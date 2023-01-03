@@ -52,9 +52,21 @@ At some point we can see that many pipelines share common functions. Such common
 ## Common credentials
 All pipeline usage/example scripts share the same config and credential files that are present in `pipelines/.dlt`.
 
+This makes running locally much easier and `dlt` configuration is flexible enough to apply to many pipelines in one folder.
 
-# How Pipelines are will be used
+Please look at `example.secrets.toml` in `.dlt` folder on how to configure `postgres`, `redshift` and `bigquery` credentials.
+
+
+# How Pipelines will be used
 The reason for the structure above is to use `dlt init` command to let user add the pipelines to their own project. `dlt init` is able to add pipelines as pieces of code, not as dependencies, see explanation here: https://github.com/dlt-hub/python-dlt-init-template
+
+For example if someone issues `dlt init chess bigquery`:
+
+1. `dlt` clones the repo and finds the `chess` in `pipelines` folder.
+2. it copies the `chess` folder and `chess_pipeline.py` to user's project folder
+3. it modifies the example script `chess_pipeline.py` to use `bigquery` to load data
+4. it inspects the `dlt.resource` and `dlt.source` functions in `chess` folder and generates config/credentials sections
+
 
 # Testing
 We use `pytest` for testing.
