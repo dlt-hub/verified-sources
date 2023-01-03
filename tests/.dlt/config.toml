@@ -1,0 +1,4 @@
+full_refresh=true  # all the pipelines run from pytest should do full refresh by default
+
+[runtime]
+log_level="WARNING"
