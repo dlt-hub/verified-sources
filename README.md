@@ -26,7 +26,7 @@ You may also use `pyenv` as [poetry](https://python-poetry.org/docs/managing-env
 
 **Code does not need to be typed** (but it is better if it is - `mypy` is able to catch a lot of problems in the code)
 
-**Function input argument of sources and resources should be typed** that provides
+**Function input argument of sources and resources should be typed** that allows `dlt` to validate input arguments at runtime, say which are secrets and generate the secret and config files automatically.
 
 ## Submitting new pipelines or bugfixes
 
@@ -56,6 +56,9 @@ This makes running locally much easier and `dlt` configuration is flexible enoug
 
 Please look at `example.secrets.toml` in `.dlt` folder on how to configure `postgres`, `redshift` and `bigquery` credentials.
 
+### Adding common credentials
+
+If you add a new pipeline that require secret value, please add a placeholder to `example.secrets.toml`. See example for chess.
 
 # How Pipelines will be used
 The reason for the structure above is to use `dlt init` command to let user add the pipelines to their own project. `dlt init` is able to add pipelines as pieces of code, not as dependencies, see explanation here: https://github.com/dlt-hub/python-dlt-init-template
@@ -69,9 +72,20 @@ For example if someone issues `dlt init chess bigquery`:
 
 
 # Testing
-We use `pytest` for testing.
+We use `pytest` for testing. Every test is running within a set of fixtures that provide the following environment (see `conftest.py`):
+1. they load secrets and config from `pipelines/.dlt` so the same values are used when you run your pipeline from command line and in tests
+2. it sets the working directory for each pipeline to `_storage` folder and makes sure it is empty before each test
+3. it drops all datasets from the destination after each test
+4. it runs each test with the original environment variables so you can modify `os.environ`
 
-## Common testing credentials
+Look at `tests/test_chess_pipeline.py` for an example. The line
+```python
+@pytest.mark.parametrize('destination_name', ALL_DESTINATIONS)
+```
+makes sure that each test runs against all destinations (as defined in `ALL_DESTINATIONS` global variables)
+
+The simplest possible test just creates pipeline and then issues a run on a source. More advanced test will use `sql_client` to check the data and access the schemas to check the table structure.
+
 
 ## Test Postgres instance
 There's compose file with fully prepared postgres instance [here](tests/postgres/README.md)

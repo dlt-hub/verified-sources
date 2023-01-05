@@ -1,4 +1,7 @@
 full_refresh=true  # all the pipelines run from pytest should do full refresh by default
 
+[sources.chess_dlt_config_example]
+config_int=123
+
 [runtime]
 log_level="WARNING"

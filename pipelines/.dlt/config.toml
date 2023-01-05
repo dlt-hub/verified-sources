@@ -1,2 +1,6 @@
 [runtime]
 log_level="WARNING"
+
+# the section below defines config values for "chess_dlt_config_example" source in chess/__init__.py
+[sources.chess_dlt_config_example]
+config_int=123

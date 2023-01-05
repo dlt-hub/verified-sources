@@ -15,8 +15,8 @@ from dlt.pipeline.exceptions import SqlClientNotAvailable
 
 TEST_STORAGE_ROOT = "_storage"
 # ALL_DESTINATIONS = ["bigquery", "redshift", "postgres"]
-# ALL_DESTINATIONS = ["postgres"]
-ALL_DESTINATIONS = ["bigquery"]
+ALL_DESTINATIONS = ["postgres"]
+# ALL_DESTINATIONS = ["bigquery"]
 
 
 @pytest.fixture(autouse=True)
@@ -56,7 +56,7 @@ def drop_pipeline() -> Iterator[None]:
 @pytest.fixture(autouse=True)
 def test_config_providers() -> Iterator[ConfigProvidersContext]:
     """Creates set of config providers where tomls are loaded from tests/.dlt"""
-    config_root = "./tests/.dlt"
+    config_root = "./pipelines/.dlt"
     ctx = ConfigProvidersContext()
     ctx.providers.clear()
     ctx.add_provider(EnvironProvider())

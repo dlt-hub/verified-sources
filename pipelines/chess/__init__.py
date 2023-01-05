@@ -1,7 +1,7 @@
 import dlt
 import datetime
 import requests
-from typing import Iterator, List, Sequence
+from typing import Iterator, List, Sequence, Dict, Any
 
 from dlt.common.typing import TDataItem
 from dlt.extract.source import DltResource
@@ -101,3 +101,16 @@ def players_online_status(players: List[str]) -> Iterator[TDataItem]:
             "lastLoginDate": status["lastLoginDate"],
             "check_time": datetime.datetime.now()  # dlt can deal with native python dates
         }
+
+
+@dlt.source
+def chess_dlt_config_example(secret_str: str = dlt.secrets.value, secret_dict: Dict[str, Any] = dlt.secrets.value, config_int: int = dlt.config.value) -> DltResource:
+    """This is an example of a source that uses dlt to provide secrets and config values. Please check `pipelines/.dlt/config.toml` and `pipelines./.dlt/example.secrets.toml`
+    to see how those values are specified.
+    """
+    print(secret_str)
+    print(secret_dict)
+    print(config_int)
+
+    # returns a resource containing the configured values - it is just a test
+    return dlt.resource([secret_str, secret_dict, config_int], name="config_values")
