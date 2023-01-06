@@ -8,7 +8,7 @@ import requests
 @dlt.source(max_table_nesting=1)
 def pipedrive_source(pipedrive_api_key=dlt.secrets.value):
     endpoints = ['persons', 'deals', 'stages', 'productFields', 'products', 'pipelines', 'personFields',
-                 'users', 'organizations', 'activityFields', 'dealFields']
+                 'users', 'organizations', 'organizationFields', 'activityFields', 'dealFields']
 
 
     endpoint_resources = [dlt.resource(get_endpoint(endpoint, pipedrive_api_key), name=endpoint, write_disposition="replace") for endpoint in endpoints]
@@ -72,7 +72,7 @@ def deals_flow(pipedrive_api_key=dlt.secrets.value):
 
 if __name__=='__main__':
     # configure the pipeline with your destination details
-    pipeline = dlt.pipeline(pipeline_name='pipedrive', destination='bigquery', dataset_name='pipedrive_data_nest_1')
+    pipeline = dlt.pipeline(pipeline_name='pipedrive', destination='bigquery', dataset_name='pipedrive')
 
     #data = list(deals_participants())
     #print(data)
