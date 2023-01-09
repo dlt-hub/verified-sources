@@ -5,7 +5,7 @@ import requests
 
 
 
-@dlt.source(max_table_nesting=1)
+@dlt.source()
 def pipedrive_source(pipedrive_api_key=dlt.secrets.value):
     endpoints = ['persons', 'stages', 'productFields', 'products', 'pipelines', 'personFields',
                  'users', 'organizations', 'organizationFields', 'activityFields', 'dealFields']
