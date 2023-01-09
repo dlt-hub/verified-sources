@@ -1,4 +1,4 @@
-# Verified pipelines contrib repo
+# Pipelines contrib repo
 
 # Development
 `python-dlt` uses `poetry` to manage, build and version the package. It also uses `make` to automate tasks. To start
@@ -27,6 +27,13 @@ You may also use `pyenv` as [poetry](https://python-poetry.org/docs/managing-env
 **Code does not need to be typed** (but it is better if it is - `mypy` is able to catch a lot of problems in the code)
 
 **Function input argument of sources and resources should be typed** that allows `dlt` to validate input arguments at runtime, say which are secrets and generate the secret and config files automatically.
+
+### Adding __init__.py files
+Linting step requires properly constructed python packages so it will ask for `__init__` files to be created. That can be automated with
+```sh
+./check-package.sh --fix
+```
+executed from the top repo folder
 
 ## Submitting new pipelines or bugfixes
 
