@@ -7,7 +7,7 @@ import requests
 
 @dlt.source(max_table_nesting=1)
 def pipedrive_source(pipedrive_api_key=dlt.secrets.value):
-    endpoints = ['persons', 'deals', 'stages', 'productFields', 'products', 'pipelines', 'personFields',
+    endpoints = ['persons', 'stages', 'productFields', 'products', 'pipelines', 'personFields',
                  'users', 'organizations', 'organizationFields', 'activityFields', 'dealFields']
 
 
@@ -16,8 +16,19 @@ def pipedrive_source(pipedrive_api_key=dlt.secrets.value):
     activities_resource = dlt.resource(get_endpoint('activities', pipedrive_api_key, extra_params={'user_id': 0}), name='activities', write_disposition="replace")
     endpoint_resources.append(activities_resource)
     # add resources that need 2 requests
-    endpoint_resources.append(deals_flow)
-    endpoint_resources.append(deals_participants)
+
+    # we make the resource explicitly and put it in a varaible
+    deals = dlt.resource(get_endpoint('deals', pipedrive_api_key))
+
+    endpoint_resources.append(deals)
+
+    # in order to avoid calling the deal endpoint 3 times (once for deal, twice for deal_entity)
+    # we use a transformer instead of a resource.
+    # The transformer can use the deals resource from cache instead of having to get the data again.
+    # We use the pipe operator to pass the deals to
+
+    endpoint_resources.append(deals | deals_participants())
+    endpoint_resources.append(deals | deals_flow())
     return endpoint_resources
 
 def _paginated_get(url, headers, params):
@@ -52,23 +63,22 @@ def get_endpoint(entity, pipedrive_api_key, extra_params=None):
     yield from pages
 
 
-@dlt.resource(write_disposition="replace")
-def deals_participants(pipedrive_api_key=dlt.secrets.value):
-    for page in get_endpoint("deals", pipedrive_api_key):
-        for row in page:
-            endpoint = f"deals/{row['id']}/participants"
-            data = get_endpoint(endpoint, pipedrive_api_key)
-            if data:
-                yield from data
+@dlt.transformer(write_disposition="replace")
+def deals_participants(deals_page, pipedrive_api_key=dlt.secrets.value):
+    for row in deals_page:
+        endpoint = f"deals/{row['id']}/participants"
+        data = get_endpoint(endpoint, pipedrive_api_key)
+        if data:
+            yield from data
 
-@dlt.resource(write_disposition="replace")
-def deals_flow(pipedrive_api_key=dlt.secrets.value):
-    for page in get_endpoint("deals", pipedrive_api_key):
-        for row in page:
-            endpoint = f"deals/{row['id']}/flow"
-            data = get_endpoint(endpoint, pipedrive_api_key)
-            if data:
-                yield from data
+
+@dlt.transformer(write_disposition="replace")
+def deals_flow(deals_page, pipedrive_api_key=dlt.secrets.value):
+    for row in deals_page:
+        endpoint = f"deals/{row['id']}/flow"
+        data = get_endpoint(endpoint, pipedrive_api_key)
+        if data:
+            yield from data
 
 if __name__=='__main__':
     # configure the pipeline with your destination details
