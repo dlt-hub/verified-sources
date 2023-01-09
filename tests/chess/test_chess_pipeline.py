@@ -2,7 +2,7 @@ import pytest
 
 import dlt
 
-from pipelines.chess import chess
+from pipelines.chess import chess, chess_dlt_config_example
 
 from tests.utils import ALL_DESTINATIONS, assert_load_info
 
@@ -85,3 +85,10 @@ def test_incremental_games_load(destination_name: str) -> None:
     # we have new games in December!
     assert_load_info(info)
     assert get_magnus_games() > magnus_games_no
+
+
+def test_config_values_source() -> None:
+    # all the input arguments will be passed from secrets/config toml by dlt
+    config_values = list(chess_dlt_config_example())
+    # the values below are configured in secrets and config in tests/.dlt
+    assert config_values == ["secret string", {"secret_key": "key string", "key_index": 1}, 123]
