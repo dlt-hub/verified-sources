@@ -15,7 +15,7 @@ def pipedrive_source(pipedrive_api_key=dlt.secrets.value):
     # add resources that need 2 requests
 
     # we make the resource explicitly and put it in a variable
-    deals = dlt.resource(_get_endpoint('deals', pipedrive_api_key))
+    deals = dlt.resource(_get_endpoint('deals', pipedrive_api_key), name="deals")
 
     endpoint_resources.append(deals)
 
