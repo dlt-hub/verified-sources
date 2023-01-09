@@ -9,7 +9,7 @@ from tests.utils import ALL_DESTINATIONS, assert_load_info
 
 @pytest.mark.parametrize('destination_name', ALL_DESTINATIONS)
 def test_load_players_games(destination_name: str) -> None:
-    # mind the full_refresh flag - it makes sure that data is loaded to unique dataset. that makes the tests independent
+    # mind the full_refresh flag - it makes sure that data is loaded to unique dataset. this allows you to run the tests on the same database in parallel
     pipeline = dlt.pipeline(pipeline_name="chess_players_games", destination=destination_name, dataset_name="chess_players_games_data", full_refresh=True)
     data = chess(
         ['magnuscarlsen','vincentkeymer', 'dommarajugukesh', 'rpragchess'],
