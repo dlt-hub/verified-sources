@@ -21,7 +21,7 @@ def pipedrive_source(pipedrive_api_key=dlt.secrets.value):
     return endpoint_resources
 
 def _paginated_get(url, headers, params):
-    """Requests and yields up to `max_pages` pages of results as per twitter api documentation: https://developer.twitter.com/en/docs/twitter-api/pagination"""
+    """Requests and yields up to `max_pages` pages of results as per pipedrive api documentation: https://developer.twitter.com/en/docs/twitter-api/pagination"""
     # pagination start and page limit
     is_next_page = True
     params['start'] = 0
@@ -31,11 +31,15 @@ def _paginated_get(url, headers, params):
         response.raise_for_status()
         page = response.json()
         # yield data only
-        yield page['data']
+        data = page['data']
+        if data:
+            yield data
         # check if next page exists
-        is_next_page = page.get("additional_data", {}).get("pagination", {}).get("more_items_in_collection")
-        # if it does, we will need this start index in the next params
-        params['start'] = response.json().get("additional_data", {}).get("pagination", {}).get("next_start")
+        pagination_info = page.get("additional_data", {}).get("pagination", {})
+        # is_next_page is set to True or False
+        is_next_page = pagination_info.get("more_items_in_collection", False)
+        if is_next_page:
+            params['start'] = pagination_info.get("next_start")
 
 
 def get_endpoint(entity, pipedrive_api_key, extra_params=None):
@@ -45,30 +49,26 @@ def get_endpoint(entity, pipedrive_api_key, extra_params=None):
         params.update(extra_params)
     url = f'https://app.pipedrive.com/v1/{entity}'
     pages = _paginated_get(url, headers=headers, params=params)
-    for page in pages:
-        yield page
+    yield from pages
+
 
 @dlt.resource(write_disposition="replace")
 def deals_participants(pipedrive_api_key=dlt.secrets.value):
-    gen = get_endpoint("deals", pipedrive_api_key)
-    if len([gen])>1:
-        for page in gen:
-            for row in page:
-                endpoint = f"deals/{row['id']}/participants"
-                data = get_endpoint(endpoint, pipedrive_api_key)
-                for page in data:
-                    yield page
+    for page in get_endpoint("deals", pipedrive_api_key):
+        for row in page:
+            endpoint = f"deals/{row['id']}/participants"
+            data = get_endpoint(endpoint, pipedrive_api_key)
+            if data:
+                yield from data
 
 @dlt.resource(write_disposition="replace")
 def deals_flow(pipedrive_api_key=dlt.secrets.value):
-    gen = get_endpoint("deals", pipedrive_api_key)
-    if len([gen])>1:
-        for page in gen:
-            for row in page:
-                endpoint = f"deals/{row['id']}/flow"
-                data = get_endpoint(endpoint, pipedrive_api_key)
-                for page in data:
-                    yield page
+    for page in get_endpoint("deals", pipedrive_api_key):
+        for row in page:
+            endpoint = f"deals/{row['id']}/flow"
+            data = get_endpoint(endpoint, pipedrive_api_key)
+            if data:
+                yield from data
 
 if __name__=='__main__':
     # configure the pipeline with your destination details
