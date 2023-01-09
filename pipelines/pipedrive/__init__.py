@@ -2,23 +2,20 @@ import dlt
 import requests
 
 
-
-
-
-@dlt.source()
+@dlt.source(name="pipedrive")
 def pipedrive_source(pipedrive_api_key=dlt.secrets.value):
+
     endpoints = ['persons', 'stages', 'productFields', 'products', 'pipelines', 'personFields',
                  'users', 'organizations', 'organizationFields', 'activityFields', 'dealFields']
 
-
-    endpoint_resources = [dlt.resource(get_endpoint(endpoint, pipedrive_api_key), name=endpoint, write_disposition="replace") for endpoint in endpoints]
+    endpoint_resources = [dlt.resource(_get_endpoint(endpoint, pipedrive_api_key), name=endpoint, write_disposition="replace") for endpoint in endpoints]
     # add activities
-    activities_resource = dlt.resource(get_endpoint('activities', pipedrive_api_key, extra_params={'user_id': 0}), name='activities', write_disposition="replace")
+    activities_resource = dlt.resource(_get_endpoint('activities', pipedrive_api_key, extra_params={'user_id': 0}), name='activities', write_disposition="replace")
     endpoint_resources.append(activities_resource)
     # add resources that need 2 requests
 
-    # we make the resource explicitly and put it in a varaible
-    deals = dlt.resource(get_endpoint('deals', pipedrive_api_key))
+    # we make the resource explicitly and put it in a variable
+    deals = dlt.resource(_get_endpoint('deals', pipedrive_api_key))
 
     endpoint_resources.append(deals)
 
@@ -27,12 +24,13 @@ def pipedrive_source(pipedrive_api_key=dlt.secrets.value):
     # The transformer can use the deals resource from cache instead of having to get the data again.
     # We use the pipe operator to pass the deals to
 
-    endpoint_resources.append(deals | deals_participants())
-    endpoint_resources.append(deals | deals_flow())
+    endpoint_resources.append(deals | deals_participants(pipedrive_api_key=pipedrive_api_key))
+    endpoint_resources.append(deals | deals_flow(pipedrive_api_key=pipedrive_api_key))
     return endpoint_resources
 
+
 def _paginated_get(url, headers, params):
-    """Requests and yields up to `max_pages` pages of results as per pipedrive api documentation: https://developer.twitter.com/en/docs/twitter-api/pagination"""
+    """Requests and yields up to `max_pages` pages of results as per pipedrive api documentation: https://pipedrive.readme.io/docs/core-api-concepts-pagination"""
     # pagination start and page limit
     is_next_page = True
     params['start'] = 0
@@ -53,7 +51,7 @@ def _paginated_get(url, headers, params):
             params['start'] = pagination_info.get("next_start")
 
 
-def get_endpoint(entity, pipedrive_api_key, extra_params=None):
+def _get_endpoint(entity, pipedrive_api_key, extra_params=None):
     headers = {"Content-Type": "application/json"}
     params = {'api_token': pipedrive_api_key}
     if extra_params:
@@ -67,7 +65,7 @@ def get_endpoint(entity, pipedrive_api_key, extra_params=None):
 def deals_participants(deals_page, pipedrive_api_key=dlt.secrets.value):
     for row in deals_page:
         endpoint = f"deals/{row['id']}/participants"
-        data = get_endpoint(endpoint, pipedrive_api_key)
+        data = _get_endpoint(endpoint, pipedrive_api_key)
         if data:
             yield from data
 
@@ -76,7 +74,7 @@ def deals_participants(deals_page, pipedrive_api_key=dlt.secrets.value):
 def deals_flow(deals_page, pipedrive_api_key=dlt.secrets.value):
     for row in deals_page:
         endpoint = f"deals/{row['id']}/flow"
-        data = get_endpoint(endpoint, pipedrive_api_key)
+        data = _get_endpoint(endpoint, pipedrive_api_key)
         if data:
             yield from data
 
