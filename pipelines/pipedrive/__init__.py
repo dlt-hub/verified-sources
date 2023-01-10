@@ -4,6 +4,32 @@ import requests
 
 @dlt.source(name="pipedrive")
 def pipedrive_source(pipedrive_api_key=dlt.secrets.value):
+    """
+
+    Pipedrive api docs: https://developers.pipedrive.com/docs/api/v1
+    api changelog: https://developers.pipedrive.com/changelog
+
+    Args:
+        pipedrive_api_key: https://pipedrive.readme.io/docs/how-to-find-the-api-token
+
+    Returns
+        resources:
+        activityFields
+        dealFields
+        deals
+        deals_flow
+        deals_participants
+        organizationFields
+        organizations
+        personFields
+        persons
+        pipelines
+        productFields
+        products
+        stages
+        users
+
+    """
 
     endpoints = ['persons', 'stages', 'productFields', 'products', 'pipelines', 'personFields',
                  'users', 'organizations', 'organizationFields', 'activityFields', 'dealFields']
