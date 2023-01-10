@@ -1,9 +1,45 @@
+"""
+Pipedrive api docs: https://developers.pipedrive.com/docs/api/v1
+
+Pipedrive changes or deprecates fields and endpoints without versioning the api.
+If something breaks, it's a good idea to check the changelog.
+Api changelog: https://developers.pipedrive.com/changelog
+
+To get an api key: https://pipedrive.readme.io/docs/how-to-find-the-api-token
+"""
+
 import dlt
 import requests
 
 
 @dlt.source(name="pipedrive")
 def pipedrive_source(pipedrive_api_key=dlt.secrets.value):
+    """
+
+    Args:
+    pipedrive_api_key: https://pipedrive.readme.io/docs/how-to-find-the-api-token
+
+    Returns resources:
+        activityFields
+        dealFields
+        deals
+        deals_flow
+        deals_participants
+        organizationFields
+        organizations
+        personFields
+        persons
+        pipelines
+        productFields
+        products
+        stages
+        users
+
+    Resources that depend on another resource are implemented as tranformers
+    so they can re-use the original resource data without re-downloading.
+    Examples:  deals_participants, deals_flow
+
+    """
 
     endpoints = ['persons', 'stages', 'productFields', 'products', 'pipelines', 'personFields',
                  'users', 'organizations', 'organizationFields', 'activityFields', 'dealFields']
@@ -30,7 +66,10 @@ def pipedrive_source(pipedrive_api_key=dlt.secrets.value):
 
 
 def _paginated_get(url, headers, params):
-    """Requests and yields up to `max_pages` pages of results as per pipedrive api documentation: https://pipedrive.readme.io/docs/core-api-concepts-pagination"""
+    """
+    Requests and yields data 500 records at a time
+    Documentation: https://pipedrive.readme.io/docs/core-api-concepts-pagination
+    """
     # pagination start and page limit
     is_next_page = True
     params['start'] = 0
@@ -52,6 +91,17 @@ def _paginated_get(url, headers, params):
 
 
 def _get_endpoint(entity, pipedrive_api_key, extra_params=None):
+    """
+    Generic method to retrieve endpoint data based on the required headers and params.
+
+    Args:
+        entity: the endpoint you want to call
+        pipedrive_api_key:
+        extra_params: any needed request params except pagination.
+
+    Returns:
+
+    """
     headers = {"Content-Type": "application/json"}
     params = {'api_token': pipedrive_api_key}
     if extra_params:
@@ -63,6 +113,10 @@ def _get_endpoint(entity, pipedrive_api_key, extra_params=None):
 
 @dlt.transformer(write_disposition="replace")
 def deals_participants(deals_page, pipedrive_api_key=dlt.secrets.value):
+    """
+    This transformer builds on deals resource data.
+    The data is passed to it page by page (as the upstream resource returns it)
+    """
     for row in deals_page:
         endpoint = f"deals/{row['id']}/participants"
         data = _get_endpoint(endpoint, pipedrive_api_key)
@@ -72,6 +126,10 @@ def deals_participants(deals_page, pipedrive_api_key=dlt.secrets.value):
 
 @dlt.transformer(write_disposition="replace")
 def deals_flow(deals_page, pipedrive_api_key=dlt.secrets.value):
+    """
+    This transformer builds on deals resource data.
+    The data is passed to it page by page (as the upstream resource returns it)
+    """
     for row in deals_page:
         endpoint = f"deals/{row['id']}/flow"
         data = _get_endpoint(endpoint, pipedrive_api_key)
