@@ -1,35 +1,36 @@
+"""
+
+Pipedrive api docs: https://developers.pipedrive.com/docs/api/v1
+api changelog: https://developers.pipedrive.com/changelog
+
+Args:
+    pipedrive_api_key: https://pipedrive.readme.io/docs/how-to-find-the-api-token
+
+Returns
+    resources:
+    activityFields
+    dealFields
+    deals
+    deals_flow
+    deals_participants
+    organizationFields
+    organizations
+    personFields
+    persons
+    pipelines
+    productFields
+    products
+    stages
+    users
+
+"""
+
 import dlt
 import requests
 
 
 @dlt.source(name="pipedrive")
 def pipedrive_source(pipedrive_api_key=dlt.secrets.value):
-    """
-
-    Pipedrive api docs: https://developers.pipedrive.com/docs/api/v1
-    api changelog: https://developers.pipedrive.com/changelog
-
-    Args:
-        pipedrive_api_key: https://pipedrive.readme.io/docs/how-to-find-the-api-token
-
-    Returns
-        resources:
-        activityFields
-        dealFields
-        deals
-        deals_flow
-        deals_participants
-        organizationFields
-        organizations
-        personFields
-        persons
-        pipelines
-        productFields
-        products
-        stages
-        users
-
-    """
 
     endpoints = ['persons', 'stages', 'productFields', 'products', 'pipelines', 'personFields',
                  'users', 'organizations', 'organizationFields', 'activityFields', 'dealFields']
@@ -56,7 +57,10 @@ def pipedrive_source(pipedrive_api_key=dlt.secrets.value):
 
 
 def _paginated_get(url, headers, params):
-    """Requests and yields up to `max_pages` pages of results as per pipedrive api documentation: https://pipedrive.readme.io/docs/core-api-concepts-pagination"""
+    """
+    Requests and yields data 500 records at a time
+    Documentation: https://pipedrive.readme.io/docs/core-api-concepts-pagination
+    """
     # pagination start and page limit
     is_next_page = True
     params['start'] = 0
