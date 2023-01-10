@@ -14,8 +14,8 @@ from dlt.common.storages import FileStorage
 from dlt.pipeline.exceptions import SqlClientNotAvailable
 
 TEST_STORAGE_ROOT = "_storage"
-# ALL_DESTINATIONS = ["bigquery", "redshift", "postgres"]
-ALL_DESTINATIONS = ["postgres"]
+ALL_DESTINATIONS = ["bigquery", "redshift", "postgres"]
+# ALL_DESTINATIONS = ["postgres"]
 # ALL_DESTINATIONS = ["bigquery"]
 
 
