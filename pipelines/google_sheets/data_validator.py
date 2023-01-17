@@ -1,80 +1,80 @@
 # This is a helper module that contains function which validate data
-
+import re
 from typing import Union
-from dateutil import parser
-from datetime import datetime
+from datetime import datetime, timedelta
+from re import match
+from math import floor
 
-import pytest
+
+# Date constant- n.o days from 1st Jan 1AD to 30th December 1899
+SERIAL_NUMBER_ORIGIN_ORDINAL = 693594
+# this string comes before the id
+URL_ID_IDENTIFIER = "d"
+# time info
+SECONDS_IN_DAY = 86400
 
 
-# this function takes an url to a Google spreadsheet and computes the spreadsheet id from it. returns an empty string if the url format is not correct
-# spreadsheet url formula: https://docs.google.com/spreadsheets/d/<spreadsheet_id>/edit
-# @input: url- str
-# @output spreadsheet_id: str
 def process_url(url: str) -> str:
+    """"
+    This function takes an url to a Google spreadsheet and computes the spreadsheet id from it according to the spreadsheet url formula: https://docs.google.com/spreadsheets/d/<spreadsheet_id>/edit
+    If the url is not formatted correctly a Value Error will be returned
+    @:param: url- the string containing the url to the spreadsheet
+    @:return: spreadsheet_id as a string or ValueError if the url is not properly formatted
+    """
 
-    # this string comes before the id
-    url_id_identifier = "d"
     # split on the '/'
     parts = url.split("/")
 
     # loop through parts
     for i in range(len(parts)):
         # if we find
-        if parts[i] == url_id_identifier and i+1 < len(parts):
+        if parts[i] == URL_ID_IDENTIFIER and i+1 < len(parts):
+            # if the id part is left empty then the url is not formatted correctly
             if parts[i+1] == "":
                 raise ValueError("Spreadsheet ID is an empty string")
-            return parts[i+1]
+            else:
+                return parts[i+1]
     # if url cannot be found, raise error
     raise ValueError("Invalid URL. Cannot find spreadsheet ID")
 
 
-# This function receives a serial number which can be an int or float(depending on the serial number) and outputs a datetime object
-# @input: serial_number- int/float. The integer part shows the number of days since December 30th 1899, the decimal part shows the fraction of the day
-# @output: converted_date: datetime object for the same date as the serial number
+def get_spreadsheet_id(url_or_id: str) -> str:
+    """"
+    This function receives an id or url to a Google Spreadsheet and returns the spreadsheet_id as a string
+    @:param: url_or_id a string which is the id or url of the spreadsheet
+    @:return: spreadsheet_id a string which is definetly the id of the spreadsheet
+    """
+
+    # TODO: raise value error for empty id ?
+
+    # check if this is an url: http or https in it
+    if match(r"http://|https://", url_or_id):
+        # process url
+        spreadsheet_id = process_url(url_or_id)
+        return spreadsheet_id
+    else:
+        # just return id
+        return url_or_id
+
+
 def serial_date_to_datetime(serial_number: Union[int, float]) -> datetime:
-
+    """
+    This function receives a serial number which can be an int or float(depending on the serial number) and outputs a datetime object
+    @:param: serial_number- int/float. The integer part shows the number of days since December 30th 1899, the decimal part shows the fraction of the day
+    @:return: converted_date: datetime object for the same date as the serial number
+    """
+    # TODO: add timezone to data
     # convert starting date to ordinal date: number of days since Jan 1st, 1 AD
-    days_since = datetime(1899, 12, 30).toordinal() + serial_number
-
-    # convert back to datetime
+    # the integer part is number of days
+    time_since = SERIAL_NUMBER_ORIGIN_ORDINAL + serial_number
+    days_since = int(time_since)
     converted_date = datetime.fromordinal(days_since)
+
+    # if this is just a date and not a time data type, just return date simply
+    if isinstance(time_since, int):
+        return converted_date
+
+    # otherwise get extra seconds passed and add them to datetime
+    extra_seconds = round((time_since-days_since) * SECONDS_IN_DAY)
+    converted_date = converted_date + timedelta(seconds=extra_seconds)
     return converted_date
-
-
-########## TEMP TESTS ############
-TEST_CASES_URL = [
-    ['https://docs.google.com/spreadsheets/d/1aBcDeFgHiJkLmNopQrStUvWxYz1234567890/edit#gid=0', '1aBcDeFgHiJkLmNopQrStUvWxYz1234567890'],
-    ['https://docs.google.com/spreadsheets/d/1aBcDeFgHiJkLmNopQrStUvWxYz1234567890/edit?usp=sharing', '1aBcDeFgHiJkLmNopQrStUvWxYz1234567890'],
-    ['https://docs.google.com/spreadsheets/d/1aBcDeFgHiJkLmNopQrStUvWxYz1234567890', '1aBcDeFgHiJkLmNopQrStUvWxYz1234567890'],
-    ['https://docs.google.com/spreadsheets/d/1aBcDeFgHiJkLmNopQrStUvWxYz1234567890/edit#gid=0&new=true', '1aBcDeFgHiJkLmNopQrStUvWxYz1234567890'],
-    ['https://docs.google.com/spreadsheets/', ValueError("Invalid URL or cannot find spreadsheet ID")],
-    ['https://docs.google.com/spreadsheets/d', ValueError("Invalid URL or cannot find spreadsheet ID")],
-    ['https://docs.google.com/spreadsheets/d/', ValueError("Invalid URL or cannot find spreadsheet ID")]
-]
-
-
-# TODO: implement some proper testing for date conversion
-TEST_CASES_DATE = [
-    '12/31/2022',
-    '31-12-2022',
-    '23:59:59',
-    '11:59 PM',
-    '12/31/2022 23:59:59',
-    '12-31-2022 23:59:59'
-]
-
-
-# tester for url conversion
-@pytest.mark.parametrize("url", "expected", TEST_CASES_URL)
-def process_url_tester(url: str, expected: str):
-
-    try:
-        assert process_url(url) == expected
-    except ValueError as e:
-        assert str(e) == str(expected)
-
-
-
-
-
