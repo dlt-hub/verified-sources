@@ -13,8 +13,6 @@ try:
 except ImportError:
     raise MissingDependencyException("Google Sheets Source", ["google1", "google2"])
 
-METADATA_SEARCH_FIELD = 'sheets(data(rowData(values)))'
-
 # TODO: consider using https://github.com/burnash/gspread for spreadsheet discovery
 # TODO: add exceptions to the code in case HTTP requests fail
 
@@ -35,10 +33,12 @@ def get_metadata(spreadsheet_id: str, service: Resource, ranges: list[str]) -> I
     find_ranges = {}
     for sh_range in ranges:
         # convert range to first 2 rows
+        # TODO: find another way to parse ranges
         range_info = get_first_rows(sh_range)
         sheet_name = range_info[0]
 
-        # use sheet indexing to check the order in which the ranges will appear in the same sheet, order of ranges matters in the api response
+        # Google Sheets API will respond with sheet data in order and ranges inside each belonging sheet. Since the range name is not returned in the response, we need sheet name
+        # and an index to serve as a unique identifier for each sheet. So a dict is made with [sheet+index] as key and as the range name as a value
         if sheet_name in sheet_indexing:
             range_index = sheet_indexing[sheet_name] + 1
         else:
@@ -47,10 +47,10 @@ def get_metadata(spreadsheet_id: str, service: Resource, ranges: list[str]) -> I
 
         # append to ranges dict
         range_dict = {
-            'headers': [],
-            'values': [],
-            'sheet_name': sheet_name,
-            'index': range_index
+            "headers": [],
+            "values": [],
+            "sheet_name": sheet_name,
+            "index": range_index
         }
         ranges_data[sh_range] = range_dict
         find_ranges[f"{sheet_name}{range_index}"] = sh_range
@@ -139,7 +139,7 @@ def process_range(sheet_val: Iterator[DictStrAny], sheet_meta: Iterator[DictStrA
 def _initialize_sheets(credentials: GcpClientCredentialsWithDefault) -> Any:
     """
     Helper function, uses GCP credentials to authenticate with Google Sheets API
-    @:param: credentials - credentials needed to login to gcp
+    @:param: credentials - credentials needed to log in to gcp
     @:return: service - object needed to make api calls to google sheets api
     """
     # Build the service object for Google sheets api.
@@ -165,7 +165,7 @@ def google_spreadsheet(spreadsheet_identifier: str, sheet_names: list[str] = Non
     # get spreadsheet id from url or id
     spreadsheet_id = get_spreadsheet_id(spreadsheet_identifier)
 
-    # if sheet names is left empty, make an api call and discover all the sheets in the spreadsheeet
+    # if sheet names is left empty, make an api call and discover all the sheets in the spreadsheet
     if not sheet_names:
         logging.info("No ranges provided. Scouting for ranges")
         sheet_names = []
@@ -187,7 +187,7 @@ def google_spreadsheet(spreadsheet_identifier: str, sheet_names: list[str] = Non
     values = service.spreadsheets().values().batchGet(
         spreadsheetId=spreadsheet_id,
         ranges=sheet_names,
-        # unformatted returns typed values
+        # unformated returns typed values
         valueRenderOption="UNFORMATTED_VALUE",
         # will return formatted dates as a serial number
         dateTimeRenderOption="SERIAL_NUMBER"

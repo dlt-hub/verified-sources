@@ -25,6 +25,7 @@ def get_data_type(value_list: list[DictStrAny]) -> list[bool]:
     value_type_list = []
     # loop through the list and process each value dict, decide if something is a datetime value or not
     for val_dict in value_list:
+        # TODO: try except
         is_date = "effectiveValue" in val_dict and \
                   "numberValue" in val_dict['effectiveValue'] and \
                   "effectiveFormat" in val_dict and \
