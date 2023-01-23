@@ -88,17 +88,31 @@ def get_metadata(spreadsheet_id: str, service: Resource, ranges: list[str]) -> I
             # key exists
             my_range = find_ranges[range_id]
 
+            # check sheet is not empty
+            try:
+                row_data_range = sh_range['rowData']
+            except KeyError:
+                logging.warning(f"Metadata: Skipped empty range: {my_range}")
+                del ranges_data[my_range]
+                continue
+
             # get headers and 1st row data
             headers = []
-            for header in sh_range['rowData'][0]['values']:
+            for header in row_data_range[0]['values']:
                 headers.append(header['formattedValue'])
 
-            # get data types for the first row
-            first_line_values = get_data_type(sh_range['rowData'][1]['values'])
+            try:
+                # get data types for the first row
+                first_line_values = get_data_type(row_data_range[1]['values'])
+            except IndexError:
+                first_line_values = []
+                logging.warning(f"Metadata: No data values for the first line of data {my_range}")
 
             # ensure there are no empty headers
             if len(first_line_values) > len(headers):
-                raise ValueError("Data has more values than headers")
+                logging.warning(f"Metadata: Skipped deformed range: {my_range}")
+                del ranges_data[my_range]
+                continue
 
             # add headers and values
             ranges_data[my_range]["headers"] = headers
@@ -106,37 +120,7 @@ def get_metadata(spreadsheet_id: str, service: Resource, ranges: list[str]) -> I
     return ranges_data
 
 
-def process_range(sheet_val: Iterator[DictStrAny], sheet_meta: Iterator[DictStrAny]) -> Iterator[DictStrAny]:
-    """
-    This function receives 2 arrays of tabular data inside a sheet. This will be processed into a schema that is later stored into a database table
-    @:param: spreadsheet_id - the id of the spreadsheet
-    @:param: spreadsheets_resource - Resource object, used to make calls to google spreadsheets
-    @:return:  ?
-    """
-    # get headers and first line data types which is just Datetime or not datetime so far
-    headers = sheet_meta['headers']
-    first_line_val_types = sheet_meta['values']
-    for row in sheet_val[1:]:
-        table_dict = {}
-
-        # empty row
-        if not row:
-            break
-
-        # process both rows and check for differences to spot dates
-        for val, header, is_datetime in zip(row, headers, first_line_val_types):
-            # check whether the object is a datetime object
-            if is_datetime:
-                converted_sn = serial_date_to_datetime(val)
-                table_dict[header] = converted_sn
-            else:
-                # just input the regular value
-                table_dict[header] = val
-        logging.info("Finished loading table")
-        yield table_dict
-
-
-def _initialize_sheets(credentials: GcpClientCredentialsWithDefault) -> Any:
+def _initialize_sheets(credentials: GcpClientCredentialsWithDefault) -> Resource:
     """
     Helper function, uses GCP credentials to authenticate with Google Sheets API
     @:param: credentials - credentials needed to log in to gcp
@@ -182,39 +166,12 @@ def google_spreadsheet(spreadsheet_identifier: str, sheet_names: list[str] = Non
     # get metadata on the first 2 rows for every provided range
     metadata_ranges_all = get_metadata(spreadsheet_id=spreadsheet_id, service=service, ranges=sheet_names)
 
-    # Make an api call to get the data for all sheets and ranges
-    # get dates as serial number
-    values = service.spreadsheets().values().batchGet(
-        spreadsheetId=spreadsheet_id,
-        ranges=sheet_names,
-        # unformated returns typed values
-        valueRenderOption="UNFORMATTED_VALUE",
-        # will return formatted dates as a serial number
-        dateTimeRenderOption="SERIAL_NUMBER"
-    ).execute()['valueRanges']
-    logging.info("Data fetched")
+    data_resources_list = get_data(service=service, spreadsheet_id=spreadsheet_id, range_names=sheet_names, metadata_dict=metadata_ranges_all, batch_size=0)
+    metadata_resource = metadata_table(spreadsheet_info=metadata_ranges_all, spreadsheet_id=spreadsheet_id)
+    data_resources_list.append(metadata_resource)
 
-    # iterate through values
-    for i in range(len(values)):
-        # get range names and values
-        sheet_range_name = values[i]['range']
-        sheet_range = values[i]['values']
-
-        # get metadata for sheet
-        if sheet_range_name in metadata_ranges_all:
-            sheet_meta_batch = metadata_ranges_all[sheet_range_name]
-        else:
-            # if range doesn't exist as a key then it means the key is just the sheet name and google sheets api just filled the range
-            sheet_name_batch = sheet_range_name.split("!")[0]
-            sheet_meta_batch = metadata_ranges_all[sheet_name_batch]
-        # create a resource from processing both sheet/range values
-        yield dlt.resource(process_range(sheet_val=sheet_range, sheet_meta=sheet_meta_batch),
-                           name=sheet_range_name,
-                           write_disposition="replace")
-    logging.info("Finished loading all ranges")
-
-    yield (
-        metadata_table(spreadsheet_info=metadata_ranges_all, spreadsheet_id=spreadsheet_id)
+    return (
+        data_resources_list
     )
     logging.info("Finished loading metadata table")
 
@@ -243,6 +200,91 @@ def metadata_table(spreadsheet_info: Iterator[DictStrAny], spreadsheet_id: str) 
             "spreadsheet_id": spreadsheet_id,
             "loaded_range": loaded_range,
             "sheet_name": range_sheet_name,
-            "num_headers": range_num_headers
+            "num_cols": range_num_headers
         }
+        yield table_dict
+
+
+def get_data(service: Resource, spreadsheet_id: str, range_names: list[str], metadata_dict: dict[DictStrAny], batch_size: int) -> list[Iterator[Any]]:
+    """
+    This function will make an api call to Google sheets and retrieve all the ranges listed in range_names and process them into dlt resources
+    @:param: service - Object to make api calls to Google Sheets
+    @:param: spredsheet_id - the id of the spreadsheet
+    @:param: range_names - list of range names
+    @:param: metadata_dict - the dict with metadata
+    @:param: batch_size - the number of rows retrieved by each api call, if 0, get all data at once
+    @:returns: my_resources - list of dlt resources, each containing a table of a specific range
+    """
+
+    my_resources = []
+
+    # Make an api call to get the data for all sheets and ranges
+    # get dates as serial number
+    values = service.spreadsheets().values().batchGet(
+        spreadsheetId=spreadsheet_id,
+        ranges=range_names,
+        # unformated returns typed values
+        valueRenderOption="UNFORMATTED_VALUE",
+        # will return formatted dates as a serial number
+        dateTimeRenderOption="SERIAL_NUMBER"
+    ).execute()['valueRanges']
+    logging.info("Data fetched")
+
+    # iterate through values
+    for i in range(len(values)):
+        # get range name
+        sheet_range_name = values[i]['range']
+
+        # get metadata for sheet
+        if sheet_range_name in metadata_dict:
+            sheet_meta_batch = metadata_dict[sheet_range_name]
+        else:
+            # if range doesn't exist as a key then it means the key is just the sheet name and google sheets api just filled the range
+            sheet_name_batch = sheet_range_name.split("!")[0]
+
+            try:
+                sheet_meta_batch = metadata_dict[sheet_name_batch]
+            except KeyError:
+                # sheet is not there because it was popped
+                logging.warning(f"Skipping data for empty range: {sheet_range_name}")
+                continue
+
+        # get range values
+        sheet_range = values[i]['values']
+        # create a resource from processing both sheet/range values
+        my_resources.append(dlt.resource(process_range(sheet_val=sheet_range, sheet_meta=sheet_meta_batch),
+                                         name=sheet_range_name,
+                                         write_disposition="replace")
+                            )
+    logging.info("Finished loading all ranges")
+    return my_resources
+
+
+def process_range(sheet_val: Iterator[DictStrAny], sheet_meta: Iterator[DictStrAny]) -> Iterator[DictStrAny]:
+    """
+    This function receives 2 arrays of tabular data inside a sheet. This will be processed into a schema that is later stored into a database table
+    @:param: spreadsheet_id - the id of the spreadsheet
+    @:param: spreadsheets_resource - Resource object, used to make calls to google spreadsheets
+    @:return:  ?
+    """
+    # get headers and first line data types which is just Datetime or not datetime so far
+    headers = sheet_meta['headers']
+    first_line_val_types = sheet_meta['values']
+    for row in sheet_val[1:]:
+        table_dict = {}
+
+        # empty row
+        if not row:
+            break
+
+        # process both rows and check for differences to spot dates
+        for val, header, is_datetime in zip(row, headers, first_line_val_types):
+            # check whether the object is a datetime object
+            if is_datetime:
+                converted_sn = serial_date_to_datetime(val)
+                table_dict[header] = converted_sn
+            else:
+                # just input the regular value
+                table_dict[header] = val
+        logging.info("Finished loading table")
         yield table_dict

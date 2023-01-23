@@ -36,11 +36,11 @@ TEST_CASES_DATE = [
 ]
 
 TEST_CASES_RANGE = [
-    ("sheet1", "sheet1!1:2"),
-    ("sheet1!G2:O28", "sheet1!G2:O3"),
-    ("sheet1!G2:H28", "sheet1!G2:H3"),
-    ("sheet1!A:B", "sheet1!A1:B2"),
-    ("sheet1!1:4", "sheet1!1:2")
+    ("sheet1", ["sheet1", "sheet1!1:2"]),
+    ("sheet1!G2:O28", ["sheet1", "sheet1!G2:O3"]),
+    ("sheet1!G2:H28", ["sheet1", "sheet1!G2:H3"]),
+    ("sheet1!A:B", ["sheet1", "sheet1!A1:B2"]),
+    ("sheet1!1:4", ["sheet1", "sheet1!1:2"])
 ]
 
 TEST_CASES_DATA_TYPES = [
