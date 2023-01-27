@@ -60,6 +60,7 @@ def get_metadata(spreadsheet_id: str, service: Resource, ranges: list[str]) -> I
         meta_ranges.append(first_rows_range)
 
     # make call to get metadata
+    # TODO: add fields so the calls are more efficient
     spr_meta = service.spreadsheets().get(
         spreadsheetId=spreadsheet_id,
         ranges=ranges,
@@ -84,7 +85,8 @@ def get_metadata(spreadsheet_id: str, service: Resource, ranges: list[str]) -> I
 
             # key does not exist in ranges
             if not (range_id in find_ranges):
-                break
+                continue
+
             # key exists
             my_range = find_ranges[range_id]
 
@@ -173,7 +175,6 @@ def google_spreadsheet(spreadsheet_identifier: str, sheet_names: list[str] = Non
     return (
         data_resources_list
     )
-    logging.info("Finished loading metadata table")
 
 
 @dlt.resource(write_disposition="replace", name="spreadsheet_info")
@@ -240,10 +241,9 @@ def get_data(service: Resource, spreadsheet_id: str, range_names: list[str], met
             sheet_meta_batch = metadata_dict[sheet_range_name]
         else:
             # if range doesn't exist as a key then it means the key is just the sheet name and google sheets api just filled the range
-            sheet_name_batch = sheet_range_name.split("!")[0]
-
+            sheet_range_name = sheet_range_name.split("!")[0]
             try:
-                sheet_meta_batch = metadata_dict[sheet_name_batch]
+                sheet_meta_batch = metadata_dict[sheet_range_name]
             except KeyError:
                 # sheet is not there because it was popped
                 logging.warning(f"Skipping data for empty range: {sheet_range_name}")
@@ -256,6 +256,7 @@ def get_data(service: Resource, spreadsheet_id: str, range_names: list[str], met
                                          name=sheet_range_name,
                                          write_disposition="replace")
                             )
+        logging.info(f"Data for {sheet_range_name} loaded")
     logging.info("Finished loading all ranges")
     return my_resources
 
@@ -270,21 +271,25 @@ def process_range(sheet_val: Iterator[DictStrAny], sheet_meta: Iterator[DictStrA
     # get headers and first line data types which is just Datetime or not datetime so far
     headers = sheet_meta['headers']
     first_line_val_types = sheet_meta['values']
+
+    weird_stuff = [row for row in sheet_val]
     for row in sheet_val[1:]:
         table_dict = {}
 
-        # empty row
+        # empty row; skip
         if not row:
-            break
+            continue
 
         # process both rows and check for differences to spot dates
         for val, header, is_datetime in zip(row, headers, first_line_val_types):
-            # check whether the object is a datetime object
-            if is_datetime:
-                converted_sn = serial_date_to_datetime(val)
-                table_dict[header] = converted_sn
+
+            # 3 main cases: null cell value, datetime value, every other value
+            # handle null values properly. Null cell values are returned as empty strings, this will cause dlt to create new columns and fill them with empty strings
+            if val == "":
+                fill_val = None
+            elif is_datetime:
+                fill_val = serial_date_to_datetime(val)
             else:
-                # just input the regular value
-                table_dict[header] = val
-        logging.info("Finished loading table")
+                fill_val = val
+            table_dict[header] = fill_val
         yield table_dict

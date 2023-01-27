@@ -3,14 +3,16 @@ from typing import Union
 from dlt.common.typing import DictStrAny
 from datetime import datetime, timedelta
 from re import match
+from dlt.common import pendulum
 
-
-# Date constant- n.o days from 1st Jan 1AD to 30th December 1899
-SERIAL_NUMBER_ORIGIN_ORDINAL = 693594
 # this string comes before the id
 URL_ID_IDENTIFIER = "d"
 # time info
 SECONDS_IN_DAY = 86400
+# TIMEZONE info
+DLT_TIMEZONE = "UTC"
+# number of seconds from UNIX timestamp origin (1st Jan 1970) to serial number origin (30th Dec 1899)
+TIMESTAMP_CONST = -2209161600.0
 
 
 def get_data_type(value_list: list[DictStrAny]) -> list[bool]:
@@ -25,13 +27,10 @@ def get_data_type(value_list: list[DictStrAny]) -> list[bool]:
     value_type_list = []
     # loop through the list and process each value dict, decide if something is a datetime value or not
     for val_dict in value_list:
-        # TODO: try except
-        is_date = "effectiveValue" in val_dict and \
-                  "numberValue" in val_dict['effectiveValue'] and \
-                  "effectiveFormat" in val_dict and \
-                  "numberFormat" in val_dict['effectiveFormat'] and\
-                  "type" in val_dict["effectiveFormat"]["numberFormat"] and\
-                  ("DATE" in val_dict["effectiveFormat"]["numberFormat"]["type"] or "TIME" in val_dict["effectiveFormat"]["numberFormat"]["type"])
+        try:
+            is_date = "DATE" in val_dict["effectiveFormat"]["numberFormat"]["type"] or "TIME" in val_dict["effectiveFormat"]["numberFormat"]["type"]
+        except KeyError as e:
+            is_date = False
         value_type_list.append(is_date)
     return value_type_list
 
@@ -79,7 +78,7 @@ def get_spreadsheet_id(url_or_id: str) -> str:
         return url_or_id
 
 
-def serial_date_to_datetime(serial_number: Union[int, float]) -> datetime:
+def serial_date_to_datetime(serial_number: Union[int, float]) -> pendulum.datetime:
     """
     This function receives a serial number which can be an int or float(depending on the serial number) and outputs a datetime object
     @:param: serial_number- int/float. The integer part shows the number of days since December 30th 1899, the decimal part shows the fraction of the day
@@ -88,23 +87,12 @@ def serial_date_to_datetime(serial_number: Union[int, float]) -> datetime:
     # TODO: add timezone to data
 
     # if called with a different data type, return with whatever input was, handled by the dlt pipeline later
+    # edge case
     if not isinstance(serial_number, (int, float)):
         return serial_number
 
-    # convert starting date to ordinal date: number of days since Jan 1st, 1 AD
-    # the integer part is number of days
-    time_since = SERIAL_NUMBER_ORIGIN_ORDINAL + serial_number
-    days_since = int(time_since)
-    converted_date = datetime.fromordinal(days_since)
-
-    # if this is just a date and not a time data type, just return date simply
-    if isinstance(time_since, int):
-        return converted_date
-
-    # otherwise get extra seconds passed and add them to datetime
-    extra_seconds = round((time_since-days_since) * SECONDS_IN_DAY)
-    converted_date = converted_date + timedelta(seconds=extra_seconds)
-    return converted_date
+    # To get the seconds passed since the start date of serial numbers we round the product of the number of seconds in a day and the serial number
+    return pendulum.from_timestamp(TIMESTAMP_CONST + round(SECONDS_IN_DAY * serial_number), DLT_TIMEZONE)
 
 
 def get_first_rows(sheet_range: str) -> list[str]:

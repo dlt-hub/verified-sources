@@ -3,6 +3,7 @@ from pipelines.google_sheets import data_validator
 from datetime import datetime
 from typing import Union
 from dlt.common.typing import TDataItems, DictStrAny
+from dlt.common import pendulum
 
 
 TEST_CASES_URL = [
@@ -29,10 +30,10 @@ TEST_CASES_URL_OR_ID = [
 
 # TODO: implement some proper testing for date conversion
 TEST_CASES_DATE = [
-    (37621, datetime(year=2002, month=12, day=31)),
-    (0.999988425925926, datetime(year=1899, month=12, day=30, hour=23, minute=59, second=59)),
-    (0.9993055555555556, datetime(year=1899, month=12, day=30, hour=23, minute=59)),
-    (44926.99998842592, datetime(year=2022, month=12, day=31, hour=23, minute=59, second=59))
+    (37621, pendulum.datetime(year=2002, month=12, day=31, tz="UTC")),
+    (0.999988425925926, pendulum.datetime(year=1899, month=12, day=30, hour=23, minute=59, second=59, tz="UTC")),
+    (0.9993055555555556, pendulum.datetime(year=1899, month=12, day=30, hour=23, minute=59, tz="UTC")),
+    (44926.99998842592, pendulum.datetime(year=2022, month=12, day=31, hour=23, minute=59, second=59, tz="UTC"))
 ]
 
 TEST_CASES_RANGE = [
