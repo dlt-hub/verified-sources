@@ -5,10 +5,8 @@ from tests.utils import ALL_DESTINATIONS, assert_load_info, drop_pipeline
 
 
 TEST_SPREADSHEETS = ["1NVxFQYRqrGmur_MeIc4m4ewToF802uy2ObC61HOCstU"]
-ALL_RANGES = ["all_types", "only_headers", "only_data", "has_empty", "inconsistent_types", "empty_row", "empty_rows", "two_tables", "more_headers_than_data", "more_data", "empty"]
-ALL_TABLES = ["all_types", "empty_row", "empty_rows", "has_empty", "inconsistent_types", "more_headers_than_data", "sheet1", "sheet2", "sheet3", "sheet4", "two_tables", "spreadsheet_info",
-              "only_headers", "only_data"]
-
+ALL_TABLES = ["all_types", "empty_row", "empty_rows", "has_empty", "inconsistent_types", "more_headers_than_data", "more_data", "sheet1", "sheet2", "sheet3", "sheet4", "two_tables",
+              "spreadsheet_info", "only_headers", "only_data", "hole_middle"]
 ALL_DESTINATIONS = ["postgres"]
 
 
@@ -55,19 +53,22 @@ def test_full_load(destination_name: str) -> None:
             assert len(rows) == len(ALL_TABLES) - 1
 
             # check all tables loaded and check that they have the correct number of columns
+            # spreadsheet_info doesn't count dlt tables, it just saves how many headers it spots from metadata, this number of cols doesn't necessarily match the ones in the db
             assert rows[0][1] == 6  # all_types table has 6 columns
             assert rows[1][1] == 5  # empty_row table has 5 columns
             assert rows[2][1] == 5  # empty_rows table has 5 columns
             assert rows[3][1] == 5  # has_empty table has 5 columns
-            assert rows[4][1] == 5  # inconsistent_types table has 5 columns
-            assert rows[5][1] == 8  # more_headers_than_data table has 8 columns
-            assert rows[6][1] == 2  # only_data table has 2 columns
-            assert rows[7][1] == 2  # only_headers table has 2 columns
-            assert rows[8][1] == 4  # sheet1 table has 4 columns
-            assert rows[9][1] == 5  # sheet2 table has 5 columns
-            assert rows[10][1] == 9  # sheet3 table has 9 columns
-            assert rows[11][1] == 1  # sheet4 table has 1 column
-            assert rows[12][1] == 9  # two_tables table has 9 columns
+            assert rows[4][1] == 7  # hole_middle table has 7 columns - this also includes the empty columns which are dropped from database
+            assert rows[5][1] == 5  # inconsistent_types table has 5 columns
+            assert rows[6][1] == 4  # more_data table has 4 columns
+            assert rows[7][1] == 8  # more_headers_than_data table has 8 columns
+            assert rows[8][1] == 2  # only_data table has 2 columns
+            assert rows[9][1] == 2  # only_headers table has 2 columns
+            assert rows[10][1] == 4  # sheet1 table has 4 columns
+            assert rows[11][1] == 5  # sheet2 table has 5 columns
+            assert rows[12][1] == 9  # sheet3 table has 9 columns
+            assert rows[13][1] == 1  # sheet4 table has 1 column
+            assert rows[14][1] == 9  # two_tables table has 9 columns
     # make sure all jobs were loaded
     assert_load_info(info)
 
@@ -221,6 +222,15 @@ def test_more_headers(destination_name) -> None:
     info = pipeline.run(data)
     assert_load_info(info)
 
+    # run query to check number of columns
+    with pipeline.sql_client() as c:
+        sql_query = "SELECT * FROM more_headers_than_data;"
+        with c.execute_query(sql_query) as cur:
+            rows = list(cur.fetchall())
+            for row in rows:
+                # each row must have 8 columns (including the 2 dlt ones)
+                assert len(row) == 8
+
 
 @pytest.mark.parametrize("destination_name", ALL_DESTINATIONS)
 def test_more_data(destination_name) -> None:
@@ -229,7 +239,20 @@ def test_more_data(destination_name) -> None:
     @:param: destination_name - redshift/bigquery/postgres
     """
     # TODO: define more specific beheviour when there is more data than headers other than not to load data entirely: are the extra headers added to the table or not?
-    assert 1 == 1
+
+    # run pipeline only for the specific table with all data types and grab that table
+    pipeline = dlt.pipeline(destination=destination_name, full_refresh=True, dataset_name="test_more_headers")
+    data = google_spreadsheet(spreadsheet_identifier=TEST_SPREADSHEETS[0], sheet_names=["more_headers_than_data"])
+    info = pipeline.run(data)
+    assert_load_info(info)
+
+    with pipeline.sql_client() as c:
+        sql_query = "SELECT * FROM more_data;"
+        with c.execute_query(sql_query) as cur:
+            rows = list(cur.fetchall())
+            for row in rows:
+                # each row must have 6 columns(including the 2 dlt ones)
+                assert len(row) == 6
 
 
 @pytest.mark.parametrize("destination_name", ALL_DESTINATIONS)
@@ -251,3 +274,26 @@ def test_two_tables(destination_name) -> None:
             rows = list(cur.fetchall())
             # 11 rows with inconsistent types expected
             assert len(rows) == 11
+
+
+@pytest.mark.parametrize("destination_name", ALL_DESTINATIONS)
+def test_hole_middle(destination_name) -> None:
+    """
+    Test ranges that have 2 tables inside the range
+    @:param: destination_name - redshift/bigquery/postgres
+    """
+
+    # run pipeline only for the specific table with all data types and grab that table
+    pipeline = dlt.pipeline(destination=destination_name, full_refresh=True, dataset_name="test_hole_middle")
+    data = google_spreadsheet(spreadsheet_identifier=TEST_SPREADSHEETS[0], sheet_names=["hole_middle"])
+    info = pipeline.run(data)
+
+    with pipeline.sql_client() as c:
+        # this query will return all rows from 2nd table appended to the 1st table
+        sql_query = "SELECT * FROM hole_middle;"
+        with c.execute_query(sql_query) as cur:
+            rows = list(cur.fetchall())
+            # 10 rows and 7 columns (including dlt ones) expected
+            assert len(rows) == 10
+            for row in rows:
+                assert len(row) == 7

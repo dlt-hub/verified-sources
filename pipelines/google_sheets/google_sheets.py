@@ -63,7 +63,7 @@ def get_metadata(spreadsheet_id: str, service: Resource, ranges: list[str]) -> I
     # TODO: add fields so the calls are more efficient
     spr_meta = service.spreadsheets().get(
         spreadsheetId=spreadsheet_id,
-        ranges=ranges,
+        ranges=meta_ranges,
         includeGridData=True
     ).execute()
 
@@ -95,13 +95,25 @@ def get_metadata(spreadsheet_id: str, service: Resource, ranges: list[str]) -> I
                 row_data_range = sh_range['rowData']
             except KeyError:
                 logging.warning(f"Metadata: Skipped empty range: {my_range}")
+                print(sh_range)
                 del ranges_data[my_range]
                 continue
 
             # get headers and 1st row data
             headers = []
+            empty_header_index = 0
             for header in row_data_range[0]['values']:
-                headers.append(header['formattedValue'])
+                if header:
+                    headers.append(header['formattedValue'])
+                else:
+                    headers.append(f"empty_header_filler{empty_header_index}")
+                    empty_header_index = empty_header_index + 1
+
+            # manage headers being empty
+            if len(headers) == empty_header_index:
+                logging.warning(f"Metadata: Skipped deformed range: {my_range}")
+                del ranges_data[my_range]
+                continue
 
             try:
                 # get data types for the first row
@@ -111,10 +123,10 @@ def get_metadata(spreadsheet_id: str, service: Resource, ranges: list[str]) -> I
                 logging.warning(f"Metadata: No data values for the first line of data {my_range}")
 
             # ensure there are no empty headers
-            if len(first_line_values) > len(headers):
-                logging.warning(f"Metadata: Skipped deformed range: {my_range}")
-                del ranges_data[my_range]
-                continue
+            #if len(first_line_values) > len(headers):
+            #    logging.warning(f"Metadata: Skipped deformed range: {my_range}")
+            #    del ranges_data[my_range]
+            #    continue
 
             # add headers and values
             ranges_data[my_range]["headers"] = headers
@@ -272,7 +284,6 @@ def process_range(sheet_val: Iterator[DictStrAny], sheet_meta: Iterator[DictStrA
     headers = sheet_meta['headers']
     first_line_val_types = sheet_meta['values']
 
-    weird_stuff = [row for row in sheet_val]
     for row in sheet_val[1:]:
         table_dict = {}
 
@@ -292,4 +303,5 @@ def process_range(sheet_val: Iterator[DictStrAny], sheet_meta: Iterator[DictStrA
             else:
                 fill_val = val
             table_dict[header] = fill_val
+        print(table_dict)
         yield table_dict

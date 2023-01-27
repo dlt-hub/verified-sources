@@ -163,3 +163,32 @@ def get_first_rows(sheet_range: str) -> list[str]:
         raise ValueError(f"Crashed while reading row: {range_start}")
 
     return [sheet_name, f"{sheet_name}!{starting_col}{starting_row}:{ending_col}{ending_row}"]
+
+
+def parse_range(grid_range: str) -> list[Union[int, str]]:
+    """
+    Receives a grid range, will output a list containing sheet_name, starting row, starting col, ending row, ending col
+    @:param: grid_range - Str formatted in A1 notation sheet_name![col][row]:[col][row]
+    @:return: list_range - List containing [sheet_name, col, row, col, row]
+    """
+
+    list_range = []
+
+    # split on the !
+    sheet_parts = grid_range.split("!")
+    sheet_name = sheet_parts[0]
+
+    range_parts = sheet_parts[1]
+    all_range_parts = sheet_parts[1].split(",")
+    for range_part in all_range_parts:
+
+        start_end = range_part.split(":")
+
+        r_start = start_end[0]
+        r_end = start_end[1]
+    pass
+
+
+
+
+
