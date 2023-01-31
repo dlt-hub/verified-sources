@@ -17,7 +17,7 @@ except ImportError:
 # TODO: add exceptions to the code in case HTTP requests fail
 
 
-def get_metadata(spreadsheet_id: str, service: Resource, ranges: list[str]) -> dict[Any]:
+def get_metadata(spreadsheet_id: str, service: Resource, ranges: list[str], named_ranges: dict[str] = None) -> dict[Any]:
     """
     # TODO: add fields to save on info returned
     Gets the metadata for the first 2 rows of every range specified. The first row is deduced as the header and the 2nd row specifies the format the rest of the data should follow
@@ -51,8 +51,13 @@ def get_metadata(spreadsheet_id: str, service: Resource, ranges: list[str]) -> d
             "headers": [],
             "values": [],
             "sheet_name": sheet_name,
-            "index": range_index
+            "index": range_index,
+            "name": None
         }
+        # check if this is a named range
+        if named_ranges and sh_range in named_ranges:
+            range_dict["name"] = named_ranges[sh_range]
+
         ranges_data[sh_range] = range_dict
         find_ranges[f"{sheet_name}{range_index}"] = sh_range
 
@@ -70,7 +75,6 @@ def get_metadata(spreadsheet_id: str, service: Resource, ranges: list[str]) -> d
 
     # process metadata, loop through every sheet that is returned from the given ranges
     for sheet in spr_meta["sheets"]:
-
         # get sheet data
         meta_sheet_name = sheet["properties"]["title"]
         sheet_range_data = sheet["data"]
@@ -80,17 +84,13 @@ def get_metadata(spreadsheet_id: str, service: Resource, ranges: list[str]) -> d
         for i in range(len(sheet_range_data)):
             # get the sheet range as it appears in the api response
             sh_range = sheet_range_data[i]
-
             # Combine sheet name and index to function as a key for the ranges dict
             range_id = meta_sheet_name + str(i)
-
             # key does not exist in ranges
             if not (range_id in find_ranges):
                 continue
-
             # key exists
             my_range = find_ranges[range_id]
-
             # check sheet is not empty
             try:
                 row_data_range = sh_range["rowData"]
@@ -114,14 +114,12 @@ def get_metadata(spreadsheet_id: str, service: Resource, ranges: list[str]) -> d
                 logging.warning(f"Metadata: Skipped deformed range: {my_range}")
                 del ranges_data[my_range]
                 continue
-
             try:
                 # get data types for the first row
                 first_line_values = is_date_datatype(row_data_range[1]["values"])
             except IndexError:
                 first_line_values = []
                 logging.warning(f"Metadata: No data values for the first line of data {my_range}")
-
             # add headers and values
             ranges_data[my_range]["headers"] = headers
             ranges_data[my_range]["values"] = first_line_values
@@ -129,7 +127,7 @@ def get_metadata(spreadsheet_id: str, service: Resource, ranges: list[str]) -> d
 
 
 @dlt.source
-def google_spreadsheet(spreadsheet_identifier: str, range_names: list[str] = None , credentials: GcpClientCredentialsWithDefault = dlt.secrets.value,
+def google_spreadsheet(spreadsheet_identifier: str, range_names: list[str] = None, credentials: GcpClientCredentialsWithDefault = dlt.secrets.value,
                        get_sheets: bool = True, get_named_ranges: bool = True) -> Any:
     """
     The source for the dlt pipeline. It returns the following resources: 1 dlt resource for every range in sheet_names
@@ -138,17 +136,15 @@ def google_spreadsheet(spreadsheet_identifier: str, range_names: list[str] = Non
     @:param: credentials - GCP credentials to the account with Google Sheets api access, defined in dlt.secrets
     @:return: multiple dlt resources
     """
-
     # authenticate to the service using the helper function
     service = api_auth(cast(GcpClientCredentialsWithDefault, credentials))
     logging.info("Successful Authentication")
-
     # get spreadsheet id from url or id
     spreadsheet_id = get_spreadsheet_id(spreadsheet_identifier)
-
     # if range_names were not provided, initialize them as an empty list
     if not range_names:
         range_names = []
+    named_ranges = None
     # if sheet names or named_ranges are to be added as tables, an extra api call is made and
     if get_sheets or get_named_ranges:
         # get metadata and append to list of ranges as needed
@@ -159,7 +155,7 @@ def google_spreadsheet(spreadsheet_identifier: str, range_names: list[str] = Non
             named_ranges = {convert_named_range_to_a1(named_range_dict=named_range, sheet_names_dict=simple_metadata["sheets"]): named_range["name"] for named_range in simple_metadata["named_ranges"]}
             range_names += list(named_ranges.keys())
     # get metadata on the first 2 rows for every provided range
-    metadata_ranges_all = get_metadata(spreadsheet_id=spreadsheet_id, service=service, ranges=range_names)
+    metadata_ranges_all = get_metadata(spreadsheet_id=spreadsheet_id, service=service, ranges=range_names, named_ranges=named_ranges)
     data_resources_list = get_data(service=service, spreadsheet_id=spreadsheet_id, range_names=range_names, metadata_dict=metadata_ranges_all)
     metadata_resource = metadata_table(spreadsheet_info=metadata_ranges_all, spreadsheet_id=spreadsheet_id)
     data_resources_list.append(metadata_resource)
@@ -179,12 +175,10 @@ def metadata_table(spreadsheet_info: dict[Any], spreadsheet_id: str) -> Iterator
     # the keys for this dict are the ranges where the data is gathered from
     loaded_ranges = spreadsheet_info.keys()
     for loaded_range in loaded_ranges:
-
         # get needed info from dict
         loaded_range_meta = spreadsheet_info[loaded_range]
         range_num_headers = len(loaded_range_meta["headers"])
         range_sheet_name = loaded_range_meta["sheet_name"]
-
         # table structure
         table_dict = {
             "spreadsheet_id": spreadsheet_id,
@@ -192,6 +186,9 @@ def metadata_table(spreadsheet_info: dict[Any], spreadsheet_id: str) -> Iterator
             "sheet_name": range_sheet_name,
             "num_cols": range_num_headers
         }
+        # change name of loaded range name if it is a ranged name
+        if loaded_range_meta["name"]:
+            table_dict["loaded_range"] = loaded_range_meta["name"]
         yield table_dict
 
 
@@ -205,6 +202,10 @@ def get_data(service: Resource, spreadsheet_id: str, range_names: list[str], met
     @:returns: my_resources - list of dlt resources, each containing a table of a specific range
     """
 
+    # handle requests with no ranges - edge case
+    if not range_names:
+        logging.warning("Fetching data error: No ranges to get data from. Check the input ranges are not empty.")
+        return []
     my_resources = []
     # Make an api call to get the data for all sheets and ranges
     # get dates as serial number
@@ -226,6 +227,9 @@ def get_data(service: Resource, spreadsheet_id: str, range_names: list[str], met
         # get metadata for sheet
         if sheet_range_name in metadata_dict:
             sheet_meta_batch = metadata_dict[sheet_range_name]
+            # check if this is a named range
+            if sheet_meta_batch["name"]:
+                sheet_range_name = sheet_meta_batch["name"]
         else:
             # if range doesn't exist as a key then it means the key is just the sheet name and google sheets api just filled the range
             sheet_range_name = sheet_range_name.split("!")[0]
@@ -253,7 +257,7 @@ def process_range(sheet_val: Iterator[DictStrAny], sheet_meta: dict[Any]) -> Ite
     Receives 2 arrays of tabular data inside a sheet. This will be processed into a schema that is later stored into a database table
     @:param: spreadsheet_id - the id of the spreadsheet
     @:param: spreadsheets_resource - Resource object, used to make calls to google spreadsheets
-    @:return:  ?
+    @:return:  table_dict - a dict version of the table. It generates a dict of the type {header:value} for every row.
     """
     # get headers and first line data types which is just Datetime or not datetime so far
     headers = sheet_meta["headers"]
@@ -277,5 +281,4 @@ def process_range(sheet_val: Iterator[DictStrAny], sheet_meta: dict[Any]) -> Ite
             else:
                 fill_val = val
             table_dict[header] = fill_val
-        print(table_dict)
         yield table_dict
