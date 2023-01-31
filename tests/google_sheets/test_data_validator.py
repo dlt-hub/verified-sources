@@ -51,6 +51,22 @@ TEST_CASES_DATA_TYPES = [
     ([], [])
 ]
 
+TEST_CASES_CONVERT_COL = [
+    (0, "A"),
+    (1, "B"),
+    (25, "Z"),
+    (26, "AA"),
+    (27, "AB"),
+    (51, "AZ"),
+    (52, "BA"),
+    (53, "BB"),
+    (675, "YZ"),
+    (676, "ZA"),
+    (700, "ZY"),
+    (701, "ZZ"),
+    (702, "AAA")
+]
+
 
 @pytest.mark.parametrize("url, expected", TEST_CASES_URL)
 def test_process_url(url: str, expected: str):
@@ -99,4 +115,9 @@ def test_ranges(sheet_range: str, expected: str):
 
 @pytest.mark.parametrize("value_dict_row, expected", TEST_CASES_DATA_TYPES)
 def test_data_types(value_dict_row: list[DictStrAny], expected: bool):
-    assert data_validator.get_data_type(value_dict_row) == expected
+    assert data_validator.is_date_datatype(value_dict_row) == expected
+
+
+@pytest.mark.parametrize("col_idx, expected", TEST_CASES_CONVERT_COL)
+def test_data_types(col_idx: int, expected: str):
+    assert data_validator.convert_col_a1(col_idx) == expected

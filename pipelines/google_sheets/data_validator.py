@@ -1,23 +1,22 @@
 # This is a helper module that contains function which validate data
 from typing import Union
 from dlt.common.typing import DictStrAny
-from datetime import datetime, timedelta
 from re import match
 from dlt.common import pendulum
 
 # this string comes before the id
 URL_ID_IDENTIFIER = "d"
 # time info
-SECONDS_IN_DAY = 86400
+SECONDS_PER_DAY = 86400
 # TIMEZONE info
 DLT_TIMEZONE = "UTC"
 # number of seconds from UNIX timestamp origin (1st Jan 1970) to serial number origin (30th Dec 1899)
 TIMESTAMP_CONST = -2209161600.0
 
 
-def get_data_type(value_list: list[DictStrAny]) -> list[bool]:
+def is_date_datatype(value_list: list[DictStrAny]) -> list[bool]:
     """
-    This is a helper function that receives
+    Helper function that receives a list of value lists from Google Sheets API, and for each data type deduces if the value contains a datetime object or not
     @:param: value_list - a list of the values in the first row of data returned by google sheets api. They are all dicts containing different information about the value
     @:return: value_type_list - list containing bool values. True if the value is a date, False otherwise
     """
@@ -28,7 +27,9 @@ def get_data_type(value_list: list[DictStrAny]) -> list[bool]:
     # loop through the list and process each value dict, decide if something is a datetime value or not
     for val_dict in value_list:
         try:
-            is_date = "DATE" in val_dict["effectiveFormat"]["numberFormat"]["type"] or "TIME" in val_dict["effectiveFormat"]["numberFormat"]["type"]
+            is_date_type = "DATE" in val_dict["effectiveFormat"]["numberFormat"]["type"]
+            is_time_type = "TIME" in val_dict["effectiveFormat"]["numberFormat"]["type"]
+            is_date = is_date_type or is_time_type
         except KeyError as e:
             is_date = False
         value_type_list.append(is_date)
@@ -78,10 +79,11 @@ def get_spreadsheet_id(url_or_id: str) -> str:
         return url_or_id
 
 
-def serial_date_to_datetime(serial_number: Union[int, float]) -> pendulum.datetime:
+def serial_date_to_datetime(serial_number: Union[int, float, str, bool]) -> pendulum.datetime:
     """
     This function receives a serial number which can be an int or float(depending on the serial number) and outputs a datetime object
-    @:param: serial_number- int/float. The integer part shows the number of days since December 30th 1899, the decimal part shows the fraction of the day
+    @:param: serial_number- int/float. The integer part shows the number of days since December 30th 1899, the decimal part shows the fraction of the day. Sometimes if a table is not formatted
+    properly this can be also be a bool or str.
     @:return: converted_date: datetime object for the same date as the serial number
     """
     # TODO: add timezone to data
@@ -92,7 +94,7 @@ def serial_date_to_datetime(serial_number: Union[int, float]) -> pendulum.dateti
         return serial_number
 
     # To get the seconds passed since the start date of serial numbers we round the product of the number of seconds in a day and the serial number
-    return pendulum.from_timestamp(TIMESTAMP_CONST + round(SECONDS_IN_DAY * serial_number), DLT_TIMEZONE)
+    return pendulum.from_timestamp(TIMESTAMP_CONST + round(SECONDS_PER_DAY * serial_number), DLT_TIMEZONE)
 
 
 def get_first_rows(sheet_range: str) -> list[str]:
@@ -189,6 +191,44 @@ def parse_range(grid_range: str) -> list[Union[int, str]]:
     pass
 
 
+def convert_named_range_to_a1(named_range_dict: dict[DictStrAny], sheet_names_dict: dict[DictStrAny] = {}) -> str:
+    """
+    Converts a named_range dict returned from Google Sheets API metadata call to A1 range
+    """
+    start_row_idx = named_range_dict["range"]["startRowIndex"]
+    end_row_idx = named_range_dict["range"]["endRowIndex"]
+    start_col_idx = named_range_dict["range"]["startColumnIndex"]
+    end_col_idx = named_range_dict["range"]["endColumnIndex"]
+
+    # get sheet name from sheet_names_dict
+    sheet_id = named_range_dict["range"]["sheetId"]
+    named_range_sheet = sheet_names_dict[sheet_id]
+
+    # convert columns from index to letters
+    start_col_letter = convert_col_a1(start_col_idx)
+    end_col_letter = convert_col_a1(end_col_idx - 1)
+
+    # For some reason the end row index is 1 row beyond the actual stopping point,
+    # meaning we don't have to add 1 to convert to row number
+    return f"{named_range_sheet}!{start_col_letter}{start_row_idx+1}:{end_col_letter}{end_row_idx}"
 
 
-
+def convert_col_a1(col_idx: int) -> str:
+    """
+    Converts a column index to a column letter in accordance with Google Sheets
+    @:param: col_idx - index of column
+    @:return: col_name - name of a column
+    """
+    letters = ["", 'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L', 'M', 'N', 'O', 'P', 'Q', 'R', 'S', 'T', 'U', 'V', 'W', 'X', 'Y', 'Z']
+    col_name = ""
+    while col_idx > 0:
+        col_idx, remainder = divmod(col_idx, 26)
+        if col_name:
+            # edge case - columns of 2 or more letters that start with the letter Z
+            if remainder == 0:
+                remainder = 26
+                col_idx = col_idx - 1
+            col_name = letters[remainder] + col_name
+        else:
+            col_name = letters[remainder+1] + col_name
+    return col_name or "A"

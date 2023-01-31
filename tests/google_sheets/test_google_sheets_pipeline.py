@@ -10,7 +10,7 @@ ALL_TABLES = ["all_types", "empty_row", "empty_rows", "has_empty", "inconsistent
 ALL_DESTINATIONS = ["postgres"]
 
 
-@pytest.mark.parametrize('spreadsheet_identifier', TEST_SPREADSHEETS)
+@pytest.mark.parametrize("spreadsheet_identifier", TEST_SPREADSHEETS)
 def test_sample_load(spreadsheet_identifier) -> None:
     """
     Tests access for all spreadsheets in the spreadsheet list
@@ -112,12 +112,12 @@ def test_all_data_types(destination_name) -> None:
     test_table = schema.all_tables()[0]
 
     # check all columns
-    assert test_table['columns']["text_types"]["data_type"] == "text"
-    assert test_table['columns']["number_types"]["data_type"] == "bigint"
-    assert test_table['columns']["float_types"]["data_type"] == "double"
-    assert test_table['columns']["bool_types"]["data_type"] == "bool"
-    assert test_table['columns']["formula_types"]["data_type"] == "double"
-    assert test_table['columns']["date_types"]["data_type"] == "timestamp"
+    assert test_table["columns"]["text_types"]["data_type"] == "text"
+    assert test_table["columns"]["number_types"]["data_type"] == "bigint"
+    assert test_table["columns"]["float_types"]["data_type"] == "double"
+    assert test_table["columns"]["bool_types"]["data_type"] == "bool"
+    assert test_table["columns"]["formula_types"]["data_type"] == "double"
+    assert test_table["columns"]["date_types"]["data_type"] == "timestamp"
 
 
 @pytest.mark.parametrize("destination_name", ALL_DESTINATIONS)

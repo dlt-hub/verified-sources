@@ -10,8 +10,8 @@ RANGES = ["sheet3!A1:B2", "sheet3!A2:B4"]
 # FULL PIPELINE RUN
 start = time.time()
 pipeline = dlt.pipeline(destination="postgres", full_refresh=False, dataset_name="sample_google_sheet_data")
-data = google_spreadsheet(spreadsheet_identifier=SPREADSHEET_URL, sheet_names=[])
+data = google_spreadsheet(spreadsheet_identifier=SPREADSHEET_URL)
 info = pipeline.run(data)
 end = time.time()
-print(info)
+#print(info)
 print(f"Execution time: {end-start}")
