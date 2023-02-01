@@ -1,4 +1,5 @@
 # This is a helper module that contains function which validate data
+
 from typing import Union
 from dlt.common.typing import DictStrAny
 from re import match
@@ -20,8 +21,6 @@ def is_date_datatype(value_list: list[DictStrAny]) -> list[bool]:
     @:param: value_list - a list of the values in the first row of data returned by google sheets api. They are all dicts containing different information about the value
     @:return: value_type_list - list containing bool values. True if the value is a date, False otherwise
     """
-
-    # TODO: check if row and cols are empty and skip
 
     value_type_list = []
     # loop through the list and process each value dict, decide if something is a datetime value or not
@@ -46,7 +45,6 @@ def process_url(url: str) -> str:
 
     # split on the '/'
     parts = url.split("/")
-
     # loop through parts
     for i in range(len(parts)):
         # if we find
@@ -67,8 +65,6 @@ def get_spreadsheet_id(url_or_id: str) -> str:
     @:return: spreadsheet_id a string which is definetly the id of the spreadsheet
     """
 
-    # TODO: raise value error for empty id ?
-
     # check if this is an url: http or https in it
     if match(r"http://|https://", url_or_id):
         # process url
@@ -86,13 +82,10 @@ def serial_date_to_datetime(serial_number: Union[int, float, str, bool]) -> pend
     properly this can be also be a bool or str.
     @:return: converted_date: datetime object for the same date as the serial number
     """
-    # TODO: add timezone to data
 
-    # if called with a different data type, return with whatever input was, handled by the dlt pipeline later
-    # edge case
+    # if called with a different data type, return with whatever input was, handled by the dlt pipeline later - edge case
     if not isinstance(serial_number, (int, float)):
         return serial_number
-
     # To get the seconds passed since the start date of serial numbers we round the product of the number of seconds in a day and the serial number
     return pendulum.from_timestamp(TIMESTAMP_CONST + round(SECONDS_PER_DAY * serial_number), DLT_TIMEZONE)
 
@@ -105,28 +98,21 @@ def get_first_rows(sheet_range: str) -> list[str]:
     @:return: [sheet_name, modified_range] - list containing strings: sheet_name and the range modified to only have the first 2 rows
     """
 
-    # TODO : add parsing for R1C1 notation
-
     # split on the !
     sheet_parts = sheet_range.split("!")
     sheet_name = sheet_parts[0]
 
-    # this is just a sheet name if it only has 1 part
+    # the range can either have 1 or 2 parts: 1 part if it is simply a sheet name or 2 parts if it is an A1 range
     if len(sheet_parts) == 1:
         return [sheet_name, f"{sheet_name}!1:2"]
-    # if for some reason there are not 2 parts, raise value error with range
-    elif len(sheet_parts) != 2:
+    elif len(sheet_parts) > 2:
         raise ValueError("Range format is incorrect! Check documentation for correct usage.")
 
     range_name = sheet_parts[1]
-
-    # split on the :
+    # split on the :, expecting strings in the form start:end, i.e 2 parts after splitting on the :
     range_parts = range_name.split(":")
-
-    # again check for misformated ranges
     if len(range_parts) != 2:
         raise ValueError("Range format is incorrect! Check documentation for correct usage.")
-
     range_start = range_parts[0]
     range_end = range_parts[1]
 
@@ -158,42 +144,20 @@ def get_first_rows(sheet_range: str) -> list[str]:
     if not starting_row:
         starting_row = "1"
 
-    # error handling incase of parsing errors
+    # error handling - parsing errors
     try:
         ending_row = str(int(starting_row) + 1)
     except ValueError:
         raise ValueError(f"Crashed while reading row: {range_start}")
-
     return [sheet_name, f"{sheet_name}!{starting_col}{starting_row}:{ending_col}{ending_row}"]
-
-
-def parse_range(grid_range: str) -> list[Union[int, str]]:
-    """
-    Receives a grid range, will output a list containing sheet_name, starting row, starting col, ending row, ending col
-    @:param: grid_range - Str formatted in A1 notation sheet_name![col][row]:[col][row]
-    @:return: list_range - List containing [sheet_name, col, row, col, row]
-    """
-
-    list_range = []
-
-    # split on the !
-    sheet_parts = grid_range.split("!")
-    sheet_name = sheet_parts[0]
-
-    range_parts = sheet_parts[1]
-    all_range_parts = sheet_parts[1].split(",")
-    for range_part in all_range_parts:
-
-        start_end = range_part.split(":")
-
-        r_start = start_end[0]
-        r_end = start_end[1]
-    pass
 
 
 def convert_named_range_to_a1(named_range_dict: dict[DictStrAny], sheet_names_dict: dict[DictStrAny] = {}) -> str:
     """
-    Converts a named_range dict returned from Google Sheets API metadata call to A1 range
+    Converts a named_range dict returned from Google Sheets API metadata call to an A1 range
+    @:param: named_range_dict - dict returned from Google Sheets API, it contains all the information about a named range
+    @:param: sheet_names_dict - dict containing all the sheets inside the spreadsheet where the sheet id is the key and the sheet name is the corresponding value.
+    @:returns: A string which represents the named range as an A1 range.
     """
     start_row_idx = named_range_dict["range"]["startRowIndex"]
     end_row_idx = named_range_dict["range"]["endRowIndex"]
@@ -219,7 +183,7 @@ def convert_col_a1(col_idx: int) -> str:
     @:param: col_idx - index of column
     @:return: col_name - name of a column
     """
-    letters = ["", 'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L', 'M', 'N', 'O', 'P', 'Q', 'R', 'S', 'T', 'U', 'V', 'W', 'X', 'Y', 'Z']
+    letters = ["", "A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L", "M", "N", "O", "P", "Q", "R", "S", "T", "U", "V", "W", "X", "Y", "Z"]
     col_name = ""
     while col_idx > 0:
         col_idx, remainder = divmod(col_idx, 26)

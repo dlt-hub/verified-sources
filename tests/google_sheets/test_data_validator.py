@@ -5,37 +5,32 @@ from typing import Union
 from dlt.common.typing import DictStrAny
 from dlt.common import pendulum
 
-
 TEST_CASES_URL = [
-    ['https://docs.google.com/spreadsheets/d/1aBcDeFgHiJkLmNopQrStUvWxYz1234567890/edit#gid=0', '1aBcDeFgHiJkLmNopQrStUvWxYz1234567890'],
-    ['https://docs.google.com/spreadsheets/d/1aBcDeFgHiJkLmNopQrStUvWxYz1234567890/edit?usp=sharing', '1aBcDeFgHiJkLmNopQrStUvWxYz1234567890'],
-    ['https://docs.google.com/spreadsheets/d/1aBcDeFgHiJkLmNopQrStUvWxYz1234567890', '1aBcDeFgHiJkLmNopQrStUvWxYz1234567890'],
-    ['https://docs.google.com/spreadsheets/d/1aBcDeFgHiJkLmNopQrStUvWxYz1234567890/edit#gid=0&new=true', '1aBcDeFgHiJkLmNopQrStUvWxYz1234567890'],
-    ['https://docs.google.com/spreadsheets/', ValueError("Invalid URL. Cannot find spreadsheet ID")],
-    ['https://docs.google.com/spreadsheets/d', ValueError("Invalid URL. Cannot find spreadsheet ID")],
-    ['https://docs.google.com/spreadsheets/d/', ValueError("Spreadsheet ID is an empty string")]
+    ("https://docs.google.com/spreadsheets/d/1aBcDeFgHiJkLmNopQrStUvWxYz1234567890/edit#gid=0", "1aBcDeFgHiJkLmNopQrStUvWxYz1234567890"),
+    ("https://docs.google.com/spreadsheets/d/1aBcDeFgHiJkLmNopQrStUvWxYz1234567890/edit?usp=sharing", "1aBcDeFgHiJkLmNopQrStUvWxYz1234567890"),
+    ("https://docs.google.com/spreadsheets/d/1aBcDeFgHiJkLmNopQrStUvWxYz1234567890", "1aBcDeFgHiJkLmNopQrStUvWxYz1234567890"),
+    ("https://docs.google.com/spreadsheets/d/1aBcDeFgHiJkLmNopQrStUvWxYz1234567890/edit#gid=0&new=true", "1aBcDeFgHiJkLmNopQrStUvWxYz1234567890"),
+    ("https://docs.google.com/spreadsheets/", ValueError("Invalid URL. Cannot find spreadsheet ID")),
+    ("https://docs.google.com/spreadsheets/d", ValueError("Invalid URL. Cannot find spreadsheet ID")),
+    ("https://docs.google.com/spreadsheets/d/", ValueError("Spreadsheet ID is an empty string"))
 ]
-
 TEST_CASES_URL_OR_ID = [
-    ('https://docs.google.com/spreadsheets/d/1aBcDeFgHiJkLmNopQrStUvWxYz1234567890/edit#gid=0', '1aBcDeFgHiJkLmNopQrStUvWxYz1234567890'),
-    ('https://docs.google.com/spreadsheets/d/1aBcDeFgHiJkLmNopQrStUvWxYz1234567890/edit?usp=sharing', '1aBcDeFgHiJkLmNopQrStUvWxYz1234567890'),
-    ('https://docs.google.com/spreadsheets/d/1aBcDeFgHiJkLmNopQrStUvWxYz1234567890', '1aBcDeFgHiJkLmNopQrStUvWxYz1234567890'),
-    ('https://docs.google.com/spreadsheets/d/1aBcDeFgHiJkLmNopQrStUvWxYz1234567890/edit#gid=0&new=true', '1aBcDeFgHiJkLmNopQrStUvWxYz1234567890'),
-    ('https://docs.google.com/spreadsheets/', ValueError("Invalid URL. Cannot find spreadsheet ID")),
-    ('https://docs.google.com/spreadsheets/d', ValueError("Invalid URL. Cannot find spreadsheet ID")),
-    ('https://docs.google.com/spreadsheets/d/', ValueError("Spreadsheet ID is an empty string")),
-    ('1aBcDeFgHiJkLmNopQrStUvWxYz1234567890', '1aBcDeFgHiJkLmNopQrStUvWxYz1234567890'),
-    ('', '')
+    ("https://docs.google.com/spreadsheets/d/1aBcDeFgHiJkLmNopQrStUvWxYz1234567890/edit#gid=0", "1aBcDeFgHiJkLmNopQrStUvWxYz1234567890"),
+    ("https://docs.google.com/spreadsheets/d/1aBcDeFgHiJkLmNopQrStUvWxYz1234567890/edit?usp=sharing", "1aBcDeFgHiJkLmNopQrStUvWxYz1234567890"),
+    ("https://docs.google.com/spreadsheets/d/1aBcDeFgHiJkLmNopQrStUvWxYz1234567890", "1aBcDeFgHiJkLmNopQrStUvWxYz1234567890"),
+    ("https://docs.google.com/spreadsheets/d/1aBcDeFgHiJkLmNopQrStUvWxYz1234567890/edit#gid=0&new=true", "1aBcDeFgHiJkLmNopQrStUvWxYz1234567890"),
+    ("https://docs.google.com/spreadsheets/", ValueError("Invalid URL. Cannot find spreadsheet ID")),
+    ("https://docs.google.com/spreadsheets/d", ValueError("Invalid URL. Cannot find spreadsheet ID")),
+    ("https://docs.google.com/spreadsheets/d/", ValueError("Spreadsheet ID is an empty string")),
+    ("1aBcDeFgHiJkLmNopQrStUvWxYz1234567890", "1aBcDeFgHiJkLmNopQrStUvWxYz1234567890"),
+    ("", "")
 ]
-
-# TODO: implement some proper testing for date conversion
 TEST_CASES_DATE = [
     (37621, pendulum.datetime(year=2002, month=12, day=31, tz="UTC")),
     (0.999988425925926, pendulum.datetime(year=1899, month=12, day=30, hour=23, minute=59, second=59, tz="UTC")),
     (0.9993055555555556, pendulum.datetime(year=1899, month=12, day=30, hour=23, minute=59, tz="UTC")),
     (44926.99998842592, pendulum.datetime(year=2022, month=12, day=31, hour=23, minute=59, second=59, tz="UTC"))
 ]
-
 TEST_CASES_RANGE = [
     ("sheet1", ["sheet1", "sheet1!1:2"]),
     ("sheet1!G2:O28", ["sheet1", "sheet1!G2:O3"]),
@@ -62,7 +57,6 @@ TEST_CASES_DATA_TYPES = [
     (row_values_1, [False, False, False, False, False, True]),
     (row_values_2, [False, False, False, False])
 ]
-
 TEST_CASES_CONVERT_COL = [
     (0, "A"),
     (1, "B"),
@@ -87,7 +81,6 @@ def test_process_url(url: str, expected: str):
     :param: url- url input str
     :param: expected: expected output str
     """
-
     try:
         assert data_validator.process_url(url) == expected
     except ValueError as e:

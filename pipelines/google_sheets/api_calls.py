@@ -4,7 +4,7 @@ from typing import Any
 import logging
 import dlt
 from dlt.common.configuration.specs import GcpClientCredentialsWithDefault
-from dlt.common.typing import DictStrAny, TDataItem
+from dlt.common.typing import DictStrAny
 from dlt.common.exceptions import MissingDependencyException
 from pipelines.google_sheets.data_validator import get_first_rows, is_date_datatype
 try:
@@ -56,7 +56,7 @@ def get_metadata_simple(spreadsheet_id: str, service: Resource) -> dict[DictStrA
     return return_info
 
 
-def get_metadata(spreadsheet_id: str, service: Resource, ranges: list[str]) -> dict[Any]:
+def get_metadata(spreadsheet_id: str, service: Resource, ranges: list[str], named_ranges: dict[str] = None) -> dict[Any]:
     """
     # TODO: add fields to save on info returned
     Gets the metadata for the first 2 rows of every range specified. The first row is deduced as the header and the 2nd row specifies the format the rest of the data should follow
@@ -70,14 +70,19 @@ def get_metadata(spreadsheet_id: str, service: Resource, ranges: list[str]) -> d
     # response like dict will contain a dict similar to the response by the Google Sheets API: ranges are returned inside the sheets they belong in the order given in the API request.
     meta_ranges = []
     response_like_dict = {}
+    metadata_all_ranges = {}
     for requested_range in ranges:
         # convert range to first 2 rows
         range_info = get_first_rows(requested_range)
         sheet_name = range_info[0]
         unfilled_range_dict = {"range": requested_range,
                                "headers": [],
-                               "cols_is_datetime": []
+                               "cols_is_datetime": [],
+                               "name": None
                                }
+        # check whether this range is a named range and save info in metadata if so
+        if named_ranges and requested_range in named_ranges:
+            unfilled_range_dict["name"] = named_ranges[requested_range]
         # add a dict with range info to the list of ranges inside the sheet
         if sheet_name in response_like_dict:
             response_like_dict[sheet_name].append(unfilled_range_dict)
@@ -108,15 +113,12 @@ def get_metadata(spreadsheet_id: str, service: Resource, ranges: list[str]) -> d
             # check that sheet is not empty, otherwise delete
             if not ("rowData" in sheet_data[i]):
                 logging.warning(f"Metadata - Skipped empty range: {response_like_dict[meta_sheet_name][i]['range']}")
-                del response_like_dict[meta_sheet_name]
                 continue
-
             # get headers and 1st row data
             range_metadata = sheet_data[i]["rowData"]
             headers = _get_range_headers(range_metadata=range_metadata)
             if not headers:
                 logging.warning(f"Metadata: Skipped range with empty headers: {response_like_dict[meta_sheet_name][i]['range']}")
-                del response_like_dict[meta_sheet_name]
                 continue
             first_line_values = _get_first_line(range_metadata=range_metadata)
             if not first_line_values:
@@ -125,7 +127,11 @@ def get_metadata(spreadsheet_id: str, service: Resource, ranges: list[str]) -> d
             # add headers and values
             response_like_dict[meta_sheet_name][i]["headers"] = headers
             response_like_dict[meta_sheet_name][i]["cols_is_datetime"] = first_line_values
-    return response_like_dict
+
+            # append dict to response
+            metadata_range_name = response_like_dict[meta_sheet_name][i]["range"]
+            metadata_all_ranges[metadata_range_name] = response_like_dict[meta_sheet_name][i]
+    return metadata_all_ranges
 
 
 def _get_range_headers(range_metadata: dict[Any]) -> list[str]:

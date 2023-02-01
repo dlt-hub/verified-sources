@@ -1,7 +1,7 @@
 import pytest
 import dlt
 from pipelines.google_sheets.google_sheets import google_spreadsheet
-from tests.utils import ALL_DESTINATIONS, assert_load_info, drop_pipeline
+from tests.utils import ALL_DESTINATIONS, assert_load_info
 
 
 TEST_SPREADSHEETS = ["1NVxFQYRqrGmur_MeIc4m4ewToF802uy2ObC61HOCstU"]
@@ -204,7 +204,6 @@ def test_inconsistent_types(destination_name) -> None:
     data = google_spreadsheet(spreadsheet_identifier=TEST_SPREADSHEETS[0], range_names=["inconsistent_types"], get_sheets=False, get_named_ranges=False)
     info = pipeline.run(data)
     assert_load_info(info)
-
     with pipeline.sql_client() as c:
         sql_query = "SELECT * FROM inconsistent_types WHERE " \
                     "test2__v_text is not Null " \
@@ -272,6 +271,7 @@ def test_two_tables(destination_name) -> None:
     pipeline = dlt.pipeline(destination=destination_name, full_refresh=True, dataset_name="test_two_tables")
     data = google_spreadsheet(spreadsheet_identifier=TEST_SPREADSHEETS[0], range_names=["two_tables"], get_sheets=False, get_named_ranges=False)
     info = pipeline.run(data)
+    assert_load_info(info)
     with pipeline.sql_client() as c:
         # this query will return all rows from 2nd table appended to the 1st table
         sql_query = "SELECT * FROM two_tables WHERE _10 is NULL;"
@@ -292,6 +292,7 @@ def test_hole_middle(destination_name) -> None:
     pipeline = dlt.pipeline(destination=destination_name, full_refresh=True, dataset_name="test_hole_middle")
     data = google_spreadsheet(spreadsheet_identifier=TEST_SPREADSHEETS[0], range_names=["hole_middle"], get_sheets=False, get_named_ranges=False)
     info = pipeline.run(data)
+    assert_load_info(info)
     with pipeline.sql_client() as c:
         # this query will return all rows from 2nd table appended to the 1st table
         sql_query = "SELECT * FROM hole_middle;"
