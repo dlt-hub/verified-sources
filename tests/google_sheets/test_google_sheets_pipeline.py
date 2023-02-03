@@ -13,6 +13,15 @@ ALL_TABLES_LOADED = ["all_types", "empty_row", "empty_rows", "has_empty", "hole_
                      "sheet1", "sheet2", "sheet3", "sheet4", "spreadsheet_info", "two_tables"]
 
 
+def create_pipeline(destination_name, dataset_name, full_refresh=True, range_names=None, get_sheets=True, get_named_ranges=True):
+
+    pipeline = dlt.pipeline(destination=destination_name, full_refresh=full_refresh, dataset_name=dataset_name)
+    data = google_spreadsheet(spreadsheet_identifier=TEST_SPREADSHEETS[0], range_names=range_names, get_sheets=get_sheets, get_named_ranges=get_named_ranges)
+    info = pipeline.run(data)
+    assert_load_info(info)
+    return pipeline
+
+
 @pytest.mark.parametrize("spreadsheet_identifier", TEST_SPREADSHEETS)
 def test_sample_load(spreadsheet_identifier) -> None:
     """
@@ -21,11 +30,7 @@ def test_sample_load(spreadsheet_identifier) -> None:
     @:param: spreadsheet_identifier -  id or url for a spreadsheet
     """
 
-    # FULL PIPELINE RUN
-    pipeline = dlt.pipeline(destination="postgres", full_refresh=True, dataset_name="test_google_sheet_data")
-    data = google_spreadsheet(spreadsheet_identifier=spreadsheet_identifier, range_names=["sheet1"], get_sheets=False, get_named_ranges=False)
-    info = pipeline.run(data)
-    assert_load_info(info)
+    create_pipeline(destination_name="postgres", dataset_name="test_google_sheet_data", range_names=["sheet1"], get_sheets=False, get_named_ranges=False)
 
 
 @pytest.mark.parametrize("destination_name", ALL_DESTINATIONS)
@@ -36,10 +41,7 @@ def test_full_load(destination_name: str) -> None:
     """
 
     # FULL PIPELINE RUN
-    pipeline = dlt.pipeline(destination=destination_name, full_refresh=True, dataset_name="test_full_load")
-    data = google_spreadsheet(spreadsheet_identifier=TEST_SPREADSHEETS[0])
-    info = pipeline.run(data)
-    assert_load_info(info)
+    pipeline = create_pipeline(destination_name=destination_name, dataset_name="test_full_load")
 
     # The schema should contain all listed tables
     # ALL_TABLES is missing spreadsheet info table - table being tested here
@@ -72,9 +74,8 @@ def test_appending(destination_name) -> None:
     test_ranges = ["sheet1!A1:D2", "sheet1!A1:D4"]
     test_ranges_table = ["sheet1_a1_d2", "sheet1_a1_d4"]
 
-    pipeline = dlt.pipeline(destination=destination_name, full_refresh=True, dataset_name="test_appending")
-    data = google_spreadsheet(spreadsheet_identifier=TEST_SPREADSHEETS[0], range_names=test_ranges, get_named_ranges=False, get_sheets=False)
-    info = pipeline.run(data)
+    pipeline = create_pipeline(destination_name=destination_name, dataset_name="test_appending", range_names=test_ranges, get_sheets=False,  get_named_ranges=False)
+
     # TODO: decide what needs to be done when range is slightly increased
     # check table rows are appended
     with pipeline.sql_client() as c:
@@ -86,8 +87,6 @@ def test_appending(destination_name) -> None:
         with c.execute_query(sql_query2) as cur:
             rows = list(cur.fetchall())
             assert len(rows) == 3
-    # check loading is done correctly
-    assert_load_info(info)
 
 
 @pytest.mark.parametrize("destination_name", ALL_DESTINATIONS)
@@ -97,17 +96,16 @@ def test_all_data_types(destination_name) -> None:
     @:param: destination_name - redshift/bigquery/postgres
     """
 
+    table_name_db = "all_types"
     # run pipeline only for the specific table with all data types and grab that table
-    pipeline_types = dlt.pipeline(destination=destination_name, full_refresh=True, dataset_name="test_all_data_types")
-    data_types = google_spreadsheet(spreadsheet_identifier=TEST_SPREADSHEETS[0], range_names=["all_types"], get_named_ranges=False, get_sheets=False)
-    info_types = pipeline_types.run(data_types)
-    assert_load_info(info_types)
+    pipeline_types = create_pipeline(destination_name=destination_name, dataset_name="test_all_data_types", range_names=["all_types"], get_sheets=False, get_named_ranges=False)
 
     schema = pipeline_types.default_schema
+    assert table_name_db in schema.tables
+
     # pipeline doesn't reset schema.all_tables when run with other tests, so we have to check all the tables in the schema and check that the name matches
-    found_table = False
     for test_table in schema.all_tables():
-        if test_table["name"] == "all_types":
+        if test_table["name"] == table_name_db:
             # check all columns
             assert test_table["columns"]["text_types"]["data_type"] == "text"
             assert test_table["columns"]["number_types"]["data_type"] == "bigint"
@@ -115,8 +113,6 @@ def test_all_data_types(destination_name) -> None:
             assert test_table["columns"]["bool_types"]["data_type"] == "bool"
             assert test_table["columns"]["formula_types"]["data_type"] == "double"
             assert test_table["columns"]["date_types"]["data_type"] == "timestamp"
-            found_table = True
-    assert found_table
 
 
 @pytest.mark.parametrize("destination_name", ALL_DESTINATIONS)
@@ -127,17 +123,14 @@ def test_empty_row(destination_name) -> None:
     """
 
     # run pipeline only for the specific table with all data types and grab that table
-    pipeline = dlt.pipeline(destination=destination_name, full_refresh=True, dataset_name="test_empty_row")
-    data = google_spreadsheet(spreadsheet_identifier=TEST_SPREADSHEETS[0], range_names=["empty_row"], get_sheets=False, get_named_ranges=False)
-    info = pipeline.run(data)
+    pipeline = create_pipeline(destination_name=destination_name, dataset_name="test_empty_row", range_names=["empty_row"], get_named_ranges=False, get_sheets=False)
+
     # check table rows are appended
     with pipeline.sql_client() as c:
         sql_query = "SELECT * FROM empty_row;"
         with c.execute_query(sql_query) as cur:
             rows = list(cur.fetchall())
             assert len(rows) == 10
-    # check loading is done correctly
-    assert_load_info(info)
 
 
 @pytest.mark.parametrize("destination_name", ALL_DESTINATIONS)
@@ -148,17 +141,14 @@ def test_empty_rows(destination_name) -> None:
     """
 
     # run pipeline only for the specific table with all data types and grab that table
-    pipeline = dlt.pipeline(destination=destination_name, full_refresh=True, dataset_name="test_empty_rows")
-    data = google_spreadsheet(spreadsheet_identifier=TEST_SPREADSHEETS[0], range_names=["empty_rows"], get_named_ranges=False, get_sheets=False)
-    info = pipeline.run(data)
+    pipeline = create_pipeline(destination_name=destination_name, dataset_name="test_empty_rows", range_names=["empty_rows"], get_named_ranges=False, get_sheets=False)
+
     # check table rows are appended
     with pipeline.sql_client() as c:
         sql_query = "SELECT * FROM empty_rows;"
         with c.execute_query(sql_query) as cur:
             rows = list(cur.fetchall())
             assert len(rows) == 9
-    # check loading is done correctly
-    assert_load_info(info)
 
 
 @pytest.mark.parametrize("destination_name", ALL_DESTINATIONS)
@@ -169,10 +159,7 @@ def test_has_empty(destination_name) -> None:
     """
 
     # run pipeline only for the specific table with all data types and grab that table
-    pipeline = dlt.pipeline(destination=destination_name, full_refresh=True, dataset_name="test_has_empty")
-    data = google_spreadsheet(spreadsheet_identifier=TEST_SPREADSHEETS[0], range_names=["has_empty"], get_sheets=False, get_named_ranges=False)
-    info = pipeline.run(data)
-    assert_load_info(info)
+    pipeline = create_pipeline(destination_name=destination_name, dataset_name="test_has_empty", range_names=["has_empty"], get_sheets=False, get_named_ranges=False)
 
     # check table rows are appended
     with pipeline.sql_client() as c:
@@ -197,10 +184,8 @@ def test_inconsistent_types(destination_name) -> None:
     """
 
     # run pipeline only for the specific table with all data types and grab that table
-    pipeline = dlt.pipeline(destination=destination_name, full_refresh=True, dataset_name="test_inconsistent_types")
-    data = google_spreadsheet(spreadsheet_identifier=TEST_SPREADSHEETS[0], range_names=["inconsistent_types"], get_sheets=False, get_named_ranges=False)
-    info = pipeline.run(data)
-    assert_load_info(info)
+    pipeline = create_pipeline(destination_name=destination_name, dataset_name="test_inconsistent_types", range_names=["inconsistent_types"], get_sheets=False, get_named_ranges=False)
+
     with pipeline.sql_client() as c:
         sql_query = "SELECT * FROM inconsistent_types WHERE " \
                     "test2__v_text is not Null " \
@@ -221,10 +206,7 @@ def test_more_headers(destination_name) -> None:
     """
 
     # run pipeline only for the specific table with all data types and grab that table
-    pipeline = dlt.pipeline(destination=destination_name, full_refresh=True, dataset_name="test_more_headers")
-    data = google_spreadsheet(spreadsheet_identifier=TEST_SPREADSHEETS[0], range_names=["more_headers_than_data"], get_sheets=False, get_named_ranges=False)
-    info = pipeline.run(data)
-    assert_load_info(info)
+    pipeline = create_pipeline(destination_name=destination_name, dataset_name="test_more_headers", range_names=["more_headers_than_data"], get_sheets=False, get_named_ranges=False)
 
     # run query to check number of columns
     with pipeline.sql_client() as c:
@@ -243,10 +225,11 @@ def test_more_data(destination_name) -> None:
     @:param: destination_name - redshift/bigquery/postgres
     """
     # run pipeline only for the specific table with all data types and grab that table
-    pipeline = dlt.pipeline(destination=destination_name, full_refresh=True, dataset_name="test_more_headers")
-    data = google_spreadsheet(spreadsheet_identifier=TEST_SPREADSHEETS[0], range_names=["more_headers_than_data"], get_sheets=False, get_named_ranges=False)
-    info = pipeline.run(data)
-    assert_load_info(info)
+    pipeline = create_pipeline(destination_name=destination_name,
+                               dataset_name="test_more_headers",
+                               range_names=["more_headers_than_data"],
+                               get_sheets=False,
+                               get_named_ranges=False)
 
     with pipeline.sql_client() as c:
         sql_query = "SELECT * FROM more_data;"
@@ -265,10 +248,8 @@ def test_two_tables(destination_name) -> None:
     """
 
     # run pipeline only for the specific table with all data types and grab that table
-    pipeline = dlt.pipeline(destination=destination_name, full_refresh=True, dataset_name="test_two_tables")
-    data = google_spreadsheet(spreadsheet_identifier=TEST_SPREADSHEETS[0], range_names=["two_tables"], get_sheets=False, get_named_ranges=False)
-    info = pipeline.run(data)
-    assert_load_info(info)
+    pipeline = create_pipeline(destination_name=destination_name, dataset_name="test_two_tables", range_names=["two_tables"], get_sheets=False, get_named_ranges=False)
+
     with pipeline.sql_client() as c:
         # this query will return all rows from 2nd table appended to the 1st table
         sql_query = "SELECT * FROM two_tables WHERE _10 is NULL;"
@@ -286,10 +267,8 @@ def test_hole_middle(destination_name) -> None:
     """
 
     # run pipeline only for the specific table with all data types and grab that table
-    pipeline = dlt.pipeline(destination=destination_name, full_refresh=True, dataset_name="test_hole_middle")
-    data = google_spreadsheet(spreadsheet_identifier=TEST_SPREADSHEETS[0], range_names=["hole_middle"], get_sheets=False, get_named_ranges=False)
-    info = pipeline.run(data)
-    assert_load_info(info)
+    pipeline = create_pipeline(destination_name=destination_name, dataset_name="test_hole_middle", range_names=["hole_middle"], get_sheets=False, get_named_ranges=False)
+
     with pipeline.sql_client() as c:
         # this query will return all rows from 2nd table appended to the 1st table
         sql_query = "SELECT * FROM hole_middle;"
@@ -312,15 +291,14 @@ def test_named_range(destination_name) -> None:
 
     # run pipeline only for the specific table with all data types and grab that table
     # with these settings, the pipeline should only have the named_range1 table inside.
-    pipeline = dlt.pipeline(destination=destination_name, full_refresh=True, dataset_name="test_named_range")
-    data = google_spreadsheet(spreadsheet_identifier=TEST_SPREADSHEETS[0], get_sheets=False, get_named_ranges=True)
-    info = pipeline.run(data)
-    assert_load_info(info)
+    pipeline = create_pipeline(destination_name=destination_name, dataset_name="test_named_range", get_sheets=False, get_named_ranges=True)
 
     # check columns have the correct data types in the schema
     # pipeline doesn't reset schema.all_tables when run with other tests, so we have to check all the tables in the schema and check that the name matches
     schema = pipeline.default_schema
-    found_table = False
+
+    assert table_name_db in schema.tables
+
     for test_table in schema.all_tables():
         if test_table["name"] == table_name_db:
             # check all column data types are correct
@@ -328,8 +306,6 @@ def test_named_range(destination_name) -> None:
             assert test_table["columns"]["_3"]["data_type"] == "bigint"
             assert test_table["columns"]["_1_03"]["data_type"] == "double"
             assert test_table["columns"]["true"]["data_type"] == "bool"
-            found_table = True
-    assert found_table
 
     # check all values are saved correctly
     expected_rows = [
