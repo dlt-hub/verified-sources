@@ -1,5 +1,5 @@
 import pytest
-from pipelines.google_sheets import data_validator
+from pipelines.google_sheets.helpers import data_processing
 from datetime import datetime
 from typing import Union
 from dlt.common.typing import DictStrAny
@@ -36,7 +36,8 @@ TEST_CASES_RANGE = [
     ("sheet1!G2:O28", ["sheet1", "sheet1!G2:O3"]),
     ("sheet1!G2:H28", ["sheet1", "sheet1!G2:H3"]),
     ("sheet1!A:B", ["sheet1", "sheet1!A1:B2"]),
-    ("sheet1!1:4", ["sheet1", "sheet1!1:2"])
+    ("sheet1!1:4", ["sheet1", "sheet1!1:2"]),
+    ("sheet1!AA23:BB55", ["sheet1", "sheet1!AA23:BB24"])
 ]
 
 row_values_1 = [
@@ -82,7 +83,7 @@ def test_process_url(url: str, expected: str):
     :param: expected: expected output str
     """
     try:
-        assert data_validator.process_url(url) == expected
+        assert data_processing.process_url(url) == expected
     except ValueError as e:
         assert str(e) == str(expected)
 
@@ -95,7 +96,7 @@ def test_get_spreadsheet_id(url_or_id: str, expected: str):
     :param: expected: expected output str
     """
     try:
-        assert data_validator.get_spreadsheet_id(url_or_id) == expected
+        assert data_processing.get_spreadsheet_id(url_or_id) == expected
     except ValueError as e:
         assert str(e) == str(expected)
 
@@ -107,19 +108,19 @@ def test_serial_date_to_datetime(serial_number: Union[int, float], expected: dat
     :param: serial_number- float or int date input
     :param: expected: expected output datetime
     """
-    assert data_validator.serial_date_to_datetime(serial_number) == expected
+    assert data_processing.serial_date_to_datetime(serial_number) == expected
 
 
 @pytest.mark.parametrize("sheet_range, expected", TEST_CASES_RANGE)
-def test_ranges(sheet_range: str, expected: str):
-    assert data_validator.get_first_rows(sheet_range) == expected
+def test_get_first_rows(sheet_range: str, expected: str):
+    assert data_processing.get_first_rows(sheet_range) == expected
 
 
 @pytest.mark.parametrize("value_dict_row, expected", TEST_CASES_DATA_TYPES)
-def test_data_types(value_dict_row: list[DictStrAny], expected: bool):
-    assert data_validator.is_date_datatype(value_dict_row) == expected
+def test_is_date_datatype(value_dict_row: list[DictStrAny], expected: bool):
+    assert data_processing.is_date_datatype(value_dict_row) == expected
 
 
 @pytest.mark.parametrize("col_idx, expected", TEST_CASES_CONVERT_COL)
-def test_column_converting(col_idx: int, expected: str):
-    assert data_validator.convert_col_a1(col_idx) == expected
+def test_convert_col_a1(col_idx: int, expected: str):
+    assert data_processing._convert_col_a1(col_idx) == expected

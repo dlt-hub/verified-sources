@@ -4,10 +4,13 @@ from pipelines.google_sheets.google_sheets import google_spreadsheet
 from tests.utils import ALL_DESTINATIONS, assert_load_info
 
 
-TEST_SPREADSHEETS = ["1NVxFQYRqrGmur_MeIc4m4ewToF802uy2ObC61HOCstU"]
-ALL_TABLES = ["all_types", "empty_row", "empty_rows", "has_empty", "inconsistent_types", "more_headers_than_data", "more_data", "sheet1", "sheet2", "sheet3", "sheet4", "two_tables",
-              "spreadsheet_info", "only_headers", "only_data", "hole_middle", "named_range1"]
-ALL_DESTINATIONS = ["postgres"]
+TEST_SPREADSHEETS = [""]
+# list expected tables and the number of columns they are supposed to have
+ALL_TABLES = ["all_types", "empty_row", "empty_rows", "has_empty", "hole_middle", "inconsistent_types", "more_data", "more_headers_than_data", "NamedRange1", "only_data", "only_headers",
+              "sheet1", "sheet2", "sheet3", "sheet4", "two_tables"]
+COL_NUMS = [6, 5, 5, 5, 7, 5, 4, 8, 4, 2, 2, 4, 5, 9, 1, 9]
+ALL_TABLES_LOADED = ["all_types", "empty_row", "empty_rows", "has_empty", "hole_middle", "inconsistent_types", "more_data", "more_headers_than_data", "named_range1", "only_data", "only_headers",
+                     "sheet1", "sheet2", "sheet3", "sheet4", "spreadsheet_info", "two_tables"]
 
 
 @pytest.mark.parametrize("spreadsheet_identifier", TEST_SPREADSHEETS)
@@ -36,39 +39,26 @@ def test_full_load(destination_name: str) -> None:
     pipeline = dlt.pipeline(destination=destination_name, full_refresh=True, dataset_name="test_full_load")
     data = google_spreadsheet(spreadsheet_identifier=TEST_SPREADSHEETS[0])
     info = pipeline.run(data)
+    assert_load_info(info)
 
     # The schema should contain all listed tables
+    # ALL_TABLES is missing spreadsheet info table - table being tested here
     schema = pipeline.default_schema
     user_tables = schema.all_tables()
-    assert len(user_tables) == len(ALL_TABLES)
+    assert len(user_tables) == len(ALL_TABLES_LOADED)
+    for table in user_tables:
+        assert table["name"] in ALL_TABLES_LOADED
 
     # check load metadata
     with pipeline.sql_client() as c:
-        # you can use unqualified table names
-        with c.execute_query("SELECT loaded_range, num_cols FROM spreadsheet_info ORDER BY loaded_range") as cur:
+        # check every table has the correct name in the metadata table and the correct number of columns
+        sql_query = "SELECT loaded_range, num_cols FROM spreadsheet_info ORDER BY LOWER(loaded_range);"
+        with c.execute_query(sql_query) as cur:
             rows = list(cur.fetchall())
-            # this has all the tables created minus itself
-            assert len(rows) == len(ALL_TABLES) - 1
-            # check all tables loaded and check that they have the correct number of columns
-            # spreadsheet_info doesn't count dlt tables, it just saves how many headers it spots from metadata, this number of cols doesn't necessarily match the ones in the db
-            assert rows[0][1] == 6  # all_types table has 6 columns
-            assert rows[1][1] == 5  # empty_row table has 5 columns
-            assert rows[2][1] == 5  # empty_rows table has 5 columns
-            assert rows[3][1] == 5  # has_empty table has 5 columns
-            assert rows[4][1] == 7  # hole_middle table has 7 columns - this also includes the empty columns which are dropped from database
-            assert rows[5][1] == 5  # inconsistent_types table has 5 columns
-            assert rows[6][1] == 4  # more_data table has 4 columns
-            assert rows[7][1] == 8  # more_headers_than_data table has 8 columns
-            assert rows[8][1] == 4  # NamedRange1 has 4 columns
-            assert rows[9][1] == 2  # only_data table has 2 columns
-            assert rows[10][1] == 2  # only_headers table has 2 columns
-            assert rows[11][1] == 4  # sheet1 table has 4 columns
-            assert rows[12][1] == 5  # sheet2 table has 5 columns
-            assert rows[13][1] == 9  # sheet3 table has 9 columns
-            assert rows[14][1] == 1  # sheet4 table has 1 column
-            assert rows[15][1] == 9  # two_tables table has 9 columns
-    # make sure all jobs were loaded
-    assert_load_info(info)
+            assert len(rows) == len(ALL_TABLES)
+            for i in range(len(rows)):
+                assert rows[i][0] == ALL_TABLES[i]
+                assert rows[i][1] == COL_NUMS[i]
 
 
 @pytest.mark.parametrize("destination_name", ALL_DESTINATIONS)
@@ -80,16 +70,20 @@ def test_appending(destination_name) -> None:
 
     # Fetch ranges from pipeline and check
     test_ranges = ["sheet1!A1:D2", "sheet1!A1:D4"]
+    test_ranges_table = ["sheet1_a1_d2", "sheet1_a1_d4"]
+
     pipeline = dlt.pipeline(destination=destination_name, full_refresh=True, dataset_name="test_appending")
-    data = google_spreadsheet(spreadsheet_identifier=TEST_SPREADSHEETS[0], range_names=test_ranges)
+    data = google_spreadsheet(spreadsheet_identifier=TEST_SPREADSHEETS[0], range_names=test_ranges, get_named_ranges=False, get_sheets=False)
     info = pipeline.run(data)
     # TODO: decide what needs to be done when range is slightly increased
     # check table rows are appended
     with pipeline.sql_client() as c:
-        with c.execute_query("SELECT * FROM sheet1_A1_D2") as cur:
+        sql_query1 = f"SELECT * FROM {test_ranges_table[0]};"
+        sql_query2 = f"SELECT * FROM {test_ranges_table[1]};"
+        with c.execute_query(sql_query1) as cur:
             rows = list(cur.fetchall())
             assert len(rows) == 1
-        with c.execute_query("SELECT * FROM sheet1_A1_D4") as cur:
+        with c.execute_query(sql_query2) as cur:
             rows = list(cur.fetchall())
             assert len(rows) == 3
     # check loading is done correctly
@@ -138,7 +132,8 @@ def test_empty_row(destination_name) -> None:
     info = pipeline.run(data)
     # check table rows are appended
     with pipeline.sql_client() as c:
-        with c.execute_query("SELECT * FROM empty_row") as cur:
+        sql_query = "SELECT * FROM empty_row;"
+        with c.execute_query(sql_query) as cur:
             rows = list(cur.fetchall())
             assert len(rows) == 10
     # check loading is done correctly
@@ -158,7 +153,8 @@ def test_empty_rows(destination_name) -> None:
     info = pipeline.run(data)
     # check table rows are appended
     with pipeline.sql_client() as c:
-        with c.execute_query("SELECT * FROM empty_rows") as cur:
+        sql_query = "SELECT * FROM empty_rows;"
+        with c.execute_query(sql_query) as cur:
             rows = list(cur.fetchall())
             assert len(rows) == 9
     # check loading is done correctly
@@ -180,12 +176,13 @@ def test_has_empty(destination_name) -> None:
 
     # check table rows are appended
     with pipeline.sql_client() as c:
+        sql_query1 = "SELECT * FROM has_empty;"
+        check_null_query = "SELECT * FROM has_empty WHERE redi2 is Null OR test2 is Null or date_test is Null;"
         # check num rows
-        with c.execute_query("SELECT * FROM has_empty") as cur:
+        with c.execute_query(sql_query1) as cur:
             rows = list(cur.fetchall())
             assert len(rows) == 9
         # check specific values are null
-        check_null_query = "SELECT * FROM has_empty WHERE redi2 is Null OR test2 is Null or date_test is Null"
         with c.execute_query(check_null_query) as cur:
             rows = list(cur.fetchall())
             # only 3 rows with null values
@@ -334,12 +331,12 @@ def test_named_range(destination_name) -> None:
             found_table = True
     assert found_table
 
+    # check all values are saved correctly
     expected_rows = [
         ("test4", 4, 1.04, True),
         ("test5", 5, 1.05, True),
         ("test6", 6, 1.06, True)
     ]
-
     # perform queries to check data inside
     with pipeline.sql_client() as c:
         sql_query = f"SELECT test3, _3, _1_03, true FROM {table_name_db};"
@@ -348,4 +345,20 @@ def test_named_range(destination_name) -> None:
             # 3 rows and 4 columns expected
             assert len(rows) == 3
             for i in range(len(rows)):
-                assert rows[i] == expected_rows[i]
+                processed_row = _row_helper(rows[i], destination_name)
+                assert processed_row == expected_rows[i]
+
+
+def _row_helper(row, destination_name):
+    """
+    Helper, unpacks the rows from different databases (Bigquery, Postgres, Redshift) to a tuple
+    @:param: row - the row returned from the sql query
+    @:param: destination_name - the name of the database
+    @:returns: all the values in the row as a tuple
+    """
+
+    if destination_name == "bigquery":
+        return tuple([val for val in row.values()])
+    else:
+        # redshift & postgres
+        return row
