@@ -104,15 +104,14 @@ def test_all_data_types(destination_name) -> None:
     assert table_name_db in schema.tables
 
     # pipeline doesn't reset schema.all_tables when run with other tests, so we have to check all the tables in the schema and check that the name matches
-    for test_table in schema.all_tables():
-        if test_table["name"] == table_name_db:
-            # check all columns
-            assert test_table["columns"]["text_types"]["data_type"] == "text"
-            assert test_table["columns"]["number_types"]["data_type"] == "bigint"
-            assert test_table["columns"]["float_types"]["data_type"] == "double"
-            assert test_table["columns"]["bool_types"]["data_type"] == "bool"
-            assert test_table["columns"]["formula_types"]["data_type"] == "double"
-            assert test_table["columns"]["date_types"]["data_type"] == "timestamp"
+    test_table = schema.get_table(table_name_db)
+    # check all columns
+    assert test_table["columns"]["text_types"]["data_type"] == "text"
+    assert test_table["columns"]["number_types"]["data_type"] == "bigint"
+    assert test_table["columns"]["float_types"]["data_type"] == "double"
+    assert test_table["columns"]["bool_types"]["data_type"] == "bool"
+    assert test_table["columns"]["formula_types"]["data_type"] == "double"
+    assert test_table["columns"]["date_types"]["data_type"] == "timestamp"
 
 
 @pytest.mark.parametrize("destination_name", ALL_DESTINATIONS)
@@ -299,13 +298,13 @@ def test_named_range(destination_name) -> None:
 
     assert table_name_db in schema.tables
 
-    for test_table in schema.all_tables():
-        if test_table["name"] == table_name_db:
-            # check all column data types are correct
-            assert test_table["columns"]["test3"]["data_type"] == "text"
-            assert test_table["columns"]["_3"]["data_type"] == "bigint"
-            assert test_table["columns"]["_1_03"]["data_type"] == "double"
-            assert test_table["columns"]["true"]["data_type"] == "bool"
+    test_table = schema.get_table(table_name_db)
+
+    # check all column data types are correct
+    assert test_table["columns"]["test3"]["data_type"] == "text"
+    assert test_table["columns"]["_3"]["data_type"] == "bigint"
+    assert test_table["columns"]["_1_03"]["data_type"] == "double"
+    assert test_table["columns"]["true"]["data_type"] == "bool"
 
     # check all values are saved correctly
     expected_rows = [
