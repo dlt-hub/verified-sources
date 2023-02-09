@@ -1,0 +1,2 @@
+zenpy
+python-dlt
