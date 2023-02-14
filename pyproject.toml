@@ -27,6 +27,9 @@ python-dlt = {version = "^0.2.0a14", extras = ["redshift", "bigquery"]}
 [tool.poetry.group.chess.dependencies]
 python-chess = "^1.999"
 
+[tool.poetry.group.sql_database.dependencies]
+sqlalchemy = "^2.0.3"
+
 [build-system]
 requires = ["poetry-core"]
 build-backend = "poetry.core.masonry.api"
