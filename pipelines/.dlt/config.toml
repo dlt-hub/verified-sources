@@ -1,3 +1,6 @@
+# destination_name = "postgres"
+# pipeline_name = "my_pipeline"
+
 [runtime]
 log_level="WARNING"
 
