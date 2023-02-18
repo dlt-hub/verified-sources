@@ -13,8 +13,11 @@ from dlt.common.storages import FileStorage
 
 from dlt.pipeline.exceptions import SqlClientNotAvailable
 
+from tests.sql_source import SQLAlchemySourceDB
+
 TEST_STORAGE_ROOT = "_storage"
 ALL_DESTINATIONS = ["bigquery", "redshift", "postgres"]
+# ALL_DESTINATIONS = ['postgres', 'bigquery']
 # ALL_DESTINATIONS = ["postgres"]
 # ALL_DESTINATIONS = ["bigquery"]
 
@@ -87,6 +90,19 @@ def preserve_environ() -> None:
     yield
     environ.clear()
     environ.update(saved_environ)
+
+
+@pytest.fixture(scope='session')
+def sql_source_db():
+    db = SQLAlchemySourceDB()
+    try:
+        db.create_schema()
+        db.create_tables()
+        db.insert_data()
+        yield db
+    finally:
+        db.drop_schema()
+
 
 
 def clean_test_storage(init_normalize: bool = False, init_loader: bool = False, mode: str = "t") -> FileStorage:
