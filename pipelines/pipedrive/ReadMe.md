@@ -40,7 +40,7 @@ pipelines
 
 1. The virtual environment  will look like below:
 
-![Environment_view].png](/Users/radheshyaam/Documents/documentations/Cloned_for_docs/pipelines/pipedrive/pipedrive_docs_imgs/Environment_view.png)
+![Environment_view].png](pipelines/pipedrive/pipedrive_docs_imgs/Environment_view.png)
 
 1. In .dlt folder is example.secrets.toml. Rename it to secrets.toml.
 2. The secrets.toml should look like the code below, delete everything else.
