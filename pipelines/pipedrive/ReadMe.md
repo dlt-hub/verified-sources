@@ -40,7 +40,7 @@ pipelines
 
 1. The virtual environment  will look like below:
 
-![Environment_view.png](https://github.com/AmanGuptAnalytics/pipelines/blob/master/pipelines/pipedrive/pipedrive_docs_imgs/Environment_view.png)
+![Environment_view.png](https://github.com/AmanGuptAnalytics/pipelines/blob/master/pipelines/pipedrive/pipedrive_docs_imgs/Environment_view1.png)
 
 1. In .dlt folder is example.secrets.toml. Rename it to secrets.toml.
 2. The secrets.toml should look like the code below, delete everything else.
@@ -66,11 +66,11 @@ location = "set me up" #Project Location For ex. “US”
 1. Open the pipedrive_pipeline.py file in pipelines directory.
 2. Rename the ***destination = ‘postgres’*** highlighted below to ***destination=’bigquery’***
     
-    ![rename_postgres_ineditor.png](https://github.com/AmanGuptAnalytics/pipelines/blob/master/pipelines/pipedrive/pipedrive_docs_imgs/rename_postgres_ineditor.png)
+    ![rename_postgres_ineditor.png](https://github.com/AmanGuptAnalytics/pipelines/blob/master/pipelines/pipedrive/pipedrive_docs_imgs/rename_postgres_ineditor1.png)
     
 3. The above code should look like
 
-![rename_tobigquery_ineditor.png](https://github.com/AmanGuptAnalytics/pipelines/blob/master/pipelines/pipedrive/pipedrive_docs_imgs/rename_tobigquery_ineditor.png)
+![rename_tobigquery_ineditor.png](https://github.com/AmanGuptAnalytics/pipelines/blob/master/pipelines/pipedrive/pipedrive_docs_imgs/rename_tobigquery_ineditor1.png)
 
 1. Save the changes (Command+S, or Ctrl+S)
 
@@ -86,7 +86,7 @@ python3 pipedrive_pipeline.py
 2. dlt will load the Data to the pipedrive_data dataset in the Bigquery.
 3. To confirm the successful run of the pipeline, check that data is loaded in Bigquery as below.
 
-![pipedrive_schema.png](https://github.com/AmanGuptAnalytics/pipelines/blob/master/pipelines/pipedrive/pipedrive_docs_imgs/pipedrive_schema.png)
+![pipedrive_schema.png](https://github.com/AmanGuptAnalytics/pipelines/blob/master/pipelines/pipedrive/pipedrive_docs_imgs/pipedrive_schema1.png)
 
 ---
 
