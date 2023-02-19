@@ -16,9 +16,10 @@ from dlt.pipeline.exceptions import SqlClientNotAvailable
 from tests.sql_source import SQLAlchemySourceDB
 
 TEST_STORAGE_ROOT = "_storage"
-ALL_DESTINATIONS = ["bigquery", "redshift", "postgres"]
-# ALL_DESTINATIONS = ['postgres', 'bigquery']
-# ALL_DESTINATIONS = ["postgres"]
+
+# get env variable with destinations
+ALL_DESTINATIONS = dlt.config.get("ALL_DESTINATIONS", list) or ["bigquery", "redshift", "postgres", "duckdb"]
+# ALL_DESTINATIONS = ["duckdb"]
 # ALL_DESTINATIONS = ["bigquery"]
 
 
@@ -142,3 +143,6 @@ def assert_load_info(info: LoadInfo, expected_load_packages: int = 1) -> None:
     assert all(info.loads_ids.values()) is True
     # no failed jobs in any of the packages
     assert all(len(jobs) == 0 for jobs in info.failed_jobs.values()) is True
+
+
+# def assert_tables_filled()
