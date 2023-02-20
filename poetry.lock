@@ -118,14 +118,6 @@ optional = false
 python-versions = "*"
 
 [[package]]
-name = "chess"
-version = "1.9.4"
-description = "A chess library with move generation and validation, Polyglot opening book probing, PGN reading and writing, Gaviota tablebase probing, Syzygy tablebase probing, and XBoard/UCI engine communication."
-category = "dev"
-optional = false
-python-versions = ">=3.7"
-
-[[package]]
 name = "click"
 version = "8.1.3"
 description = "Composable command line interface toolkit"
@@ -583,10 +575,6 @@ description = "Mimesis: Fake Data Generator."
 category = "dev"
 optional = false
 python-versions = ">=3.8,<4.0"
-files = [
-    {file = "mimesis-7.0.0-py3-none-any.whl", hash = "sha256:ef6fb61eeb978d4d8d7dface23837ef2e1fd90659cd7dc83cf6d39a73db90e6d"},
-    {file = "mimesis-7.0.0.tar.gz", hash = "sha256:0ca1beffc8c62948753a0404e9f37283286c9177d7a59eaee095f89a1d6fd00a"},
-]
 
 [[package]]
 name = "mypy"
@@ -834,17 +822,6 @@ tomli = {version = ">=1.0.0", markers = "python_version < \"3.11\""}
 testing = ["argcomplete", "hypothesis (>=3.56)", "mock", "nose", "pygments (>=2.7.2)", "requests", "xmlschema"]
 
 [[package]]
-name = "python-chess"
-version = "1.999"
-description = "A chess library with move generation, move validation, and support for common formats."
-category = "dev"
-optional = false
-python-versions = "*"
-
-[package.dependencies]
-chess = ">=1,<2"
-
-[[package]]
 name = "python-dateutil"
 version = "2.8.2"
 description = "Extensions to the standard Python datetime module"
@@ -857,7 +834,7 @@ six = ">=1.5"
 
 [[package]]
 name = "python-dlt"
-version = "0.2.0a19"
+version = "0.2.0a20"
 description = "DLT is an open-source python-native scalable data loading framework that does not require any devops efforts to run."
 category = "dev"
 optional = false
@@ -1235,7 +1212,7 @@ testing = ["flake8 (<5)", "func-timeout", "jaraco.functools", "jaraco.itertools"
 [metadata]
 lock-version = "1.1"
 python-versions = "^3.8.1"
-content-hash = "b92a2e83119aa099c9110d9214277ebaa767ed4630b35afa4710692e12cc35b6"
+content-hash = "f952a58e29eff54bd88a2b78a4c96bda77aaeb1509f960836980cf1a578d0c3f"
 
 [metadata.files]
 astatine = [
@@ -1425,10 +1402,6 @@ charset-normalizer = [
     {file = "charset_normalizer-3.0.1-cp39-cp39-win32.whl", hash = "sha256:39cf9ed17fe3b1bc81f33c9ceb6ce67683ee7526e65fde1447c772afc54a1bb8"},
     {file = "charset_normalizer-3.0.1-cp39-cp39-win_amd64.whl", hash = "sha256:0a11e971ed097d24c534c037d298ad32c6ce81a45736d31e0ff0ad37ab437d59"},
     {file = "charset_normalizer-3.0.1-py3-none-any.whl", hash = "sha256:7e189e2e1d3ed2f4aebabd2d5b0f931e883676e51c7624826e0a4e5fe8a0bf24"},
-]
-chess = [
-    {file = "chess-1.9.4-py3-none-any.whl", hash = "sha256:44d471b1ba71a4287c1bb9af3d6b472df37f07686ec52d5d5feb982b0fcfad34"},
-    {file = "chess-1.9.4.tar.gz", hash = "sha256:7f42d664f8975abe46e34bd7d131efd2bba65dc78bd1c226f554eb6ca4a9b381"},
 ]
 click = [
     {file = "click-8.1.3-py3-none-any.whl", hash = "sha256:bb4d8133cb15a609f44e8213d9b391b0809795062913b383c62be0ee95b1db48"},
@@ -1777,6 +1750,10 @@ mccabe = [
     {file = "mccabe-0.7.0-py2.py3-none-any.whl", hash = "sha256:6c2d30ab6be0e4a46919781807b4f0d834ebdd6c6e3dca0bda5a15f863427b6e"},
     {file = "mccabe-0.7.0.tar.gz", hash = "sha256:348e0240c33b60bbdf4e523192ef919f28cb2c3d7d5c7794f74009290f236325"},
 ]
+mimesis = [
+    {file = "mimesis-7.0.0-py3-none-any.whl", hash = "sha256:ef6fb61eeb978d4d8d7dface23837ef2e1fd90659cd7dc83cf6d39a73db90e6d"},
+    {file = "mimesis-7.0.0.tar.gz", hash = "sha256:0ca1beffc8c62948753a0404e9f37283286c9177d7a59eaee095f89a1d6fd00a"},
+]
 mypy = [
     {file = "mypy-0.991-cp310-cp310-macosx_10_9_universal2.whl", hash = "sha256:7d17e0a9707d0772f4a7b878f04b4fd11f6f5bcb9b3813975a9b13c9332153ab"},
     {file = "mypy-0.991-cp310-cp310-macosx_10_9_x86_64.whl", hash = "sha256:0714258640194d75677e86c786e80ccf294972cc76885d3ebbb560f11db0003d"},
@@ -2086,17 +2063,13 @@ pytest = [
     {file = "pytest-7.2.1-py3-none-any.whl", hash = "sha256:c7c6ca206e93355074ae32f7403e8ea12163b1163c976fee7d4d84027c162be5"},
     {file = "pytest-7.2.1.tar.gz", hash = "sha256:d45e0952f3727241918b8fd0f376f5ff6b301cc0777c6f9a556935c92d8a7d42"},
 ]
-python-chess = [
-    {file = "python-chess-1.999.tar.gz", hash = "sha256:8cad0388c42242d890ac6368ad64def15cd0165db033df0ad479492e266e5e6c"},
-    {file = "python_chess-1.999-py3-none-any.whl", hash = "sha256:93b562f8f1124cb7bf56fb095e18743758e69dc6a028ccda0badcaa5c59d88c8"},
-]
 python-dateutil = [
     {file = "python-dateutil-2.8.2.tar.gz", hash = "sha256:0123cacc1627ae19ddf3c27a5de5bd67ee4586fbdd6440d9748f8abb483d3e86"},
     {file = "python_dateutil-2.8.2-py2.py3-none-any.whl", hash = "sha256:961d03dc3453ebbc59dbdea9e4e11c5651520a876d0f4db161e8674aae935da9"},
 ]
 python-dlt = [
-    {file = "python_dlt-0.2.0a19-py3-none-any.whl", hash = "sha256:d2c02847c36188c6852b0c34299f3dd19f734a3b2793302b42a54596999eb1f0"},
-    {file = "python_dlt-0.2.0a19.tar.gz", hash = "sha256:663270ad2f124bb4577c7806b1504adadc4b07ae36158a6d8ec7129f738bfd07"},
+    {file = "python_dlt-0.2.0a20-py3-none-any.whl", hash = "sha256:6ea0b388e71915ffef017c9312264847e3a38745b89e33449d0b04e80d791df7"},
+    {file = "python_dlt-0.2.0a20.tar.gz", hash = "sha256:056f663b5af3c58bba327bc60444a3d17d0a2f49a6bcd7718ce479c74ecbc340"},
 ]
 pytz = [
     {file = "pytz-2022.7.1-py2.py3-none-any.whl", hash = "sha256:78f4f37d8198e0627c5f1143240bb0206b8691d8d7ac6d78fee88b78733f8c4a"},
