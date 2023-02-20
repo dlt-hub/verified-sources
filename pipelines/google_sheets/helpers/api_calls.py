@@ -6,7 +6,7 @@ from typing import List
 from dlt.common.configuration.specs import GcpClientCredentialsWithDefault
 from dlt.common.typing import DictStrAny, StrAny
 from dlt.common.exceptions import MissingDependencyException
-from pipelines.google_sheets.helpers.data_processing import metadata_preprocessing, get_first_line, get_range_headers
+from .data_processing import metadata_preprocessing, get_first_line, get_range_headers
 try:
     from apiclient.discovery import build, Resource
 except ImportError:
