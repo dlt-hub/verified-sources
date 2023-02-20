@@ -26,6 +26,10 @@ mimesis = "^7.0.0"
 [tool.poetry.group.sql_database.dependencies]
 sqlalchemy = "^2.0.3"
 
+
+[tool.poetry.group.google_sheets.dependencies]
+google-api-python-client = "^2.78.0"
+
 [build-system]
 requires = ["poetry-core"]
 build-backend = "poetry.core.masonry.api"

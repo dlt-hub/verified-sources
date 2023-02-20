@@ -12,7 +12,7 @@ from pipelines.google_sheets.helpers import api_calls
 try:
     from apiclient.discovery import build, Resource
 except ImportError:
-    raise MissingDependencyException("Google Sheets Source", ["google1", "google2"])
+    raise MissingDependencyException("Google API Client", ["google-api-python-client"])
 
 
 @dlt.source
