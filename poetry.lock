@@ -977,6 +977,18 @@ files = [
 ]
 
 [[package]]
+name = "mimesis"
+version = "7.0.0"
+description = "Mimesis: Fake Data Generator."
+category = "dev"
+optional = false
+python-versions = ">=3.8,<4.0"
+files = [
+    {file = "mimesis-7.0.0-py3-none-any.whl", hash = "sha256:ef6fb61eeb978d4d8d7dface23837ef2e1fd90659cd7dc83cf6d39a73db90e6d"},
+    {file = "mimesis-7.0.0.tar.gz", hash = "sha256:0ca1beffc8c62948753a0404e9f37283286c9177d7a59eaee095f89a1d6fd00a"},
+]
+
+[[package]]
 name = "mypy"
 version = "0.991"
 description = "Optional static typing for Python"
@@ -2111,4 +2123,4 @@ testing = ["flake8 (<5)", "func-timeout", "jaraco.functools", "jaraco.itertools"
 [metadata]
 lock-version = "2.0"
 python-versions = "^3.8.1"
-content-hash = "8dbbed564d2bfc7467dcb741b6df579224cfc79e5b0ccb4960761ee256e5f82f"
+content-hash = "2ff5fb64d86668249c1c17fee40729a41138dbdae7607772565bd7935fdc300a"
