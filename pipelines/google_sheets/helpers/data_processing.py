@@ -235,7 +235,7 @@ def serial_date_to_datetime(serial_number: Union[int, float, str, bool]) -> pend
     if not isinstance(serial_number, (int, float)):
         return serial_number
     # To get the seconds passed since the start date of serial numbers we round the product of the number of seconds in a day and the serial number
-    conv_datetime = pendulum.from_timestamp(TIMESTAMP_CONST + round(SECONDS_PER_DAY * serial_number), DLT_TIMEZONE)
+    conv_datetime = pendulum.from_timestamp(0, DLT_TIMEZONE) + pendulum.duration(seconds=TIMESTAMP_CONST + round(SECONDS_PER_DAY * serial_number))
     return conv_datetime
 
 
