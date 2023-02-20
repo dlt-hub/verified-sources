@@ -4,7 +4,7 @@ from pipelines.google_sheets.google_sheets import google_spreadsheet
 from tests.utils import ALL_DESTINATIONS, assert_load_info
 
 
-TEST_SPREADSHEETS = [""]
+TEST_SPREADSHEETS = ["https://docs.google.com/spreadsheets/d/1HhWHjqouQnnCIZAFa2rL6vT91YRN8aIhts22SUUR580"]
 # list expected tables and the number of columns they are supposed to have
 ALL_TABLES = ["all_types", "empty_row", "empty_rows", "has_empty", "hole_middle", "inconsistent_types", "more_data", "more_headers_than_data", "NamedRange1", "only_data", "only_headers",
               "sheet1", "sheet2", "sheet3", "sheet4", "two_tables"]

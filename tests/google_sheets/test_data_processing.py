@@ -1,7 +1,8 @@
 import pytest
 from pipelines.google_sheets.helpers import data_processing
 from datetime import datetime
-from typing import Union
+from typing import Union, List
+
 from dlt.common.typing import DictStrAny
 from dlt.common import pendulum
 
@@ -117,7 +118,7 @@ def test_get_first_rows(sheet_range: str, expected: str):
 
 
 @pytest.mark.parametrize("value_dict_row, expected", TEST_CASES_DATA_TYPES)
-def test_is_date_datatype(value_dict_row: list[DictStrAny], expected: bool):
+def test_is_date_datatype(value_dict_row: List[DictStrAny], expected: bool):
     assert data_processing.is_date_datatype(value_dict_row) == expected
 
 

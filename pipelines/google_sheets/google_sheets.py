@@ -1,9 +1,9 @@
 # Contains the main pipeline functions
 
-from typing import Any, Iterator, cast
+from typing import Any, Iterator, cast, List
 import dlt
 from dlt.common.configuration.specs import GcpClientCredentialsWithDefault
-from dlt.common.typing import DictStrAny, TDataItem
+from dlt.common.typing import StrAny, DictStrAny, TDataItem, Dict
 from dlt.common.exceptions import MissingDependencyException
 import logging
 from pipelines.google_sheets.helpers.data_processing import get_spreadsheet_id, convert_named_range_to_a1, process_range
@@ -16,7 +16,7 @@ except ImportError:
 
 
 @dlt.source
-def google_spreadsheet(spreadsheet_identifier: str, range_names: list[str] = None, credentials: GcpClientCredentialsWithDefault = dlt.secrets.value,
+def google_spreadsheet(spreadsheet_identifier: str, range_names: List[str] = None, credentials: GcpClientCredentialsWithDefault = dlt.secrets.value,
                        get_sheets: bool = True, get_named_ranges: bool = True) -> Any:
     """
     The source for the dlt pipeline. It returns the following resources: 1 dlt resource for every range in sheet_names
@@ -52,7 +52,7 @@ def google_spreadsheet(spreadsheet_identifier: str, range_names: list[str] = Non
 
 
 @dlt.resource(write_disposition="replace", name="spreadsheet_info")
-def metadata_table(spreadsheet_info: dict[Any], spreadsheet_id: str) -> Iterator[TDataItem]:
+def metadata_table(spreadsheet_info: StrAny, spreadsheet_id: str) -> Iterator[TDataItem]:
     """
     Creates the metadata_table resource. It adds a table with all loaded ranges into a table
     @:param: spreadsheet_info - This is a dict where all loaded ranges are keys. Inside the dict there is another dict with keys: "headers", "sheet_name", "index" and "values"
@@ -81,7 +81,7 @@ def metadata_table(spreadsheet_info: dict[Any], spreadsheet_id: str) -> Iterator
         yield table_dict
 
 
-def get_data(service: Resource, spreadsheet_id: str, range_names: list[str], metadata_dict: dict[DictStrAny]) -> list[Iterator[Any]]:
+def get_data(service: Resource, spreadsheet_id: str, range_names: List[str], metadata_dict: Dict[str, DictStrAny]) -> List[Iterator[Any]]:
     """
     Makes an api call to Google sheets and retrieve all the ranges listed in range_names and process them into dlt resources
     @:param: service - Object to make api calls to Google Sheets

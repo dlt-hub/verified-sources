@@ -1,10 +1,11 @@
-# This is a helper module that contains function which validate and process data
+"""This is a helper module that contains function which validate and process data"""
 
-from typing import Union, Any, Iterator
-from dlt.common.typing import DictStrAny
-from re import match
-from dlt.common import pendulum
 import logging
+from typing import Union, Any, Iterator, List, Dict
+from re import match
+from dlt.common.typing import DictStrAny, StrAny
+from dlt.common import pendulum
+
 
 # this string comes before the id
 URL_ID_IDENTIFIER = "d"
@@ -56,7 +57,7 @@ def process_url(url: str) -> str:
     raise ValueError("Invalid URL. Cannot find spreadsheet ID")
 
 
-def get_first_rows(sheet_range: str) -> list[str]:
+def get_first_rows(sheet_range: str) -> List[str]:
     """
     Receives the range of a Google sheet, parses it and outputs the sheet name, a range which includes the first 2 rows only. Is used for only getting the first 2 rows when collecting metadata.
     @:param: sheet_range - Ex: sheet1, sheet3!G18:O28. General formula {sheet_name}![Starting_column][Starting_row]:[Ending_column]:[Ending_row]
@@ -110,7 +111,7 @@ def _separate_row_col(row_col_str: str) -> (str, str):
     return range_row, range_col
 
 
-def convert_named_range_to_a1(named_range_dict: DictStrAny, sheet_names_dict: dict[DictStrAny] = None) -> str:
+def convert_named_range_to_a1(named_range_dict: DictStrAny, sheet_names_dict: Dict[str, DictStrAny] = None) -> str:
     """
     Converts a named_range dict returned from Google Sheets API metadata call to an A1 range
     @:param: named_range_dict - dict returned from Google Sheets API, it contains all the information about a named range
@@ -159,7 +160,7 @@ def _convert_col_a1(col_idx: int) -> str:
     return col_name or "A"
 
 
-def get_range_headers(range_metadata: dict[Any], range_name: str) -> list[str]:
+def get_range_headers(range_metadata: StrAny, range_name: str) -> List[str]:
     """
     Helper. Receives the metadata for a range of cells and outputs only the headers for columns, i.e. first line of data
     @:param: range_metadata - Dict containing metadata for the first 2 rows of a range, taken from Google Sheets API response.
@@ -187,7 +188,7 @@ def get_range_headers(range_metadata: dict[Any], range_name: str) -> list[str]:
     return headers
 
 
-def get_first_line(range_metadata: dict[Any]) -> list[bool]:
+def get_first_line(range_metadata: StrAny) -> List[bool]:
     """
     Helper. Parses through the metadata for a range and checks whether a column contains datetime types or not
     @:param: range_metadata - Metadata for first 2 rows in a range
@@ -202,7 +203,7 @@ def get_first_line(range_metadata: dict[Any]) -> list[bool]:
     return is_datetime_cols
 
 
-def is_date_datatype(value_list: list[DictStrAny]) -> list[bool]:
+def is_date_datatype(value_list: List[DictStrAny]) -> List[bool]:
     """
     Helper function that receives a list of value lists from Google Sheets API, and for each data type deduces if the value contains a datetime object or not
     @:param: value_list - a list of the values in the first row of data returned by google sheets api. They are all dicts containing different information about the value
@@ -238,7 +239,7 @@ def serial_date_to_datetime(serial_number: Union[int, float, str, bool]) -> pend
     return conv_datetime
 
 
-def metadata_preprocessing(ranges: list[str], named_ranges: dict[str] = None) -> dict[str]:
+def metadata_preprocessing(ranges: List[str], named_ranges: StrAny = None) -> DictStrAny:
     """
     Helper, will iterate through input ranges and process them so only the first 2 rows are returned per range. It will also structure all the ranges inside a dict similar to how they are returned
     by the Google Sheets API metadata request
@@ -270,7 +271,7 @@ def metadata_preprocessing(ranges: list[str], named_ranges: dict[str] = None) ->
     return meta_ranges, response_like_dict
 
 
-def process_range(sheet_val: Iterator[DictStrAny], sheet_meta: dict[Any]) -> Iterator[DictStrAny]:
+def process_range(sheet_val: Iterator[DictStrAny], sheet_meta: StrAny) -> Iterator[DictStrAny]:
     """
     Receives 2 arrays of tabular data inside a sheet. This will be processed into a schema that is later stored into a database table
     @:param: spreadsheet_id - the id of the spreadsheet
