@@ -5,8 +5,20 @@ import dlt
 from pipelines.sql_database import sql_database
 
 from tests.utils import ALL_DESTINATIONS, assert_load_info
-from tests.sql_source import SQLAlchemySourceDB
-from pipelines.sql_database import sql_database
+from tests.sql_database.sql_source import SQLAlchemySourceDB
+
+
+@pytest.fixture(scope='module')
+def sql_source_db():
+    # TODO: parametrize the fixture so it takes the credentials for all destinations
+    db = SQLAlchemySourceDB(database_url=dlt.secrets["destination.postgres.credentials"])
+    db.create_schema()
+    try:
+        db.create_tables()
+        db.insert_data()
+        yield db
+    finally:
+        db.drop_schema()
 
 
 @pytest.mark.parametrize("destination_name", ALL_DESTINATIONS)

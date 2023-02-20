@@ -26,8 +26,9 @@ class TableInfo(TypedDict):
 
 
 class SQLAlchemySourceDB:
-    def __init__(self) -> None:
-        self.database_url = "postgresql://loader:loader@localhost/dlt_source"
+    def __init__(self, database_url: str) -> None:
+        self.database_url = database_url
+        # TODO: generate unique name
         self.schema = "my_dlt_source"
         self.engine = create_engine(self.database_url)
         self.metadata = MetaData(schema=self.schema)
