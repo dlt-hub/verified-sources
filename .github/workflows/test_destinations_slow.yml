@@ -1,5 +1,5 @@
 
-name: test destinations bigquery
+name: test destinations bigquery and redshift
 
 on:
   pull_request:
@@ -9,7 +9,7 @@ on:
   workflow_dispatch:
 
 env:
-  ALL_DESTINATIONS: '["bigquery"]'
+  ALL_DESTINATIONS: '["bigquery", "redshift"]'
   DESTINATIONS_SECRETS: ${{ secrets.DESTINATIONS_SECRETS }}
   SOURCES_SECRETS: ${{ secrets.SOURCES_SECRETS }}
   RUNTIME__LOG_LEVEL: ERROR
@@ -17,15 +17,15 @@ env:
 jobs:
 
   run_loader:
-    name: test destinations bigquery
-    strategy:
-      fail-fast: false
-      matrix:
-        os: ["ubuntu-latest", "macos-latest", "windows-latest"]
+    name: test destinations bigquery and redshift
+    # strategy:
+    #   fail-fast: false
+    #   matrix:
+    #     os: ["ubuntu-latest", "macos-latest", "windows-latest"]
     defaults:
       run:
         shell: bash
-    runs-on: ${{ matrix.os }}
+    runs-on: "ubuntu-latest"
 
     steps:
 

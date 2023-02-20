@@ -9,7 +9,7 @@ on:
   workflow_dispatch:
 
 env:
-  ALL_DESTINATIONS: '["redshift", "postgres", "duckdb"]'
+  ALL_DESTINATIONS: '["postgres", "duckdb"]'
   DESTINATIONS_SECRETS: ${{ secrets.DESTINATIONS_SECRETS }}
   SOURCES_SECRETS: ${{ secrets.SOURCES_SECRETS }}
   RUNTIME__LOG_LEVEL: ERROR
@@ -19,6 +19,7 @@ jobs:
   run_loader:
     name: test destinations redshift, postgres and duckdb
     strategy:
+      max-parallel: 1
       fail-fast: false
       matrix:
         os: ["ubuntu-latest", "macos-latest", "windows-latest"]
