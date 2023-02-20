@@ -1,5 +1,5 @@
 
-name: test redshift, postgres and duckdb
+name: test destinations bigquery
 
 on:
   pull_request:
@@ -9,7 +9,7 @@ on:
   workflow_dispatch:
 
 env:
-  ALL_DESTINATIONS: '["redshift", "postgres", "duckdb"]'
+  ALL_DESTINATIONS: '["bigquery"]'
   DESTINATIONS_SECRETS: ${{ secrets.DESTINATIONS_SECRETS }}
   SOURCES_SECRETS: ${{ secrets.SOURCES_SECRETS }}
   RUNTIME__LOG_LEVEL: ERROR
@@ -17,7 +17,7 @@ env:
 jobs:
 
   run_loader:
-    name: test destinations redshift, postgres and duckdb
+    name: test destinations bigquery
     strategy:
       fail-fast: false
       matrix:
@@ -35,7 +35,7 @@ jobs:
       - name: Setup Python
         uses: actions/setup-python@v1
         with:
-          python-version: "3.9.x"
+          python-version: "3.10.x"
 
       - name: Install Poetry
         uses: snok/install-poetry@v1.3.2
