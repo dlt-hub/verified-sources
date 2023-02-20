@@ -10,10 +10,15 @@ log_level="WARNING"
 
 ## chess
 
-[sources.chesss.extract]
+[sources.chess.extract]
 max_parallel_items = 5
 workers = 2  # limit the parallel execution
 
 # the section below defines config values for "chess_dlt_config_example" source in chess/__init__.py
 [sources.chess]
 config_int=123
+
+## sql_database
+
+[sources.sql_database.data_writer]
+buffer_max_items=5000
