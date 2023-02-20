@@ -24,7 +24,12 @@ You may also use `pyenv` as [poetry](https://python-poetry.org/docs/managing-env
 ## typing and linting
 `python-dlt` uses `mypy` and `flake8` with several plugins for linting. We do not reorder imports or reformat code. To lint the code do `make lint`.
 
-**Code does not need to be typed** (but it is better if it is - `mypy` is able to catch a lot of problems in the code)
+**Code does not need to be typed** - but it is better if it is - `mypy` is able to catch a lot of problems in the code. If your pipeline is typed add it to the `Makefile`
+```Makefile
+poetry run mypy --config-file mypy.ini pipelines/chess pipelines/sql_database
+```
+We'll get something better (ie. adding `py.typed` file to your pipeline folder will trigger )
+
 
 **Function input argument of sources and resources should be typed** that allows `dlt` to validate input arguments at runtime, say which are secrets and generate the secret and config files automatically.
 
@@ -126,8 +131,17 @@ makes sure that each test runs against all destinations (as defined in `ALL_DEST
 
 The simplest possible test just creates pipeline and then issues a run on a source. More advanced test will use `sql_client` to check the data and access the schemas to check the table structure.
 
+## Guidelines for writing tests
+Your tests will be run both locally and on CI. It means that a few instances of your test may be executed in parallel and they will be sharing resources. A few simple rules make that possible.
+1. Always use `full_refresh` when creating pipelines in test. This will make sure that data is loaded into new schema/dataset. Fixtures in `conftest.py` will drop datasets created during load.
+2. When creating any fixtures for your tests, make sure that fixture is unique for your test instance.
+> If you create database or schema or table, add random suffix/prefix to it und use in your test
+>
+> If you create an account ie. an user with a name and this name is uniq identifier, also add random suffix/prefix
+3. Cleanup after your fixtures - delete accounts, drop schemas and databases
+
 ## Mandatory tests for pipelines
-1. You should test your pipeline against all
+TBD.
 
 ## Running tests selectively
 1. When developing, limit the destinations to local ie. duckdb in tests/utils.py. **remember to uncomment the right set of destinations back**
