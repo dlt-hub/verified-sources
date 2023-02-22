@@ -46,17 +46,17 @@ def pipedrive_source(pipedrive_api_key=dlt.secrets.value):
 
     # we need to add entity fields' resources before entities' resources in order to let custom fields data munging work properly
     entity_fields_endpoints = ['activityFields', 'dealFields', 'organizationFields', 'personFields', 'productFields']
-    endpoints_resources = [dlt.resource(get_endpoint(endpoint, pipedrive_api_key), name=endpoint, write_disposition="replace") for endpoint in entity_fields_endpoints]
+    endpoints_resources = [dlt.resource(_get_endpoint(endpoint, pipedrive_api_key), name=endpoint, write_disposition="replace") for endpoint in entity_fields_endpoints]
 
     entities_endpoints = ['organizations', 'pipelines', 'persons', 'products', 'stages', 'users']
-    endpoints_resources += [dlt.resource(get_endpoint(endpoint, pipedrive_api_key), name=endpoint, write_disposition="replace") for endpoint in entities_endpoints]
+    endpoints_resources += [dlt.resource(_get_endpoint(endpoint, pipedrive_api_key), name=endpoint, write_disposition="replace") for endpoint in entities_endpoints]
     # add activities
-    activities_resource = dlt.resource(get_endpoint('activities', pipedrive_api_key, extra_params={'user_id': 0}), name='activities', write_disposition="replace")
+    activities_resource = dlt.resource(_get_endpoint('activities', pipedrive_api_key, extra_params={'user_id': 0}), name='activities', write_disposition="replace")
     endpoints_resources.append(activities_resource)
     # add resources that need 2 requests
 
     # we make the resource explicitly and put it in a variable
-    deals = dlt.resource(get_endpoint('deals', pipedrive_api_key), name="deals")
+    deals = dlt.resource(_get_endpoint('deals', pipedrive_api_key), name="deals")
 
     endpoints_resources.append(deals)
 
@@ -99,7 +99,7 @@ def _paginated_get(url, headers, params):
             params['start'] = pagination_info.get("next_start")
 
 
-def get_endpoint(entity, pipedrive_api_key, extra_params=None, munge_custom_fields=True):
+def _get_endpoint(entity, pipedrive_api_key, extra_params=None, munge_custom_fields=True):
     """
     Generic method to retrieve endpoint data based on the required headers and params.
 
@@ -131,7 +131,7 @@ def deals_participants(deals_page, pipedrive_api_key=dlt.secrets.value):
     """
     for row in deals_page:
         endpoint = f"deals/{row['id']}/participants"
-        data = get_endpoint(endpoint, pipedrive_api_key)
+        data = _get_endpoint(endpoint, pipedrive_api_key)
         if data:
             yield from data
 
@@ -144,7 +144,7 @@ def deals_flow(deals_page, pipedrive_api_key=dlt.secrets.value):
     """
     for row in deals_page:
         endpoint = f"deals/{row['id']}/flow"
-        data = get_endpoint(endpoint, pipedrive_api_key)
+        data = _get_endpoint(endpoint, pipedrive_api_key)
         if data:
             yield from data
 
