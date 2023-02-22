@@ -1,4 +1,3 @@
-from dlt.common.normalizers.names.snake_case import normalize_column_name
 from typing import Dict, List, Generator, Optional
 
 import dlt
@@ -24,8 +23,9 @@ def munge_push_func(data: List, endpoint: str) -> List:
 
 
 def _normalize_map(data_item: Dict) -> Dict:
+    source_schema = dlt.current.source_schema()
     normalized_name = data_item['name'].strip()  # remove leading and trailing spaces
-    normalized_name = normalize_column_name(normalized_name)
+    normalized_name = source_schema.naming.normalize_identifier(normalized_name)
     return {data_item['key']: {'name': data_item['name'], 'normalized_name': normalized_name}}
 
 
