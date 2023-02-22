@@ -29,5 +29,6 @@ def load_players_online_status():
 
 if __name__ == "__main__" :
     # run our main example
+    # list(chess_dlt_config_example())
     load_players_games_example()
     # load_players_online_status()

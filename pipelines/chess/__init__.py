@@ -1,13 +1,15 @@
-import dlt
+from reretry import retry
 import datetime
 import requests
 from typing import Iterator, List, Sequence, Dict, Any
 
-from dlt.common.typing import TDataItem
+import dlt
+from dlt.common.typing import TDataItem, StrAny
 from dlt.extract.source import DltResource
 
 OFFICIAL_CHESS_API_URL = "https://api.chess.com/pub/"
 UNOFFICIAL_CHESS_API_URL = "https://www.chess.com/callback/"
+
 
 @dlt.source
 def chess(players: List[str], start_month: str = None, end_month: str = None) -> Sequence[DltResource]:
@@ -35,22 +37,37 @@ def chess(players: List[str], start_month: str = None, end_month: str = None) ->
     )
 
 
+@retry(tries=10, delay=1, backoff=1.1)
+def _get_url_with_retry(url: str) -> StrAny:
+    r = requests.get(url)
+    r.raise_for_status()
+    return r.json()  # type: ignore
+
+
+def _get_path_with_retry(path: str) -> StrAny:
+    return _get_url_with_retry(f"{OFFICIAL_CHESS_API_URL}{path}")  # type: ignore
+
+
 @dlt.resource(write_disposition="replace")
 def players_profiles(players: List[str]) -> Iterator[TDataItem]:
     """Yields player profiles for a list of player usernames"""
+
+    # convert to parallel call
+    @dlt.defer
+    def get_profile(username: str) -> TDataItem:
+        return _get_path_with_retry(f"player/{username}")
+
     for username in players:
-        r = requests.get(f"{OFFICIAL_CHESS_API_URL}player/{username}")
-        r.raise_for_status()
-        yield r.json()
+        yield get_profile(username)
 
 
 @dlt.resource(write_disposition="replace", selected=False)
 def players_archives(players: List[str]) -> Iterator[List[TDataItem]]:
     """Yields url to game archives for specified players."""
+
     for username in players:
-        r = requests.get(f"{OFFICIAL_CHESS_API_URL}player/{username}/games/archives")
-        r.raise_for_status()
-        yield r.json().get("archives", [])
+        data = _get_path_with_retry(f"player/{username}/games/archives")
+        yield data.get("archives", [])
 
 
 @dlt.resource(write_disposition="append")
@@ -81,9 +98,8 @@ def players_games(players: List[str], start_month: str = None, end_month: str = 
         else:
             checked_archives.append(url)
         # get the filtered archive
-        r = requests.get(url)
-        r.raise_for_status()
-        yield r.json().get("games", [])
+        data = _get_url_with_retry(url)
+        yield data.get("games", [])
 
 
 @dlt.resource(write_disposition="append")
@@ -91,9 +107,7 @@ def players_online_status(players: List[str]) -> Iterator[TDataItem]:
     """Returns current online status for a list of players"""
     # we'll use unofficial endpoint to get online status, the official seems to be removed
     for player in players:
-        r = requests.get("%suser/popup/%s" % (UNOFFICIAL_CHESS_API_URL, player))
-        r.raise_for_status()
-        status = r.json()
+        status = _get_url_with_retry("%suser/popup/%s" % (UNOFFICIAL_CHESS_API_URL, player))
         # return just relevant selection
         yield {
             "username": player,
@@ -112,5 +126,5 @@ def chess_dlt_config_example(secret_str: str = dlt.secrets.value, secret_dict: D
     print(secret_dict)
     print(config_int)
 
-    # returns a resource containing the configured values - it is just a test
+    # returns a resource yielding the configured values - it is just a test
     return dlt.resource([secret_str, secret_dict, config_int], name="config_values")

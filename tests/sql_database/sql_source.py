@@ -18,7 +18,7 @@ from sqlalchemy import (
     ForeignKey,
 )
 
-from dlt.common.utils import chunks
+from dlt.common.utils import chunks, uniq_id
 
 
 class TableInfo(TypedDict):
@@ -26,9 +26,9 @@ class TableInfo(TypedDict):
 
 
 class SQLAlchemySourceDB:
-    def __init__(self) -> None:
-        self.database_url = "postgresql://loader:loader@localhost/dlt_source"
-        self.schema = "my_dlt_source"
+    def __init__(self, database_url: str) -> None:
+        self.database_url = database_url
+        self.schema = "my_dlt_source" + uniq_id()
         self.engine = create_engine(self.database_url)
         self.metadata = MetaData(schema=self.schema)
         self.table_infos: Dict[str, TableInfo] = {}

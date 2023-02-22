@@ -26,6 +26,13 @@ dev: has-poetry
 
 lint:
 	./check-package.sh
-	poetry run mypy --config-file mypy.ini pipelines/chess
+	poetry run mypy --config-file mypy.ini $(shell find pipelines -type f -name py.typed -exec dirname "{}" \; |sort -u)
 	poetry run flake8 --max-line-length=200 pipelines
 	poetry run flake8 --max-line-length=200 tests
+
+
+test:
+	poetry run pytest tests
+
+test-local:
+	ALL_DESTINATIONS='["duckdb", "postgres"]' DESTINATION__POSTGRES__CREDENTIALS=postgresql://loader:loader@localhost:5432/dlt_data poetry run pytest tests

@@ -1,14 +1,16 @@
-# Contains helper functions to make API calls
+"""Contains helper functions to make API calls"""
 
 import logging
+from typing import List
+
 from dlt.common.configuration.specs import GcpClientCredentialsWithDefault
-from dlt.common.typing import DictStrAny
+from dlt.common.typing import DictStrAny, StrAny
 from dlt.common.exceptions import MissingDependencyException
-from pipelines.google_sheets.helpers.data_processing import metadata_preprocessing, get_first_line, get_range_headers
+from .data_processing import metadata_preprocessing, get_first_line, get_range_headers
 try:
     from apiclient.discovery import build, Resource
 except ImportError:
-    raise MissingDependencyException("Google Sheets Source", ["google1", "google2"])
+    raise MissingDependencyException("Google API Client", ["google-api-python-client"])
 
 
 def api_auth(credentials: GcpClientCredentialsWithDefault) -> Resource:
@@ -54,7 +56,7 @@ def get_metadata_simple(spreadsheet_id: str, service: Resource) -> DictStrAny:
     return return_info
 
 
-def get_metadata(spreadsheet_id: str, service: Resource, ranges: list[str], named_ranges: dict[str] = None) -> DictStrAny:
+def get_metadata(spreadsheet_id: str, service: Resource, ranges: List[str], named_ranges: StrAny = None) -> DictStrAny:
     """
     # TODO: add fields to save on info returned
     Gets the metadata for the first 2 rows of every range specified. The first row is deduced as the header and the 2nd row specifies the format the rest of the data should follow
@@ -107,7 +109,7 @@ def get_metadata(spreadsheet_id: str, service: Resource, ranges: list[str], name
     return metadata_all_ranges
 
 
-def get_data_batch(service: Resource, spreadsheet_id: str, range_names: list[str]) -> list[DictStrAny]:
+def get_data_batch(service: Resource, spreadsheet_id: str, range_names: List[str]) -> List[DictStrAny]:
     """
     Calls Google Sheets API to get data in a batch. This is the most efficient way to get data for multiple ranges inside a spreadsheet. However, this API call will return the data for each range
     without the same name that the range was called

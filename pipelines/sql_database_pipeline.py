@@ -2,7 +2,7 @@ from typing import List
 
 import dlt
 
-from pipelines.sql_database import sql_database
+from sql_database import sql_database
 
 if __name__ == '__main__':
     pipeline = dlt.pipeline(

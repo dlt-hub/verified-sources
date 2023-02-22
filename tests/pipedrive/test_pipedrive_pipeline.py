@@ -8,7 +8,7 @@ from tests.utils import ALL_DESTINATIONS, assert_load_info
 
 
 @pytest.mark.parametrize('destination_name', ALL_DESTINATIONS)
-def test_load_players_games(destination_name: str) -> None:
+def test_all_resources(destination_name: str) -> None:
     # mind the full_refresh flag - it makes sure that data is loaded to unique dataset. this allows you to run the tests on the same database in parallel
     # configure the pipeline with your destination details
     pipeline = dlt.pipeline(pipeline_name='pipedrive', destination=destination_name, dataset_name='pipedrive_data', full_refresh=True)
