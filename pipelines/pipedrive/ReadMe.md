@@ -90,8 +90,3 @@ python3 pipedrive_pipeline.py
 
 ---
 
----
-
----
-
-                                                      —END OF GUIDE, THANK YOU—
