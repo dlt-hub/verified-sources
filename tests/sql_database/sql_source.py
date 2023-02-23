@@ -19,6 +19,7 @@ from sqlalchemy import (
 )
 
 from dlt.common.utils import chunks, uniq_id
+from dlt.common.configuration.specs import ConnectionStringCredentials
 
 
 class TableInfo(TypedDict):
@@ -26,8 +27,9 @@ class TableInfo(TypedDict):
 
 
 class SQLAlchemySourceDB:
-    def __init__(self, database_url: str) -> None:
-        self.database_url = database_url
+    def __init__(self, credentials: ConnectionStringCredentials) -> None:
+        self.credentials = credentials
+        self.database_url = credentials.to_native_representation()
         self.schema = "my_dlt_source" + uniq_id()
         self.engine = create_engine(self.database_url)
         self.metadata = MetaData(schema=self.schema)

@@ -4,6 +4,7 @@ from collections import defaultdict
 import dlt
 from dlt.extract.source import DltResource
 from dlt.common import json
+from dlt.common.configuration.specs import ConnectionStringCredentials
 
 from sqlalchemy import create_engine, MetaData, Table, Column, tuple_
 from sqlalchemy.sql import Select
@@ -90,7 +91,7 @@ def table_rows(
 
 @dlt.source
 def sql_database(
-    database_url: str = dlt.secrets.value,
+    credentials: ConnectionStringCredentials = dlt.secrets.value,
     schema: Optional[str] = dlt.config.value,
     table_names: Optional[List[str]] = dlt.config.value,
     write_disposition: str = 'replace',
@@ -98,13 +99,13 @@ def sql_database(
     """A dlt source which loads data from an SQL database using SQLAlchemy.
     Resources are automatically created for each table in the schema or from the given list of tables.
 
-    :param database_url: An SQLAlchemy database connection string (e.g. `postgresql://user:password@localhost/my_database`)
+    :param credentials: Credentials for the database to load
     :param schema: Name of the database schema to load (if different from default)
     :param table_names: A list of table names to load. By default all defaults in the schema are loaded.
 
     :return: A list of dlt resources for each table to be loaded
     """
-    engine = create_engine(database_url)
+    engine = create_engine(credentials.to_native_representation())
     engine.execution_options(stream_results=True)
     metadata = MetaData(
         schema=schema,

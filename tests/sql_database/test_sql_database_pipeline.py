@@ -1,6 +1,7 @@
 import pytest
 
 import dlt
+from dlt.common.configuration.specs import ConnectionStringCredentials
 
 from pipelines.sql_database import sql_database
 
@@ -9,9 +10,10 @@ from tests.sql_database.sql_source import SQLAlchemySourceDB
 
 
 @pytest.fixture(scope='module')
-def sql_source_db():
+def sql_source_db(request: pytest.FixtureRequest):
     # TODO: parametrize the fixture so it takes the credentials for all destinations
-    db = SQLAlchemySourceDB(database_url=dlt.secrets["destination.postgres.credentials"])
+    credentials = dlt.secrets.get('destination.postgres.credentials', expected_type=ConnectionStringCredentials)
+    db = SQLAlchemySourceDB(credentials)
     db.create_schema()
     try:
         db.create_tables()
@@ -29,7 +31,7 @@ def test_load_sql_schema_loads_all_tables(sql_source_db: SQLAlchemySourceDB, des
         dataset_name='my_sql_data',
         full_refresh=False
     )
-    load_info = pipeline.run(sql_database(sql_source_db.database_url, schema=sql_source_db.schema))
+    load_info = pipeline.run(sql_database(credentials=sql_source_db.credentials, schema=sql_source_db.schema))
     assert_load_info(load_info)
 
     with pipeline.sql_client() as c:
