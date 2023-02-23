@@ -24,7 +24,7 @@ python-dlt = {version = "^0.2.0a20", extras = ["redshift", "bigquery", "postgres
 mimesis = "^7.0.0"
 
 [tool.poetry.group.sql_database.dependencies]
-sqlalchemy = "^2.0.3"
+sqlalchemy = ">=1.4"
 
 
 [tool.poetry.group.google_sheets.dependencies]

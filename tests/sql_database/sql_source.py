@@ -36,7 +36,6 @@ class SQLAlchemySourceDB:
     def create_schema(self) -> None:
         with self.engine.begin() as conn:
             conn.execute(sqla_schema.CreateSchema(self.schema, if_not_exists=True))
-            conn.commit()
 
     def drop_schema(self) -> None:
         with self.engine.begin() as conn:
