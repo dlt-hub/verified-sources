@@ -36,8 +36,9 @@ def zendesk(credentials: dict = dlt.secrets.value, load_all: bool = True, pivot_
     # Authenticate
     zen_credentials = ZendeskCredentials(credentials)
     zen_client = auth_zendesk(credentials=zen_credentials)
-    resource_list = [ticket_fields_table(zen_client=zen_client), ticket_table(zen_client=zen_client, pivot_fields=pivot_ticket_fields),
-                     ticket_metric_table(zen_client=zen_client)]
+    resource_list = [ticket_fields_table(zen_client=zen_client),
+                     ticket_table(zen_client=zen_client, pivot_fields=pivot_ticket_fields, start_time=incremental_start_time),
+                     ticket_metric_table(zen_client=zen_client, start_time=incremental_start_time)]
     # load other api endpoints into resources if the option is to do so
     if load_all:
         resources_to_be_loaded.extend(EXTRA_RESOURCES)
@@ -91,7 +92,7 @@ def ticket_table(zen_client: Zenpy, pivot_fields: bool = True, per_page: int = 1
 
 
 @dlt.resource(name="ticket_metric_events", write_disposition="replace")
-def ticket_metric_table(zen_client: Zenpy, start_time: DateTime) -> Iterator[TDataItem]:
+def ticket_metric_table(zen_client: Zenpy, start_time: DateTime = FIRST_DAY_OF_CURRENT_YEAR) -> Iterator[TDataItem]:
     """
     Will return all the ticket metric events from the starting date with the default being 1st Jan of the current year
     @:param zen_client: Zenpy type object, used to make calls to Zendesk API through zenpy module

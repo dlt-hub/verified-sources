@@ -5,7 +5,7 @@ from tests.utils import ALL_DESTINATIONS, assert_load_info
 
 
 # list expected tables and the number of columns they are supposed to have
-BASIC_TABLES = ["ticket_metric_events", "tickets", "users", "sla_policies", "groups", "organizations", "brands" ]
+BASIC_TABLES = ["ticket_fields", "tickets", "ticket_metric_events", "users", "sla_policies", "groups", "organizations", "brands" ]
 EXTRA_TABLES = [
     "activities", "automations", "custom_agent_roles", "dynamic_content", "group_memberships", "job_status", "macros", "organization_fields", "organization_memberships", "recipient_addresses",
     "requests", "satisfaction_ratings", "sharing_agreements", "skips", "suspended_tickets", "targets", "ticket_forms", "ticket_metrics", "triggers", "user_fields", "views", "tags"
