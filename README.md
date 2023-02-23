@@ -1,5 +1,16 @@
 # Pipelines contrib repo
 
+
+# Using pipelines in your project
+[WIP] `dlt` offers an `init` command that will clone and inject any pipeline from this repository into your project, setup the credentials and python dependencies. Please follow our [docs](https://dlthub.com/docs/command-line-interface)
+
+# How to contact us and get help
+Join our slack by following the [invitation link](https://join.slack.com/t/dlthub-community/shared_invite/zt-1n5193dbq-rCBmJ6p~ckpSFK4hCF2dYA)
+
+For people using the pipelines: `technical-help` channel
+
+For contributors: `dlt-contributors` channel
+
 # Development
 `python-dlt` uses `poetry` to manage, build and version the package. It also uses `make` to automate tasks. To start
 ```sh
@@ -48,11 +59,6 @@ executed from the top repo folder
 You can find the official `dlt` documentation at [our docs site](https://dlthub.com/docs). This documentation is oriented at newcomers that often are not professional programmers. In other words: it is good to get first grasp on how to create a pipeline.
 
 For contributors we have [in-depth technical documentation](https://github.com/dlt-hub/dlt/tree/devel/docs/technical) that may not be polished but is much more comprehensive. The chapter on [config and credentials](https://github.com/dlt-hub/dlt/blob/devel/docs/technical/secrets_and_config.md) is a must-read.
-
-## How to contact us
-Join our slack by following the invitation:
-For contributors: `dlt-contributors` channel
-For people using the pipelines: `technical-help` channel
 
 # Repository structure
 
