@@ -34,7 +34,7 @@ def _set_last_value(table_name: str, cursor_column: str, value: Any, loaded_id: 
         cursor_state['loaded_ids'].append(loaded_id)
 
 
-def _make_query(table: Table, cursor_column: Optional[str], unique_column: Optional[str]) -> Tuple[Select, Optional[Column[Any]], Optional[Column[Any]]]:
+def _make_query(table: Table, cursor_column: Optional[str], unique_column: Optional[str]) -> Tuple[Select[Any], Optional[Column[Any]], Optional[Column[Any]]]:
     """Make the SQL query object to select from table.
     Returns a tuple with the query and optionally the cursor column as `sqlalchemy.Column` object
     """
@@ -83,7 +83,7 @@ def table_rows(
             for row in partition:
                 if cursor is not None:
                     _set_last_value(
-                        table.name, cursor_column, row._mapping[cursor], row._mapping.get(unique)
+                        table.name, cursor_column, row._mapping[cursor], row._mapping.get(unique.name) if unique is not None else None
                     )
                 yield dict(row._mapping)
 
