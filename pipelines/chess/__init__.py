@@ -1,7 +1,7 @@
 from reretry import retry
 import datetime
 import requests
-from typing import Iterator, List, Sequence, Dict, Any
+from typing import Callable, Iterator, List, Sequence, Dict, Any
 
 import dlt
 from dlt.common.typing import TDataItem, StrAny
@@ -37,7 +37,7 @@ def chess(players: List[str], start_month: str = None, end_month: str = None) ->
     )
 
 
-@retry(tries=10, delay=1, backoff=1.1)
+@retry(tries=10, delay=1, backoff=1.1, logger=None)
 def _get_url_with_retry(url: str) -> StrAny:
     r = requests.get(url)
     r.raise_for_status()
@@ -52,13 +52,13 @@ def _get_path_with_retry(path: str) -> StrAny:
 def players_profiles(players: List[str]) -> Iterator[TDataItem]:
     """Yields player profiles for a list of player usernames"""
 
-    # convert to parallel call
+    # get archives in parallel by decorating the http request with defer
     @dlt.defer
-    def get_profile(username: str) -> TDataItem:
+    def _get_profile(username: str) -> TDataItem:
         return _get_path_with_retry(f"player/{username}")
 
     for username in players:
-        yield get_profile(username)
+        yield _get_profile(username)
 
 
 @dlt.resource(write_disposition="replace", selected=False)
@@ -71,7 +71,7 @@ def players_archives(players: List[str]) -> Iterator[List[TDataItem]]:
 
 
 @dlt.resource(write_disposition="append")
-def players_games(players: List[str], start_month: str = None, end_month: str = None) -> Iterator[List[TDataItem]]:
+def players_games(players: List[str], start_month: str = None, end_month: str = None) -> Iterator[Callable[[], List[TDataItem]]]:
     """Yields `players` games that happened between `start_month` and `end_month`. See the `chess` source documentation for details."""
     # do a simple validation to prevent common mistakes in month format
     if start_month and start_month[4] != "/":
@@ -84,6 +84,13 @@ def players_games(players: List[str], start_month: str = None, end_month: str = 
     checked_archives = dlt.state().setdefault("archives", [])
     # get player archives, note that you can call the resource like any other function and just iterate it like a list
     archives = players_archives(players)
+
+    # get archives in parallel by decorating the http request with defer
+    @dlt.defer
+    def _get_archive(url: str) -> List[TDataItem]:
+        print(f"Getting archive from {url}")
+        return _get_url_with_retry(url).get("games", [])  # type: ignore
+
     # enumerate the archives
     url: str = None
     for url in archives:  # type: ignore
@@ -98,8 +105,7 @@ def players_games(players: List[str], start_month: str = None, end_month: str = 
         else:
             checked_archives.append(url)
         # get the filtered archive
-        data = _get_url_with_retry(url)
-        yield data.get("games", [])
+        yield _get_archive(url)
 
 
 @dlt.resource(write_disposition="append")
