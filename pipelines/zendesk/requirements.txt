@@ -1,2 +1,2 @@
-zenpy
+zenpy==2.0.25
 python-dlt

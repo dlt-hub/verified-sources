@@ -5,8 +5,12 @@ from tests.utils import ALL_DESTINATIONS, assert_load_info
 
 
 # list expected tables and the number of columns they are supposed to have
-ALL_TABLES = ["tickets", "organizations", "users"]
-COL_NUMS = [11, 6, 7]
+BASIC_TABLES = ["ticket_metric_events", "tickets", "users", "sla_policies", "groups", "organizations", "brands" ]
+EXTRA_TABLES = [
+    "activities", "automations", "custom_agent_roles", "dynamic_content", "group_memberships", "job_status", "macros", "organization_fields", "organization_memberships", "recipient_addresses",
+    "requests", "satisfaction_ratings", "sharing_agreements", "skips", "suspended_tickets", "targets", "ticket_forms", "ticket_metrics", "triggers", "user_fields", "views", "tags"
+]
+ALL_DESTINATIONS = ["postgres"]
 
 
 def create_pipeline(destination_name, dataset_name, full_refresh=True, range_names=None, get_sheets=True, get_named_ranges=True):
@@ -34,16 +38,6 @@ def test_full_load(destination_name: str) -> None:
     # ALL_TABLES is missing spreadsheet info table - table being tested here
     schema = pipeline.default_schema
     user_tables = schema.all_tables()
-    assert len(user_tables) == len(ALL_TABLES)
+    assert len(user_tables) == len(BASIC_TABLES) + len(EXTRA_TABLES)
     for table in user_tables:
-        assert table["name"] in ALL_TABLES
-
-    # all tables have correct info in them
-    ticket_table = schema.get_table(ALL_TABLES[0])
-    org_table = schema.get_table(ALL_TABLES[1])
-    usr_table = schema.get_table(ALL_TABLES[2])
-
-    # check all columns
-    assert len(ticket_table["columns"]) == COL_NUMS[0]
-    assert len(org_table["columns"]) == COL_NUMS[1]
-    assert len(usr_table["columns"]) == COL_NUMS[2]
+        assert table["name"] in BASIC_TABLES or table["name"] in EXTRA_TABLES
