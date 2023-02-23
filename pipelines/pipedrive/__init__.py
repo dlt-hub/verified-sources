@@ -99,6 +99,9 @@ def _paginated_get(url, headers, params):
             params['start'] = pagination_info.get("next_start")
 
 
+ENTITY_FIELDS_SUFFIX = "Fields"
+
+
 def _get_endpoint(entity, pipedrive_api_key, extra_params=None, munge_custom_fields=True):
     """
     Generic method to retrieve endpoint data based on the required headers and params.
@@ -119,12 +122,11 @@ def _get_endpoint(entity, pipedrive_api_key, extra_params=None, munge_custom_fie
     url = f'https://app.pipedrive.com/v1/{entity}'
     pages = _paginated_get(url, headers=headers, params=params)
     if munge_custom_fields:
-        fields_suffix = "Fields"
-        if fields_suffix in entity:  # checks if it's an entity fields' endpoint (e.g.: activityFields)
+        if ENTITY_FIELDS_SUFFIX in entity:  # checks if it's an entity fields' endpoint (e.g.: activityFields)
             munging_func = munge_push_func
         else:
             munging_func = pull_munge_func
-            entity = entity[:-1] + fields_suffix  # converts entities' endpoint into entity fields' endpoint
+            entity = entity[:-1] + ENTITY_FIELDS_SUFFIX  # converts entities' endpoint into entity fields' endpoint
         pages = map(functools.partial(munging_func, endpoint=entity), pages)
     yield from pages
 
