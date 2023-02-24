@@ -129,7 +129,7 @@ def _get_endpoint(entity: str, pipedrive_api_key: str, extra_params: Dict[str, A
             munging_func = munge_push_func
         else:
             munging_func = pull_munge_func
-            entity = entity[:-1] + ENTITY_FIELDS_SUFFIX  # converts entities' endpoint into entity fields' endpoint
+            entity = entity[:-1] + ENTITY_FIELDS_SUFFIX  # turns entities' endpoint into entity fields' endpoint
         pages = map(functools.partial(munging_func, endpoint=entity), pages)
     yield from pages
 
