@@ -18,7 +18,7 @@ from dlt.extract.source import DltResource
 from typing import Any, Dict, Iterator, Optional, Sequence
 
 
-@dlt.source(name="pipedrive")
+@dlt.source(name='pipedrive')
 def pipedrive_source(pipedrive_api_key: str = dlt.secrets.value) -> Sequence[DltResource]:
     """
 
@@ -95,14 +95,14 @@ def _paginated_get(url: str, headers: Dict[str, Any], params: Dict[str, Any]) ->
         if data:
             yield data
         # check if next page exists
-        pagination_info = page.get("additional_data", {}).get("pagination", {})
+        pagination_info = page.get('additional_data', {}).get('pagination', {})
         # is_next_page is set to True or False
-        is_next_page = pagination_info.get("more_items_in_collection", False)
+        is_next_page = pagination_info.get('more_items_in_collection', False)
         if is_next_page:
-            params['start'] = pagination_info.get("next_start")
+            params['start'] = pagination_info.get('next_start')
 
 
-ENTITY_FIELDS_SUFFIX = "Fields"
+ENTITY_FIELDS_SUFFIX = 'Fields'
 
 
 def _get_endpoint(entity: str, pipedrive_api_key: str, extra_params: Dict[str, Any] = None, munge_custom_fields: bool = True) -> Optional[Iterator[TDataItems]]:
@@ -118,7 +118,7 @@ def _get_endpoint(entity: str, pipedrive_api_key: str, extra_params: Dict[str, A
     Returns:
 
     """
-    headers = {"Content-Type": "application/json"}
+    headers = {'Content-Type': 'application/json'}
     params = {'api_token': pipedrive_api_key}
     if extra_params:
         params.update(extra_params)
@@ -134,27 +134,27 @@ def _get_endpoint(entity: str, pipedrive_api_key: str, extra_params: Dict[str, A
     yield from pages
 
 
-@dlt.transformer(write_disposition="replace")
+@dlt.transformer(write_disposition='replace')
 def deals_participants(deals_page: Any, pipedrive_api_key: str = dlt.secrets.value) -> Optional[Iterator[TDataItems]]:
     """
     This transformer builds on deals resource data.
     The data is passed to it page by page (as the upstream resource returns it)
     """
     for row in deals_page:
-        endpoint = f"deals/{row['id']}/participants"
+        endpoint = f'deals/{row["id"]}/participants'
         data = _get_endpoint(endpoint, pipedrive_api_key, munge_custom_fields=False)
         if data:
             yield from data
 
 
-@dlt.transformer(write_disposition="replace")
+@dlt.transformer(write_disposition='replace')
 def deals_flow(deals_page: Any, pipedrive_api_key: str = dlt.secrets.value) -> Optional[Iterator[TDataItems]]:
     """
     This transformer builds on deals resource data.
     The data is passed to it page by page (as the upstream resource returns it)
     """
     for row in deals_page:
-        endpoint = f"deals/{row['id']}/flow"
+        endpoint = f'deals/{row["id"]}/flow'
         data = _get_endpoint(endpoint, pipedrive_api_key, munge_custom_fields=False)
         if data:
             yield from data
