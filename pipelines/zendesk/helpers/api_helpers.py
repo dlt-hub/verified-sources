@@ -1,6 +1,6 @@
 from dlt.common import logger
-from dlt.common.typing import TDataItem
-from typing import Iterator, Union
+from dlt.common.typing import TDataItem, DictStrAny
+from typing import Iterator, Union, Dict, Any
 from zenpy import Zenpy
 from zenpy.lib.api_objects import Ticket
 
@@ -19,9 +19,12 @@ class ZendeskCredentials:
     oauth_token: Union[str, None]
     password: Union[str, None]
 
-    def __init__(self, cred_dict: dict):
-        for key, value in cred_dict.items():
-            setattr(self, key, value)
+    def __init__(self, cred_dict: Dict[str, str]):
+        self.subdomain = cred_dict.get("subdomain", None)
+        self.email = cred_dict.get("email", None)
+        self.password = cred_dict.get("password", None)
+        self.token = cred_dict.get("token", None)
+        self.oauth_token = cred_dict.get("oauth_token", None)
 
 
 def auth_zendesk(credentials: ZendeskCredentials, domain: str = "zendesk.com", timeout: Union[float, None] = None, ratelimit_budget: Union[int, None] = None,
@@ -42,7 +45,7 @@ def auth_zendesk(credentials: ZendeskCredentials, domain: str = "zendesk.com", t
         credentials.token = None
     # zenpy currently will handle most errors
     # fill fields that were filled
-    zen_client = Zenpy(
+    zendesk_client = Zenpy(
         token=credentials.token,
         email=credentials.email,
         subdomain=credentials.subdomain,
@@ -55,19 +58,20 @@ def auth_zendesk(credentials: ZendeskCredentials, domain: str = "zendesk.com", t
         proactive_ratelimit_request_interval=proactive_ratelimit_request_interval,
         disable_cache=disable_cache
     )
-    return zen_client
+    return zendesk_client
 
 
-def process_ticket(sample_ticket: Ticket, custom_fields: dict, pivot_fields: bool = True) -> dict:
+def process_ticket(ticket: Ticket, custom_fields: Dict[str, str], pivot_fields: bool = True) -> DictStrAny:
     """
-    Helper that returns a dictionary of the ticket class provided as a parameter. This is done since to_dict() method of Ticket class doesn't return all the required information
+    Helper that returns a dictionary of the ticket class provided as a parameter. This is done since to_dict()
+    method of Ticket class doesn't return all the required information
     @:param sample_ticket: Ticket Object returned by a Zenpy API call, contains info on a single ticket.
     @:param custom_fields: A dict containing all the custom fields available for tickets.
     @:param pivot_fields: Bool that indicates whether to pivot all custom fields or not.
     @:return base_dict: A dict containing 'cleaned' data about a ticket.
     """
 
-    base_dict = sample_ticket.to_dict()
+    base_dict: DictStrAny = ticket.to_dict()
     # get tags as a string eliminating the square brackets from string
     base_dict["tags"] = str(base_dict["tags"])[1:-1]
 
@@ -79,7 +83,7 @@ def process_ticket(sample_ticket: Ticket, custom_fields: dict, pivot_fields: boo
             field_name = custom_fields[cus_field_id]
             base_dict[field_name] = custom_field["value"]
         else:
-            custom_field["ticket_id"] = sample_ticket.id
+            custom_field["ticket_id"] = ticket.id
 
     # delete fields that are not needed for pivoting
     if pivot_fields:
@@ -87,13 +91,13 @@ def process_ticket(sample_ticket: Ticket, custom_fields: dict, pivot_fields: boo
     del base_dict["fields"]
 
     # modify dates to return datetime objects instead
-    base_dict["updated_at"] = sample_ticket.updated
-    base_dict["created_at"] = sample_ticket.created
-    base_dict["due_at"] = sample_ticket.due
+    base_dict["updated_at"] = ticket.updated
+    base_dict["created_at"] = ticket.created
+    base_dict["due_at"] = ticket.due
     return base_dict
 
 
-def basic_load(resource_api: Iterator) -> Iterator[TDataItem]:
+def basic_load(resource_api: Iterator[Any]) -> Iterator[TDataItem]:
     """
     Receives a generator/iterable of Zenpy Objects and returns a generator of dicts. Loader helper
     @:param resource_api: generator/iterable of Zenpy Objects

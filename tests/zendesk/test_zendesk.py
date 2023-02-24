@@ -10,6 +10,10 @@ EXTRA_TABLES = [
     "activities", "automations", "custom_agent_roles", "dynamic_content", "group_memberships", "job_status", "macros", "organization_fields", "organization_memberships", "recipient_addresses",
     "requests", "satisfaction_ratings", "sharing_agreements", "skips", "suspended_tickets", "targets", "ticket_forms", "ticket_metrics", "triggers", "user_fields", "views", "tags"
 ]
+ALL_TABLES = ["ticket_fields", "tickets", "ticket_metric_events", "users", "sla_policies", "groups", "organizations", "brands", "activities", "automations", "custom_agent_roles", "dynamic_content",
+              "group_memberships", "job_status", "macros", "organization_fields", "organization_memberships", "recipient_addresses", "requests", "satisfaction_ratings", "sharing_agreements", "skips",
+              "suspended_tickets", "targets", "ticket_forms", "ticket_metrics", "triggers", "user_fields", "views", "tags"
+              ]
 ALL_DESTINATIONS = ["postgres"]
 
 
@@ -35,9 +39,12 @@ def test_full_load(destination_name: str) -> None:
     pipeline = create_pipeline(destination_name=destination_name, dataset_name="test_full_load")
 
     # The schema should contain all listed tables
-    # ALL_TABLES is missing spreadsheet info table - table being tested here
     schema = pipeline.default_schema
     user_tables = schema.all_tables()
-    assert len(user_tables) == len(BASIC_TABLES) + len(EXTRA_TABLES)
+    num_proper_tables = 0
     for table in user_tables:
-        assert table["name"] in BASIC_TABLES or table["name"] in EXTRA_TABLES
+        table_name = table["name"]
+        if not ("__" in table_name):
+            assert table_name in ALL_TABLES
+            num_proper_tables += 1
+    assert num_proper_tables == len(ALL_TABLES)
