@@ -1,6 +1,24 @@
+### Global & dlt components
 [runtime]
 log_level="WARNING"
 
+### Destinations
+
+# nothing to configure...
+
+### Sources
+
+## chess
+
+[sources.chess.extract]
+max_parallel_items = 5
+workers = 2  # limit the parallel execution
+
 # the section below defines config values for "chess_dlt_config_example" source in chess/__init__.py
-[sources.chess_dlt_config_example]
+[sources.chess]
 config_int=123
+
+## sql_database
+
+[sources.sql_database.data_writer]
+buffer_max_items=5000

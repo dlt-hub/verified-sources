@@ -14,8 +14,10 @@ from dlt.common.storages import FileStorage
 from dlt.pipeline.exceptions import SqlClientNotAvailable
 
 TEST_STORAGE_ROOT = "_storage"
-ALL_DESTINATIONS = ["bigquery", "redshift", "postgres"]
-# ALL_DESTINATIONS = ["postgres"]
+
+# get env variable with destinations
+ALL_DESTINATIONS = dlt.config.get("ALL_DESTINATIONS", list) or ["bigquery", "redshift", "postgres", "duckdb"]
+# ALL_DESTINATIONS = ["duckdb"]
 # ALL_DESTINATIONS = ["bigquery"]
 
 
@@ -53,7 +55,7 @@ def drop_pipeline() -> Iterator[None]:
         Container()[PipelineContext].deactivate()
 
 
-@pytest.fixture(autouse=True)
+@pytest.fixture(autouse=True, scope="session")
 def test_config_providers() -> Iterator[ConfigProvidersContext]:
     """Creates set of config providers where tomls are loaded from tests/.dlt"""
     config_root = "./pipelines/.dlt"
@@ -126,3 +128,6 @@ def assert_load_info(info: LoadInfo, expected_load_packages: int = 1) -> None:
     assert all(info.loads_ids.values()) is True
     # no failed jobs in any of the packages
     assert all(len(jobs) == 0 for jobs in info.failed_jobs.values()) is True
+
+
+# def assert_tables_filled()
