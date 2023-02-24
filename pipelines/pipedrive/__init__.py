@@ -13,10 +13,13 @@ import functools
 import requests
 
 from .custom_fields_munger import munge_push_func, pull_munge_func, parsed_mapping
+from dlt.common.typing import TDataItems
+from dlt.extract.source import DltResource
+from typing import Any, Dict, Iterator, Optional, Sequence
 
 
 @dlt.source(name="pipedrive")
-def pipedrive_source(pipedrive_api_key=dlt.secrets.value):
+def pipedrive_source(pipedrive_api_key: str = dlt.secrets.value) -> Sequence[DltResource]:
     """
 
     Args:
@@ -74,7 +77,7 @@ def pipedrive_source(pipedrive_api_key=dlt.secrets.value):
     return endpoints_resources
 
 
-def _paginated_get(url, headers, params):
+def _paginated_get(url: str, headers: Dict[str, Any], params: Dict[str, Any]) -> Optional[Iterator[TDataItems]]:
     """
     Requests and yields data 500 records at a time
     Documentation: https://pipedrive.readme.io/docs/core-api-concepts-pagination
@@ -102,7 +105,7 @@ def _paginated_get(url, headers, params):
 ENTITY_FIELDS_SUFFIX = "Fields"
 
 
-def _get_endpoint(entity, pipedrive_api_key, extra_params=None, munge_custom_fields=True):
+def _get_endpoint(entity: str, pipedrive_api_key: str, extra_params: Dict[str, Any] = None, munge_custom_fields: bool = True) -> Optional[Iterator[TDataItems]]:
     """
     Generic method to retrieve endpoint data based on the required headers and params.
 
@@ -132,7 +135,7 @@ def _get_endpoint(entity, pipedrive_api_key, extra_params=None, munge_custom_fie
 
 
 @dlt.transformer(write_disposition="replace")
-def deals_participants(deals_page, pipedrive_api_key=dlt.secrets.value):
+def deals_participants(deals_page: Any, pipedrive_api_key: str = dlt.secrets.value) -> Optional[Iterator[TDataItems]]:
     """
     This transformer builds on deals resource data.
     The data is passed to it page by page (as the upstream resource returns it)
@@ -145,7 +148,7 @@ def deals_participants(deals_page, pipedrive_api_key=dlt.secrets.value):
 
 
 @dlt.transformer(write_disposition="replace")
-def deals_flow(deals_page, pipedrive_api_key=dlt.secrets.value):
+def deals_flow(deals_page: Any, pipedrive_api_key: str = dlt.secrets.value) -> Optional[Iterator[TDataItems]]:
     """
     This transformer builds on deals resource data.
     The data is passed to it page by page (as the upstream resource returns it)

@@ -1,4 +1,3 @@
-from dlt.common.typing import TDataItem
 from typing import Any, Dict, Iterable, Iterator, List, Optional
 
 import dlt
@@ -47,7 +46,7 @@ def pull_munge_func(data: Iterator[Dict[str, Any]], endpoint: str) -> Iterable[D
 
 
 @dlt.resource(name='custom_fields_mapping', write_disposition='replace')
-def parsed_mapping() -> Optional[Iterator[List[TDataItem]]]:
+def parsed_mapping() -> Optional[Iterator[List[Dict[str, str]]]]:
     """
     Parses and yields custom fields' mapping in order to be stored in destiny by dlt
     """
