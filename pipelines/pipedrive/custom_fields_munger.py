@@ -1,9 +1,10 @@
-from typing import Dict, List, Generator, Optional
+from dlt.common.typing import TDataItem
+from typing import Any, Dict, Iterable, Iterator, List, Optional
 
 import dlt
 
 
-def munge_push_func(data: List, endpoint: str) -> List:
+def munge_push_func(data: Iterator[Dict[str, Any]], endpoint: str) -> Iterable[Dict[str, Any]]:
     """
     Specific function to perform data munging and push changes to custom fields' mapping stored in dlt's state
     The endpoint must be an entity fields' endpoint
@@ -22,22 +23,21 @@ def munge_push_func(data: List, endpoint: str) -> List:
     return data
 
 
-def _normalize_map(data_item: Dict) -> Dict:
+def _normalize_map(data_item: Dict[str, Any]) -> Dict[str, Dict[str, str]]:
     source_schema = dlt.current.source_schema()
     normalized_name = data_item['name'].strip()  # remove leading and trailing spaces
     normalized_name = source_schema.naming.normalize_identifier(normalized_name)
     return {data_item['key']: {'name': data_item['name'], 'normalized_name': normalized_name}}
 
 
-def pull_munge_func(data: List, endpoint: str) -> List:
+def pull_munge_func(data: Iterator[Dict[str, Any]], endpoint: str) -> Iterable[Dict[str, Any]]:
     """
     Specific function to pull changes from custom fields' mapping stored in dlt's state and perform data munging
-    The endpoint must be an entities' endpoint
+    The endpoint must be an entity fields' endpoint
     """
     custom_fields_mapping = dlt.state().get('custom_fields_mapping')
     if custom_fields_mapping:
         for data_item in data:
-            endpoint = f'{endpoint[:-1]}Fields'  # converts entities' endpoint into entity fields' endpoint
             data_item_mapping = custom_fields_mapping.get(endpoint)
             if data_item_mapping:
                 for hash_string, names in data_item_mapping.items():
@@ -47,7 +47,7 @@ def pull_munge_func(data: List, endpoint: str) -> List:
 
 
 @dlt.resource(name='custom_fields_mapping', write_disposition='replace')
-def parsed_mapping() -> Optional[Generator[Dict, None, None]]:
+def parsed_mapping() -> Optional[Iterator[List[TDataItem]]]:
     """
     Parses and yields custom fields' mapping in order to be stored in destiny by dlt
     """

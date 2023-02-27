@@ -1754,14 +1754,14 @@ six = ">=1.5"
 
 [[package]]
 name = "python-dlt"
-version = "0.2.0a20"
+version = "0.2.0a21"
 description = "DLT is an open-source python-native scalable data loading framework that does not require any devops efforts to run."
 category = "dev"
 optional = false
 python-versions = ">=3.8,<4.0"
 files = [
-    {file = "python_dlt-0.2.0a20-py3-none-any.whl", hash = "sha256:6ea0b388e71915ffef017c9312264847e3a38745b89e33449d0b04e80d791df7"},
-    {file = "python_dlt-0.2.0a20.tar.gz", hash = "sha256:056f663b5af3c58bba327bc60444a3d17d0a2f49a6bcd7718ce479c74ecbc340"},
+    {file = "python_dlt-0.2.0a21-py3-none-any.whl", hash = "sha256:034917c6274d2a3b3e3c0cc68adc3fc00e10753df278ee31b9ac9e83004fcb76"},
+    {file = "python_dlt-0.2.0a21.tar.gz", hash = "sha256:2cb9760c5f81a88f75f51fdb87bdb30b8d4eacb460b1c439bd47b6d487101236"},
 ]
 
 [package.dependencies]
@@ -2404,4 +2404,4 @@ testing = ["flake8 (<5)", "func-timeout", "jaraco.functools", "jaraco.itertools"
 [metadata]
 lock-version = "2.0"
 python-versions = "^3.8.1"
-content-hash = "3927e9834aed42b3025c7f90ba39353d710082ecbcf6321a7932f2f3efababae"
+content-hash = "01e723c5dbcb328aa2a44fe59d46195cf844e125e5d094ab95b7eecf681af758"

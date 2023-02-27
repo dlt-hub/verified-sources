@@ -46,17 +46,17 @@ def pipedrive_source(pipedrive_api_key=dlt.secrets.value):
 
     # we need to add entity fields' resources before entities' resources in order to let custom fields data munging work properly
     entity_fields_endpoints = ['activityFields', 'dealFields', 'organizationFields', 'personFields', 'productFields']
-    endpoints_resources = [dlt.resource(_get_endpoint(endpoint, pipedrive_api_key), name=endpoint, write_disposition="replace") for endpoint in entity_fields_endpoints]
+    endpoints_resources = [dlt.resource(_get_endpoint(endpoint, pipedrive_api_key), name=endpoint, write_disposition='replace') for endpoint in entity_fields_endpoints]
 
     entities_endpoints = ['organizations', 'pipelines', 'persons', 'products', 'stages', 'users']
-    endpoints_resources += [dlt.resource(_get_endpoint(endpoint, pipedrive_api_key), name=endpoint, write_disposition="replace") for endpoint in entities_endpoints]
+    endpoints_resources += [dlt.resource(_get_endpoint(endpoint, pipedrive_api_key), name=endpoint, write_disposition='replace') for endpoint in entities_endpoints]
     # add activities
-    activities_resource = dlt.resource(_get_endpoint('activities', pipedrive_api_key, extra_params={'user_id': 0}), name='activities', write_disposition="replace")
+    activities_resource = dlt.resource(_get_endpoint('activities', pipedrive_api_key, extra_params={'user_id': 0}), name='activities', write_disposition='replace')
     endpoints_resources.append(activities_resource)
     # add resources that need 2 requests
 
     # we make the resource explicitly and put it in a variable
-    deals = dlt.resource(_get_endpoint('deals', pipedrive_api_key), name="deals")
+    deals = dlt.resource(_get_endpoint('deals', pipedrive_api_key), name='deals', write_disposition='replace')
 
     endpoints_resources.append(deals)
 
@@ -119,7 +119,13 @@ def _get_endpoint(entity, pipedrive_api_key, extra_params=None, munge_custom_fie
     url = f'https://app.pipedrive.com/v1/{entity}'
     pages = _paginated_get(url, headers=headers, params=params)
     if munge_custom_fields:
-        pages = map(functools.partial(munge_push_func if "Fields" in entity else pull_munge_func, endpoint=entity), pages)
+        fields_suffix = "Fields"
+        if fields_suffix in entity:  # checks if it's an entity fields' endpoint (e.g.: activityFields)
+            munging_func = munge_push_func
+        else:
+            munging_func = pull_munge_func
+            entity = entity[:-1] + fields_suffix  # converts entities' endpoint into entity fields' endpoint
+        pages = map(functools.partial(munging_func, endpoint=entity), pages)
     yield from pages
 
 
@@ -131,7 +137,7 @@ def deals_participants(deals_page, pipedrive_api_key=dlt.secrets.value):
     """
     for row in deals_page:
         endpoint = f"deals/{row['id']}/participants"
-        data = _get_endpoint(endpoint, pipedrive_api_key)
+        data = _get_endpoint(endpoint, pipedrive_api_key, munge_custom_fields=False)
         if data:
             yield from data
 
@@ -144,19 +150,6 @@ def deals_flow(deals_page, pipedrive_api_key=dlt.secrets.value):
     """
     for row in deals_page:
         endpoint = f"deals/{row['id']}/flow"
-        data = _get_endpoint(endpoint, pipedrive_api_key)
+        data = _get_endpoint(endpoint, pipedrive_api_key, munge_custom_fields=False)
         if data:
             yield from data
-
-
-if __name__ == '__main__':
-    # configure the pipeline with your destination details
-    pipeline = dlt.pipeline(pipeline_name='pipedrive', destination='bigquery', dataset_name='pipedrive')
-
-    #data = list(deals_participants())
-    #print(data)
-    # run the pipeline with your parameters
-    load_info = pipeline.run(pipedrive_source())
-
-    # pretty print the information on data that was loaded
-    print(load_info)
