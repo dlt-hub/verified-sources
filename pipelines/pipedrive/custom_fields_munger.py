@@ -13,7 +13,7 @@ def munge_push_func(data: Iterator[Dict[str, Any]], endpoint: str) -> Iterable[D
         # 'edit_flag' field contains a boolean value, which is set to 'True' for custom fields and 'False' otherwise
         if all([data_item.get('edit_flag'), data_item.get('name'), data_item.get('key')]):
             # Regarding custom fields, 'key' field contains pipedrive's hash string representation of its name
-            # We assume that pipedrive's hash strings are meant to be an univoque representation of custom fields' name (per endpoint), so dlt's state shouldn't be updated while those values
+            # We assume that pipedrive's hash strings are meant to be an univoque representation of custom fields' name, so dlt's state shouldn't be updated while those values
             # remain unchanged
             # First of all, we search on and update dlt's state
             if custom_fields_mapping.get(endpoint):
