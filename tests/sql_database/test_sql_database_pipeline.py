@@ -100,6 +100,7 @@ def test_load_sql_table_incremental(sql_source_db: SQLAlchemySourceDB, destinati
     load_info = pipeline.run(
         make_source()
     )
+    assert_load_info(load_info)
 
     with pipeline.sql_client() as c:
         for table in tables:
