@@ -57,7 +57,17 @@ def _parse_response(r: requests.Response, **kwargs) -> Generator[Dict[str, Any],
     # Yield the properties of each result in the API response
     if 'results' in _data:
         for _result in _data['results']:
-            yield _result['properties']
+            _obj = _result['properties']
+            if 'associations' in _result:
+                for association in _result['associations']:
+                    __values = [{'value': _obj['hs_object_id'], f'{association}_id': __r['id']} for __r in
+                                _result['associations'][association]['results']]
+
+                    # remove duplicates from list of dicts
+                    __values = [dict(t) for t in {tuple(d.items()) for d in __values}]
+
+                    _obj[association] = __values
+            yield _obj
 
     # Follow pagination links if they exist
     if 'paging' in _data:
