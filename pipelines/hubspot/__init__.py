@@ -5,10 +5,10 @@ import dlt
 from dlt.common.typing import TDataItems
 from dlt.extract.source import DltResource
 
-from hubspot.client import fetch_data
-from hubspot.endpoints import CRM_CONTACTS_ENDPOINT, CRM_COMPANIES_ENDPOINT, \
+from pipelines.hubspot.client import fetch_data
+from pipelines.hubspot.endpoints import CRM_CONTACTS_ENDPOINT, CRM_COMPANIES_ENDPOINT, \
     CRM_DEALS_ENDPOINT, CRM_TICKETS_ENDPOINT, CRM_PRODUCTS_ENDPOINT, CRM_ENGAGEMENTS_CALLS_ENDPOINT, \
-    CRM_ENGAGEMENTS_COMMUNICATIONS_ENDPOINT, CRM_ENGAGEMENTS_EMAILS_ENDPOINT, WEB_ANALYTICS_EVENTS_ENDPOINT
+    CRM_ENGAGEMENTS_COMMUNICATIONS_ENDPOINT, CRM_ENGAGEMENTS_EMAILS_ENDPOINT, WEB_ANALYTICS_EVENTS_ENDPOINT, CRM_QUOTES_ENDPOINT
 
 
 @dlt.source
@@ -58,7 +58,11 @@ def hubspot(api_key: str = dlt.secrets.value) -> Sequence[DltResource]:
         yield fetch_data(CRM_PRODUCTS_ENDPOINT, api_key=api_key)
 
     @dlt.resource(write_disposition="replace")
+    def quotes() -> Iterator[TDataItems]:
+        yield fetch_data(CRM_QUOTES_ENDPOINT, api_key=api_key)
+
+    @dlt.resource(write_disposition="replace")
     def web_analytics_events() -> Iterator[TDataItems]:
         yield fetch_data(WEB_ANALYTICS_EVENTS_ENDPOINT, api_key=api_key)
 
-    return companies(), contacts(), deals(), tickets(), products(), web_analytics_events()
+    return companies(), contacts(), deals(), tickets(), products(), quotes(), web_analytics_events()
