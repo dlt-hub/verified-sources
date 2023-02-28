@@ -11,7 +11,7 @@ class ZendeskCredentials:
     Subdomain is always required  and there are 3 alternative authentication ways
     1. email + token
     2. email + password
-    3. oauth_token
+    3. oauth_token - https://developer.zendesk.com/documentation/live-chat/getting-started/auth/#authorization-code-grant-flow
     """
     subdomain: Union[str, None]
     email: Union[str, None]
@@ -43,6 +43,7 @@ def auth_zendesk(credentials: ZendeskCredentials, domain: str = "zendesk.com", t
     # 3 alternate ways to authenticate, all fields for at least one need to be active to authenticate, can't have tokens and password at the same time
     if credentials.password:
         credentials.token = None
+
     # zenpy currently will handle most errors
     # fill fields that were filled
     zendesk_client = Zenpy(

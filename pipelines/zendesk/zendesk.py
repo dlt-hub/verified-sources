@@ -20,7 +20,21 @@ FIRST_DAY_OF_MILLENNIUM = datetime(year=2000, month=1, day=1)
 
 
 @dlt.source
-def zendesk(credentials: Dict[str, str] = dlt.secrets.value, load_all: bool = True, pivot_ticket_fields: bool = True, incremental_start_time: DateTime = FIRST_DAY_OF_MILLENNIUM) -> Sequence[DltResource]:
+def zendesk_chat(credentials: Dict[str, str]) -> DltResource:
+    """
+    The source for the dlt pipeline. It returns all the basic information.
+    @:param credentials: read as a dict, as filled in .dlt.secrets.toml
+    @:returns: multiple dlt resources
+    """
+    # Authenticate
+    zen_credentials = ZendeskCredentials(credentials)
+    zendesk_client = auth_zendesk(credentials=zen_credentials)
+    return chats_table(zendesk_client=zendesk_client)
+
+
+@dlt.source
+def zendesk(credentials: Dict[str, str] = dlt.secrets.value, load_all: bool = True,
+            pivot_ticket_fields: bool = True, incremental_start_time: DateTime = FIRST_DAY_OF_MILLENNIUM) -> Sequence[DltResource]:
     """
     The source for the dlt pipeline. It returns all the basic tables for Zendesk Support: tickets, users, brands, organizations, groups and all extra resources if required
     @:param credentials: read as a dict, as filled in .dlt.secrets.toml
@@ -102,6 +116,20 @@ def ticket_metric_table(zendesk_client: Zenpy, start_time: DateTime = FIRST_DAY_
     all_metric_events = zendesk_client.ticket_metric_events(start_time=start_time)
     for metric_event in all_metric_events:
         yield metric_event.to_dict()
+
+
+@dlt.resource(name="chats", write_disposition="replace")
+def chats_table(zendesk_client: Zenpy, start_date: DateTime = FIRST_DAY_OF_CURRENT_YEAR) -> Iterator[TDataItem]:
+    """
+    Resource for Chats
+    @:param zendesk_client: Zenpy type object, used to make calls to Zendesk API through zenpy module
+    @:param start_date: Datetime object that serves as the starting date of when to retrieve objects
+    @:returns: Generator returning dicts for every row of data
+    """
+
+    all_chats = zendesk_client.chats.incremental(start_time=start_date)
+    dict_generator = basic_load(resource_api=all_chats)
+    yield from dict_generator
 
 
 def basic_resource(zendesk_client: Zenpy, resource: str, per_page: int = 1000) -> Iterator[TDataItem]:
