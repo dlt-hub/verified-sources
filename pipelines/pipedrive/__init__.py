@@ -9,11 +9,17 @@ To get an api key: https://pipedrive.readme.io/docs/how-to-find-the-api-token
 """
 
 import dlt
+import functools
 import requests
 
+from .custom_fields_munger import munge_push_func, pull_munge_func, parsed_mapping
+from dlt.common.typing import TDataItems
+from dlt.extract.source import DltResource
+from typing import Any, Dict, Iterator, Optional, Sequence
 
-@dlt.source(name="pipedrive")
-def pipedrive_source(pipedrive_api_key=dlt.secrets.value):
+
+@dlt.source(name='pipedrive')
+def pipedrive_source(pipedrive_api_key: str = dlt.secrets.value) -> Sequence[DltResource]:
     """
 
     Args:
@@ -41,31 +47,37 @@ def pipedrive_source(pipedrive_api_key=dlt.secrets.value):
 
     """
 
-    endpoints = ['persons', 'stages', 'productFields', 'products', 'pipelines', 'personFields',
-                 'users', 'organizations', 'organizationFields', 'activityFields', 'dealFields']
+    # we need to add entity fields' resources before entities' resources in order to let custom fields data munging work properly
+    entity_fields_endpoints = ['activityFields', 'dealFields', 'organizationFields', 'personFields', 'productFields']
+    endpoints_resources = [dlt.resource(_get_endpoint(endpoint, pipedrive_api_key), name=endpoint, write_disposition='replace') for endpoint in entity_fields_endpoints]
 
-    endpoint_resources = [dlt.resource(_get_endpoint(endpoint, pipedrive_api_key), name=endpoint, write_disposition="replace") for endpoint in endpoints]
+    entities_endpoints = ['organizations', 'pipelines', 'persons', 'products', 'stages', 'users']
+    endpoints_resources += [dlt.resource(_get_endpoint(endpoint, pipedrive_api_key), name=endpoint, write_disposition='replace') for endpoint in entities_endpoints]
     # add activities
-    activities_resource = dlt.resource(_get_endpoint('activities', pipedrive_api_key, extra_params={'user_id': 0}), name='activities', write_disposition="replace")
-    endpoint_resources.append(activities_resource)
+    activities_resource = dlt.resource(_get_endpoint('activities', pipedrive_api_key, extra_params={'user_id': 0}), name='activities', write_disposition='replace')
+    endpoints_resources.append(activities_resource)
     # add resources that need 2 requests
 
     # we make the resource explicitly and put it in a variable
-    deals = dlt.resource(_get_endpoint('deals', pipedrive_api_key), name="deals")
+    deals = dlt.resource(_get_endpoint('deals', pipedrive_api_key), name='deals', write_disposition='replace')
 
-    endpoint_resources.append(deals)
+    endpoints_resources.append(deals)
 
     # in order to avoid calling the deal endpoint 3 times (once for deal, twice for deal_entity)
     # we use a transformer instead of a resource.
     # The transformer can use the deals resource from cache instead of having to get the data again.
     # We use the pipe operator to pass the deals to
 
-    endpoint_resources.append(deals | deals_participants(pipedrive_api_key=pipedrive_api_key))
-    endpoint_resources.append(deals | deals_flow(pipedrive_api_key=pipedrive_api_key))
-    return endpoint_resources
+    endpoints_resources.append(deals | deals_participants(pipedrive_api_key=pipedrive_api_key))
+    endpoints_resources.append(deals | deals_flow(pipedrive_api_key=pipedrive_api_key))
+
+    # add custom fields' mapping
+    endpoints_resources.append(parsed_mapping())
+
+    return endpoints_resources
 
 
-def _paginated_get(url, headers, params):
+def _paginated_get(url: str, headers: Dict[str, Any], params: Dict[str, Any]) -> Optional[Iterator[TDataItems]]:
     """
     Requests and yields data 500 records at a time
     Documentation: https://pipedrive.readme.io/docs/core-api-concepts-pagination
@@ -83,14 +95,17 @@ def _paginated_get(url, headers, params):
         if data:
             yield data
         # check if next page exists
-        pagination_info = page.get("additional_data", {}).get("pagination", {})
+        pagination_info = page.get('additional_data', {}).get('pagination', {})
         # is_next_page is set to True or False
-        is_next_page = pagination_info.get("more_items_in_collection", False)
+        is_next_page = pagination_info.get('more_items_in_collection', False)
         if is_next_page:
-            params['start'] = pagination_info.get("next_start")
+            params['start'] = pagination_info.get('next_start')
 
 
-def _get_endpoint(entity, pipedrive_api_key, extra_params=None):
+ENTITY_FIELDS_SUFFIX = 'Fields'
+
+
+def _get_endpoint(entity: str, pipedrive_api_key: str, extra_params: Dict[str, Any] = None, munge_custom_fields: bool = True) -> Optional[Iterator[TDataItems]]:
     """
     Generic method to retrieve endpoint data based on the required headers and params.
 
@@ -98,52 +113,48 @@ def _get_endpoint(entity, pipedrive_api_key, extra_params=None):
         entity: the endpoint you want to call
         pipedrive_api_key:
         extra_params: any needed request params except pagination.
+        munge_custom_fields: whether to perform custom fields' data munging or not
 
     Returns:
 
     """
-    headers = {"Content-Type": "application/json"}
+    headers = {'Content-Type': 'application/json'}
     params = {'api_token': pipedrive_api_key}
     if extra_params:
         params.update(extra_params)
     url = f'https://app.pipedrive.com/v1/{entity}'
     pages = _paginated_get(url, headers=headers, params=params)
+    if munge_custom_fields:
+        if ENTITY_FIELDS_SUFFIX in entity:  # checks if it's an entity fields' endpoint (e.g.: activityFields)
+            munging_func = munge_push_func
+        else:
+            munging_func = pull_munge_func
+            entity = entity[:-1] + ENTITY_FIELDS_SUFFIX  # turns entities' endpoint into entity fields' endpoint
+        pages = map(functools.partial(munging_func, endpoint=entity), pages)
     yield from pages
 
 
-@dlt.transformer(write_disposition="replace")
-def deals_participants(deals_page, pipedrive_api_key=dlt.secrets.value):
+@dlt.transformer(write_disposition='replace')
+def deals_participants(deals_page: Any, pipedrive_api_key: str = dlt.secrets.value) -> Optional[Iterator[TDataItems]]:
     """
     This transformer builds on deals resource data.
     The data is passed to it page by page (as the upstream resource returns it)
     """
     for row in deals_page:
-        endpoint = f"deals/{row['id']}/participants"
-        data = _get_endpoint(endpoint, pipedrive_api_key)
+        endpoint = f'deals/{row["id"]}/participants'
+        data = _get_endpoint(endpoint, pipedrive_api_key, munge_custom_fields=False)
         if data:
             yield from data
 
 
-@dlt.transformer(write_disposition="replace")
-def deals_flow(deals_page, pipedrive_api_key=dlt.secrets.value):
+@dlt.transformer(write_disposition='replace')
+def deals_flow(deals_page: Any, pipedrive_api_key: str = dlt.secrets.value) -> Optional[Iterator[TDataItems]]:
     """
     This transformer builds on deals resource data.
     The data is passed to it page by page (as the upstream resource returns it)
     """
     for row in deals_page:
-        endpoint = f"deals/{row['id']}/flow"
-        data = _get_endpoint(endpoint, pipedrive_api_key)
+        endpoint = f'deals/{row["id"]}/flow'
+        data = _get_endpoint(endpoint, pipedrive_api_key, munge_custom_fields=False)
         if data:
             yield from data
-
-if __name__=='__main__':
-    # configure the pipeline with your destination details
-    pipeline = dlt.pipeline(pipeline_name='pipedrive', destination='bigquery', dataset_name='pipedrive')
-
-    #data = list(deals_participants())
-    #print(data)
-    # run the pipeline with your parameters
-    load_info = pipeline.run(pipedrive_source())
-
-    # pretty print the information on data that was loaded
-    print(load_info)
