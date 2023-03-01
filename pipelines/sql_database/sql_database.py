@@ -75,8 +75,8 @@ def sql_database(
 
     return [
         dlt.resource(
-            table_rows(engine, table),
+            table_rows,
             name=table.name
-        )
+        )(engine, table)
         for table in tables
     ]
