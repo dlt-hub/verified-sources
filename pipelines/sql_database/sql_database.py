@@ -21,6 +21,16 @@ def sql_table(
     unique_column: Optional[str] = dlt.config.value,
     write_disposition: TWriteDisposition = 'append'
 ) -> DltResource:
+    """A dlt resource which loads data from an SQL database table using SQLAlchemy.
+
+    :param credentials: Database credentials or an `sqlalchemy.Engine` instance
+    :param table: Name of the table to load
+    :param schema: Optional name of the schema table belongs to (uses databse default schema by default)
+    :param metadata: Optional `sqlalchemy.MetaData` instance. `schema` argument is ignored when this is used.
+    :param cursor_column: Optional column name to use as cursor for resumeable loading
+    :param unique_column: Optional column that uniquely identifies a row in the table for resumeable loading
+    :param write_disposition: Write disposition of the resource
+    """
     engine = engine_from_credentials(credentials)
     engine.execution_options(stream_results=True)
     metadata = metadata or MetaData(schema=schema)
@@ -44,8 +54,9 @@ def sql_database(
     """A dlt source which loads data from an SQL database using SQLAlchemy.
     Resources are automatically created for each table in the schema or from the given list of tables.
 
-    :param credentials: Credentials for the database to load
+    :param credentials: Database credentials or an `sqlalchemy.Engine` instance
     :param schema: Name of the database schema to load (if different from default)
+    :param metadata: Optional `sqlalchemy.MetaData` instance. `schema` argument is ignored when this is used.
     :param table_names: A list of table names to load. By default all tables in the schema are loaded.
 
     :return: A list of dlt resources for each table to be loaded
