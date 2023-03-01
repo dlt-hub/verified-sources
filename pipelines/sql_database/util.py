@@ -50,8 +50,24 @@ class TableLoader:
             Cursor(table.name, cursor_column, unique_column)
             if cursor_column is not None else None
         )
-        self.cursor_column = table.c.get(cursor_column)
-        self.unique_column = table.c.get(unique_column)
+        if cursor_column:
+            try:
+                self.cursor_column = table.c[cursor_column]
+            except KeyError as e:
+                raise KeyError(
+                    f"Cursor column '{cursor_column}' does not exist in table '{table.name}'"
+                ) from e
+        else:
+            self.cursor_column = None
+        if unique_column:
+            try:
+                self.unique_column = table.c[unique_column]
+            except KeyError as e:
+                raise KeyError(
+                    f"Unique column '{unique_column}' does not exist in table '{table.name}'"
+                ) from e
+        else:
+            self.unique_column = None
         self.table_has_cursor = self.cursor_column is not None
         self.table_has_unique = self.unique_column is not None
 
