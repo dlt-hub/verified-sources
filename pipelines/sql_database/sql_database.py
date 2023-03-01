@@ -1,4 +1,4 @@
-from typing import List, Iterator, Dict, Any, Optional
+from typing import List, Iterator, Dict, Any, Optional, Union
 from functools import partial
 
 import dlt
@@ -8,21 +8,22 @@ from dlt.common.schema.typing import TWriteDisposition
 from sqlalchemy import create_engine, MetaData, Table
 from sqlalchemy.engine import Engine
 
-from pipelines.sql_database.util import table_rows
+from pipelines.sql_database.util import table_rows, engine_from_credentials
 
 
 @dlt.resource
 def sql_table(
-    credentials: ConnectionStringCredentials = dlt.secrets.value,
+    credentials: Union[ConnectionStringCredentials, Engine] = dlt.secrets.value,
     table: str = dlt.config.value,
     schema: Optional[str] = dlt.config.value,
+    metadata: Optional[MetaData] = None,
     cursor_column: Optional[str] = dlt.config.value,
     unique_column: Optional[str] = dlt.config.value,
     write_disposition: TWriteDisposition = 'append'
 ) -> DltResource:
-    engine = create_engine(credentials.to_native_representation())
+    engine = engine_from_credentials(credentials)
     engine.execution_options(stream_results=True)
-    metadata = MetaData(schema=schema)
+    metadata = metadata or MetaData(schema=schema)
 
     table_obj = Table(table, metadata, autoload_with=engine)
 
@@ -34,8 +35,9 @@ def sql_table(
 
 @dlt.source
 def sql_database(
-    credentials: ConnectionStringCredentials = dlt.secrets.value,
+    credentials: Union[ConnectionStringCredentials, Engine] = dlt.secrets.value,
     schema: Optional[str] = dlt.config.value,
+    metadata: Optional[MetaData] = None,
     table_names: Optional[List[str]] = dlt.config.value,
     write_disposition: TWriteDisposition = 'append'
 ) -> List[DltResource]:
@@ -48,9 +50,9 @@ def sql_database(
 
     :return: A list of dlt resources for each table to be loaded
     """
-    engine = create_engine(credentials.to_native_representation())
+    engine = engine_from_credentials(credentials)
     engine.execution_options(stream_results=True)
-    metadata = MetaData(schema=schema)
+    metadata = metadata or MetaData(schema=schema)
 
     if table_names:
         tables = [

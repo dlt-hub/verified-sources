@@ -1,6 +1,7 @@
-from typing import cast, TypedDict, Any, List, Optional, Mapping, Iterator, Dict
+from typing import cast, TypedDict, Any, List, Optional, Mapping, Iterator, Dict, Union
 
-from sqlalchemy import Table, tuple_
+from dlt.common.configuration.specs import ConnectionStringCredentials
+from sqlalchemy import Table, tuple_, create_engine
 from sqlalchemy.engine import Result, Engine
 from sqlalchemy.sql import Select
 
@@ -114,3 +115,9 @@ def table_rows(
     """
     loader = TableLoader(engine, table, cursor_column, unique_column)
     yield from loader.load_rows()
+
+
+def engine_from_credentials(credentials: Union[ConnectionStringCredentials, Engine]) -> Engine:
+    if isinstance(credentials, Engine):
+        return credentials
+    return create_engine(credentials.to_native_representation())
