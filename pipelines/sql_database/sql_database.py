@@ -49,7 +49,6 @@ def sql_database(
     schema: Optional[str] = dlt.config.value,
     metadata: Optional[MetaData] = None,
     table_names: Optional[List[str]] = dlt.config.value,
-    write_disposition: TWriteDisposition = 'append'
 ) -> List[DltResource]:
     """A dlt source which loads data from an SQL database using SQLAlchemy.
     Resources are automatically created for each table in the schema or from the given list of tables.
@@ -77,7 +76,7 @@ def sql_database(
     return [
         dlt.resource(
             table_rows(engine, table),
-            name=table.name, write_disposition=write_disposition
+            name=table.name
         )
         for table in tables
     ]
