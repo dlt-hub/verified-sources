@@ -46,6 +46,9 @@ class SQLAlchemySourceDB:
                 sqla_schema.DropSchema(self.schema, cascade=True, if_exists=True)
             )
 
+    def get_table(self, name: str) -> Table:
+        return self.metadata.tables[f"{self.schema}.{name}"]
+
     def create_tables(self) -> None:
         Table(
             "app_user",
