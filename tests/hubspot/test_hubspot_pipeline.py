@@ -1,10 +1,16 @@
 from unittest.mock import patch
 
+import dlt
 import pytest
 import requests
 
-from pipelines.hubspot import fetch_data, CRM_CONTACTS_ENDPOINT, CRM_COMPANIES_ENDPOINT, CRM_DEALS_ENDPOINT, CRM_PRODUCTS_ENDPOINT, CRM_TICKETS_ENDPOINT, CRM_QUOTES_ENDPOINT
-from tests.hubspot.mock_data import mock_contacts_data, mock_companies_data, mock_deals_data, mock_products_data, mock_tickets_data, mock_quotes_data
+from pipelines.hubspot import hubspot
+from pipelines.hubspot.client import fetch_data
+from pipelines.hubspot.endpoints import CRM_CONTACTS_ENDPOINT, CRM_COMPANIES_ENDPOINT, CRM_DEALS_ENDPOINT, \
+    CRM_PRODUCTS_ENDPOINT, CRM_TICKETS_ENDPOINT, CRM_QUOTES_ENDPOINT
+from tests.hubspot.mock_data import mock_contacts_data, mock_companies_data, mock_deals_data, mock_products_data, \
+    mock_tickets_data, mock_quotes_data
+from tests.utils import ALL_DESTINATIONS, assert_load_info
 
 
 @pytest.fixture()
@@ -84,3 +90,11 @@ def test_fetch_data_quotes(mock_response):
         data = list(fetch_data(CRM_QUOTES_ENDPOINT, '12345'))
         assert len(data) == len(expected_data)
         assert data == expected_data
+
+
+@pytest.mark.parametrize('destination_name', ALL_DESTINATIONS)
+def test_all_resources(destination_name: str) -> None:
+    pipeline = dlt.pipeline(pipeline_name='hubspot', destination=destination_name, dataset_name='hubspot_data', full_refresh=True)
+    load_info = pipeline.run(hubspot())
+    print(load_info)
+    assert_load_info(load_info)

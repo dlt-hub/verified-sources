@@ -5,13 +5,13 @@ import dlt
 from dlt.common.typing import TDataItems
 from dlt.extract.source import DltResource
 
-from pipelines.hubspot.client import fetch_data
-from pipelines.hubspot.endpoints import CRM_CONTACTS_ENDPOINT, CRM_COMPANIES_ENDPOINT, \
+from .client import fetch_data
+from .endpoints import CRM_CONTACTS_ENDPOINT, CRM_COMPANIES_ENDPOINT, \
     CRM_DEALS_ENDPOINT, CRM_TICKETS_ENDPOINT, CRM_PRODUCTS_ENDPOINT, CRM_ENGAGEMENTS_CALLS_ENDPOINT, \
     CRM_ENGAGEMENTS_COMMUNICATIONS_ENDPOINT, CRM_ENGAGEMENTS_EMAILS_ENDPOINT, WEB_ANALYTICS_EVENTS_ENDPOINT, CRM_QUOTES_ENDPOINT
 
 
-@dlt.source
+@dlt.source(name="hubspot")
 def hubspot(api_key: str = dlt.secrets.value) -> Sequence[DltResource]:
     """
     A DLT source that retrieves data from the HubSpot API using the specified API key.
