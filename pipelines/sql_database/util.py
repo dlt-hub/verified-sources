@@ -1,8 +1,8 @@
-from typing import cast, TypedDict, Any, List, Optional, Mapping, Iterator, Dict, Union
+from typing import cast, TypedDict, Any, List, Optional, Mapping, Iterator, Dict, Union, Sequence
 
 from dlt.common.configuration.specs import ConnectionStringCredentials
 from sqlalchemy import Table, tuple_, create_engine
-from sqlalchemy.engine import Result, Engine
+from sqlalchemy.engine import Engine, Row
 from sqlalchemy.sql import Select
 
 import dlt
@@ -42,10 +42,12 @@ class TableLoader:
         engine: Engine,
         table: Table,
         cursor_column: Optional[str] = None,
-        unique_column: Optional[str] = None
+        unique_column: Optional[str] = None,
+        chunk_size: int = 1000
     ) -> None:
         self.engine = engine
         self.table = table
+        self.chunk_size = chunk_size
         self.cursor = (
             Cursor(table.name, cursor_column, unique_column)
             if cursor_column is not None else None
@@ -78,8 +80,6 @@ class TableLoader:
             return query
         cursor_col = self.cursor_column
         if cursor_col is None:
-            # Cursor column doesn't exist in table
-            # TODO: Should this print a warning or exception?
             return query
         query = query.order_by(cursor_col)
         cursor_state = self.cursor.get_state()
@@ -106,30 +106,35 @@ class TableLoader:
             row[cursor.unique_column] if self.table_has_unique else None
         )
 
-    def load_rows(self) -> Iterator[Dict[str, Any]]:
+    def _process_rows(self, partition: Sequence[Row]) -> Iterator[Dict[str, Any]]:  # type: ignore # sqla1.4&2
+        for row in partition:
+            row_mapping = row._mapping
+            self._update_cursor(row_mapping)
+            yield dict(row_mapping)
+
+    def load_rows(self) -> Iterator[List[Dict[str, Any]]]:
         query = self.make_query()
 
         with self.engine.connect() as conn:
-            result = conn.execution_options(yield_per=1000).execute(query)
+            result = conn.execution_options(yield_per=self.chunk_size).execute(query)
             for partition in result.partitions():
-                for row in partition:
-                    row_mapping = row._mapping
-                    self._update_cursor(row_mapping)
-                    yield dict(row_mapping)
+                yield list(self._process_rows(partition))
 
 
 def table_rows(
     engine: Engine,
     table: Table,
     cursor_column: Optional[str] = None,
-    unique_column: Optional[str] = None
-) -> Iterator[Dict[str, Any]]:
+    unique_column: Optional[str] = None,
+    chunk_size: int = 1000
+) -> Iterator[List[Dict[str, Any]]]:
     """Yields rows from the given database table.
     :param table: The table name to load data from
     :param cursor_column: Optional column name to use as cursor for resumeable loading
     :param unique_column: Optional column that uniquely identifies a row in the table for resumeable loading
+    :param chunk_size: How many rows to read from db at a time
     """
-    loader = TableLoader(engine, table, cursor_column, unique_column)
+    loader = TableLoader(engine, table, cursor_column, unique_column, chunk_size=chunk_size)
     yield from loader.load_rows()
 
 
