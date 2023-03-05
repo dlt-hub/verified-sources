@@ -8,7 +8,7 @@ from dlt.common.schema.typing import TWriteDisposition
 from sqlalchemy import create_engine, MetaData, Table
 from sqlalchemy.engine import Engine
 
-from pipelines.sql_database.util import table_rows, engine_from_credentials
+from .util import table_rows, engine_from_credentials
 
 
 @dlt.resource

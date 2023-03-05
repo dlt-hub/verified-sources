@@ -1,4 +1,5 @@
-"""
+"""Highly customizable pipeline for Pipedrive, supports endpoint addition, selection and column rename
+
 Pipedrive api docs: https://developers.pipedrive.com/docs/api/v1
 
 Pipedrive changes or deprecates fields and endpoints without versioning the api.
