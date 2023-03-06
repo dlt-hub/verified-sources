@@ -8,14 +8,14 @@ This may look a little bit weird from software engineering perspective but we wa
 
 ## Use `dlt init` to add pipeline to your project
 
-We'll use the [dlt init](https://dlthub.com/docs/command-line-interface) command to distribute pipelines. The information below is WIP. This feature works currently only with [init repo](https://github.com/dlt-hub/python-dlt-init-template)
+We'll use the [dlt init](https://dlthub.com/docs/command-line-interface) command to distribute pipelines.
 
 
 1. Pipelines are distributed by `dlt init` command that can be issued several times.
-2. Pipelines come from `contrib` repo and if there’s no pipeline there, the `init` repo is used (this is what we currently do)
+2. Pipelines come from `[pipelines](pipelines) folder of this repo and if there’s no pipeline there, the [init](init) folder is used.
 3. The pipelines are added to the current project as source code: the folder (ie. `pipedrive`) and the example script (`pipedrive_pipeline.py`) are added to the project.
 4. The freelancer/end user is able to copy and paste and hack the code of the pipeline.
-5. The subsequent `dlt init` with existing pipeline will update the code only if it was not modified!
+5. The subsequent `dlt init` with existing pipeline will update the code. User hacks and modifications will be preserved (if user chooses so).
 6. Versioning: using `git` for distribution provides enough versioning information. (tags, branches, commit ids)
 
 For example if someone issues `dlt init chess bigquery`:
