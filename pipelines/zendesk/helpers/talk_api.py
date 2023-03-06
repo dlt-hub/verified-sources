@@ -83,17 +83,3 @@ class ZendeskAPIClient:
                 # retry or print for failure
                 logger.warning(f"API call failed on endpoint {endpoint} with error code {response.status_code}")
                 print(f"API call failed on endpoint {endpoint} with error code {response.status_code}")
-
-
-if __name__ == "__main__":
-    my_test_cred = {
-        "subdomain": "maxdata",
-        "oauth_token": "e60a8eba3ba89a0f4ff43ef261277c1f259e76053223039ddd3c42a908c8258b"
-    }
-
-    zen_test_creds = ZendeskCredentials(my_test_cred)
-    ze_api_client = ZendeskAPIClient(zen_test_creds)
-    for endpoint in talk_endpoints.values():
-        my_req = ze_api_client.make_request(endpoint)
-        if my_req:
-            my_pages = [page for page in my_req]

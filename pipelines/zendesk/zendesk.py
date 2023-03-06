@@ -4,6 +4,7 @@ from dlt.common.typing import TDataItem, DictStrStr
 from dlt.extract.source import DltResource
 from pendulum import DateTime, datetime, now
 from pipelines.zendesk.helpers.api_helpers import ZendeskCredentials, auth_zendesk, basic_load, process_ticket
+from pipelines.zendesk.helpers.talk_api import ZendeskAPIClient, TALK_ENDPOINTS
 from typing import Iterator, Sequence, Dict
 from zenpy import Zenpy
 
@@ -13,10 +14,20 @@ EXTRA_RESOURCES = [
     "requests", "satisfaction_ratings", "sharing_agreements", "skips", "suspended_tickets", "targets", "ticket_forms", "ticket_metrics", "triggers", "user_fields", "views", "tags"
 ]
 resources_to_be_loaded = ["users", "sla_policies", "groups", "organizations", "brands"]
-
 CURRENT_YEAR = now().year
 FIRST_DAY_OF_CURRENT_YEAR = datetime(year=CURRENT_YEAR, month=1, day=1)
 FIRST_DAY_OF_MILLENNIUM = datetime(year=2000, month=1, day=1)
+
+
+@dlt.source
+def zendesk_talk(credentials: ZendeskCredentials = ZendeskCredentials(dlt.secrets["sources.zendesk.zendesk_talk.credentials"].value)) -> Sequence[DltResource]:
+    zendesk_client = ZendeskAPIClient(credentials)
+    talk_resources = []
+    for key, talk_endpoint in TALK_ENDPOINTS.items():
+        talk_resources.append(dlt.resource(talk_resource(zendesk_client=zendesk_client, talk_endpoint_name=key, talk_endpoint=talk_endpoint),
+                                           name=talk_endpoint,
+                                           write_disposition="replace"))
+    return talk_resources
 
 
 @dlt.source
@@ -179,3 +190,20 @@ def incremental_load_resource(zendesk_client: Zenpy, resource: str, per_page: in
         return
     dict_generator = basic_load(resource_api=resource_api)
     yield from dict_generator
+
+
+def talk_resource(zendesk_client: ZendeskAPIClient, talk_endpoint_name: str, talk_endpoint: str) -> Iterator[TDataItem]:
+    try:
+        my_req = zendesk_client.make_request(endpoint=talk_endpoint, data_point_name=talk_endpoint_name)
+        if my_req:
+            my_pages = [page for page in my_req]
+            for page in my_pages:
+                # multiple records
+                if isinstance(page, list):
+                    for record in page:
+                        yield record
+                else:
+                    yield page
+    except Exception as e:
+        print(f"Failed to load resource: {talk_endpoint}")
+        print(str(e))

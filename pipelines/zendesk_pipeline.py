@@ -1,6 +1,6 @@
 import time
 import dlt
-from zendesk.zendesk import zendesk, zendesk_chat
+from zendesk.zendesk import zendesk, zendesk_chat, zendesk_talk, ZendeskCredentials
 
 
 if __name__ == "__main__":
@@ -10,7 +10,7 @@ if __name__ == "__main__":
     pipeline = dlt.pipeline(destination="postgres", full_refresh=False, dataset_name="sample_zendesk_data2")
     data = zendesk(load_all=True)
     data_chat = zendesk_chat()
-
-    info = pipeline.run([data, data_chat])
+    data_talk = zendesk_talk(credentials=ZendeskCredentials(dlt.secrets["sources.zendesk.zendesk.credentials"].value))
+    info = pipeline.run([data_talk])
     end = time.time()
     print(f"Time taken: {end-start}")
