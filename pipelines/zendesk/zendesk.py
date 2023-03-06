@@ -1,6 +1,6 @@
 import dlt
 from dlt.common import logger
-from dlt.common.typing import TDataItem
+from dlt.common.typing import TDataItem, DictStrStr
 from dlt.extract.source import DltResource
 from pendulum import DateTime, datetime, now
 from pipelines.zendesk.helpers.api_helpers import ZendeskCredentials, auth_zendesk, basic_load, process_ticket
@@ -20,20 +20,19 @@ FIRST_DAY_OF_MILLENNIUM = datetime(year=2000, month=1, day=1)
 
 
 @dlt.source
-def zendesk_chat(credentials: Dict[str, str]) -> DltResource:
+def zendesk_chat(credentials: ZendeskCredentials = ZendeskCredentials(dlt.secrets["sources.zendesk.zendesk_chat.credentials"].value)) -> DltResource:
     """
     The source for the dlt pipeline. It returns all the basic information.
     @:param credentials: read as a dict, as filled in .dlt.secrets.toml
     @:returns: multiple dlt resources
     """
     # Authenticate
-    zen_credentials = ZendeskCredentials(credentials)
-    zendesk_client = auth_zendesk(credentials=zen_credentials)
+    zendesk_client = auth_zendesk(credentials=credentials)
     return chats_table(zendesk_client=zendesk_client)
 
 
 @dlt.source
-def zendesk(credentials: Dict[str, str] = dlt.secrets.value, load_all: bool = True,
+def zendesk(credentials: ZendeskCredentials = ZendeskCredentials(dlt.secrets["sources.zendesk.zendesk.credentials"].value), load_all: bool = True,
             pivot_ticket_fields: bool = True, incremental_start_time: DateTime = FIRST_DAY_OF_MILLENNIUM) -> Sequence[DltResource]:
     """
     The source for the dlt pipeline. It returns all the basic tables for Zendesk Support: tickets, users, brands, organizations, groups and all extra resources if required
@@ -44,12 +43,10 @@ def zendesk(credentials: Dict[str, str] = dlt.secrets.value, load_all: bool = Tr
     @:returns: multiple dlt resources
     """
 
-    # TODO: Implement Chat
     # TODO: Implement Talk
     # TODO: Make caching manageable and editable by users
     # Authenticate
-    zen_credentials = ZendeskCredentials(credentials)
-    zendesk_client = auth_zendesk(credentials=zen_credentials)
+    zendesk_client = auth_zendesk(credentials=credentials)
     resource_list = [ticket_fields_table(zendesk_client=zendesk_client),
                      ticket_table(zendesk_client=zendesk_client, pivot_fields=pivot_ticket_fields, start_time=incremental_start_time),
                      ticket_metric_table(zendesk_client=zendesk_client, start_time=incremental_start_time)]

@@ -1,6 +1,7 @@
 from dlt.common import logger
-from dlt.common.typing import TDataItem, DictStrAny
-from typing import Iterator, Union, Dict, Any
+from dlt.common.typing import TDataItem, DictStrAny, DictStrStr
+from dlt.common.configuration.specs.base_configuration import CredentialsConfiguration, CredentialsWithDefault, configspec
+from typing import Iterator, Union, Dict, Any, Optional
 from zenpy import Zenpy
 from zenpy.lib.api_objects import Ticket
 
@@ -13,13 +14,13 @@ class ZendeskCredentials:
     2. email + password
     3. oauth_token - https://developer.zendesk.com/documentation/live-chat/getting-started/auth/#authorization-code-grant-flow
     """
-    subdomain: Union[str, None]
-    email: Union[str, None]
-    token: Union[str, None]
-    oauth_token: Union[str, None]
-    password: Union[str, None]
+    subdomain: Optional[str]
+    email: Optional[str]
+    token: Optional[str]
+    oauth_token: Optional[str]
+    password: Optional[str]
 
-    def __init__(self, cred_dict: Dict[str, str]):
+    def __init__(self, cred_dict: DictStrStr):
         self.subdomain = cred_dict.get("subdomain", None)
         self.email = cred_dict.get("email", None)
         self.password = cred_dict.get("password", None)
@@ -27,8 +28,8 @@ class ZendeskCredentials:
         self.oauth_token = cred_dict.get("oauth_token", None)
 
 
-def auth_zendesk(credentials: ZendeskCredentials, domain: str = "zendesk.com", timeout: Union[float, None] = None, ratelimit_budget: Union[int, None] = None,
-                 proactive_ratelimit: Union[int, None] = None, proactive_ratelimit_request_interval: int = 10, disable_cache: bool = False) -> Zenpy:
+def auth_zendesk(credentials: ZendeskCredentials, domain: str = "zendesk.com", timeout: Optional[float] = None, ratelimit_budget: Optional[int] = None,
+                 proactive_ratelimit: Optional[int] = None, proactive_ratelimit_request_interval: int = 10, disable_cache: bool = False) -> Zenpy:
     """
     Helper, gets a Zendesk Credentials object and authenticates to the Zendesk API
     @:param: credentials - Zendesk Credentials Object, stores the credentials
@@ -62,7 +63,7 @@ def auth_zendesk(credentials: ZendeskCredentials, domain: str = "zendesk.com", t
     return zendesk_client
 
 
-def process_ticket(ticket: Ticket, custom_fields: Dict[str, str], pivot_fields: bool = True) -> DictStrAny:
+def process_ticket(ticket: Ticket, custom_fields: DictStrStr, pivot_fields: bool = True) -> DictStrAny:
     """
     Helper that returns a dictionary of the ticket class provided as a parameter. This is done since to_dict()
     method of Ticket class doesn't return all the required information
