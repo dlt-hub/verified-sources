@@ -2,7 +2,7 @@
 
 
 # Using pipelines in your project
-[WIP] `dlt` offers an `init` command that will clone and inject any pipeline from this repository into your project, setup the credentials and python dependencies. Please follow our [docs](https://dlthub.com/docs/command-line-interface)
+`dlt` offers an `init` command that will clone and inject any pipeline from this repository into your project, setup the credentials and python dependencies. Please follow our [docs](https://dlthub.com/docs/command-line-interface)
 
 # How to contact us and get help
 Join our slack by following the [invitation link](https://join.slack.com/t/dlthub-community/shared_invite/zt-1n5193dbq-rCBmJ6p~ckpSFK4hCF2dYA)
@@ -73,7 +73,8 @@ All repo code reside in `pipelines` folder. Each pipeline has its own **pipeline
 5. Add pipeline specific dependencies as described below
 6. Place your tests in `tests/<pipeline folder>`. To run your tests you'll need to create test accounts, data sets, credentials etc. Talk to dlt team on slack. We may provide you with the required accounts and credentials.
 7. Add example credentials to this repo as described below.
-8. The pipeline must pass CI: linter and tests stage. If you created any accounts or credentials, this data must be shared or via this repo or as is described later. We'll add it to our CI secrets
+8. Optional: add one liner module docstring to the `__init__.py` in **pipeline folder**. `dlt init --list-pipelines` will use this line as pipeline description.
+9. The pipeline must pass CI: linter and tests stage. If you created any accounts or credentials, this data must be shared or via this repo or as is described later. We'll add it to our CI secrets
 
 ## Pipeline specific dependencies.
 If pipeline requires additional dependencies that are not available in `python-dlt` they may be added as follows:
@@ -82,11 +83,18 @@ If pipeline requires additional dependencies that are not available in `python-d
 2. Add `requirements.txt` file in **pipeline folder** and add the dependency there.
 
 ## Python module import structure
-Use relative imports. Your code will be imported as source code and everything under **pipeline folder** must be self-contained and isolated. Example (from `google_sheets`)
+**Use relative imports**. Your code will be imported as source code and everything under **pipeline folder** must be self-contained and isolated. Example (from `google_sheets`)
 ```python
 from .helpers.data_processing import get_spreadsheet_id
 from .helpers.api_calls import api_auth
 from .helpers import api_calls
+```
+
+In your **Create a demo/usage script** use normal imports - as you would use in standalone script.
+Example (from `pipedrive`):
+```python
+import dlt
+from pipedrive import pipedrive_source
 ```
 
 ## Common credentials and configuration
@@ -126,7 +134,7 @@ TBD. but is seems you need all destination and source credentials. **Please ping
 2. SOURCES_SECRETS
 
 # How Pipelines will be distributed
-The reason for the structure above is to use `dlt init` command to let user add the pipelines to their own project. `dlt init` is able to add pipelines as pieces of code, not as dependencies, see explanation here: https://github.com/dlt-hub/python-dlt-init-template
+The reason for the structure above is to use `dlt init` command to let user add the pipelines to their own project. `dlt init` is able to add pipelines as pieces of code, not as dependencies.
 
 Please read the [detailed information](DISTRIBUTION.md) on our distribution model
 

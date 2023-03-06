@@ -1,0 +1,4 @@
+# put your configuration values here
+
+[runtime]
+log_level="WARNING"  # the system log level of dlt

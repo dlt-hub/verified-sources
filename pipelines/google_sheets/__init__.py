@@ -1,0 +1,1 @@
+"""Loads Google Sheets data from tabs, named and explicit ranges."""

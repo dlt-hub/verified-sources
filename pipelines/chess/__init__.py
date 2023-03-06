@@ -1,3 +1,5 @@
+"""A pipeline loading player profiles and games from chess.com api"""
+
 from reretry import retry
 import datetime
 import requests
