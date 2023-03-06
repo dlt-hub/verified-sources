@@ -5,7 +5,7 @@ from dlt.extract.source import DltResource
 from pendulum import DateTime, datetime, now
 from pipelines.zendesk.helpers.api_helpers import ZendeskCredentials, auth_zendesk, basic_load, process_ticket
 from pipelines.zendesk.helpers.talk_api import ZendeskAPIClient, TALK_ENDPOINTS
-from typing import Iterator, Sequence, Dict
+from typing import Iterator, Sequence, Dict, Union
 from zenpy import Zenpy
 
 
@@ -19,13 +19,13 @@ FIRST_DAY_OF_CURRENT_YEAR = datetime(year=CURRENT_YEAR, month=1, day=1)
 FIRST_DAY_OF_MILLENNIUM = datetime(year=2000, month=1, day=1)
 
 
-@dlt.source
+@dlt.source(max_table_nesting=2)
 def zendesk_talk(credentials: ZendeskCredentials = ZendeskCredentials(dlt.secrets["sources.zendesk.zendesk_talk.credentials"].value)) -> Sequence[DltResource]:
     zendesk_client = ZendeskAPIClient(credentials)
     talk_resources = []
     for key, talk_endpoint in TALK_ENDPOINTS.items():
         talk_resources.append(dlt.resource(talk_resource(zendesk_client=zendesk_client, talk_endpoint_name=key, talk_endpoint=talk_endpoint),
-                                           name=talk_endpoint,
+                                           name=key,
                                            write_disposition="replace"))
     return talk_resources
 
