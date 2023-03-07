@@ -1,4 +1,4 @@
-# Pipedrive dlt Pipeline
+# Pipedrive dlt pipeline
 
 # **Pipedrive setup**
 
