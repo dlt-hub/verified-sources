@@ -2,16 +2,16 @@ import dlt
 from chess import chess
 
 
-def load_players_games_example():
+def load_players_games_example(start_month: str, end_month: str):
     """Constructs a pipeline that will load chess games of specific players for a range of months."""
 
     # configure the pipeline: provide the destination and dataset name to which the data should go
-    pipeline = dlt.pipeline(pipeline_name="chess_players_games", destination="duckdb", dataset_name="chess_players_games_data")
+    pipeline = dlt.pipeline(pipeline_name="chess_pipeline", destination="duckdb", dataset_name="chess_players_games_data")
     # create the data source by providing a list of players and start/end month in YYYY/MM format
     data = chess(
         ['magnuscarlsen','vincentkeymer', 'dommarajugukesh', 'rpragchess'],
-        start_month='2022/10',
-        end_month='2022/12'
+        start_month=start_month,
+        end_month=end_month
     )
     # load the "players_games" and "players_profiles" out of all the possible resources
     info = pipeline.run(data.with_resources("players_games", "players_profiles"))
@@ -21,13 +21,21 @@ def load_players_games_example():
 def load_players_online_status():
     """Constructs a pipeline that will append online status of selected players"""
 
-    pipeline = dlt.pipeline(pipeline_name="chess_players_games", destination="postgres", dataset_name="chess_players_online_status")
+    pipeline = dlt.pipeline(pipeline_name="chess_pipeline", destination="postgres", dataset_name="chess_players_games_data")
     data = chess(['magnuscarlsen','vincentkeymer', 'dommarajugukesh', 'rpragchess'])
     info = pipeline.run(data.with_resources("players_online_status"))
     print(info)
 
 
+def load_players_games_incrementally():
+    """Pipeline will not load the same game archive twice"""
+    # loads games for 11.2022
+    load_players_games_example("2022/11", "2022/11")
+    # second load skips games for 11.2022 but will load for 12.2022
+    load_players_games_example("2022/11", "2022/12")
+
+
 if __name__ == "__main__" :
     # run our main example
-    load_players_games_example()
+    load_players_games_example("2022/11", "2022/12")
     load_players_online_status()
