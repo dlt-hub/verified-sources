@@ -64,14 +64,14 @@ For contributors we have [in-depth technical documentation](https://github.com/d
 
 All repo code reside in `pipelines` folder. Each pipeline has its own **pipeline folder** (ie. `chess`) where the `dlt.source` and `dlt.resource` functions are present. The internal organization of this folder is up to the contributor. For each pipeline there's a also a script with the example usages (ie. `chess_pipeline.py`). The intention is to show the user how the sources/resources may be called and let the user to copy the code from it.
 
-## Steps to add a new pipeline
+## Steps to add a new pipeline `<name>`
 
-1. Create a folder (**pipeline folder**) with your pipeline name in `pipelines`. Place all your code in that folder.
+1. Create a folder (**pipeline folder**) with your pipeline `<name>` in `pipelines`. Place all your code in that folder.
 2. Place (decorated) source/resource functions in the **main module** named as **pipeline folder** (the `__init__.py` also works)
 3. Try to separate your code where the part that you want people to hack stays in **main module** and the rest goes to some helper modules.
-4. Create a demo/usage script with the name `<pipeline_folder>_pipeline.py` and place it in `pipelines`. Make it work with `postgres` or `duckdb` so it is easy to try them out
+4. Create a demo/usage script with the name `<name>_pipeline.py` and place it in `pipelines`. Make it work with `postgres` or `duckdb` so it is easy to try them out
 5. Add pipeline specific dependencies as described below
-6. Place your tests in `tests/<pipeline folder>`. To run your tests you'll need to create test accounts, data sets, credentials etc. Talk to dlt team on slack. We may provide you with the required accounts and credentials.
+6. Place your tests in `tests/<name>`. To run your tests you'll need to create test accounts, data sets, credentials etc. Talk to dlt team on slack. We may provide you with the required accounts and credentials.
 7. Add example credentials to this repo as described below.
 8. Optional: add one liner module docstring to the `__init__.py` in **pipeline folder**. `dlt init --list-pipelines` will use this line as pipeline description.
 9. The pipeline must pass CI: linter and tests stage. If you created any accounts or credentials, this data must be shared or via this repo or as is described later. We'll add it to our CI secrets
@@ -96,6 +96,18 @@ Example (from `pipedrive`):
 import dlt
 from pipedrive import pipedrive_source
 ```
+
+## The demo/usage pipeline script: `<name>_pipeline.py`
+This script is distributed by `dlt init` with the other pipeline `<name>` files. It will be a first touch point with your users. It will be used by them as a starting point or as a source of code snippets. The ideal content for the script:
+1. Shows a few usage examples with different source/resource arguments combinations that you think are the most common cases for your user.
+2. If you provide any customizations/transformations then show how to use them.
+3. Any code snippet that will speed the user up.
+
+Examples:
+* [chess](pipelines/chess_pipeline.py)
+* [pipedrive](pipelines/pipedrive_pipeline.py)
+
+
 
 ## Common credentials and configuration
 As mentioned above the tech doc on [config and credentials](https://github.com/dlt-hub/dlt/blob/devel/docs/technical/secrets_and_config.md) is a must-read.

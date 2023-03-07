@@ -42,12 +42,13 @@ def pull_munge_func(data: Iterator[Dict[str, Any]], endpoint: str) -> Iterable[D
     """
     custom_fields_mapping = dlt.state().get('custom_fields_mapping')
     if custom_fields_mapping:
-        for data_item in data:
-            data_item_mapping = custom_fields_mapping.get(endpoint)
-            if data_item_mapping:
-                for hash_string, names in data_item_mapping.items():
+        data_item_mapping = custom_fields_mapping.get(endpoint)
+        if data_item_mapping:
+            renames = [(hash_string, names["name"]) for hash_string, names in data_item_mapping.items()]
+            for data_item in data:
+                for hash_string, name in renames:
                     if hash_string in data_item:
-                        data_item[names['normalized_name']] = data_item.pop(hash_string)
+                        data_item[name] = data_item.pop(hash_string)
     return data
 
 
