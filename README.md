@@ -22,7 +22,7 @@ make dev  # will install all deps including dev
 ```
 Executing `poetry shell` and working in it is very convenient at this moment.
 
-## python version
+## Python version
 Use python 3.8 for development which is the lowest supported version for `python-dlt`. You'll need `distutils` and `venv`:
 
 ```shell
@@ -32,12 +32,15 @@ sudo apt install python3.8-venv
 ```
 You may also use `pyenv` as [poetry](https://python-poetry.org/docs/managing-environments/) suggests.
 
-## typing and linting
+## Typing and linting
 `python-dlt` uses `mypy` and `flake8` with several plugins for linting. We do not reorder imports or reformat code. To lint the code do `make lint`.
 
 **Code does not need to be typed** - but it is better if it is - `mypy` is able to catch a lot of problems in the code. If your pipeline is typed file named `py.typed` to the folder where your pipeline code is. (see `chess` pipeline for example)
 
 **Function input argument of sources and resources should be typed** that allows `dlt` to validate input arguments at runtime, say which are secrets and generate the secret and config files automatically.
+
+## `dlt init` compatibility
+All the pipelines will be parsed and installed with `dlt init` **during the linting stage**. Those tests are implemented in `tests/test_dlt_init.py`. This is required for the PR to be accepted on CI.
 
 ### Adding `__init__.py` files
 Linting step requires properly constructed python packages so it will ask for `__init__` files to be created. That can be automated with
@@ -176,7 +179,7 @@ Your tests will be run both locally and on CI. It means that a few instances of 
 4. Add code to `tests/utils.py` only if this is helpful for all tests. Put your specific helpers in your own directory.
 
 ## Mandatory tests for pipelines
-TBD.
+Tests in `tests/test_dlt_init.py` are executed as part of linting stage and must be passing. They make sure that pipeline can be distributed with `dlt init`.
 
 ## Running tests selectively
 1. When developing, limit the destinations to local ie. duckdb by setting the environment variable:

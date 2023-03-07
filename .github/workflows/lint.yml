@@ -16,7 +16,9 @@ jobs:
     steps:
 
       - name: Check out
-        uses: actions/checkout@master
+        uses: actions/checkout@v3
+        with:
+          path: dlt-pipelines
 
       - name: Setup Python
         uses: actions/setup-python@v1
@@ -34,11 +36,11 @@ jobs:
         id: cached-poetry-dependencies
         uses: actions/cache@v2
         with:
-          path: .venv
+          path: dlt-pipelines/.venv
           key: venv-${{ runner.os }}-${{ steps.setup-python.outputs.python-version }}-${{ hashFiles('**/poetry.lock') }}
 
       - name: Install dependencies
-        run: poetry install --no-interaction --all-extras
+        run: cd dlt-pipelines && poetry install --no-interaction --all-extras
 
       - name: Run lint
-        run: make lint
+        run: cd dlt-pipelines && make lint
