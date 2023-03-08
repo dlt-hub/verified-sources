@@ -863,7 +863,7 @@ six = ">=1.5"
 
 [[package]]
 name = "python-dlt"
-version = "0.2.0a24"
+version = "0.2.0a25"
 description = "DLT is an open-source python-native scalable data loading framework that does not require any devops efforts to run."
 category = "dev"
 optional = false
@@ -2093,8 +2093,8 @@ python-dateutil = [
     {file = "python_dateutil-2.8.2-py2.py3-none-any.whl", hash = "sha256:961d03dc3453ebbc59dbdea9e4e11c5651520a876d0f4db161e8674aae935da9"},
 ]
 python-dlt = [
-    {file = "python_dlt-0.2.0a24-py3-none-any.whl", hash = "sha256:6dd2948ff4dc26600fe66a4cdd1f88d70ca6b96fc614d28b3b29d74f6578e3b4"},
-    {file = "python_dlt-0.2.0a24.tar.gz", hash = "sha256:0ebc6740b13b06d05c7e307af6b960ba0b5644e22a8b20df09c10a355b093ede"},
+    {file = "python_dlt-0.2.0a25-py3-none-any.whl", hash = "sha256:a63fa629769422e8faf2b76828f0e76759cf11d2c8367e06f48c4cff0ed6701d"},
+    {file = "python_dlt-0.2.0a25.tar.gz", hash = "sha256:170455af9ba2df0099b5b713df1124534e6f95e44843f21aad20a6a9da135b50"},
 ]
 pytz = [
     {file = "pytz-2022.7.1-py2.py3-none-any.whl", hash = "sha256:78f4f37d8198e0627c5f1143240bb0206b8691d8d7ac6d78fee88b78733f8c4a"},
