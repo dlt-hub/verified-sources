@@ -28,7 +28,8 @@ def test_custom_fields_munger(destination_name: str) -> None:
 
     pipeline = dlt.pipeline(pipeline_name='pipedrive', destination=destination_name, dataset_name='pipedrive_data', full_refresh=True)
 
-    load_info = pipeline.run(pipedrive_source().with_resources('persons', 'personFields', 'products', 'productFields', 'custom_fields_mapping'))
+    resources_names = ['persons', 'personFields', 'products', 'productFields', 'custom_fields_mapping']
+    load_info = pipeline.run(pipedrive_source().with_resources(*resources_names))
     print(load_info)
     assert_load_info(load_info)
 
