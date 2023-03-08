@@ -2,6 +2,12 @@ from typing import Any, Dict, Iterable, Iterator, List, Optional
 
 import dlt
 
+# https://developers.pipedrive.com/docs/api/v1
+entities_endpoints = ('activities', 'deals', 'notes', 'organizations', 'persons', 'products')
+entity_fields_endpoints = ('activityFields', 'dealFields', 'noteFields', 'organizationFields', 'personFields', 'productFields')
+entities_mapping = dict(zip(entities_endpoints, entity_fields_endpoints))
+entity_fields_mapping = dict(zip(entity_fields_endpoints, entities_endpoints))
+
 
 def munge_push_func(data: Iterator[Dict[str, Any]], endpoint: str) -> Iterable[Dict[str, Any]]:
     """

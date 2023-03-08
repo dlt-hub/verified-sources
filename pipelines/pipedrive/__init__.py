@@ -12,7 +12,7 @@ To get an api key: https://pipedrive.readme.io/docs/how-to-find-the-api-token
 import dlt
 import functools
 
-from .custom_fields_munger import munge_push_func, pull_munge_func, parsed_mapping
+from .custom_fields_munger import entities_mapping, entity_fields_mapping, munge_push_func, pull_munge_func, parsed_mapping
 from dlt.common.typing import TDataItems
 from dlt.extract.source import DltResource
 from dlt.sources.helpers import requests
@@ -102,9 +102,6 @@ def _paginated_get(url: str, headers: Dict[str, Any], params: Dict[str, Any]) ->
             params['start'] = pagination_info.get('next_start')
 
 
-ENTITY_FIELDS_SUFFIX = 'Fields'
-
-
 def _get_endpoint(entity: str, pipedrive_api_key: str, extra_params: Dict[str, Any] = None, munge_custom_fields: bool = True) -> Optional[Iterator[TDataItems]]:
     """
     Generic method to retrieve endpoint data based on the required headers and params.
@@ -125,11 +122,11 @@ def _get_endpoint(entity: str, pipedrive_api_key: str, extra_params: Dict[str, A
     url = f'https://app.pipedrive.com/v1/{entity}'
     pages = _paginated_get(url, headers=headers, params=params)
     if munge_custom_fields:
-        if ENTITY_FIELDS_SUFFIX in entity:  # checks if it's an entity fields' endpoint (e.g.: activityFields)
+        if entity in entity_fields_mapping:  # checks if it's an entity fields' endpoint (e.g.: activityFields)
             munging_func = munge_push_func
         else:
             munging_func = pull_munge_func
-            entity = entity[:-1] + ENTITY_FIELDS_SUFFIX  # turns entities' endpoint into entity fields' endpoint
+            entity = entities_mapping.get(entity, '')  # turns entities' endpoint into entity fields' endpoint
         pages = map(functools.partial(munging_func, endpoint=entity), pages)
     yield from pages
 
