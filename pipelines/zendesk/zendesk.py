@@ -1,11 +1,12 @@
 import dlt
 from dlt.common import logger
-from dlt.common.typing import TDataItem, DictStrStr
+from dlt.common.typing import TDataItem
 from dlt.extract.source import DltResource
 from pendulum import DateTime, datetime, now
-from pipelines.zendesk.helpers.api_helpers import ZendeskCredentials, auth_zendesk, basic_load, process_ticket
+from pipelines.zendesk.helpers.api_helpers import auth_zenpy, basic_load, process_ticket
 from pipelines.zendesk.helpers.talk_api import ZendeskAPIClient, TALK_ENDPOINTS
-from typing import Iterator, Sequence, Dict, Union
+from pipelines.zendesk.helpers.credentials import ZendeskCredentialsOAuth, ZendeskCredentialsToken, ZendeskCredentialsEmailPass
+from typing import Iterator, Sequence, Union
 from zenpy import Zenpy
 
 
@@ -20,7 +21,8 @@ FIRST_DAY_OF_MILLENNIUM = datetime(year=2000, month=1, day=1)
 
 
 @dlt.source(max_table_nesting=2)
-def zendesk_talk(credentials: ZendeskCredentials = ZendeskCredentials(dlt.secrets["sources.zendesk.zendesk_talk.credentials"].value)) -> Sequence[DltResource]:
+def zendesk_talk(credentials: Union[ZendeskCredentialsOAuth, ZendeskCredentialsToken, ZendeskCredentialsEmailPass] = dlt.secrets.value) -> Sequence[DltResource]:
+
     zendesk_client = ZendeskAPIClient(credentials)
     talk_resources = []
     for key, talk_endpoint in TALK_ENDPOINTS.items():
@@ -31,20 +33,20 @@ def zendesk_talk(credentials: ZendeskCredentials = ZendeskCredentials(dlt.secret
 
 
 @dlt.source
-def zendesk_chat(credentials: ZendeskCredentials = ZendeskCredentials(dlt.secrets["sources.zendesk.zendesk_chat.credentials"].value)) -> DltResource:
+def zendesk_chat(credentials: Union[ZendeskCredentialsOAuth, ZendeskCredentialsToken, ZendeskCredentialsEmailPass] = dlt.secrets.value) -> DltResource:
     """
     The source for the dlt pipeline. It returns all the basic information.
     @:param credentials: read as a dict, as filled in .dlt.secrets.toml
     @:returns: multiple dlt resources
     """
     # Authenticate
-    zendesk_client = auth_zendesk(credentials=credentials)
+    zendesk_client = auth_zenpy(credentials=credentials)
     return chats_table(zendesk_client=zendesk_client)
 
 
 @dlt.source
-def zendesk(credentials: ZendeskCredentials = ZendeskCredentials(dlt.secrets["sources.zendesk.zendesk.credentials"].value), load_all: bool = True,
-            pivot_ticket_fields: bool = True, incremental_start_time: DateTime = FIRST_DAY_OF_MILLENNIUM) -> Sequence[DltResource]:
+def zendesk(credentials: Union[ZendeskCredentialsOAuth, ZendeskCredentialsToken, ZendeskCredentialsEmailPass] = dlt.secrets.value, load_all: bool = True, pivot_ticket_fields: bool = True,
+            incremental_start_time: DateTime = FIRST_DAY_OF_MILLENNIUM) -> Sequence[DltResource]:
     """
     The source for the dlt pipeline. It returns all the basic tables for Zendesk Support: tickets, users, brands, organizations, groups and all extra resources if required
     @:param credentials: read as a dict, as filled in .dlt.secrets.toml
@@ -54,10 +56,9 @@ def zendesk(credentials: ZendeskCredentials = ZendeskCredentials(dlt.secrets["so
     @:returns: multiple dlt resources
     """
 
-    # TODO: Implement Talk
     # TODO: Make caching manageable and editable by users
     # Authenticate
-    zendesk_client = auth_zendesk(credentials=credentials)
+    zendesk_client = auth_zenpy(credentials=credentials)
     resource_list = [ticket_fields_table(zendesk_client=zendesk_client),
                      ticket_table(zendesk_client=zendesk_client, pivot_fields=pivot_ticket_fields, start_time=incremental_start_time),
                      ticket_metric_table(zendesk_client=zendesk_client, start_time=incremental_start_time)]
@@ -193,6 +194,13 @@ def incremental_load_resource(zendesk_client: Zenpy, resource: str, per_page: in
 
 
 def talk_resource(zendesk_client: ZendeskAPIClient, talk_endpoint_name: str, talk_endpoint: str) -> Iterator[TDataItem]:
+    """
+    Called as a dlt resource. Generic loader for a ZendeskTalk endpoint.
+    @:param zendesk_client: ZendeskAPIClient object that makes api calls to Zendesk Talk API
+    @:param talk_endpoint_name: The name of the talk_endpoint
+    @:param talk_endpoint: The actual url ending of this endpoint
+    @:returns: Generator of dicts
+    """
     try:
         my_req = zendesk_client.make_request(endpoint=talk_endpoint, data_point_name=talk_endpoint_name)
         if my_req:
@@ -205,5 +213,5 @@ def talk_resource(zendesk_client: ZendeskAPIClient, talk_endpoint_name: str, tal
                 else:
                     yield page
     except Exception as e:
-        print(f"Failed to load resource: {talk_endpoint}")
-        print(str(e))
+        logger.warning(f"Failed to load resource: {talk_endpoint}")
+        logger.warning(str(e))

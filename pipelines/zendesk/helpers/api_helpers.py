@@ -1,35 +1,13 @@
 from dlt.common import logger
 from dlt.common.typing import TDataItem, DictStrAny, DictStrStr
-from dlt.common.configuration.specs.base_configuration import CredentialsConfiguration, CredentialsWithDefault, configspec
-from typing import Iterator, Union, Dict, Any, Optional
+from pipelines.zendesk.helpers.credentials import ZendeskCredentialsToken, ZendeskCredentialsEmailPass, ZendeskCredentialsOAuth
+from typing import Iterator, Any, Optional, Union
 from zenpy import Zenpy
 from zenpy.lib.api_objects import Ticket
 
 
-class ZendeskCredentials:
-    """
-    This class is used to store credentials from a dict of Zendesk Credentials
-    Subdomain is always required  and there are 3 alternative authentication ways
-    1. email + token
-    2. email + password
-    3. oauth_token - https://developer.zendesk.com/documentation/live-chat/getting-started/auth/#authorization-code-grant-flow
-    """
-    subdomain: Optional[str]
-    email: Optional[str]
-    token: Optional[str]
-    oauth_token: Optional[str]
-    password: Optional[str]
-
-    def __init__(self, cred_dict: DictStrStr):
-        self.subdomain = cred_dict.get("subdomain", None)
-        self.email = cred_dict.get("email", None)
-        self.password = cred_dict.get("password", None)
-        self.token = cred_dict.get("token", None)
-        self.oauth_token = cred_dict.get("oauth_token", None)
-
-
-def auth_zendesk(credentials: ZendeskCredentials, domain: str = "zendesk.com", timeout: Optional[float] = None, ratelimit_budget: Optional[int] = None,
-                 proactive_ratelimit: Optional[int] = None, proactive_ratelimit_request_interval: int = 10, disable_cache: bool = False) -> Zenpy:
+def auth_zenpy(credentials: Union[ZendeskCredentialsOAuth, ZendeskCredentialsToken, ZendeskCredentialsEmailPass], domain: str = "zendesk.com", timeout: Optional[float] = None,
+               ratelimit_budget: Optional[int] = None, proactive_ratelimit: Optional[int] = None, proactive_ratelimit_request_interval: int = 10, disable_cache: bool = False) -> Zenpy:
     """
     Helper, gets a Zendesk Credentials object and authenticates to the Zendesk API
     @:param: credentials - Zendesk Credentials Object, stores the credentials
@@ -41,25 +19,26 @@ def auth_zendesk(credentials: ZendeskCredentials, domain: str = "zendesk.com", t
     @:param timeout: float that sets the global timeout on Zenpy
     @:returns: API client to make requests to Zendesk API
     """
-    # 3 alternate ways to authenticate, all fields for at least one need to be active to authenticate, can't have tokens and password at the same time
-    if credentials.password:
-        credentials.token = None
-
-    # zenpy currently will handle most errors
-    # fill fields that were filled
-    zendesk_client = Zenpy(
-        token=credentials.token,
-        email=credentials.email,
-        subdomain=credentials.subdomain,
-        password=credentials.password,
-        oauth_token=credentials.oauth_token,
-        domain=domain,
-        timeout=timeout,
-        ratelimit_budget=ratelimit_budget,
-        proactive_ratelimit=proactive_ratelimit,
-        proactive_ratelimit_request_interval=proactive_ratelimit_request_interval,
-        disable_cache=disable_cache
-    )
+    # oauth token is the preferred way to authenticate, followed by api token and then email + password combo
+    # if none of these are filled, simply return an error
+    if isinstance(credentials, ZendeskCredentialsOAuth):
+        zendesk_client = Zenpy(
+            subdomain=credentials.subdomain, oauth_token=credentials.oauth_token,
+            domain=domain, timeout=timeout, ratelimit_budget=ratelimit_budget, proactive_ratelimit=proactive_ratelimit, proactive_ratelimit_request_interval=proactive_ratelimit_request_interval,
+            disable_cache=disable_cache
+        )
+    elif isinstance(credentials, ZendeskCredentialsToken):
+        zendesk_client = Zenpy(
+            token=credentials.token, email=credentials.email, subdomain=credentials.subdomain,
+            domain=domain, timeout=timeout, ratelimit_budget=ratelimit_budget, proactive_ratelimit=proactive_ratelimit, proactive_ratelimit_request_interval=proactive_ratelimit_request_interval,
+            disable_cache=disable_cache
+        )
+    elif isinstance(credentials, ZendeskCredentialsEmailPass):
+        zendesk_client = Zenpy(
+            email=credentials.email, subdomain=credentials.subdomain, password=credentials.password,
+            domain=domain, timeout=timeout, ratelimit_budget=ratelimit_budget, proactive_ratelimit=proactive_ratelimit, proactive_ratelimit_request_interval=proactive_ratelimit_request_interval,
+            disable_cache=disable_cache
+        )
     return zendesk_client
 
 
