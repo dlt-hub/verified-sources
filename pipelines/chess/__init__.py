@@ -1,3 +1,6 @@
+"""A pipeline loading player profiles and games from chess.com api"""
+
+from requests import HTTPError
 from reretry import retry
 import datetime
 import requests
@@ -37,7 +40,7 @@ def chess(players: List[str], start_month: str = None, end_month: str = None) ->
     )
 
 
-@retry(tries=10, delay=1, backoff=1.1, logger=None)
+@retry(tries=5, delay=1, backoff=1.1, logger=None)
 def _get_url_with_retry(url: str) -> StrAny:
     r = requests.get(url)
     r.raise_for_status()
@@ -89,7 +92,14 @@ def players_games(players: List[str], start_month: str = None, end_month: str = 
     @dlt.defer
     def _get_archive(url: str) -> List[TDataItem]:
         print(f"Getting archive from {url}")
-        return _get_url_with_retry(url).get("games", [])  # type: ignore
+        try:
+            games = _get_url_with_retry(url).get("games", [])
+            return games  # type: ignore
+        except HTTPError as http_err:
+            # sometimes archives are not available and the error seems to be permanent
+            if http_err.response.status_code == 404:
+                return []
+            raise
 
     # enumerate the archives
     url: str = None

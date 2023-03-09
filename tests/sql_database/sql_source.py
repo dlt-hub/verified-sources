@@ -19,15 +19,18 @@ from sqlalchemy import (
 )
 
 from dlt.common.utils import chunks, uniq_id
+from dlt.common.configuration.specs import ConnectionStringCredentials
 
 
 class TableInfo(TypedDict):
     row_count: int
+    ids: List[int]
 
 
 class SQLAlchemySourceDB:
-    def __init__(self, database_url: str) -> None:
-        self.database_url = database_url
+    def __init__(self, credentials: ConnectionStringCredentials) -> None:
+        self.credentials = credentials
+        self.database_url = credentials.to_native_representation()
         self.schema = "my_dlt_source" + uniq_id()
         self.engine = create_engine(self.database_url)
         self.metadata = MetaData(schema=self.schema)
@@ -36,13 +39,15 @@ class SQLAlchemySourceDB:
     def create_schema(self) -> None:
         with self.engine.begin() as conn:
             conn.execute(sqla_schema.CreateSchema(self.schema, if_not_exists=True))
-            conn.commit()
 
     def drop_schema(self) -> None:
         with self.engine.begin() as conn:
             conn.execute(
                 sqla_schema.DropSchema(self.schema, cascade=True, if_exists=True)
             )
+
+    def get_table(self, name: str) -> Table:
+        return self.metadata.tables[f"{self.schema}.{name}"]
 
     def create_tables(self) -> None:
         Table(
@@ -57,6 +62,12 @@ class SQLAlchemySourceDB:
                 nullable=False,
                 server_default=func.now(),
             ),
+            Column(
+                'updated_at',
+                DateTime(timezone=True),
+                nullable=False,
+                server_default=func.now(),
+            )
         )
         Table(
             "chat_channel",
@@ -70,6 +81,12 @@ class SQLAlchemySourceDB:
             ),
             Column("name", Text(), nullable=False),
             Column("active", Boolean(), nullable=False, server_default=text("true")),
+            Column(
+                'updated_at',
+                DateTime(timezone=True),
+                nullable=False,
+                server_default=func.now(),
+            )
         )
         Table(
             "chat_message",
@@ -96,6 +113,12 @@ class SQLAlchemySourceDB:
                 nullable=False,
                 index=True,
             ),
+            Column(
+                'updated_at',
+                DateTime(timezone=True),
+                nullable=False,
+                server_default=func.now(),
+            )
         )
 
         self.metadata.create_all(bind=self.engine)
@@ -112,7 +135,7 @@ class SQLAlchemySourceDB:
             with self.engine.begin() as conn:
                 result = conn.execute(table.insert().values(rows).returning(table.c.id))  # type: ignore
                 user_ids.extend(result.scalars())
-        self.table_infos['app_user'] = dict(row_count=n)
+        self.table_infos['app_user'] = dict(row_count=n, ids=user_ids)
         return user_ids
 
     def _fake_channels(self, n: int = 500) -> List[int]:
@@ -127,16 +150,16 @@ class SQLAlchemySourceDB:
             with self.engine.begin() as conn:
                 result = conn.execute(table.insert().values(rows).returning(table.c.id))  # type: ignore
                 channel_ids.extend(result.scalars())
-        self.table_infos['chat_channel'] = dict(row_count=n)
+        self.table_infos['chat_channel'] = dict(row_count=n, ids=channel_ids)
         return channel_ids
 
-    def _fake_chat_data(self, n: int = 9402) -> None:
-        user_ids = self._fake_users()
-        channel_ids = self._fake_channels()
-
+    def fake_messages(self, n: int=9402) -> List[int]:
+        user_ids = self.table_infos['app_user']['ids']
+        channel_ids = self.table_infos['chat_channel']['ids']
         _text = mimesis.Text()
         choice = mimesis.Choice()
         table = self.metadata.tables[f"{self.schema}.chat_message"]
+        message_ids: List[int] = []
         for chunk in chunks(range(n), 5000):
             rows = [
                 dict(
@@ -147,8 +170,17 @@ class SQLAlchemySourceDB:
                 for i in chunk
             ]
             with self.engine.begin() as conn:
-                conn.execute(table.insert().values(rows))
-        self.table_infos['chat_message'] = dict(row_count=n)
+                result = conn.execute(table.insert().values(rows).returning(table.c.id))
+                message_ids.extend(result.scalars())
+        result = self.table_infos.setdefault('chat_message', dict(row_count=0, ids=[]))
+        result['row_count'] += len(message_ids)
+        result['ids'].extend(message_ids)
+        return message_ids
+
+    def _fake_chat_data(self, n: int = 9402) -> None:
+        self._fake_users()
+        self._fake_channels()
+        self.fake_messages()
 
     def insert_data(self) -> None:
         self._fake_chat_data()

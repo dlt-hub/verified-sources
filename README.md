@@ -2,7 +2,7 @@
 
 
 # Using pipelines in your project
-[WIP] `dlt` offers an `init` command that will clone and inject any pipeline from this repository into your project, setup the credentials and python dependencies. Please follow our [docs](https://dlthub.com/docs/command-line-interface)
+`dlt` offers an `init` command that will clone and inject any pipeline from this repository into your project, setup the credentials and python dependencies. Please follow our [docs](https://dlthub.com/docs/command-line-interface)
 
 # How to contact us and get help
 Join our slack by following the [invitation link](https://join.slack.com/t/dlthub-community/shared_invite/zt-1n5193dbq-rCBmJ6p~ckpSFK4hCF2dYA)
@@ -22,7 +22,7 @@ make dev  # will install all deps including dev
 ```
 Executing `poetry shell` and working in it is very convenient at this moment.
 
-## python version
+## Python version
 Use python 3.8 for development which is the lowest supported version for `python-dlt`. You'll need `distutils` and `venv`:
 
 ```shell
@@ -32,12 +32,15 @@ sudo apt install python3.8-venv
 ```
 You may also use `pyenv` as [poetry](https://python-poetry.org/docs/managing-environments/) suggests.
 
-## typing and linting
+## Typing and linting
 `python-dlt` uses `mypy` and `flake8` with several plugins for linting. We do not reorder imports or reformat code. To lint the code do `make lint`.
 
 **Code does not need to be typed** - but it is better if it is - `mypy` is able to catch a lot of problems in the code. If your pipeline is typed file named `py.typed` to the folder where your pipeline code is. (see `chess` pipeline for example)
 
 **Function input argument of sources and resources should be typed** that allows `dlt` to validate input arguments at runtime, say which are secrets and generate the secret and config files automatically.
+
+## `dlt init` compatibility
+All the pipelines will be parsed and installed with `dlt init` **during the linting stage**. Those tests are implemented in `tests/test_dlt_init.py`. This is required for the PR to be accepted on CI.
 
 ### Adding `__init__.py` files
 Linting step requires properly constructed python packages so it will ask for `__init__` files to be created. That can be automated with
@@ -64,16 +67,17 @@ For contributors we have [in-depth technical documentation](https://github.com/d
 
 All repo code reside in `pipelines` folder. Each pipeline has its own **pipeline folder** (ie. `chess`) where the `dlt.source` and `dlt.resource` functions are present. The internal organization of this folder is up to the contributor. For each pipeline there's a also a script with the example usages (ie. `chess_pipeline.py`). The intention is to show the user how the sources/resources may be called and let the user to copy the code from it.
 
-## Steps to add a new pipeline
+## Steps to add a new pipeline `<name>`
 
-1. Create a folder (**pipeline folder**) with your pipeline name in `pipelines`. Place all your code in that folder.
+1. Create a folder (**pipeline folder**) with your pipeline `<name>` in `pipelines`. Place all your code in that folder.
 2. Place (decorated) source/resource functions in the **main module** named as **pipeline folder** (the `__init__.py` also works)
 3. Try to separate your code where the part that you want people to hack stays in **main module** and the rest goes to some helper modules.
-4. Create a demo/usage script with the name `<pipeline_folder>_pipeline.py` and place it in `pipelines`. Make it work with `postgres` or `duckdb` so it is easy to try them out
+4. Create a demo/usage script with the name `<name>_pipeline.py` and place it in `pipelines`. Make it work with `postgres` or `duckdb` so it is easy to try them out
 5. Add pipeline specific dependencies as described below
-6. Place your tests in `tests/<pipeline folder>`. To run your tests you'll need to create test accounts, data sets, credentials etc. Talk to dlt team on slack. We may provide you with the required accounts and credentials.
+6. Place your tests in `tests/<name>`. To run your tests you'll need to create test accounts, data sets, credentials etc. Talk to dlt team on slack. We may provide you with the required accounts and credentials.
 7. Add example credentials to this repo as described below.
-8. The pipeline must pass CI: linter and tests stage. If you created any accounts or credentials, this data must be shared or via this repo or as is described later. We'll add it to our CI secrets
+8. Optional: add one liner module docstring to the `__init__.py` in **pipeline folder**. `dlt init --list-pipelines` will use this line as pipeline description.
+9. The pipeline must pass CI: linter and tests stage. If you created any accounts or credentials, this data must be shared or via this repo or as is described later. We'll add it to our CI secrets
 
 ## Pipeline specific dependencies.
 If pipeline requires additional dependencies that are not available in `python-dlt` they may be added as follows:
@@ -82,12 +86,31 @@ If pipeline requires additional dependencies that are not available in `python-d
 2. Add `requirements.txt` file in **pipeline folder** and add the dependency there.
 
 ## Python module import structure
-Use relative imports. Your code will be imported as source code and everything under **pipeline folder** must be self-contained and isolated. Example (from `google_sheets`)
+**Use relative imports**. Your code will be imported as source code and everything under **pipeline folder** must be self-contained and isolated. Example (from `google_sheets`)
 ```python
 from .helpers.data_processing import get_spreadsheet_id
 from .helpers.api_calls import api_auth
 from .helpers import api_calls
 ```
+
+In your **Create a demo/usage script** use normal imports - as you would use in standalone script.
+Example (from `pipedrive`):
+```python
+import dlt
+from pipedrive import pipedrive_source
+```
+
+## The demo/usage pipeline script: `<name>_pipeline.py`
+This script is distributed by `dlt init` with the other pipeline `<name>` files. It will be a first touch point with your users. It will be used by them as a starting point or as a source of code snippets. The ideal content for the script:
+1. Shows a few usage examples with different source/resource arguments combinations that you think are the most common cases for your user.
+2. If you provide any customizations/transformations then show how to use them.
+3. Any code snippet that will speed the user up.
+
+Examples:
+* [chess](pipelines/chess_pipeline.py)
+* [pipedrive](pipelines/pipedrive_pipeline.py)
+
+
 
 ## Common credentials and configuration
 As mentioned above the tech doc on [config and credentials](https://github.com/dlt-hub/dlt/blob/devel/docs/technical/secrets_and_config.md) is a must-read.
@@ -126,7 +149,7 @@ TBD. but is seems you need all destination and source credentials. **Please ping
 2. SOURCES_SECRETS
 
 # How Pipelines will be distributed
-The reason for the structure above is to use `dlt init` command to let user add the pipelines to their own project. `dlt init` is able to add pipelines as pieces of code, not as dependencies, see explanation here: https://github.com/dlt-hub/python-dlt-init-template
+The reason for the structure above is to use `dlt init` command to let user add the pipelines to their own project. `dlt init` is able to add pipelines as pieces of code, not as dependencies.
 
 Please read the [detailed information](DISTRIBUTION.md) on our distribution model
 
@@ -156,7 +179,7 @@ Your tests will be run both locally and on CI. It means that a few instances of 
 4. Add code to `tests/utils.py` only if this is helpful for all tests. Put your specific helpers in your own directory.
 
 ## Mandatory tests for pipelines
-TBD.
+Tests in `tests/test_dlt_init.py` are executed as part of linting stage and must be passing. They make sure that pipeline can be distributed with `dlt init`.
 
 ## Running tests selectively
 1. When developing, limit the destinations to local ie. duckdb by setting the environment variable:
