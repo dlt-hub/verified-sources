@@ -60,11 +60,7 @@ def _get_last_timestamp_from_destiny(endpoint: str, max_retries: int, backoff_de
                 with dlt.current.pipeline().sql_client() as c:
                     with c.execute_query(sql_query) as cur:
                         row = cur.fetchone()
-                        if row:
-                            if isinstance(row[0], datetime):
-                                last_timestamp = row[0]
-                            elif isinstance(row[0], str):
-                                last_timestamp = _parse_datetime_str(row[0])
+                        last_timestamp = row[0] if row and isinstance(row[0], datetime) else None
             except:
                 sleep(backoff_delay)
             retries += 1
