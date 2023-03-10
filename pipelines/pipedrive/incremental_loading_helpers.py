@@ -72,8 +72,6 @@ def set_last_timestamp(endpoint: str, last_timestamp: str) -> None:
     Specific function to store last timestamp in dlt's state
     The endpoint must be an entities' endpoint
     """
-    last_timestamps = dlt.state().setdefault('last_timestamps', {})
-    if last_timestamps.get(endpoint):
+    if endpoint in entities_mapping:
+        last_timestamps = dlt.state().setdefault('last_timestamps', {})
         last_timestamps[endpoint] = last_timestamp
-    else:
-        last_timestamps.update({endpoint: last_timestamp})
