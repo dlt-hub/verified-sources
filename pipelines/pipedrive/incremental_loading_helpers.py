@@ -1,5 +1,6 @@
 from datetime import datetime, timedelta, timezone
 from dateutil import parser
+from dlt.common.configuration import with_config
 from time import sleep
 from typing import Optional
 
@@ -12,7 +13,8 @@ entities_mapping = dict(zip(entities_endpoints, entity_items_params))
 entity_items_mapping = dict(zip(entity_items_params, entities_endpoints))
 
 
-def get_since_timestamp(endpoint: str, step: int = 1, max_retries: int = 1, backoff_delay: float = .1, days_back: int = 30) -> str:
+@with_config
+def get_since_timestamp(endpoint: str, step: int = dlt.config.value, max_retries: int = dlt.config.value, backoff_delay: float = dlt.config.value, days_back: int = dlt.config.value) -> str:
     """
     Specific function to generate 'recents' endpoint's 'since_timestamp' based on last timestamp stored in dlt's state/destiny (if available)
     The endpoint must be an entities' endpoint

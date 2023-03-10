@@ -18,6 +18,12 @@ workers = 2  # limit the parallel execution
 [sources.chess]
 config_int=123
 
+[sources.pipedrive]
+step=1  # 'recents' endpoint 'since_timestamp' param's step (in seconds) default value
+max_retries=1  # destiny query's max retries default value
+backoff_delay=0.1  # destiny query's back off (in seconds) default value
+days_back=30  # 'recents' endpoint 'since_timestamp' param's days back default value
+
 ## sql_database
 
 [sources.sql_database.data_writer]
