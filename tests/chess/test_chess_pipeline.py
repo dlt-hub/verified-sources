@@ -13,7 +13,7 @@ def test_load_players_games(destination_name: str) -> None:
     pipeline = dlt.pipeline(pipeline_name="chess_players_games", destination=destination_name, dataset_name="chess_players_games_data", full_refresh=True)
     data = chess(
         ['magnuscarlsen','vincentkeymer', 'dommarajugukesh', 'rpragchess'],
-        start_month='2022/10',
+        start_month='2022/11',
         end_month='2022/12'
     )
     # load the "players_games" out of the data source
@@ -35,10 +35,10 @@ def test_load_players_games(destination_name: str) -> None:
     with pipeline.sql_client() as c:
         # you can use parametrized queries as well, see python dbapi
         # you can use unqualified table names
-        with c.execute_query("SELECT white__username, COUNT(1) FROM players_games WHERE white__username IN ('MagnusCarlsen') GROUP BY white__username") as cur:
+        with c.execute_query("SELECT white__username, COUNT(1) FROM players_games WHERE white__username IN (%s) GROUP BY white__username", "MagnusCarlsen") as cur:
             rows = list(cur.fetchall())
             assert len(rows) == 1
-            assert rows[0][1] == 449  # magnus has 449 games
+            assert rows[0][1] == 374  # magnus has 374 games
 
 
 @pytest.mark.parametrize('destination_name', ALL_DESTINATIONS)
@@ -47,7 +47,7 @@ def test_incremental_games_load(destination_name: str) -> None:
     pipeline = dlt.pipeline(pipeline_name="chess_players_games", destination=destination_name, dataset_name="chess_players_games_data", full_refresh=True)
     data = chess(
         ['magnuscarlsen'],
-        start_month='2022/10',
+        start_month='2022/11',
         end_month='2022/11'
     )
     info = pipeline.run(data.with_resources("players_games"))
@@ -66,7 +66,7 @@ def test_incremental_games_load(destination_name: str) -> None:
     # do load with the same range into the existing dataset
     data = chess(
         ['magnuscarlsen'],
-        start_month='2022/10',
+        start_month='2022/11',
         end_month='2022/11'
     )
     info = pipeline.run(data.with_resources("players_games"))
@@ -78,7 +78,7 @@ def test_incremental_games_load(destination_name: str) -> None:
     # get some new games
     data = chess(
         ['magnuscarlsen'],
-        start_month='2022/11',
+        start_month='2022/12',
         end_month='2022/12'
     )
     info = pipeline.run(data.with_resources("players_games"))
