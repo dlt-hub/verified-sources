@@ -92,7 +92,9 @@ def _paginated_get(base_url: str, endpoint: str, headers: Dict[str, Any], params
         entity_items_params = params['items'].split(',') if isinstance(params.get('items'), str) else []
         entity_items_param = entity_items_params[0] if len(entity_items_params) == 1 else ''
         since_timestamp = get_since_timestamp(recents_entity_items_mapping.get(entity_items_param, ''))
-        if not since_timestamp:
+        if since_timestamp:
+            params['since_timestamp'] = since_timestamp
+        else:
             # turn incremental loading into full loading
             endpoint = recents_entity_items_mapping.get(entity_items_param, '')
             params.pop('items', '')
