@@ -4,6 +4,8 @@ This module contains everything related to the API client class made to make req
 from pipelines.zendesk.helpers.credentials import ZendeskCredentialsToken, ZendeskCredentialsOAuth, ZendeskCredentialsEmailPass
 from dlt.common import logger
 from dlt.common.typing import DictStrStr, TSecretValue, TDataItems
+from pendulum import DateTime
+from time import sleep
 from typing import Union, Tuple, Iterator
 import requests
 
@@ -28,6 +30,10 @@ possible_endpoints = {
     "digital_lines": "/api/v2/channels/voice/digital_lines",
     "agents_overview": "/api/v2/channels/voice/stats/agents_overview",
     "account_overview": "/api/v2/channels/voice/stats/account_overview",
+}
+ZENDESK_STATUS_CODES = {
+    "ok": 200,
+    "rate_limit": 429
 }
 
 
@@ -65,19 +71,45 @@ class ZendeskAPIClient:
         @:param endpoint: String that specifies the exact endpoint data is being received from
         @:return response_json:
         """
-
-        # TODO: handle hitting the rate limit
+        # TODO: 1 automatic retry on normal failures
         # TODO: caching
         # TODO: side loading
         # TODO: handle incremental load
         # make request and keep looping until there is no next page
         get_url = f"{self.url}{endpoint}"
         while get_url:
-            response = requests.get(get_url, headers=self.headers, auth=self.auth)
-            if response.status_code == 200:
-                response_json = response.json()
-                get_url = response_json.get("next_page", None)
-                yield response_json[data_point_name]
-            else:
-                # retry or print for failure
-                logger.warning(f"API call failed on endpoint {endpoint} with error code {response.status_code}")
+            try:
+                response = requests.get(get_url, headers=self.headers, auth=self.auth)
+                if response.status_code == ZENDESK_STATUS_CODES["ok"]:
+                    # check if there is a next page and yield the response,
+                    # usually all relevant data is stored in a key with same name as endpoint
+                    response_json = response.json()
+                    get_url = response_json.get("next_page", None)
+                    yield response_json[data_point_name]
+                elif response.status_code == ZENDESK_STATUS_CODES["rate_limit"]:
+                    # handle being rate limited
+                    rate_limit = float(response.headers["retry-after"])
+                    logger.warning(f"The rate limit for Zendesk API is being hit! Waiting for {rate_limit} seconds.")
+                    _wait_rate_limit(rate_limit=rate_limit)
+                else:
+                    get_url = None
+                    logger.warning(f"API call failed on endpoint {endpoint} with error code {response.status_code}")
+            except Exception:
+                get_url = None
+                logger.warning(f"Encountered an error on url: {get_url}")
+
+    def make_request_incremental(self, endpoint: str, data_point_name: str, start_date: DateTime) -> Iterator[TDataItems]:
+        """
+        Makes a request to an incremental API endpoint
+        """
+        # convert start date to unix epoch and make request normally
+        combined_endpoint = f"{endpoint}?start_date={start_date.timestamp()}"
+        yield from self.make_request(endpoint=combined_endpoint, data_point_name=data_point_name)
+
+
+def _wait_rate_limit(rate_limit: float) -> None:
+    """
+    Helper, that simply waits for the rate limit to end by using sleep
+    @:param rate_limit: dictates how many seconds should be waited for.
+    """
+    sleep(rate_limit)
