@@ -114,9 +114,10 @@ def hubspot(api_key: str = dlt.secrets.value) -> Sequence[DltResource]:
     def quotes_events(quote: dict = None) -> Iterator[TDataItems]:
         yield _get_web_analytics_events("quote", quote["hs_object_id"])
 
-    return companies | companies_events(), \
-           contacts | contacts_events(), \
-           deals | deals_events(), \
-           tickets | tickets_events(), \
-           products | products_events(), \
-           quotes | quotes_events()
+    return [companies(), companies_events(),
+            contacts(), contacts_events(),
+            deals(), deals_events(),
+            tickets(), tickets_events(),
+            products(), products_events(),
+            quotes(), quotes_events()]
+

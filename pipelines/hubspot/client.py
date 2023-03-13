@@ -79,7 +79,7 @@ def _parse_response(r: requests.Response, **kwargs) -> Generator[Dict[str, Any],
             yield from fetch_data(next_url, **kwargs)
 
 
-@retry(tries=3, delay=1, backoff=1.1)
+@retry(tries=3, delay=5, backoff=1.1)
 def fetch_data(endpoint: str, api_key: str, **kwargs) -> Generator[Dict[str, Any], None, None]:
     """
     Fetch data from HUBSPOT endpoint using a specified API key and yield the properties of each result.
