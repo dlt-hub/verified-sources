@@ -75,7 +75,8 @@ def _get_last_timestamp_from_destiny(endpoint: str, max_retries: int, backoff_de
         sql_query = f"SELECT MAX(add_time) AS last_timestamp FROM {normalized_endpoint}"
         while not last_timestamp and retries <= max_retries:
             try:
-                with dlt.current.pipeline().sql_client() as c:
+                current_pipeline = dlt.current.pipeline()
+                with current_pipeline.sql_client() as c:
                     with c.execute_query(sql_query) as cur:
                         row = cur.fetchone()
                         last_timestamp = row[0] if row and isinstance(row[0], datetime) else None
