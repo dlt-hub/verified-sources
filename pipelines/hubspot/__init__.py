@@ -1,3 +1,7 @@
+"""
+This is a module that provides a DLT source to retrieve data from multiple endpoints of the HubSpot API using a specified API key. The retrieved data is returned as a tuple of Dlt resources, one for each endpoint.
+"""
+
 from datetime import datetime
 from typing import Sequence, Iterator
 
