@@ -1,6 +1,6 @@
 import dlt
 
-from pipelines.hubspot import hubspot
+from hubspot import hubspot
 
 
 def main():
