@@ -17,8 +17,11 @@ def get_entity_items_param(params: Dict[str, Any]) -> str:
     """
     Specific function to get 'recents' endpoint's items param
     """
-    entity_items_params_split = params['items'].split(',') if isinstance(params.get('items'), str) else []
-    entity_items_param = entity_items_params_split[0] if len(entity_items_params_split) == 1 else ''
+    entity_items_param = ''
+    if isinstance(params.get('items'), str):
+        entity_items_params_split = params['items'].split(',')
+        if len(entity_items_params_split) == 1:
+            entity_items_param = entity_items_params_split[0]
     return entity_items_param
 
 
@@ -75,12 +78,12 @@ def _get_last_timestamp_from_destiny(endpoint: str, max_retries: int, backoff_de
         sql_query = f"SELECT MAX(add_time) AS last_timestamp FROM {normalized_endpoint}"
         while not last_timestamp and retries <= max_retries:
             try:
-                current_pipeline = dlt.current.pipeline()
+                current_pipeline = dlt.current.pipeline()  # type: ignore
                 with current_pipeline.sql_client() as c:
                     with c.execute_query(sql_query) as cur:
                         row = cur.fetchone()
                         last_timestamp = row[0] if row and isinstance(row[0], datetime) else None
-            except:
+            except Exception:
                 sleep(backoff_delay)
             retries += 1
     return last_timestamp
@@ -104,3 +107,4 @@ def max_datetime(first_datetime: Optional[datetime], second_datetime: Optional[d
             return first_datetime
         elif second_datetime:
             return second_datetime
+    return None
