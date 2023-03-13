@@ -30,8 +30,7 @@ def munge_push_func(data: Iterator[Dict[str, Any]], endpoint: str) -> Iterable[D
 
 def _normalize_map(data_item: Dict[str, Any]) -> Dict[str, Dict[str, str]]:
     source_schema = dlt.current.source_schema()
-    normalized_name = data_item['name'].strip()  # remove leading and trailing spaces
-    normalized_name = source_schema.naming.normalize_identifier(normalized_name)
+    normalized_name = source_schema.naming.normalize_identifier(data_item['name'])
     return {data_item['key']: {'name': data_item['name'], 'normalized_name': normalized_name}}
 
 
@@ -44,10 +43,11 @@ def pull_munge_func(data: Iterator[Dict[str, Any]], endpoint: str) -> Iterable[D
     if custom_fields_mapping:
         data_item_mapping = custom_fields_mapping.get(endpoint)
         if data_item_mapping:
-            renames = [(hash_string, names["name"]) for hash_string, names in data_item_mapping.items()]
+            partial_mapping = [(hash_string, names["name"]) for hash_string, names in data_item_mapping.items()]
             for data_item in data:
-                for hash_string, name in renames:
+                for hash_string, name in partial_mapping:
                     if hash_string in data_item:
+                        # We let dlt perform normalization
                         data_item[name] = data_item.pop(hash_string)
     return data
 
