@@ -2,7 +2,7 @@ from datetime import datetime, timedelta, timezone
 from dateutil import parser
 from dlt.common.configuration import with_config
 from time import sleep
-from typing import Optional
+from typing import Any, Dict, Optional
 
 import dlt
 
@@ -11,6 +11,15 @@ entities_endpoints = ('activities', 'activityTypes', 'deals', 'files', 'filters'
 entity_items_params = ('activity', 'activityType', 'deal', 'file', 'filter', 'note', 'organization', 'person', 'pipeline', 'product', 'stage', 'user')
 entities_mapping = dict(zip(entities_endpoints, entity_items_params))
 entity_items_mapping = dict(zip(entity_items_params, entities_endpoints))
+
+
+def get_entity_items_param(params: Dict[str, Any]) -> str:
+    """
+    Specific function to get 'recents' endpoint's items param
+    """
+    entity_items_params_split = params['items'].split(',') if isinstance(params.get('items'), str) else []
+    entity_items_param = entity_items_params_split[0] if len(entity_items_params_split) == 1 else ''
+    return entity_items_param
 
 
 @with_config
@@ -24,15 +33,14 @@ def get_since_timestamp(endpoint: str, step: int = dlt.config.value, max_retries
         last_timestamp = _get_last_timestamp_from_state(endpoint)
         if not last_timestamp:
             last_timestamp = _get_last_timestamp_from_destiny(endpoint, max_retries, backoff_delay)
-        if last_timestamp:
-            since_timestamp = last_timestamp + timedelta(seconds=step)
-        else:
-            since_timestamp = datetime.now(timezone.utc) - timedelta(days=days_back)  # default value
-        since_timestamp_str = parse_datetime(since_timestamp)
+        if not last_timestamp:
+            last_timestamp = datetime.now(timezone.utc) - timedelta(days=days_back)  # default value
+        since_timestamp = last_timestamp + timedelta(seconds=step)
+        since_timestamp_str = parse_datetime_obj(since_timestamp)
     return since_timestamp_str
 
 
-def parse_datetime(datetime_obj: datetime) -> str:
+def parse_datetime_obj(datetime_obj: datetime) -> str:
     datetime_str = ''
     if isinstance(datetime_obj, datetime):
         datetime_str = datetime.strftime(datetime_obj, '%Y-%m-%d %H:%M:%S')
@@ -52,9 +60,8 @@ UTC_OFFSET = '+00:00'
 
 def _get_last_timestamp_from_state(endpoint: str) -> Optional[datetime]:
     last_timestamp_str = dlt.state().get('last_timestamps', {}).get(endpoint, '')
-    if last_timestamp_str:
-        last_timestamp = parse_datetime_str(last_timestamp_str + UTC_OFFSET)
-        return last_timestamp
+    last_timestamp = parse_datetime_str(last_timestamp_str + UTC_OFFSET)
+    return last_timestamp
 
 
 def _get_last_timestamp_from_destiny(endpoint: str, max_retries: int, backoff_delay: float) -> Optional[datetime]:

@@ -14,8 +14,8 @@ import functools
 
 from .custom_fields_munger import entities_mapping, entity_fields_mapping, munge_push_func, pull_munge_func, parsed_mapping
 from .incremental_loading_helpers import (
-    entities_mapping as recents_entities_mapping, entity_items_mapping as recents_entity_items_mapping, get_since_timestamp, set_last_timestamp, max_datetime, parse_datetime, parse_datetime_str,
-    UTC_OFFSET
+    entities_mapping as recents_entities_mapping, entity_items_mapping as recents_entity_items_mapping, get_entity_items_param, get_since_timestamp, set_last_timestamp, max_datetime,
+    parse_datetime_obj, parse_datetime_str, UTC_OFFSET
 )
 from dlt.common.typing import TDataItems
 from dlt.extract.source import DltResource
@@ -126,13 +126,13 @@ def _paginated_get(base_url: str, endpoint: str, headers: Dict[str, Any], params
         if last_timestamp:
             # store last timestamp in dlt's state
             if endpoint in recents_entities_mapping:
-                last_timestamp_str = parse_datetime(last_timestamp)
+                last_timestamp_str = parse_datetime_obj(last_timestamp)
                 set_last_timestamp(endpoint, last_timestamp_str)
             elif endpoint == RECENTS_ENDPOINT:
                 entity_items_param = params.get('items', '')
                 if entity_items_param in recents_entity_items_mapping:
                     endpoint = recents_entity_items_mapping[entity_items_param]  # turns entity items' param into entities' endpoint
-                    last_timestamp_str = parse_datetime(last_timestamp)
+                    last_timestamp_str = parse_datetime_obj(last_timestamp)
                     set_last_timestamp(endpoint, last_timestamp_str)
 
 
@@ -158,28 +158,20 @@ def _get_endpoint(entity: str, pipedrive_api_key: str, extra_params: Dict[str, A
         params.update(extra_params)
 
     if entity == RECENTS_ENDPOINT:
-        entity_items_params = params['items'].split(',') if isinstance(params.get('items'), str) else []
-        entity_items_param = entity_items_params[0] if len(entity_items_params) == 1 else ''
-        since_timestamp_str = get_since_timestamp(recents_entity_items_mapping.get(entity_items_param, ''))
-        if since_timestamp_str:
-            params['since_timestamp'] = since_timestamp_str
-        else:
-            # turn incremental loading into full loading
-            entity = recents_entity_items_mapping.get(entity_items_param, '')
-            params.pop('items', '')
+        entity_items_param = get_entity_items_param(params)
+        params['since_timestamp'] = get_since_timestamp(recents_entity_items_mapping.get(entity_items_param, ''))
 
-    if entity:
-        pages = _paginated_get(base_url=BASE_URL, endpoint=entity, headers=headers, params=params)
-        if munge_custom_fields:
-            if entity in entity_fields_mapping:  # checks if it's an entity fields' endpoint (e.g.: activityFields)
-                munging_func = munge_push_func
-            else:
-                munging_func = pull_munge_func
-                if entity == RECENTS_ENDPOINT:
-                    entity = recents_entity_items_mapping.get(entity_items_param, '')  # turns entity items' param into entities' endpoint
-                entity = entities_mapping.get(entity, '')  # turns entities' endpoint into entity fields' endpoint
-            pages = map(functools.partial(munging_func, endpoint=entity), pages)
-        yield from pages
+    pages = _paginated_get(base_url=BASE_URL, endpoint=entity, headers=headers, params=params)
+    if munge_custom_fields:
+        if entity in entity_fields_mapping:  # checks if it's an entity fields' endpoint (e.g.: activityFields)
+            munging_func = munge_push_func
+        else:
+            munging_func = pull_munge_func
+            if entity == RECENTS_ENDPOINT:
+                entity = recents_entity_items_mapping.get(entity_items_param, '')  # turns entity items' param into entities' endpoint
+            entity = entities_mapping.get(entity, '')  # turns entities' endpoint into entity fields' endpoint
+        pages = map(functools.partial(munging_func, endpoint=entity), pages)
+    yield from pages
 
 
 @dlt.transformer(write_disposition='replace')
