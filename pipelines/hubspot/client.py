@@ -105,7 +105,7 @@ def fetch_data(endpoint: str, api_key: str, **kwargs) -> Generator[Dict[str, Any
         function, such as any parameters that need to be included in the API request.
 
         This function also includes a retry decorator that will automatically retry the API call up to
-        3 times with a 1-second delay between retries, using an exponential backoff strategy.
+        3 times with a 5-second delay between retries, using an exponential backoff strategy.
 
     """
     # Construct the URL and headers for the API request
