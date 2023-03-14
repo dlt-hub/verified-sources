@@ -159,7 +159,8 @@ def _get_endpoint(entity: str, pipedrive_api_key: str, extra_params: Dict[str, A
 
     if entity == RECENTS_ENDPOINT:
         entity_items_param = get_entity_items_param(params)
-        params['since_timestamp'] = get_since_timestamp(recents_entity_items_mapping.get(entity_items_param, ''))
+        if recents_entity_items_mapping.get(entity_items_param):
+            params['since_timestamp'] = get_since_timestamp(recents_entity_items_mapping[entity_items_param])
 
     pages = _paginated_get(base_url=BASE_URL, endpoint=entity, headers=headers, params=params)
     if munge_custom_fields:
