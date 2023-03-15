@@ -21,9 +21,9 @@ To retrieve data from all endpoints and enable Web Analytics Events for CRM Comp
 
 python
 
->>> resources = hubspot(api_key="your_api_key",
-...                     enable_companies_events=True,
-...                     enable_contacts_events=True)
+>>> resources = hubspot(api_key="your_api_key")
+>>> resources.companies_events.selected = True
+>>> resources.contacts_events.selected = True
 
 Note:
 The Web Analytics Events endpoint bookmarks the latest event using a state.
@@ -45,13 +45,7 @@ from .endpoints import CRM_CONTACTS_ENDPOINT, CRM_COMPANIES_ENDPOINT, \
 
 
 @dlt.source
-def hubspot(api_key: str = dlt.secrets.value,
-            enable_companies_events: bool = False,
-            enable_contacts_events: bool = False,
-            enable_deals_events: bool = False,
-            enable_tickets_events: bool = False,
-            enable_products_events: bool = False,
-            enable_quotes_events: bool = False) -> Sequence[DltResource]:
+def hubspot(api_key: str = dlt.secrets.value) -> Sequence[DltResource]:
     """
     A DLT source that retrieves data from the HubSpot API using the specified API key.
 
@@ -60,12 +54,6 @@ def hubspot(api_key: str = dlt.secrets.value,
 
     Args:
         api_key (str, optional): The API key used to authenticate with the HubSpot API. Defaults to dlt.secrets.value.
-        enable_companies_events (bool, optional): If True, retrieve web analytics events for companies. Defaults to False.
-        enable_contacts_events (bool, optional): If True, retrieve web analytics events for contacts. Defaults to False.
-        enable_deals_events (bool, optional): If True, retrieve web analytics events for deals. Defaults to False.
-        enable_tickets_events (bool, optional): If True, retrieve web analytics events for tickets. Defaults to False.
-        enable_products_events (bool, optional): If True, retrieve web analytics events for products. Defaults to False.
-        enable_quotes_events (bool, optional): If True, retrieve web analytics events for quotes. Defaults to False.
 
     Returns:
         tuple: A tuple of Dlt resources, one for each HubSpot API endpoint.
@@ -110,7 +98,7 @@ def hubspot(api_key: str = dlt.secrets.value,
     def companies() -> Iterator[TDataItems]:
         yield fetch_data(CRM_COMPANIES_ENDPOINT, api_key=api_key)
 
-    @dlt.transformer(data_from=companies, name="companies_events", write_disposition="append")
+    @dlt.transformer(data_from=companies, name="companies_events", write_disposition="append", selected=False)
     def companies_events(company: dict = None) -> Iterator[TDataItems]:
         yield from _get_web_analytics_events('company', company["hs_object_id"])
 
@@ -118,7 +106,7 @@ def hubspot(api_key: str = dlt.secrets.value,
     def contacts() -> Iterator[TDataItems]:
         yield fetch_data(CRM_CONTACTS_ENDPOINT, api_key=api_key)
 
-    @dlt.transformer(data_from=contacts, name="contacts_events", write_disposition="append")
+    @dlt.transformer(data_from=contacts, name="contacts_events", write_disposition="append", selected=False)
     def contacts_events(contact: dict = None) -> Iterator[TDataItems]:
         yield _get_web_analytics_events("contact", contact["hs_object_id"])
 
@@ -126,7 +114,7 @@ def hubspot(api_key: str = dlt.secrets.value,
     def deals() -> Iterator[TDataItems]:
         yield fetch_data(CRM_DEALS_ENDPOINT, api_key=api_key)
 
-    @dlt.transformer(data_from=deals, name="deals_events", write_disposition="append")
+    @dlt.transformer(data_from=deals, name="deals_events", write_disposition="append", selected=False)
     def deals_events(deal: dict = None) -> Iterator[TDataItems]:
         yield _get_web_analytics_events("deal", deal["hs_object_id"])
 
@@ -134,7 +122,7 @@ def hubspot(api_key: str = dlt.secrets.value,
     def tickets() -> Iterator[TDataItems]:
         yield fetch_data(CRM_TICKETS_ENDPOINT, api_key=api_key)
 
-    @dlt.transformer(data_from=tickets, name="tickets_events", write_disposition="append")
+    @dlt.transformer(data_from=tickets, name="tickets_events", write_disposition="append", selected=False)
     def tickets_events(ticket: dict = None) -> Iterator[TDataItems]:
         yield _get_web_analytics_events("ticket", ticket["hs_object_id"])
 
@@ -142,7 +130,7 @@ def hubspot(api_key: str = dlt.secrets.value,
     def products() -> Iterator[TDataItems]:
         yield fetch_data(CRM_PRODUCTS_ENDPOINT, api_key=api_key)
 
-    @dlt.transformer(data_from=products, name="products_events", write_disposition="append")
+    @dlt.transformer(data_from=products, name="products_events", write_disposition="append", selected=False)
     def products_events(product: dict = None) -> Iterator[TDataItems]:
         yield _get_web_analytics_events("product", product["hs_object_id"])
 
@@ -150,28 +138,13 @@ def hubspot(api_key: str = dlt.secrets.value,
     def quotes() -> Iterator[TDataItems]:
         yield fetch_data(CRM_QUOTES_ENDPOINT, api_key=api_key)
 
-    @dlt.transformer(data_from=quotes, name="quotes_events", write_disposition="append")
+    @dlt.transformer(data_from=quotes, name="quotes_events", write_disposition="append", selected=False)
     def quotes_events(quote: dict = None) -> Iterator[TDataItems]:
         yield _get_web_analytics_events("quote", quote["hs_object_id"])
 
-    _resources = [companies(), contacts(), deals(), tickets(), products(), quotes()]
-
-    if enable_companies_events:
-        _resources.append(companies_events())
-
-    if enable_contacts_events:
-        _resources.append(contacts_events())
-
-    if enable_deals_events:
-        _resources.append(deals_events())
-
-    if enable_tickets_events:
-        _resources.append(tickets_events())
-
-    if enable_products_events:
-        _resources.append(products_events())
-
-    if enable_quotes_events:
-        _resources.append(quotes_events())
-
-    return _resources
+    return [companies(), companies_events(),
+            contacts(), contacts_events(),
+            deals(), deals_events(),
+            tickets(), tickets_events(),
+            products(), products_events(),
+            quotes(), quotes_events()]
