@@ -28,7 +28,7 @@ def load_without_events():
 
 def load_with_company_events():
     """
-    This function loads data from HubSpot into a PostgreSQL database with company events enabled.
+    This function loads data from HubSpot into a PostgreSQL database with company and contacts events selected.
 
     Returns:
         None
@@ -40,10 +40,13 @@ def load_with_company_events():
                      destination='postgres',
                      full_refresh=False)
 
+    source = hubspot()
+
+    source.companies_events.selected = True
+    source.contacts_events.selected = True
+
     # Run the pipeline with the HubSpot source connector and enable company events
-    info = p.run(
-        hubspot(enable_companies_events=True)
-    )
+    info = p.run(source)
 
     # Print information about the pipeline run
     print(info)
