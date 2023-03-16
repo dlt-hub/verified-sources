@@ -112,9 +112,9 @@ def _paginated_get(base_url: str, endpoint: str, headers: Dict[str, Any], params
         data = page['data']
         last_timestamp_str = ''
         if data:
-            if page.get('additional_data', {}).get('last_timestamp_on_page', ''):  # checks 'recents' endpoint's data
+            if endpoint == RECENTS_ENDPOINT:
                 data = [data_item['data'] for data_item in data]  # filters and flattens 'recents' endpoint's data
-                last_timestamp_str = page['additional_data']['last_timestamp_on_page']
+                last_timestamp_str = page.get('additional_data', {}).get('last_timestamp_on_page', '')
             elif endpoint not in entity_fields_mapping:
                 last_timestamp_str = data[-1].get('add_time', '')
             last_timestamp = max_datetime(last_timestamp, parse_datetime_str(last_timestamp_str + UTC_OFFSET))
@@ -128,15 +128,15 @@ def _paginated_get(base_url: str, endpoint: str, headers: Dict[str, Any], params
 
         if last_timestamp:
             # store last timestamp in dlt's state
-            if endpoint in recents_entities_mapping:
-                last_timestamp_str = parse_datetime_obj(last_timestamp)
-                set_last_timestamp(endpoint, last_timestamp_str)
-            elif endpoint == RECENTS_ENDPOINT:
-                entity_items_param = params.get('items', '')
-                if entity_items_param in recents_entity_items_mapping:
+            if endpoint == RECENTS_ENDPOINT:
+                entity_items_param = get_entity_items_param(params)
+                if recents_entity_items_mapping.get(entity_items_param):
                     endpoint = recents_entity_items_mapping[entity_items_param]  # turns entity items' param into entities' endpoint
                     last_timestamp_str = parse_datetime_obj(last_timestamp)
                     set_last_timestamp(endpoint, last_timestamp_str)
+            elif endpoint not in entity_fields_mapping:
+                last_timestamp_str = parse_datetime_obj(last_timestamp)
+                set_last_timestamp(endpoint, last_timestamp_str)
 
 
 BASE_URL = 'https://app.pipedrive.com/v1'
