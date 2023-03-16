@@ -115,7 +115,7 @@ def _paginated_get(base_url: str, endpoint: str, headers: Dict[str, Any], params
             if page.get('additional_data', {}).get('last_timestamp_on_page', ''):  # checks 'recents' endpoint's data
                 data = [data_item['data'] for data_item in data]  # filters and flattens 'recents' endpoint's data
                 last_timestamp_str = page['additional_data']['last_timestamp_on_page']
-            elif endpoint in recents_entities_mapping:
+            elif endpoint not in entity_fields_mapping:
                 last_timestamp_str = data[-1].get('add_time', '')
             last_timestamp = max_datetime(last_timestamp, parse_datetime_str(last_timestamp_str + UTC_OFFSET))
             yield data
@@ -165,7 +165,7 @@ def _get_endpoint(entity: str, pipedrive_api_key: str, extra_params: Dict[str, A
         entity_items_param = get_entity_items_param(params)
         if recents_entity_items_mapping.get(entity_items_param):
             params['since_timestamp'] = get_since_timestamp(recents_entity_items_mapping[entity_items_param])
-    elif entity in recents_entities_mapping:
+    elif entity not in entity_fields_mapping:
         params['sort'] = 'add_time ASC'
 
     pages = _paginated_get(base_url=BASE_URL, endpoint=entity, headers=headers, params=params)
