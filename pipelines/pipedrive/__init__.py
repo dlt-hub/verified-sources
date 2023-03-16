@@ -110,10 +110,13 @@ def _paginated_get(base_url: str, endpoint: str, headers: Dict[str, Any], params
         page = response.json()
         # yield data only
         data = page['data']
+        last_timestamp_str = ''
         if data:
-            if page.get('additional_data', {}).get('since_timestamp', ''):  # checks 'recents' endpoint's data
+            if page.get('additional_data', {}).get('last_timestamp_on_page', ''):  # checks 'recents' endpoint's data
                 data = [data_item['data'] for data_item in data]  # filters and flattens 'recents' endpoint's data
-            last_timestamp_str = data[-1].get('add_time', '')  # regardless of full or incremental loading
+                last_timestamp_str = page['additional_data']['last_timestamp_on_page']
+            elif endpoint in recents_entities_mapping:
+                last_timestamp_str = data[-1].get('add_time', '')
             last_timestamp = max_datetime(last_timestamp, parse_datetime_str(last_timestamp_str + UTC_OFFSET))
             yield data
         # check if next page exists
@@ -157,10 +160,13 @@ def _get_endpoint(entity: str, pipedrive_api_key: str, extra_params: Dict[str, A
     if extra_params:
         params.update(extra_params)
 
+    entity_items_param = ''
     if entity == RECENTS_ENDPOINT:
         entity_items_param = get_entity_items_param(params)
         if recents_entity_items_mapping.get(entity_items_param):
             params['since_timestamp'] = get_since_timestamp(recents_entity_items_mapping[entity_items_param])
+    elif entity in recents_entities_mapping:
+        params['sort'] = 'add_time ASC'
 
     pages = _paginated_get(base_url=BASE_URL, endpoint=entity, headers=headers, params=params)
     if munge_custom_fields:
