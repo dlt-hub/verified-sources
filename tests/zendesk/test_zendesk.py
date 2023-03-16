@@ -1,4 +1,5 @@
 import pytest
+from typing import List
 import dlt
 from dlt.pipeline.pipeline import Pipeline
 from pipelines.zendesk import zendesk_chat, zendesk_support, zendesk_talk
@@ -125,7 +126,7 @@ def _create_pipeline(destination_name: str, dataset_name: str, full_refresh: boo
     return pipeline
 
 
-def _check_pipeline_has_tables(pipeline: Pipeline, tables: list[str]):
+def _check_pipeline_has_tables(pipeline: Pipeline, tables: List[str]):
     """
     Helper that checks if a pipeline has all tables in the list and has the same number of proper tables as the list (child tables and dlt tables not included in this count)
     @:param pipeline: DLT pipeline
