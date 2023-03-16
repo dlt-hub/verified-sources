@@ -1,10 +1,10 @@
 """
 This module handles how credentials are read in dlt sources
 """
-from dlt.common.configuration.specs import CredentialsConfiguration
-from dlt.common.configuration import configspec
-from dlt.common.typing import TSecretValue
 from typing import ClassVar, List
+from dlt.common.configuration import configspec
+from dlt.common.configuration.specs import CredentialsConfiguration
+from dlt.common.typing import TSecretValue
 
 
 @configspec

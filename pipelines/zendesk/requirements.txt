@@ -1,2 +1,3 @@
-zenpy==2.0.25
+pendulum
 python-dlt
+zenpy==2.0.25

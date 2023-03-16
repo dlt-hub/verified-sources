@@ -1,6 +1,6 @@
 from dlt.common import logger
 from dlt.common.typing import TDataItem, DictStrAny, DictStrStr
-from pipelines.zendesk.helpers.credentials import ZendeskCredentialsToken, ZendeskCredentialsEmailPass, ZendeskCredentialsOAuth
+from .credentials import ZendeskCredentialsToken, ZendeskCredentialsEmailPass, ZendeskCredentialsOAuth
 from typing import Iterator, Any, Optional, Union
 from zenpy import Zenpy
 from zenpy.lib.api_objects import Ticket
@@ -69,6 +69,9 @@ def process_ticket(ticket: Ticket, custom_fields: DictStrStr, pivot_fields: bool
     # delete fields that are not needed for pivoting
     if pivot_fields:
         del base_dict["custom_fields"]
+    else:
+        # un pivoting will simply save the dict as a json string
+        base_dict["custom_fields"] = str(base_dict["custom_fields"])
     del base_dict["fields"]
 
     # modify dates to return datetime objects instead
@@ -91,10 +94,6 @@ def basic_load(resource_api: Iterator[Any]) -> Iterator[TDataItem]:
         for element in resource_api:
             if isinstance(element, dict):
                 yield element
-                continue
-            try:
+            else:
                 dict_res = element.to_dict()
                 yield dict_res
-            except AttributeError as e:
-                logger.warning(f"Error! Element {element} of type {type(element)} returned from api {resource_api} has no attribute to_dict")
-                logger.warning(str(e))

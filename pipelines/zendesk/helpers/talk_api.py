@@ -1,13 +1,18 @@
 """
 This module contains everything related to the API client class made to make requests specifically to ZendeskTalk
 """
-from pipelines.zendesk.helpers.credentials import ZendeskCredentialsToken, ZendeskCredentialsOAuth, ZendeskCredentialsEmailPass
-from dlt.common import logger
-from dlt.common.typing import DictStrStr, TSecretValue, TDataItems
-from pendulum import DateTime
+
 from time import sleep
-from typing import Union, Tuple, Iterator
+from typing import Dict, Iterator, Optional, Tuple, Union
 import requests
+from dlt.common import logger
+from dlt.common.exceptions import MissingDependencyException
+from dlt.common.typing import DictStrStr, TDataItems, TSecretValue
+try:
+    from pendulum import DateTime
+except ImportError:
+    raise MissingDependencyException("Pendulum", ["pendulum"])
+from .credentials import ZendeskCredentialsEmailPass, ZendeskCredentialsOAuth, ZendeskCredentialsToken
 
 
 TALK_ENDPOINTS = {
@@ -22,9 +27,12 @@ TALK_ENDPOINTS = {
     "agents_activity": "/api/v2/channels/voice/stats/agents_activity",
     "current_queue_activity": "/api/v2/channels/voice/stats/current_queue_activity"
 }
+INCREMENTAL_ENDPOINTS = {
+    "calls": "/api/v2/channels/voice/stats/incremental/calls.json",
+    "legs": "/api/v2/channels/voice/stats/incremental/legs.json"
+}
+
 possible_endpoints = {
-    "incremental_calls": "/api/v2/channels/voice/stats/incremental/calls.json",
-    "incremental_legs": "/api/v2/channels/voice/stats/incremental/legs.json",
     "availabilities": "/api/v2/channels/voice/availabilities",
     "recordings": "/api/v2/channels/voice/calls/{call_id}/recordings",
     "digital_lines": "/api/v2/channels/voice/digital_lines",
@@ -44,7 +52,7 @@ class ZendeskAPIClient:
     subdomain: str = ""
     url: str = ""
     headers: DictStrStr = {}
-    auth: Tuple[str, TSecretValue]
+    auth: Optional[Tuple[str, TSecretValue]] = None
 
     def __init__(self, credentials: Union[ZendeskCredentialsOAuth, ZendeskCredentialsToken, ZendeskCredentialsEmailPass]) -> None:
         """
@@ -52,34 +60,39 @@ class ZendeskAPIClient:
         @:param credentials: ZendeskCredentials object which contains the necessary credentials to authenticate to ZendeskAPI
         @:returns: Nothing since it just initializes API parameters
         """
+        # oauth token is the preferred way to authenticate, followed by api token and then email + password combo
+        # fill headers and auth for every possibility of credentials given, raise error if credentials are of incorrect type
+        if isinstance(credentials, ZendeskCredentialsOAuth):
+            self.headers["Authorization"] = f"Bearer {credentials.oauth_token}"
+            self.auth = None
+        elif isinstance(credentials, ZendeskCredentialsToken):
+            self.headers["Authorizations"] = f"Bearer {credentials.token}"
+            self.auth = None
+        elif isinstance(credentials, ZendeskCredentialsEmailPass):
+            self.auth = (credentials.email, credentials.password)
+            self.headers = {}
+        else:
+            raise TypeError("Wrong credentials type provided to ZendeskAPIClient. The credentials need to be of type: ZendeskCredentialsOAuth, ZendeskCredentialsToken or ZendeskCredentialsEmailPass")
+
         # set subdomain, this is always needed to configure endpoints
         self.subdomain = credentials.subdomain
         self.url = f"https://{self.subdomain}.zendesk.com"
 
-        # oauth token is the preferred way to authenticate, followed by api token and then email + password combo
-        # if none of these are filled, simply return an error
-        if isinstance(credentials, ZendeskCredentialsOAuth):
-            self.headers["Authorization"] = f"Bearer {credentials.oauth_token}"
-        elif isinstance(credentials, ZendeskCredentialsToken):
-            self.headers["Authorizations"] = f"Bearer {credentials.token}"
-        elif isinstance(credentials, ZendeskCredentialsEmailPass):
-            self.auth = (credentials.email, credentials.password)
-
-    def make_request(self, endpoint: str, data_point_name: str) -> Iterator[TDataItems]:
+    def make_request(self, endpoint: str, data_point_name: str, params: Optional[Dict[str, int]] = None) -> Iterator[TDataItems]:
         """
         Makes a get request on a given endpoint.
-        @:param endpoint: String that specifies the exact endpoint data is being received from
-        @:return response_json:
+        @:param endpoint: the url to the endpoint, i.e. api/v2/calls
+        @:param data_point_name: name of the endpoint, i.e. calls
+        @:returns: A generator of json responses
         """
-        # TODO: 1 automatic retry on normal failures
+        # TODO: automatic retry on normal failures
         # TODO: caching
         # TODO: side loading
-        # TODO: handle incremental load
         # make request and keep looping until there is no next page
         get_url = f"{self.url}{endpoint}"
         while get_url:
             try:
-                response = requests.get(get_url, headers=self.headers, auth=self.auth)
+                response = requests.get(get_url, headers=self.headers, auth=self.auth, params=params)
                 if response.status_code == ZENDESK_STATUS_CODES["ok"]:
                     # check if there is a next page and yield the response,
                     # usually all relevant data is stored in a key with same name as endpoint
@@ -94,17 +107,22 @@ class ZendeskAPIClient:
                 else:
                     get_url = None
                     logger.warning(f"API call failed on endpoint {endpoint} with error code {response.status_code}")
-            except Exception:
-                get_url = None
+            except Exception as e:
                 logger.warning(f"Encountered an error on url: {get_url}")
+                logger.warning(str(e))
+                get_url = None
 
-    def make_request_incremental(self, endpoint: str, data_point_name: str, start_date: DateTime) -> Iterator[TDataItems]:
+    def make_request_incremental(self, endpoint: str, data_point_name: str, start_date: float) -> Iterator[TDataItems]:
         """
         Makes a request to an incremental API endpoint
+        @:param endpoint: the url to the endpoint, i.e. api/v2/calls
+        @:param data_point_name: name of the endpoint, i.e. calls
+        @:param start_date: a timestamp of the starting date, i.e. a date in unix epoch time (the number of seconds since January 1, 1970, 00:00:00 UTC)
+        @:returns: A generator of json responses
         """
-        # convert start date to unix epoch and make request normally
-        combined_endpoint = f"{endpoint}?start_date={start_date.timestamp()}"
-        yield from self.make_request(endpoint=combined_endpoint, data_point_name=data_point_name)
+        # start date comes as unix epoch float, need to convert to an integer to make the call to the API
+        params = {"start_time": int(start_date)}
+        yield from self.make_request(endpoint=endpoint, data_point_name=data_point_name, params=params)
 
 
 def _wait_rate_limit(rate_limit: float) -> None:

@@ -30,6 +30,10 @@ sqlalchemy = ">=1.4"
 [tool.poetry.group.google_sheets.dependencies]
 google-api-python-client = "^2.78.0"
 
+
+[tool.poetry.group.zenpy.dependencies]
+zenpy = "^2.0.25"
+
 [build-system]
 requires = ["poetry-core"]
 build-backend = "poetry.core.masonry.api"
