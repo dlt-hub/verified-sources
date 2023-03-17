@@ -1,13 +1,22 @@
 import dlt
-from google_sheets.google_sheets import google_spreadsheet
+from google_sheets import google_spreadsheet
 
-# constants
-SPREADSHEET_ID = ""
-SPREADSHEET_URL = ""
 
-# FULL PIPELINE RUN
-if __name__ == "main":
-    pipeline = dlt.pipeline(pipeline_name="google_sheets_pipeline", destination="bigquery", full_refresh=False, dataset_name="sample_google_sheet_data")
-    data = google_spreadsheet(spreadsheet_identifier=SPREADSHEET_ID)
+def full_pipeline_run(destination: str = "postgres", pipeline_name: str = "google_sheets_pipeline", full_refresh: bool = False, dataset_name: str = "sample_google_sheet_data") -> None:
+    """
+    Does a full pipeline run. Will load all the sheets in the spreadsheet and all the named ranges in the spreadsheet. Will also load all the ranges given in config.
+    The dlt config also contains the spreadsheet url or id that data will be loaded from.
+    :@param destination: The destination for the load: bigquery, postgres, or redshift
+    @:param pipeline_name: The name of the pipeline
+    @:param full_refresh: Setting that enables running the pipeline and losing all the previous saved context.
+    """
+    pipeline = dlt.pipeline(pipeline_name=pipeline_name, destination=destination, full_refresh=full_refresh, dataset_name=dataset_name)
+    data = google_spreadsheet()
     info = pipeline.run(data)
     print(info)
+    return
+
+
+# FULL PIPELINE RUN
+if __name__ == "__main__":
+    full_pipeline_run()

@@ -1,11 +1,17 @@
 """This is a helper module that contains function which validate and process data"""
 
-import logging
-from typing import Union, Any, Iterator, List, Dict
-from re import match
-from dlt.common.typing import DictStrAny, StrAny
-from dlt.common import pendulum
 
+from typing import Any, Dict, Iterator, List, Tuple, Union
+from re import match
+
+from dlt.common import logger
+from dlt.common.exceptions import MissingDependencyException
+from dlt.common.typing import DictStrAny
+
+try:
+    from pendulum import DateTime, duration, from_timestamp
+except ImportError:
+    raise MissingDependencyException("Pendulum", ["pendulum"])
 
 # this string comes before the id
 URL_ID_IDENTIFIER = "d"
@@ -95,7 +101,7 @@ def get_first_rows(sheet_range: str) -> List[str]:
     return [sheet_name, f"{sheet_name}!{starting_col}{starting_row}:{ending_col}{ending_row}"]
 
 
-def _separate_row_col(row_col_str: str) -> (str, str):
+def _separate_row_col(row_col_str: str) -> Tuple[str, str]:
     """
     Helper function that receives a row and column together from the A1 range and returns the row and column separately
     @:param: row_col_str - ex: A1, BB2, ZZ25, etc
@@ -160,7 +166,7 @@ def _convert_col_a1(col_idx: int) -> str:
     return col_name or "A"
 
 
-def get_range_headers(range_metadata: StrAny, range_name: str) -> List[str]:
+def get_range_headers(range_metadata: List[DictStrAny], range_name: str) -> List[str]:
     """
     Helper. Receives the metadata for a range of cells and outputs only the headers for columns, i.e. first line of data
     @:param: range_metadata - Dict containing metadata for the first 2 rows of a range, taken from Google Sheets API response.
@@ -174,21 +180,21 @@ def get_range_headers(range_metadata: StrAny, range_name: str) -> List[str]:
             header_val = header["formattedValue"]
             # warn user when reading non string values as header - metadata is the only place to check this info
             if not ("stringValue" in header["effectiveValue"]):
-                logging.warning(f"In range {range_name}, header value: {header_val} is not a string! Name changed when loaded in database!")
+                logger.warning(f"In range {range_name}, header value: {header_val} is not a string! Name changed when loaded in database!")
             headers.append(header_val)
         else:
             headers.append(f"empty_header_filler{empty_header_index}")
             empty_header_index = empty_header_index + 1
     # report if a header was empty
     if empty_header_index:
-        logging.warning(f"In range {range_name}, {empty_header_index} headers were found empty!")
+        logger.warning(f"In range {range_name}, {empty_header_index} headers were found empty!")
     # manage headers being empty
     if len(headers) == empty_header_index:
         return []
     return headers
 
 
-def get_first_line(range_metadata: StrAny) -> List[bool]:
+def get_first_line(range_metadata: List[DictStrAny]) -> List[bool]:
     """
     Helper. Parses through the metadata for a range and checks whether a column contains datetime types or not
     @:param: range_metadata - Metadata for first 2 rows in a range
@@ -223,7 +229,7 @@ def is_date_datatype(value_list: List[DictStrAny]) -> List[bool]:
     return value_type_list
 
 
-def serial_date_to_datetime(serial_number: Union[int, float, str, bool]) -> pendulum.datetime:
+def serial_date_to_datetime(serial_number: Union[int, float, str, bool]) -> Union[DateTime, str, bool]:
     """
     Receives a serial number which can be an int or float(depending on the serial number) and outputs a datetime object
     @:param: serial_number- int/float. The integer part shows the number of days since December 30th 1899, the decimal part shows the fraction of the day. Sometimes if a table is not formatted
@@ -235,34 +241,43 @@ def serial_date_to_datetime(serial_number: Union[int, float, str, bool]) -> pend
     if not isinstance(serial_number, (int, float)):
         return serial_number
     # To get the seconds passed since the start date of serial numbers we round the product of the number of seconds in a day and the serial number
-    conv_datetime = pendulum.from_timestamp(0, DLT_TIMEZONE) + pendulum.duration(seconds=TIMESTAMP_CONST + round(SECONDS_PER_DAY * serial_number))
+    conv_datetime: DateTime = from_timestamp(0, DLT_TIMEZONE) + duration(seconds=TIMESTAMP_CONST + round(SECONDS_PER_DAY * serial_number))
     return conv_datetime
 
 
-def metadata_preprocessing(ranges: List[str], named_ranges: StrAny = None) -> DictStrAny:
+def metadata_preprocessing(ranges: List[str], named_ranges: DictStrAny = None) -> Tuple[List[str], Dict[str, List[DictStrAny]]]:
     """
     Helper, will iterate through input ranges and process them so only the first 2 rows are returned per range. It will also structure all the ranges inside a dict similar to how they are returned
     by the Google Sheets API metadata request
-    @:param: range_names - list of range names
+    @:param: ranges - list of range names
+    @:param named_ranges: dict containing ranges as keys and the corresponding named ranges as the values
+    @:return meta_ranges: List containing all the ranges where metadata is gathered from, ex: sheet1!1:2 would be an element of this list
+    @:return response_like_dict: This dictionary copies how google sheets API returns data from ranges: all ranges are organized into their parent sheets which are keys to the dict.
+                                 All ranges belonging to a sheet are in a list with the order in which they appear in the request being preserved, ex: {"sheet1" : ["range3", "range1"]
+                                 range3 is returned before range1 because it would have been ahead in the list of ranges given in the request. Here instead of storing a string for
+                                 range1 or range3, a dict with all the metadata for that range is stored. as showed in unfilled_range_dict
     """
 
     # process metadata ranges so only the first 2 rows are appended
     # response like dict will contain a dict similar to the response by the Google Sheets API: ranges are returned inside the sheets they belong in the order given in the API request.
     meta_ranges = []
-    response_like_dict = {}
+    response_like_dict: Dict[str, List[DictStrAny]] = {}
     for requested_range in ranges:
-        # convert range to first 2 rows
+        # Metadata ranges have a different range-only first 2 rows, so we need to convert to those ranges first
+        # convert range to first 2 rows, getting the sheet name and the range that has only the first 2 rows
         range_info = get_first_rows(requested_range)
         sheet_name = range_info[0]
+        # initialize the dict containing information about the metadata of this range, headers contains the names of all header columns and
+        # cols_is_date contains booleans indicating whether the data expected in that column is a datetime object or not.
         unfilled_range_dict = {"range": requested_range,
                                "headers": [],
                                "cols_is_datetime": [],
                                "name": None
                                }
-        # check whether this range is a named range and save info in metadata if so
+        # try to filled information about range name if the range has a name by checking named ranges
         if named_ranges and requested_range in named_ranges:
             unfilled_range_dict["name"] = named_ranges[requested_range]
-        # add a dict with range info to the list of ranges inside the sheet
+        # All the information in the dict is properly set up, now we just need to store it in the response_like_dict
         if sheet_name in response_like_dict:
             response_like_dict[sheet_name].append(unfilled_range_dict)
         else:
@@ -271,11 +286,11 @@ def metadata_preprocessing(ranges: List[str], named_ranges: StrAny = None) -> Di
     return meta_ranges, response_like_dict
 
 
-def process_range(sheet_val: Iterator[DictStrAny], sheet_meta: StrAny) -> Iterator[DictStrAny]:
+def process_range(sheet_val: List[List[Any]], sheet_meta: DictStrAny) -> Iterator[DictStrAny]:
     """
     Receives 2 arrays of tabular data inside a sheet. This will be processed into a schema that is later stored into a database table
-    @:param: spreadsheet_id - the id of the spreadsheet
-    @:param: spreadsheets_resource - Resource object, used to make calls to google spreadsheets
+    @:param: sheet_val - 2D array of values
+    @:param: sheet_meta - Metadata gathered for this specific range
     @:return:  table_dict - a dict version of the table. It generates a dict of the type {header:value} for every row.
     """
     # get headers and first line data types which is just Datetime or not Datetime so far and loop through the remaining values

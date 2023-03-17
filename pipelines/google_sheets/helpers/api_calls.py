@@ -1,12 +1,12 @@
 """Contains helper functions to make API calls"""
 
-import logging
 from typing import List
 
+from dlt.common import logger
 from dlt.common.configuration.specs import GcpClientCredentialsWithDefault
-from dlt.common.typing import DictStrAny, StrAny
 from dlt.common.exceptions import MissingDependencyException
-from .data_processing import metadata_preprocessing, get_first_line, get_range_headers
+from dlt.common.typing import DictStrAny
+from .data_processing import get_first_line, get_range_headers, metadata_preprocessing
 
 try:
     from apiclient.discovery import build, Resource
@@ -34,7 +34,7 @@ def get_metadata_simple(spreadsheet_id: str, service: Resource) -> DictStrAny:
     @:param: get_named_ranges - setting: if true will return all named ranges inside spreadsheet
     @:return: return_info - dict containing information on sheets inside if any and named ranges inside if any. Has 2 keys: "sheets" and "named_ranges"
     """
-    return_info = {
+    return_info: DictStrAny = {
         "sheets": {},
         "named_ranges": []
     }
@@ -48,23 +48,24 @@ def get_metadata_simple(spreadsheet_id: str, service: Resource) -> DictStrAny:
         sheet_name = sheet_m["properties"]["title"]
         sheet_id = sheet_m["properties"]["sheetId"]
         return_info["sheets"][sheet_id] = sheet_name
-    logging.info(f"Found the following sheets {return_info['sheets']}")
+    logger.info(f"Found the following sheets {return_info['sheets']}")
 
     # this is a list containing dicts with info on named ranges
     if "namedRanges" in metadata:
         return_info["named_ranges"] = metadata["namedRanges"]
-    logging.info(f"Found the following sheets {return_info['named_ranges']}")
+    logger.info(f"Found the following sheets {return_info['named_ranges']}")
     return return_info
 
 
-def get_metadata(spreadsheet_id: str, service: Resource, ranges: List[str], named_ranges: StrAny = None) -> DictStrAny:
+def get_metadata(spreadsheet_id: str, service: Resource, ranges: List[str], named_ranges: DictStrAny = None) -> DictStrAny:
     """
     # TODO: add fields to save on info returned
     Gets the metadata for the first 2 rows of every range specified. The first row is deduced as the header and the 2nd row specifies the format the rest of the data should follow
-    @:param: spreadsheet_id - the id of the spreadsheet
-    @:param: service - Resource object used by google-api-python-client to make api calls
-    @:param: ranges - List of ranges to get data from. If left empty, every sheet inside the spreadsheet will be included instead. named ranges not supported
-    @:return: ranges_data - A dict where all the range names are the key. The values for each key are the corresponding sheet metadata: sheet_name, headers, values
+    @:param spreadsheet_id: - the id of the spreadsheet
+    @:param service: - Resource object used by google-api-python-client to make api calls
+    @:param ranges: - List of ranges to get data from. If left empty, every sheet inside the spreadsheet will be included instead. named ranges not supported
+    @:param named_ranges: Dict containing ranges as keys and the corresponding named ranges as the values
+    @:return metadata_all_ranges: - A dict where all the range names are the key. The values for each key are the corresponding sheet metadata: sheet_name, headers, values
     """
 
     # process metadata ranges so only the first 2 rows are appended
@@ -91,17 +92,17 @@ def get_metadata(spreadsheet_id: str, service: Resource, ranges: List[str], name
             metadata_range_name = response_like_dict[meta_sheet_name][i]["range"]
             # check that sheet is not empty, otherwise delete
             if not ("rowData" in sheet_data[i]):
-                logging.warning(f"Metadata - Skipped empty range: {metadata_range_name}")
+                logger.warning(f"Metadata - Skipped empty range: {metadata_range_name}")
                 continue
             # get headers and 1st row data
             range_metadata = sheet_data[i]["rowData"]
             headers = get_range_headers(range_metadata=range_metadata, range_name=metadata_range_name)
             if not headers:
-                logging.warning(f"Metadata: Skipped range with empty headers: {metadata_range_name}")
+                logger.warning(f"Metadata: Skipped range with empty headers: {metadata_range_name}")
                 continue
             first_line_values = get_first_line(range_metadata=range_metadata)
             if not first_line_values:
-                logging.warning(f"Metadata: No data values for the first line of data {metadata_range_name}")
+                logger.warning(f"Metadata: No data values for the first line of data {metadata_range_name}")
             # add headers and values
             response_like_dict[meta_sheet_name][i]["headers"] = headers
             response_like_dict[meta_sheet_name][i]["cols_is_datetime"] = first_line_values
@@ -121,11 +122,11 @@ def get_data_batch(service: Resource, spreadsheet_id: str, range_names: List[str
     """
     # handle requests with no ranges - edge case
     if not range_names:
-        logging.warning("Fetching data error: No ranges to get data from. Check the input ranges are not empty.")
+        logger.warning("Fetching data error: No ranges to get data from. Check the input ranges are not empty.")
         return []
     # Make an api call to get the data for all sheets and ranges
     # get dates as serial number
-    values = service.spreadsheets().values().batchGet(
+    values: List[DictStrAny] = service.spreadsheets().values().batchGet(
         spreadsheetId=spreadsheet_id,
         ranges=range_names,
         # un formatted returns typed values
@@ -133,5 +134,5 @@ def get_data_batch(service: Resource, spreadsheet_id: str, range_names: List[str
         # will return formatted dates as a serial number
         dateTimeRenderOption="SERIAL_NUMBER"
     ).execute()["valueRanges"]
-    logging.info("Data fetched")
+    logger.info("Data fetched")
     return values
