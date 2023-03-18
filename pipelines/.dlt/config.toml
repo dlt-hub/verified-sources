@@ -18,6 +18,13 @@ workers = 2  # limit the parallel execution
 [sources.chess]
 config_int=123
 
+[sources.shopify]
+api_version="2023-01"
+step=1
+max_retries=1
+backoff_delay=0.1
+days_back=30
+
 ## sql_database
 
 [sources.sql_database.data_writer]
