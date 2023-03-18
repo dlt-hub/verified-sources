@@ -94,9 +94,9 @@ def _paginated_get(base_url: str, endpoint: str, headers: Dict[str, Any], params
             params.pop('order', '')
             params.pop('created_at_min', '')
 
-        if last_timestamp_str:
-            # store last timestamp in dlt's state
-            set_last_timestamp(endpoint, last_timestamp_str)
+    if last_timestamp_str:
+        # store last timestamp in dlt's state
+        set_last_timestamp(endpoint, last_timestamp_str)
 
 
 def _get_endpoint(entity: str, access_token: str, store_name: str, api_version: str, extra_params: Dict[str, Any] = None, incrementally: bool = True) -> Optional[Iterator[TDataItems]]:
