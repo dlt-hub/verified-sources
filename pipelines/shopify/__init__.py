@@ -14,7 +14,7 @@ from time import sleep
 from timeit import default_timer
 from typing import Any, Dict, Iterator, Optional, Sequence
 
-from .incremental_loading_helpers import get_linked_url, RelationType, get_since_timestamp, set_last_timestamp
+from .incremental_loading_helpers import get_since_timestamp, set_last_timestamp
 
 
 @dlt.source(name='shopify')
@@ -87,8 +87,7 @@ def _paginated_get(base_url: str, endpoint: str, headers: Dict[str, Any], params
             last_timestamp_str = data[-1].get('created_at', '')
             yield data
         # check if next page exists
-        link_header = response.headers.get('Link')
-        linked_url = get_linked_url(link_header, RelationType.NEXT) if link_header else ''
+        linked_url = response.links.get('next', {}).get('url', '')
         # is_next_page is set to True or False
         is_next_page = linked_url != ''
         if is_next_page:
@@ -130,7 +129,7 @@ def _get_endpoint(
     if extra_params:
         params.update(extra_params)
     if incrementally:
-        params['created_at_min'] = get_since_timestamp(entity)
+        params['created_at_min'] = get_since_timestamp(entity, 'created_at')
     base_url = f'https://{store_name}.myshopify.com/admin/api/{api_version}'
     pages = _paginated_get(base_url, endpoint=entity, headers=headers, params=params, rate_limit=rate_limit)
     yield from pages
