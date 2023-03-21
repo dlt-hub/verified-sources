@@ -1,5 +1,5 @@
-import requests
 import dlt
+from dlt.sources.helpers import requests
 
 
 def _create_auth_headers(api_secret_key):

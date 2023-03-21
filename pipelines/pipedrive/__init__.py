@@ -11,11 +11,11 @@ To get an api key: https://pipedrive.readme.io/docs/how-to-find-the-api-token
 
 import dlt
 import functools
-import requests
 
 from .custom_fields_munger import munge_push_func, pull_munge_func, parsed_mapping
 from dlt.common.typing import TDataItems
 from dlt.extract.source import DltResource
+from dlt.sources.helpers import requests
 from typing import Any, Dict, Iterator, Optional, Sequence
 
 
@@ -89,7 +89,6 @@ def _paginated_get(url: str, headers: Dict[str, Any], params: Dict[str, Any]) ->
     params['limit'] = 500
     while is_next_page:
         response = requests.get(url, headers=headers, params=params)
-        response.raise_for_status()
         page = response.json()
         # yield data only
         data = page['data']

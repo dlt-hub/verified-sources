@@ -2,8 +2,8 @@ from unittest.mock import patch
 
 import dlt
 import pytest
-import requests
 
+from dlt.sources.helpers import requests
 from pipelines.hubspot import hubspot
 from pipelines.hubspot.client import fetch_data
 from pipelines.hubspot.endpoints import CRM_CONTACTS_ENDPOINT, CRM_COMPANIES_ENDPOINT, CRM_DEALS_ENDPOINT, \
