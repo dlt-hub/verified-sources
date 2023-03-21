@@ -129,7 +129,7 @@ def _get_endpoint(
     if extra_params:
         params.update(extra_params)
     if incrementally:
-        params['created_at_min'] = get_since_timestamp(entity, 'created_at')
+        params['created_at_min'] = get_since_timestamp(entity)
     base_url = f'https://{store_name}.myshopify.com/admin/api/{api_version}'
     pages = _paginated_get(base_url, endpoint=entity, headers=headers, params=params, rate_limit=rate_limit)
     yield from pages

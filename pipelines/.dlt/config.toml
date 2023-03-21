@@ -22,8 +22,6 @@ config_int=123
 api_version="2023-01"
 rate_limit=2
 step=1
-max_retries=1
-backoff_delay=0.1
 days_back=30
 
 ## sql_database
