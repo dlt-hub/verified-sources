@@ -1,5 +1,5 @@
 from dlt.common import logger
-from dlt.common.typing import TDataItem, DictStrAny, DictStrStr
+from dlt.common.typing import DictStrAny, DictStrStr, TDataItem, TDataItems
 from .credentials import ZendeskCredentialsToken, ZendeskCredentialsEmailPass, ZendeskCredentialsOAuth
 from typing import Iterator, Any, Optional, Union
 from zenpy import Zenpy
@@ -42,7 +42,7 @@ def auth_zenpy(credentials: Union[ZendeskCredentialsOAuth, ZendeskCredentialsTok
     return zendesk_client
 
 
-def process_ticket(ticket: Ticket, custom_fields: DictStrStr, pivot_fields: bool = True) -> DictStrAny:
+def process_ticket(ticket: Ticket, custom_fields: DictStrStr, pivot_custom_fields: bool = True) -> DictStrAny:
     """
     Helper that returns a dictionary of the ticket class provided as a parameter. This is done since to_dict()
     method of Ticket class doesn't return all the required information
@@ -54,12 +54,12 @@ def process_ticket(ticket: Ticket, custom_fields: DictStrStr, pivot_fields: bool
 
     base_dict: DictStrAny = ticket.to_dict()
     # get tags as a string eliminating the square brackets from string
-    base_dict["tags"] = str(base_dict["tags"])[1:-1]
+    base_dict["tags"] = base_dict["tags"]
 
     # pivot custom field if indicated as such
     # get custom fields
     for custom_field in base_dict["custom_fields"]:
-        if pivot_fields:
+        if pivot_custom_fields:
             cus_field_id = str(custom_field["id"])
             field_name = custom_fields[cus_field_id]
             base_dict[field_name] = custom_field["value"]
@@ -67,7 +67,7 @@ def process_ticket(ticket: Ticket, custom_fields: DictStrStr, pivot_fields: bool
             custom_field["ticket_id"] = ticket.id
 
     # delete fields that are not needed for pivoting
-    if pivot_fields:
+    if pivot_custom_fields:
         del base_dict["custom_fields"]
     else:
         # un pivoting will simply save the dict as a json string
@@ -97,3 +97,22 @@ def basic_load(resource_api: Iterator[Any]) -> Iterator[TDataItem]:
             else:
                 dict_res = element.to_dict()
                 yield dict_res
+
+
+def process_talk_resource(response: Iterator[TDataItems]) -> Iterator[TDataItems]:
+    """
+    Processes the response from a request to the ZendeskTalk API and yields results one line at a time for every page in the response
+    :param response: Can contain one or multiple pages of data, if multiple pages this will be a generator of lists containing data (dictionaries), otherwise it will just a list
+    of dictionaries
+    :returns: A generator of dicts
+    """
+    if response:
+        my_pages = [page for page in response]
+        for page in my_pages:
+            # multiple records in page
+            if isinstance(page, list):
+                for record in page:
+                    yield record
+            # only 1 record in the page, just yield page
+            else:
+                yield page

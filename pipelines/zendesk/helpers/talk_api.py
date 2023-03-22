@@ -66,8 +66,8 @@ class ZendeskAPIClient:
             self.headers["Authorization"] = f"Bearer {credentials.oauth_token}"
             self.auth = None
         elif isinstance(credentials, ZendeskCredentialsToken):
-            self.headers["Authorizations"] = f"Bearer {credentials.token}"
-            self.auth = None
+            self.headers = None
+            self.auth = (f"{credentials.email}/token", credentials.token)
         elif isinstance(credentials, ZendeskCredentialsEmailPass):
             self.auth = (credentials.email, credentials.password)
             self.headers = {}
