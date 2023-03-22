@@ -30,7 +30,7 @@ def load_selected_data():
     print(shopify_data.locations)
 
 
-if __name__ == "__main__" :
+if __name__ == "__main__":
     # run our main example
     load_shopify()
     # load selected tables and display resource info

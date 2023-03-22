@@ -1,37 +1,33 @@
 from datetime import timedelta
 from dlt.common import pendulum
-from dlt.common.configuration import with_config
-from pendulum import Date, DateTime, Duration, Time
-from typing import Optional, Union
+from typing import Any, List
 
 import dlt
 
 
-@with_config
-def get_since_timestamp(endpoint: str, step: int = dlt.config.value, days_back: int = dlt.config.value) -> str:
+def get_last_timestamp(endpoint: str, initial_days_back: int) -> Any:
     """
     Specific function to generate 'since_timestamp' string based on last timestamp stored in dlt's state (if available)
     """
-    since_timestamp_str = ''
-    if all([isinstance(step, int), step > 0, isinstance(days_back, int), days_back > 0]):
-        last_timestamp = _get_last_timestamp_from_state(endpoint)
-        if not last_timestamp:
-            last_timestamp = pendulum.now() - timedelta(days=days_back)  # default value
-        since_timestamp_str = str(last_timestamp + timedelta(seconds=step))
-    return since_timestamp_str
-
-
-def _get_last_timestamp_from_state(endpoint: str) -> Optional[Union[Date, Time, DateTime, Duration]]:
-    last_timestamp = None
-    last_timestamp_str = dlt.state().get('last_timestamps', {}).get(endpoint, '')
-    if last_timestamp_str:
-        last_timestamp = pendulum.parse(last_timestamp_str)
+    last_timestamp = get_last_metadatum_from_state(endpoint, 'timestamp')
+    if not last_timestamp:
+        if all([isinstance(initial_days_back, int), initial_days_back > 0]):
+            last_timestamp = str(pendulum.now() - timedelta(days=initial_days_back))  # default value
     return last_timestamp
 
 
-def set_last_timestamp(endpoint: str, last_timestamp_str: str) -> None:
+def get_last_metadatum_from_state(endpoint: str, metadatum: str) -> Any:
+    last_metadata = _get_last_metadata_from_state(endpoint)
+    return last_metadata.get(metadatum)
+
+
+def _get_last_metadata_from_state(endpoint: str) -> Any:
+    return dlt.state().get('last_metadata', {}).get(endpoint, {})
+
+
+def set_last_metadata(endpoint: str, last_timestamp: str, last_ids: List[int]) -> None:
     """
-    Specific function to store last timestamp in dlt's state
+    Specific function to store last metadata in dlt's state
     """
-    last_timestamps = dlt.state().setdefault('last_timestamps', {})
-    last_timestamps[endpoint] = last_timestamp_str
+    last_metadata = dlt.state().setdefault('last_metadata', {})
+    last_metadata[endpoint] = {'timestamp': last_timestamp, 'ids': last_ids}

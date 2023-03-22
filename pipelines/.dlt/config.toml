@@ -21,8 +21,7 @@ config_int=123
 [sources.shopify]
 api_version="2023-01"
 rate_limit=2
-step=1
-days_back=30
+initial_days_back=30
 
 ## sql_database
 
