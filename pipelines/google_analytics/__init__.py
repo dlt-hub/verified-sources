@@ -1,13 +1,15 @@
 """
 Defines all the sources and resources needed for Google Analytics V4
 """
-import logging
-from typing import Iterator, Optional, Sequence, Union, List
+
+from typing import Iterator, List
 import dlt
+from dlt.common import logger
 from dlt.common.configuration.specs import GcpClientCredentialsWithDefault
 from dlt.common.exceptions import MissingDependencyException
-from dlt.common.typing import TDataItem, DictStrAny
+from dlt.common.typing import TDataItem
 from dlt.extract.source import DltResource
+from .helpers.data_processing import process_dimension, process_metric, process_report
 
 try:
     from google.analytics.data_v1beta import BetaAnalyticsDataClient
@@ -63,20 +65,8 @@ def sample_analytics_resource(client: Resource) -> Iterator[TDataItem]:
         date_ranges=[DateRange(start_date="2020-03-31", end_date="today")],
     )
     response = client.run_report(request)
-    for row in response.rows:
-        yield {"dimension_values": row.dimension_values[0].value, "metric_values": row.metric_values[0].value}
-    """
-    response = client.reports().batchGet(
-        body={
-            'reportRequests': [
-                {
-                    'dateRanges': [{'startDate': '7daysAgo', 'endDate': 'today'}],
-                    'metrics': [{'expression': 'ga:sessions'}],
-                    'dimensions': [{'name': 'ga:country'}]
-                }]
-        }
-    ).execute()
-    """
+    processed_response_generator = process_report(response=response)
+    yield from processed_response_generator
 
 
 @dlt.resource(selected=False)
@@ -119,34 +109,3 @@ def dimensions_table(metadata: Metadata) -> Iterator[TDataItem]:
         processed_dimension = process_dimension(dimension=dimension)
         yield processed_dimension
 
-
-def process_metric(metric: MetricMetadata) -> DictStrAny:
-    """
-    Will process a MetricMetadata object into a dict
-    :param metric: MetricMetadata Object
-    :return metric_dict: The dict version of the object
-    """
-    metric_dict = {"api_name": metric.api_name,
-                   "category": metric.category,
-                   "custom_definition": metric.custom_definition,
-                   "description": metric.description,
-                   "expression": metric.expression,
-                   "type": metric.type_,
-                   "ui_name": metric.ui_name
-                   }
-    return metric_dict
-
-
-def process_dimension(dimension: DimensionMetadata) -> DictStrAny:
-    """
-    Will process a DimensionMetadata object into a dict
-    :param dimension: DimensionMetadata Object
-    :return dimension_dict: The dict version of the object
-    """
-    dimension_dict = {"api_name": dimension.api_name,
-                      "category": dimension.category,
-                      "custom_definition": dimension.custom_definition,
-                      "description": dimension.description,
-                      "ui_name": dimension.ui_name
-                      }
-    return dimension_dict
