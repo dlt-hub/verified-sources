@@ -19,7 +19,12 @@ from .incremental_loading_helpers import get_last_timestamp, get_last_metadatum_
 
 @dlt.source(name='shopify')
 def shopify_source(
-    access_token: str = dlt.secrets.value, store_name: str = dlt.secrets.value, api_version: str = dlt.config.value, rate_limit: int = dlt.config.value, initial_days_back: int = dlt.config.value
+    access_token: str = dlt.secrets.value,
+    store_name: str = dlt.secrets.value,
+    api_version: str = dlt.config.value,
+    limit_window: int = dlt.config.value,
+    rate_limit: int = dlt.config.value,
+    initial_days_back: int = dlt.config.value
 ) -> Sequence[DltResource]:
     """
 
@@ -44,12 +49,12 @@ def shopify_source(
     """
 
     # add incremental loading resource
-    resources = [dlt.resource(_get_endpoint('orders', access_token, store_name, api_version, rate_limit, initial_days_back), name='orders', write_disposition='append')]
+    resources = [dlt.resource(_get_endpoint('orders', access_token, store_name, api_version, limit_window, rate_limit, initial_days_back), name='orders', write_disposition='append')]
 
     # add full loading resources
     single_endpoints = ['customers', 'events', 'marketing_events', 'draft_orders', 'locations', 'checkouts', 'price_rules', 'products', 'tender_transactions']
     resources += [
-        dlt.resource(_get_endpoint(endpoint, access_token, store_name, api_version, rate_limit, initial_days_back, incrementally=False), name=endpoint, write_disposition='replace')
+        dlt.resource(_get_endpoint(endpoint, access_token, store_name, api_version, limit_window, rate_limit, initial_days_back, incrementally=False), name=endpoint, write_disposition='replace')
         for endpoint in single_endpoints
     ]
 
@@ -58,7 +63,7 @@ def shopify_source(
     compound_endpoints = {'balance_transactions': 'shopify_payments/balance/transactions', 'disputes': 'shopify_payments/disputes', 'payouts': 'shopify_payments/payouts'}
     resources += [
         dlt.resource(
-            _get_endpoint(endpoint_alias, access_token, store_name, api_version, rate_limit, initial_days_back, extra_params={endpoint_alias: endpoint}, incrementally=False),
+            _get_endpoint(endpoint_alias, access_token, store_name, api_version, limit_window, rate_limit, initial_days_back, extra_params={endpoint_alias: endpoint}, incrementally=False),
             name=endpoint_alias,
             write_disposition='replace'
         )
@@ -69,7 +74,7 @@ def shopify_source(
     return resources
 
 
-def _paginated_get(base_url: str, endpoint: str, headers: Dict[str, Any], params: Dict[str, Any], rate_limit: int) -> Optional[Iterator[TDataItems]]:
+def _paginated_get(base_url: str, endpoint: str, headers: Dict[str, Any], params: Dict[str, Any], limit_window: int, rate_limit: int) -> Optional[Iterator[TDataItems]]:
     """
     Requests and yields data 250 records at a time
     Documentation: https://shopify.dev/docs/api/usage/pagination-rest
@@ -117,9 +122,9 @@ def _paginated_get(base_url: str, endpoint: str, headers: Dict[str, Any], params
                 params.pop(filtering_param, '')
         end_time = default_timer()
         elapsed_time = end_time - start_time
-        if elapsed_time < 1 / rate_limit:
+        if elapsed_time < limit_window / rate_limit:
             # https://shopify.dev/docs/api/usage/rate-limits
-            sleep(1 / rate_limit - elapsed_time)
+            sleep(limit_window / rate_limit - elapsed_time)
 
     if all([last_timestamp, last_ids]):
         # store last metadata in dlt's state
@@ -127,7 +132,7 @@ def _paginated_get(base_url: str, endpoint: str, headers: Dict[str, Any], params
 
 
 def _get_endpoint(
-    entity: str, access_token: str, store_name: str, api_version: str, rate_limit: int, initial_days_back: int, extra_params: Dict[str, Any] = None, incrementally: bool = True
+    entity: str, access_token: str, store_name: str, api_version: str, limit_window: int, rate_limit: int, initial_days_back: int, extra_params: Dict[str, Any] = None, incrementally: bool = True
 ) -> Optional[Iterator[TDataItems]]:
     """
     Generic method to retrieve endpoint data based on the required headers and params.
@@ -137,6 +142,7 @@ def _get_endpoint(
         access_token:
         store_name:
         api_version:
+        limit_window:
         rate_limit:
         initial_days_back:
         extra_params: any needed request params except pagination.
@@ -155,5 +161,5 @@ def _get_endpoint(
         last_timestamp = get_last_timestamp(entity, initial_days_back)
         params[filtering_param] = last_timestamp
     base_url = f'https://{store_name}.myshopify.com/admin/api/{api_version}'
-    pages = _paginated_get(base_url, endpoint=entity, headers=headers, params=params, rate_limit=rate_limit)
+    pages = _paginated_get(base_url, endpoint=entity, headers=headers, params=params, limit_window=limit_window, rate_limit=rate_limit)
     yield from pages

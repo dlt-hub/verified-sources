@@ -20,6 +20,7 @@ config_int=123
 
 [sources.shopify]
 api_version="2023-01"
+limit_window=1  # seconds
 rate_limit=2
 initial_days_back=30
 
