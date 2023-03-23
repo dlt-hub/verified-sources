@@ -32,6 +32,6 @@ def load_selected_data():
 
 if __name__ == "__main__":
     # run our main example
-    load_shopify()
+    # load_shopify()
     # load selected tables and display resource info
-    # load_selected_data()
+    load_selected_data()
