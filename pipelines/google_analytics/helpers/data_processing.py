@@ -15,6 +15,7 @@ try:
         Metadata,
         Metric,
         MetricMetadata,
+        MetricType,
         RunReportRequest,
         GetMetadataRequest,
         RunReportResponse
@@ -67,6 +68,34 @@ def process_report(response: RunReportResponse, dimensions: List[str], metrics: 
     :param metrics:
     :return:
     """
+
+    metrics_headers = [header.name for header in response.metric_headers]
+    dimensions_headers = [header.name for header in response.dimension_headers]
     for row in response.rows:
-        #response_dict = {dimensions[i]: row.dimension_values[i].value for i in range(len(dimensions))}
-        yield {"dimension_values": row.dimension_values[0].value, "metric_values": row.metric_values[0].value}
+        response_dict = {}
+        for i in range(len(dimensions_headers)):
+            response_dict[dimensions_headers[i]] = row.dimension_values[i].value
+        for i in range(len(metrics_headers)):
+            # get metric type and process the value depending on type. Save metric name including type as well for the columns
+            metric_type = response.metric_headers[i].type_
+            metric_value = process_metric_value(metric_type=metric_type, value=row.metric_values[i].value)
+            response_dict[f"{metrics_headers[i]}_{metric_type.name.split('_')[1]}"] = metric_value
+        yield response_dict
+
+
+def process_metric_value(metric_type, value):
+    """
+    Process metric type, convert it from string to the correct type and return it.
+    :param metric_type: The type of the metric
+    :param value: The value of the metric as a string
+    :returns: The given value converted to the correct Data Type
+    """
+
+    # So far according to GA4 documentation these are the correct types: https://developers.google.com/analytics/devguides/reporting/data/v1/rest/v1beta/MetricType
+    # 0 for strings, 1 for ints and 2-12 are different types of floating points.
+    if metric_type.value == 0:
+        return value
+    elif metric_type.value == 1:
+        return int(value)
+    else:
+        return float(value)

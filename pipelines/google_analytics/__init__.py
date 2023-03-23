@@ -2,7 +2,7 @@
 Defines all the sources and resources needed for Google Analytics V4
 """
 
-from typing import Iterator, List
+from typing import Iterator, List, Optional
 import dlt
 from dlt.common import logger
 from dlt.common.configuration.specs import GcpClientCredentialsWithDefault
@@ -17,6 +17,8 @@ try:
         DateRange,
         Dimension,
         DimensionMetadata,
+        Filter,
+        FilterExpression,
         Metadata,
         Metric,
         MetricMetadata,
@@ -32,41 +34,76 @@ except ImportError:
 
 
 @dlt.source(max_table_nesting=2)
-def google_analytics(credentials: GcpClientCredentialsWithDefault = dlt.secrets.value, property_id: int = dlt.config.value) -> List[DltResource]:
+def google_analytics(credentials: GcpClientCredentialsWithDefault = dlt.secrets.value,
+                     dimensions: List[str] = dlt.config.value,
+                     metrics: List[str] = dlt.config.value,
+                     property_id: int = dlt.config.value,
+                     rows_per_page: int = dlt.config.value) -> List[DltResource]:
     """
     The DLT source for Google Analytics. Will load basic Analytics info to the pipeline.
-    :param credentials:
-    :param property_id:
+    :param credentials: Credentials to the Google Analytics Account
+    :param dimensions: Dimensions for the report, see metadata for full list of dimensions.
+    :param metrics: Metrics for the report, see metadata for full list of metrics.
+    :param property_id: A reference to the Google Analytics project. https://developers.google.com/analytics/devguides/reporting/data/v1/property-id
+    :param rows_per_page: Controls how many rows are retrieved per page in the reports. Default is 10000, maximum possible is 100000.
     :return resource_list: list containing all the resources in the Google Analytics Pipeline.
     """
 
     # Build the service object for Google Analytics api.
-    # service = build("analyticsreporting", "v4", credentials=credentials.to_service_account_credentials())
     client = BetaAnalyticsDataClient(credentials=credentials.to_service_account_credentials())
-
-    return [get_metadata(client=client, property_id=property_id) | metrics_table,
-            get_metadata(client=client, property_id=property_id) | dimensions_table,
-            sample_analytics_resource(client=client)
+    metadata = get_metadata(client=client, property_id=property_id)
+    return [metadata | metrics_table,
+            metadata | dimensions_table,
+            sample_analytics_resource(client=client, dimensions=dimensions, metrics=metrics, property_id=property_id, rows_per_page=rows_per_page)
             ]
 
 
 @dlt.resource(name="sample_data_report", write_disposition="replace")
-def sample_analytics_resource(client: Resource) -> Iterator[TDataItem]:
+def sample_analytics_resource(client: Resource, rows_per_page: int, dimensions: List[str], metrics: List[str], property_id: int) -> Iterator[TDataItem]:
+    """
+    Retrieves the data for a report given dimensions, metrics and filters required for the report.
+    :param client: The google analytics client used to make requests.
+    :param dimensions: Dimensions for the report, see metadata for full list of dimensions.
+    :param metrics: Metrics for the report, see metadata for full list of metrics.
+    :param property_id: A reference to the Google Analytics project. https://developers.google.com/analytics/devguides/reporting/data/v1/property-id
+    :param rows_per_page: Controls how many rows are retrieved per page in the reports. Default is 10000, maximum possible is 100000.
+    :return:
+    """
+
     # TODO: incremental load
-    # TODO: helper for report loading
     # TODO: get more data: multiple metrics, multiple dimensions?
-    # TODO: pagination handling
-    # Using a default constructor instructs the client to use the credentials
-    # specified in GOOGLE_APPLICATION_CREDENTIALS environment variable.
-    request = RunReportRequest(
-        property="properties/293833391",
-        dimensions=[Dimension(name="browser")],
-        metrics=[Metric(name="activeUsers")],
-        date_ranges=[DateRange(start_date="2020-03-31", end_date="today")],
-    )
-    response = client.run_report(request)
-    processed_response_generator = process_report(response=response)
-    yield from processed_response_generator
+
+    dimension_list = []
+    metric_list = []
+    # fill dimensions and metrics
+    for dimension in dimensions:
+        dimension_list.append(Dimension(name=dimension))
+    for metric in metrics:
+        metric_list.append(Metric(name=metric))
+
+    # loop through all the pages,
+    # the total number of rows is received after the first request, for the first request to be sent through, initializing the row_count to 1 would suffice
+    offset = 0
+    row_count = 1
+    limit = rows_per_page
+    while offset < row_count:
+        # make request to get the particular page
+        request = RunReportRequest(
+            property=f"properties/{property_id}",
+            dimensions=dimension_list,
+            metrics=metric_list,
+            offset=offset,
+            limit=limit,
+            date_ranges=[DateRange(start_date="2020-03-31", end_date="today")],
+        )
+        response = client.run_report(request)
+
+        processed_response_generator = process_report(response=response, metrics=metrics, dimensions=dimensions)
+        yield from processed_response_generator
+
+        # update
+        row_count = response.row_count
+        offset += limit
 
 
 @dlt.resource(selected=False)
@@ -108,4 +145,3 @@ def dimensions_table(metadata: Metadata) -> Iterator[TDataItem]:
     for dimension in metadata.dimensions:
         processed_dimension = process_dimension(dimension=dimension)
         yield processed_dimension
-
