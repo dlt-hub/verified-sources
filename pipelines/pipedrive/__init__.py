@@ -113,7 +113,7 @@ def pipedrive_source(
     return endpoints_resources
 
 
-FIELD_SUFFIX = 'Field'
+FIELDS_SUFFIX = 'Fields'
 RECENTS_ENDPOINT = 'recents'
 
 
@@ -147,7 +147,7 @@ def _paginated_get(base_url: str, endpoint: str, headers: Dict[str, Any], params
                 last_ids_from_state = set(last_ids_from_state)
                 data = list(filter(lambda datum: datum['id'] not in last_ids_from_state, data))
 
-            if all([data, is_single_endpoint(endpoint), FIELD_SUFFIX not in endpoint]):
+            if all([data, is_single_endpoint(endpoint), FIELDS_SUFFIX not in endpoint]):
                 timestamp_field = 'created' if any([endpoint == 'users', get_entity_items_param(params) == 'user']) else 'update_time'
                 if data[-1][timestamp_field] != last_timestamp:
                     last_timestamp = data[-1][timestamp_field]
@@ -210,7 +210,7 @@ def _get_endpoint(
         entity_items_param = get_entity_items_param(params)
         if recents_entity_items_mapping.get(entity_items_param):
             params['since_timestamp'] = get_last_timestamp(recents_entity_items_mapping[entity_items_param], initial_days_back)
-    elif all([is_single_endpoint(entity), FIELD_SUFFIX not in entity]):
+    elif all([is_single_endpoint(entity), FIELDS_SUFFIX not in entity]):
         timestamp_field = 'created' if entity == 'users' else 'update_time'
         params['sort'] = f'{timestamp_field} ASC'
 
