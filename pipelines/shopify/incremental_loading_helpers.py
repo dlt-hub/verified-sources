@@ -7,7 +7,7 @@ import dlt
 
 def get_last_timestamp(endpoint: str, initial_days_back: int) -> Any:
     """
-    Specific function to generate 'since_timestamp' string based on last timestamp stored in dlt's state (if available)
+    Specific function to get last timestamp stored in dlt's state (if available)
     """
     last_timestamp = get_last_metadatum_from_state(endpoint, 'timestamp')
     if not last_timestamp:
