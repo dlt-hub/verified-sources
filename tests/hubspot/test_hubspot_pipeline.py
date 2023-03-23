@@ -31,7 +31,7 @@ def test_fetch_data_companies(mock_response):
     expected_data = [_p['properties'] for _p in mock_data['results']]
     mock_resp = mock_response(json_data=mock_data)
 
-    with patch('requests.get', return_value=mock_resp):
+    with patch('dlt.sources.helpers.requests.get', return_value=mock_resp):
         data = list(fetch_data(CRM_COMPANIES_ENDPOINT, '12345'))
         assert len(data) == len(expected_data)
         assert data == expected_data
@@ -42,7 +42,7 @@ def test_fetch_data_contacts(mock_response):
     expected_data = [_p['properties'] for _p in mock_data['results']]
     mock_resp = mock_response(json_data=mock_data)
 
-    with patch('requests.get', return_value=mock_resp):
+    with patch('dlt.sources.helpers.requests.get', return_value=mock_resp):
         data = list(fetch_data(CRM_CONTACTS_ENDPOINT, '12345'))
         assert len(data) == len(expected_data)
         assert data == expected_data
@@ -53,7 +53,7 @@ def test_fetch_data_deals(mock_response):
     expected_data = [_p['properties'] for _p in mock_data['results']]
     mock_resp = mock_response(json_data=mock_data)
 
-    with patch('requests.get', return_value=mock_resp):
+    with patch('dlt.sources.helpers.requests.get', return_value=mock_resp):
         data = list(fetch_data(CRM_DEALS_ENDPOINT, '12345'))
         assert len(data) == len(expected_data)
         assert data == expected_data
@@ -64,7 +64,7 @@ def test_fetch_data_products(mock_response):
     expected_data = [_p['properties'] for _p in mock_data['results']]
     mock_resp = mock_response(json_data=mock_data)
 
-    with patch('requests.get', return_value=mock_resp):
+    with patch('dlt.sources.helpers.requests.get', return_value=mock_resp):
         data = list(fetch_data(CRM_PRODUCTS_ENDPOINT, '12345'))
         assert len(data) == len(expected_data)
         assert data == expected_data
@@ -75,7 +75,7 @@ def test_fetch_data_tickets(mock_response):
     expected_data = [_p['properties'] for _p in mock_data['results']]
     mock_resp = mock_response(json_data=mock_data)
 
-    with patch('requests.get', return_value=mock_resp):
+    with patch('dlt.sources.helpers.requests.get', return_value=mock_resp):
         data = list(fetch_data(CRM_TICKETS_ENDPOINT, '12345'))
         assert len(data) == len(expected_data)
         assert data == expected_data
@@ -86,7 +86,7 @@ def test_fetch_data_quotes(mock_response):
     expected_data = [_p['properties'] for _p in mock_data['results']]
     mock_resp = mock_response(json_data=mock_data)
 
-    with patch('requests.get', return_value=mock_resp):
+    with patch('dlt.sources.helpers.requests.get', return_value=mock_resp):
         data = list(fetch_data(CRM_QUOTES_ENDPOINT, '12345'))
         assert len(data) == len(expected_data)
         assert data == expected_data
