@@ -135,3 +135,4 @@ secrets.toml
 # temp
 tmp
 **/tmp
+activecampaign_env
