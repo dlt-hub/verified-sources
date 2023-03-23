@@ -13,5 +13,6 @@ def load(endpoints=None):
 
 
 if __name__ == "__main__" :
+    # add your desired endpoints to the list
     endpoints = ['athletes']
     load(endpoints)
