@@ -93,7 +93,7 @@ def exchangerates_resource(
     rates = []
     now = arrow.get()
     date = arrow.get(last_updated_at)
-    while date.date() <= now.date():
+    while date.date() < now.date():
         url = _build_url(
             "api.apilayer.com",
             f"exchangerates_data/",

@@ -3,10 +3,9 @@ from exchange_rates import exchangerates_source
 
 CURRENCY_LIST = ["AUD", "BRL", "CAD", "CHF", "CNY", "DKK", "EUR", "GBP"]
 BASE_CURRENCY = "EUR"
-DATASET_NAME = "exchangerates_data"
 
 pipeline = dlt.pipeline(
-        pipeline_name="exchangerates", destination="postgres", dataset_name=DATASET_NAME
+        pipeline_name="exchangerates", destination="postgres", dataset_name="exchangerates_data"
     )
 
 def get_last_updated_at(default="2023-03-17T00:00:00Z"):
@@ -14,14 +13,16 @@ def get_last_updated_at(default="2023-03-17T00:00:00Z"):
         f"select max(date)::date from exchangerates_data.exchangerates_resource"
     )
     # Query the database to get the most recent date that the conversion rates were loaded
+
     with pipeline.sql_client() as client:
-        # TODO: fails with  <class 'TypeError'> if table doesn`t exist. Cannot parse argument of type None.
         res = client.execute_sql(last_updated_query)
-        if res is None:
-            last_updated_at = default
+        # todo: error handling - we would need to make sure this only happens for a "table not found" error.
+        if not res[0][0]:
+            last_val = dlt.current.state().setdefault("date", default)
         else:
-            last_updated_at = res[0][0]
-    return last_updated_at
+            last_val = dlt.current.state().setdefault("date", res[0][0])
+
+    return last_val
 
 def load_euro_conversion_rates_incrementally(currency_list, base_currency):
     """
