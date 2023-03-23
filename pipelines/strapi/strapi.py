@@ -3,7 +3,7 @@ import requests
 import math
 
 @dlt.source
-def strapi_source(api_secret_key=dlt.secrets.value, endpoints=None):
+def strapi_source(api_secret_key=dlt.secrets.value, domain=dlt.secrets.value, endpoints=None):
     """ strapi behaves like a mongo db, with topics and documents
     endpoints represents a list of collections
     """
@@ -11,7 +11,7 @@ def strapi_source(api_secret_key=dlt.secrets.value, endpoints=None):
     if not endpoints:
         endpoints = ['athletes']
 
-    endpoint_resources = [dlt.resource(_get_endpoint(api_secret_key, endpoint),
+    endpoint_resources = [dlt.resource(_get_endpoint(api_secret_key, domain, endpoint),
                                        name=endpoint,
                                        write_disposition="replace")
                           for endpoint in endpoints]
@@ -19,37 +19,40 @@ def strapi_source(api_secret_key=dlt.secrets.value, endpoints=None):
     return endpoint_resources
 
 
-def _get_endpoint(token, endpoint=''):
+def _get_endpoint(token, domain, endpoint=''):
+    """
+    A generator that yields data from a paginated API endpoint.
 
-    domain = "fantium-strapi.up.railway.app"
+    :param token: The access token for the API.
+    :param domain: The domain name of the API.
+    :param endpoint: The API endpoint to query.
+    """
     api_endpoint = f'https://{domain}/api/{endpoint}'
     headers = {
         'Content-Type': 'application/json',
         'Authorization': f'Bearer {token}'
     }
     page_size = 25
-    params = {'pagination[start]': 0,
-              "pagination[limit]": page_size,
-              "pagination[withCount]": 1}
+    params = {
+        'pagination[start]': 0,
+        'pagination[limit]': page_size,
+        'pagination[withCount]': 1
+    }
+
+    # get the total number of pages
+    response = requests.get(api_endpoint, headers=headers, params=params)
+    response.raise_for_status()
+    total_results = response.json()['meta']['pagination']['total']
+    pages_total = math.ceil(total_results / page_size)
 
     # yield page by page
-    pages_dowloaded = 0
-    pages_total = 1
-    while pages_dowloaded <= pages_total:
-
+    for page_number in range(pages_total):
+        params['pagination[start]'] = page_number * page_size
         response = requests.get(api_endpoint, headers=headers, params=params)
         response.raise_for_status()
-        print(response.json())
         data = response.json().get('data')
         if data:
             yield data
-
-        # keep track of pages left
-        pages_dowloaded +=1
-        params['pagination[start]'] = pages_dowloaded
-
-        total_results = response.json().get('meta').get('pagination').get('total')
-        pages_total = math.floor(total_results/page_size)
 
 
 if __name__=='__main__':
