@@ -1,15 +1,18 @@
 import dlt
 import requests
 import math
+from typing import List, Sequence
+from dlt.extract.source import DltResource, DltSource
 
 @dlt.source
-def strapi_source(api_secret_key=dlt.secrets.value, domain=dlt.secrets.value, endpoints=None):
+def strapi_source(endpoints: List[str],
+                  api_secret_key: str = dlt.secrets.value,
+                  domain: str = dlt.secrets.value,
+                  ) -> Sequence[DltResource]:
     """ strapi behaves like a mongo db, with topics and documents
     endpoints represents a list of collections
     """
 
-    if not endpoints:
-        endpoints = ['athletes']
 
     endpoint_resources = [dlt.resource(_get_endpoint(api_secret_key, domain, endpoint),
                                        name=endpoint,
@@ -19,13 +22,18 @@ def strapi_source(api_secret_key=dlt.secrets.value, domain=dlt.secrets.value, en
     return endpoint_resources
 
 
-def _get_endpoint(token, domain, endpoint=''):
+def _get_endpoint(token: str, domain: str, endpoint: str) -> DltResource:
     """
     A generator that yields data from a paginated API endpoint.
 
     :param token: The access token for the API.
+    :type token: str
     :param domain: The domain name of the API.
-    :param endpoint: The API endpoint to query.
+    :type domain: str
+    :param endpoint: The API endpoint to query, defaults to ''.
+    :type endpoint: str
+    :yield: A list of data from the API endpoint.
+    :rtype: list
     """
     api_endpoint = f'https://{domain}/api/{endpoint}'
     headers = {
