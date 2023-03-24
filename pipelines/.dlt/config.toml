@@ -19,10 +19,10 @@ workers = 2  # limit the parallel execution
 config_int=123
 
 [sources.pipedrive]
-step=1  # 'recents' endpoint 'since_timestamp' param's step (in seconds) default value
-max_retries=1  # destiny query's max retries default value
-backoff_delay=0.1  # destiny query's back off (in seconds) default value
-days_back=30  # 'recents' endpoint 'since_timestamp' param's days back default value
+api_version="v1"
+limit_window=2  # seconds
+rate_limit=10
+initial_days_back=30
 
 ## sql_database
 

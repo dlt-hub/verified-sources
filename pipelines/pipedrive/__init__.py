@@ -14,17 +14,26 @@ import functools
 
 from .custom_fields_munger import entities_mapping, entity_fields_mapping, munge_push_func, pull_munge_func, parsed_mapping
 from .incremental_loading_helpers import (
-    entities_mapping as recents_entities_mapping, entity_items_mapping as recents_entity_items_mapping, get_entity_items_param, get_since_timestamp, set_last_timestamp, max_datetime,
-    parse_datetime_obj, parse_datetime_str, UTC_OFFSET
+    entities_mapping as recents_entities_mapping,
+    entity_items_mapping as recents_entity_items_mapping,
+    get_entity_items_param,
+    get_last_timestamp,
+    get_last_metadatum_from_state,
+    is_single_endpoint,
+    set_last_metadata
 )
 from dlt.common.typing import TDataItems
 from dlt.extract.source import DltResource
 from dlt.sources.helpers import requests
+from time import sleep
+from timeit import default_timer
 from typing import Any, Dict, Iterator, Optional, Sequence
 
 
 @dlt.source(name='pipedrive')
-def pipedrive_source(pipedrive_api_key: str = dlt.secrets.value) -> Sequence[DltResource]:
+def pipedrive_source(
+    pipedrive_api_key: str = dlt.secrets.value, api_version: str = dlt.config.value, limit_window: int = dlt.config.value, rate_limit: int = dlt.config.value, initial_days_back: int = dlt.config.value
+) -> Sequence[DltResource]:
     """
 
     Args:
@@ -54,25 +63,39 @@ def pipedrive_source(pipedrive_api_key: str = dlt.secrets.value) -> Sequence[Dlt
 
     # we need to add entity fields' resources before entities' resources in order to let custom fields data munging work properly
     entity_fields_endpoints = ['activityFields', 'dealFields', 'organizationFields', 'personFields', 'productFields']
-    endpoints_resources = [dlt.resource(_get_endpoint(endpoint, pipedrive_api_key), name=endpoint, write_disposition='replace') for endpoint in entity_fields_endpoints]
+    endpoints_resources = [
+        dlt.resource(_get_endpoint(endpoint, pipedrive_api_key, api_version, limit_window, rate_limit, initial_days_back), name=endpoint, write_disposition='replace')
+        for endpoint in entity_fields_endpoints
+    ]
 
     entities_endpoints = ['pipelines', 'persons', 'stages', 'users']
-    endpoints_resources += [dlt.resource(_get_endpoint(endpoint, pipedrive_api_key), name=endpoint, write_disposition='replace') for endpoint in entities_endpoints]
+    endpoints_resources += [
+        dlt.resource(_get_endpoint(endpoint, pipedrive_api_key, api_version, limit_window, rate_limit, initial_days_back), name=endpoint, write_disposition='replace')
+        for endpoint in entities_endpoints
+    ]
 
     # add incremental loading resources
     entity_item_params = ['organization', 'product']
     endpoints_resources += [
-        dlt.resource(_get_endpoint(RECENTS_ENDPOINT, pipedrive_api_key, extra_params={'items': entity_item_param}), name=recents_entity_items_mapping[entity_item_param], write_disposition='append')
+        dlt.resource(
+            _get_endpoint(RECENTS_ENDPOINT, pipedrive_api_key, api_version, limit_window, rate_limit, initial_days_back, extra_params={'items': entity_item_param}),
+            name=recents_entity_items_mapping[entity_item_param],
+            write_disposition='append'
+        )
         for entity_item_param in entity_item_params
     ]
 
     # add activities
-    activities_resource = dlt.resource(_get_endpoint('activities', pipedrive_api_key, extra_params={'user_id': 0}), name='activities', write_disposition='replace')
+    activities_resource = dlt.resource(
+        _get_endpoint('activities', pipedrive_api_key, api_version, limit_window, rate_limit, initial_days_back, extra_params={'user_id': 0}),
+        name='activities',
+        write_disposition='replace'
+    )
     endpoints_resources.append(activities_resource)
     # add resources that need 2 requests
 
     # we make the resource explicitly and put it in a variable
-    deals = dlt.resource(_get_endpoint('deals', pipedrive_api_key), name='deals', write_disposition='replace')
+    deals = dlt.resource(_get_endpoint('deals', pipedrive_api_key, api_version, limit_window, rate_limit, initial_days_back), name='deals', write_disposition='replace')
 
     endpoints_resources.append(deals)
 
@@ -90,34 +113,48 @@ def pipedrive_source(pipedrive_api_key: str = dlt.secrets.value) -> Sequence[Dlt
     return endpoints_resources
 
 
+FIELD_SUFFIX = 'Field'
 RECENTS_ENDPOINT = 'recents'
 
 
-def _paginated_get(base_url: str, endpoint: str, headers: Dict[str, Any], params: Dict[str, Any]) -> Optional[Iterator[TDataItems]]:
+def _paginated_get(base_url: str, endpoint: str, headers: Dict[str, Any], params: Dict[str, Any], limit_window: int, rate_limit: int) -> Optional[Iterator[TDataItems]]:
     """
     Requests and yields data 500 records at a time
     Documentation: https://pipedrive.readme.io/docs/core-api-concepts-pagination
     """
     url = f'{base_url}/{endpoint}'
-    last_timestamp = None
     # pagination start and page limit
     is_next_page = True
     params['start'] = 0
     params['limit'] = 500
+    last_timestamp = ''
+    last_ids = []
     while is_next_page:
+        start_time = default_timer()
         response = requests.get(url, headers=headers, params=params)
         response.raise_for_status()
         page = response.json()
         # yield data only
         data = page['data']
-        last_timestamp_str = ''
         if data:
+
             if endpoint == RECENTS_ENDPOINT:
-                data = [data_item['data'] for data_item in data]  # filters and flattens 'recents' endpoint's data
-                last_timestamp_str = page.get('additional_data', {}).get('last_timestamp_on_page', '')
-            elif endpoint not in entity_fields_mapping:
-                last_timestamp_str = data[-1].get('add_time', '')
-            last_timestamp = max_datetime(last_timestamp, parse_datetime_str(last_timestamp_str + UTC_OFFSET))
+                data = [datum['data'] for datum in data]  # filters and flattens 'recents' endpoint's data
+
+            # deduplicate data
+            last_ids_from_state = get_last_metadatum_from_state(endpoint, 'ids')
+            if last_ids_from_state:
+                last_ids_from_state = set(last_ids_from_state)
+                data = list(filter(lambda datum: datum['id'] not in last_ids_from_state, data))
+
+            if all([data, is_single_endpoint(endpoint), FIELD_SUFFIX not in endpoint]):
+                timestamp_field = 'created' if any([endpoint == 'users', get_entity_items_param(params) == 'user']) else 'update_time'
+                if data[-1][timestamp_field] != last_timestamp:
+                    last_timestamp = data[-1][timestamp_field]
+                    last_ids = [datum['id'] for datum in data if datum[timestamp_field] == last_timestamp]
+                else:
+                    last_ids += [datum['id'] for datum in data if datum[timestamp_field] == last_timestamp]
+
             yield data
         # check if next page exists
         pagination_info = page.get('additional_data', {}).get('pagination', {})
@@ -126,35 +163,43 @@ def _paginated_get(base_url: str, endpoint: str, headers: Dict[str, Any], params
         if is_next_page:
             params['start'] = pagination_info.get('next_start')
 
-        if last_timestamp:
-            # store last timestamp in dlt's state
+        end_time = default_timer()
+        elapsed_time = end_time - start_time
+        if elapsed_time < limit_window / rate_limit:
+            # https://pipedrive.readme.io/docs/core-api-concepts-rate-limiting
+            sleep(limit_window / rate_limit - elapsed_time)
+
+        if all([last_timestamp, last_ids]):
+            # store last metadata in dlt's state
             if endpoint == RECENTS_ENDPOINT:
                 entity_items_param = get_entity_items_param(params)
                 if recents_entity_items_mapping.get(entity_items_param):
                     endpoint = recents_entity_items_mapping[entity_items_param]  # turns entity items' param into entities' endpoint
-                    last_timestamp_str = parse_datetime_obj(last_timestamp)
-                    set_last_timestamp(endpoint, last_timestamp_str)
+                    set_last_metadata(endpoint, last_timestamp, last_ids)
             elif endpoint not in entity_fields_mapping:
-                last_timestamp_str = parse_datetime_obj(last_timestamp)
-                set_last_timestamp(endpoint, last_timestamp_str)
+                set_last_metadata(endpoint, last_timestamp, last_ids)
 
 
-BASE_URL = 'https://app.pipedrive.com/v1'
-
-
-def _get_endpoint(entity: str, pipedrive_api_key: str, extra_params: Dict[str, Any] = None, munge_custom_fields: bool = True) -> Optional[Iterator[TDataItems]]:
+def _get_endpoint(
+    entity: str, pipedrive_api_key: str, api_version: str, limit_window: int, rate_limit: int,  initial_days_back: int, extra_params: Dict[str, Any] = None, munge_custom_fields: bool = True
+) -> Optional[Iterator[TDataItems]]:
     """
     Generic method to retrieve endpoint data based on the required headers and params.
 
     Args:
         entity: the endpoint you want to call
         pipedrive_api_key:
+        api_version:
+        limit_window:
+        rate_limit:
+        initial_days_back:
         extra_params: any needed request params except pagination.
         munge_custom_fields: whether to perform custom fields' data munging or not
 
     Returns:
 
     """
+    base_url = f'https://app.pipedrive.com/{api_version}'
     headers = {'Content-Type': 'application/json'}
     params = {'api_token': pipedrive_api_key}
     if extra_params:
@@ -164,11 +209,12 @@ def _get_endpoint(entity: str, pipedrive_api_key: str, extra_params: Dict[str, A
     if entity == RECENTS_ENDPOINT:
         entity_items_param = get_entity_items_param(params)
         if recents_entity_items_mapping.get(entity_items_param):
-            params['since_timestamp'] = get_since_timestamp(recents_entity_items_mapping[entity_items_param])
-    elif entity not in entity_fields_mapping:
-        params['sort'] = 'add_time ASC'
+            params['since_timestamp'] = get_last_timestamp(recents_entity_items_mapping[entity_items_param], initial_days_back)
+    elif all([is_single_endpoint(entity), FIELD_SUFFIX not in entity]):
+        timestamp_field = 'created' if entity == 'users' else 'update_time'
+        params['sort'] = f'{timestamp_field} ASC'
 
-    pages = _paginated_get(base_url=BASE_URL, endpoint=entity, headers=headers, params=params)
+    pages = _paginated_get(base_url=base_url, endpoint=entity, headers=headers, params=params, limit_window=limit_window, rate_limit=rate_limit)
     if munge_custom_fields:
         if entity in entity_fields_mapping:  # checks if it's an entity fields' endpoint (e.g.: activityFields)
             munging_func = munge_push_func
@@ -182,26 +228,40 @@ def _get_endpoint(entity: str, pipedrive_api_key: str, extra_params: Dict[str, A
 
 
 @dlt.transformer(write_disposition='replace')
-def deals_participants(deals_page: Any, pipedrive_api_key: str = dlt.secrets.value) -> Optional[Iterator[TDataItems]]:
+def deals_participants(
+    deals_page: Any,
+    pipedrive_api_key: str = dlt.secrets.value,
+    api_version: str = dlt.config.value,
+    limit_window: int = dlt.config.value,
+    rate_limit: int = dlt.config.value,
+    initial_days_back: int = dlt.config.value
+) -> Optional[Iterator[TDataItems]]:
     """
     This transformer builds on deals resource data.
     The data is passed to it page by page (as the upstream resource returns it)
     """
     for row in deals_page:
         endpoint = f'deals/{row["id"]}/participants'
-        data = _get_endpoint(endpoint, pipedrive_api_key, munge_custom_fields=False)
+        data = _get_endpoint(endpoint, pipedrive_api_key, api_version, limit_window, rate_limit, initial_days_back, munge_custom_fields=False)
         if data:
             yield from data
 
 
 @dlt.transformer(write_disposition='replace')
-def deals_flow(deals_page: Any, pipedrive_api_key: str = dlt.secrets.value) -> Optional[Iterator[TDataItems]]:
+def deals_flow(
+    deals_page: Any,
+    pipedrive_api_key: str = dlt.secrets.value,
+    api_version: str = dlt.config.value,
+    limit_window: int = dlt.config.value,
+    rate_limit: int = dlt.config.value,
+    initial_days_back: int = dlt.config.value
+) -> Optional[Iterator[TDataItems]]:
     """
     This transformer builds on deals resource data.
     The data is passed to it page by page (as the upstream resource returns it)
     """
     for row in deals_page:
         endpoint = f'deals/{row["id"]}/flow'
-        data = _get_endpoint(endpoint, pipedrive_api_key, munge_custom_fields=False)
+        data = _get_endpoint(endpoint, pipedrive_api_key, api_version, limit_window, rate_limit, initial_days_back, munge_custom_fields=False)
         if data:
             yield from data
