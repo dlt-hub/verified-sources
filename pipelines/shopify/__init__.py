@@ -158,7 +158,8 @@ def _get_endpoint(
         params.update(extra_params)
     if incrementally:
         filtering_param = 'processed_at_min' if entity == 'tender_transactions' else 'created_at_min'
-        last_timestamp = get_last_timestamp(entity, initial_days_back)
+        timestamp_format = '%Y-%m-%dT%H:%M:%S%z'
+        last_timestamp = get_last_timestamp(entity, initial_days_back, timestamp_format)
         params[filtering_param] = last_timestamp
     base_url = f'https://{store_name}.myshopify.com/admin/api/{api_version}'
     pages = _paginated_get(base_url, endpoint=entity, headers=headers, params=params, limit_window=limit_window, rate_limit=rate_limit)
