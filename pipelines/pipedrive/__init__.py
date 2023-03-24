@@ -13,6 +13,7 @@ import dlt
 import functools
 
 from .custom_fields_munger import entities_mapping, entity_fields_mapping, munge_push_func, pull_munge_func, parsed_mapping
+from .incremental_loading_helpers import entities_mapping as recents_entities_mapping, entity_items_mapping as recents_entity_items_mapping, get_since_timestamp, set_last_timestamp
 from dlt.common.typing import TDataItems
 from dlt.extract.source import DltResource
 from dlt.sources.helpers import requests
@@ -78,28 +79,62 @@ def pipedrive_source(pipedrive_api_key: str = dlt.secrets.value) -> Sequence[Dlt
     return endpoints_resources
 
 
-def _paginated_get(url: str, headers: Dict[str, Any], params: Dict[str, Any]) -> Optional[Iterator[TDataItems]]:
+RECENTS_ENDPOINT = 'recents'
+
+
+def _paginated_get(base_url: str, endpoint: str, headers: Dict[str, Any], params: Dict[str, Any]) -> Optional[Iterator[TDataItems]]:
     """
     Requests and yields data 500 records at a time
     Documentation: https://pipedrive.readme.io/docs/core-api-concepts-pagination
     """
-    # pagination start and page limit
-    is_next_page = True
-    params['start'] = 0
-    params['limit'] = 500
-    while is_next_page:
-        response = requests.get(url, headers=headers, params=params)
-        page = response.json()
-        # yield data only
-        data = page['data']
-        if data:
-            yield data
-        # check if next page exists
-        pagination_info = page.get('additional_data', {}).get('pagination', {})
-        # is_next_page is set to True or False
-        is_next_page = pagination_info.get('more_items_in_collection', False)
-        if is_next_page:
-            params['start'] = pagination_info.get('next_start')
+    entity_items_param = ''
+    if endpoint == RECENTS_ENDPOINT:
+        entity_items_params = params['items'].split(',') if isinstance(params.get('items'), str) else []
+        entity_items_param = entity_items_params[0] if len(entity_items_params) == 1 else ''
+        since_timestamp = get_since_timestamp(recents_entity_items_mapping.get(entity_items_param, ''))
+        if not since_timestamp:
+            # turn incremental loading into full loading
+            endpoint = recents_entity_items_mapping.get(entity_items_param, '')
+            params.pop('items', '')
+
+    if endpoint:
+
+        url = f'{base_url}/{endpoint}'
+        last_timestamp = ''
+
+        # pagination start and page limit
+        is_next_page = True
+        params['start'] = 0
+        params['limit'] = 500
+        while is_next_page:
+            response = requests.get(url, headers=headers, params=params)
+            response.raise_for_status()
+            page = response.json()
+            # yield data only
+            data = page['data']
+            if data:
+                if page.get('additional_data', {}).get('since_timestamp', ''):  # checks 'recents' endpoint's data
+                    data = [data_item['data'] for data_item in data]  # filters and flattens 'recents' endpoint's data
+                last_timestamp = data[-1].get('add_time', '')  # regardless of full or incremental loading
+                yield data
+            # check if next page exists
+            pagination_info = page.get('additional_data', {}).get('pagination', {})
+            # is_next_page is set to True or False
+            is_next_page = pagination_info.get('more_items_in_collection', False)
+            if is_next_page:
+                params['start'] = pagination_info.get('next_start')
+
+            if last_timestamp:
+                # store last timestamp in dlt's state
+                if endpoint in recents_entities_mapping:
+                    set_last_timestamp(endpoint, last_timestamp)
+                elif endpoint == RECENTS_ENDPOINT:
+                    if entity_items_param in recents_entity_items_mapping:
+                        endpoint = recents_entity_items_mapping[entity_items_param]  # turns entity items' param into entities' endpoint
+                        set_last_timestamp(endpoint, last_timestamp)
+
+
+BASE_URL = 'https://app.pipedrive.com/v1'
 
 
 def _get_endpoint(entity: str, pipedrive_api_key: str, extra_params: Dict[str, Any] = None, munge_custom_fields: bool = True) -> Optional[Iterator[TDataItems]]:
@@ -119,8 +154,7 @@ def _get_endpoint(entity: str, pipedrive_api_key: str, extra_params: Dict[str, A
     params = {'api_token': pipedrive_api_key}
     if extra_params:
         params.update(extra_params)
-    url = f'https://app.pipedrive.com/v1/{entity}'
-    pages = _paginated_get(url, headers=headers, params=params)
+    pages = _paginated_get(base_url=BASE_URL, endpoint=entity, headers=headers, params=params)
     if munge_custom_fields:
         if entity in entity_fields_mapping:  # checks if it's an entity fields' endpoint (e.g.: activityFields)
             munging_func = munge_push_func
