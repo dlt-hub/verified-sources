@@ -20,8 +20,8 @@ config_int=123
 
 # Google Analytics config
 [sources.google_analytics.google_analytics]
-dimensions = ["browser", "city"]
-metrics = ["totalUsers", "transactions"]
+queries = [{resource_name = "sample_analytics_data1", dimensions = ["browser", "city"], metrics = ["totalUsers", "transactions"]},
+            {resource_name = "sample_analytics_data2", dimensions = ["browser"], metrics = ["totalUsers", "transactions"]}]
 property_id = 293833391
 rows_per_page = 1
 

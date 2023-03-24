@@ -7,7 +7,7 @@ import dlt
 from dlt.common import logger
 from dlt.common.configuration.specs import GcpClientCredentialsWithDefault
 from dlt.common.exceptions import MissingDependencyException
-from dlt.common.typing import TDataItem
+from dlt.common.typing import TDataItem, DictStrAny
 from dlt.extract.source import DltResource
 from .helpers.data_processing import process_dimension, process_metric, process_report
 
@@ -16,6 +16,7 @@ try:
     from google.analytics.data_v1beta.types import (
         DateRange,
         Dimension,
+        DimensionExpression,
         DimensionMetadata,
         Filter,
         FilterExpression,
@@ -35,34 +36,36 @@ except ImportError:
 
 @dlt.source(max_table_nesting=2)
 def google_analytics(credentials: GcpClientCredentialsWithDefault = dlt.secrets.value,
-                     dimensions: List[str] = dlt.config.value,
-                     metrics: List[str] = dlt.config.value,
                      property_id: int = dlt.config.value,
-                     rows_per_page: int = dlt.config.value) -> List[DltResource]:
+                     rows_per_page: int = dlt.config.value,
+                     queries: List[DictStrAny] = dlt.config.value) -> List[DltResource]:
     """
     The DLT source for Google Analytics. Will load basic Analytics info to the pipeline.
     :param credentials: Credentials to the Google Analytics Account
-    :param dimensions: Dimensions for the report, see metadata for full list of dimensions.
-    :param metrics: Metrics for the report, see metadata for full list of metrics.
     :param property_id: A reference to the Google Analytics project. https://developers.google.com/analytics/devguides/reporting/data/v1/property-id
     :param rows_per_page: Controls how many rows are retrieved per page in the reports. Default is 10000, maximum possible is 100000.
+    :param queries:
     :return resource_list: list containing all the resources in the Google Analytics Pipeline.
     """
 
     # Build the service object for Google Analytics api.
     client = BetaAnalyticsDataClient(credentials=credentials.to_service_account_credentials())
+    # get metadata needed for some resources
     metadata = get_metadata(client=client, property_id=property_id)
-    return [metadata | metrics_table,
-            metadata | dimensions_table,
-            sample_analytics_resource(client=client, dimensions=dimensions, metrics=metrics, property_id=property_id, rows_per_page=rows_per_page)
-            ]
+    resource_list = [metadata | metrics_table, metadata | dimensions_table]
+    for query in queries:
+        name = query["resource_name"]
+        dimensions = query["dimensions"]
+        metrics = query["metrics"]
+        resource_list.append(dlt.resource(basic_report(client=client, rows_per_page=rows_per_page, property_id=property_id, dimensions=dimensions, metrics=metrics),
+                                          name=name, write_disposition="replace"))
+    return resource_list
 
 
-@dlt.resource(name="sample_data_report", write_disposition="replace")
-def sample_analytics_resource(client: Resource, rows_per_page: int, dimensions: List[str], metrics: List[str], property_id: int) -> Iterator[TDataItem]:
+def basic_report(client: Resource, rows_per_page: int, dimensions: List[str], metrics: List[str], property_id: int) -> Iterator[TDataItem]:
     """
     Retrieves the data for a report given dimensions, metrics and filters required for the report.
-    :param client: The google analytics client used to make requests.
+    :param client: The Google Analytics client used to make requests.
     :param dimensions: Dimensions for the report, see metadata for full list of dimensions.
     :param metrics: Metrics for the report, see metadata for full list of metrics.
     :param property_id: A reference to the Google Analytics project. https://developers.google.com/analytics/devguides/reporting/data/v1/property-id
@@ -72,15 +75,13 @@ def sample_analytics_resource(client: Resource, rows_per_page: int, dimensions: 
 
     # TODO: incremental load
     # TODO: get more data: multiple metrics, multiple dimensions?
-
+    # fill dimensions and metrics with the proper api client objects
     dimension_list = []
     metric_list = []
-    # fill dimensions and metrics
     for dimension in dimensions:
         dimension_list.append(Dimension(name=dimension))
     for metric in metrics:
         metric_list.append(Metric(name=metric))
-
     # loop through all the pages,
     # the total number of rows is received after the first request, for the first request to be sent through, initializing the row_count to 1 would suffice
     offset = 0
@@ -130,6 +131,7 @@ def metrics_table(metadata: Metadata) -> Iterator[TDataItem]:
     :param metadata: Metadata class object which contains all the information stored in the GA4 metadata
     :return: Generator of dicts, 1 metric at a time
     """
+
     for metric in metadata.metrics:
         processed_metric = process_metric(metric=metric)
         yield processed_metric
