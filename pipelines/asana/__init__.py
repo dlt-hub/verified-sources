@@ -46,7 +46,6 @@ def workspaces(client: AsanaClient) -> t.Iterator[dict]:
     data_from=workspaces,
     table_name="projects",
     write_disposition="replace",
-    selected=False,
 )
 @dlt.defer
 def projects(workspace, client: AsanaClient) -> t.Iterator[dict]:
@@ -220,7 +219,6 @@ def tasks(project_array, client: AsanaClient) -> t.Iterator[dict]:
     data_from=tasks,
     table_name="stories",
     write_disposition="append",
-    selected=False,
 )
 @dlt.defer
 def stories(task, client: AsanaClient) -> t.Iterator[dict]:
