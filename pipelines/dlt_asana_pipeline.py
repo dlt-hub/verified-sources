@@ -11,7 +11,7 @@ Available resources:
     users
 """
 import dlt
-from asana import asana_source
+from dlt_asana import asana_source
 
 
 def load(*resources: str) -> None:

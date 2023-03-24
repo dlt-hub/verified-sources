@@ -1,3 +1,4 @@
+"""Fetches Asana workspaces, projects, tasks and other associated objects, using parallel requests wherever possible."""
 import typing as t
 from datetime import datetime
 
