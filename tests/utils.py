@@ -1,10 +1,11 @@
+import os
 import pytest
 from typing import Any, Iterator, List
 from os import environ
 from unittest.mock import patch
 
 import dlt
-
+from dlt.common.typing import DictStrAny
 from dlt.common.configuration.container import Container
 from dlt.common.configuration.specs.config_providers_context import ConfigProvidersContext
 from dlt.common.configuration.providers import EnvironProvider, ConfigTomlProvider, SecretsTomlProvider
@@ -71,9 +72,15 @@ def test_config_providers() -> Iterator[ConfigProvidersContext]:
 @pytest.fixture(autouse=True)
 def patch_pipeline_working_dir() -> None:
     """Puts the pipeline working directory into test storage"""
-    with patch("dlt.common.pipeline._get_home_dir") as _get_home_dir:
-        _get_home_dir.return_value = TEST_STORAGE_ROOT
-        yield
+    try:
+
+        with patch("dlt.common.configuration.paths._get_user_home_dir") as _get_home_dir:
+            _get_home_dir.return_value = os.path.abspath(TEST_STORAGE_ROOT)
+            yield
+    except ModuleNotFoundError:
+        with patch("dlt.common.pipeline._get_home_dir") as _get_home_dir:
+                _get_home_dir.return_value = os.path.abspath(TEST_STORAGE_ROOT)
+                yield
 
 
 @pytest.fixture(autouse=True)
@@ -105,10 +112,12 @@ def clean_test_storage(init_normalize: bool = False, init_loader: bool = False, 
 
 
 def assert_table_data(p: dlt.Pipeline, table_name: str, table_data: List[Any], schema_name: str = None, info: LoadInfo = None) -> None:
+    """Asserts that table contains single column (ordered ASC) of values matches `table_data`. If `info` is provided, second column must contain one of load_ids in `info`"""
     assert_query_data(p, f"SELECT * FROM {table_name} ORDER BY 1 NULLS FIRST", table_data, schema_name, info)
 
 
 def assert_query_data(p: dlt.Pipeline, sql: str, table_data: List[Any], schema_name: str = None, info: LoadInfo = None) -> None:
+    """Asserts that query selecting single column of values matches `table_data`. If `info` is provided, second column must contain one of load_ids in `info`"""
     with p.sql_client(schema_name=schema_name) as c:
         with c.execute_query(sql) as cur:
             rows = list(cur.fetchall())
@@ -123,11 +132,29 @@ def assert_query_data(p: dlt.Pipeline, sql: str, table_data: List[Any], schema_n
 
 
 def assert_load_info(info: LoadInfo, expected_load_packages: int = 1) -> None:
+    """Asserts that expected number of packages was loaded and there are no failed jobs"""
     assert len(info.loads_ids) == expected_load_packages
     # all packages loaded
     assert all(info.loads_ids.values()) is True
     # no failed jobs in any of the packages
     assert all(len(jobs) == 0 for jobs in info.failed_jobs.values()) is True
 
+
+def load_table_counts(p: dlt.Pipeline, *table_names: str) -> DictStrAny:
+    """Returns row counts for `table_names` as dict"""
+    query = "\nUNION ALL\n".join([f"SELECT '{name}' as name, COUNT(1) as c FROM {name}" for name in table_names])
+    with p.sql_client() as c:
+        with c.execute_query(query) as cur:
+            rows = list(cur.fetchall())
+            return {r[0]: r[1] for r in rows}
+
+
+def load_table_distinct_counts(p: dlt.Pipeline, distinct_column: str, *table_names: str) -> DictStrAny:
+    """Returns counts of distinct values for column `distinct_column` for `table_names` as dict"""
+    query = "\nUNION ALL\n".join([f"SELECT '{name}' as name, COUNT(DISTINCT {distinct_column}) as c FROM {name}" for name in table_names])
+    with p.sql_client() as c:
+        with c.execute_query(query) as cur:
+            rows = list(cur.fetchall())
+            return {r[0]: r[1] for r in rows}
 
 # def assert_tables_filled()
