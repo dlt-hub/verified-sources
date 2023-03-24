@@ -1,8 +1,8 @@
 import dlt
-import requests
 import math
 from typing import List, Sequence
 from dlt.extract.source import DltResource, DltSource
+from dlt.sources.helpers import requests
 
 @dlt.source
 def strapi_source(endpoints: List[str],
@@ -49,7 +49,6 @@ def _get_endpoint(token: str, domain: str, endpoint: str) -> DltResource:
 
     # get the total number of pages
     response = requests.get(api_endpoint, headers=headers, params=params)
-    response.raise_for_status()
     total_results = response.json()['meta']['pagination']['total']
     pages_total = math.ceil(total_results / page_size)
 
@@ -57,7 +56,6 @@ def _get_endpoint(token: str, domain: str, endpoint: str) -> DltResource:
     for page_number in range(pages_total):
         params['pagination[start]'] = page_number * page_size
         response = requests.get(api_endpoint, headers=headers, params=params)
-        response.raise_for_status()
         data = response.json().get('data')
         if data:
             yield data

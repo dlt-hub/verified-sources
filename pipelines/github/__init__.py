@@ -1,14 +1,13 @@
 """Loads github issues, pull requests and reactions for a specific repository via customizable graphql query. Loads events incrementally."""
 import urllib.parse
 from typing import Any, Iterator, List, Sequence, Tuple
-import requests
-from reretry import retry
 
 import dlt
 from pendulum.parsing import parse_iso8601
 from dlt.common.typing import StrAny, DictStrAny, TDataItems
 from dlt.common.utils import chunks
 from dlt.extract.source import DltResource, DltSource
+from dlt.sources.helpers import requests
 
 from .queries import ISSUES_QUERY, RATE_LIMIT, COMMENT_REACTIONS_QUERY
 
@@ -169,10 +168,8 @@ def _get_auth_header(access_token: str) -> StrAny:
 
 def _run_graphql_query(access_token: str, query: str, variables: DictStrAny) -> Tuple[StrAny, StrAny]:
 
-    @retry(tries=5, delay=1, backoff=1.1, logger=None)
     def _request() -> requests.Response:
         r = requests.post('https://api.github.com/graphql', json={'query': query, 'variables': variables}, headers=_get_auth_header(access_token))
-        r.raise_for_status()
         return r
 
     data = _request().json()
@@ -222,10 +219,8 @@ def _get_comment_reaction(comment_ids: List[str], access_token: str) -> StrAny:
 
 def _get_rest_pages(access_token: str, query: str) -> Iterator[List[StrAny]]:
 
-    @retry(tries=5, delay=1, backoff=1.1, logger=None)
     def _request(url: str) -> requests.Response:
         r = requests.get(url, headers=_get_auth_header(access_token))
-        r.raise_for_status()
         print(f"got page {url}, requests left: " + r.headers["x-ratelimit-remaining"])
         return r
 
