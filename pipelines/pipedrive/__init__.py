@@ -209,7 +209,8 @@ def _get_endpoint(
     if entity == RECENTS_ENDPOINT:
         entity_items_param = get_entity_items_param(params)
         if recents_entity_items_mapping.get(entity_items_param):
-            params['since_timestamp'] = get_last_timestamp(recents_entity_items_mapping[entity_items_param], initial_days_back)
+            timestamp_format = '%Y-%m-%d %H:%M:%S'
+            params['since_timestamp'] = get_last_timestamp(recents_entity_items_mapping[entity_items_param], initial_days_back, timestamp_format)
     elif all([is_single_endpoint(entity), FIELDS_SUFFIX not in entity]):
         timestamp_field = 'created' if entity == 'users' else 'update_time'
         params['sort'] = f'{timestamp_field} ASC'

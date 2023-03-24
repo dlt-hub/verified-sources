@@ -23,14 +23,14 @@ def get_entity_items_param(params: Dict[str, Any]) -> str:
     return entity_items_param
 
 
-def get_last_timestamp(endpoint: str, initial_days_back: int) -> Any:
+def get_last_timestamp(endpoint: str, initial_days_back: int, timestamp_format: str) -> Any:
     """
     Specific function to get last timestamp stored in dlt's state (if available)
     """
     last_timestamp = get_last_metadatum_from_state(endpoint, 'timestamp')
     if not last_timestamp:
         if all([isinstance(initial_days_back, int), initial_days_back > 0]):
-            last_timestamp = datetime.strftime(pendulum.now() - timedelta(days=initial_days_back), '%Y-%m-%d %H:%M:%S')  # default value
+            last_timestamp = datetime.strftime(pendulum.now() - timedelta(days=initial_days_back), timestamp_format)  # default value
     return last_timestamp
 
 
