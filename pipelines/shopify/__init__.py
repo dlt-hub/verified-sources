@@ -6,10 +6,10 @@ To get an admin access token: https://shopify.dev/docs/apps/auth/admin-app-acces
 """
 
 import dlt
-import requests
 
 from dlt.common.typing import TDataItems
 from dlt.extract.source import DltResource
+from dlt.sources.helpers import requests
 from time import sleep
 from timeit import default_timer
 from typing import Any, Dict, Iterator, Optional, Sequence
