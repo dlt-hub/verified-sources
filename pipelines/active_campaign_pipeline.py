@@ -1,5 +1,5 @@
 import dlt
-from active_campaign import active_campaign_source
+from active_campaign import active_campaign
 
 
 def load_active_campaign():
@@ -10,7 +10,7 @@ def load_active_campaign():
         destination="bigquery",
         dataset_name="active_campaign_data",
     )
-    load_info = pipeline.run(active_campaign_source())
+    load_info = pipeline.run(active_campaign())
     print(load_info)
 
 
@@ -22,7 +22,7 @@ def load_selected_data():
         dataset_name="active_campaign_data",
     )
     load_info = pipeline.run(
-        active_campaign_source().with_resources(
+        active_campaign().with_resources(
             "accounts",
             "accountContacts",
             "addresses",
@@ -40,23 +40,13 @@ def load_selected_data():
         )
     )
 
-    load_info = pipeline.run(active_campaign_source())
     print(load_info)
     # just to show how to access resources within source
-    active_campaign_data = active_campaign_source()
-    # print source info
-    print(active_campaign_data)
-    print()
-    # list resource names
-    print(active_campaign_data.resources.keys())
-    print()
-    # print `automations` resource info
-    print(active_campaign_data.resources["automations"])
-    print()
 
 
 if __name__ == "__main__":
     # run our main example
     load_active_campaign()
-    # load selected tables and display resource info
-    load_selected_data()
+    # or load selected tables and display resource info
+    # for that, uncomment the below
+    # load_selected_data()

@@ -9,11 +9,11 @@ To get an api key: https://developers.activecampaign.com/reference/authenticatio
 """
 
 import dlt
-import requests
+from dlt.sources.helpers import requests
 
 
-@dlt.source(name="active_campaign")
-def active_campaign_source(active_campaign_api_key=dlt.secrets.value):
+@dlt.source
+def active_campaign(api_key=dlt.secrets.value, account_name=dlt.secrets.value):
     """
 
     Returns resources:
@@ -53,7 +53,7 @@ def active_campaign_source(active_campaign_api_key=dlt.secrets.value):
 
     endpoint_resources = [
         dlt.resource(
-            _get_endpoint(endpoint, active_campaign_api_key),
+            _get_endpoint(endpoint, account_name, api_key),
             name=endpoint,
             write_disposition="replace",
         )
@@ -95,13 +95,13 @@ def _paginated_get(url, entity, headers):
             more_data = False
 
 
-def _get_endpoint(entity, active_campaign_api_key):
+def _get_endpoint(entity, account_name, api_key):
     """
     Generic method to retrieve endpoint data based on the required headers and params.
 
     Args:
         entity: the endpoint you want to call
-        active_campaign_api_key:
+        api_key:
         extra_params: any needed request params except pagination.
 
     Returns:
@@ -109,9 +109,9 @@ def _get_endpoint(entity, active_campaign_api_key):
     """
     headers = {
         "Content-Type": "application/json",
-        "Api-Token": str(active_campaign_api_key),
+        "Api-Token": str(api_key),
     }
-    url = f"https://youraccountname.api-us1.com/api/3/{entity}"
+    url = f"https://{account_name}.api-us1.com/api/3/{entity}"
     pages = _paginated_get(url, entity, headers=headers)
     yield from pages
 
@@ -125,14 +125,14 @@ if __name__ == "__main__":
     )
 
     # print credentials by running the resource
-    data = list(active_campaign_source())
+    data = list(active_campaign())
 
     # print the data yielded from resource
     print(data)
     # exit()
 
     # run the pipeline with your parameters
-    load_info = pipeline.run(active_campaign_source())
+    load_info = pipeline.run(active_campaign())
 
     # pretty print the information on data that was loaded
     print(load_info)
