@@ -45,8 +45,8 @@ class ZendeskAPIClient:
     """
     subdomain: str = ""
     url: str = ""
-    headers: Optional[DictStrStr] = None
-    auth: Optional[Tuple[str, TSecretValue]] = None
+    headers: Optional[DictStrStr]
+    auth: Optional[Tuple[str, TSecretValue]]
 
     def __init__(self, credentials: Union[ZendeskCredentialsOAuth, ZendeskCredentialsToken, ZendeskCredentialsEmailPass]) -> None:
         """
