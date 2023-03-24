@@ -1,6 +1,6 @@
 import time
 import dlt
-from zendesk import DateTime, zendesk_chat, zendesk_talk, zendesk_support
+from zendesk import pendulum, zendesk_chat, zendesk_talk, zendesk_support
 
 
 def load_all():
@@ -41,7 +41,7 @@ def incremental_pipeline():
     # Choosing starting point for incremental load - optional, the default is the last load time. If no last load time
     # the start time will be the 1st day of the millennium
     # start time needs to be a pendulum datetime object
-    start_time = DateTime(year=2023, month=1, day=1)
+    start_time = pendulum.DateTime(year=2023, month=1, day=1)
 
     pipeline = dlt.pipeline(pipeline_name="dlt_zendesk_pipeline", destination="postgres", full_refresh=False, dataset_name="sample_zendesk_data")
     data = zendesk_support(load_all=True, incremental_start_time=start_time)

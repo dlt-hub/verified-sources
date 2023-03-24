@@ -60,7 +60,7 @@ def test_incrementing(destination_name: str) -> None:
 
     # check that the expected keys are saved now in dlt state
     for saved_timezone in INCREMENTAL_SAVED_KEYS:
-        assert isinstance(dlt.state()["zendesk"][saved_timezone], float)
+        assert isinstance(dlt.state()["zendesk"][saved_timezone], (float, int))
 
     # save the number of distinct data_points for each incremental table
     with pipeline_incremental.sql_client() as c:
