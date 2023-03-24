@@ -1716,14 +1716,14 @@ six = ">=1.5"
 
 [[package]]
 name = "python-dlt"
-version = "0.2.0a25"
+version = "0.2.0a28"
 description = "DLT is an open-source python-native scalable data loading framework that does not require any devops efforts to run."
 category = "dev"
 optional = false
 python-versions = ">=3.8,<4.0"
 files = [
-    {file = "python_dlt-0.2.0a25-py3-none-any.whl", hash = "sha256:a63fa629769422e8faf2b76828f0e76759cf11d2c8367e06f48c4cff0ed6701d"},
-    {file = "python_dlt-0.2.0a25.tar.gz", hash = "sha256:170455af9ba2df0099b5b713df1124534e6f95e44843f21aad20a6a9da135b50"},
+    {file = "python_dlt-0.2.0a28-py3-none-any.whl", hash = "sha256:f5ac44397600d53e5a977520a693278aef278317daf99535c59548f0b7741e60"},
+    {file = "python_dlt-0.2.0a28.tar.gz", hash = "sha256:35e125a0eca8fea456b4bf89d1cb236cd8aefc2c4a6667e7973a8fa7829e3d98"},
 ]
 
 [package.dependencies]
@@ -1759,6 +1759,7 @@ sentry-sdk = ">=1.4.3"
 setuptools = ">=65.6.0"
 simplejson = ">=3.17.5"
 SQLAlchemy = ">=1.3.5"
+tenacity = ">=8.2.2,<9.0.0"
 tomlkit = ">=0.11.3"
 tqdm = ">=4.64.1"
 typing-extensions = ">=4.0.0"
@@ -2181,6 +2182,21 @@ files = [
 pbr = ">=2.0.0,<2.1.0 || >2.1.0"
 
 [[package]]
+name = "tenacity"
+version = "8.2.2"
+description = "Retry code until it succeeds"
+category = "dev"
+optional = false
+python-versions = ">=3.6"
+files = [
+    {file = "tenacity-8.2.2-py3-none-any.whl", hash = "sha256:2f277afb21b851637e8f52e6a613ff08734c347dc19ade928e519d7d2d8569b0"},
+    {file = "tenacity-8.2.2.tar.gz", hash = "sha256:43af037822bd0029025877f3b2d97cc4d7bb0c2991000a3d59d71517c5c969e0"},
+]
+
+[package.extras]
+doc = ["reno", "sphinx", "tornado (>=4.5)"]
+
+[[package]]
 name = "tomli"
 version = "2.0.1"
 description = "A lil' TOML parser"
@@ -2369,4 +2385,4 @@ testing = ["big-O", "flake8 (<5)", "jaraco.functools", "jaraco.itertools", "more
 [metadata]
 lock-version = "2.0"
 python-versions = "^3.8.1"
-content-hash = "28aecd9545625d8694181603a590f32841f94942569079e255c8103a93a4098c"
+content-hash = "5610afb9694cbfad493fee95d86d18cbe09e2234058facfb01c7685de43af1d3"
