@@ -1,7 +1,6 @@
 import dlt
 
 from github import github_reactions, github_repo_events
-from tests.utils import load_table_counts
 
 
 def load_duckdb_repo_reactions_issues_only() -> None:
