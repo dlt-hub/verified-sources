@@ -57,7 +57,7 @@ class ZendeskAPIClient:
         # oauth token is the preferred way to authenticate, followed by api token and then email + password combo
         # fill headers and auth for every possibility of credentials given, raise error if credentials are of incorrect type
         if isinstance(credentials, ZendeskCredentialsOAuth):
-            self.headers["Authorization"] = f"Bearer {credentials.oauth_token}"
+            self.headers = {"Authorization": f"Bearer {credentials.oauth_token}"}
             self.auth = None
         elif isinstance(credentials, ZendeskCredentialsToken):
             self.headers = None
