@@ -1,5 +1,5 @@
 import dlt
-import requests
+from dlt.sources.helpers import requests
 
 
 @dlt.source
