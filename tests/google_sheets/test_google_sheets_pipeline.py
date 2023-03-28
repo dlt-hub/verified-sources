@@ -1,36 +1,33 @@
 import pytest
 import dlt
-from pipelines.google_sheets.google_sheets import google_spreadsheet
+from pipelines.google_sheets import google_spreadsheet
 from tests.utils import ALL_DESTINATIONS, assert_load_info
 
 
-TEST_SPREADSHEETS = ["https://docs.google.com/spreadsheets/d/1HhWHjqouQnnCIZAFa2rL6vT91YRN8aIhts22SUUR580"]
+#TEST_SPREADSHEETS = ["...."] - this value is now saved in config.toml
 # list expected tables and the number of columns they are supposed to have
 ALL_TABLES = ["all_types", "empty_row", "empty_rows", "has_empty", "hole_middle", "inconsistent_types", "more_data", "more_headers_than_data", "NamedRange1", "only_data", "only_headers",
-              "sheet1", "sheet2", "sheet3", "sheet4", "two_tables"]
+              "Sheet 1", "sheet2", "sheet3", "sheet4", "two_tables"]
 COL_NUMS = [6, 5, 5, 5, 7, 5, 4, 8, 4, 2, 2, 4, 5, 9, 1, 9]
 ALL_TABLES_LOADED = ["all_types", "empty_row", "empty_rows", "has_empty", "hole_middle", "inconsistent_types", "more_data", "more_headers_than_data", "named_range1", "only_data", "only_headers",
-                     "sheet1", "sheet2", "sheet3", "sheet4", "spreadsheet_info", "two_tables"]
+                     "sheet_1", "sheet2", "sheet3", "sheet4", "spreadsheet_info", "two_tables"]
 
 
 def create_pipeline(destination_name, dataset_name, full_refresh=True, range_names=None, get_sheets=True, get_named_ranges=True):
 
     pipeline = dlt.pipeline(destination=destination_name, full_refresh=full_refresh, dataset_name=dataset_name)
-    data = google_spreadsheet(spreadsheet_identifier=TEST_SPREADSHEETS[0], range_names=range_names, get_sheets=get_sheets, get_named_ranges=get_named_ranges)
+    data = google_spreadsheet(range_names=range_names, get_sheets=get_sheets, get_named_ranges=get_named_ranges)
     info = pipeline.run(data)
     assert_load_info(info)
     return pipeline
 
 
-@pytest.mark.parametrize("spreadsheet_identifier", TEST_SPREADSHEETS)
-def test_sample_load(spreadsheet_identifier) -> None:
+def test_sample_load() -> None:
     """
-    Tests access for all spreadsheets in the spreadsheet list
-    Also checks execution time for a pipeline run is less than 10 seconds
-    @:param: spreadsheet_identifier -  id or url for a spreadsheet
+    Tests access for a spreadsheet in config.toml
     """
 
-    create_pipeline(destination_name="postgres", dataset_name="test_google_sheet_data", range_names=["sheet1"], get_sheets=False, get_named_ranges=False)
+    create_pipeline(destination_name="postgres", dataset_name="test_google_sheet_data", range_names=["Sheet 1"], get_sheets=False, get_named_ranges=False)
 
 
 @pytest.mark.parametrize("destination_name", ALL_DESTINATIONS)
@@ -71,8 +68,8 @@ def test_appending(destination_name) -> None:
     """
 
     # Fetch ranges from pipeline and check
-    test_ranges = ["sheet1!A1:D2", "sheet1!A1:D4"]
-    test_ranges_table = ["sheet1_a1_d2", "sheet1_a1_d4"]
+    test_ranges = ["Sheet 1!A1:D2", "Sheet 1!A1:D4"]
+    test_ranges_table = ["sheet_1_a1_d2", "sheet_1_a1_d4"]
 
     pipeline = create_pipeline(destination_name=destination_name, dataset_name="test_appending", range_names=test_ranges, get_sheets=False,  get_named_ranges=False)
 

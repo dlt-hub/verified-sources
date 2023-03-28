@@ -11,7 +11,7 @@ def full_pipeline_run(destination: str = "postgres", pipeline_name: str = "googl
     @:param full_refresh: Setting that enables running the pipeline and losing all the previous saved context.
     """
     pipeline = dlt.pipeline(pipeline_name=pipeline_name, destination=destination, full_refresh=full_refresh, dataset_name=dataset_name)
-    data = google_spreadsheet()
+    data = google_spreadsheet(get_sheets=True, get_named_ranges=False)
     info = pipeline.run(data)
     print(info)
     return
@@ -19,4 +19,4 @@ def full_pipeline_run(destination: str = "postgres", pipeline_name: str = "googl
 
 # FULL PIPELINE RUN
 if __name__ == "__main__":
-    full_pipeline_run()
+    full_pipeline_run(dataset_name="test2", full_refresh=True)

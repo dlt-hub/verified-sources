@@ -22,3 +22,9 @@ config_int=123
 
 [sources.sql_database.data_writer]
 buffer_max_items=5000
+
+
+[sources.google_sheets.google_spreadsheet]
+range_names = []
+spreadsheet_identifier = ""
+

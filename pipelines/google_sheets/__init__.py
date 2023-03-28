@@ -33,9 +33,8 @@ def google_spreadsheet(spreadsheet_identifier: str = dlt.config.value, range_nam
     logger.info("Successful Authentication")
     # get spreadsheet id from url or id
     spreadsheet_id = get_spreadsheet_id(spreadsheet_identifier)
-    # if range_names were not provided, initialize them as an empty list
-    if not range_names:
-        range_names = []
+    # make sure range_names is a list
+    range_names = [range_name for range_name in range_names]
     named_ranges = None
     # if sheet names or named_ranges are to be added as tables, an extra api call is made and
     if get_sheets or get_named_ranges:
@@ -100,8 +99,10 @@ def get_data(service: Resource, spreadsheet_id: str, range_names: List[str], met
     my_resources = []
     values = api_calls.get_data_batch(service=service, spreadsheet_id=spreadsheet_id, range_names=range_names)
     for i in range(len(values)):
-        # get range name and metadata for sheet
-        sheet_range_name = values[i]["range"]
+        # get range name and metadata for sheet. Extra quotation marks returned by the API call are removed.
+        range_part1, range_part2 = values[i]["range"].split("!")
+        range_part1 = range_part1.strip("'")
+        sheet_range_name = f"{range_part1}!{range_part2}"
         if sheet_range_name in metadata_dict:
             sheet_meta_batch = metadata_dict[sheet_range_name]
             # check if this is a named range and change the name so the range table can be saved with its proper name
@@ -109,12 +110,11 @@ def get_data(service: Resource, spreadsheet_id: str, range_names: List[str], met
                 sheet_range_name = sheet_meta_batch["name"]
         else:
             # if range doesn't exist as a key for metadata then it means the key is just the sheet name and google sheets api response just filled the range or that the sheet is skipped because
-            # it was empty
+            # it was empty. Extra quotation marks returned by the API call are removed.
             sheet_range_name = sheet_range_name.split("!")[0]
-            try:
+            if sheet_range_name in metadata_dict:
                 sheet_meta_batch = metadata_dict[sheet_range_name]
-            except KeyError:
-                # sheet is not there because it was popped from metadata due to being empty
+            else:
                 logger.warning(f"Skipping data for empty range: {sheet_range_name}")
                 continue
         # get range values
