@@ -75,9 +75,7 @@ def process_ticket(ticket: Ticket, custom_fields: DictStrStr, pivot_custom_field
     # delete fields that are not needed for pivoting
     if pivot_custom_fields:
         del base_dict["custom_fields"]
-    else:
-        # un pivoting will simply save the dict as a json string
-        base_dict["custom_fields"] = str(base_dict["custom_fields"])
+
     del base_dict["fields"]
 
     # modify dates to return datetime objects instead
