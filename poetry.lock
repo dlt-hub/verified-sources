@@ -2349,6 +2349,24 @@ files = [
 test = ["pytest (>=3.0.0)"]
 
 [[package]]
+name = "zenpy"
+version = "2.0.25"
+description = "Python wrapper for the Zendesk API"
+category = "dev"
+optional = false
+python-versions = "*"
+files = [
+    {file = "zenpy-2.0.25.tar.gz", hash = "sha256:0b41998811cdcab997523c1fed40edb5ef21c4a2046d9cf7209933343222ff9b"},
+]
+
+[package.dependencies]
+cachetools = ">=3.1.0"
+python-dateutil = ">=2.7.5"
+pytz = ">=2018.9"
+requests = ">=2.14.2"
+six = ">=1.14.0"
+
+[[package]]
 name = "zipp"
 version = "3.15.0"
 description = "Backport of pathlib-compatible object wrapper for zip files"
@@ -2367,4 +2385,4 @@ testing = ["big-O", "flake8 (<5)", "jaraco.functools", "jaraco.itertools", "more
 [metadata]
 lock-version = "2.0"
 python-versions = "^3.8.1"
-content-hash = "a5a9fde1fee1c8b7cc89cc3cbd72da56b40fdb0639adc66b388b5d184126825f"
+content-hash = "5610afb9694cbfad493fee95d86d18cbe09e2234058facfb01c7685de43af1d3"
