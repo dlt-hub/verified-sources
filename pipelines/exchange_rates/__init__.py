@@ -27,12 +27,14 @@ def exchangerates_source(
     Returns:
         Generator: A generator that yields JSON response objects from the exchangerates API.
     """
-    return exchangerates_resource(
+
+    # Use add_yield_map to unpivot|union rates
+    yield exchangerates_resource(
         currency_list,
         last_updated_at,
         base_currency=base_currency,
         exchangerates_api_key=exchangerates_api_key,
-    )
+    ).add_yield_map(lambda i: (yield i))
 
 
 def _create_auth_headers(exchangerates_api_key):
@@ -101,5 +103,7 @@ def exchangerates_resource(
             query=dict(symbols=",".join(currency_list), base=base_currency),
         )
         date = date.shift(days=1)
-        res = requests.get(url, headers=headers, data=payload)
-        yield res.json()
+        # res = requests.get(url, headers=headers, data=payload)
+        employee_string = '{"first_name": "Michael", "last_name": "Rodgers", "department": "Marketing"}'
+        json_object = json.loads(employee_string)
+        yield json_object
