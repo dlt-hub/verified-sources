@@ -54,7 +54,7 @@ def incremental_pipeline():
 if __name__ == "__main__":
     # simple run where everything is loaded
     start = time.time()
-    load_info = incremental_pipeline()
+    load_info = load_all()
     end = time.time()
     print(load_info)
     print(f"Time taken: {end-start}")
