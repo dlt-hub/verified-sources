@@ -8,7 +8,7 @@ def load_all():
     Loads all possible tables for Zendesk Support, Chat, Talk
     """
     # FULL PIPELINE RUN
-    pipeline = dlt.pipeline(pipeline_name="dlt_zendesk_pipeline", destination="postgres", full_refresh=True, dataset_name="sample_zendesk_data3")
+    pipeline = dlt.pipeline(pipeline_name="dlt_zendesk_pipeline", destination="postgres", full_refresh=False, dataset_name="sample_zendesk_data3")
 
     # zendesk support source function
     data_support = zendesk_support(load_all=True)
@@ -54,7 +54,7 @@ def incremental_pipeline():
 if __name__ == "__main__":
     # simple run where everything is loaded
     start = time.time()
-    load_info = load_all()
+    load_info = incremental_pipeline()
     end = time.time()
     print(load_info)
     print(f"Time taken: {end-start}")
