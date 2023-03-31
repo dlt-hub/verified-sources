@@ -30,6 +30,11 @@ def shopify_source(
 
     Args:
     access_token: https://shopify.dev/docs/apps/auth/admin-app-access-tokens
+    store_name:
+    api_version:
+    limit_window:
+    rate_limit:
+    initial_days_back:
 
     Returns resources:
         orders
