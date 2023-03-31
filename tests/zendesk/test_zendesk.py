@@ -17,7 +17,6 @@ TALK_TABLES = ["calls", "addresses", "agents_activity", "current_queue_activity"
 # all the timezones saved in dlt state
 INCREMENTAL_SAVED_KEYS = ["last_load_tickets", "last_load_ticket_metric_events", "last_load_chats", "last_load_talk_calls", "last_load_talk_legs"]
 INCREMENTAL_TABLES = ["tickets", "ticket_metric_events", "chats"]  # calls_incremental and legs_incremental have no data so not added here yet
-ALL_DESTINATIONS = ["postgres"]
 
 
 @pytest.mark.parametrize("destination_name", ALL_DESTINATIONS)

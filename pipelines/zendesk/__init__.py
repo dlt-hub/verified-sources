@@ -21,7 +21,7 @@ FIRST_DAY_OF_MILLENNIUM_STRING = "2000-01-01T00:00:00Z"
 
 
 @dlt.source(max_table_nesting=2)
-def zendesk_talk(credentials: Union[ZendeskCredentialsOAuth, ZendeskCredentialsToken, ZendeskCredentialsEmailPass] = dlt.secrets.value,
+def zendesk_talk(credentials: Union[ZendeskCredentialsEmailPass, ZendeskCredentialsToken, ZendeskCredentialsOAuth] = dlt.secrets.value,
                  incremental_start_time: Optional[pendulum.DateTime] = None) -> Sequence[DltResource]:
     # use the credentials to authenticate with the ZendeskClient
     zendesk_client = ZendeskAPIClient(credentials)
@@ -40,10 +40,10 @@ def zendesk_talk(credentials: Union[ZendeskCredentialsOAuth, ZendeskCredentialsT
 
 
 @dlt.source(max_table_nesting=2)
-def zendesk_chat(credentials: Union[ZendeskCredentialsOAuth, ZendeskCredentialsToken, ZendeskCredentialsEmailPass] = dlt.secrets.value,
+def zendesk_chat(credentials: ZendeskCredentialsOAuth = dlt.secrets.value,
                  incremental_start_time: Optional[pendulum.DateTime] = None) -> DltResource:
     """
-    The source for the dlt pipeline. It returns all the basic information.
+    The source for the dlt pipeline. It returns all the basic information. ZendeskChat accepts only OAuthCredentials.
     @:param credentials: read as a dict, as filled in .dlt.secrets.toml
     @:returns: multiple dlt resources
     """
@@ -53,7 +53,7 @@ def zendesk_chat(credentials: Union[ZendeskCredentialsOAuth, ZendeskCredentialsT
 
 
 @dlt.source(max_table_nesting=2)
-def zendesk_support(credentials: Union[ZendeskCredentialsOAuth, ZendeskCredentialsToken, ZendeskCredentialsEmailPass] = dlt.secrets.value, load_all: bool = True,
+def zendesk_support(credentials: Union[ZendeskCredentialsEmailPass, ZendeskCredentialsToken, ZendeskCredentialsOAuth] = dlt.secrets.value, load_all: bool = True,
                     pivot_ticket_fields: bool = True, incremental_start_time: Optional[pendulum.DateTime] = None) -> Sequence[DltResource]:
     """
     The source for the dlt pipeline. It returns all the basic tables for Zendesk Support: tickets, users, brands, organizations, groups and all extra resources if required
