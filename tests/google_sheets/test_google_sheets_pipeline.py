@@ -1,5 +1,6 @@
 import pytest
 import dlt
+from dlt.common.pipeline import LoadInfo
 from pipelines.google_sheets import google_spreadsheet
 from tests.utils import ALL_DESTINATIONS, assert_load_info
 
@@ -13,23 +14,23 @@ ALL_TABLES_LOADED = ["all_types", "empty_row", "empty_rows", "has_empty", "hole_
 ALL_DESTINATIONS = ["postgres"]
 
 
-def create_pipeline(destination_name, dataset_name, full_refresh=True, range_names=None, get_sheets=True, get_named_ranges=True) -> dlt.Pipeline:
+def create_pipeline(destination_name, dataset_name, full_refresh=True, range_names=None, get_sheets=True, get_named_ranges=True) -> (LoadInfo, dlt.Pipeline):
     """
-    Creates a simple pipeline and returns it. It also checks that the pipeline is loaded correctly.
+    Helper, creates a simple pipeline and returns it along with the load info.
     """
     pipeline = dlt.pipeline(destination=destination_name, full_refresh=full_refresh, dataset_name=dataset_name)
     data = google_spreadsheet(range_names=range_names, get_sheets=get_sheets, get_named_ranges=get_named_ranges)
     info = pipeline.run(data)
-    assert_load_info(info)
-    return pipeline
+    return info, pipeline
 
 
 def test_sample_load() -> None:
     """
-    Tests access for a spreadsheet in config.toml
+    Tests access for a spreadsheet in config.toml and check that the pipeline was loaded correctly.
     """
 
-    create_pipeline(destination_name="postgres", dataset_name="test_google_sheet_data", range_names=["Sheet 1"], get_sheets=False, get_named_ranges=False)
+    info = create_pipeline(destination_name="postgres", dataset_name="test_google_sheet_data", range_names=["Sheet 1"], get_sheets=False, get_named_ranges=False)[0]
+    assert_load_info(info)
 
 
 @pytest.mark.parametrize("destination_name", ALL_DESTINATIONS)
@@ -40,7 +41,8 @@ def test_full_load(destination_name: str) -> None:
     """
 
     # FULL PIPELINE RUN
-    pipeline = create_pipeline(destination_name=destination_name, dataset_name="test_full_load")
+    info, pipeline = create_pipeline(destination_name=destination_name, dataset_name="test_full_load")
+    assert_load_info(info)
 
     # The schema should contain all listed tables
     # ALL_TABLES is missing spreadsheet info table - table being tested here
@@ -73,7 +75,8 @@ def test_appending(destination_name) -> None:
     test_ranges = ["Sheet 1!A1:D2", "Sheet 1!A1:D4"]
     test_ranges_table = ["sheet_1_a1_d2", "sheet_1_a1_d4"]
 
-    pipeline = create_pipeline(destination_name=destination_name, dataset_name="test_appending", range_names=test_ranges, get_sheets=False,  get_named_ranges=False)
+    info, pipeline = create_pipeline(destination_name=destination_name, dataset_name="test_appending", range_names=test_ranges, get_sheets=False,  get_named_ranges=False)
+    assert_load_info(info)
 
     # TODO: decide what needs to be done when range is slightly increased
     # check table rows are appended
@@ -97,7 +100,8 @@ def test_all_data_types(destination_name) -> None:
 
     table_name_db = "all_types"
     # run pipeline only for the specific table with all data types and grab that table
-    pipeline_types = create_pipeline(destination_name=destination_name, dataset_name="test_all_data_types", range_names=["all_types"], get_sheets=False, get_named_ranges=False)
+    info, pipeline_types = create_pipeline(destination_name=destination_name, dataset_name="test_all_data_types", range_names=["all_types"], get_sheets=False, get_named_ranges=False)
+    assert_load_info(info)
 
     schema = pipeline_types.default_schema
     assert table_name_db in schema.tables
@@ -121,7 +125,8 @@ def test_empty_row(destination_name) -> None:
     """
 
     # run pipeline only for the specific table with all data types and grab that table
-    pipeline = create_pipeline(destination_name=destination_name, dataset_name="test_empty_row", range_names=["empty_row"], get_named_ranges=False, get_sheets=False)
+    info, pipeline = create_pipeline(destination_name=destination_name, dataset_name="test_empty_row", range_names=["empty_row"], get_named_ranges=False, get_sheets=False)
+    assert_load_info(info)
 
     # check table rows are appended
     with pipeline.sql_client() as c:
@@ -139,7 +144,8 @@ def test_empty_rows(destination_name) -> None:
     """
 
     # run pipeline only for the specific table with all data types and grab that table
-    pipeline = create_pipeline(destination_name=destination_name, dataset_name="test_empty_rows", range_names=["empty_rows"], get_named_ranges=False, get_sheets=False)
+    info, pipeline = create_pipeline(destination_name=destination_name, dataset_name="test_empty_rows", range_names=["empty_rows"], get_named_ranges=False, get_sheets=False)
+    assert_load_info(info)
 
     # check table rows are appended
     with pipeline.sql_client() as c:
@@ -157,7 +163,8 @@ def test_has_empty(destination_name) -> None:
     """
 
     # run pipeline only for the specific table with all data types and grab that table
-    pipeline = create_pipeline(destination_name=destination_name, dataset_name="test_has_empty", range_names=["has_empty"], get_sheets=False, get_named_ranges=False)
+    info, pipeline = create_pipeline(destination_name=destination_name, dataset_name="test_has_empty", range_names=["has_empty"], get_sheets=False, get_named_ranges=False)
+    assert_load_info(info)
 
     # check table rows are appended
     with pipeline.sql_client() as c:
@@ -182,7 +189,8 @@ def test_inconsistent_types(destination_name) -> None:
     """
 
     # run pipeline only for the specific table with all data types and grab that table
-    pipeline = create_pipeline(destination_name=destination_name, dataset_name="test_inconsistent_types", range_names=["inconsistent_types"], get_sheets=False, get_named_ranges=False)
+    info, pipeline = create_pipeline(destination_name=destination_name, dataset_name="test_inconsistent_types", range_names=["inconsistent_types"], get_sheets=False, get_named_ranges=False)
+    assert_load_info(info)
 
     with pipeline.sql_client() as c:
         sql_query = "SELECT * FROM inconsistent_types WHERE " \
@@ -204,7 +212,8 @@ def test_more_headers(destination_name) -> None:
     """
 
     # run pipeline only for the specific table with all data types and grab that table
-    pipeline = create_pipeline(destination_name=destination_name, dataset_name="test_more_headers", range_names=["more_headers_than_data"], get_sheets=False, get_named_ranges=False)
+    info, pipeline = create_pipeline(destination_name=destination_name, dataset_name="test_more_headers", range_names=["more_headers_than_data"], get_sheets=False, get_named_ranges=False)
+    assert_load_info(info)
 
     # run query to check number of columns
     with pipeline.sql_client() as c:
@@ -223,11 +232,12 @@ def test_more_data(destination_name) -> None:
     @:param: destination_name - redshift/bigquery/postgres
     """
     # run pipeline only for the specific table with all data types and grab that table
-    pipeline = create_pipeline(destination_name=destination_name,
-                               dataset_name="test_more_headers",
-                               range_names=["more_headers_than_data"],
-                               get_sheets=False,
-                               get_named_ranges=False)
+    info, pipeline = create_pipeline(destination_name=destination_name,
+                                     dataset_name="test_more_headers",
+                                     range_names=["more_headers_than_data"],
+                                     get_sheets=False,
+                                     get_named_ranges=False)
+    assert_load_info(info)
 
     with pipeline.sql_client() as c:
         sql_query = "SELECT * FROM more_data;"
@@ -246,7 +256,8 @@ def test_two_tables(destination_name) -> None:
     """
 
     # run pipeline only for the specific table with all data types and grab that table
-    pipeline = create_pipeline(destination_name=destination_name, dataset_name="test_two_tables", range_names=["two_tables"], get_sheets=False, get_named_ranges=False)
+    info, pipeline = create_pipeline(destination_name=destination_name, dataset_name="test_two_tables", range_names=["two_tables"], get_sheets=False, get_named_ranges=False)
+    assert_load_info(info)
 
     with pipeline.sql_client() as c:
         # this query will return all rows from 2nd table appended to the 1st table
@@ -265,7 +276,8 @@ def test_hole_middle(destination_name) -> None:
     """
 
     # run pipeline only for the specific table with all data types and grab that table
-    pipeline = create_pipeline(destination_name=destination_name, dataset_name="test_hole_middle", range_names=["hole_middle"], get_sheets=False, get_named_ranges=False)
+    info, pipeline = create_pipeline(destination_name=destination_name, dataset_name="test_hole_middle", range_names=["hole_middle"], get_sheets=False, get_named_ranges=False)
+    assert_load_info(info)
 
     with pipeline.sql_client() as c:
         # this query will return all rows from 2nd table appended to the 1st table
@@ -289,14 +301,13 @@ def test_named_range(destination_name) -> None:
 
     # run pipeline only for the specific table with all data types and grab that table
     # with these settings, the pipeline should only have the named_range1 table inside.
-    pipeline = create_pipeline(destination_name=destination_name, dataset_name="test_named_range", get_sheets=False, get_named_ranges=True)
+    info, pipeline = create_pipeline(destination_name=destination_name, dataset_name="test_named_range", get_sheets=False, get_named_ranges=True)
+    assert_load_info(info)
 
     # check columns have the correct data types in the schema
     # pipeline doesn't reset schema.all_tables when run with other tests, so we have to check all the tables in the schema and check that the name matches
     schema = pipeline.default_schema
-
     assert table_name_db in schema.tables
-
     test_table = schema.get_table(table_name_db)
 
     # check all column data types are correct
