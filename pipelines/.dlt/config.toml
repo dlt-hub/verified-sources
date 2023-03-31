@@ -18,6 +18,10 @@ workers = 2  # limit the parallel execution
 [sources.chess]
 config_int=123
 
+[sources.salesforce]
+api_version="v57.0"
+initial_days_back=30
+
 ## sql_database
 
 [sources.sql_database.data_writer]
