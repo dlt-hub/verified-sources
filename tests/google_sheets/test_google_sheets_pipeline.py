@@ -4,17 +4,19 @@ from pipelines.google_sheets import google_spreadsheet
 from tests.utils import ALL_DESTINATIONS, assert_load_info
 
 
-#TEST_SPREADSHEETS = ["...."] - this value is now saved in config.toml
 # list expected tables and the number of columns they are supposed to have
 ALL_TABLES = ["all_types", "empty_row", "empty_rows", "has_empty", "hole_middle", "inconsistent_types", "more_data", "more_headers_than_data", "NamedRange1", "only_data", "only_headers",
               "Sheet 1", "sheet2", "sheet3", "sheet4", "two_tables"]
 COL_NUMS = [6, 5, 5, 5, 7, 5, 4, 8, 4, 2, 2, 4, 5, 9, 1, 9]
 ALL_TABLES_LOADED = ["all_types", "empty_row", "empty_rows", "has_empty", "hole_middle", "inconsistent_types", "more_data", "more_headers_than_data", "named_range1", "only_data", "only_headers",
                      "sheet_1", "sheet2", "sheet3", "sheet4", "spreadsheet_info", "two_tables"]
+ALL_DESTINATIONS = ["postgres"]
 
 
-def create_pipeline(destination_name, dataset_name, full_refresh=True, range_names=None, get_sheets=True, get_named_ranges=True):
-
+def create_pipeline(destination_name, dataset_name, full_refresh=True, range_names=None, get_sheets=True, get_named_ranges=True) -> dlt.Pipeline:
+    """
+    Creates a simple pipeline and returns it. It also checks that the pipeline is loaded correctly.
+    """
     pipeline = dlt.pipeline(destination=destination_name, full_refresh=full_refresh, dataset_name=dataset_name)
     data = google_spreadsheet(range_names=range_names, get_sheets=get_sheets, get_named_ranges=get_named_ranges)
     info = pipeline.run(data)

@@ -65,7 +65,7 @@ def get_metadata(spreadsheet_id: str, service: Resource, ranges: List[str], name
     @:param service: - Resource object used by google-api-python-client to make api calls
     @:param ranges: - List of ranges to get data from. If left empty, every sheet inside the spreadsheet will be included instead. named ranges not supported
     @:param named_ranges: Dict containing ranges as keys and the corresponding named ranges as the values
-    @:return metadata_all_ranges: - A dict where all the range names are the key. The values for each key are the corresponding sheet metadata: sheet_name, headers, values
+    @:returns: - A dict where all the range names are the key. The values for each key are the corresponding sheet metadata: sheet_name, headers, values
     """
 
     # process metadata ranges so only the first 2 rows are appended

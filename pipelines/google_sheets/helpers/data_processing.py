@@ -3,15 +3,8 @@
 
 from typing import Any, Dict, Iterator, List, Tuple, Union
 from re import match
-
-from dlt.common import logger
-from dlt.common.exceptions import MissingDependencyException
+from dlt.common import logger, pendulum
 from dlt.common.typing import DictStrAny
-
-try:
-    from pendulum import DateTime, duration, from_timestamp
-except ImportError:
-    raise MissingDependencyException("Pendulum", ["pendulum"])
 
 # this string comes before the id
 URL_ID_IDENTIFIER = "d"
@@ -229,7 +222,7 @@ def is_date_datatype(value_list: List[DictStrAny]) -> List[bool]:
     return value_type_list
 
 
-def serial_date_to_datetime(serial_number: Union[int, float, str, bool]) -> Union[DateTime, str, bool]:
+def serial_date_to_datetime(serial_number: Union[int, float, str, bool]) -> Union[pendulum.DateTime, str, bool]:
     """
     Receives a serial number which can be an int or float(depending on the serial number) and outputs a datetime object
     @:param: serial_number- int/float. The integer part shows the number of days since December 30th 1899, the decimal part shows the fraction of the day. Sometimes if a table is not formatted
@@ -241,7 +234,7 @@ def serial_date_to_datetime(serial_number: Union[int, float, str, bool]) -> Unio
     if not isinstance(serial_number, (int, float)):
         return serial_number
     # To get the seconds passed since the start date of serial numbers we round the product of the number of seconds in a day and the serial number
-    conv_datetime: DateTime = from_timestamp(0, DLT_TIMEZONE) + duration(seconds=TIMESTAMP_CONST + round(SECONDS_PER_DAY * serial_number))
+    conv_datetime: pendulum.DateTime = pendulum.from_timestamp(0, DLT_TIMEZONE) + pendulum.duration(seconds=TIMESTAMP_CONST + round(SECONDS_PER_DAY * serial_number))
     return conv_datetime
 
 
@@ -271,16 +264,17 @@ def metadata_preprocessing(ranges: List[str], named_ranges: DictStrAny = None) -
         # cols_is_date contains booleans indicating whether the data expected in that column is a datetime object or not.
         unfilled_range_dict = {"range": requested_range,
                                "headers": [],
-                               "cols_is_datetime": [],
-                               "name": None
+                               "cols_is_datetime": []
                                }
-        # try to filled information about range name if the range has a name by checking named ranges
-        if named_ranges and requested_range in named_ranges:
+        # try to fill information about range name if the range has a name by checking named ranges
+        try:
             unfilled_range_dict["name"] = named_ranges[requested_range]
+        except (KeyError, TypeError):
+            unfilled_range_dict["name"] = None
         # All the information in the dict is properly set up, now we just need to store it in the response_like_dict
-        if sheet_name in response_like_dict:
+        try:
             response_like_dict[sheet_name].append(unfilled_range_dict)
-        else:
+        except KeyError:
             response_like_dict[sheet_name] = [unfilled_range_dict]
         meta_ranges.append(range_info[1])
     return meta_ranges, response_like_dict
