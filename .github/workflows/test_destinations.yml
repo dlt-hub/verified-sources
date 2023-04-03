@@ -39,6 +39,10 @@ jobs:
         id: get_changed_pipelines
         run: |
           set -x
+          echo "base.sha: ${{ github.event.pull_request.base.sha }} head.sha:${{ github.event.pull_request.head.sha }}"
+          git_diff=$(git diff --name-only ${{ github.event.pull_request.base.sha }} ${{ github.event.pull_request.head.sha }})
+          echo "Command status: $?"
+          echo $git_diff
           changed_pipelines=$(
             git diff --name-only ${{ github.event.pull_request.base.sha }} ${{ github.event.pull_request.head.sha }} \
               | grep '^pipelines/' \
@@ -46,6 +50,7 @@ jobs:
               | sort -u \
               | tr '\n' ' '
           )
+          echo $?
           echo "Changed pipelines: $changed_pipelines"
           echo "pipelines_list=$changed_pipelines" >> $GITHUB_OUTPUT
 
