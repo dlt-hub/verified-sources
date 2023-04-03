@@ -32,6 +32,8 @@ jobs:
 
       - name: Check out
         uses: actions/checkout@master
+        with:
+          fetch-depth: 0
 
       - name: Setup Python
         uses: actions/setup-python@v1
@@ -61,8 +63,21 @@ jobs:
         run: pwd && echo "$DESTINATIONS_SECRETS" > pipelines/.dlt/secrets.toml && echo "$SOURCES_SECRETS" >> pipelines/.dlt/secrets.toml
       # - name: Setup upterm session
       #   uses: lhotari/action-upterm@v1
+
+      - name: Get changed pipelines
+        id: get_changed_pipelines
+        run: |
+          changed_pipelines=$(
+            git diff --name-only ${{ github.event.pull_request.base.sha }} ${{ github.event.pull_request.head.sha }} \
+              | grep '^pipelines/' \
+              | sed -E 's/^pipelines\/([^/]+)\/[^/]+$/\1/; s/^pipelines\/(.*)_pipeline\.py$/\1/' \
+              | sort -u \
+              | tr '\n' ' '
+          )
+          echo "Changed pipelines: $changed_pipelines"
+          echo "pipelines_list=$changed_pipelines" >> $GITHUB_OUTPUT
       - run: |
-          poetry run pytest tests
+          poetry run pytest $(echo ${{ steps.get_changed_pipelines.outputs.pipelines_list }} | awk '{for(i=1;i<=NF;i++) printf "tests/%s ", $i}')
         if: runner.os != 'Windows'
         name: Run tests/chess Linux/MAC
       - run: |
