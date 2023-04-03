@@ -4,33 +4,25 @@ Defines all the sources and resources needed for ZendeskSupport, ZendeskChat and
 
 from typing import Iterator, Optional, Sequence, Union
 import dlt
-from dlt.common.exceptions import MissingDependencyException
-from dlt.common.typing import TDataItem
+from dlt.common import logger, pendulum
+from dlt.common.typing import DictStrAny, TDataItem
 from dlt.extract.source import DltResource
-try:
-    from pendulum import DateTime, datetime, from_timestamp, now
-except ImportError:
-    raise MissingDependencyException("Pendulum", ["pendulum"])
-try:
-    from zenpy import Zenpy
-except ImportError:
-    raise MissingDependencyException("Zenpy", ["zenpy~=2.0.25"])
-from .helpers.api_helpers import auth_zenpy, basic_load, process_ticket
+from .helpers.api_helpers import auth_zenpy, basic_load, get_latest_timestamp, process_talk_resource, process_ticket, Zenpy
 from .helpers.talk_api import INCREMENTAL_ENDPOINTS, TALK_ENDPOINTS, ZendeskAPIClient
 from .helpers.credentials import ZendeskCredentialsEmailPass, ZendeskCredentialsOAuth, ZendeskCredentialsToken
 
-EXTRA_RESOURCES = [
+EXTRA_RESOURCES_SUPPORT = [
     "activities", "automations", "custom_agent_roles", "dynamic_content", "group_memberships", "job_status", "macros", "organization_fields", "organization_memberships", "recipient_addresses",
     "requests", "satisfaction_ratings", "sharing_agreements", "skips", "suspended_tickets", "targets", "ticket_forms", "ticket_metrics", "triggers", "user_fields", "views", "tags"
 ]
-resources_to_be_loaded = ["users", "sla_policies", "groups", "organizations", "brands"]
-FIRST_DAY_OF_CURRENT_YEAR = datetime(year=now().year, month=1, day=1)
-FIRST_DAY_OF_MILLENNIUM = datetime(year=2000, month=1, day=1)
+FIRST_DAY_OF_CURRENT_YEAR = pendulum.datetime(year=pendulum.now().year, month=1, day=1)
+FIRST_DAY_OF_MILLENNIUM = pendulum.datetime(year=2000, month=1, day=1)
+FIRST_DAY_OF_MILLENNIUM_STRING = "2000-01-01T00:00:00Z"
 
 
 @dlt.source(max_table_nesting=2)
-def zendesk_talk(credentials: Union[ZendeskCredentialsOAuth, ZendeskCredentialsToken, ZendeskCredentialsEmailPass] = dlt.secrets.value,
-                 incremental_start_time: Optional[DateTime] = None) -> Sequence[DltResource]:
+def zendesk_talk(credentials: Union[ZendeskCredentialsEmailPass, ZendeskCredentialsToken, ZendeskCredentialsOAuth] = dlt.secrets.value,
+                 incremental_start_time: Optional[pendulum.DateTime] = None) -> Sequence[DltResource]:
     # use the credentials to authenticate with the ZendeskClient
     zendesk_client = ZendeskAPIClient(credentials)
     talk_resources = []
@@ -48,10 +40,10 @@ def zendesk_talk(credentials: Union[ZendeskCredentialsOAuth, ZendeskCredentialsT
 
 
 @dlt.source(max_table_nesting=2)
-def zendesk_chat(credentials: Union[ZendeskCredentialsOAuth, ZendeskCredentialsToken, ZendeskCredentialsEmailPass] = dlt.secrets.value,
-                 incremental_start_time: Optional[DateTime] = None) -> DltResource:
+def zendesk_chat(credentials: ZendeskCredentialsOAuth = dlt.secrets.value,
+                 incremental_start_time: Optional[pendulum.DateTime] = None) -> DltResource:
     """
-    The source for the dlt pipeline. It returns all the basic information.
+    The source for the dlt pipeline. It returns all the basic information. ZendeskChat accepts only OAuthCredentials.
     @:param credentials: read as a dict, as filled in .dlt.secrets.toml
     @:returns: multiple dlt resources
     """
@@ -61,8 +53,8 @@ def zendesk_chat(credentials: Union[ZendeskCredentialsOAuth, ZendeskCredentialsT
 
 
 @dlt.source(max_table_nesting=2)
-def zendesk_support(credentials: Union[ZendeskCredentialsOAuth, ZendeskCredentialsToken, ZendeskCredentialsEmailPass] = dlt.secrets.value, load_all: bool = True, pivot_ticket_fields: bool = True,
-                    incremental_start_time: Optional[DateTime] = None) -> Sequence[DltResource]:
+def zendesk_support(credentials: Union[ZendeskCredentialsEmailPass, ZendeskCredentialsToken, ZendeskCredentialsOAuth] = dlt.secrets.value, load_all: bool = True,
+                    pivot_ticket_fields: bool = True, incremental_start_time: Optional[pendulum.DateTime] = None) -> Sequence[DltResource]:
     """
     The source for the dlt pipeline. It returns all the basic tables for Zendesk Support: tickets, users, brands, organizations, groups and all extra resources if required
     @:param credentials: read as a dict, as filled in .dlt.secrets.toml
@@ -75,12 +67,16 @@ def zendesk_support(credentials: Union[ZendeskCredentialsOAuth, ZendeskCredentia
     # TODO: Make caching manageable and editable by users
     # Authenticate
     zendesk_client = auth_zenpy(credentials=credentials)
+
+    # loading base tables
     resource_list = [ticket_fields_table(zendesk_client=zendesk_client),
                      ticket_table(zendesk_client=zendesk_client, pivot_fields=pivot_ticket_fields, start_time=incremental_start_time),
                      ticket_metric_table(zendesk_client=zendesk_client, start_time=incremental_start_time)]
-    # load other api endpoints into resources if the option is to do so
+
+    # other tables to be loaded
+    resources_to_be_loaded = ["users", "sla_policies", "groups", "organizations", "brands"]
     if load_all:
-        resources_to_be_loaded.extend(EXTRA_RESOURCES)
+        resources_to_be_loaded.extend(EXTRA_RESOURCES_SUPPORT)
     for resource in resources_to_be_loaded:
         resource_list.append(dlt.resource(basic_resource(zendesk_client=zendesk_client, resource=resource),
                                           name=resource,
@@ -110,15 +106,17 @@ def ticket_fields_table(zendesk_client: Zenpy) -> Iterator[TDataItem]:
         yield return_dict
 
 
-@dlt.resource(name="tickets", write_disposition="append")
-def ticket_table(zendesk_client: Zenpy, pivot_fields: bool = True, per_page: int = 1000, start_time: Optional[DateTime] = None) -> Iterator[TDataItem]:
+@dlt.resource(name="tickets", write_disposition="append", columns={"tags": {"name": "tags", "data_type": "complex", "nullable": True},
+                                                                   "custom_fields": {"name": "custom_fields", "data_type": "complex", "nullable": True}})
+def ticket_table(zendesk_client: Zenpy, pivot_fields: bool = True, per_page: int = 1000, start_time: Optional[pendulum.DateTime] = None, incremental_col: str = "updated_at") -> Iterator[TDataItem]:
     """
     Resource for tickets table. Uses DLT state to handle column renaming of custom fields to prevent changing the names of said columns.
     This resource uses pagination, loading and side loading to make API calls more efficient
     @:param zendesk_client: Zenpy type object, used to make calls to Zendesk API through zenpy module
     @:param pivot: bool that indicates whether to pivot the custom fields in tickets, default set to true
     @:param per_page: Describes how many Ticket objects are loaded per page, int
-    @:parm start_time: The datetime for which Tickets start to load, tickets before this date will not be loaded
+    @:param start_time: The datetime for which Tickets start to load, tickets before this date will not be loaded
+    @:param incremental_col: Chooses the column of this table holds the value for incremental loading. This column needs to hold a datetime object
     @:returns: Generator returning dicts for every row of data
     """
 
@@ -130,23 +128,35 @@ def ticket_table(zendesk_client: Zenpy, pivot_fields: bool = True, per_page: int
         start_time = start_time.timestamp()
     # grab the custom fields from dlt state if any
     fields_dict = dlt.state().setdefault("ticket_custom_fields", {})
+    # Init the latest timestamp to 0 before the query is sent. This is done to set the last loading time.
+    latest_timestamp = 0.0
     all_tickets = zendesk_client.tickets.incremental(paginate_by_time=False,
                                                      per_page=per_page,
                                                      start_time=start_time,
                                                      include=["users", "groups", "organisation", "brands"])
     for ticket in all_tickets:
-        ticket_dict = process_ticket(ticket=ticket, custom_fields=fields_dict, pivot_fields=pivot_fields)
+        ticket_dict = process_ticket(ticket=ticket, custom_fields=fields_dict, pivot_custom_fields=pivot_fields)
+        # deduce the latest timestamp of the ticket
+        if incremental_col in ticket_dict:
+            ticket_timestamp = ticket_dict[incremental_col].timestamp()
+        else:
+            ticket_timestamp = ticket_dict["updated_at"].timestamp()
+        # update the latest timestamp as we iterate through tickets
+        if ticket_timestamp > latest_timestamp:
+            latest_timestamp = ticket_timestamp
         yield ticket_dict
-    # update the last load time in the dlt state
-    dlt.state()["last_load_tickets"] = now().timestamp()
+    # update the last load time in the dlt state to be the timestamp of the last created ticket
+    dlt.state()["last_load_tickets"] = latest_timestamp
+    logger.info(f"Tickets last load saved in dlt state as timestamp: {latest_timestamp}")
 
 
-@dlt.resource(name="ticket_metric_events", write_disposition="replace")
-def ticket_metric_table(zendesk_client: Zenpy, start_time: Optional[DateTime] = None) -> Iterator[TDataItem]:
+@dlt.resource(name="ticket_metric_events", write_disposition="append")
+def ticket_metric_table(zendesk_client: Zenpy, start_time: Optional[pendulum.DateTime] = None, incremental_col: str = "time") -> Iterator[TDataItem]:
     """
     Will return all the ticket metric events from the starting date with the default being 1st Jan of the current year
     @:param zendesk_client: Zenpy type object, used to make calls to Zendesk API through zenpy module
     @:param start_time: Datetime on when to start loading for ticket metric events
+    @:param incremental_col: Chooses the column of this table holds the value for incremental loading. This column needs to hold a datetime object
     @:returns: Generator returning dicts for every row of data
     """
 
@@ -154,12 +164,21 @@ def ticket_metric_table(zendesk_client: Zenpy, start_time: Optional[DateTime] = 
     # because of Zenpy this needs to be a Datetime instead of a timestamp
     if not start_time:
         # convert from timestamp to datetime object since it is required by Zenpy
-        start_time = from_timestamp(dlt.state().setdefault("last_load_ticket_metric_events", FIRST_DAY_OF_MILLENNIUM.timestamp()))
+        start_time = pendulum.from_timestamp(dlt.state().setdefault("last_load_ticket_metric_events", FIRST_DAY_OF_MILLENNIUM.timestamp()))
+    # Init the latest timestamp to 0 before the query is sent. This is done to set the last loading time.
+    latest_timestamp = 0.0
     all_metric_events = zendesk_client.ticket_metric_events(start_time=start_time)
     for metric_event in all_metric_events:
-        yield metric_event.to_dict()
-    # update the last load time in the dlt state, save as timestamp since datetime not supported by dlt state
-    dlt.state()["last_load_ticket_metric_events"] = now().timestamp()
+        metric_event_dict = metric_event.to_dict()
+        # deduce the latest timestamp of the ticket
+        ticket_metric_timestamp = get_latest_timestamp(chosen_col=incremental_col, default_col="time", object_dict=metric_event_dict)
+        # update the latest timestamp as we iterate through tickets
+        if ticket_metric_timestamp > latest_timestamp:
+            latest_timestamp = ticket_metric_timestamp
+        yield metric_event_dict
+    # update the last load time in the dlt state to be the timestamp of the last created ticket
+    dlt.state()["last_load_ticket_metric_events"] = latest_timestamp
+    logger.info(f"Tickets Metric Events last load saved in dlt state as timestamp: {latest_timestamp}")
 
 
 def basic_resource(zendesk_client: Zenpy, resource: str, per_page: int = 1000) -> Iterator[TDataItem]:
@@ -185,7 +204,7 @@ def basic_resource(zendesk_client: Zenpy, resource: str, per_page: int = 1000) -
 
 # Chat resources
 @dlt.resource(name="chats", write_disposition="append")
-def chats_table(zendesk_client: Zenpy, start_time: Optional[DateTime] = None) -> Iterator[TDataItem]:
+def chats_table(zendesk_client: Zenpy, start_time: Optional[pendulum.DateTime] = None, incremental_col: str = "update_timestamp") -> Iterator[TDataItem]:
     """
     Resource for Chats
     @:param zendesk_client: Zenpy type object, used to make calls to Zendesk API through zenpy module
@@ -195,12 +214,22 @@ def chats_table(zendesk_client: Zenpy, start_time: Optional[DateTime] = None) ->
     # grab the start time from last dlt load if not filled, if that is also empty then use the first day of the millennium as the start time instead
     if not start_time:
         # the dlt state will store a timestamp, we need to convert back to datetime for Zenpy
-        start_time = from_timestamp(dlt.state().setdefault("last_load_chats", FIRST_DAY_OF_MILLENNIUM.timestamp()))
+        start_time = pendulum.from_timestamp(dlt.state().setdefault("last_load_chats", FIRST_DAY_OF_MILLENNIUM.timestamp()))
+    # Init the latest timestamp to 0 before the query is sent. This is done to set the last loading time.
+    latest_timestamp = 0.0
+    # Send query and process it
     all_chats = zendesk_client.chats.incremental(start_time=start_time)
     dict_generator = basic_load(resource_api=all_chats)
-    yield from dict_generator
+    for chat_dict in dict_generator:
+        # deduce the latest timestamp of the chat
+        chat_timestamp = get_latest_timestamp(chosen_col=incremental_col, default_col="updated_timestamp", object_dict=chat_dict)
+        # update the latest timestamp as we iterate through tickets
+        if chat_timestamp > latest_timestamp:
+            latest_timestamp = chat_timestamp
+        yield chat_dict
     # update the last load time in the dlt state and save as timestamp since datetime is not supported by dlt state
-    dlt.state()["last_load_chats"] = now().timestamp()
+    dlt.state()["last_load_chats"] = latest_timestamp
+    logger.info(f"Chats last load saved in dlt state as timestamp: {latest_timestamp}")
 
 
 # Talk resources
@@ -212,20 +241,16 @@ def talk_resource(zendesk_client: ZendeskAPIClient, talk_endpoint_name: str, tal
     @:param talk_endpoint: The actual url ending of this endpoint
     @:returns: Generator of dicts
     """
-    my_req = zendesk_client.make_request(endpoint=talk_endpoint, data_point_name=talk_endpoint_name)
-    if my_req:
-        my_pages = [page for page in my_req]
-        for page in my_pages:
-            # multiple records in page
-            if isinstance(page, list):
-                for record in page:
-                    yield record
-            # only 1 record in the page, just yield page
-            else:
-                yield page
+    # send query and process it
+    client_response = zendesk_client.make_request(endpoint=talk_endpoint, data_point_name=talk_endpoint_name)
+    yield from process_talk_resource(response=client_response)
 
 
-def talk_incremental_resource(zendesk_client: ZendeskAPIClient, talk_endpoint_name: str, talk_endpoint: str, start_date: Optional[DateTime] = None) -> Iterator[TDataItem]:
+def talk_incremental_resource(zendesk_client: ZendeskAPIClient,
+                              talk_endpoint_name: str,
+                              talk_endpoint: str,
+                              start_date: Optional[pendulum.DateTime] = None,
+                              incremental_col: str = "updated_at") -> Iterator[TDataItem]:
     """
     Called as a dlt resource. Generic loader for a ZendeskTalk endpoint.
     @:param zendesk_client: ZendeskAPIClient object that makes api calls to Zendesk Talk API
@@ -238,16 +263,19 @@ def talk_incremental_resource(zendesk_client: ZendeskAPIClient, talk_endpoint_na
         final_start_date = dlt.state().setdefault(f"last_load_talk_{talk_endpoint_name}", FIRST_DAY_OF_MILLENNIUM.timestamp())
     else:
         final_start_date = start_date.timestamp()
-    my_req = zendesk_client.make_request_incremental(endpoint=talk_endpoint, data_point_name=talk_endpoint_name, start_date=final_start_date)
-    if my_req:
-        my_pages = [page for page in my_req]
-        for page in my_pages:
-            # multiple records in page
-            if isinstance(page, list):
-                for record in page:
-                    yield record
-            # only 1 record in the page, just yield page
-            else:
-                yield page
+    # Init the latest timestamp to 0 before the query is sent. This is done to set the last loading time.
+    latest_timestamp = 0.0
+    # send the request and process it
+    client_response = zendesk_client.make_request_incremental(endpoint=talk_endpoint, data_point_name=talk_endpoint_name, start_date=final_start_date)
+    talk_incremental_resource_generator = process_talk_resource(response=client_response)
+    for talk_incremental_resource_dict in talk_incremental_resource_generator:
+        # deduce the latest timestamp of the talk resource
+        incremental_endpoint_timestamp = get_latest_timestamp(chosen_col=incremental_col, default_col="updated_at", object_dict=talk_incremental_resource_dict)
+        # update the latest timestamp as we iterate through tickets
+        if incremental_endpoint_timestamp > latest_timestamp:
+            latest_timestamp = incremental_endpoint_timestamp
+        yield talk_incremental_resource_dict
     # update the last load time in the dlt state
-    dlt.state()[f"last_load_talk_{talk_endpoint_name}"] = now().timestamp()
+    dlt.state()[f"last_load_talk_{talk_endpoint_name}"] = latest_timestamp
+    logger.info(f"{talk_endpoint_name} last load saved in dlt state as timestamp: {latest_timestamp}")
+

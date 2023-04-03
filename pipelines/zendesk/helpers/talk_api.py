@@ -4,16 +4,10 @@ This module contains everything related to the API client class made to make req
 
 from time import sleep
 from typing import Dict, Iterator, Optional, Tuple, Union
-import requests
 from dlt.common import logger
-from dlt.common.exceptions import MissingDependencyException
 from dlt.common.typing import DictStrStr, TDataItems, TSecretValue
-try:
-    from pendulum import DateTime
-except ImportError:
-    raise MissingDependencyException("Pendulum", ["pendulum"])
+from dlt.sources.helpers.requests import client
 from .credentials import ZendeskCredentialsEmailPass, ZendeskCredentialsOAuth, ZendeskCredentialsToken
-
 
 TALK_ENDPOINTS = {
     "calls": "/api/v2/channels/voice/calls",
@@ -51,8 +45,8 @@ class ZendeskAPIClient:
     """
     subdomain: str = ""
     url: str = ""
-    headers: DictStrStr = {}
-    auth: Optional[Tuple[str, TSecretValue]] = None
+    headers: Optional[DictStrStr]
+    auth: Optional[Tuple[str, TSecretValue]]
 
     def __init__(self, credentials: Union[ZendeskCredentialsOAuth, ZendeskCredentialsToken, ZendeskCredentialsEmailPass]) -> None:
         """
@@ -63,14 +57,14 @@ class ZendeskAPIClient:
         # oauth token is the preferred way to authenticate, followed by api token and then email + password combo
         # fill headers and auth for every possibility of credentials given, raise error if credentials are of incorrect type
         if isinstance(credentials, ZendeskCredentialsOAuth):
-            self.headers["Authorization"] = f"Bearer {credentials.oauth_token}"
+            self.headers = {"Authorization": f"Bearer {credentials.oauth_token}"}
             self.auth = None
         elif isinstance(credentials, ZendeskCredentialsToken):
-            self.headers["Authorizations"] = f"Bearer {credentials.token}"
-            self.auth = None
+            self.headers = None
+            self.auth = (f"{credentials.email}/token", credentials.token)
         elif isinstance(credentials, ZendeskCredentialsEmailPass):
             self.auth = (credentials.email, credentials.password)
-            self.headers = {}
+            self.headers = None
         else:
             raise TypeError("Wrong credentials type provided to ZendeskAPIClient. The credentials need to be of type: ZendeskCredentialsOAuth, ZendeskCredentialsToken or ZendeskCredentialsEmailPass")
 
@@ -92,7 +86,7 @@ class ZendeskAPIClient:
         get_url = f"{self.url}{endpoint}"
         while get_url:
             try:
-                response = requests.get(get_url, headers=self.headers, auth=self.auth, params=params)
+                response = client.get(get_url, headers=self.headers, auth=self.auth, params=params)
                 if response.status_code == ZENDESK_STATUS_CODES["ok"]:
                     # check if there is a next page and yield the response,
                     # usually all relevant data is stored in a key with same name as endpoint
