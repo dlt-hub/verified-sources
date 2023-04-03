@@ -1,3 +1,5 @@
+import logging
+
 import pytest
 import dlt
 from dlt.common.pipeline import LoadInfo
@@ -234,11 +236,12 @@ def test_more_data(destination_name) -> None:
     # run pipeline only for the specific table with all data types and grab that table
     info, pipeline = create_pipeline(destination_name=destination_name,
                                      dataset_name="test_more_headers",
-                                     range_names=["more_headers_than_data"],
+                                     range_names=["more_data"],
                                      get_sheets=False,
                                      get_named_ranges=False)
     assert_load_info(info)
-
+    pipeline_schema = pipeline.default_schema
+    logging.warning(pipeline_schema)
     with pipeline.sql_client() as c:
         sql_query = "SELECT * FROM more_data;"
         with c.execute_query(sql_query) as cur:
