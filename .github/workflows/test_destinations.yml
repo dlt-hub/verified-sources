@@ -43,6 +43,37 @@ jobs:
           git_diff=$(git diff --name-only ${{ github.event.pull_request.base.sha }} ${{ github.event.pull_request.head.sha }})
           echo "Command status: $?"
           echo $git_diff
+
+          changed_pipelines=$(
+            git diff --name-only ${{ github.event.pull_request.base.sha }} ${{ github.event.pull_request.head.sha }} \
+              | grep '^pipelines/' \
+              | sed -E 's/^pipelines\/([^/]+)\/[^/]+$/\1/; s/^pipelines\/(.*)_pipeline\.py$/\1/' \
+              | sort -u \
+              | tr '\n' ' '
+          )
+          echo "$changed_pipelines - command status: $?"
+
+          changed_pipelines=$(
+            git diff --name-only ${{ github.event.pull_request.base.sha }} ${{ github.event.pull_request.head.sha }} \
+              | grep '^pipelines/'
+          )
+          echo "$changed_pipelines - command status: $?"
+
+          changed_pipelines=$(
+            git diff --name-only ${{ github.event.pull_request.base.sha }} ${{ github.event.pull_request.head.sha }} \
+              | grep '^pipelines/' \
+              | sed -E 's/^pipelines\/([^/]+)\/[^/]+$/\1/; s/^pipelines\/(.*)_pipeline\.py$/\1/'
+          )
+          echo "$changed_pipelines - command status: $?"
+
+          changed_pipelines=$(
+            git diff --name-only ${{ github.event.pull_request.base.sha }} ${{ github.event.pull_request.head.sha }} \
+              | grep '^pipelines/' \
+              | sed -E 's/^pipelines\/([^/]+)\/[^/]+$/\1/; s/^pipelines\/(.*)_pipeline\.py$/\1/' \
+              | sort -u \
+          )
+          echo "$changed_pipelines - command status: $?"
+
           changed_pipelines=$(
             git diff --name-only ${{ github.event.pull_request.base.sha }} ${{ github.event.pull_request.head.sha }} \
               | grep '^pipelines/' \
