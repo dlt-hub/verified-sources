@@ -1,14 +1,12 @@
 """A pipeline loading player profiles and games from chess.com api"""
 
-from requests import HTTPError
-from reretry import retry
 import datetime
-import requests
 from typing import Callable, Iterator, List, Sequence, Dict, Any
 
 import dlt
 from dlt.common.typing import TDataItem, StrAny
 from dlt.extract.source import DltResource
+from dlt.sources.helpers import requests
 
 OFFICIAL_CHESS_API_URL = "https://api.chess.com/pub/"
 UNOFFICIAL_CHESS_API_URL = "https://www.chess.com/callback/"
@@ -39,16 +37,13 @@ def chess(players: List[str], start_month: str = None, end_month: str = None) ->
         players_online_status(players)
     )
 
-
-@retry(tries=5, delay=1, backoff=1.1, logger=None)
 def _get_url_with_retry(url: str) -> StrAny:
     r = requests.get(url)
-    r.raise_for_status()
-    return r.json()  # type: ignore
+    return r.json() # type: ignore
 
 
 def _get_path_with_retry(path: str) -> StrAny:
-    return _get_url_with_retry(f"{OFFICIAL_CHESS_API_URL}{path}")  # type: ignore
+    return _get_url_with_retry(f"{OFFICIAL_CHESS_API_URL}{path}")
 
 
 @dlt.resource(write_disposition="replace")
@@ -95,7 +90,7 @@ def players_games(players: List[str], start_month: str = None, end_month: str = 
         try:
             games = _get_url_with_retry(url).get("games", [])
             return games  # type: ignore
-        except HTTPError as http_err:
+        except requests.HTTPError as http_err:
             # sometimes archives are not available and the error seems to be permanent
             if http_err.response.status_code == 404:
                 return []
@@ -103,7 +98,7 @@ def players_games(players: List[str], start_month: str = None, end_month: str = 
 
     # enumerate the archives
     url: str = None
-    for url in archives:  # type: ignore
+    for url in archives:
         # the `url` format is https://api.chess.com/pub/player/{username}/games/{YYYY}/{MM}
         if start_month and url[-7:] < start_month:
             continue
