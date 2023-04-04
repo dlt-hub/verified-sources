@@ -99,11 +99,18 @@ jobs:
       # - name: Setup upterm session
       #   uses: lhotari/action-upterm@v1
       - run: |
-          poetry run pytest $(echo ${{ needs.get_changed_pipelines.outputs.pipelines_list }} | awk '{for(i=1;i<=NF;i++) printf "tests/%s ", $i}')
+          pipelines_list="${{ needs.get_changed_pipelines.outputs.pipelines_list }}"
+          test_paths=$(echo "$pipelines_list" | awk '{for(i=1;i<=NF;i++) printf "tests/%s ", $i}')
+          poetry run pytest $test_paths
         if: runner.os != 'Windows'
         name: Run tests/chess Linux/MAC
       - run: |
-          poetry run pytest $(echo ${{ needs.get_changed_pipelines.outputs.pipelines_list }} | awk '{for(i=1;i<=NF;i++) printf "tests/%s ", $i}')
+          setlocal enabledelayedexpansion
+          SET TESTS=
+          FOR %%i IN (%needs.get_changed_pipelines.outputs.pipelines_list%) DO (
+            SET TESTS=!TESTS! tests/%%i
+          )
+          poetry run pytest !TESTS!
         if: runner.os == 'Windows'
         name: Run tests/chess Windows
         shell: cmd
