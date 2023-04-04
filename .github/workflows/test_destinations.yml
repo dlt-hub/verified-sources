@@ -51,37 +51,27 @@ jobs:
           echo "Command status: $?"
           echo $git_diff
 
-          changed_pipelines=$(
+          raw_changed_pipelines=$(
             git diff --name-only ${{ github.event.pull_request.base.sha }} ${{ github.event.pull_request.head.sha }} \
-              | grep '^pipelines/'
+              | grep '^pipelines/' || true
           )
-          echo "$changed_pipelines - command status: $?"
 
-          changed_pipelines=$(
-            git diff --name-only ${{ github.event.pull_request.base.sha }} ${{ github.event.pull_request.head.sha }} \
-              | grep '^pipelines/' \
-              | sed -E 's/^pipelines\/([^/]+)\/[^/]+$/\1/; s/^pipelines\/(.*)_pipeline\.py$/\1/'
-          )
-          echo "$changed_pipelines - command status: $?"
+          echo "Command status: $?"
+          echo $raw_changed_pipelines
 
-          changed_pipelines=$(
-            git diff --name-only ${{ github.event.pull_request.base.sha }} ${{ github.event.pull_request.head.sha }} \
-              | grep '^pipelines/' \
-              | sed -E 's/^pipelines\/([^/]+)\/[^/]+$/\1/; s/^pipelines\/(.*)_pipeline\.py$/\1/' \
-              | sort -u
-          )
-          echo "$changed_pipelines - command status: $?"
-
-          changed_pipelines=$(
-            git diff --name-only ${{ github.event.pull_request.base.sha }} ${{ github.event.pull_request.head.sha }} \
-              | grep '^pipelines/' \
+          if [ -z "$raw_changed_pipelines" ]; then
+            echo "No changed pipelines. Skipping tests."
+            echo "pipelines_list=" >> $GITHUB_OUTPUT
+          else
+            changed_pipelines=$(echo "$raw_changed_pipelines" \
               | sed -E 's/^pipelines\/([^/]+)\/[^/]+$/\1/; s/^pipelines\/(.*)_pipeline\.py$/\1/' \
               | sort -u \
               | tr '\n' ' '
-          )
-          echo $?
-          echo "Changed pipelines: $changed_pipelines"
-          echo "pipelines_list=$changed_pipelines" >> $GITHUB_OUTPUT
+            )
+            echo "Command status: $?"
+            echo "Changed pipelines: $changed_pipelines"
+            echo "pipelines_list=$changed_pipelines" >> $GITHUB_OUTPUT
+          fi
 
       - name: Setup Python
         uses: actions/setup-python@v1
