@@ -15,6 +15,9 @@ env:
   RUNTIME__LOG_LEVEL: ERROR
 
 jobs:
+  get_changed_pipelines:
+    uses: ./.github/workflows/get_changed_pipelines.yml
+
   run_loader:
     name: test destinations redshift, postgres and duckdb
     needs: get_changed_pipelines
