@@ -12,6 +12,10 @@ OFFICIAL_CHESS_API_URL = "https://api.chess.com/pub/"
 UNOFFICIAL_CHESS_API_URL = "https://www.chess.com/callback/"
 
 
+def deleteme():
+    pass
+
+
 @dlt.source
 def chess(players: List[str], start_month: str = None, end_month: str = None) -> Sequence[DltResource]:
     """A dlt source for the chess.com api. It groups several resources (in this case chess.com API endpoints) containing various types of data: ie user profiles
