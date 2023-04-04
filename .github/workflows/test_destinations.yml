@@ -15,41 +15,21 @@ env:
   RUNTIME__LOG_LEVEL: ERROR
 
 jobs:
-
-  run_loader:
-    name: test destinations redshift, postgres and duckdb
-    strategy:
-      max-parallel: 2
-      fail-fast: false
-      matrix:
-        os: ["ubuntu-latest", "macos-latest", "windows-latest"]
-    defaults:
-      run:
-        shell: bash
-    runs-on: ${{ matrix.os }}
-
+  get_changed_pipelines:
+    runs-on: ubuntu-latest
     steps:
-
-      - name: Check out
-        uses: actions/checkout@master
+      - name: Checkout code
+        uses: actions/checkout@v3
         with:
           fetch-depth: 0
-
-      - name: Output git data
-        run: |
-          echo "base.sha: ${{ github.event.pull_request.base.sha }} head.sha:${{ github.event.pull_request.head.sha }}"
-
-      # - name: Setup upterm session
-      #   uses: lhotari/action-upterm@v1
+      - name: Setup upterm session
+        uses: lhotari/action-upterm@v1
 
       - name: Get changed pipelines
         id: get_changed_pipelines
         run: |
-          set -x
           echo "base.sha: ${{ github.event.pull_request.base.sha }} head.sha:${{ github.event.pull_request.head.sha }}"
-          git_diff=$(git diff --name-only ${{ github.event.pull_request.base.sha }} ${{ github.event.pull_request.head.sha }})
-          echo "Command status: $?"
-          echo $git_diff
+          echo $(git diff --name-only ${{ github.event.pull_request.base.sha }} ${{ github.event.pull_request.head.sha }})
 
           raw_changed_pipelines=$(
             git diff --name-only ${{ github.event.pull_request.base.sha }} ${{ github.event.pull_request.head.sha }} \
@@ -61,7 +41,6 @@ jobs:
 
           if [ -z "$raw_changed_pipelines" ]; then
             echo "No changed pipelines. Skipping tests."
-            echo "pipelines_list=" >> $GITHUB_OUTPUT
           else
             changed_pipelines=$(echo "$raw_changed_pipelines" \
               | sed -E 's/^pipelines\/([^/]+)\/[^/]+$/\1/; s/^pipelines\/(.*)_pipeline\.py$/\1/' \
@@ -70,8 +49,26 @@ jobs:
             )
             echo "Command status: $?"
             echo "Changed pipelines: $changed_pipelines"
-            echo "pipelines_list=$changed_pipelines" >> $GITHUB_OUTPUT
           fi
+          echo "pipelines_list=$changed_pipelines" >> $GITHUB_OUTPUT
+
+  run_loader:
+    name: test destinations redshift, postgres and duckdb
+    needs: get_changed_pipelines
+    if: needs.get_changed_pipelines.outputs.pipelines_list != ''
+    strategy:
+      max-parallel: 2
+      fail-fast: false
+      matrix:
+        os: ["ubuntu-latest", "macos-latest", "windows-latest"]
+    defaults:
+      run:
+        shell: bash
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - name: Check out
+        uses: actions/checkout@master
 
       - name: Setup Python
         uses: actions/setup-python@v1
@@ -102,11 +99,11 @@ jobs:
       # - name: Setup upterm session
       #   uses: lhotari/action-upterm@v1
       - run: |
-          poetry run pytest $(echo ${{ steps.get_changed_pipelines.outputs.pipelines_list }} | awk '{for(i=1;i<=NF;i++) printf "tests/%s ", $i}')
+          poetry run pytest $(echo ${{ needs.get_changed_pipelines.outputs.pipelines_list }} | awk '{for(i=1;i<=NF;i++) printf "tests/%s ", $i}')
         if: runner.os != 'Windows'
         name: Run tests/chess Linux/MAC
       - run: |
-          poetry run pytest tests
+          poetry run pytest $(echo ${{ needs.get_changed_pipelines.outputs.pipelines_list }} | awk '{for(i=1;i<=NF;i++) printf "tests/%s ", $i}')
         if: runner.os == 'Windows'
         name: Run tests/chess Windows
         shell: cmd
