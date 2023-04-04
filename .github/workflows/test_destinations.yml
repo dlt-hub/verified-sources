@@ -35,6 +35,10 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: Output git data
+        run: |
+          echo "base.sha: ${{ github.event.pull_request.base.sha }} head.sha:${{ github.event.pull_request.head.sha }}"
+
       - name: Setup upterm session
         uses: lhotari/action-upterm@v1
 
