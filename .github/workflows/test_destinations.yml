@@ -103,7 +103,7 @@ jobs:
         if: runner.os != 'Windows'
         name: Run tests/chess Linux/MAC
       - run: |
-          FOR %%i IN (%needs.get_changed_pipelines.outputs.pipelines_list%) DO (
+          FOR %%i IN (${{ needs.get_changed_pipelines.outputs.pipelines_list }}) DO (
             echo Running tests for: %%i
             poetry run pytest tests/%%i
           )
