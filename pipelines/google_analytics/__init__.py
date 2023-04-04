@@ -1,13 +1,14 @@
 """
 Defines all the sources and resources needed for Google Analytics V4
 """
-from typing import Iterator, List
+from typing import Iterator, List, Union
 import dlt
 from dlt.common import pendulum
 from dlt.common.configuration.specs import GcpClientCredentialsWithDefault
 from dlt.common.exceptions import MissingDependencyException
 from dlt.common.typing import TDataItem, DictStrAny
 from dlt.extract.source import DltResource
+from .helpers.credentials import GoogleAnalyticsCredentialsOAuth
 from .helpers.data_processing import get_report, process_dimension, process_metric, process_report
 try:
     from google.analytics.data_v1beta import BetaAnalyticsDataClient
@@ -24,7 +25,7 @@ FIRST_DAY_OF_MILLENNIUM = "2000-01-01"
 
 
 @dlt.source(max_table_nesting=2)
-def google_analytics(credentials: GcpClientCredentialsWithDefault = dlt.secrets.value,
+def google_analytics(credentials: Union[GoogleAnalyticsCredentialsOAuth, GcpClientCredentialsWithDefault] = dlt.secrets.value,
                      property_id: int = dlt.config.value,
                      rows_per_page: int = dlt.config.value,
                      queries: List[DictStrAny] = dlt.config.value,
@@ -43,6 +44,9 @@ def google_analytics(credentials: GcpClientCredentialsWithDefault = dlt.secrets.
     :return resource_list: list containing all the resources in the Google Analytics Pipeline.
     """
 
+    # generate access token for credentials if we are using OAuth2.0
+    if isinstance(credentials, GoogleAnalyticsCredentialsOAuth):
+        credentials.auth()
     # Build the service object for Google Analytics api.
     client = BetaAnalyticsDataClient(credentials=credentials.to_service_account_credentials())
     # get metadata needed for some resources
