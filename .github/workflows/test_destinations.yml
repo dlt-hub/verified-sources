@@ -28,7 +28,8 @@ jobs:
       - name: Get changed pipelines
         id: get_changed_pipelines
         run: |
-          echo "base.sha: ${{ github.event.pull_request.base.sha }} head.sha:${{ github.event.pull_request.head.sha }}"
+          echo "base.sha: ${{ github.event.pull_request.base.sha }}"
+          echo "head.sha: ${{ github.event.pull_request.head.sha }}"
 
           raw_changed_pipelines=$(
             git diff --name-only ${{ github.event.pull_request.base.sha }} ${{ github.event.pull_request.head.sha }} \
