@@ -15,9 +15,14 @@ env:
   RUNTIME__LOG_LEVEL: ERROR
 
 jobs:
+  get_changed_pipelines:
+    uses: ./.github/workflows/get_changed_pipelines.yml
 
   run_loader:
     name: test destinations bigquery and redshift
+    needs: get_changed_pipelines
+    if: needs.get_changed_pipelines.outputs.pipelines_list != ''
+
     # strategy:
     #   fail-fast: false
     #   matrix:
@@ -61,11 +66,16 @@ jobs:
       # - name: Setup upterm session
       #   uses: lhotari/action-upterm@v1
       - run: |
-          poetry run pytest tests
+          pipelines_list="${{ needs.get_changed_pipelines.outputs.pipelines_list }}"
+          test_paths=$(echo "$pipelines_list" | awk '{for(i=1;i<=NF;i++) printf "tests/%s ", $i}')
+          poetry run pytest $test_paths
         if: runner.os != 'Windows'
         name: Run tests on Linux/macOS
       - run: |
-          poetry run pytest tests
+          FOR %%i IN (${{ needs.get_changed_pipelines.outputs.pipelines_list }}) DO (
+            echo Running tests for: %%i
+            poetry run pytest tests/%%i
+          )
         if: runner.os == 'Windows'
         name: Run tests on Windows
         shell: cmd

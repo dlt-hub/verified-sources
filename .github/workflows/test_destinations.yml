@@ -1,5 +1,5 @@
 
-name: test redshift, postgres and duckdb
+name: test postgres and duckdb
 
 on:
   pull_request:
