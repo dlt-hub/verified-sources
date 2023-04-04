@@ -63,9 +63,9 @@ jobs:
       - run: |
           poetry run pytest tests
         if: runner.os != 'Windows'
-        name: Run tests/chess Linux/MAC
+        name: Run tests on Linux/macOS
       - run: |
           poetry run pytest tests
         if: runner.os == 'Windows'
-        name: Run tests/chess Windows
+        name: Run tests on Windows
         shell: cmd

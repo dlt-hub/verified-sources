@@ -100,12 +100,12 @@ jobs:
           test_paths=$(echo "$pipelines_list" | awk '{for(i=1;i<=NF;i++) printf "tests/%s ", $i}')
           poetry run pytest $test_paths
         if: runner.os != 'Windows'
-        name: Run tests/chess Linux/MAC
+        name: Run tests on Linux/macOS
       - run: |
           FOR %%i IN (${{ needs.get_changed_pipelines.outputs.pipelines_list }}) DO (
             echo Running tests for: %%i
             poetry run pytest tests/%%i
           )
         if: runner.os == 'Windows'
-        name: Run tests/chess Windows
+        name: Run tests on Windows
         shell: cmd
