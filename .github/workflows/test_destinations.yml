@@ -17,7 +17,8 @@ env:
 jobs:
   get_changed_pipelines:
     runs-on: ubuntu-latest
-
+    outputs:
+      pipelines_list: ${{ steps.get_changed_pipelines.outputs.pipelines_list }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v3
