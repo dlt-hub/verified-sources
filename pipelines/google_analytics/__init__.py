@@ -25,7 +25,7 @@ FIRST_DAY_OF_MILLENNIUM = "2000-01-01"
 
 
 @dlt.source(max_table_nesting=2)
-def google_analytics(credentials: Union[GoogleAnalyticsCredentialsOAuth, GcpClientCredentialsWithDefault] = dlt.secrets.value,
+def google_analytics(credentials: Union[GcpClientCredentialsWithDefault] = dlt.secrets.value,
                      property_id: int = dlt.config.value,
                      rows_per_page: int = dlt.config.value,
                      queries: List[DictStrAny] = dlt.config.value,
@@ -116,7 +116,7 @@ def get_metadata(client: Resource, property_id: int) -> Iterator[Metadata]:
     yield metadata
 
 
-@dlt.transformer(data_from=get_metadata, write_disposition="replace", name="metrics")
+@dlt.transformer(data_from=get_metadata, write_disposition="replace", name="metrics")   # type: ignore
 def metrics_table(metadata: Metadata) -> Iterator[TDataItem]:
     """
     Loads data for metrics
@@ -129,7 +129,7 @@ def metrics_table(metadata: Metadata) -> Iterator[TDataItem]:
         yield processed_metric
 
 
-@dlt.transformer(data_from=get_metadata, write_disposition="replace", name="dimensions")
+@dlt.transformer(data_from=get_metadata, write_disposition="replace", name="dimensions")    # type: ignore
 def dimensions_table(metadata: Metadata) -> Iterator[TDataItem]:
     """
     Loads data for dimensions

@@ -30,7 +30,7 @@ class GoogleAnalyticsCredentialsOAuth(GoogleAnalyticsCredentialsBase):
     refresh_token: TSecretValue
     access_token: Optional[TSecretValue] = None
 
-    def auth(self):
+    def auth(self) -> None:
         """
         Will produce an access token from the given credentials.
         :returns: An access token to GA4
@@ -44,5 +44,5 @@ class GoogleAnalyticsCredentialsOAuth(GoogleAnalyticsCredentialsBase):
             self.access_token = creds.token
         except Exception as e:
             logger.warning("Couldn't create access token from credentials. Refresh token may have expired!")
-            logger.warning(e)
+            logger.warning(str(e))
             raise ValueError("Invalid credentials for creating an OAuth token!")
