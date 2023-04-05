@@ -61,14 +61,10 @@ def google_analytics(credentials: Union[GoogleAnalyticsCredentialsOAuth, GcpClie
             "refresh_token": credentials.refresh_token,
             "token": credentials.access_token
         })
-        google = OAuth2Session(client_id=credentials.client_id, scope=["https://www.googleapis.com/auth/analytics.readonly"], redirect_uri="https://localhost")
-        extra = {
-        'client_id': credentials.client_id,
-        'client_secret': credentials.client_secret}
-        credentials.token = google.refresh_token(token_url="https://oauth2.googleapis.com/token", refresh_token=credentials.refresh_token, **extra)["access_token"]
     # use service account to authenticate if not using OAuth2.0
     else:
         credentials = credentials.to_service_account_credentials()
+
     # Build the service object for Google Analytics api.
     client = BetaAnalyticsDataClient(credentials=credentials)
     # get metadata needed for some resources

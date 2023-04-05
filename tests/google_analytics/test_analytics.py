@@ -14,6 +14,7 @@ QUERIES = [
 # dict containing the name of the tables expected in the db as keys and the number of rows expected as values
 ALL_TABLES = {"dimensions": 206, "metrics": 96, "sample_analytics_data1": 4, "sample_analytics_data2": 4}
 INCREMENTAL_SAVED_KEYS = ["last_load_sample_analytics_data1", "last_load_sample_analytics_data2"]
+ALL_DESTINATIONS = ["postgres"]
 
 
 @pytest.mark.parametrize("destination_name", ALL_DESTINATIONS)

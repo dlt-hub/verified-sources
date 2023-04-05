@@ -3,19 +3,18 @@ This module handles how credentials are read in dlt sources
 """
 from typing import ClassVar, List, Optional
 from dlt.common import logger
-from dlt.common.exceptions import MissingDependencyException
 from dlt.common.configuration import configspec
 from dlt.common.configuration.specs import CredentialsConfiguration
+from dlt.common.exceptions import MissingDependencyException
 from dlt.common.typing import TSecretValue
-
-# try:
-#     from google.oauth2.credentials import Credentials
-# except ImportError:
-#     raise MissingDependencyException("Google OAuth2 library", ["google-auth-oauthlib"])
 try:
-    from google_auth_oauthlib.flow import InstalledAppFlow
+    from google.oauth2.credentials import Credentials
 except ImportError:
-    raise MissingDependencyException("Google Auth library", ["google-auth-oauthlib"])
+    raise MissingDependencyException("Google OAuth Library", ["google-auth-oauthlib"])
+try:
+    from requests_oauthlib import OAuth2Session
+except ImportError:
+    raise MissingDependencyException("Requests-OAuthlib", ["requests_oauthlib"])
 
 
 class GoogleAnalyticsCredentialsBase(CredentialsConfiguration):
@@ -23,18 +22,6 @@ class GoogleAnalyticsCredentialsBase(CredentialsConfiguration):
     The Base version of all the GoogleAnalyticsCredentials classes.
     """
     __config_gen_annotations__: ClassVar[List[str]] = []
-
-
-def local_server_flow(client_config, scopes, port=0):
-    """Run an OAuth flow using a local server strategy.
-    Creates an OAuth flow and runs `google_auth_oauthlib.flow.InstalledAppFlow.run_local_server <https://google-auth-oauthlib.readthedocs.io/en/latest/reference/google_auth_oauthlib.flow.html#google_auth_oauthlib.flow.InstalledAppFlow.run_local_server>`_.
-    This will start a local web server and open the authorization URL in
-    the user's browser.
-    Pass this function to ``flow`` parameter of :meth:`~gspread.oauth` to run
-    a local server flow.
-    """
-    flow = InstalledAppFlow.from_client_config(client_config, scopes)
-    return flow.run_local_server(port=port)
 
 
 @configspec
@@ -54,23 +41,12 @@ class GoogleAnalyticsCredentialsOAuth(GoogleAnalyticsCredentialsBase):
         :returns: An access token to GA4
         """
         try:
-            scopes = ["https://www.googleapis.com/auth/analytics.readonly"]
-            credentials = {
-                "installed": {
-                    "client_id": self.client_id,
-                    "project_id": self.project_id,
-                    "auth_uri": "https://accounts.google.com/o/oauth2/auth",
-                    "token_uri": "https://oauth2.googleapis.com/token",
-                    "auth_provider_x509_cert_url": "https://www.googleapis.com/oauth2/v1/certs",
-                    "client_secret": self.client_secret,
-                    "redirect_uris": [
-                        "http://localhost"
-                    ]
-                }
+            google = OAuth2Session(client_id=self.client_id, scope=["https://www.googleapis.com/auth/analytics.readonly"], redirect_uri="https://localhost")
+            extra = {
+                "client_id": self.client_id,
+                "client_secret": self.client_secret
             }
-            creds = local_server_flow(client_config=credentials, scopes=scopes)
-            self.refresh_token = creds.refresh_token
-            self.access_token = creds.token
+            self.access_token = google.refresh_token(token_url="https://oauth2.googleapis.com/token", refresh_token=self.refresh_token, **extra)["access_token"]
         except Exception as e:
             logger.warning("Couldn't create access token from credentials. Refresh token may have expired!")
             logger.warning(str(e))
