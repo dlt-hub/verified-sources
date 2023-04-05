@@ -3,6 +3,10 @@ name: get changed pipelines
 
 on:
   workflow_call:
+    outputs:
+      pipelines_list:
+        description: "List of changed pipelines"
+        value: ${{ jobs.get_changed_pipelines.outputs.pipelines_list }}
 
 jobs:
   get_changed_pipelines:
