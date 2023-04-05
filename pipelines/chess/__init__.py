@@ -11,6 +11,8 @@ from dlt.sources.helpers import requests
 OFFICIAL_CHESS_API_URL = "https://api.chess.com/pub/"
 UNOFFICIAL_CHESS_API_URL = "https://www.chess.com/callback/"
 
+def foo():
+    pass
 
 @dlt.source
 def chess(players: List[str], start_month: str = None, end_month: str = None) -> Sequence[DltResource]:
