@@ -10,16 +10,23 @@ from dlt.common.typing import TDataItem, DictStrAny
 from dlt.extract.source import DltResource
 from .helpers.credentials import GoogleAnalyticsCredentialsOAuth
 from .helpers.data_processing import get_report, process_dimension, process_metric, process_report
-from google.oauth2.credentials import Credentials
+try:
+    from google.oauth2.credentials import Credentials
+except ImportError:
+    raise MissingDependencyException("Google OAuth Library", ["google-auth-oauthlib"])
 try:
     from google.analytics.data_v1beta import BetaAnalyticsDataClient
     from google.analytics.data_v1beta.types import DateRange, Dimension, DimensionExpression, DimensionMetadata, GetMetadataRequest, Metadata, Metric, MetricMetadata, RunReportRequest
 except ImportError:
     raise MissingDependencyException("Google Analytics API Client", ["google-analytics-data"])
 try:
-    from apiclient.discovery import build, Resource
+    from apiclient.discovery import Resource
 except ImportError:
     raise MissingDependencyException("Google API Client", ["google-api-python-client"])
+try:
+    from requests_oauthlib import OAuth2Session
+except ImportError:
+    raise MissingDependencyException("Requests-OAuthlib", ["requests_oauthlib"])
 
 
 FIRST_DAY_OF_MILLENNIUM = "2000-01-01"
@@ -54,6 +61,12 @@ def google_analytics(credentials: Union[GoogleAnalyticsCredentialsOAuth, GcpClie
             "refresh_token": credentials.refresh_token,
             "token": credentials.access_token
         })
+        google = OAuth2Session(client_id=credentials.client_id, scope=["https://www.googleapis.com/auth/analytics.readonly"], redirect_uri="https://localhost")
+        extra = {
+        'client_id': credentials.client_id,
+        'client_secret': credentials.client_secret}
+        credentials.token = google.refresh_token(token_url="https://oauth2.googleapis.com/token", refresh_token=credentials.refresh_token, **extra)["access_token"]
+    # use service account to authenticate if not using OAuth2.0
     else:
         credentials = credentials.to_service_account_credentials()
     # Build the service object for Google Analytics api.

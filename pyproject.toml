@@ -11,6 +11,8 @@ packages = [{include = "pipelines"}]
 python = "^3.8.1"
 google-analytics-data = "^0.16.1"
 google-api-python-client = "^2.81.0"
+google-auth-oauthlib ="^1.0.0"
+requests_oauthlib = "^1.3.1"
 
 [tool.poetry.group.dev.dependencies]
 mypy = "^0.991"
