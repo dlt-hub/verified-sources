@@ -63,14 +63,12 @@ class GoogleAnalyticsCredentialsOAuth(GoogleAnalyticsCredentialsBase):
                     "token_uri": "https://oauth2.googleapis.com/token",
                     "auth_provider_x509_cert_url": "https://www.googleapis.com/oauth2/v1/certs",
                     "client_secret": self.client_secret,
-                    "redirect_uris": [
-                        "http://localhost"
-                    ]
+                    "redirect_uris": ["http://localhost"]
                 }
             }
             creds = local_server_flow(client_config=credentials, scopes=scopes)
-            token = self.access_token = creds.token
-            return token
+            self.access_token = creds.token
+            return self.access_token
         except Exception as e:
             logger.warning("Couldn't create access token from credentials. Refresh token may have expired!")
             logger.warning(str(e))

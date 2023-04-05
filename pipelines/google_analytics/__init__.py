@@ -20,12 +20,11 @@ try:
 except ImportError:
     raise MissingDependencyException("Google API Client", ["google-api-python-client"])
 
-
 FIRST_DAY_OF_MILLENNIUM = "2000-01-01"
 
 
 @dlt.source(max_table_nesting=2)
-def google_analytics(credentials: Union[GcpClientCredentialsWithDefault] = dlt.secrets.value,
+def google_analytics(credentials: Union[GoogleAnalyticsCredentialsOAuth, GcpClientCredentialsWithDefault] = dlt.secrets.value,
                      property_id: int = dlt.config.value,
                      rows_per_page: int = dlt.config.value,
                      queries: List[DictStrAny] = dlt.config.value,
@@ -46,9 +45,10 @@ def google_analytics(credentials: Union[GcpClientCredentialsWithDefault] = dlt.s
 
     # generate access token for credentials if we are using OAuth2.0
     if isinstance(credentials, GoogleAnalyticsCredentialsOAuth):
-        credentials.auth()
-    # Build the service object for Google Analytics api.
-    client = BetaAnalyticsDataClient(credentials=credentials.to_service_account_credentials())
+        # Build the service object for Google Analytics api.
+        client = BetaAnalyticsDataClient(credentials=credentials.auth())
+    else:
+        client = BetaAnalyticsDataClient(credentials=credentials.to_service_account_credentials())
     # get metadata needed for some resources
     metadata = get_metadata(client=client, property_id=property_id)
     resource_list = [metadata | metrics_table, metadata | dimensions_table]
