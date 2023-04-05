@@ -10,6 +10,7 @@ from dlt.common.typing import TDataItem, DictStrAny
 from dlt.extract.source import DltResource
 from .helpers.credentials import GoogleAnalyticsCredentialsOAuth
 from .helpers.data_processing import get_report, process_dimension, process_metric, process_report
+from google.oauth2.credentials import Credentials
 try:
     from google.analytics.data_v1beta import BetaAnalyticsDataClient
     from google.analytics.data_v1beta.types import DateRange, Dimension, DimensionExpression, DimensionMetadata, GetMetadataRequest, Metadata, Metric, MetricMetadata, RunReportRequest
@@ -25,7 +26,7 @@ FIRST_DAY_OF_MILLENNIUM = "2000-01-01"
 
 
 @dlt.source(max_table_nesting=2)
-def google_analytics(credentials: Union[GcpClientCredentialsWithDefault] = dlt.secrets.value,
+def google_analytics(credentials: Union[GoogleAnalyticsCredentialsOAuth, GcpClientCredentialsWithDefault] = dlt.secrets.value,
                      property_id: int = dlt.config.value,
                      rows_per_page: int = dlt.config.value,
                      queries: List[DictStrAny] = dlt.config.value,
@@ -47,8 +48,16 @@ def google_analytics(credentials: Union[GcpClientCredentialsWithDefault] = dlt.s
     # generate access token for credentials if we are using OAuth2.0
     if isinstance(credentials, GoogleAnalyticsCredentialsOAuth):
         credentials.auth()
+        credentials = Credentials.from_authorized_user_info(info={
+            "client_id": credentials.client_id,
+            "client_secret": credentials.client_secret,
+            "refresh_token": credentials.refresh_token,
+            "token": credentials.access_token
+        })
+    else:
+        credentials = credentials.to_service_account_credentials()
     # Build the service object for Google Analytics api.
-    client = BetaAnalyticsDataClient(credentials=credentials.to_service_account_credentials())
+    client = BetaAnalyticsDataClient(credentials=credentials)
     # get metadata needed for some resources
     metadata = get_metadata(client=client, property_id=property_id)
     resource_list = [metadata | metrics_table, metadata | dimensions_table]
