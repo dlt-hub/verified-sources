@@ -32,13 +32,12 @@ class GoogleAnalyticsCredentialsOAuth(GoogleAnalyticsCredentialsBase):
     client_id: str
     client_secret: TSecretValue
     project_id: TSecretValue
-    refresh_token: TSecretValue  # are we using this anywhere?
+    refresh_token: TSecretValue
     access_token: Optional[TSecretValue] = None
 
     def auth(self) -> None:
         """
         Will produce an access token from the given credentials.
-        :returns: An access token to GA4
         """
         try:
             google = OAuth2Session(client_id=self.client_id, scope=["https://www.googleapis.com/auth/analytics.readonly"], redirect_uri="https://localhost")
