@@ -24,7 +24,7 @@ def test_load_players_games(destination_name: str) -> None:
     assert_load_info(info)
     # now let's inspect the generates schema. it should contain just one table with user data
     schema = pipeline.default_schema
-    user_tables = schema.all_tables()
+    user_tables = schema.data_tables()
     assert len(user_tables) == 1
     # tables are typed dicts
     players_games_table = user_tables[0]

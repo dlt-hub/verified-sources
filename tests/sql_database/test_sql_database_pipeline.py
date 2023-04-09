@@ -3,7 +3,6 @@ import os
 from typing import List, Optional
 
 import dlt
-from dlt.common.configuration.specs import ConnectionStringCredentials
 from dlt.common.utils import uniq_id
 from dlt.extract.source import DltResource
 

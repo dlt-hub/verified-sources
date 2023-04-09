@@ -1,10 +1,6 @@
 import pytest
-import random
-from time import time
 
 import dlt
-from dlt.common.utils import uniq_id
-from dlt.pipeline.state import StateInjectableContext
 
 from pipelines.github import github_reactions, github_repo_events
 
@@ -22,7 +18,7 @@ def test_github_reactions(destination_name: str) -> None:
     expected_tables = ["issues", "pull_requests", "issues__reactions", "pull_requests__reactions", "issues__comments", "pull_requests__comments",
                        "pull_requests__comments__reactions", "issues__comments__reactions"]
     # only those tables in the schema
-    assert set(t["name"] for t in pipeline.default_schema.all_tables()) == set(expected_tables)
+    assert set(t["name"] for t in pipeline.default_schema.data_tables()) == set(expected_tables)
     # get counts
     table_counts = load_table_counts(pipeline, *expected_tables)
     # all tables loaded
@@ -39,13 +35,13 @@ def test_github_events(destination_name: str) -> None:
     load_info = pipeline.run(data)
     assert_load_info(load_info)
     # all tables must end with event (auto created from event types) or contain "_event__" (child tables)
-    table_names = [t["name"] for t in pipeline.default_schema.all_tables()]
+    table_names = [t["name"] for t in pipeline.default_schema.data_tables()]
     assert all(name.endswith("_event") or name.find("_event__") != -1 for name in table_names)
     load_table_counts(pipeline, *table_names)
     # load again. it could happen that a single event got loaded but surely numbers should not double and events must be unique
     data = github_repo_events("apache", "airflow")
     pipeline.run(data)
-    table_names = [t["name"] for t in pipeline.default_schema.all_tables() if t["name"].endswith("_event")]
+    table_names = [t["name"] for t in pipeline.default_schema.data_tables() if t["name"].endswith("_event")]
     table_counts = load_table_counts(pipeline, *table_names)
     table_distinct_id_counts = load_table_distinct_counts(pipeline, "id", *table_names)
     # no duplicates
