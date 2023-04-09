@@ -1,14 +1,19 @@
-from typing import List, Iterator, Dict, Any, Optional, Union
-from functools import partial
+from typing import List, Optional, Union
 
 import dlt
 from dlt.extract.source import DltResource
+from dlt.common.configuration.specs.base_configuration import BaseConfiguration, configspec
 from dlt.common.configuration.specs import ConnectionStringCredentials
 from dlt.common.schema.typing import TWriteDisposition
-from sqlalchemy import create_engine, MetaData, Table
+from sqlalchemy import MetaData, Table
 from sqlalchemy.engine import Engine
 
 from .util import table_rows, engine_from_credentials
+
+@configspec
+class IncrementalColumnsConfiguration(BaseConfiguration):
+    cursor_column: Optional[str] = None
+    unique_column: Optional[str] = None
 
 
 @dlt.resource
@@ -31,6 +36,7 @@ def sql_table(
     :param unique_column: Optional column that uniquely identifies a row in the table for resumeable loading
     :param write_disposition: Write disposition of the resource
     """
+
     engine = engine_from_credentials(credentials)
     engine.execution_options(stream_results=True)
     metadata = metadata or MetaData(schema=schema)
@@ -76,7 +82,8 @@ def sql_database(
     return [
         dlt.resource(
             table_rows,
-            name=table.name
+            name=table.name,
+            spec=IncrementalColumnsConfiguration  # use spec to explicitly include default parameters in configuration
         )(engine, table)
         for table in tables
     ]
