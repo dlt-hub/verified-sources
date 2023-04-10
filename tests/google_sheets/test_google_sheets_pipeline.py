@@ -49,10 +49,8 @@ def test_full_load(destination_name: str) -> None:
     # The schema should contain all listed tables
     # ALL_TABLES is missing spreadsheet info table - table being tested here
     schema = pipeline.default_schema
-    user_tables = schema.all_tables()
-    assert len(user_tables) == len(ALL_TABLES_LOADED)
-    for table in user_tables:
-        assert table["name"] in ALL_TABLES_LOADED
+    user_tables = schema.data_tables()
+    assert set([t["name"] for t in user_tables]) == set(ALL_TABLES_LOADED)
 
     # check load metadata
     with pipeline.sql_client() as c:
@@ -108,7 +106,7 @@ def test_all_data_types(destination_name) -> None:
     schema = pipeline_types.default_schema
     assert table_name_db in schema.tables
 
-    # pipeline doesn't reset schema.all_tables when run with other tests, so we have to check all the tables in the schema and check that the name matches
+    # pipeline doesn't reset schema.data_tables when run with other tests, so we have to check all the tables in the schema and check that the name matches
     test_table = schema.get_table(table_name_db)
     # check all columns
     assert test_table["columns"]["text_types"]["data_type"] == "text"
@@ -308,7 +306,7 @@ def test_named_range(destination_name) -> None:
     assert_load_info(info)
 
     # check columns have the correct data types in the schema
-    # pipeline doesn't reset schema.all_tables when run with other tests, so we have to check all the tables in the schema and check that the name matches
+    # pipeline doesn't reset schema.data_tables when run with other tests, so we have to check all the tables in the schema and check that the name matches
     schema = pipeline.default_schema
     assert table_name_db in schema.tables
     test_table = schema.get_table(table_name_db)
