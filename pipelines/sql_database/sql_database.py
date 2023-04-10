@@ -1,19 +1,13 @@
-from typing import List, Optional, Union
+from typing import List, Optional, Union, Any
 
 import dlt
 from dlt.extract.source import DltResource
-from dlt.common.configuration.specs.base_configuration import BaseConfiguration, configspec
 from dlt.common.configuration.specs import ConnectionStringCredentials
 from dlt.common.schema.typing import TWriteDisposition
 from sqlalchemy import MetaData, Table
 from sqlalchemy.engine import Engine
 
-from .util import table_rows, engine_from_credentials
-
-@configspec
-class IncrementalColumnsConfiguration(BaseConfiguration):
-    cursor_column: Optional[str] = None
-    unique_column: Optional[str] = None
+from .util import table_rows, engine_from_credentials, get_primary_key
 
 
 @dlt.resource
@@ -22,8 +16,7 @@ def sql_table(
     table: str = dlt.config.value,
     schema: Optional[str] = dlt.config.value,
     metadata: Optional[MetaData] = None,
-    cursor_column: Optional[str] = dlt.config.value,
-    unique_column: Optional[str] = dlt.config.value,
+    incremental: Optional[dlt.sources.incremental[Any]] = None,
     write_disposition: TWriteDisposition = 'append'
 ) -> DltResource:
     """A dlt resource which loads data from an SQL database table using SQLAlchemy.
@@ -32,8 +25,7 @@ def sql_table(
     :param table: Name of the table to load
     :param schema: Optional name of the schema table belongs to (uses databse default schema by default)
     :param metadata: Optional `sqlalchemy.MetaData` instance. `schema` argument is ignored when this is used.
-    :param cursor_column: Optional column name to use as cursor for resumeable loading
-    :param unique_column: Optional column that uniquely identifies a row in the table for resumeable loading
+    :param incremental: Option to enable incremental loading for the table. E.g. `incremental=dlt.source.incremental('updated_at', pendulum.parse('2022-01-01T00:00:00Z'))`
     :param write_disposition: Write disposition of the resource
     """
 
@@ -44,9 +36,8 @@ def sql_table(
     table_obj = Table(table, metadata, autoload_with=engine)
 
     return dlt.resource(
-        table_rows(engine, table_obj, cursor_column=cursor_column, unique_column=unique_column),
-        name=table_obj.name, write_disposition=write_disposition
-    )
+        table_rows, name=table_obj.name, write_disposition=write_disposition, primary_key=get_primary_key(table_obj)
+    )(engine, table_obj, incremental=incremental)
 
 
 @dlt.source
@@ -83,7 +74,7 @@ def sql_database(
         dlt.resource(
             table_rows,
             name=table.name,
-            spec=IncrementalColumnsConfiguration  # use spec to explicitly include default parameters in configuration
+            primary_key=get_primary_key(table)
         )(engine, table)
         for table in tables
     ]

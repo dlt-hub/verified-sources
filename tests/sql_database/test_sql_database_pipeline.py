@@ -61,8 +61,7 @@ def test_load_sql_table_incremental(sql_source_db: SQLAlchemySourceDB, destinati
     """Run pipeline twice. Insert more rows after first run
     and ensure only those rows are stored after the second run.
     """
-    os.environ['SOURCES__SQL_DATABASE__CHAT_MESSAGE__CURSOR_COLUMN'] = 'updated_at'
-    os.environ['SOURCES__SQL_DATABASE__CHAT_MESSAGE__UNIQUE_COLUMN'] = 'id'
+    os.environ['SOURCES__SQL_DATABASE__CHAT_MESSAGE__INCREMENTAL__CURSOR_PATH'] = 'updated_at'
 
     pipeline = make_pipeline(destination_name)
     tables = ['chat_message']
@@ -107,7 +106,7 @@ def test_load_sql_table_resource__incremental(sql_source_db: SQLAlchemySourceDB,
         return [
             sql_table(
                 credentials=sql_source_db.credentials, schema=sql_source_db.schema,
-                table='chat_message', cursor_column='updated_at', unique_column='id'
+                table='chat_message', incremental=dlt.sources.incremental('updated_at')
             )
         ]
 
@@ -119,3 +118,26 @@ def test_load_sql_table_resource__incremental(sql_source_db: SQLAlchemySourceDB,
     assert_load_info(load_info)
 
     assert_row_counts(pipeline, sql_source_db, ['chat_message'])
+
+
+@pytest.mark.parametrize("destination_name", ALL_DESTINATIONS)
+def test_load_sql_table_resource__incremental_initial_value(sql_source_db: SQLAlchemySourceDB, destination_name: str) -> None:
+    @dlt.source
+    def sql_table_source() -> List[DltResource]:
+        return [
+            sql_table(
+                credentials=sql_source_db.credentials, schema=sql_source_db.schema,
+                table='chat_message', incremental=dlt.sources.incremental('updated_at', sql_source_db.table_infos['chat_message']['created_at'].start_value)
+            )
+        ]
+
+    pipeline = make_pipeline(destination_name)
+    load_info = pipeline.run(sql_table_source())
+    assert_load_info(load_info)
+    assert_row_counts(pipeline, sql_source_db, ['chat_message'])
+
+
+def test_incremental_composite_primary_key_from_table(sql_source_db: SQLAlchemySourceDB) -> None:
+    resource = sql_table(credentials=sql_source_db.credentials, table='has_composite_key', schema=sql_source_db.schema)
+
+    assert resource.incremental.primary_key == ['a', 'b', 'c']
