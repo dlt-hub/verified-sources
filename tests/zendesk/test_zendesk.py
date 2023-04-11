@@ -3,6 +3,8 @@ from typing import List
 import dlt
 from dlt.pipeline.pipeline import Pipeline
 from pipelines.zendesk import zendesk_chat, zendesk_support, zendesk_talk
+from pipelines.zendesk.helpers.api_helpers import _make_json_serializable
+from zenpy.lib.api_objects import Ticket
 from tests.utils import ALL_DESTINATIONS, assert_load_info
 
 # TODO: several endpoints are not returning data from test account. tables for those endpoints will not be created
@@ -117,6 +119,12 @@ def test_zendesk_talk(destination_name: str) -> None:
     # FULL PIPELINE RUN
     pipeline = _create_pipeline(destination_name=destination_name, dataset_name="test_full_load", include_talk=True)
     _check_pipeline_has_tables(pipeline=pipeline, tables=TALK_TABLES)
+
+
+def test_unserializable_dicts() -> None:
+    sample_dict = {"ticket_sample": Ticket()}
+    sample_dict = _make_json_serializable(sample_dict)
+    assert sample_dict
 
 
 def _create_pipeline(destination_name: str, dataset_name: str, full_refresh: bool = True, include_support: bool = False, include_chat: bool = False, include_talk: bool = False):

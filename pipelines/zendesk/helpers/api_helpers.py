@@ -1,10 +1,11 @@
+import json
 from typing import Iterator, Any, Optional, Union
 from dlt.common import logger, pendulum
 from dlt.common.exceptions import MissingDependencyException
 from dlt.common.typing import DictStrAny, DictStrStr, TDataItem, TDataItems
 try:
     from zenpy import Zenpy
-    from zenpy.lib.api_objects import Ticket
+    from zenpy.lib.api_objects import Ticket, JobStatus
 except ImportError:
     raise MissingDependencyException("Zenpy", ["zenpy>=2.0.25"])
 from .credentials import ZendeskCredentialsToken, ZendeskCredentialsEmailPass, ZendeskCredentialsOAuth
@@ -71,13 +72,11 @@ def process_ticket(ticket: Ticket, custom_fields: DictStrStr, pivot_custom_field
             base_dict[field_name] = custom_field["value"]
         else:
             custom_field["ticket_id"] = ticket.id
-
     # delete fields that are not needed for pivoting
     if pivot_custom_fields:
         del base_dict["custom_fields"]
-
     del base_dict["fields"]
-
+    base_dict = _make_json_serializable(base_dict)
     # modify dates to return datetime objects instead
     base_dict["updated_at"] = ticket.updated
     base_dict["created_at"] = ticket.created
@@ -92,14 +91,14 @@ def basic_load(resource_api: Iterator[Any]) -> Iterator[TDataItem]:
     """
     # sometimes there is a single element which is a dict instead of a generator of objects
     if isinstance(resource_api, dict):
-        yield resource_api
+        yield _make_json_serializable(resource_api)
     else:
         # some basic resources return a dict instead of objects
         for element in resource_api:
             if isinstance(element, dict):
-                yield element
+                yield _make_json_serializable(element)
             else:
-                dict_res = element.to_dict()
+                dict_res = _make_json_serializable(element.to_dict())
                 yield dict_res
 
 
@@ -143,3 +142,18 @@ def get_latest_timestamp(chosen_col: str, default_col: str, object_dict: DictStr
         else:
             raise ValueError(f"Error! {default_col} doesn't contain a format which can be converted into a DateTime by the pendulum parser!")
     return return_timestamp
+
+
+def _make_json_serializable(the_dict: DictStrAny) -> DictStrAny:
+    """
+    Helper that makes a dict json serializable
+    @:param the_dict: The dict that needs to be made json serializable.
+    @:return the_dict: Processed dict that no longer contains any non json serializable values
+    """
+
+    for key, value in the_dict.items():
+        try:
+            json.dumps(the_dict[key])
+        except (TypeError, OverflowError):
+            the_dict[key] = str(value)
+    return the_dict

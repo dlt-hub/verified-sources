@@ -1,0 +1,16 @@
+[tool.poetry]
+name = "pipelines"
+version = "0.1.0"
+description = ""
+authors = ["redicane <caneredi@gmail.com>"]
+readme = "README.md"
+
+[tool.poetry.dependencies]
+python = "^3.10"
+python-dlt = "^0.2.0a30"
+zenpy = "^2.0.25"
+
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
