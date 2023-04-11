@@ -2,12 +2,18 @@ from typing import List, Optional, Union, Any
 
 import dlt
 from dlt.extract.source import DltResource
+from dlt.common.configuration.specs.base_configuration import BaseConfiguration, configspec
 from dlt.common.configuration.specs import ConnectionStringCredentials
 from dlt.common.schema.typing import TWriteDisposition
 from sqlalchemy import MetaData, Table
 from sqlalchemy.engine import Engine
 
 from .util import table_rows, engine_from_credentials, get_primary_key
+
+
+@configspec
+class SqlTableConfiguration(BaseConfiguration):
+    incremental: Optional[dlt.sources.incremental] = None  # type: ignore[type-arg]
 
 
 @dlt.resource
@@ -74,7 +80,8 @@ def sql_database(
         dlt.resource(
             table_rows,
             name=table.name,
-            primary_key=get_primary_key(table)
+            primary_key=get_primary_key(table),
+            spec=SqlTableConfiguration,
         )(engine, table)
         for table in tables
     ]
