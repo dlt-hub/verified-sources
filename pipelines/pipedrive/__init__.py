@@ -10,17 +10,28 @@ To get an api key: https://pipedrive.readme.io/docs/how-to-find-the-api-token
 """
 
 import dlt
-import functools
 
-from .custom_fields_munger import munge_push_func, pull_munge_func, parsed_mapping
+from .custom_fields_munger import update_fields_mapping, rename_fields
 from dlt.common.typing import TDataItems
 from dlt.extract.source import DltResource
 from dlt.sources.helpers import requests
-from typing import Any, Dict, Iterator, Optional, Sequence
+from typing import Any, Dict, Iterator, List, Optional, Sequence
+
+
+ENTITY_MAPPINGS = [
+    ('activities', 'activityFields', {'user_id': 0}),
+    ('organizations', "organizationFields", None),
+    ('persons', 'personFields', None),
+    ('products', 'productFields', None),
+    ('deals', 'dealFields', None),
+    ("pipelines", None, None),
+    ('stages', None, None),
+    ('users', None, None)
+]
 
 
 @dlt.source(name='pipedrive')
-def pipedrive_source(pipedrive_api_key: str = dlt.secrets.value) -> Sequence[DltResource]:
+def pipedrive_source(pipedrive_api_key: str = dlt.secrets.value) -> Iterator[DltResource]:
     """
 
     Args:
@@ -42,43 +53,37 @@ def pipedrive_source(pipedrive_api_key: str = dlt.secrets.value) -> Sequence[Dlt
         stages
         users
 
-    Resources that depend on another resource are implemented as tranformers
+    Resources that depend on another resource are implemented as transformers
     so they can re-use the original resource data without re-downloading.
     Examples:  deals_participants, deals_flow
 
     """
 
-    # we need to add entity fields' resources before entities' resources in order to let custom fields data munging work properly
-    entity_fields_endpoints = ['activityFields', 'dealFields', 'organizationFields', 'personFields', 'productFields']
-    endpoints_resources = [dlt.resource(_get_endpoint(endpoint, pipedrive_api_key), name=endpoint, write_disposition='replace') for endpoint in entity_fields_endpoints]
+    # create state
+    mapping_state = create_state(pipedrive_api_key)
+    # yield nice rename mapping
+    yield mapping_state | parsed_mapping
 
-    entities_endpoints = ['organizations', 'pipelines', 'persons', 'products', 'stages', 'users']
-    endpoints_resources += [dlt.resource(_get_endpoint(endpoint, pipedrive_api_key), name=endpoint, write_disposition='replace') for endpoint in entities_endpoints]
-    # add activities
-    activities_resource = dlt.resource(_get_endpoint('activities', pipedrive_api_key, extra_params={'user_id': 0}), name='activities', write_disposition='replace')
-    endpoints_resources.append(activities_resource)
-    # add resources that need 2 requests
+    endpoints_resources = {}
+    # the *Fields resources send the rename data to regular resources
+    for entity, fields_entity, extra_params in ENTITY_MAPPINGS:
+        if fields_entity is None:
+            # regular resource
+            resource = dlt.resource(_get_pages(entity, pipedrive_api_key, extra_params=extra_params), name=entity, write_disposition='replace')
+            endpoints_resources[resource.name] = resource
+        else:
+            # currently we make entities dependent on fieldEntities. this is not a good idea. we just need to make sure that state is created before the entities
+            # are extracted. if there's not state the renames do not happen. this lets people for example to implement their own source for rename state
+            field_resource = dlt.resource(_get_rename_from_state(None, entity), name=fields_entity, write_disposition='replace', selected=False)
+            entity_transformer = dlt.transformer(name=entity, write_disposition='replace')(_get_pages_with_rename)(entity, pipedrive_api_key, extra_params=extra_params)
+            endpoints_resources[entity_transformer.name] =  field_resource | entity_transformer
 
-    # we make the resource explicitly and put it in a variable
-    deals = dlt.resource(_get_endpoint('deals', pipedrive_api_key), name='deals', write_disposition='replace')
-
-    endpoints_resources.append(deals)
-
-    # in order to avoid calling the deal endpoint 3 times (once for deal, twice for deal_entity)
-    # we use a transformer instead of a resource.
-    # The transformer can use the deals resource from cache instead of having to get the data again.
-    # We use the pipe operator to pass the deals to
-
-    endpoints_resources.append(deals | deals_participants(pipedrive_api_key=pipedrive_api_key))
-    endpoints_resources.append(deals | deals_flow(pipedrive_api_key=pipedrive_api_key))
-
-    # add custom fields' mapping
-    endpoints_resources.append(parsed_mapping())
-
-    return endpoints_resources
+    yield from endpoints_resources.values()
+    yield endpoints_resources["deals"] | deals_participants(pipedrive_api_key=pipedrive_api_key)
+    yield endpoints_resources["deals"] | deals_flow(pipedrive_api_key=pipedrive_api_key)
 
 
-def _paginated_get(url: str, headers: Dict[str, Any], params: Dict[str, Any]) -> Optional[Iterator[TDataItems]]:
+def _paginated_get(url: str, headers: Dict[str, Any], params: Dict[str, Any]) -> Iterator[Iterator[Dict[str, Any]]]:
     """
     Requests and yields data 500 records at a time
     Documentation: https://pipedrive.readme.io/docs/core-api-concepts-pagination
@@ -102,10 +107,7 @@ def _paginated_get(url: str, headers: Dict[str, Any], params: Dict[str, Any]) ->
             params['start'] = pagination_info.get('next_start')
 
 
-ENTITY_FIELDS_SUFFIX = 'Fields'
-
-
-def _get_endpoint(entity: str, pipedrive_api_key: str, extra_params: Dict[str, Any] = None, munge_custom_fields: bool = True) -> Optional[Iterator[TDataItems]]:
+def _get_pages(entity: str, pipedrive_api_key: str, extra_params: Dict[str, Any] = None) -> Iterator[Iterator[Dict[str, Any]]]:
     """
     Generic method to retrieve endpoint data based on the required headers and params.
 
@@ -123,15 +125,17 @@ def _get_endpoint(entity: str, pipedrive_api_key: str, extra_params: Dict[str, A
     if extra_params:
         params.update(extra_params)
     url = f'https://app.pipedrive.com/v1/{entity}'
-    pages = _paginated_get(url, headers=headers, params=params)
-    if munge_custom_fields:
-        if ENTITY_FIELDS_SUFFIX in entity:  # checks if it's an entity fields' endpoint (e.g.: activityFields)
-            munging_func = munge_push_func
-        else:
-            munging_func = pull_munge_func
-            entity = entity[:-1] + ENTITY_FIELDS_SUFFIX  # turns entities' endpoint into entity fields' endpoint
-        pages = map(functools.partial(munging_func, endpoint=entity), pages)
-    yield from pages
+    yield from _paginated_get(url, headers=headers, params=params)
+
+
+def _get_rename_from_state(custom_fields_mapping, entity: str) -> Iterator[Dict[str, Any]]:
+    custom_fields_mapping = custom_fields_mapping or dlt.state()['custom_fields_mapping']
+    yield custom_fields_mapping.get(entity, {})
+
+
+def _get_pages_with_rename(data_item_mapping: Dict[str, Any], entity: str, pipedrive_api_key: str, extra_params: Dict[str, Any] = None) -> Iterator[TDataItems]:
+    for page in _get_pages(entity, pipedrive_api_key, extra_params):
+        yield rename_fields(page, data_item_mapping)
 
 
 @dlt.transformer(write_disposition='replace')
@@ -142,7 +146,7 @@ def deals_participants(deals_page: Any, pipedrive_api_key: str = dlt.secrets.val
     """
     for row in deals_page:
         endpoint = f'deals/{row["id"]}/participants'
-        data = _get_endpoint(endpoint, pipedrive_api_key, munge_custom_fields=False)
+        data = _get_pages(endpoint, pipedrive_api_key)
         if data:
             yield from data
 
@@ -155,6 +159,36 @@ def deals_flow(deals_page: Any, pipedrive_api_key: str = dlt.secrets.value) -> O
     """
     for row in deals_page:
         endpoint = f'deals/{row["id"]}/flow'
-        data = _get_endpoint(endpoint, pipedrive_api_key, munge_custom_fields=False)
+        data = _get_pages(endpoint, pipedrive_api_key)
         if data:
             yield from data
+
+
+@dlt.resource(selected=False)
+def create_state(pipedrive_api_key: str):
+    def _get_pages_for_rename(entity: str, pipedrive_api_key: str) -> Dict[str, Any]:
+
+        existing_fields_mapping = custom_fields_mapping.setdefault(entity, {})
+        # we need to process all pages before yielding
+        for page in _get_pages(entity, pipedrive_api_key):
+            existing_fields_mapping = update_fields_mapping(page, existing_fields_mapping)
+        return existing_fields_mapping
+
+
+    # gets all *Fields data and stores in state
+    custom_fields_mapping = dlt.state().setdefault('custom_fields_mapping', {})
+    for entity, fields_entity, _ in ENTITY_MAPPINGS:
+        if fields_entity is None:
+            continue
+        custom_fields_mapping[entity] = _get_pages_for_rename(fields_entity, pipedrive_api_key)
+
+    yield custom_fields_mapping
+
+
+@dlt.transformer(name='custom_fields_mapping', write_disposition='replace')
+def parsed_mapping(custom_fields_mapping) -> Optional[Iterator[List[Dict[str, str]]]]:
+    """
+    Parses and yields custom fields' mapping in order to be stored in destiny by dlt
+    """
+    for endpoint, data_item_mapping in custom_fields_mapping.items():
+        yield [{'endpoint': endpoint, 'hash_string': hash_string, 'name': names['name'], 'normalized_name': names['normalized_name']} for hash_string, names in data_item_mapping.items()]

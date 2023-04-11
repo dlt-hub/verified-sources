@@ -5,7 +5,7 @@ from pipedrive import pipedrive_source
 def load_pipedrive():
     """Constructs a pipeline that will load all pipedrive data"""
     # configure the pipeline with your destination details
-    pipeline = dlt.pipeline(pipeline_name='pipedrive', destination='bigquery', dataset_name='pipedrive_data')
+    pipeline = dlt.pipeline(pipeline_name='pipedrive', destination='duckdb', dataset_name='pipedrive_data')
     load_info = pipeline.run(pipedrive_source())
     print(load_info)
 
@@ -32,7 +32,7 @@ def load_selected_data():
 
 if __name__ == "__main__" :
     # run our main example
-    # load_pipedrive()
+    load_pipedrive()
     # load selected tables and display resource info
-    load_selected_data()
+    # load_selected_data()
 
