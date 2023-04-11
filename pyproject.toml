@@ -20,7 +20,7 @@ flake8-tidy-imports = "^4.8.0"
 flake8-encodings = "^0.5.0.post1"
 flake8-builtins = "^2.1.0"
 types-requests = "^2.28.11.7"
-python-dlt = {version = "^0.2.0a29", extras = ["redshift", "bigquery", "postgres", "duckdb"]}
+python-dlt = {version = "^0.2.0a31", extras = ["redshift", "bigquery", "postgres", "duckdb"]}
 mimesis = "^7.0.0"
 
 [tool.poetry.group.sql_database.dependencies]
