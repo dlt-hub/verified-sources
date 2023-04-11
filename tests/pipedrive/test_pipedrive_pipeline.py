@@ -4,7 +4,13 @@ from time import time
 
 import dlt
 from dlt.common.utils import uniq_id
-from dlt.pipeline.state import StateInjectableContext
+from dlt.common.configuration.resolve import inject_section
+from dlt.common.configuration.specs import ConfigSectionContext
+
+try:
+    from dlt.pipeline.state import StateInjectableContext
+except ImportError:
+    from dlt.common.pipeline import StateInjectableContext
 
 from pipelines.pipedrive import pipedrive_source
 from pipelines.pipedrive.custom_fields_munger import pull_munge_func
@@ -99,26 +105,26 @@ def test_munger_throughput() -> None:
     # create pipeline so state is available
     pipeline = dlt.pipeline()
 
-    with pipeline._container.injectable_context(StateInjectableContext(state={})):
-        # create N data items with X columns each
-        data_items = []
-        # add 100 renames
-        renames = {uniq_id():{"name": uniq_id()} for _ in range(0, 100)}
-        rename_keys = list(renames.keys())
-        # 10.000 records
-        for _ in range(0, 10000):
-            # with more or less ~100 columns
-            d = {uniq_id():uniq_id() for _ in range(0, 95)}
-            # with ~5 columns to be munged/
-            for _ in range(0, 5):
-                assert random.choice(rename_keys) in renames
-                d[random.choice(rename_keys)] = uniq_id()
-            # assert len(d) == 100
-            data_items.append(d)
+    with inject_section(ConfigSectionContext(sections=("sources", __name__, "munger"))):
+        with pipeline._container.injectable_context(StateInjectableContext(state={})) as state:
+            # create N data items with X columns each
+            data_items = []
+            # add 100 renames
+            renames = {uniq_id():{"name": uniq_id()} for _ in range(0, 100)}
+            rename_keys = list(renames.keys())
+            # 10.000 records
+            for _ in range(0, 10000):
+                # with more or less ~100 columns
+                d = {uniq_id():uniq_id() for _ in range(0, 95)}
+                # with ~5 columns to be munged/
+                for _ in range(0, 5):
+                    assert random.choice(rename_keys) in renames
+                    d[random.choice(rename_keys)] = uniq_id()
+                # assert len(d) == 100
+                data_items.append(d)
 
-        state = dlt.state()
-        state["custom_fields_mapping"] = {"endpoint": renames}
+            state.state["custom_fields_mapping"] = {"endpoint": renames}
 
-        start_ts = time()
-        pull_munge_func(data_items, "endpoint")
-        print(f"munging time: {time() - start_ts} seconds")
+            start_ts = time()
+            pull_munge_func(data_items, "endpoint")
+            print(f"munging time: {time() - start_ts} seconds")

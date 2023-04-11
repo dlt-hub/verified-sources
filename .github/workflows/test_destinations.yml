@@ -1,5 +1,5 @@
 
-name: test redshift, postgres and duckdb
+name: test postgres and duckdb
 
 on:
   pull_request:
@@ -15,9 +15,13 @@ env:
   RUNTIME__LOG_LEVEL: ERROR
 
 jobs:
+  get_changed_pipelines:
+    uses: ./.github/workflows/get_changed_pipelines.yml
 
   run_loader:
     name: test destinations redshift, postgres and duckdb
+    needs: get_changed_pipelines
+    if: needs.get_changed_pipelines.outputs.pipelines_list != ''
     strategy:
       max-parallel: 2
       fail-fast: false
@@ -29,7 +33,6 @@ jobs:
     runs-on: ${{ matrix.os }}
 
     steps:
-
       - name: Check out
         uses: actions/checkout@master
 
@@ -62,11 +65,16 @@ jobs:
       # - name: Setup upterm session
       #   uses: lhotari/action-upterm@v1
       - run: |
-          poetry run pytest tests
+          pipelines_list="${{ needs.get_changed_pipelines.outputs.pipelines_list }}"
+          test_paths=$(echo "$pipelines_list" | awk '{for(i=1;i<=NF;i++) printf "tests/%s ", $i}')
+          poetry run pytest $test_paths
         if: runner.os != 'Windows'
-        name: Run tests/chess Linux/MAC
+        name: Run tests on Linux/macOS
       - run: |
-          poetry run pytest tests
+          FOR %%i IN (${{ needs.get_changed_pipelines.outputs.pipelines_list }}) DO (
+            echo Running tests for: %%i
+            poetry run pytest tests/%%i
+          )
         if: runner.os == 'Windows'
-        name: Run tests/chess Windows
+        name: Run tests on Windows
         shell: cmd
