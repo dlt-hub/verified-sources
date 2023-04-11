@@ -37,9 +37,6 @@ class TableLoader:
         query = table.select()
         if not self.incremental:
             return query
-
-        if self.cursor_column is None:
-            return query
         last_value_func = self.incremental.last_value_func
         if last_value_func is max:  # Query ordered and filtered according to last_value function
             order_by = self.cursor_column.asc()
