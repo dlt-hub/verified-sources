@@ -34,6 +34,8 @@ FIRST_DAY_OF_MILLENNIUM = "2000-01-01"
 
 @dlt.source(max_table_nesting=2)
 def google_analytics(credentials: Union[GoogleAnalyticsCredentialsOAuth, GcpClientCredentialsWithDefault] = dlt.secrets.value,
+                     scope: str = dlt.config.value,
+                     redirect_uri: str = dlt.config.value,
                      property_id: int = dlt.config.value,
                      rows_per_page: int = dlt.config.value,
                      queries: List[DictStrAny] = dlt.config.value,
@@ -42,6 +44,8 @@ def google_analytics(credentials: Union[GoogleAnalyticsCredentialsOAuth, GcpClie
     """
     The DLT source for Google Analytics. Will load basic Analytics info to the pipeline.
     :param credentials: Credentials to the Google Analytics Account
+    :param scope: The scope of oauth token permissions, must match the scope of the refresh tokens.
+    :param redirect_uri: The redirect uri specified in the oauth client.
     :param property_id: A reference to the Google Analytics project. https://developers.google.com/analytics/devguides/reporting/data/v1/property-id
     :param rows_per_page: Controls how many rows are retrieved per page in the reports. Default is 10000, maximum possible is 100000.
     :param queries: List containing info on the all the reports being requested with all the dimensions and metrics per report.
@@ -54,7 +58,7 @@ def google_analytics(credentials: Union[GoogleAnalyticsCredentialsOAuth, GcpClie
 
     # generate access token for credentials if we are using OAuth2.0
     if isinstance(credentials, GoogleAnalyticsCredentialsOAuth):
-        credentials.auth()
+        credentials.auth(scope=scope, redirect_uri=redirect_uri)
         credentials = Credentials.from_authorized_user_info(info={
             "client_id": credentials.client_id,
             "client_secret": credentials.client_secret,

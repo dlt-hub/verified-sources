@@ -35,12 +35,15 @@ class GoogleAnalyticsCredentialsOAuth(GoogleAnalyticsCredentialsBase):
     refresh_token: TSecretValue
     access_token: Optional[TSecretValue] = None
 
-    def auth(self) -> None:
+    def auth(self, scope: str, redirect_uri: str) -> None:
         """
         Will produce an access token from the given credentials.
+        :param scope: The scope of oauth token permissions, must match the scope of the refresh tokens.
+        :param redirect_uri: The redirect uri specified in the oauth client.
+        :return: None
         """
         try:
-            google = OAuth2Session(client_id=self.client_id, scope=["https://www.googleapis.com/auth/analytics.readonly"], redirect_uri="https://localhost")
+            google = OAuth2Session(client_id=self.client_id, scope=scope, redirect_uri=redirect_uri)
             extra = {
                 "client_id": self.client_id,
                 "client_secret": self.client_secret

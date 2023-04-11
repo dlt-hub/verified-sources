@@ -6,7 +6,6 @@ from dlt.pipeline.pipeline import Pipeline
 from pipelines.google_analytics import google_analytics
 from tests.utils import ALL_DESTINATIONS, assert_load_info
 
-ALL_DESTINATIONS = ["postgres"]
 QUERIES = [
     {"resource_name": "sample_analytics_data1", "dimensions": ["browser", "city"], "metrics": ["totalUsers", "transactions"]},
     {"resource_name": "sample_analytics_data2", "dimensions": ["browser", "city"], "metrics": ["totalUsers"]}
@@ -99,7 +98,7 @@ def test_incrementing(destination_name: str) -> None:
                 table_data[table] = len(rows)
     # check dlt state is saved correctly
     for saved_date_key in INCREMENTAL_SAVED_KEYS:
-        assert isinstance(dlt.state()["google_analytics"][saved_date_key], str)
+        assert isinstance(pipeline.state["sources"]["google_analytics"][saved_date_key], str)
 
     # do 2nd load of data and check that no new data is added, i.e. number of rows is the same
     pipeline = _create_pipeline(queries=QUERIES, destination_name=destination_name, dataset_name="analytics_dataset")
@@ -134,11 +133,11 @@ def _check_pipeline_has_tables(pipeline: Pipeline, tables: List[str]):
     """
 
     schema = pipeline.default_schema
-    user_tables = schema.all_tables()
+    user_tables = schema.data_tables()
     num_proper_tables = 0
     for table in user_tables:
         table_name = table["name"]
-        if not ("__" in table_name):
+        if not ("_dlt" in table_name):
             assert table_name in tables
             num_proper_tables += 1
     assert num_proper_tables == len(tables)
