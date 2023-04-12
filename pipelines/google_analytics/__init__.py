@@ -80,7 +80,7 @@ def google_analytics(credentials: Union[GoogleAnalyticsCredentialsOAuth, GcpClie
         metrics = query["metrics"]
         resource_list.append(dlt.resource(basic_report(client=client, rows_per_page=rows_per_page, property_id=property_id, dimensions=dimensions, metrics=metrics,
                                                        resource_name=name, start_date=start_date, end_date=end_date),
-                                          name=name, write_disposition="replace"))
+                                          name=name, write_disposition="append"))
     return resource_list
 
 
