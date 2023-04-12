@@ -36,7 +36,7 @@ jobs:
             echo "No changed pipelines. Skipping tests."
           else
             changed_pipelines=$(echo "$raw_changed_pipelines" \
-              | sed -E 's/^pipelines\/([^/]+)\/[^/]+$/\1/; s/^pipelines\/(.*)_pipeline\.py$/\1/' \
+              | sed -nE 's/^pipelines\/([^/]+)\/.*$/\1/p; s/^pipelines\/(.*)_pipeline\.py$/\1/p' \
               | sort -u \
               | tr '\n' ' '
             )
