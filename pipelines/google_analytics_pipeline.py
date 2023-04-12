@@ -22,10 +22,11 @@ def simple_load():
     # Google Analytics source function
     data_analytics = google_analytics(queries=queries)
     info = pipeline.run(data=data_analytics)
+    print(info)
     return info
 
 
-def chose_date_load(start_date: str = "2000-01-01", end_date: str = "today"):
+def chose_date_load(start_date: str = "2000-01-01", end_date: str = None):
     """
     Chooses the starting and end date for the pipeline load.
     :param start_date: Needs to be the string version of date in the format yyyy-mm-dd and some other values: https://developers.google.com/analytics/devguides/reporting/data/v1/rest/v1beta/DateRange
@@ -37,6 +38,7 @@ def chose_date_load(start_date: str = "2000-01-01", end_date: str = "today"):
     # Google Analytics source function
     data_analytics = google_analytics(queries=queries, start_date=start_date, end_date=end_date)
     info = pipeline.run(data=data_analytics)
+    print(info)
     return info
 
 
