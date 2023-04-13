@@ -27,7 +27,7 @@ redirect_uri = "https://localhost"
 property_id = 293833391
 rows_per_page = 1
 start_date = "2000-01-01"
-end_date = "today"
+end_date = "yesterday"
 
 # sql_database
 [sources.sql_database.data_writer]

@@ -2,7 +2,8 @@
 This module contains helpers that process data and make it ready for loading into the database
 """
 
-from typing import Iterator, List, Union
+from typing import Any, Iterator, List, Union
+from dlt.common.pendulum import pendulum
 from dlt.common.exceptions import MissingDependencyException
 from dlt.common.typing import DictStrAny, TDataItem, TDataItems
 try:
@@ -97,7 +98,7 @@ def process_report(response: RunReportResponse) -> Iterator[TDataItems]:
     metrics_headers = [header.name for header in response.metric_headers]
     dimensions_headers = [header.name for header in response.dimension_headers]
     for row in response.rows:
-        response_dict: DictStrAny = {dimension_header: dimension_value.value
+        response_dict: DictStrAny = {dimension_header: _resolve_dimension_value(dimension_header, dimension_value.value)
                                      for dimension_header, dimension_value in zip(dimensions_headers, row.dimension_values)}
         for i in range(len(metrics_headers)):
             # get metric type and process the value depending on type. Save metric name including type as well for the columns
@@ -123,3 +124,21 @@ def process_metric_value(metric_type: MetricType, value: str) -> Union[str, int,
         return int(value)
     else:
         return float(value)
+
+
+def _resolve_dimension_value(dimension_name: str, dimension_value: str) -> Any:
+    """
+    Helper that will receive a dimension's name and value and convert to a datetime object if need be.
+    :param dimension_name: Name of dimension.
+    :param dimension_value: Value of the dimension.
+    :returns: The value of the dimension with the correct data type.
+    """
+
+    if dimension_name.lower() == "date":
+        return pendulum.from_format(dimension_value, "YYYYMMDD", tz="UTC")
+    elif dimension_name.lower() == "dateHour":
+        return pendulum.from_format(dimension_value, "YYYYMMDD HH", tz="UTC")
+    elif dimension_name.lower() == "dateHourMinute":
+        return pendulum.from_format(dimension_value, "YYYYMMDD HH:MM", tz="UTC")
+    else:
+        return dimension_value

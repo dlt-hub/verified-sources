@@ -102,15 +102,14 @@ def basic_report(client: Resource, rows_per_page: int, dimensions: List[str], me
     # grab the start time from last dlt load if not filled, if that is also empty then use the first day of the millennium as the start time instead
     if not start_date:
         start_date = dlt.state().setdefault(f"last_load_{resource_name}", FIRST_DAY_OF_MILLENNIUM)
-    else:
-        # if start time is given convert to a string as required by the GA4 API
-        start_date = start_date
-    # configure end_date
+    # configure end_date - if left empty - revert to last full day: yesterday
     if not end_date:
-        end_date = pendulum.today().to_date_string()
-    else:
-        end_date = end_date
+        end_date = pendulum.yesterday().to_date_string()
 
+    # check if there is any date dimension in query dimension, if not add it. Options are date, dateHour, dateHourMinute
+    date_dimensions = [dimension for dimension in dimensions if "date" in dimension.lower()]
+    if not date_dimensions:
+        dimensions.append("date")
     # fill dimensions and metrics with the proper api client objects
     dimension_list = [Dimension(name=dimension) for dimension in dimensions]
     metric_list = [Metric(name=metric) for metric in metrics]
