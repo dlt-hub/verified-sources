@@ -25,21 +25,24 @@ class MatomoAPIClient:
         self.base_url = base_url
         self.auth_token = auth_token
 
-    def _request(self, endpoint: str, id_site: int, period: str, date: str):
+    def _request(self, params: dict):
         headers = {'Content-type': 'application/json'}
-        url = f"{self.base_url}/index.php?module=API&method={endpoint}&idSite={id_site}&period={period}&date={date}&format=json&token_auth={self.auth_token}"
-        response = requests.get(url=url, headers=headers)
+        url = f"{self.base_url}/index.php"
+        response = requests.get(url=url, headers=headers, params=params)
         response.raise_for_status()
         return response.json()
 
-    def get_visits(self, id_site, period, date):
+    def get_visits(self, id_site: int, period: str, date: str):
         params = {
-            "idSite": id_site,
-            "period": period,
-            "date": date,
-            "method": "VisitsSummary.get"
+            'module': 'API',
+            'method': 'VisitsSummary.get',
+            'idSite': id_site,
+            'format': 'json',
+            'token_auth': self.auth_token,
+            'period': period,
+            'date': date
         }
-        return self._request(endpoint=params["method"], id_site=params["idSite"], period=params["period"], date=params["date"])
+        return self._request(params=params)
 
 
 if __name__ == "__main__":
