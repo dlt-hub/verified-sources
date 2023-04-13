@@ -5,13 +5,12 @@ from dlt.common.typing import DictStrAny
 from dlt.pipeline.pipeline import Pipeline
 from pipelines.google_analytics import google_analytics
 from tests.utils import ALL_DESTINATIONS, assert_load_info
-
 QUERIES = [
     {"resource_name": "sample_analytics_data1", "dimensions": ["browser", "city"], "metrics": ["totalUsers", "transactions"]},
     {"resource_name": "sample_analytics_data2", "dimensions": ["browser", "city"], "metrics": ["totalUsers"]}
 ]
 # dict containing the name of the tables expected in the db as keys and the number of rows expected as values
-ALL_TABLES = {"dimensions": 206, "metrics": 96, "sample_analytics_data1": 4, "sample_analytics_data2": 4}
+ALL_TABLES = {"dimensions": 206, "metrics": 96, "sample_analytics_data1": 12, "sample_analytics_data2": 12}
 INCREMENTAL_SAVED_KEYS = ["last_load_sample_analytics_data1", "last_load_sample_analytics_data2"]
 
 

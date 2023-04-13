@@ -134,11 +134,11 @@ def _resolve_dimension_value(dimension_name: str, dimension_value: str) -> Any:
     :returns: The value of the dimension with the correct data type.
     """
 
-    if dimension_name.lower() == "date":
+    if dimension_name == "date":
         return pendulum.from_format(dimension_value, "YYYYMMDD", tz="UTC")
-    elif dimension_name.lower() == "dateHour":
-        return pendulum.from_format(dimension_value, "YYYYMMDD HH", tz="UTC")
-    elif dimension_name.lower() == "dateHourMinute":
-        return pendulum.from_format(dimension_value, "YYYYMMDD HH:MM", tz="UTC")
+    elif dimension_name == "dateHour":
+        return pendulum.from_format(dimension_value, "YYYYMMDDHH", tz="UTC")
+    elif dimension_name == "dateHourMinute":
+        return pendulum.from_format(dimension_value, "YYYYMMDDHHmm", tz="UTC")
     else:
         return dimension_value
