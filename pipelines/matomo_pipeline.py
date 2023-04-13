@@ -1,5 +1,5 @@
 """Contains functions that run the matomo pipeline."""
-from .matomo import matomo
+from matomo import matomo
 import dlt
 from time import time
 

@@ -18,8 +18,14 @@ workers = 2  # limit the parallel execution
 [sources.chess]
 config_int=123
 
-## sql_database
+# matomo
+[sources.matomo.matomo]
+id_site = 2
+period = "month"
+date = "2022-03-01"
+methods = ["VisitsSummary.get", "API.getReportMetadata"]
 
+## sql_database
 [sources.sql_database.data_writer]
 buffer_max_items=5000
 

@@ -1,34 +1,65 @@
 """Contains all sources and resources for the Matomo pipeline."""
-from typing import Iterator
+from typing import Dict, Iterator, List
 import dlt
-from dlt.common.exceptions import MissingDependencyException
 from dlt.common.typing import TDataItem
-try:
-    from matomoapi import Matomo
-except ImportError:
-    raise MissingDependencyException("Matomo API Client", ["google-api-python-client"])
+from dlt.extract.source import DltResource
+from .helpers.matomo_client import MatomoAPIClient
 
 
 @dlt.source(max_table_nesting=2)
-def matomo(credentials: str = dlt.secrets.value) -> Iterator[TDataItem]:
+def matomo(credentials: Dict[str, str] = dlt.secrets.value, id_site: int = dlt.config.value,
+           period: str = dlt.config.value, date: str = dlt.config.value) -> List[DltResource]:
+    """
 
-
-    # Replace with your Matomo site URL and authentication token
-    matomo_url = 'https://your-matomo-site.com'
-    matomo_token = 'your-authentication-token'
+    :param credentials:
+    :param id_site:
+    :param period:
+    :param date:
+    :param methods:
+    :return:
+    """
 
     # Create an instance of the Matomo API client
-    matomo = Matomo(matomo_url, token_auth=matomo_token)
+    matomo_client = MatomoAPIClient(base_url=credentials["url"], auth_token=credentials["api_token"])
+    reports = get_reports(matomo_client=matomo_client, id_site=id_site, period=period, date=date)
+    metadata = get_metadata(matomo_client=matomo_client, id_site=id_site, period=period, date=date)
+    return [reports, metadata]
 
+
+@dlt.resource(write_disposition="replace", name="reports")
+def get_reports(matomo_client: MatomoAPIClient,  id_site: int = dlt.config.value, period: str = dlt.config.value,
+                date: str = dlt.config.value) -> Iterator[TDataItem]:
+    """
+
+    :param matomo_client:
+    :param id_site:
+    :param period:
+    :param date:
+    :param methods:
+    :return:
+    """
     # Get the metadata for the available reports
-    metadata = matomo.get_metadata()
+    reports = matomo_client.get_visits(id_site=id_site, period=period, date=date)
 
     # Print the metadata
-    for report in metadata:
-        print(f"{report['name']}: {report['description']}")
+    for report in reports:
+        yield report
 
-    # Get the data for a specific report
-    report_data = matomo.get_report('VisitsSummary.get', date='today', period='day')
 
-    # Print the report data
-    print(report_data)
+@dlt.resource(write_disposition="replace", name="metadata")
+def get_metadata(matomo_client: MatomoAPIClient,  id_site: int = dlt.config.value, period: str = dlt.config.value,
+                 date: str = dlt.config.value) -> Iterator[TDataItem]:
+    """
+
+    :param matomo_client:
+    :param id_site:
+    :param period:
+    :param date:
+    :param methods:
+    :return:
+    """
+    # Get the metadata for the available reports
+    reports = matomo_client.get_metadata(id_site=id_site, period=period, date=date)
+    # Print the metadata
+    for report in reports:
+        yield report
