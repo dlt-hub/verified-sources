@@ -18,8 +18,7 @@ workers = 2  # limit the parallel execution
 [sources.chess]
 config_int=123
 
-## sql_database
-
+# sql_database
 [sources.sql_database.data_writer]
 buffer_max_items=5000
 
