@@ -1,4 +1,0 @@
-google-analytics-data
-google-api-python-client
-google-auth-oauthlib
-requests_oauthlib

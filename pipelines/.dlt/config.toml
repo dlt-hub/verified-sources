@@ -18,18 +18,7 @@ workers = 2  # limit the parallel execution
 [sources.chess]
 config_int=123
 
-# Google Analytics config
-[sources.google_analytics.google_analytics]
-queries = [{resource_name = "sample_analytics_data1", dimensions = ["browser", "city", "dateHour"], metrics = ["totalUsers", "transactions"]},
-            {resource_name = "sample_analytics_data2", dimensions = ["browser", "city"], metrics = ["totalUsers", "transactions"]}]
-scope = "https://www.googleapis.com/auth/analytics.readonly"
-redirect_uri = "https://localhost"
-property_id = 293833391
-rows_per_page = 1000
-start_date = "2000-01-01"
-end_date = "yesterday"
-
-## sql_database
+# sql_database
 [sources.sql_database.data_writer]
 buffer_max_items=5000
 
