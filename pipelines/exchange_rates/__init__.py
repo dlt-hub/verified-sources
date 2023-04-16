@@ -11,7 +11,6 @@ import requests
 @dlt.source
 def exchangerates_source(
     currency_list,
-    last_updated_at,
     base_currency,
     exchangerates_api_key=dlt.secrets.value,
 ):
@@ -20,21 +19,17 @@ def exchangerates_source(
 
     Args:
         currency_list (list): A list of currency codes (e.g., ["AUD", "BRL", "CAD"]).
-        last_updated_at (str): The date (in ISO 8601 format) of the latest exchange rate data already stored in the pipeline destination.
         base_currency (str, optional): The base currency to convert from (default is "EUR").
         exchangerates_api_key (str, optional): The API key for the exchangerates API. Defaults to the value stored in the pipeline secrets.
 
     Returns:
         Generator: A generator that yields JSON response objects from the exchangerates API.
     """
-
-    # Use add_yield_map to unpivot|union rates
     yield exchangerates_resource(
         currency_list,
-        last_updated_at,
         base_currency=base_currency,
         exchangerates_api_key=exchangerates_api_key,
-    ).add_yield_map(lambda i: (yield i))
+    )
 
 
 def _create_auth_headers(exchangerates_api_key):
@@ -74,7 +69,6 @@ def _build_url(
 @dlt.resource(write_disposition="append")
 def exchangerates_resource(
     currency_list: list,
-    last_updated_at: str,
     base_currency: str,
     exchangerates_api_key: str = dlt.secrets.value,
 ) -> dict:
@@ -83,7 +77,6 @@ def exchangerates_resource(
 
     Args:
         currency_list (list): A list of currency codes for which to retrieve exchange rates.
-        last_updated_at (str): A string representation of the date from which to start retrieving exchange rates.
         base_currency (str): The base currency for which to retrieve exchange rates.
         exchangerates_api_key (str, optional): The API key for the ExchangeRates API. Defaults to dlt.secrets.value.
 
@@ -92,18 +85,27 @@ def exchangerates_resource(
     """
     headers = _create_auth_headers(exchangerates_api_key)
     payload = {}
-    rates = []
     now = arrow.get()
+    last_updated_at = dlt.current.state().setdefault("date", "2023-04-10T00:00:00Z")
     date = arrow.get(last_updated_at)
     while date.date() < now.date():
         url = _build_url(
             "api.apilayer.com",
-            f"exchangerates_data/",
+            "exchangerates_data/",
             date.date().isoformat(),
             query=dict(symbols=",".join(currency_list), base=base_currency),
         )
         date = date.shift(days=1)
-        # res = requests.get(url, headers=headers, data=payload)
-        employee_string = '{"first_name": "Michael", "last_name": "Rodgers", "department": "Marketing"}'
-        json_object = json.loads(employee_string)
-        yield json_object
+        res = requests.get(url, headers=headers, data=payload)
+
+        json_object = res.json()
+        yield (
+            {
+                "to": base_currency,
+                "date": json_object["date"],
+                "rate": f'{(1 / json_object["rates"][rate]):.10f}',
+                "from": rate,
+            }
+            for rate in json_object["rates"]
+        )
+        dlt.current.state()["date"] = json_object["date"]
