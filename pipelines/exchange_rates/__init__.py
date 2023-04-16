@@ -88,24 +88,24 @@ def exchangerates_resource(
     now = arrow.get()
     last_updated_at = dlt.current.state().setdefault("date", "2023-04-10T00:00:00Z")
     date = arrow.get(last_updated_at)
-    while date.date() < now.date():
-        url = _build_url(
-            "api.apilayer.com",
-            "exchangerates_data/",
-            date.date().isoformat(),
-            query=dict(symbols=",".join(currency_list), base=base_currency),
-        )
-        date = date.shift(days=1)
-        res = requests.get(url, headers=headers, data=payload)
-
-        json_object = res.json()
-        yield (
-            {
-                "to": base_currency,
-                "date": json_object["date"],
-                "rate": f'{(1 / json_object["rates"][rate]):.10f}',
-                "from": rate,
-            }
-            for rate in json_object["rates"]
-        )
-        dlt.current.state()["date"] = json_object["date"]
+    if date.date() < now.date():
+        while date.date() <= now.date():
+            url = _build_url(
+                "api.apilayer.com",
+                "exchangerates_data/",
+                date.date().isoformat(),
+                query=dict(symbols=",".join(currency_list), base=base_currency),
+            )
+            date = date.shift(days=1)
+            res = requests.get(url, headers=headers, data=payload)
+            json_object = res.json()
+            yield (
+                {
+                    "to": base_currency,
+                    "date": json_object["date"],
+                    "rate": f'{(1 / json_object["rates"][rate]):.10f}',
+                    "from": rate,
+                }
+                for rate in json_object["rates"]
+            )
+            dlt.current.state()["date"] = json_object["date"]
