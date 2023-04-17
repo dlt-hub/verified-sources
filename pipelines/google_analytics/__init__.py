@@ -1,9 +1,9 @@
 """
 Defines all the sources and resources needed for Google Analytics V4
 """
-from typing import Iterator, List, Union
+from typing import Iterator, List, Optional, Union
 import dlt
-from dlt.common import pendulum
+from dlt.common import logger, pendulum
 from dlt.common.configuration.specs import GcpClientCredentialsWithDefault
 from dlt.common.exceptions import MissingDependencyException
 from dlt.common.typing import TDataItem, DictStrAny
@@ -28,7 +28,6 @@ try:
 except ImportError:
     raise MissingDependencyException("Requests-OAuthlib", ["requests_oauthlib"])
 
-
 FIRST_DAY_OF_MILLENNIUM = "2000-01-01"
 
 
@@ -39,8 +38,7 @@ def google_analytics(credentials: Union[GoogleAnalyticsCredentialsOAuth, GcpClie
                      property_id: int = dlt.config.value,
                      rows_per_page: int = dlt.config.value,
                      queries: List[DictStrAny] = dlt.config.value,
-                     start_date: str = dlt.config.value,
-                     end_date: str = dlt.config.value) -> List[DltResource]:
+                     start_date: Optional[str] = dlt.config.value) -> List[DltResource]:
     """
     The DLT source for Google Analytics. Will load basic Analytics info to the pipeline.
     :param credentials: Credentials to the Google Analytics Account
@@ -50,8 +48,6 @@ def google_analytics(credentials: Union[GoogleAnalyticsCredentialsOAuth, GcpClie
     :param rows_per_page: Controls how many rows are retrieved per page in the reports. Default is 10000, maximum possible is 100000.
     :param queries: List containing info on the all the reports being requested with all the dimensions and metrics per report.
     :param start_date: Needs to be the string version of date in the format yyyy-mm-dd and some other values: https://developers.google.com/analytics/devguides/reporting/data/v1/rest/v1beta/DateRange
-    can be left empty for default incremental load behaviour.
-    :param end_date: Needs to be the string version of date in the format yyyy-mm-dd and some other values: https://developers.google.com/analytics/devguides/reporting/data/v1/rest/v1beta/DateRange
     can be left empty for default incremental load behaviour.
     :return resource_list: list containing all the resources in the Google Analytics Pipeline.
     """
@@ -79,13 +75,13 @@ def google_analytics(credentials: Union[GoogleAnalyticsCredentialsOAuth, GcpClie
         dimensions = query["dimensions"]
         metrics = query["metrics"]
         resource_list.append(dlt.resource(basic_report(client=client, rows_per_page=rows_per_page, property_id=property_id, dimensions=dimensions, metrics=metrics,
-                                                       resource_name=name, start_date=start_date, end_date=end_date),
+                                                       resource_name=name, start_date=start_date),
                                           name=name, write_disposition="append"))
     return resource_list
 
 
 def basic_report(client: Resource, rows_per_page: int, dimensions: List[str], metrics: List[str], property_id: int,
-                 resource_name: str, start_date: str = None, end_date: str = None) -> Iterator[TDataItem]:
+                 resource_name: str, start_date: str) -> Iterator[TDataItem]:
     """
     Retrieves the data for a report given dimensions, metrics and filters required for the report.
     :param client: The Google Analytics client used to make requests.
@@ -94,17 +90,15 @@ def basic_report(client: Resource, rows_per_page: int, dimensions: List[str], me
     :param property_id: A reference to the Google Analytics project. https://developers.google.com/analytics/devguides/reporting/data/v1/property-id
     :param rows_per_page: Controls how many rows are retrieved per page in the reports. Default is 10000, maximum possible is 100000.
     :param resource_name: The resource name used to save incremental into dlt state
-    :param start_date: Incremental load start_date, default is taken from dlt state if exists
-    :param end_date: Incremental load end_date, default is always set to the date when the load is started.
+    :param start_date: Incremental load start_date, default is taken from dlt state if exists.
     :returns: Generator of all rows of data in the report.
     """
 
-    # grab the start time from last dlt load if not filled, if that is also empty then use the first day of the millennium as the start time instead
-    if not start_date:
-        start_date = dlt.state().setdefault(f"last_load_{resource_name}", FIRST_DAY_OF_MILLENNIUM)
-    # configure end_date - if left empty - revert to last full day: yesterday
-    if not end_date:
-        end_date = pendulum.yesterday().to_date_string()
+    # grab the start time from last dlt load. If not filled, set to given start_date
+    start_date = dlt.state().get(f"last_load_{resource_name}", start_date or FIRST_DAY_OF_MILLENNIUM)
+    logger.warning(f"Using the starting date: {start_date} for incremental report: {resource_name}")
+    # configure end_date to yesterday as a date string
+    end_date = pendulum.yesterday().to_date_string()
 
     # check if there is any date dimension in query dimension, if not add it. Options are date, dateHour, dateHourMinute
     date_dimensions = [dimension for dimension in dimensions if "date" in dimension.lower()]

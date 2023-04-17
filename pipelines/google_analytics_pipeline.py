@@ -41,17 +41,16 @@ def simple_load_config():
     return info
 
 
-def chose_date_load(start_date: str = "2000-01-01", end_date: str = None):
+def chose_date_first_load(start_date: str = "2000-01-01"):
     """
-    Chooses the starting and end date for the pipeline load.
+    Chooses the starting date for the first pipeline load. Subsequent loads of the pipeline will be from the last loaded date
     :param start_date: Needs to be the string version of date in the format yyyy-mm-dd and some other values: https://developers.google.com/analytics/devguides/reporting/data/v1/rest/v1beta/DateRange
-    :param end_date: Needs to be the string version of date in the format yyyy-mm-dd and some other values: https://developers.google.com/analytics/devguides/reporting/data/v1/rest/v1beta/DateRange
     :returns: Load info on the pipeline that has been run
     """
     # FULL PIPELINE RUN
     pipeline = dlt.pipeline(pipeline_name="dlt_google_analytics_pipeline", destination="postgres", full_refresh=False, dataset_name="sample_analytics_data")
     # Google Analytics source function
-    data_analytics = google_analytics(start_date=start_date, end_date=end_date)
+    data_analytics = google_analytics(start_date=start_date)
     info = pipeline.run(data=data_analytics)
     print(info)
     return info
