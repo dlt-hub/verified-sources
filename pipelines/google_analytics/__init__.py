@@ -2,6 +2,8 @@
 Defines all the sources and resources needed for Google Analytics V4
 """
 from typing import Iterator, List, Optional, Union
+from pendulum.datetime import DateTime
+
 import dlt
 from dlt.common import logger, pendulum
 from dlt.common.configuration.specs import GcpClientCredentialsWithDefault
@@ -51,7 +53,6 @@ def google_analytics(credentials: Union[GoogleAnalyticsCredentialsOAuth, GcpClie
     can be left empty for default incremental load behaviour.
     :return resource_list: list containing all the resources in the Google Analytics Pipeline.
     """
-
     # generate access token for credentials if we are using OAuth2.0
     if isinstance(credentials, GoogleAnalyticsCredentialsOAuth):
         credentials.auth(scope=scope, redirect_uri=redirect_uri)
@@ -71,17 +72,37 @@ def google_analytics(credentials: Union[GoogleAnalyticsCredentialsOAuth, GcpClie
     metadata = get_metadata(client=client, property_id=property_id)
     resource_list = [metadata | metrics_table, metadata | dimensions_table]
     for query in queries:
-        name = query["resource_name"]
-        dimensions = query["dimensions"]
-        metrics = query["metrics"]
-        resource_list.append(dlt.resource(basic_report(client=client, rows_per_page=rows_per_page, property_id=property_id, dimensions=dimensions, metrics=metrics,
-                                                       resource_name=name, start_date=start_date),
-                                          name=name, write_disposition="append"))
+        # always add "date" to dimensions so we are able to track the last day of a report
+        dimensions=query["dimensions"]
+        if "date" not in dimensions:
+            # make a copy of dimensions
+            dimensions = dimensions + ["date"]
+        resource_name = query["resource_name"]
+        resource_list.append(
+            dlt.resource(basic_report, name=resource_name, write_disposition="append")(
+                client=client,
+                rows_per_page=rows_per_page,
+                property_id=property_id,
+                dimensions=dimensions,
+                metrics=query["metrics"],
+                resource_name=resource_name,
+                start_date=start_date,
+                last_date=dlt.sources.incremental("date", primary_key=())  # pass empty primary key to avoid unique checks
+            )
+        )
     return resource_list
 
 
-def basic_report(client: Resource, rows_per_page: int, dimensions: List[str], metrics: List[str], property_id: int,
-                 resource_name: str, start_date: str) -> Iterator[TDataItem]:
+def basic_report(
+    client: Resource,
+    rows_per_page: int,
+    dimensions: List[str],
+    metrics: List[str],
+    property_id: int,
+    resource_name: str,
+    start_date: str,
+    last_date: dlt.sources.incremental[DateTime]
+) -> Iterator[TDataItem]:
     """
     Retrieves the data for a report given dimensions, metrics and filters required for the report.
     :param client: The Google Analytics client used to make requests.
@@ -94,24 +115,22 @@ def basic_report(client: Resource, rows_per_page: int, dimensions: List[str], me
     :returns: Generator of all rows of data in the report.
     """
 
-    # grab the start time from last dlt load. If not filled, set to given start_date
-    start_date = dlt.state().get(f"last_load_{resource_name}", start_date or FIRST_DAY_OF_MILLENNIUM)
-    logger.warning(f"Using the starting date: {start_date} for incremental report: {resource_name}")
+    # grab the start time from last dlt load if not filled, if that is also empty then use the first day of the millennium as the start time instead
+    if last_date.last_value:
+        if start_date:
+            logger.warning(f"Using the starting date: {last_date.last_value} for incremental report: {resource_name} and ignoring start date passed as argument {start_date}")
+        # take next day after yesterday to avoid double loads
+        start_date = last_date.last_value.add(days=1).to_date_string()
+    else:
+        start_date = start_date or FIRST_DAY_OF_MILLENNIUM
     # configure end_date to yesterday as a date string
     end_date = pendulum.yesterday().to_date_string()
-
-    # check if there is any date dimension in query dimension, if not add it. Options are date, dateHour, dateHourMinute
-    date_dimensions = [dimension for dimension in dimensions if "date" in dimension.lower()]
-    if not date_dimensions:
-        dimensions.append("date")
     # fill dimensions and metrics with the proper api client objects
     dimension_list = [Dimension(name=dimension) for dimension in dimensions]
     metric_list = [Metric(name=metric) for metric in metrics]
     # use helpers to send request and process it
     processed_response = get_report(client=client, property_id=property_id, dimension_list=dimension_list, metric_list=metric_list, limit=rows_per_page, start_date=start_date, end_date=end_date)
     yield from processed_response
-    # update the last load time in the dlt state after a successful load
-    dlt.state()[f"last_load_{resource_name}"] = end_date
 
 
 @dlt.resource(selected=False)
