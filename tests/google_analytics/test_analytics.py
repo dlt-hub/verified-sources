@@ -4,7 +4,7 @@ import dlt
 from dlt.common.typing import DictStrAny
 from dlt.pipeline.pipeline import Pipeline
 from pipelines.google_analytics import google_analytics
-from tests.utils import ALL_DESTINATIONS, assert_load_info
+from tests.utils import ALL_DESTINATIONS, assert_load_info, load_table_counts
 QUERIES = [
     {"resource_name": "sample_analytics_data1", "dimensions": ["browser", "city"], "metrics": ["totalUsers", "transactions"]},
     {"resource_name": "sample_analytics_data2", "dimensions": ["browser", "city"], "metrics": ["totalUsers"]}
@@ -87,26 +87,16 @@ def test_incrementing(destination_name: str) -> None:
     @:param: destination_name - redshift/bigquery/postgres
     """
     # do 1st load of data, query the db and save the number of rows per resource
-    table_data = {}
-    pipeline = _create_pipeline(queries=QUERIES, destination_name=destination_name, dataset_name="analytics_dataset")
-    with pipeline.sql_client() as client:
-        for table in ALL_TABLES:
-            sql_query = f"SELECT * FROM {table};"
-            with client.execute_query(sql_query) as cur:
-                rows = list(cur.fetchall())
-                table_data[table] = len(rows)
-    # check dlt state is saved correctly
-    for saved_date_key in INCREMENTAL_SAVED_KEYS:
-        assert isinstance(pipeline.state["sources"]["google_analytics"][saved_date_key], str)
+    pipeline = _create_pipeline(queries=QUERIES, destination_name=destination_name, dataset_name="analytics_dataset", full_refresh=False)
+    first_load_counts = load_table_counts(pipeline, *ALL_TABLES.keys())
 
     # do 2nd load of data and check that no new data is added, i.e. number of rows is the same
-    pipeline = _create_pipeline(queries=QUERIES, destination_name=destination_name, dataset_name="analytics_dataset")
-    with pipeline.sql_client() as client:
-        for table in ALL_TABLES:
-            sql_query = f"SELECT * FROM {table};"
-            with client.execute_query(sql_query) as cur:
-                rows = list(cur.fetchall())
-                assert len(rows) == table_data[table]
+    data = google_analytics(queries=QUERIES)
+    info = pipeline.run(data)
+    assert_load_info(info)
+    incremental_load_counts = load_table_counts(pipeline, *ALL_TABLES.keys())
+
+    assert first_load_counts == incremental_load_counts
 
 
 def _create_pipeline(destination_name: str, dataset_name: str, queries: List[DictStrAny], full_refresh: bool = True):
@@ -133,10 +123,4 @@ def _check_pipeline_has_tables(pipeline: Pipeline, tables: List[str]):
 
     schema = pipeline.default_schema
     user_tables = schema.data_tables()
-    num_proper_tables = 0
-    for table in user_tables:
-        table_name = table["name"]
-        if not ("_dlt" in table_name):
-            assert table_name in tables
-            num_proper_tables += 1
-    assert num_proper_tables == len(tables)
+    assert set(tables).difference([t["name"] for t in user_tables]) == set()

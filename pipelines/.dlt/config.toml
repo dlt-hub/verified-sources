@@ -20,7 +20,7 @@ config_int=123
 
 # Google Analytics config
 [sources.google_analytics.google_analytics]
-queries = [{resource_name = "sample_analytics_data1", dimensions = ["browser", "city", "dateHour"], metrics = ["totalUsers", "transactions"]},
+queries = [{resource_name = "sample_analytics_data1", dimensions = ["browser", "city", "dateHour" ,"date"], metrics = ["totalUsers", "transactions"]},
             {resource_name = "sample_analytics_data2", dimensions = ["browser", "city"], metrics = ["totalUsers", "transactions"]}]
 scope = "https://www.googleapis.com/auth/analytics.readonly"
 redirect_uri = "https://localhost"

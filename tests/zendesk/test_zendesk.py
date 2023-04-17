@@ -162,6 +162,5 @@ def _check_pipeline_has_tables(pipeline: Pipeline, tables: List[str]):
     schema = pipeline.default_schema
     # only tables that have data are created now
     user_tables = schema.data_tables()
-    # print(set(tables).difference([t["name"] for t in user_tables]))
     assert set(tables).difference([t["name"] for t in user_tables]) == set()
 
