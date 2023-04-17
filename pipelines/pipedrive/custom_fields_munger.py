@@ -1,6 +1,8 @@
-from typing import Any, Dict, Iterable, Iterator, List, Optional
+from typing import Any, Dict, Iterable, Iterator, List, Optional, Sequence
 
 import dlt
+
+from .typing import TDataPage
 
 
 # def munge_push_func(data: Iterator[Dict[str, Any]], endpoint: str) -> Iterable[Dict[str, Any]]:
@@ -28,7 +30,7 @@ import dlt
 #     return data
 
 
-def update_fields_mapping(new_fields_mapping: Iterator[Dict[str, Any]], existing_fields_mapping: Dict[str, Any]) -> Dict[str, Any]:
+def update_fields_mapping(new_fields_mapping: TDataPage, existing_fields_mapping: Dict[str, Any]) -> Dict[str, Any]:
     """
     Specific function to perform data munging and push changes to custom fields' mapping stored in dlt's state
     The endpoint must be an entity fields' endpoint
@@ -76,7 +78,9 @@ def _normalize_map(data_item: Dict[str, Any]) -> Dict[str, Dict[str, str]]:
 #     return data
 
 
-def rename_fields(data: Iterator[Dict[str, Any]], fields_mapping: Dict[str, Any]) -> Iterator[Dict[str, Any]]:
+def rename_fields(data: TDataPage, fields_mapping: Dict[str, Any]) -> TDataPage:
+    if not fields_mapping:
+        return data
     renames = [(hash_string, names["name"]) for hash_string, names in fields_mapping.items()]
     for data_item in data:
         for hash_string, name in renames:
