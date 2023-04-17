@@ -24,12 +24,16 @@ has-poetry:
 dev: has-poetry
 	poetry install
 
-lint:
+lint-dlt-init:
+	poetry run pytest tests/test_dlt_init.py --no-header
+
+lint-code:
 	./check-package.sh
 	poetry run mypy --config-file mypy.ini $(shell find pipelines -type f -name py.typed -exec dirname "{}" \; |sort -u)
 	poetry run flake8 --max-line-length=200 pipelines init
 	poetry run flake8 --max-line-length=200 tests
-	poetry run pytest tests/test_dlt_init.py --no-header
+
+lint: lint-code lint-dlt-init
 
 test:
 	poetry run pytest tests
