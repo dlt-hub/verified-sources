@@ -97,7 +97,7 @@ def test_incrementing(destination_name: str) -> None:
 
     # do first load with first ending date
     pendulum.set_test_now(first_end_date)
-    pipeline = _create_pipeline(queries=QUERIES, destination_name=destination_name, dataset_name="analytics_dataset", full_refresh=False)
+    pipeline = _create_pipeline(queries=QUERIES, destination_name=destination_name, dataset_name="analytics_dataset", full_refresh=True)
     incremental_load_counts = [load_table_counts(pipeline, *ALL_TABLES.keys())]
 
     # load the rest of the data
