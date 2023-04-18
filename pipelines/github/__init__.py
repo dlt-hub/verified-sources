@@ -68,36 +68,21 @@ def github_repo_events(
 
     """
     # use naming function in table name to generate separate tables for each event
-    @dlt.resource(table_name=lambda i: i['type'])  # type: ignore
-    def repo_events() -> Iterator[TDataItems]:
-        # get last taken event
-        state = dlt.state()
-        last_created_at = parse_iso8601(state.setdefault("last_created_at", "1970-01-01T00:00:00Z"))
-
+    @dlt.resource(primary_key="id", table_name=lambda i: i['type'])  # type: ignore
+    def repo_events(last_created_at: dlt.sources.incremental[str] = dlt.sources.incremental("created_at", initial_value="1970-01-01T00:00:00Z", last_value_func=max)) -> Iterator[TDataItems]:
         repos_path = "/repos/%s/%s/events" % (urllib.parse.quote(owner), urllib.parse.quote(name))
-        data_items: List[StrAny] = []
 
-        for page_items in _get_rest_pages(access_token, repos_path + "?per_page=100"):
-            # check minimum created_at in page items
-            data_items.extend(page_items)
-            if parse_iso8601(min(page_items, key=lambda i: i["created_at"])["created_at"]) < last_created_at:  # type: ignore
+        for page in _get_rest_pages(access_token, repos_path + "?per_page=100"):
+            yield page
+
+            # stop requesting pages if the last element was already older than initial value
+            # note: incremental will skip those items anyway, we just do not want to use the api limits
+            if page and page[-1]["created_at"] < last_created_at.initial_value:
                 # do not get more pages, we overlap with previous run
-                print(f"Overlap with previous run created at {last_created_at}")
+                print(f"Overlap with previous run created at {last_created_at.initial_value}")
                 break
 
-        # sort, filter by last created date and deduplicate
-        sorted_items = sorted(data_items, key=lambda i: i["created_at"], reverse=True)  # type: ignore
-        data_items = list(
-            {item["id"]: item for item in sorted_items if parse_iso8601(item["created_at"]) > last_created_at}.values()
-        )
-        for item in data_items:
-            # dispatch items to separate tables via table name which is lambda
-            yield item
-        if len(data_items) > 0:
-            # save state
-            state["last_created_at"] = sorted_items[0]["created_at"]
-
-    return repo_events()
+    return repo_events  # type: ignore
 
 
 def _get_reactions_data(
