@@ -46,8 +46,8 @@ class MatomoAPIClient:
             "format": "json",
             "token_auth": self.auth_token
         }
-        for i in range(len(methods)):
-            params[f"urls[{i}]"] = f"method={methods[i]}&idSite={site_id}&period={period}&date={date}"
+        for i, method in enumerate(methods):
+            params[f"urls[{i}]"] = f"method={method}&idSite={site_id}&period={period}&date={date}"
         # Merge the additional parameters into the request parameters
         params.update(extra_params)
         # Send the API request
