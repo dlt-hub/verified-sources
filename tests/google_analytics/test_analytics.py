@@ -4,6 +4,7 @@ from typing import List, Optional
 import dlt
 from dlt.common.pendulum import pendulum
 from dlt.common.typing import DictStrAny
+from dlt.common.utils import uniq_id
 from dlt.pipeline.pipeline import Pipeline
 from pipelines.google_analytics import google_analytics
 from tests.utils import ALL_DESTINATIONS, assert_load_info, load_table_counts
@@ -93,12 +94,19 @@ def test_incrementing(destination_name: str) -> None:
     second_end_date = pendulum.datetime(year=2021, month=12, day=31)
     third_end_date = pendulum.datetime(year=2023, month=1, day=1)
     fourth_end_date = pendulum.datetime(year=2023, month=2, day=1)
-    incremental_end_dates = [second_end_date, third_end_date, fourth_end_date]
+    incremental_end_dates = [first_end_date, second_end_date, third_end_date, fourth_end_date]
+
+    incremental_load_counts = []
+    # dataset_name = "analytics_dataset_" + uniq_id()  # use random dataset name so we can run many tests in parallel
+    pipeline = dlt.pipeline(destination=destination_name, full_refresh=True, dataset_name="analytics_dataset")
+
 
     # do first load with first ending date
-    pendulum.set_test_now(first_end_date)
-    pipeline = _create_pipeline(queries=QUERIES, destination_name=destination_name, dataset_name="analytics_dataset", full_refresh=True)
-    incremental_load_counts = [load_table_counts(pipeline, *ALL_TABLES.keys())]
+    # with pendulum.test(incremental_end_date):
+    #     # do not use full refresh it does not work with pendulum mock
+
+    #     pipeline = _create_pipeline(queries=QUERIES, destination_name=destination_name, dataset_name=dataset_name, full_refresh=False)
+    # incremental_load_counts = [load_table_counts(pipeline, *ALL_TABLES.keys())]
 
     # load the rest of the data
     for incremental_end_date in incremental_end_dates:
@@ -168,7 +176,6 @@ def _create_pipeline(destination_name: str, dataset_name: str, queries: List[Dic
     :param full_refresh: pipeline parameter
     :param queries: Describes how many reports and what data should be retrieved for each report.
     """
-    assert full_refresh
     pipeline = dlt.pipeline(destination=destination_name, full_refresh=full_refresh, dataset_name=dataset_name)
     # gather data with sources and see which data to run or not
     data = google_analytics(queries=queries, start_date=start_date)
