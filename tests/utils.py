@@ -35,7 +35,7 @@ def drop_pipeline() -> Iterator[None]:
                 with p.sql_client(schema_name) as c:
                     try:
                         c.drop_dataset()
-                        print("dropped")
+                        # print("dropped")
                     except Exception as exc:
                         print(exc)
             except SqlClientNotAvailable:
@@ -51,7 +51,6 @@ def drop_pipeline() -> Iterator[None]:
                 # for each schema, drop the dataset
                 for schema_name in p.schema_names:
                     _drop_dataset(schema_name)
-        print("wipe")
         p._wipe_working_folder()
         # deactivate context
         Container()[PipelineContext].deactivate()
