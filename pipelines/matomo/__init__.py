@@ -1,65 +1,60 @@
 """Contains all sources and resources for the Matomo pipeline."""
 from typing import Dict, Iterator, List
 import dlt
-from dlt.common.typing import TDataItem
+from dlt.common.typing import DictStrAny, TDataItem
 from dlt.extract.source import DltResource
 from .helpers.matomo_client import MatomoAPIClient
 
 
 @dlt.source(max_table_nesting=2)
-def matomo(credentials: Dict[str, str] = dlt.secrets.value, id_site: int = dlt.config.value,
-           period: str = dlt.config.value, date: str = dlt.config.value) -> List[DltResource]:
+def matomo(credentials: Dict[str, str] = dlt.secrets.value, queries: Iterator[DictStrAny] = dlt.config.value) -> List[DltResource]:
     """
-
+    The source for the pipeline.
     :param credentials:
-    :param id_site:
-    :param period:
-    :param date:
-    :param methods:
+    :param queries: Dicts that contain information on the reports to retrieve
     :return:
     """
 
     # Create an instance of the Matomo API client
-    matomo_client = MatomoAPIClient(base_url=credentials["url"], auth_token=credentials["api_token"])
-    reports = get_reports(matomo_client=matomo_client, id_site=id_site, period=period, date=date)
-    metadata = get_metadata(matomo_client=matomo_client, id_site=id_site, period=period, date=date)
-    return [reports, metadata]
+    client = MatomoAPIClient(base_url=credentials["url"], auth_token=credentials["api_token"])
+    resource_list = []
+    for query in queries:
+        name = query["resource_name"]
+        resource_list.append(dlt.resource(get_query(client=client, query=query), name=name, write_disposition="append"))
+    return resource_list
 
 
-@dlt.resource(write_disposition="replace", name="reports")
-def get_reports(matomo_client: MatomoAPIClient,  id_site: int = dlt.config.value, period: str = dlt.config.value,
-                date: str = dlt.config.value) -> Iterator[TDataItem]:
+def get_query(client: MatomoAPIClient,  query: DictStrAny) -> Iterator[TDataItem]:
     """
-
-    :param matomo_client:
-    :param id_site:
-    :param period:
-    :param date:
-    :param methods:
+    Processes a query, loads it into a resource
+    :param client:
+    :param query:
     :return:
     """
-    # Get the metadata for the available reports
-    reports = matomo_client.get_visits(id_site=id_site, period=period, date=date)
 
-    # Print the metadata
-    for report in reports:
-        yield report
+    date = query["date"]
+    extra_params = query["params"]
+    methods = query["methods"]
+    period = query["period"]
+    site_ids = query["site_ids"]
+    # Get the metadata for the available reports
+    reports = client.get_query(date=date, extra_params=extra_params, methods=methods, period=period, site_ids=site_ids)
+    yield from reports
 
 
 @dlt.resource(write_disposition="replace", name="metadata")
-def get_metadata(matomo_client: MatomoAPIClient,  id_site: int = dlt.config.value, period: str = dlt.config.value,
+def get_metadata(client: MatomoAPIClient,  id_site: int = dlt.config.value, period: str = dlt.config.value,
                  date: str = dlt.config.value) -> Iterator[TDataItem]:
     """
 
-    :param matomo_client:
+    :param client:
     :param id_site:
     :param period:
     :param date:
-    :param methods:
     :return:
     """
     # Get the metadata for the available reports
-    reports = matomo_client.get_metadata(id_site=id_site, period=period, date=date)
+    reports = client.get_metadata(id_site=id_site, period=period, date=date)
     # Print the metadata
     for report in reports:
         yield report
