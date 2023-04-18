@@ -2,4 +2,4 @@ google-analytics-data
 google-api-python-client
 google-auth-oauthlib
 requests_oauthlib
-python-dlt
+dlt>=0.2.5

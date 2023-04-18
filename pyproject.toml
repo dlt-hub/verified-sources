@@ -1,5 +1,5 @@
 [tool.poetry]
-name = "python-dlt-verified-pipelines"
+name = "dlt-verified-pipelines"
 version = "0.1.0"
 description = "Initial set of dlt pipelines installable with `dlt init` command"
 authors = ["Various Authors <team@dlthub.com>"]
@@ -9,7 +9,7 @@ packages = [{include = "pipelines"}]
 
 [tool.poetry.dependencies]
 python = "^3.8.1"
-python-dlt = "^0.2.1"
+dlt = {version = "^0.2.5", extras = ["redshift", "bigquery", "postgres", "duckdb"]}
 
 [tool.poetry.group.dev.dependencies]
 mypy = "^0.991"
