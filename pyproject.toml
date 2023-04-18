@@ -9,7 +9,7 @@ packages = [{include = "pipelines"}]
 
 [tool.poetry.dependencies]
 python = "^3.8.1"
-python-dlt = {version = "^0.2.0a31", extras = ["redshift", "bigquery", "postgres", "duckdb"]}
+python-dlt = "^0.2.1"
 
 [tool.poetry.group.dev.dependencies]
 mypy = "^0.991"
