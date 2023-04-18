@@ -87,7 +87,7 @@ def google_analytics(credentials: Union[GoogleAnalyticsCredentialsOAuth, GcpClie
                 metrics=query["metrics"],
                 resource_name=resource_name,
                 start_date=start_date,
-                last_date=dlt.sources.incremental("date", primary_key=())  # pass empty primary key to avoid unique checks
+                last_date=dlt.sources.incremental("date", primary_key=())  # pass empty primary key to avoid unique checks, a primary key defined by the resource will be used
             )
         )
     return resource_list
@@ -112,6 +112,7 @@ def basic_report(
     :param rows_per_page: Controls how many rows are retrieved per page in the reports. Default is 10000, maximum possible is 100000.
     :param resource_name: The resource name used to save incremental into dlt state
     :param start_date: Incremental load start_date, default is taken from dlt state if exists.
+    :param last_date: Incremental load end date, default is taken from dlt state if exists.
     :returns: Generator of all rows of data in the report.
     """
 

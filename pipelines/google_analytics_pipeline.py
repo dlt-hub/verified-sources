@@ -29,7 +29,8 @@ def simple_load():
 
 def simple_load_config():
     """
-    Just loads the data normally. Queries taken from config Incremental loading for this pipeline is on, the last load time is saved in dlt_state and the next load of the pipeline will have the last load as a starting date.
+    Just loads the data normally. Queries taken from config Incremental loading for this pipeline is on, the last load time is saved in dlt_state and the next load of the pipeline will have the last
+    load as a starting date.
     :returns: Load info on the pipeline that has been run
     """
     # FULL PIPELINE RUN
