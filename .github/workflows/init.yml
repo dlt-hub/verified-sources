@@ -1,5 +1,5 @@
 
-name: lint
+name: init
 
 on:
   pull_request:
