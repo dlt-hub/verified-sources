@@ -102,11 +102,11 @@ def test_incrementing(destination_name: str) -> None:
 
     # load the rest of the data
     for incremental_end_date in incremental_end_dates:
-        pendulum.set_test_now(incremental_end_date)
-        data = google_analytics(queries=QUERIES)
-        info = pipeline.run(data)
-        assert_load_info(info)
-        incremental_load_counts.append(load_table_counts(pipeline, *ALL_TABLES.keys()))
+        with pendulum.test(incremental_end_date):
+            data = google_analytics(queries=QUERIES)
+            info = pipeline.run(data)
+            assert_load_info(info)
+            incremental_load_counts.append(load_table_counts(pipeline, *ALL_TABLES.keys()))
 
     # Check new data is added after the 1st incremental load
     assert incremental_load_counts[0] != ALL_TABLES and incremental_load_counts[1] != ALL_TABLES
@@ -136,6 +136,7 @@ def test_pagination(destination_name: str) -> None:
     # do 2nd load of data and check that no new data is added, i.e. number of rows is the same
     os.environ["SOURCES__GOOGLE_ANALYTICS__GOOGLE_ANALYTICS__ROWS_PER_PAGE"] = "10"
     pipeline_pagination_10 = _create_pipeline(queries=QUERIES, destination_name=destination_name, dataset_name="analytics_dataset_pagination_10", full_refresh=True)
+    print(pipeline_pagination_10.dataset_name)
     second_load_counts = load_table_counts(pipeline_pagination_10, *ALL_TABLES.keys())
     assert first_load_counts == second_load_counts
     assert first_load_counts == ALL_TABLES
@@ -168,6 +169,7 @@ def _create_pipeline(destination_name: str, dataset_name: str, queries: List[Dic
     :param full_refresh: pipeline parameter
     :param queries: Describes how many reports and what data should be retrieved for each report.
     """
+    assert full_refresh
     pipeline = dlt.pipeline(destination=destination_name, full_refresh=full_refresh, dataset_name=dataset_name)
     # gather data with sources and see which data to run or not
     data = google_analytics(queries=queries, start_date=start_date)
