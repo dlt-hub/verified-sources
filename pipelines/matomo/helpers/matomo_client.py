@@ -53,33 +53,6 @@ class MatomoAPIClient:
         # Send the API request
         yield from self._request(params=params)
 
-    def get_matomo_data(self, api_method: str, site_id: int, period: str, date: str, extra_parameters: dict = None) -> Iterator[TDataItems]:
-        """
-        Retrieves data from the Matomo API for a given site using multiple Matomo API methods.
-        :param extra_parameters:
-        :param date:
-        :param period:
-        :param api_method:
-        :param site_id:
-        :return:
-        """
-        # Set up the API URL and parameters
-        if extra_parameters is None:
-            extra_parameters = {}
-        params = {
-            "module": "API",
-            "method": api_method,
-            "idSite": site_id,
-            "period": period,
-            "date": date,
-            "format": "json",
-            "token_auth": self.auth_token
-        }
-        # Merge the additional parameters into the request parameters
-        params.update(extra_parameters)
-        # Send the API request
-        yield from self._request(params=params)
-
 
 # if __name__ == "__main__":
 #     api_client = MatomoAPIClient(base_url="", auth_token="")
