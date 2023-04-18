@@ -1,6 +1,6 @@
 """This module contains an implementation of a Matomo API client for python."""
-from typing import Iterator
-from dlt.common.typing import TDataItems
+from typing import Iterator, List
+from dlt.common.typing import DictStrAny, TDataItems
 from dlt.sources.helpers.requests import client
 
 
@@ -24,7 +24,34 @@ class MatomoAPIClient:
         url = f"{self.base_url}/index.php"
         response = client.get(url=url, headers=headers, params=params)
         response.raise_for_status()
-        yield response.json()
+        json_response = response.json()
+        yield json_response
+
+    def get_query(self, date: str, extra_params: DictStrAny, methods: List[str], period: str, site_id: int):
+        """
+
+        :param date:
+        :param extra_params:
+        :param methods:
+        :param period:
+        :param site_id:
+        :return:
+        """
+        # Set up the API URL and parameters
+        if extra_params is None:
+            extra_parameters = {}
+        params = {
+            "module": "API",
+            "method": "API.getBulkRequest",
+            "format": "json",
+            "token_auth": self.auth_token
+        }
+        for i in range(len(methods)):
+            params[f"urls[{i}]"] = f"method={methods[i]}&idSite={site_id}&period={period}&date={date}"
+        # Merge the additional parameters into the request parameters
+        params.update(extra_params)
+        # Send the API request
+        yield from self._request(params=params)
 
     def get_matomo_data(self, api_method: str, site_id: int, period: str, date: str, extra_parameters: dict = None) -> Iterator[TDataItems]:
         """

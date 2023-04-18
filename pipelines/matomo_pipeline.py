@@ -8,7 +8,7 @@ def basic_pipeline_run() -> None:
     """
     Does a basic run of the pipeline.
     """
-    pipeline = dlt.pipeline(dataset_name="matomo", full_refresh=False, destination="postgres", pipeline_name="matomo")
+    pipeline = dlt.pipeline(dataset_name="matomo", full_refresh=True, destination="postgres", pipeline_name="matomo2")
     data = matomo()
     info = pipeline.run(data)
     print(info)

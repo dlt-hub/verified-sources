@@ -31,8 +31,8 @@ end_date = "yesterday"
 
 # Matomo config
 [sources.matomo.matomo]
-queries = [{resource_name = "sample_analytics_data1", methods = ["VisitsSummary.get", "API.getReportMetadata"], date = "2022-03-01", period = "month", site_ids = [2], extra_params = {}},
-    {resource_name = "sample_analytics_data2", methods = ["VisitsSummary.get", "API.getReportMetadata"], date = "2022-03-02", period = "month", site_ids = [2]}]
+queries = [{resource_name = "sample_analytics_data1", methods = ["VisitsSummary.get", "API.getReportMetadata"], date = "previous100", period = "day", site_id = 2, extra_params = {}},
+    {resource_name = "sample_analytics_data2", methods = ["VisitsSummary.get", "API.getReportMetadata"], date = "2022-03-02", period = "month", site_id = 2}]
 
 ## sql_database
 [sources.sql_database.data_writer]

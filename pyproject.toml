@@ -9,7 +9,6 @@ packages = [{include = "pipelines"}]
 
 [tool.poetry.dependencies]
 python = "^3.8.1"
-python-dlt = {version = "^0.2.0a31", extras = ["redshift", "bigquery", "postgres", "duckdb"]}
 
 [tool.poetry.group.dev.dependencies]
 mypy = "^0.991"
@@ -33,6 +32,12 @@ google-api-python-client = "^2.78.0"
 
 [tool.poetry.group.zenpy.dependencies]
 zenpy = "^2.0.25"
+
+
+
+
+[tool.poetry.group.matomo.dependencies]
+dlt = "^0.2.5"
 
 [build-system]
 requires = ["poetry-core"]
