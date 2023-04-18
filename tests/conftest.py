@@ -24,3 +24,12 @@ def pytest_configure(config):
     # push telemetry to CI
     os.environ["RUNTIME__DLTHUB_TELEMETRY"] = "False"
     os.environ["RUNTIME__DLTHUB_TELEMETRY_SEGMENT_WRITE_KEY"] = "TLJiyRkGVZGCi2TtjClamXpFcxAA1rSB"
+
+    # path pipeline instance id up to millisecond
+    from dlt.common import pendulum
+    from dlt.pipeline.pipeline import Pipeline
+
+    def _create_pipeline_instance_id(self) -> str:
+        return pendulum.now().format("_YYYYMMDDhhmmssSSSS")
+
+    Pipeline._create_pipeline_instance_id = _create_pipeline_instance_id

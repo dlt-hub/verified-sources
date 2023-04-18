@@ -12,7 +12,7 @@ For people using the pipelines: `technical-help` channel
 For contributors: `dlt-contributors` channel
 
 # Development
-`python-dlt` uses `poetry` to manage, build and version the package. It also uses `make` to automate tasks. To start
+`dlt` uses `poetry` to manage, build and version the package. It also uses `make` to automate tasks. To start
 ```sh
 make install-poetry  # will install poetry, to be run outside virtualenv
 ```
@@ -23,7 +23,7 @@ make dev  # will install all deps including dev
 Executing `poetry shell` and working in it is very convenient at this moment.
 
 ## Python version
-Use python 3.8 for development which is the lowest supported version for `python-dlt`. You'll need `distutils` and `venv`:
+Use python 3.8 for development which is the lowest supported version for `dlt`. You'll need `distutils` and `venv`:
 
 ```shell
 sudo apt-get install python3.8
@@ -33,7 +33,7 @@ sudo apt install python3.8-venv
 You may also use `pyenv` as [poetry](https://python-poetry.org/docs/managing-environments/) suggests.
 
 ## Typing and linting
-`python-dlt` uses `mypy` and `flake8` with several plugins for linting. We do not reorder imports or reformat code. To lint the code do `make lint`.
+`dlt` uses `mypy` and `flake8` with several plugins for linting. We do not reorder imports or reformat code. To lint the code do `make lint`.
 
 **Code does not need to be typed** - but it is better if it is - `mypy` is able to catch a lot of problems in the code. If your pipeline is typed file named `py.typed` to the folder where your pipeline code is. (see `chess` pipeline for example)
 
@@ -80,7 +80,7 @@ All repo code reside in `pipelines` folder. Each pipeline has its own **pipeline
 9. The pipeline must pass CI: linter and tests stage. If you created any accounts or credentials, this data must be shared or via this repo or as is described later. We'll add it to our CI secrets
 
 ## Pipeline specific dependencies.
-If pipeline requires additional dependencies that are not available in `python-dlt` they may be added as follows:
+If pipeline requires additional dependencies that are not available in `dlt` they may be added as follows:
 
 1. Use `poetry` to add it to the group with the same name as pipeline. Example: chess pipeline uses `python-chess` to decode game moves. Dependency was added with `poetry add -G chess python-chess`
 2. Add `requirements.txt` file in **pipeline folder** and add the dependency there.
@@ -167,6 +167,8 @@ Look at `tests/chess/test_chess_pipeline.py` for an example. The line
 makes sure that each test runs against all destinations (as defined in `ALL_DESTINATIONS` global variables)
 
 The simplest possible test just creates pipeline and then issues a run on a source. More advanced test will use `sql_client` to check the data and access the schemas to check the table structure.
+
+Please also look at the [test helpers](tests/utils.py) that you can use to assert the load infos, get counts of elements in tables, select and assert the data in tables etc.
 
 ## Guidelines for writing tests
 Your tests will be run both locally and on CI. It means that a few instances of your test may be executed in parallel and they will be sharing resources. A few simple rules make that possible.
