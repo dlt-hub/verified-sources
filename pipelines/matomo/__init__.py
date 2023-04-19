@@ -72,21 +72,3 @@ def process_report(report: Iterator[TDataItem]) -> Iterator[TDataItem]:
                 yield value
         except Exception as e:
             logger.warning(e)
-
-
-@dlt.resource(write_disposition="replace", name="metadata")
-def get_metadata(client: MatomoAPIClient,  id_site: int = dlt.config.value, period: str = dlt.config.value,
-                 date: str = dlt.config.value) -> Iterator[TDataItem]:
-    """
-
-    :param client:
-    :param id_site:
-    :param period:
-    :param date:
-    :return:
-    """
-    # Get the metadata for the available reports
-    reports = client.get_metadata(id_site=id_site, period=period, date=date)
-    # Print the metadata
-    for report in reports:
-        yield report

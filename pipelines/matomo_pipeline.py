@@ -14,6 +14,30 @@ def basic_pipeline_run() -> None:
     print(info)
 
 
+def run_custom_reports():
+    """
+    Defines some custom reports you can use and shows how to use for different custom reports
+    :return:
+    """
+    pass
+
+
+def run_live_reports():
+    """
+    Defines some live reports you can use and shows how to use for different live reports
+    :return:
+    """
+    pass
+
+
+def run_normal_reports():
+    """
+    Defines some normal reports you can use and shows how to use for different normal reports. Can also be defined
+    :return:
+    """
+    pass
+
+
 if __name__ == "__main__":
     start = time()
     basic_pipeline_run()

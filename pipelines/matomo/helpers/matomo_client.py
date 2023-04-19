@@ -20,6 +20,11 @@ class MatomoAPIClient:
         self.auth_token = auth_token
 
     def _request(self, params: dict):
+        """
+        Helper that retrieves the data and returns the json response
+        :param params:
+        :return:
+        """
         headers = {'Content-type': 'application/json'}
         url = f"{self.base_url}/index.php"
         response = client.get(url=url, headers=headers, params=params)
@@ -53,8 +58,3 @@ class MatomoAPIClient:
         # Send the API request
         yield from self._request(params=params)
 
-
-# if __name__ == "__main__":
-#     api_client = MatomoAPIClient(base_url="", auth_token="")
-#     meta = api_client.get_matomo_data(site_id=2, api_method="API.getMatomoVersion", period="month", date="2022-03-01", extra_parameters=None)
-#     print(meta)
