@@ -71,7 +71,7 @@ def test_init_list_pipelines() -> None:
 def assert_requests_txt(project_files: FileStorage) -> None:
     # check requirements
     assert project_files.has_file(cli_utils.REQUIREMENTS_TXT)
-    assert "python-dlt" in project_files.load(cli_utils.REQUIREMENTS_TXT)
+    assert "dlt" in project_files.load(cli_utils.REQUIREMENTS_TXT)
 
 
 def assert_pipeline_files(project_files: FileStorage, pipeline_name: str, destination_name: str) -> None:

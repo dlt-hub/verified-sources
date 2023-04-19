@@ -51,7 +51,7 @@ def drop_pipeline() -> Iterator[None]:
                 # for each schema, drop the dataset
                 for schema_name in p.schema_names:
                     _drop_dataset(schema_name)
-
+        p._wipe_working_folder()
         # deactivate context
         Container()[PipelineContext].deactivate()
 
