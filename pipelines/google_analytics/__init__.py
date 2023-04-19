@@ -34,28 +34,35 @@ FIRST_DAY_OF_MILLENNIUM = "2000-01-01"
 
 
 @dlt.source(max_table_nesting=2)
-def google_analytics(credentials: Union[GoogleAnalyticsCredentialsOAuth, GcpClientCredentialsWithDefault] = dlt.secrets.value,
-                     scope: str = dlt.config.value,
-                     redirect_uri: str = dlt.config.value,
-                     property_id: int = dlt.config.value,
-                     rows_per_page: int = dlt.config.value,
-                     queries: List[DictStrAny] = dlt.config.value,
-                     start_date: Optional[str] = dlt.config.value) -> List[DltResource]:
+def google_analytics(
+    credentials: Union[GoogleAnalyticsCredentialsOAuth, GcpClientCredentialsWithDefault] = dlt.secrets.value,
+    property_id: int = dlt.config.value,
+    queries: List[DictStrAny] = dlt.config.value,
+    start_date: Optional[str] = FIRST_DAY_OF_MILLENNIUM,
+    rows_per_page: int = 1000
+) -> List[DltResource]:
     """
     The DLT source for Google Analytics. Will load basic Analytics info to the pipeline.
     :param credentials: Credentials to the Google Analytics Account
-    :param scope: The scope of oauth token permissions, must match the scope of the refresh tokens.
-    :param redirect_uri: The redirect uri specified in the oauth client.
-    :param property_id: A reference to the Google Analytics project. https://developers.google.com/analytics/devguides/reporting/data/v1/property-id
-    :param rows_per_page: Controls how many rows are retrieved per page in the reports. Default is 10000, maximum possible is 100000.
+    :param property_id: A numeric Google Analytics property id. https://developers.google.com/analytics/devguides/reporting/data/v1/property-id
     :param queries: List containing info on the all the reports being requested with all the dimensions and metrics per report.
     :param start_date: Needs to be the string version of date in the format yyyy-mm-dd and some other values: https://developers.google.com/analytics/devguides/reporting/data/v1/rest/v1beta/DateRange
     can be left empty for default incremental load behaviour.
+    :param rows_per_page: Controls how many rows are retrieved per page in the reports. Default is 10000, maximum possible is 100000.
     :return resource_list: list containing all the resources in the Google Analytics Pipeline.
     """
+    # validate input params for the most common mistakes
+    try:
+        property_id = int(property_id)
+    except ValueError:
+        raise ValueError(f"{property_id} is an invalid google property id. Please use a numeric id, and not your Measurement ID like G-7F1AE12JLR")
+    if property_id == 0:
+        raise ValueError("Google Analytics property id is 0. Did you forget to configure it?")
+    if not rows_per_page:
+        raise ValueError("Rows per page cannot be 0")
     # generate access token for credentials if we are using OAuth2.0
     if isinstance(credentials, GoogleAnalyticsCredentialsOAuth):
-        credentials.auth(scope=scope, redirect_uri=redirect_uri)
+        credentials.auth("https://www.googleapis.com/auth/analytics.readonly")
         credentials = Credentials.from_authorized_user_info(info={
             "client_id": credentials.client_id,
             "client_secret": credentials.client_secret,
@@ -118,7 +125,7 @@ def basic_report(
 
     # grab the start time from last dlt load if not filled, if that is also empty then use the first day of the millennium as the start time instead
     if last_date.last_value:
-        if start_date:
+        if start_date != FIRST_DAY_OF_MILLENNIUM:
             logger.warning(f"Using the starting date: {last_date.last_value} for incremental report: {resource_name} and ignoring start date passed as argument {start_date}")
         # take next day after yesterday to avoid double loads
         start_date = last_date.last_value.add(days=1).to_date_string()
