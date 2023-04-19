@@ -8,8 +8,7 @@ from google_analytics import google_analytics
 # this can also be filled in config.toml and be left empty as a parameter.
 queries = [
     {"resource_name": "sample_analytics_data1", "dimensions": ["browser", "city"], "metrics": ["totalUsers", "transactions"]},
-    {"resource_name": "sample_analytics_data2", "dimensions": ["browser", "city", "dateHour"], "metrics": ["totalUsers"]},
-    {"resource_name": "sample_analytics_data2", "dimensions": ["dateHourMinute"], "metrics": ["totalUsers"]}
+    {"resource_name": "sample_analytics_data2", "dimensions": ["browser", "city", "dateHour"], "metrics": ["totalUsers"]}
 ]
 
 
@@ -21,7 +20,8 @@ def simple_load():
     # FULL PIPELINE RUN
     pipeline = dlt.pipeline(pipeline_name="dlt_google_analytics_pipeline", destination="postgres", full_refresh=False, dataset_name="sample_analytics_data")
     # Google Analytics source function - taking data from queries defined locally instead of config
-    data_analytics = google_analytics(queries=queries)
+    # TODO: pass your google analytics property id
+    data_analytics = google_analytics(property_id=0, queries=queries)
     info = pipeline.run(data=data_analytics)
     print(info)
     return info
@@ -59,6 +59,6 @@ def chose_date_first_load(start_date: str = "2000-01-01"):
 
 if __name__ == "__main__":
     start_time = time.time()
-    simple_load_config()
+    simple_load()
     end_time = time.time()
     print(f"Time taken: {end_time-start_time}")
