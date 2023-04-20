@@ -37,7 +37,8 @@ Enumerate everything that goes beyond standard `dlt` building blocks. Suggest th
 - ask dlt team for help if it looks like complex software task
 
 # Test account / test data
-- tell what data you expect in the test dataset. otherwise refer to use cases
+- specify what data you expect in the test dataset. otherwise refer to use cases
+- specify what kind of account access you need, include tool's name, reuired plan or features needed
 
 # Implementation tasks
 Below you have a proposal for implementation tasks
