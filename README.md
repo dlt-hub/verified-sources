@@ -63,7 +63,7 @@ All repo code reside in `pipelines` folder. Each pipeline has its own **pipeline
 8. The pipeline must pass linter stage.
 
 ## Pipeline specific dependencies.
-If pipeline requires additional dependencies that are not available in `python-dlt` they may be added as follows:
+If pipeline requires additional dependencies that are not available in `dlt` they may be added as follows:
 
 1. Use `poetry` to add it to the group with the same name as pipeline. Example: chess pipeline uses `python-chess` to decode game moves. Dependency was added with `poetry add -G chess python-chess`
 2. Add `requirements.txt` file in **pipeline folder** and add the dependency there.
@@ -185,6 +185,8 @@ Look at `tests/chess/test_chess_pipeline.py` for an example. The line
 makes sure that each test runs against all destinations (as defined in `ALL_DESTINATIONS` global variables)
 
 The simplest possible test just creates pipeline and then issues a run on a source. More advanced test will use `sql_client` to check the data and access the schemas to check the table structure.
+
+Please also look at the [test helpers](tests/utils.py) that you can use to assert the load infos, get counts of elements in tables, select and assert the data in tables etc.
 
 ## Guidelines for writing tests
 Your tests will be run both locally and on CI. It means that a few instances of your test may be executed in parallel and they will be sharing resources. A few simple rules make that possible.

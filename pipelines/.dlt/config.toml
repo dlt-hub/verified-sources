@@ -18,7 +18,13 @@ workers = 2  # limit the parallel execution
 [sources.chess]
 config_int=123
 
-# sql_database
+# Google Analytics config
+[sources.google_analytics.google_analytics]
+queries = [{resource_name = "sample_analytics_data1", dimensions = ["browser", "city", "dateHour" ,"date"], metrics = ["totalUsers", "transactions"]},
+            {resource_name = "sample_analytics_data2", dimensions = ["browser", "city"], metrics = ["totalUsers", "transactions"]}]
+property_id = 293833391
+
+## sql_database
 [sources.sql_database.data_writer]
 buffer_max_items=5000
 
