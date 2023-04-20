@@ -19,20 +19,30 @@ class MatomoAPIClient:
         self.base_url = base_url
         self.auth_token = auth_token
 
-    def _request(self, params: dict):
+    def _request(self, params: dict, filter_limit: int):
         """
         Helper that retrieves the data and returns the json response
         :param params:
         :return:
         """
-        headers = {'Content-type': 'application/json'}
-        url = f"{self.base_url}/index.php"
-        response = client.get(url=url, headers=headers, params=params)
-        response.raise_for_status()
-        json_response = response.json()
-        yield json_response
 
-    def get_query(self, date: str, extra_params: DictStrAny, methods: List[str], period: str, site_id: int):
+        # loop through all the pages
+        # the total number of rows is received after the first request, for the first request to be sent through, initializing the row_count to 1 would suffice
+        offset = 0
+        row_count = 1
+        limit = filter_limit
+        while offset < row_count:
+            headers = {'Content-type': 'application/json'}
+            url = f"{self.base_url}/index.php"
+            response = client.get(url=url, headers=headers, params=params)
+            response.raise_for_status()
+            json_response = response.json()
+            yield json_response
+            # update
+            row_count = len(json_response)
+            offset += limit
+
+    def get_query(self, date: str, extra_params: DictStrAny, methods: List[str], period: str, site_id: int, filter_limit: int):
         """
 
         :param date:
@@ -52,9 +62,9 @@ class MatomoAPIClient:
             "token_auth": self.auth_token
         }
         for i, method in enumerate(methods):
-            params[f"urls[{i}]"] = f"method={method}&idSite={site_id}&period={period}&date={date}"
+            params[f"urls[{i}]"] = f"method={method}&idSite={site_id}&period={period}&date={date}&filter_limit={filter_limit}"
         # Merge the additional parameters into the request parameters
         params.update(extra_params)
         # Send the API request
-        yield from self._request(params=params)
+        yield from self._request(params=params, filter_limit=filter_limit)
 

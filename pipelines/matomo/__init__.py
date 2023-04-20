@@ -9,7 +9,7 @@ from .helpers.matomo_client import MatomoAPIClient
 
 
 @dlt.source(max_table_nesting=2)
-def matomo(credentials: Dict[str, str] = dlt.secrets.value, queries: List[DictStrAny] = dlt.config.value) -> List[DltResource]:
+def matomo(credentials: Dict[str, str] = dlt.secrets.value, queries: List[DictStrAny] = dlt.config.value, filter_limit: int = dlt.config.value) -> List[DltResource]:
     """
     The source for the pipeline.
     :param credentials:
@@ -21,12 +21,12 @@ def matomo(credentials: Dict[str, str] = dlt.secrets.value, queries: List[DictSt
     client = MatomoAPIClient(base_url=credentials["url"], auth_token=credentials["api_token"])
     resource_list = []
     for query in queries:
-        batch_data = get_data_batch(client=client, query=query)
+        batch_data = get_data_batch(client=client, query=query, filter_limit=filter_limit)
         resource_list.extend(batch_data)
     return resource_list
 
 
-def get_data_batch(client: MatomoAPIClient, query: DictStrAny) -> List[DltResource]:
+def get_data_batch(client: MatomoAPIClient, query: DictStrAny, filter_limit: int) -> List[DltResource]:
     """
     Get all the data in batches.
     :param client:
@@ -40,8 +40,9 @@ def get_data_batch(client: MatomoAPIClient, query: DictStrAny) -> List[DltResour
     methods = query.get("methods", [])
     period = query.get("period", "date")
     site_ids = query.get("site_id", 2)
+    filter_limit = filter_limit
     # Get the metadata for the available reports
-    reports = client.get_query(date=date, extra_params=extra_params, methods=methods, period=period, site_id=site_ids)
+    reports = client.get_query(date=date, extra_params=extra_params, methods=methods, period=period, site_id=site_ids, filter_limit=filter_limit)
     resource_list = []
     for report in reports:
         for method_data, method in zip(report, methods):
