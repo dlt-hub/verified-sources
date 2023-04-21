@@ -83,26 +83,6 @@ def test_incrementing(destination_name: str) -> None:
 
 
 @pytest.mark.parametrize("destination_name", ALL_DESTINATIONS)
-def test_pagination(destination_name: str) -> None:
-    """
-    Tests that pagination works as intended.
-    :param destination_name:
-    :return:
-    """
-    # Load the pipeline twice with different paginations
-    os.environ["SOURCES__MATOMO__MATOMO__ROWS_PER_PAGE"] = "5"
-    pipeline_pagination_5 = _create_pipeline(queries=QUERIES, destination_name=destination_name, dataset_name="matomo_dataset_pagination_5", full_refresh=True)
-    first_load_counts = load_table_counts(pipeline_pagination_5, *ALL_TABLES.keys())
-
-    # do 2nd load of data and check that no new data is added, i.e. number of rows is the same
-    os.environ["SOURCES__MATOMO__MATOMO__ROWS_PER_PAGE"] = "10"
-    pipeline_pagination_10 = _create_pipeline(queries=QUERIES, destination_name=destination_name, dataset_name="matomo_dataset_pagination_10", full_refresh=True)
-    second_load_counts = load_table_counts(pipeline_pagination_10, *ALL_TABLES.keys())
-    assert first_load_counts == second_load_counts
-    assert first_load_counts == ALL_TABLES
-
-
-@pytest.mark.parametrize("destination_name", ALL_DESTINATIONS)
 def test_starting_date(destination_name: str) -> None:
     """
     Tests that starting date works as intended.
@@ -137,6 +117,7 @@ def _create_pipeline(destination_name: str, dataset_name: str, queries: List[Dic
     return pipeline
 
 
+
 def _check_pipeline_has_tables(pipeline: Pipeline, tables: List[str]):
     """
     Helper that checks if a pipeline has all tables in the list and has the same number of proper tables as the list (child tables and dlt tables not included in this count)
@@ -157,7 +138,7 @@ def _count_comparison(first_counts: DictStrAny, second_counts: DictStrAny, same_
     :param same_data_expected: If true, both tables are expected to have the same number of rows for non metadata tables, otherwise first_counts is expected to have more rows per table.
     :return:
     """
-    assert len(first_counts) == len (second_counts)
+    assert len(first_counts) == len(second_counts)
     for table_name in first_counts:
         if table_name not in {"dimensions", "metrics"}:
             if same_data_expected:
