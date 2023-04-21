@@ -34,18 +34,28 @@ Use the [bug report template](https://github.com/dlt-hub/pipelines/issues/new?te
 
 If you are new to `dlt` complete the [Getting started](https://dlthub.com/docs/getting-started) and the [Walkthroughs](https://dlthub.com/docs/walkthroughs/create-a-pipeline) so you have a feeling what is dlt and **how people will use your pipeline**.
 
-We strongly suggest that you build your pipelines out of existing building blocks.
+We strongly suggest that you build your pipelines out of existing **building blocks**.
 
 * Declare your [resources](https://dlthub.com/docs/general-usage/resource) and group them in [sources](https://dlthub.com/docs/general-usage/source) using Python decorators.
-* [Create pipelines with multiple steps](https://dlthub.com/docs/general-usage/resource#feeding-data-from-one-resource-into-another) to load additional data or enrich it
+* [Connect the transformers to the resources](https://dlthub.com/docs/general-usage/resource#feeding-data-from-one-resource-into-another) to load additional data or enrich it
+* [Create your resources dynamically from data](https://dlthub.com/docs/general-usage/source#create-resources-dynamically)
 * [Append, replace and merge your tables](https://dlthub.com/docs/general-usage/incremental-loading)
-* [Transform your data in python](https://dlthub.com/docs/general-usage/resource#customize-resources) and see some [examples of customizations](https://dlthub.com/docs/customizations/customizing-pipelines/renaming_columns)
+* [Transform your data before loading](https://dlthub.com/docs/general-usage/resource#customize-resources) and see some [examples of customizations like column renames and anonymization](https://dlthub.com/docs/customizations/customizing-pipelines/renaming_columns)
 * [Set up "last value" incremental loading](https://dlthub.com/docs/general-usage/incremental-loading#incremental-loading-with-last-value)
+* [Dispatch data to several tables from a single resource](https://dlthub.com/docs/general-usage/resource#dispatch-data-to-many-tables)
+* [Set primary and merge keys, define the columns nullability and data types](https://dlthub.com/docs/general-usage/resource#define-schema)
 
 Concepts to grasp
 * [Credentials](https://dlthub.com/docs/general-usage/credentials) and their ["under the hood"](https://github.com/dlt-hub/dlt/blob/devel/docs/technical/secrets_and_config.md)
 * [Schemas, naming conventions and data normalization](https://dlthub.com/docs/general-usage/schema).
 * [How we distribute pipelines to our users](DISTRIBUTION.md)
+
+Building blocks used right:
+* [Create dynamic resources for tables by reflecting a whole database](https://github.com/dlt-hub/pipelines/blob/master/pipelines/sql_database/sql_database.py#L50)
+* [Incrementally dispatch github events to separate tables](https://github.com/dlt-hub/pipelines/blob/master/pipelines/github/__init__.py#L70)
+* [Read the participants for each deal using transformers and pipe operator](https://github.com/dlt-hub/pipelines/blob/master/pipelines/pipedrive/__init__.py#L67)
+* [Read the events for each ticket by attaching transformer to resource explicitly](https://github.com/dlt-hub/pipelines/blob/master/pipelines/hubspot/__init__.py#L125)
+* [Set `tags` column data type to complex to load them as JSON/struct](https://github.com/dlt-hub/pipelines/blob/master/pipelines/zendesk/__init__.py#L108)
 
 # Contribute pipeline step by step
 
