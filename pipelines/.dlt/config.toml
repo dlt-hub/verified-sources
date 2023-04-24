@@ -9,6 +9,7 @@ log_level="WARNING"
 ### Sources
 
 ## chess
+dlthub_telemetry = true
 
 [sources.chess.extract]
 max_parallel_items = 5
