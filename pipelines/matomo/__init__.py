@@ -11,7 +11,7 @@ FIRST_DAY_OF_MILLENNIUM = "2000-01-01"
 
 
 @dlt.source(max_table_nesting=2)
-def matomo(credentials: Dict[str, str] = dlt.secrets.value, queries: List[DictStrAny] = dlt.config.value, filter_limit: int = dlt.config.value) -> List[DltResource]:
+def matomo(credentials: Dict[str, str] = dlt.secrets.value, queries: List[DictStrAny] = dlt.config.value) -> List[DltResource]:
     """
     The source for the pipeline.
     :param credentials:
@@ -24,23 +24,35 @@ def matomo(credentials: Dict[str, str] = dlt.secrets.value, queries: List[DictSt
     resource_list = []
     for query in queries:
         name = query.get("resource_name")
-        filter_limit = filter_limit
         batch_data = dlt.resource(get_data_batch, write_disposition="append", name=name)(
             client=client,
             query=query,
-            filter_limit=filter_limit,
-            last_date=dlt.sources.incremental("date", primary_key=())   # a primary key defined by the resource name will be used
+            last_date=dlt.sources.incremental("date", primary_key=())  # a primary key defined by the resource name will be used
         )
         resource_list.append(batch_data)
     return resource_list
 
 
-def get_data_batch(client: MatomoAPIClient, query: DictStrAny, filter_limit: int, last_date: dlt.sources.incremental[pendulum.DateTime]) -> List[DltResource]:
+@dlt.source(max_table_nesting=2)
+def matomo_live_data(credentials: Dict[str, str] = dlt.secrets.value) -> List[DltResource]:
+    """
+    The source for the pipeline.
+    :param credentials:
+    :return:
+    """
+
+    # Create an instance of the Matomo API client
+    client = MatomoAPIClient(base_url=credentials["url"], auth_token=credentials["api_token"])
+    resource_list = [get_live_counters(client=client), get_last_visits_details(client=client), get_visitor_profile(client=client), get_most_recent_visitor_id(client=client)]
+
+    return resource_list
+
+
+def get_data_batch(client: MatomoAPIClient, query: DictStrAny, last_date: dlt.sources.incremental[pendulum.DateTime]) -> List[DltResource]:
     """
     Get data in batches
     :param client:
     :param query:
-    :param filter_limit:
     :return:
     """
 
@@ -50,7 +62,6 @@ def get_data_batch(client: MatomoAPIClient, query: DictStrAny, filter_limit: int
     period = query.get("period", "day")
     site_ids = query.get("site_id", 2)
     start_date = query.get("date", None)
-    filter_limit = filter_limit
 
     # configure incremental loading. start_date prio: last dlt load -> set start time -> 2000-01-01
     if last_date.last_value:
@@ -65,13 +76,12 @@ def get_data_batch(client: MatomoAPIClient, query: DictStrAny, filter_limit: int
     date_range = f"{start_date},{end_date}"
     # Get all method data returned for a single query and iterate through pages received
     reports = client.get_query(date=date_range, extra_params=extra_params, methods=methods, period=period, site_id=site_ids)
-    for page in reports:
-        for method_data, method in zip(page, methods):
-            # process data for every method and save it in the correct table (1 for each method data)
-            table_name = f"{name}_{method}"
-            processed_report_generator = process_report(method_data)
-            for data in processed_report_generator:
-                yield dlt.mark.with_table_name(data, table_name)
+    for method_data, method in zip(reports, methods):
+        # process data for every method and save it in the correct table (1 for each method data)
+        table_name = f"{name}_{method}"
+        processed_report_generator = process_report(method_data)
+        for data in processed_report_generator:
+            yield dlt.mark.with_table_name(data, table_name)
 
 
 def process_report(report: Iterator[TDataItem]) -> Iterator[TDataItem]:
@@ -96,3 +106,51 @@ def process_report(report: Iterator[TDataItem]) -> Iterator[TDataItem]:
                 yield value
         except Exception as e:
             logger.warning(e)
+
+
+@dlt.resource(name="live_counters", write_disposition="replace")
+def get_live_counters(client: MatomoAPIClient):
+    """
+
+    :param client:
+    :return:
+    """
+    method_data = client.get_method(date="previous100", period="day", site_id=2, method="Live.getCounters", extra_params={"lastMinutes": 120})
+    processed_report_generator = process_report(method_data)
+    yield from processed_report_generator
+
+
+@dlt.resource(name="last_visit_details", write_disposition="replace")
+def get_last_visits_details(client: MatomoAPIClient):
+    """
+
+    :param client:
+    :return:
+    """
+    method_data = client.get_method(date="previous100", period="day", site_id=2, method="Live.getLastVisitsDetails", extra_params={})
+    processed_report_generator = process_report(method_data)
+    yield from processed_report_generator
+
+
+@dlt.resource(name="visitor_profile", write_disposition="replace")
+def get_visitor_profile(client: MatomoAPIClient):
+    """
+
+    :param client:
+    :return:
+    """
+    method_data = client.get_method(date="previous100", period="day", site_id=2, method="Live.getVisitorProfile", extra_params={})
+    processed_report_generator = process_report(method_data)
+    yield from processed_report_generator
+
+
+@dlt.resource(name="most_recent_visitor_id", write_disposition="replace")
+def get_most_recent_visitor_id(client: MatomoAPIClient):
+    """
+
+    :param client:
+    :return:
+    """
+    method_data = client.get_method(date="previous100", period="day", site_id=2, method="Live.getMostRecentVisitorId", extra_params={})
+    processed_report_generator = process_report(method_data)
+    yield from processed_report_generator

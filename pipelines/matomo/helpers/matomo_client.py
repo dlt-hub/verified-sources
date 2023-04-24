@@ -33,7 +33,7 @@ class MatomoAPIClient:
         response = client.get(url=url, headers=headers, params=params)
         response.raise_for_status()
         json_response = response.json()
-        yield json_response
+        return json_response
 
     def get_query(self, date: str, extra_params: DictStrAny, methods: List[str], period: str, site_id: int):
         """
@@ -46,18 +46,46 @@ class MatomoAPIClient:
         :return:
         """
         # Set up the API URL and parameters
-        if extra_params is None:
-            extra_parameters = {}
+        if not extra_params:
+            extra_params = {}
         params = {
             "module": "API",
             "method": "API.getBulkRequest",
             "format": "json",
-            "token_auth": self.auth_token,
+            "token_auth": self.auth_token
         }
         for i, method in enumerate(methods):
             params[f"urls[{i}]"] = f"method={method}&idSite={site_id}&period={period}&date={date}"
         # Merge the additional parameters into the request parameters
         params.update(extra_params)
         # Send the API request
-        yield from self._request(params=params)
+        return self._request(params=params)
+
+    def get_method(self, date: str, extra_params: DictStrAny, method: str, period: str, site_id: int):
+        """
+
+        :param date:
+        :param extra_params:
+        :param method:
+        :param period:
+        :param site_id:
+        :return:
+        """
+
+        # Set up the API URL and parameters
+        if not extra_params:
+            extra_params = {}
+        params = {
+            "module": "API",
+            "idSite": site_id,
+            "method": method,
+            "date": date,
+            "period": period,
+            "format": "json",
+            "token_auth": self.auth_token,
+        }
+        # Merge the additional parameters into the request parameters
+        params.update(extra_params)
+        # Send the API request
+        return self._request(params=params)
 

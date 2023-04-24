@@ -1,5 +1,5 @@
 """Contains functions that run the matomo pipeline."""
-from matomo import matomo
+from matomo import matomo, matomo_live_data
 import dlt
 from time import time
 
@@ -27,7 +27,12 @@ def run_live_reports():
     Defines some live reports you can use and shows how to use for different live reports
     :return:
     """
-    pass
+
+    pipeline = dlt.pipeline(dataset_name="matomo_live", full_refresh=False, destination="postgres", pipeline_name="matomo2")
+    data = matomo_live_data()
+    info = pipeline.run(data)
+    print(info)
+
 
 
 def run_normal_reports():
@@ -40,6 +45,6 @@ def run_normal_reports():
 
 if __name__ == "__main__":
     start = time()
-    basic_pipeline_run()
+    run_live_reports()
     end = time()
     print(f"Time taken: {end-start}")
