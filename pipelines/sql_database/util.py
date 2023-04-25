@@ -75,10 +75,12 @@ def table_rows(
     yield from loader.load_rows()
 
 
-def engine_from_credentials(credentials: Union[ConnectionStringCredentials, Engine]) -> Engine:
+def engine_from_credentials(credentials: Union[ConnectionStringCredentials, Engine, str]) -> Engine:
     if isinstance(credentials, Engine):
         return credentials
-    return create_engine(credentials.to_native_representation())
+    if isinstance(credentials, ConnectionStringCredentials):
+        credentials = credentials.to_native_representation()
+    return create_engine(credentials)
 
 
 def get_primary_key(table: Table) -> List[str]:
