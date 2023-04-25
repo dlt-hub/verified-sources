@@ -1,16 +1,17 @@
 """Contains functions that run the matomo pipeline."""
-from matomo import matomo, matomo_live_data
+from matomo import matomo_reports, matomo_events
 import dlt
 from time import time
 
 
-def basic_pipeline_run() -> None:
+def run_full_load() -> None:
     """
     Does a basic run of the pipeline.
     """
-    pipeline = dlt.pipeline(dataset_name="matomo", full_refresh=False, destination="postgres", pipeline_name="matomo2")
-    data = matomo()
-    info = pipeline.run(data)
+    pipeline_reports = dlt.pipeline(dataset_name="matomo_full_load", full_refresh=False, destination="postgres", pipeline_name="matomo")
+    data_reports = matomo_reports()
+    data_events = matomo_events()
+    info = pipeline_reports.run([data_reports, data_events])
     print(info)
 
 
@@ -22,29 +23,31 @@ def run_custom_reports():
     pass
 
 
-def run_live_reports():
+def run_reports():
     """
-    Defines some live reports you can use and shows how to use for different live reports
+    Runs the pipeline only loading reports.
     :return:
     """
-
-    pipeline = dlt.pipeline(dataset_name="matomo_live", full_refresh=False, destination="postgres", pipeline_name="matomo2")
-    data = matomo_live_data()
-    info = pipeline.run(data)
+    pipeline_events = dlt.pipeline(dataset_name="matomo_reports", full_refresh=False, destination="postgres", pipeline_name="matomo")
+    data = matomo_reports()
+    info = pipeline_events.run(data)
     print(info)
 
 
-
-def run_normal_reports():
+def run_live_events():
     """
-    Defines some normal reports you can use and shows how to use for different normal reports. Can also be defined
+    Runs the pipeline only loading live events.
     :return:
     """
-    pass
+
+    pipeline_events = dlt.pipeline(dataset_name="matomo_events", full_refresh=False, destination="postgres", pipeline_name="matomo")
+    data = matomo_events()
+    info = pipeline_events.run(data)
+    print(info)
 
 
 if __name__ == "__main__":
     start = time()
-    run_live_reports()
+    run_live_events()
     end = time()
     print(f"Time taken: {end-start}")

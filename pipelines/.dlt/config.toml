@@ -29,11 +29,12 @@ rows_per_page = 1000
 start_date = "2000-01-01"
 
 # Matomo config
-[sources.matomo.matomo]
+[sources.matomo]
 queries = [
     {resource_name = "sample_analytics_data1", methods = ["VisitsSummary.get", "API.getReportMetadata"], date = "2020-01-01", period = "day", site_id = 2, extra_params = {}},
     {resource_name = "sample_analytics_data2", methods = ["VisitsSummary.get", "API.getReportMetadata"], date = "2022-03-02", period = "month", site_id = 2}
 ]
+live_events_site_id = 2
 
 ## sql_database
 [sources.sql_database.data_writer]

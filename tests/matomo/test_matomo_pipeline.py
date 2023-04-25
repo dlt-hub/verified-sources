@@ -5,7 +5,7 @@ import dlt
 from dlt.common.pendulum import pendulum
 from dlt.common.typing import DictStrAny
 from dlt.pipeline.pipeline import Pipeline
-from pipelines.matomo import matomo
+from pipelines.matomo import matomo_events, matomo_reports
 from tests.utils import ALL_DESTINATIONS, assert_load_info, load_table_counts
 QUERIES = []
 # dict containing the name of the tables expected in the db as keys and the number of rows expected as values
@@ -115,7 +115,6 @@ def _create_pipeline(destination_name: str, dataset_name: str, queries: List[Dic
     info = pipeline.run(data)
     assert_load_info(info)
     return pipeline
-
 
 
 def _check_pipeline_has_tables(pipeline: Pipeline, tables: List[str]):

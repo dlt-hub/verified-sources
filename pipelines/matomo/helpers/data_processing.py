@@ -1,0 +1,82 @@
+"""Helpers for processing data from API calls."""
+
+from typing import Iterator, List
+import dlt
+from dlt.common import logger
+from dlt.common.pendulum import pendulum
+from dlt.common.typing import DictStrAny, TDataItem
+
+FIRST_DAY_OF_MILLENNIUM = "2000-01-01"
+FIRST_DAY_OF_MILLENNIUM_TIMESTAMP = 946684800.0
+
+
+def process_report(report: Iterator[TDataItem]) -> Iterator[TDataItem]:
+    """
+    Helper, loops through multiple formats of method_data and processes them into dlt resources
+    :param report: Response from Matomo API containing data for a single method.
+    :returns: generator of dicts.
+    """
+    if isinstance(report, dict):
+        for key, value in report.items():
+            # TODO: better way of checking for this
+            # need to also check here if it is only a single row of data being received
+            if not isinstance(value, dict):
+                yield report
+                break
+            value["date"] = pendulum.parse(key)
+            yield value
+    else:
+        try:
+            for value in report:
+                value["date"] = pendulum.yesterday()
+                yield value
+        except Exception as e:
+            logger.warning(str(e))
+            raise ValueError("Method doesn't support report data!")
+
+
+def process_visitors(visitors_list: List[DictStrAny]) -> Iterator[TDataItem]:
+    """
+    Helper to process data from Matomo live visits data.
+    :param visitors_list: A list of dicts as returned by Matomo API
+    :returns: A generator of processed dicts from the raw API call
+    """
+    for visitor_info in visitors_list:
+        last_visit_datetime = pendulum.from_timestamp(visitor_info["serverTimestamp"])
+        visitor_info["last_visit_datetime"] = last_visit_datetime
+        yield visitor_info
+
+
+def get_matomo_date_range(start_date: str, last_date: dlt.sources.incremental[pendulum.DateTime]) -> str:
+    """
+    Given a default starting date and the last load date for a resource, it will output a valid date range for Matomo API data retrieval
+    :param start_date: Default starting date string
+    :param last_date: Last date loaded saved in dlt state
+    :return date_range: formatted string for a date range - starting_date,end_date
+    """
+    # configure incremental loading. start_date prio: last dlt load -> set start time -> 2000-01-01
+    if last_date.last_value:
+        # take next day after yesterday to avoid double loads
+        start_date = last_date.last_value.add(days=1).to_date_string()
+        if start_date:
+            logger.warning(f"Using the starting date: {last_date.last_value} for last_visit_details and ignoring start date passed as argument {start_date}")
+    else:
+        start_date = start_date or FIRST_DAY_OF_MILLENNIUM
+    # configure end_date to yesterday as a date string and format date_range with starting and end dates
+    end_date = pendulum.yesterday().to_date_string()
+    date_range = f"{start_date},{end_date}"
+    return date_range
+
+
+def get_matomo_last_load_timestamp(last_date: dlt.sources.incremental[pendulum.DateTime]) -> float:
+    """
+    Giventhe last load date for a resource, it will output the timestamp of the starting time for getting live visits from Matomo.
+    :param last_date: Last date loaded saved in dlt state
+    :returns: Timestamp of last load or 2000-01-01 loading for the first time.
+    """
+    # configure incremental loading. start_date prio: last dlt load -> 2000-01-01
+    if last_date.last_value:
+        last_load_timestamp: float = last_date.last_value.timestamp()
+        return last_load_timestamp
+    else:
+        return FIRST_DAY_OF_MILLENNIUM_TIMESTAMP
