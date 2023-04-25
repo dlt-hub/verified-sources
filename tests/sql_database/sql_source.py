@@ -24,9 +24,6 @@ from dlt.common.configuration.specs import ConnectionStringCredentials
 from dlt.common.pendulum import pendulum, timedelta
 
 
-
-
-
 class SQLAlchemySourceDB:
     def __init__(self, credentials: ConnectionStringCredentials) -> None:
         self.credentials = credentials
