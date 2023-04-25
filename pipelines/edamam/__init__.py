@@ -13,10 +13,6 @@ from dlt.sources.helpers import requests
 EDAMAM_NUTRITION_DATA_API_URL = 'https://api.edamam.com/api/nutrition-data'
 current_time = datetime.datetime.now()
 
-@dlt.source(name='edamam')
-def edamam_source(api_secrets_key: str = dlt.secrets.value) -> Sequence[DltResource]:
-    """edamam dlt source"""
-    return edamam_source(api_secrets_key)
 
 @dlt.resource(write_disposition='append')
 def nutrition_data(
