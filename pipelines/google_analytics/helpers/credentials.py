@@ -1,7 +1,7 @@
 """
 This module handles how credentials are read in dlt sources
 """
-from typing import ClassVar, List, Optional
+from typing import ClassVar, List, Optional, Union
 from dlt.common import logger
 from dlt.common.configuration import configspec
 from dlt.common.configuration.specs import CredentialsConfiguration
@@ -33,17 +33,19 @@ class GoogleAnalyticsCredentialsOAuth(GoogleAnalyticsCredentialsBase):
     client_secret: TSecretValue
     project_id: TSecretValue
     refresh_token: TSecretValue
+    scopes: Optional[List[str]] = None
+
     access_token: Optional[TSecretValue] = None
 
-    def auth(self, scope: str, redirect_uri: str) -> None:
+    def auth(self, scopes: Union[str, List[str]]) -> None:
         """
-        Will produce an access token from the given credentials.
-        :param scope: The scope of oauth token permissions, must match the scope of the refresh tokens.
-        :param redirect_uri: The redirect uri specified in the oauth client.
+        Will produce an access token from the given credentials using `refresh_token` grant type and optional scopes
         :return: None
         """
+        self.add_scopes(scopes)
         try:
-            google = OAuth2Session(client_id=self.client_id, scope=scope, redirect_uri=redirect_uri)
+
+            google = OAuth2Session(client_id=self.client_id, scope=self.scopes)
             extra = {
                 "client_id": self.client_id,
                 "client_secret": self.client_secret
@@ -53,3 +55,17 @@ class GoogleAnalyticsCredentialsOAuth(GoogleAnalyticsCredentialsBase):
             logger.warning("Couldn't create access token from credentials. Refresh token may have expired!")
             logger.warning(str(e))
             raise ValueError("Invalid credentials for creating an OAuth token!")
+
+
+    def add_scopes(self, scopes: Union[str, List[str]]) -> None:
+        if not self.scopes:
+            if isinstance(scopes, str):
+                self.scopes = [scopes]
+            else:
+                self.scopes = scopes
+        else:
+            if isinstance(scopes, str):
+                if scopes not in self.scopes:
+                    self.scopes += [scopes]
+            elif scopes:
+                self.scopes = list(set(self.scopes + scopes))

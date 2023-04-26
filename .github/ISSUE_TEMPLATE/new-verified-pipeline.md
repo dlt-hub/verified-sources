@@ -1,13 +1,18 @@
 ---
-name: New Verified Pipeline
-about: This is a spec for new verified pipeline
+name: New verified pipeline
+about: I want to create a new verified pipeline
 title: "[pipeline name] verified pipeline"
 labels: verified pipeline
 assignees: ''
 
 ---
 
-# Description
+# Planned Pipeline Info
+Please provide info below when opening the issue to give use heads-up on what is planned.
+- **name** of the pipeline to be used by `dlt init` and to be placed in `pipelines` folder: [e.g. pipedrive]
+- **category and description** of the pipeline: [e.g. CRM, loads the relevant data from pipedrive api]
+
+You can fill the data below when writing spec.
 
 # Use Cases
 Please provide descriptions up to 3 most important use cases that users of this pipeline do. Those use cases will be:
@@ -21,7 +26,7 @@ use case description is not only targeted at the developers but also by people c
 Define pipeline interface to the user in terms of sources and resources.
 - enumerate all the sources with information form which endpoints the data comes from
 - ideally provide the config arguments to each source (ie. start dates, report ranges etc.)
-- use some pseudocode if you want
+- you can use pseudocode to show how you intend to use the source
 - provide the default write disposition for resources in the source (all append, all replace?)
 - in the sources identify the incremental and merge resources and specify them in a reasonable way (ideally by giving the cursor columns - what is the last value really?, primary keys and merge keys).
 
@@ -32,11 +37,12 @@ Enumerate everything that goes beyond standard `dlt` building blocks. Suggest th
 - ask dlt team for help if it looks like complex software task
 
 # Test account / test data
-- tell what data you expect in the test dataset. otherwise refer to use cases
+- specify what data you expect in the test dataset. otherwise refer to use cases
+- specify what kind of account access you need, include tool's name, reuired plan or features needed
 
 # Implementation tasks
 Below you have a proposal for implementation tasks
 * [ ] implement all the described sources, resources and endpoints
-* [ ] make sure that the Use Cases can be easily executed by the user with the implemented by **providing demonstrations in all the use cases in the `[pipeline_name]_pipeline.py`
+* [ ] make sure that the Use Cases can be easily executed by the pipeline's user by **providing demonstrations of all the use cases** in the `[pipeline_name]_pipeline.py`
 * [ ] all the use cases are tested
 * [ ] if there are any customizations you must test them, including unit tests for custom code

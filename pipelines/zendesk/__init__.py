@@ -106,8 +106,7 @@ def ticket_fields_table(zendesk_client: Zenpy) -> Iterator[TDataItem]:
         yield return_dict
 
 
-@dlt.resource(name="tickets", write_disposition="append", columns={"tags": {"name": "tags", "data_type": "complex", "nullable": True},
-                                                                   "custom_fields": {"name": "custom_fields", "data_type": "complex", "nullable": True}})
+@dlt.resource(name="tickets", write_disposition="append", columns={"tags": {"data_type": "complex"}, "custom_fields": {"data_type": "complex"}})
 def ticket_table(zendesk_client: Zenpy, pivot_fields: bool = True, per_page: int = 1000, start_time: Optional[pendulum.DateTime] = None, incremental_col: str = "updated_at") -> Iterator[TDataItem]:
     """
     Resource for tickets table. Uses DLT state to handle column renaming of custom fields to prevent changing the names of said columns.

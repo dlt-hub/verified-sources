@@ -8,7 +8,7 @@ This may look a little bit weird from software engineering perspective but we wa
 
 ## Use `dlt init` to add pipeline to your project
 
-We'll use the [dlt init](https://dlthub.com/docs/command-line-interface) command to distribute pipelines.
+We'll use the [dlt init](https://dlthub.com/docs/walkthroughs/add-a-pipeline) command to distribute pipelines.
 
 
 1. Pipelines are distributed by `dlt init` command that can be issued several times.
