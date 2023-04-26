@@ -7,7 +7,6 @@ from faker import Faker
 class RandomDataGenerator:
     def __init__(self):
         self.fake = Faker()
-        self.fake.seed_instance(42)
 
     def random_names_generation(self, length: int = 10) -> Tuple[str]:
         random_names = []
