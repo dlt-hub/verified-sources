@@ -18,13 +18,15 @@ def process_report(report: Iterator[TDataItem]) -> Iterator[TDataItem]:
     """
     if isinstance(report, dict):
         for key, value in report.items():
-            # TODO: better way of checking for this
-            # need to also check here if it is only a single row of data being received
-            if not isinstance(value, dict):
+            if isinstance(value, list):
+                for el in value:
+                    el["date"] = pendulum.parse(key)
+                    yield el
+            elif isinstance(value, dict):
+                value["date"] = pendulum.parse(key)
+                yield value
+            else:
                 yield report
-                break
-            value["date"] = pendulum.parse(key)
-            yield value
     else:
         try:
             for value in report:
@@ -56,10 +58,10 @@ def get_matomo_date_range(start_date: str, last_date: dlt.sources.incremental[pe
     """
     # configure incremental loading. start_date prio: last dlt load -> set start time -> 2000-01-01
     if last_date.last_value:
+        if start_date:
+            logger.warning(f"Using the starting date: {last_date.last_value} for the query and ignoring start date passed as argument {start_date}!")
         # take next day after yesterday to avoid double loads
         start_date = last_date.last_value.add(days=1).to_date_string()
-        if start_date:
-            logger.warning(f"Using the starting date: {last_date.last_value} for last_visit_details and ignoring start date passed as argument {start_date}")
     else:
         start_date = start_date or FIRST_DAY_OF_MILLENNIUM
     # configure end_date to yesterday as a date string and format date_range with starting and end dates

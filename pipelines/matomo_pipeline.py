@@ -20,7 +20,25 @@ def run_custom_reports():
     Defines some custom reports you can use and shows how to use for different custom reports
     :return:
     """
-    pass
+
+    queries = [
+        {"resource_name": "custom_report_name",
+         "methods": ["CustomReports.getCustomReport"],
+         "date": "2020-01-01",
+         "period": "day",
+         "site_id": 2,
+         "extra_params": {"idCustomReport": 1}},
+        {"resource_name": "custom_report_name2",
+         "methods": ["CustomReports.getCustomReport"],
+         "date": "2020-01-01",
+         "period": "day",
+         "site_id": 2,
+         "extra_params": {"idCustomReport": 2}},
+    ]
+    pipeline_reports = dlt.pipeline(dataset_name="matomo_custom_reports", full_refresh=False, destination="postgres", pipeline_name="matomo")
+    data = matomo_reports(queries=queries)
+    info = pipeline_reports.run(data)
+    print(info)
 
 
 def run_reports():
@@ -48,6 +66,6 @@ def run_live_events():
 
 if __name__ == "__main__":
     start = time()
-    run_live_events()
+    run_full_load()
     end = time()
     print(f"Time taken: {end-start}")
