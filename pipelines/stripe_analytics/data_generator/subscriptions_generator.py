@@ -3,11 +3,8 @@ import random
 from typing import Tuple
 
 import stripe
+from random_data_generator import RandomDataGenerator
 from tqdm import tqdm
-
-from pipelines.stripe_analytics.data_generator.random_data_generator import (
-    RandomDataGenerator,
-)
 
 
 class StripeDataUploader:
@@ -51,9 +48,24 @@ class StripeDataUploader:
             )
 
     @staticmethod
+    def create_coupons():
+        stripe.Coupon.create(
+            duration="once",
+            id=f"free-period_{random.randint(0, 1000000)}",
+            percent_off=100,
+        )
+        stripe.Coupon.create(
+            duration="forever",
+            id=f"discount_{random.randint(0, 1000000)}",
+            percent_off=15,
+        )
+
+    @staticmethod
     def attach_customer_and_subscription():
         all_customers = stripe.Customer.list()["data"]
         all_subscriptions = stripe.Price.list()["data"]
+        all_coupons = [coupon["id"] for coupon in stripe.Coupon.list()["data"]]
+        all_coupons.append(None)
 
         for sample_customer in tqdm(
             all_customers, desc="Randomly assign subscriptions on customers..."
@@ -64,6 +76,7 @@ class StripeDataUploader:
                 default_payment_method=sample_customer["invoice_settings"].get(
                     "default_payment_method", "pm_card_visa"
                 ),
+                coupon=random.choice(all_coupons),
             )
 
     @staticmethod
@@ -71,7 +84,9 @@ class StripeDataUploader:
         all_customers_subscriptions = stripe.Subscription.list()["data"]
         to_delete = random.sample(all_customers_subscriptions, k=number)
 
-        for sample in tqdm(to_delete, desc="Randomly delete some customer's subscriptions..."):
+        for sample in tqdm(
+            to_delete, desc="Randomly delete some customer's subscriptions..."
+        ):
             stripe.Subscription.delete(sample["id"])
 
 
@@ -86,5 +101,6 @@ if __name__ == "__main__":
 
     uploader.create_subscription(rand_plans, rand_amounts)
     uploader.create_customer(rand_customers)
+    uploader.create_coupons()
     uploader.attach_customer_and_subscription()
     uploader.randomly_delete_subscriptions(5)
