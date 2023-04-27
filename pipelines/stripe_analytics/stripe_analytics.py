@@ -1,8 +1,10 @@
 from enum import Enum
-from typing import Generator
+from typing import Generator, Any
+from datetime import datetime
 
 import dlt
 import stripe
+from dlt.extract.source import DltResource
 
 
 class Endpoints(Enum):
@@ -15,8 +17,11 @@ class Endpoints(Enum):
 
 def stripe_get_data(resource: Endpoints, start_date=None, end_date=None, **kwargs) -> dict:
     if start_date:
-        # convert to unix timestamp
-        start_date = int(start_date.timestamp())
+        if isinstance(start_date, str):
+            start_date = datetime.strptime(start_date, '%Y-%m-%dT%H:%M:%SZ')
+        if isinstance(start_date, datetime):
+            # convert to unix timestamp
+            start_date = int(start_date.timestamp())
     if end_date:
         # convert to unix timestamp
         end_date = int(end_date.timestamp())
@@ -35,17 +40,20 @@ def stripe_source(
     stripe_secret_key: str = dlt.secrets.value,
     limit: int = 100,
     get_all_data: bool = False,
-):
+) -> Generator[DltResource, Any, None]:
 
     stripe.api_key = stripe_secret_key
     stripe.api_version = "2022-11-15"
 
-    def get_resource(endpoint: Endpoints) -> Generator[dict]:
+    def get_resource(endpoint: Endpoints,
+                     created=dlt.sources.incremental("created", initial_value=-3600)
+    ) -> Generator[dict, Any, None]:
         get_more = True
         starting_after = None
+        print(created)
         while get_more:
             response = stripe_get_data(
-                endpoint, limit=limit, starting_after=starting_after
+                endpoint, start_date=created.last_value, limit=limit, starting_after=starting_after
             )
             get_more = False if not get_all_data else response["has_more"]
 
