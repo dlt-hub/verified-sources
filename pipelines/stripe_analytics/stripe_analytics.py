@@ -50,10 +50,10 @@ def stripe_source(
     ) -> Generator[dict, Any, None]:
         get_more = True
         starting_after = None
-        print(created)
+        start_value = created.last_value
         while get_more:
             response = stripe_get_data(
-                endpoint, start_date=created.last_value, limit=limit, starting_after=starting_after
+                endpoint, start_date=start_value, limit=limit, starting_after=starting_after
             )
             get_more = False if not get_all_data else response["has_more"]
 
@@ -64,10 +64,10 @@ def stripe_source(
 
     for endpoint in Endpoints:
         yield dlt.resource(
-            get_resource(endpoint),
+            get_resource,
             name=endpoint.value,
             write_disposition="merge",
             primary_key="id",
-        )
+        )(endpoint)
 
 
