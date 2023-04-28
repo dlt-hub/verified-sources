@@ -61,27 +61,35 @@ class MatomoAPIClient:
         # Send the API request
         return self._request(params=params)
 
-    def get_method(self, extra_params: DictStrAny, method: str, site_id: int) -> TDataItem:
+    def get_method(self, extra_params: DictStrAny, method: str, site_id: int, rows_per_page: int = 10000) -> TDataItem:
         """
         Helper that gets data using a Matomo API method
         :param extra_params: Extra parameters as a dict
         :param method: Unique report from Matomo API
         :param site_id: Unique id of the Matomo site
+        :param rows_per_page: How many rows are returned per page from the request.
         :returns: JSON data from the response.
         """
 
         # Set up the API URL and parameters
+
         if not extra_params:
             extra_params = {}
+        filter_offset = 0
         params = {
             "module": "API",
-            "idSite": site_id,
-            "method": method,
+            "method": "API.getBulkRequest",
             "format": "json",
             "token_auth": self.auth_token,
+            "urls[0]": f"method={method}&idSite={site_id}&filter_limit={rows_per_page}&filter_offset={filter_offset}"
         }
         # Merge the additional parameters into the request parameters
         params.update(extra_params)
         # Send the API request
-        return self._request(params=params)
+        method_data = self._request(params=params)[0]
+        while len(method_data):
+            yield method_data
+            filter_offset += len(method_data)
+            params["urls[0]"] = f"method={method}&idSite={site_id}&filter_limit={rows_per_page}&filter_offset={filter_offset}"
+            method_data = self._request(params=params)[0]
 

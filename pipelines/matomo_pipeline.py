@@ -25,17 +25,16 @@ def run_custom_reports():
          "methods": ["CustomReports.getCustomReport"],
          "date": "2020-01-01",
          "period": "day",
-         "site_id": 3,
          "extra_params": {"idCustomReport": 1}},
         {"resource_name": "custom_report_name2",
          "methods": ["CustomReports.getCustomReport"],
          "date": "2020-01-01",
          "period": "day",
-         "site_id": 3,
          "extra_params": {"idCustomReport": 2}},
     ]
+    site_id = 3
     pipeline_reports = dlt.pipeline(dataset_name="matomo_custom_reports", full_refresh=False, destination="postgres", pipeline_name="matomo")
-    data = matomo_reports(queries=queries)
+    data = matomo_reports(queries=queries, site_id=site_id)
     info = pipeline_reports.run(data)
     print(info)
 
@@ -45,8 +44,11 @@ def run_reports():
     Runs the pipeline only loading reports.
     :return:
     """
+
+    # site id can also be assigned explicitly. Default is to read from config.toml
+    site_id = 3
     pipeline_reports = dlt.pipeline(dataset_name="matomo_reports", full_refresh=False, destination="postgres", pipeline_name="matomo")
-    data = matomo_reports()
+    data = matomo_reports(site_id=site_id)
     info = pipeline_reports.run(data)
     print(info)
 
@@ -64,4 +66,4 @@ def run_live_events():
 
 
 if __name__ == "__main__":
-    run_live_events()
+    run_full_load()

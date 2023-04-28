@@ -8,6 +8,7 @@ from dlt.common.typing import DictStrAny, TDataItem
 
 FIRST_DAY_OF_MILLENNIUM = "2000-01-01"
 FIRST_DAY_OF_MILLENNIUM_TIMESTAMP = 946684800.0
+TIMESTAMP_10_DAYS_AGO = pendulum.today().subtract(days=10).timestamp()
 
 
 def process_report(report: Iterator[TDataItem]) -> Union[DictStrAny, List[TDataItem]]:

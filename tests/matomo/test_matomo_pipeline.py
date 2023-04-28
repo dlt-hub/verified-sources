@@ -1,5 +1,4 @@
 import pytest
-import os
 from typing import List
 import dlt
 from dlt.common.pendulum import pendulum
@@ -15,7 +14,6 @@ QUERIES = [
         "methods": ["VisitsSummary.get", "API.getReportMetadata"],
         "date": "2020-01-01",
         "period": "day",
-        "site_id": 3,
         "extra_params": {}
     },
     {
@@ -23,7 +21,6 @@ QUERIES = [
         "methods": ["VisitsSummary.get", "API.getReportMetadata", "CustomReports.getCustomReport"],
         "date": "2022-01-01",
         "period": "day",
-        "site_id": 3,
         "extra_params": {"idCustomReport": 1}
     }
 ]
@@ -33,7 +30,6 @@ QUERIES_START_DATE1 = [
             "methods": ["VisitsSummary.get"],
             "date": "2020-01-01",
             "period": "day",
-            "site_id": 3,
             "extra_params": {}
         }
 ]
@@ -43,17 +39,16 @@ QUERIES_START_DATE2 = [
             "methods": ["VisitsSummary.get"],
             "date": "2022-01-01",
             "period": "day",
-            "site_id": 3,
             "extra_params": {}
         }
 ]
 ALL_TABLES_START_DATE = ["sample_analytics_data1_visits_summary_get"]
+REPORTS_SITE_ID = 3
 LIVE_EVENTS_SITE_ID = 3
 # dict containing the name of the tables expected in the db as keys and the number of rows expected as values
 ALL_TABLES_REPORTS = ["sample_analytics_data1_visits_summary_get", "sample_analytics_data1_api_get_report_metadata", "sample_analytics_data2_visits_summary_get",
                       "sample_analytics_data2_api_get_report_metadata", "sample_analytics_data2_custom_reports_get_custom_report"]
 ALL_TABLES_EVENTS = ["visitors", "visits"]
-ALL_DESTINATIONS = ["postgres"]
 
 
 @pytest.mark.parametrize("destination_name", ALL_DESTINATIONS)
@@ -76,8 +71,10 @@ def test_events(destination_name: str) -> None:
     :returns: None
     """
 
-    os.environ["SOURCES__MATOMO__GET_LIVE_EVENT_VISITORS"] = "true"
-    pipeline = _create_pipeline(destination_name=destination_name, dataset_name="matomo_dataset", include_events=True, include_reports=False, queries=QUERIES)
+    pipeline = dlt.pipeline(destination=destination_name, full_refresh=True, dataset_name="matomo_dataset")
+    data_events = matomo_events(live_events_site_id=LIVE_EVENTS_SITE_ID, get_live_event_visitors=True)
+    info = pipeline.run(data_events)
+    assert_load_info(info)
     _check_pipeline_has_tables(pipeline, ALL_TABLES_EVENTS)
 
 
@@ -100,7 +97,7 @@ def test_incrementing_reports(destination_name: str) -> None:
     # load the rest of the data
     for incremental_end_date in incremental_end_dates:
         with pendulum.test(incremental_end_date):
-            data = matomo_reports(queries=QUERIES)
+            data = matomo_reports(queries=QUERIES, site_id=REPORTS_SITE_ID)
             info = pipeline.run(data)
             assert_load_info(info)
             incremental_load_counts.append(load_table_counts(pipeline, *ALL_TABLES_REPORTS))
@@ -139,7 +136,7 @@ def _create_pipeline(destination_name: str, dataset_name: str, queries: List[Dic
     pipeline = dlt.pipeline(destination=destination_name, full_refresh=full_refresh, dataset_name=dataset_name)
     data_sources = []
     if include_reports:
-        data_reports = matomo_reports(queries=queries)
+        data_reports = matomo_reports(queries=queries, site_id=REPORTS_SITE_ID)
         data_sources.append(data_reports)
     if include_events:
         data_events = matomo_events(live_events_site_id=LIVE_EVENTS_SITE_ID)
