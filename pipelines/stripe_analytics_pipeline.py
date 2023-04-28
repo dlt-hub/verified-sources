@@ -1,7 +1,5 @@
-from datetime import datetime, timedelta
 import dlt
-from stripe_analytics.stripe_analytics import stripe_source
-from stripe_analytics.metrics import calculate_mrr, churn_rate
+from stripe_analytics.stripe_analytics import stripe_source, metrics_resource
 
 
 if __name__ == "__main__":
@@ -15,18 +13,12 @@ if __name__ == "__main__":
     load_info = pipeline.run(source)
     print(load_info)
 
-    with pipeline.sql_client() as client:
-        with client.execute_query("SELECT * FROM subscription") as table:
-            sub_info = table.df()
+    pipeline_metrics = dlt.pipeline(
+        pipeline_name="stripe_analytics",
+        destination="duckdb",
+        dataset_name="stripe_metrics",
+    )
 
-    # Access to events through the Retrieve Event API is guaranteed only for 30 days.
-    # But we probably have old data in the database.
-    with pipeline.sql_client() as client:
-        with client.execute_query("SELECT * FROM event WHERE created > %s", datetime.now() - timedelta(30)) as table:
-            event_info = table.df()
-
-    mrr = calculate_mrr(sub_info)
-    print(f"MRR: {mrr}")
-
-    churn = churn_rate(event_info, sub_info)
-    print(f"Churn rate: {churn}")
+    resource = metrics_resource(pipeline)
+    load_info = pipeline.run(resource)
+    print(load_info)
