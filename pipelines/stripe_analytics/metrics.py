@@ -52,7 +52,7 @@ def calculate_mrr(df_sub: pd.DataFrame) -> float:
             "plan_amount_month"
         ].sum()
 
-    return total_mrr(df_sub)
+    return float(total_mrr(df_sub))
 
 
 def churn_rate(df_event: pd.DataFrame, df_subscription: pd.DataFrame) -> float:
@@ -68,4 +68,4 @@ def churn_rate(df_event: pd.DataFrame, df_subscription: pd.DataFrame) -> float:
     # total active or past_due subscription now
     subscriber = len(df_subscription[df_subscription["status"] != "canceled"])
 
-    return round(churned_subscriber / (churned_subscriber + subscriber), 3)
+    return float(round(churned_subscriber / (churned_subscriber + subscriber), 3))
