@@ -1,10 +1,12 @@
 from enum import Enum
 from typing import Generator, Any
-from datetime import datetime
+from datetime import datetime, timedelta
 
 import dlt
 import stripe
 from dlt.extract.source import DltResource
+
+from .metrics import calculate_mrr, churn_rate
 
 
 class Endpoints(Enum):
@@ -71,3 +73,22 @@ def stripe_source(
         )(endpoint)
 
 
+@dlt.resource(name="Metrics", write_disposition="append", primary_key="created")
+def metrics_resource(pipeline):
+    with pipeline.sql_client() as client:
+        with client.execute_query("SELECT * FROM subscription") as table:
+            sub_info = table.df()
+
+    # Access to events through the Retrieve Event API is guaranteed only for 30 days.
+    # But we probably have old data in the database.
+    with pipeline.sql_client() as client:
+        with client.execute_query("SELECT * FROM event WHERE created > %s", datetime.now() - timedelta(30)) as table:
+            event_info = table.df()
+
+    mrr = calculate_mrr(sub_info)
+    print(f"MRR: {mrr}")
+
+    churn = churn_rate(event_info, sub_info)
+    print(f"Churn rate: {churn}")
+
+    yield {"MRR": mrr, "Churn rate": churn, "created": datetime.now()}
