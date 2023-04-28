@@ -1,2 +1,1 @@
-dlt
-dlt[postgres]
+dlt >= 0.2.5

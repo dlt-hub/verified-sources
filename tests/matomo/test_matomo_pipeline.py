@@ -1,4 +1,5 @@
 import pytest
+import os
 from typing import List
 import dlt
 from dlt.common.pendulum import pendulum
@@ -14,7 +15,7 @@ QUERIES = [
         "methods": ["VisitsSummary.get", "API.getReportMetadata"],
         "date": "2020-01-01",
         "period": "day",
-        "site_id": 2,
+        "site_id": 3,
         "extra_params": {}
     },
     {
@@ -22,7 +23,7 @@ QUERIES = [
         "methods": ["VisitsSummary.get", "API.getReportMetadata", "CustomReports.getCustomReport"],
         "date": "2022-01-01",
         "period": "day",
-        "site_id": 2,
+        "site_id": 3,
         "extra_params": {"idCustomReport": 1}
     }
 ]
@@ -32,7 +33,7 @@ QUERIES_START_DATE1 = [
             "methods": ["VisitsSummary.get"],
             "date": "2020-01-01",
             "period": "day",
-            "site_id": 2,
+            "site_id": 3,
             "extra_params": {}
         }
 ]
@@ -42,16 +43,17 @@ QUERIES_START_DATE2 = [
             "methods": ["VisitsSummary.get"],
             "date": "2022-01-01",
             "period": "day",
-            "site_id": 2,
+            "site_id": 3,
             "extra_params": {}
         }
 ]
 ALL_TABLES_START_DATE = ["sample_analytics_data1_visits_summary_get"]
-LIVE_EVENTS_SITE_ID = 2
+LIVE_EVENTS_SITE_ID = 3
 # dict containing the name of the tables expected in the db as keys and the number of rows expected as values
 ALL_TABLES_REPORTS = ["sample_analytics_data1_visits_summary_get", "sample_analytics_data1_api_get_report_metadata", "sample_analytics_data2_visits_summary_get",
                       "sample_analytics_data2_api_get_report_metadata", "sample_analytics_data2_custom_reports_get_custom_report"]
 ALL_TABLES_EVENTS = ["visitors", "visits"]
+ALL_DESTINATIONS = ["postgres"]
 
 
 @pytest.mark.parametrize("destination_name", ALL_DESTINATIONS)
@@ -74,6 +76,7 @@ def test_events(destination_name: str) -> None:
     :returns: None
     """
 
+    os.environ["SOURCES__MATOMO__GET_LIVE_EVENT_VISITORS"] = "true"
     pipeline = _create_pipeline(destination_name=destination_name, dataset_name="matomo_dataset", include_events=True, include_reports=False, queries=QUERIES)
     _check_pipeline_has_tables(pipeline, ALL_TABLES_EVENTS)
 

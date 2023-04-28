@@ -5,27 +5,28 @@ import pendulum
 from dlt.common.typing import DictStrAny, TDataItem
 from dlt.extract.source import DltResource
 from .helpers.matomo_client import MatomoAPIClient
-from .helpers.data_processing import FIRST_DAY_OF_MILLENNIUM, get_matomo_last_load_timestamp, get_matomo_date_range, process_report, process_visitors
+from .helpers.data_processing import FIRST_DAY_OF_MILLENNIUM, FIRST_DAY_OF_MILLENNIUM_TIMESTAMP, get_matomo_date_range, process_report, process_visitors
 
 
 @dlt.source(max_table_nesting=2)
-def matomo_reports(credentials: Dict[str, str] = dlt.secrets.value, queries: List[DictStrAny] = dlt.config.value) -> List[DltResource]:
+def matomo_reports(api_token: str = dlt.secrets.value, url: str = dlt.config.value, queries: List[DictStrAny] = dlt.config.value) -> List[DltResource]:
     """
     The source for the pipeline.
-    :param credentials:
+    :param api_token:
+    :param url: Url of the website
     :param queries: Dicts that contain information on the reports to retrieve
     :return:
     """
 
     # Create an instance of the Matomo API client
-    client = MatomoAPIClient(credentials=credentials)
+    client = MatomoAPIClient(api_token=api_token, url=url)
     resource_list = []
     for query in queries:
         name = query.get("resource_name")
         batch_data = dlt.resource(get_data_batch, write_disposition="append", name=name)(
             client=client,
             query=query,
-            last_date=dlt.sources.incremental("date", primary_key=())  # a primary key defined by the resource name will be used
+            last_date=dlt.sources.incremental("date", primary_key=())  # disables unique checks in incremental
         )
         resource_list.append(batch_data)
     return resource_list
@@ -59,19 +60,23 @@ def get_data_batch(client: MatomoAPIClient, query: DictStrAny, last_date: dlt.so
             yield dlt.mark.with_table_name(data, table_name)
 
 
-@dlt.source(max_table_nesting=4)
-def matomo_events(credentials: Dict[str, str] = dlt.secrets.value, live_events_site_id: int = dlt.config.value) -> List[DltResource]:
+@dlt.source(max_table_nesting=2)
+def matomo_events(api_token: str = dlt.secrets.value, url: str = dlt.config.value, live_events_site_id: int = dlt.config.value, get_live_event_visitors: bool = dlt.config.value) -> List[DltResource]:
     """
     The source for the pipeline.
-    :param credentials:
+    :param api_token:
+    :param url:
     :param live_events_site_id:
+    :param get_live_event_visitors: Option, if set to true will retrieve data about unique visitors.
     :return: A list of resources containing event data.
     """
 
     # Create an instance of the Matomo API client
-    client = MatomoAPIClient(credentials=credentials)
-    visits_data_generator = get_last_visits(client=client, last_date=dlt.sources.incremental("last_visit_datetime", primary_key=()), site_id=live_events_site_id)
-    resource_list = [visits_data_generator, visits_data_generator | get_unique_visitors(client=client, site_id=live_events_site_id)]
+    client = MatomoAPIClient(api_token=api_token, url=url)
+    visits_data_generator = get_last_visits(client=client, last_date=dlt.sources.incremental("serverTimestamp"), site_id=live_events_site_id)
+    resource_list = [visits_data_generator]
+    if get_live_event_visitors:
+        resource_list.append(visits_data_generator | get_unique_visitors(client=client, site_id=live_events_site_id))
     return resource_list
 
 
@@ -86,23 +91,23 @@ def get_last_visits(client: MatomoAPIClient, site_id: int,  last_date: dlt.sourc
     :returns: Iterator of dicts containing information on last visits in the given timeframe
     """
 
-    min_timestamp = get_matomo_last_load_timestamp(last_date=last_date)
+    min_timestamp = last_date.last_value if last_date.last_value else FIRST_DAY_OF_MILLENNIUM_TIMESTAMP
     method_data = client.get_method(site_id=site_id, method="Live.getLastVisitsDetails", extra_params={"minTimestamp": min_timestamp})
-    processed_report_generator = process_visitors(method_data)
-    for processed_dict in processed_report_generator:
-        yield processed_dict
+    yield method_data
 
 
 @dlt.transformer(data_from=get_last_visits, write_disposition="merge", name="visitors", primary_key="visitorId")    # type: ignore
-def get_unique_visitors(visit_details: DictStrAny, client: MatomoAPIClient, site_id: int) -> Iterator[TDataItem]:
+def get_unique_visitors(visits: List[DictStrAny], client: MatomoAPIClient, site_id: int) -> Iterator[TDataItem]:
     """
     Dlt transformer. Receives information about visits from get_last_visits
-    :param visit_details: Dict containing information on last visits in the given timeframe
+    :param visits: List of dicts containing information on last visits in the given timeframe
     :param client: Used to make calls to Matomo API
     :param site_id: Every site in Matomo has a unique id
     :returns: Dict containing information about  the visitor
     """
-    visitor_id = visit_details["visitorId"]
-    method_data = client.get_method(site_id=site_id, method="Live.getVisitorProfile", extra_params={"visitorId": visitor_id})
-    yield method_data
+
+    for visit in visits:
+        visitor_id = visit["visitorId"]
+        method_data = client.get_method(site_id=site_id, method="Live.getVisitorProfile", extra_params={"visitorId": visitor_id})
+        yield method_data
 

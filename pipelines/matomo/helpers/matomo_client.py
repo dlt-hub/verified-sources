@@ -9,14 +9,15 @@ class MatomoAPIClient:
     API client used to make requests to Matomo API.
     """
 
-    def __init__(self, credentials: DictStrStr) -> None:
+    def __init__(self, api_token: str, url: str) -> None:
         """
         Initializes the client which is then used to make api requests.
-        :param credentials: Contains a token and a base url used to authenticate to the Matomo API
+        :param api_token: Token used to authenticate for Matomo API
+        :param url: Url of the website
         """
 
-        self.base_url = credentials["url"]
-        self.auth_token = credentials["api_token"]
+        self.base_url = url
+        self.auth_token = api_token
 
     def _request(self, params: DictStrAny) -> TDataItem:
         """

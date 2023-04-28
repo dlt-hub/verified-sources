@@ -1,6 +1,6 @@
 """Helpers for processing data from API calls."""
 
-from typing import Iterator, List
+from typing import Iterator, List, Union
 import dlt
 from dlt.common import logger
 from dlt.common.pendulum import pendulum
@@ -10,31 +10,34 @@ FIRST_DAY_OF_MILLENNIUM = "2000-01-01"
 FIRST_DAY_OF_MILLENNIUM_TIMESTAMP = 946684800.0
 
 
-def process_report(report: Iterator[TDataItem]) -> Iterator[TDataItem]:
+def process_report(report: Iterator[TDataItem]) -> Union[DictStrAny, List[TDataItem]]:
     """
     Helper, loops through multiple formats of method_data and processes them into dlt resources
     :param report: Response from Matomo API containing data for a single method.
     :returns: generator of dicts.
     """
+
+    processed_report = []
     if isinstance(report, dict):
         for key, value in report.items():
             if isinstance(value, list):
                 for el in value:
                     el["date"] = pendulum.parse(key)
-                    yield el
+                    processed_report.append(el)
             elif isinstance(value, dict):
                 value["date"] = pendulum.parse(key)
-                yield value
+                processed_report.append(value)
             else:
-                yield report
+                return report
     else:
         try:
             for value in report:
                 value["date"] = pendulum.yesterday()
-                yield value
+                processed_report.append(value)
         except Exception as e:
             logger.warning(str(e))
             raise ValueError("Method doesn't support report data!")
+    return processed_report
 
 
 def process_visitors(visitors_list: List[DictStrAny]) -> Iterator[TDataItem]:
@@ -68,17 +71,3 @@ def get_matomo_date_range(start_date: str, last_date: dlt.sources.incremental[pe
     end_date = pendulum.yesterday().to_date_string()
     date_range = f"{start_date},{end_date}"
     return date_range
-
-
-def get_matomo_last_load_timestamp(last_date: dlt.sources.incremental[pendulum.DateTime]) -> float:
-    """
-    Giventhe last load date for a resource, it will output the timestamp of the starting time for getting live visits from Matomo.
-    :param last_date: Last date loaded saved in dlt state
-    :returns: Timestamp of last load or 2000-01-01 loading for the first time.
-    """
-    # configure incremental loading. start_date prio: last dlt load -> 2000-01-01
-    if last_date.last_value:
-        last_load_timestamp: float = last_date.last_value.timestamp()
-        return last_load_timestamp
-    else:
-        return FIRST_DAY_OF_MILLENNIUM_TIMESTAMP

@@ -27,10 +27,12 @@ property_id = 293833391
 # Matomo config
 [sources.matomo]
 queries = [
-    {resource_name = "sample_analytics_data1", methods = ["VisitsSummary.get", "API.getReportMetadata"], date = "2020-01-01", period = "day", site_id = 2, extra_params = {}},
-    {resource_name = "sample_analytics_data2", methods = ["VisitsSummary.get", "API.getReportMetadata"], date = "2022-03-02", period = "month", site_id = 2}
+    {resource_name = "sample_analytics_data1", methods = ["VisitsSummary.get", "API.getReportMetadata"], date = "2020-01-01", period = "day", site_id = 3, extra_params = {}},
+    {resource_name = "sample_analytics_data2", methods = ["VisitsSummary.get", "API.getReportMetadata"], date = "2022-03-02", period = "month", site_id = 3}
 ]
-live_events_site_id = 2
+get_live_event_visitors = true
+live_events_site_id = 3
+url = "https://datamaxdemo.matomo.cloud/"
 
 ## sql_database
 [sources.sql_database.data_writer]
