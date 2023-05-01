@@ -1,7 +1,7 @@
 from typing import List
 
 import dlt
-from edamam import edamam_source, nutrition_data
+from edamam import nutrition_data
 
 def load_nutrition_data(ingredients: List[str]) -> None:
     """construct nutrition_data pipeline for duckdb"""
