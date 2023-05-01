@@ -124,7 +124,7 @@ def _get_video_details(youtube: Any, video_list: List[str], max_results: int) ->
 
     return stats_list
 
-@dlt.source(name="youtube_analytics")
+@dlt.source(name="youtube_data")
 def youtube_data_source(
     channel_names: List[str],
     start_date: str,
@@ -150,7 +150,7 @@ def youtube_data(
     channel_names: List[str],
     start_date: str,
     end_date: str,
-    max_results: int,
+    max_results: int = 50,
     youtube: Any = build(_SERVICE_NAME, _SERVICE_VERSION, developer=dlt.secrets.value),
 ) -> Iterator[TDataItem]:
     
