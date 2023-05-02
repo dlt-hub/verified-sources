@@ -13,12 +13,6 @@ if __name__ == "__main__":
     load_info = pipeline.run(source)
     print(load_info)
 
-    pipeline_metrics = dlt.pipeline(
-        pipeline_name="stripe_analytics",
-        destination="duckdb",
-        dataset_name="stripe_metrics",
-    )
-
     resource = metrics_resource(pipeline)
     load_info = pipeline.run(resource)
     print(load_info)
