@@ -92,8 +92,8 @@ def _get_recent_pages(
 
 def _get_deals_children(deals_page: TDataPage, endpoint: str, pipedrive_api_key: str) -> Iterator[TDataPage]:
     for row in deals_page:
-        endpoint = f"deals/{row['id']}/{endpoint}"
-        yield from _get_pages(endpoint, pipedrive_api_key)
+        url = f"deals/{row['id']}/{endpoint}"
+        yield from _get_pages(url, pipedrive_api_key)
 
 
 def _make_deals_child_resource(name: str, endpoint: str, pipedrive_api_key: str, write_disposition: TWriteDisposition) -> DltResource:
