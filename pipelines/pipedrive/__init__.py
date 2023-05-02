@@ -57,6 +57,39 @@ def pipedrive_source(
     since_timestamp: Optional[Union[pendulum.DateTime, str]] = dlt.config.value,
     rename_custom_fields: bool = True
 ) -> Iterator[DltResource]:
+    """
+    Get data from the Pipedrive API. Supports incremental loading and custom fields mapping.
+
+    Args:
+        pipedrive_api_key: https://pipedrive.readme.io/docs/how-to-find-the-api-token
+        write_disposition: Write disposition for loaded data (e.g. `merge` or `replace`)
+        since_timestamp: Starting timestamp for incremental loading. By default complete history is loaded.
+        rename_custom_fields: When `True` custom fields names are used in extracted dataset instead of their hash strings.
+
+    Returns resources:
+        custom_fields_mapping
+        activities
+        activityTypes
+        deals
+        deals_flow
+        fals_participants
+        files
+        filters
+        notes
+        persons
+        organizations
+        pipelines
+        products
+        stages
+        users
+
+    For custom fields renaming to work the `custom_fields_mapping` resource must be included when e.g. limited resources using `with_resources`
+
+    Resources that depend on another resource are implemented as transformers
+    so they can re-use the original resource data without re-downloading.
+    Examples:  deals_participants, deals_flow
+    """
+
     mapping_state = create_state(pipedrive_api_key)
     # yield nice rename mapping
     yield mapping_state | parsed_mapping
