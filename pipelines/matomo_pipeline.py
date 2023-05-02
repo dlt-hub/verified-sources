@@ -60,10 +60,10 @@ def run_live_events():
     """
 
     pipeline_events = dlt.pipeline(dataset_name="matomo_events", full_refresh=False, destination="postgres", pipeline_name="matomo")
-    data = matomo_events(get_live_event_visitors=True)
+    data = matomo_events(get_live_event_visitors=False)
     info = pipeline_events.run(data)
     print(info)
 
 
 if __name__ == "__main__":
-    run_live_events()
+    run_full_load()
