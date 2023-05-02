@@ -20,7 +20,7 @@ from dlt.extract.source import DltResource
 from dlt.sources.helpers import requests
 from dlt.common.schema.typing import TWriteDisposition
 from dlt.common import pendulum
-from typing import Any, Dict, Iterator, List, Optional, Sequence
+from typing import Any, Dict, Iterator, List, Optional, Sequence, Union
 
 
 ENTITY_MAPPINGS = [
@@ -54,7 +54,7 @@ RECENTS_ENTITIES = {
 def pipedrive_source(
     pipedrive_api_key: str = dlt.secrets.value,
     write_disposition: TWriteDisposition = 'merge',
-    since_timestamp: Optional[pendulum.DateTime] = dlt.config.value,
+    since_timestamp: Optional[Union[pendulum.DateTime, str]] = dlt.config.value,
     rename_custom_fields: bool = True
 ) -> Iterator[DltResource]:
     mapping_state = create_state(pipedrive_api_key)
@@ -62,7 +62,11 @@ def pipedrive_source(
     yield mapping_state | parsed_mapping
     kw = {}
     if since_timestamp:
-        kw['since_timestamp'] = since_timestamp.to_iso8601_string()
+        if isinstance(since_timestamp, str):
+            since_timestamp = pendulum.parse(since_timestamp)  # type: ignore[assignment]
+        assert isinstance(since_timestamp, pendulum.DateTime), "since_timestamp must be a valid ISO datetime string or pendulum.DateTime object"
+        since_timestamp = since_timestamp.in_timezone("UTC")
+        kw['since_timestamp'] = since_timestamp.to_iso8601_string().replace("T", " ").replace("Z", "")  # pd datetime format
 
     endpoints_resources = {}
     for entity, resource_name in RECENTS_ENTITIES.items():
