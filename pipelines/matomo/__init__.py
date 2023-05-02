@@ -90,6 +90,7 @@ def get_last_visits(client: MatomoAPIClient, site_id: int,  last_date: dlt.sourc
     :param client: Used to make calls to Matomo API
     :param site_id: Every site in Matomo has a unique id
     :param last_date: date of last load for this resource if it exists
+    :param rows_per_page: How many rows will be there per page.
     :returns: Iterator of dicts containing information on last visits in the given timeframe
     """
 
@@ -110,7 +111,15 @@ def get_unique_visitors(visits: List[DictStrAny], client: MatomoAPIClient, site_
     :returns: Dict containing information about  the visitor
     """
 
+    visitor_ids = [visit["visitorId"] for visit in visits]
+    indexed_visitor_ids = [visitor_ids[i:i+100] for i in range(0, len(visitor_ids), 100)]
+    for visitor_list in indexed_visitor_ids:
+        method_data = client.get_visitors_batch(visitor_list=visitor_list, site_id=site_id)
+        yield method_data
+
+    """
     for visit in visits:
         visitor_id = visit["visitorId"]
         method_data = client.get_method(site_id=site_id, method="Live.getVisitorProfile", extra_params={"visitorId": visitor_id})
-        yield method_data
+        yield from method_data
+    """

@@ -24,6 +24,12 @@ QUERIES = [
         "extra_params": {"idCustomReport": 1}
     }
 ]
+INCREMENTAL_END_DATES = [
+    pendulum.datetime(year=2020, month=1, day=1),
+    pendulum.datetime(year=2020, month=2, day=1),
+    pendulum.datetime(year=2021, month=1, day=1),
+    pendulum.datetime(year=2021, month=2, day=1)
+]
 QUERIES_START_DATE1 = [
         {
             "resource_name": "sample_analytics_data1",
@@ -84,18 +90,11 @@ def test_incrementing_reports(destination_name: str) -> None:
     Checks that incremental loading works for reports
     @:param: destination_name - redshift/bigquery/postgres
     """
-    # Define all end_dates to be used for incremental loading
-    first_end_date = pendulum.datetime(year=2020, month=1, day=1)
-    second_end_date = pendulum.datetime(year=2020, month=2, day=1)
-    third_end_date = pendulum.datetime(year=2021, month=1, day=1)
-    fourth_end_date = pendulum.datetime(year=2021, month=2, day=1)
-    incremental_end_dates = [first_end_date, second_end_date, third_end_date, fourth_end_date]
-
     incremental_load_counts = []
     pipeline = dlt.pipeline(destination=destination_name, full_refresh=True, dataset_name="matomo")
 
     # load the rest of the data
-    for incremental_end_date in incremental_end_dates:
+    for incremental_end_date in INCREMENTAL_END_DATES:
         with pendulum.test(incremental_end_date):
             data = matomo_reports(queries=QUERIES, site_id=REPORTS_SITE_ID)
             info = pipeline.run(data)

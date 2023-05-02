@@ -72,7 +72,6 @@ class MatomoAPIClient:
         """
 
         # Set up the API URL and parameters
-
         if not extra_params:
             extra_params = {}
         filter_offset = 0
@@ -92,4 +91,26 @@ class MatomoAPIClient:
             filter_offset += len(method_data)
             params["urls[0]"] = f"method={method}&idSite={site_id}&filter_limit={rows_per_page}&filter_offset={filter_offset}"
             method_data = self._request(params=params)[0]
+
+    def get_visitors_batch(self, visitor_list: List[str], site_id: int, extra_params: DictStrAny = None) -> TDataItem:
+        """
+        Gets visitors for Matomo.
+        :param visitor_list:
+        :param site_id:
+        :param extra_params:
+        :return:
+        """
+        if not extra_params:
+            extra_params = {}
+        params = {
+            "module": "API",
+            "method": "API.getBulkRequest",
+            "format": "json",
+            "site_id": site_id,
+            "token_auth": self.auth_token
+        }
+        params.update({f"urls[{i}]": f"method=Live.getVisitorProfile&idSite={site_id}&visitorId={visitor_list[i]}" for i in range(len(visitor_list))})
+        params.update(extra_params)
+        method_data = self._request(params=params)
+        return method_data
 
