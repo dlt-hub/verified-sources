@@ -54,7 +54,8 @@ RECENTS_ENTITIES = [
 def pipedrive_source(
     pipedrive_api_key: str = dlt.secrets.value,
     write_disposition: TWriteDisposition = 'merge',
-    since_timestamp: Optional[pendulum.DateTime] = dlt.config.value
+    since_timestamp: Optional[pendulum.DateTime] = dlt.config.value,
+    rename_custom_fields: bool = True
 ) -> Iterator[DltResource]:
     mapping_state = create_state(pipedrive_api_key)
     # yield nice rename mapping
@@ -67,7 +68,7 @@ def pipedrive_source(
     for entity in RECENTS_ENTITIES:
         endpoints_resources[entity] = dlt.resource(
             _get_recent_pages, name=entity, primary_key="id", write_disposition=write_disposition
-        )(entity, **kw)
+        )(entity, rename_custom_fields=rename_custom_fields, **kw)
 
     yield from endpoints_resources.values()
     yield endpoints_resources["deal"] | _make_deals_child_resource("deal_participant", "participants", pipedrive_api_key, write_disposition)
@@ -78,6 +79,7 @@ def _get_recent_pages(
     entity: str,
     pipedrive_api_key: str = dlt.secrets.value,
     since_timestamp: dlt.sources.incremental[str] = dlt.sources.incremental('update_time|modified', '1970-01-01 00:00:00'),
+    rename_custom_fields: bool = True
 ) -> Iterator[TDataPage]:
     """Get a specific entity type from /recents.
     """
@@ -86,8 +88,12 @@ def _get_recent_pages(
         "recents", pipedrive_api_key,
         extra_params=dict(since_timestamp=since_timestamp.last_value, items=entity),
     )
+    pages = (_extract_recents_data(page) for page in pages)
+    if not rename_custom_fields:
+        yield from pages
+        return
     for page in pages:
-        yield rename_fields(_extract_recents_data(page), custom_fields_mapping)
+        yield rename_fields(page, custom_fields_mapping)
 
 
 def _get_deals_children(deals_page: TDataPage, endpoint: str, pipedrive_api_key: str) -> Iterator[TDataPage]:
