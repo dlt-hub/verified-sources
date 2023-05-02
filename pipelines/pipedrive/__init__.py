@@ -34,20 +34,20 @@ ENTITY_MAPPINGS = [
     ('user', None, None)
 ]
 
-RECENTS_ENTITIES = [
-    "activity",
-    "activityType",
-    "deal",
-    "file",
-    "filter",
-    "note",
-    "person",
-    "organization",
-    "pipeline",
-    "product",
-    "stage",
-    "user",
-]
+RECENTS_ENTITIES = {
+    "activity": "activities",
+    "activityType": "activityTypes",
+    "deal": "deals",
+    "file": "files",
+    "filter": "filters",
+    "note": "notes",
+    "person": "persons",
+    "organization": "organizations",
+    "pipeline": "pipelines",
+    "product": "products",
+    "stage": "stages",
+    "user": "users",
+}
 
 
 @dlt.source(name="pipedrive")
@@ -65,14 +65,14 @@ def pipedrive_source(
         kw['since_timestamp'] = since_timestamp.to_iso8601_string()
 
     endpoints_resources = {}
-    for entity in RECENTS_ENTITIES:
-        endpoints_resources[entity] = dlt.resource(
-            _get_recent_pages, name=entity, primary_key="id", write_disposition=write_disposition
+    for entity, resource_name in RECENTS_ENTITIES.items():
+        endpoints_resources[resource_name] = dlt.resource(
+            _get_recent_pages, name=resource_name, primary_key="id", write_disposition=write_disposition
         )(entity, rename_custom_fields=rename_custom_fields, **kw)
 
     yield from endpoints_resources.values()
-    yield endpoints_resources["deal"] | _make_deals_child_resource("deal_participant", "participants", pipedrive_api_key, write_disposition)
-    yield endpoints_resources["deal"] | _make_deals_child_resource("deal_flow", "flow", pipedrive_api_key, write_disposition)
+    yield endpoints_resources["deals"] | _make_deals_child_resource("deals_participants", "participants", pipedrive_api_key, write_disposition)
+    yield endpoints_resources["deals"] | _make_deals_child_resource("deals_flow", "flow", pipedrive_api_key, write_disposition)
 
 
 def _get_recent_pages(
