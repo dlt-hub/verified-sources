@@ -12,7 +12,7 @@ To get an api key: https://pipedrive.readme.io/docs/how-to-find-the-api-token
 import dlt
 
 from .custom_fields_munger import update_fields_mapping, rename_fields
-from .recents import grouped_recents, _extract_recents_data
+from .recents import _extract_recents_data, _get_recent_items, _get_recent_items_incremental
 from .helpers import _paginated_get, _get_pages
 from .typing import TDataPage
 from dlt.common.typing import TDataItems
@@ -55,7 +55,6 @@ def pipedrive_source(
     pipedrive_api_key: str = dlt.secrets.value,
     write_disposition: TWriteDisposition = 'merge',
     since_timestamp: Optional[Union[pendulum.DateTime, str]] = dlt.config.value,
-    rename_custom_fields: bool = True
 ) -> Iterator[DltResource]:
     """
     Get data from the Pipedrive API. Supports incremental loading and custom fields mapping.
@@ -63,8 +62,7 @@ def pipedrive_source(
     Args:
         pipedrive_api_key: https://pipedrive.readme.io/docs/how-to-find-the-api-token
         write_disposition: Write disposition for loaded data (e.g. `merge` or `replace`)
-        since_timestamp: Starting timestamp for incremental loading. By default complete history is loaded.
-        rename_custom_fields: When `True` custom fields names are used in extracted dataset instead of their hash strings.
+        since_timestamp: Starting timestamp for incremental loading. By default complete history is loaded on first run.
 
     Returns resources:
         custom_fields_mapping
@@ -72,7 +70,7 @@ def pipedrive_source(
         activityTypes
         deals
         deals_flow
-        fals_participants
+        deals_participants
         files
         filters
         notes
@@ -83,7 +81,7 @@ def pipedrive_source(
         stages
         users
 
-    For custom fields renaming to work the `custom_fields_mapping` resource must be included when e.g. limited resources using `with_resources`
+    For custom fields rename the `custom_fields_mapping` resource must be selected or loaded before other resources.
 
     Resources that depend on another resource are implemented as transformers
     so they can re-use the original resource data without re-downloading.
@@ -94,62 +92,59 @@ def pipedrive_source(
     # yield nice rename mapping
     yield mapping_state | parsed_mapping
     kw = {}
+    recents_func = _get_recent_items_incremental
     if since_timestamp:
         if isinstance(since_timestamp, str):
             since_timestamp = pendulum.parse(since_timestamp)  # type: ignore[assignment]
         assert isinstance(since_timestamp, pendulum.DateTime), "since_timestamp must be a valid ISO datetime string or pendulum.DateTime object"
         since_timestamp = since_timestamp.in_timezone("UTC")
         kw['since_timestamp'] = since_timestamp.to_iso8601_string().replace("T", " ").replace("Z", "")  # pd datetime format
+    elif write_disposition == 'replace':
+        recents_func = _get_recent_items
 
     endpoints_resources = {}
     for entity, resource_name in RECENTS_ENTITIES.items():
         endpoints_resources[resource_name] = dlt.resource(
-            _get_recent_pages, name=resource_name, primary_key="id", write_disposition=write_disposition
-        )(entity, rename_custom_fields=rename_custom_fields, **kw)
+            recents_func, name=resource_name, primary_key="id", write_disposition=write_disposition
+        )(entity, **kw)
 
     yield from endpoints_resources.values()
-    yield endpoints_resources["deals"] | _make_deals_child_resource("deals_participants", "participants", pipedrive_api_key, write_disposition)
-    yield endpoints_resources["deals"] | _make_deals_child_resource("deals_flow", "flow", pipedrive_api_key, write_disposition)
+    yield endpoints_resources['deals'] | dlt.transformer(
+        name='deals_participants', write_disposition=write_disposition, primary_key="id"
+    )(_get_deals_participants)(pipedrive_api_key)
+
+    yield endpoints_resources['deals'] | dlt.transformer(
+        name='deals_flow', write_disposition=write_disposition, primary_key=["id", "object"]
+    )(_get_deals_flow)(pipedrive_api_key)
 
 
-def _get_recent_pages(
-    entity: str,
-    pipedrive_api_key: str = dlt.secrets.value,
-    since_timestamp: dlt.sources.incremental[str] = dlt.sources.incremental('update_time|modified', '1970-01-01 00:00:00'),
-    rename_custom_fields: bool = True
-) -> Iterator[TDataPage]:
-    """Get a specific entity type from /recents.
-    """
-    custom_fields_mapping = dlt.state().get('custom_fields_mapping', {}).get(entity, {})
-    pages = _get_pages(
-        "recents", pipedrive_api_key,
-        extra_params=dict(since_timestamp=since_timestamp.last_value, items=entity),
-    )
-    pages = (_extract_recents_data(page) for page in pages)
-    if not rename_custom_fields:
-        yield from pages
-        return
-    for page in pages:
-        yield rename_fields(page, custom_fields_mapping)
+def _process_deals_flow(flow_page: TDataPage) -> Iterator[Dict[str, Any]]:
+    for item in flow_page:
+        item = dict(item, id=item['data']['id'])
+        del item['data']['id']
+        yield item
 
 
-def _get_deals_children(deals_page: TDataPage, endpoint: str, pipedrive_api_key: str) -> Iterator[TDataPage]:
+def _get_deals_flow(deals_page: TDataPage, pipedrive_api_key: str) -> Iterator[Iterator[Dict[str, Any]]]:
     for row in deals_page:
-        url = f"deals/{row['id']}/{endpoint}"
+        url = f"deals/{row['id']}/flow"
+        for page in _get_pages(url, pipedrive_api_key):
+            yield _process_deals_flow(page)
+
+
+def _get_deals_participants(deals_page: TDataPage, pipedrive_api_key: str) -> Iterator[TDataPage]:
+    for row in deals_page:
+        url = f"deals/{row['id']}/participants"
         yield from _get_pages(url, pipedrive_api_key)
-
-
-def _make_deals_child_resource(name: str, endpoint: str, pipedrive_api_key: str, write_disposition: TWriteDisposition) -> DltResource:
-    return dlt.transformer(name=name, write_disposition=write_disposition, primary_key="id")(_get_deals_children)(endpoint, pipedrive_api_key)
 
 
 @dlt.resource(selected=False)
 def create_state(pipedrive_api_key: str) -> Iterator[Dict[str, Any]]:
-    def _get_pages_for_rename(entity: str, pipedrive_api_key: str) -> Dict[str, Any]:
+    def _get_pages_for_rename(entity: str, fields_entity: str, pipedrive_api_key: str) -> Dict[str, Any]:
 
-        existing_fields_mapping: Dict[str, Any] = custom_fields_mapping.setdefault(entity, {})
+        existing_fields_mapping: Dict[str, Dict[str, str]] = custom_fields_mapping.setdefault(entity, {})
         # we need to process all pages before yielding
-        for page in _get_pages(entity, pipedrive_api_key):
+        for page in _get_pages(fields_entity, pipedrive_api_key):
             existing_fields_mapping = update_fields_mapping(page, existing_fields_mapping)
         return existing_fields_mapping
 
@@ -159,7 +154,7 @@ def create_state(pipedrive_api_key: str) -> Iterator[Dict[str, Any]]:
     for entity, fields_entity, _ in ENTITY_MAPPINGS:
         if fields_entity is None:
             continue
-        custom_fields_mapping[entity] = _get_pages_for_rename(fields_entity, pipedrive_api_key)
+        custom_fields_mapping[entity] = _get_pages_for_rename(entity, fields_entity, pipedrive_api_key)
 
     yield custom_fields_mapping
 

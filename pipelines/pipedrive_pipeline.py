@@ -13,7 +13,7 @@ def load_pipedrive():
 def load_selected_data():
     """Shows how to load just selected tables using `with_resources`"""
     pipeline = dlt.pipeline(pipeline_name='pipedrive', destination='postgres', dataset_name='pipedrive_data')
-    load_info = pipeline.run(pipedrive_source().with_resources("products", "deals", "dealFields", "deals_participants"))
+    load_info = pipeline.run(pipedrive_source().with_resources("products", "deals", "deals_participants", "custom_fields_mapping"))
     print(load_info)
     # just to show how to access resources within source
     pipedrive_data = pipedrive_source()
@@ -30,9 +30,16 @@ def load_selected_data():
     print(pipedrive_data.deals_participants)
 
 
+def load_new_data():
+    """Example setting an initial value for incremental loading to get activities updated after given date"""
+    pipeline = dlt.pipeline(pipeline_name='pipedrive', destination='postgres', dataset_name='pipedrive_data')
+    load_info = pipeline.run(pipedrive_source(since_timestamp="2023-03-01 00:00:00Z").with_resources("activities", "custom_fields_mapping"))
+    print(load_info)
+
+
 if __name__ == "__main__" :
     # run our main example
-    load_pipedrive()
+    # load_pipedrive()
     # load selected tables and display resource info
-    # load_selected_data()
+    load_selected_data()
 
