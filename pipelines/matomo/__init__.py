@@ -115,7 +115,8 @@ def get_unique_visitors(visits: List[DictStrAny], client: MatomoAPIClient, site_
     indexed_visitor_ids = [visitor_ids[i:i+100] for i in range(0, len(visitor_ids), 100)]
     for visitor_list in indexed_visitor_ids:
         method_data = client.get_visitors_batch(visitor_list=visitor_list, site_id=site_id)
-        yield method_data
+        for method_dict in method_data:
+            yield method_dict
 
     """
     for visit in visits:
