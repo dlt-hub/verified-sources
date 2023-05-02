@@ -5,7 +5,7 @@ import dlt
 
 from pipelines.youtube_data import youtube_data
 
-from test.utils import ALL_DESTINATIONS, assert_load_info, assert_table_counts
+from tests.utils import ALL_DESTINATIONS, assert_load_info, load_table_counts
 
 @pytest.mark.parametrize('destination_name', ALL_DESTINATIONS)
 def test_load_youtube_data(destination_name: str) -> None:
@@ -13,7 +13,7 @@ def test_load_youtube_data(destination_name: str) -> None:
     pipeline = dlt.pipeline(
         pipeline_name="youtube_data",
         destination=destination_name,
-        dataset="youtube_data",
+        dataset_name="youtube_data",
         full_refresh=True
     )
 
@@ -25,7 +25,7 @@ def test_load_youtube_data(destination_name: str) -> None:
     # test if job is loaded
     assert_load_info(info)
     # test if table exists
-    assert_table_counts(pipeline, "youtube_metrics")["youtube_metrics"] == 1
+    assert load_table_counts(pipeline, "youtube_metrics")["youtube_metrics"] == 1
     # assert column datatype
     table = pipeline.default_schema.data_tables()[0]
     assert table["columns"]["channel_id"]["data_type"] == "text"

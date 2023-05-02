@@ -67,7 +67,7 @@ def _get_channel_video(
             page_token=next_page_token
         ).execute()
 
-        for item in item['response']:
+        for item in response['items']:
             if 'videoId' in item['id']:
                 video_id = item['id']['videoId']
                 video_ids.append(video_id)
@@ -151,7 +151,7 @@ def youtube_data(
     start_date: str,
     end_date: str,
     max_results: int = 50,
-    youtube: Any = build(_SERVICE_NAME, _SERVICE_VERSION, developer=dlt.secrets.value),
+    youtube: Any = build(_SERVICE_NAME, _SERVICE_VERSION, developerKey=dlt.secrets.value),
 ) -> Iterator[TDataItem]:
     
     for channel_name in channel_names:

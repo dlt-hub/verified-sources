@@ -33,5 +33,5 @@ if __name__ == "__main__":
     channel_names = ["mrbeast"]
     start_date="2022-01-01T00:00:00Z"
     end_date=today.strftime("%Y-%m-%d")+"T00:00:00Z"
-    max_results = 50
+    max_results = 2
     load_youtube_data(channel_names, start_date, end_date, max_results)
