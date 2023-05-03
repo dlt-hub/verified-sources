@@ -142,7 +142,7 @@ def test_since_timestamp() -> None:
     assert m.call_args.kwargs['extra_params']['since_timestamp'] == '1986-03-03 00:00:00'
 
     with mock.patch('pipelines.pipedrive.recents._get_pages', autospec=True, return_value=iter([])) as m:
-        no_incremental_source = pipedrive_source(write_disposition='replace').with_resources('persons')
+        no_incremental_source = pipedrive_source(incremental=False).with_resources('persons')
         pipeline.extract(no_incremental_source)
 
     assert m.call_args.kwargs['extra_params']['since_timestamp'] == '1970-01-01 00:00:00'
@@ -174,7 +174,7 @@ def test_no_incremental(destination_name: str) -> None:
     pipeline = dlt.pipeline(pipeline_name='pipedrive', destination=destination_name, dataset_name='pipedrive', full_refresh=True)
 
     # No items older than initial value are loaded
-    source = pipedrive_source(write_disposition="replace").with_resources('persons')
+    source = pipedrive_source(incremental=False).with_resources('persons')
 
     load_info = pipeline.run(source)
     assert_load_info(load_info)

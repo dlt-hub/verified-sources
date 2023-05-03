@@ -20,7 +20,7 @@ from dlt.extract.source import DltResource
 from dlt.sources.helpers import requests
 from dlt.common.schema.typing import TWriteDisposition
 from dlt.common import pendulum
-from typing import Any, Dict, Iterator, List, Optional, Sequence, Union
+from typing import Any, Dict, Iterator, List, Optional, Sequence, Union, Callable
 
 
 ENTITY_MAPPINGS = [
@@ -55,6 +55,7 @@ def pipedrive_source(
     pipedrive_api_key: str = dlt.secrets.value,
     write_disposition: TWriteDisposition = 'merge',
     since_timestamp: Optional[Union[pendulum.DateTime, str]] = dlt.config.value,
+    incremental: bool = True
 ) -> Iterator[DltResource]:
     """
     Get data from the Pipedrive API. Supports incremental loading and custom fields mapping.
@@ -63,6 +64,7 @@ def pipedrive_source(
         pipedrive_api_key: https://pipedrive.readme.io/docs/how-to-find-the-api-token
         write_disposition: Write disposition for loaded data (e.g. `merge` or `replace`)
         since_timestamp: Starting timestamp for incremental loading. By default complete history is loaded on first run.
+        incremental: Enable or disable incremental loading.
 
     Returns resources:
         custom_fields_mapping
@@ -92,15 +94,14 @@ def pipedrive_source(
     # yield nice rename mapping
     yield mapping_state | parsed_mapping
     kw = {}
-    recents_func = _get_recent_items_incremental
     if since_timestamp:
         if isinstance(since_timestamp, str):
             since_timestamp = pendulum.parse(since_timestamp)  # type: ignore[assignment]
         assert isinstance(since_timestamp, pendulum.DateTime), "since_timestamp must be a valid ISO datetime string or pendulum.DateTime object"
         since_timestamp = since_timestamp.in_timezone("UTC")
         kw['since_timestamp'] = since_timestamp.to_iso8601_string().replace("T", " ").replace("Z", "")  # pd datetime format
-    elif write_disposition == 'replace':
-        recents_func = _get_recent_items
+
+    recents_func: Any = _get_recent_items_incremental if incremental else _get_recent_items
 
     endpoints_resources = {}
     for entity, resource_name in RECENTS_ENTITIES.items():

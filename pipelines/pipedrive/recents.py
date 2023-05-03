@@ -53,7 +53,11 @@ def _get_recent_items_incremental(
 def _get_recent_items(
     entity: str,
     pipedrive_api_key: str = dlt.secrets.value,
+    since_timestamp: Optional[str] = None
 ) -> Iterator[TDataPage]:
     """Get all history for specific entity type from /recents.
     """
-    yield from _get_recent_pages(entity, pipedrive_api_key, "1970-01-01 00:00:00")
+    yield from _get_recent_pages(entity, pipedrive_api_key, since_timestamp or "1970-01-01 00:00:00")
+
+
+__source_name__ = 'sql_database'
