@@ -22,14 +22,6 @@ class RandomDataGenerator:
 
         return tuple(random_plans)
 
-    @staticmethod
-    def random_amounts_generation(length: int = 2) -> Tuple[str]:
-        random_amounts = []
-        for _ in range(length):
-            random_amounts.append(str(random.randint(100, 10000)))
-
-        return tuple(random_amounts)
-
     def random_cards_generation(
         self, length: int = 10
     ) -> tuple[dict[str, int | Any], ...]:
