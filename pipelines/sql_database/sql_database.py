@@ -18,7 +18,7 @@ class SqlTableConfiguration(BaseConfiguration):
 
 @dlt.resource
 def sql_table(
-    credentials: Union[ConnectionStringCredentials, Engine] = dlt.secrets.value,
+    credentials: Union[ConnectionStringCredentials, Engine, str] = dlt.secrets.value,
     table: str = dlt.config.value,
     schema: Optional[str] = dlt.config.value,
     metadata: Optional[MetaData] = None,
@@ -48,7 +48,7 @@ def sql_table(
 
 @dlt.source
 def sql_database(
-    credentials: Union[ConnectionStringCredentials, Engine] = dlt.secrets.value,
+    credentials: Union[ConnectionStringCredentials, Engine, str] = dlt.secrets.value,
     schema: Optional[str] = dlt.config.value,
     metadata: Optional[MetaData] = None,
     table_names: Optional[List[str]] = dlt.config.value,

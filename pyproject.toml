@@ -26,6 +26,7 @@ pandas = "2.0.1"
 
 [tool.poetry.group.sql_database.dependencies]
 sqlalchemy = ">=1.4"
+pymysql = "^1.0.3"
 
 
 [tool.poetry.group.google_sheets.dependencies]
