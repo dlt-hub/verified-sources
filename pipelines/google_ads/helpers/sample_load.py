@@ -1,7 +1,4 @@
- """This example illustrates how to get all campaigns.
-
-To add campaigns, run add_campaigns.py.
-"""
+"""This example illustrates how to get all campaigns.To add campaigns, run add_campaigns.py."""
 
 from google.ads.googleads.client import GoogleAdsClient
 
