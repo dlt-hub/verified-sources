@@ -11,7 +11,7 @@ Available resources:
     users
 """
 import dlt
-from dlt_asana import asana_source
+from asana_dlt import asana_source
 from typing import List
 
 def load(resources: List[str]) -> None:
@@ -26,5 +26,5 @@ def load(resources: List[str]) -> None:
 
 if __name__ == "__main__":
     # Add your desired resources to the list...
-    resources = ["projects", "tasks", "users", "workspaces"]
+    resources = ["projects", "tasks", "users", "workspaces", "tags", "stories", "sections", "teams"]
     load(resources)
