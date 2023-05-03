@@ -19,7 +19,7 @@ class Endpoints(Enum):
 
 
 def stripe_get_data(
-    resource: Endpoints, start_date: Optional[Any] = None, end_date: Optional[Any] = None, **kwargs
+    resource: Endpoints, start_date: Optional[Any] = None, end_date: Optional[Any] = None, **kwargs : Any
 ) -> Dict[Any, Any]:
     if start_date:
         if isinstance(start_date, str):
