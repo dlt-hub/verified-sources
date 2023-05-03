@@ -1,6 +1,6 @@
-from enum import Enum
-from typing import Generator, Any
 from datetime import datetime, timedelta
+from enum import Enum
+from typing import Any, Generator, Optional
 
 import dlt
 import stripe
@@ -17,10 +17,12 @@ class Endpoints(Enum):
     events: str = "Event"
 
 
-def stripe_get_data(resource: Endpoints, start_date=None, end_date=None, **kwargs) -> dict:
+def stripe_get_data(
+    resource: Endpoints, start_date=None, end_date=None, **kwargs
+) -> dict:
     if start_date:
         if isinstance(start_date, str):
-            start_date = datetime.strptime(start_date, '%Y-%m-%dT%H:%M:%SZ')
+            start_date = datetime.strptime(start_date, "%Y-%m-%dT%H:%M:%SZ")
         if isinstance(start_date, datetime):
             # convert to unix timestamp
             start_date = int(start_date.timestamp())
@@ -42,20 +44,27 @@ def stripe_source(
     stripe_secret_key: str = dlt.secrets.value,
     limit: int = 100,
     get_all_data: bool = False,
+    start_date: Optional[datetime] = None,
+    end_date: Optional[datetime] = None,
 ) -> Generator[DltResource, Any, None]:
-
     stripe.api_key = stripe_secret_key
     stripe.api_version = "2022-11-15"
 
-    def get_resource(endpoint: Endpoints,
-                     created=dlt.sources.incremental("created", initial_value=-3600)
+    def get_resource(
+        endpoint: Endpoints,
+        created=dlt.sources.incremental("created", initial_value=-3600),
     ) -> Generator[dict, Any, None]:
         get_more = True
         starting_after = None
         start_value = created.last_value
+
         while get_more:
             response = stripe_get_data(
-                endpoint, start_date=start_value, limit=limit, starting_after=starting_after
+                endpoint,
+                start_date=start_value if start_date is None else start_date,
+                end_date=end_date,
+                limit=limit,
+                starting_after=starting_after,
             )
             get_more = False if not get_all_data else response["has_more"]
 
@@ -82,13 +91,15 @@ def metrics_resource(pipeline):
     # Access to events through the Retrieve Event API is guaranteed only for 30 days.
     # But we probably have old data in the database.
     with pipeline.sql_client() as client:
-        with client.execute_query("SELECT * FROM event WHERE created > %s", datetime.now() - timedelta(30)) as table:
+        with client.execute_query(
+            "SELECT * FROM event WHERE created > %s", datetime.now() - timedelta(30)
+        ) as table:
             event_info = table.df()
 
     mrr = calculate_mrr(sub_info)
     print(f"MRR: {mrr}")
 
     churn = churn_rate(event_info, sub_info)
-    print(f"Churn rate: {churn}")
+    print(f"Churn rate: {round(churn * 100, 1)}%")
 
     yield {"MRR": mrr, "Churn rate": churn, "created": datetime.now()}
