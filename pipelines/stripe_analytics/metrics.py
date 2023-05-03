@@ -1,4 +1,5 @@
 from datetime import datetime, timedelta
+from typing import Optional
 
 import numpy as np
 import pandas as pd
@@ -25,19 +26,12 @@ def calculate_mrr(df_sub: pd.DataFrame) -> float:
     # Monthly revenue divided by 100, because Stripe gives revenue in cents
     df_sub["plan_amount_month"] = np.where(
         df_sub["plan__interval"] == "month",
-        (1 / 100)
-        * df_sub["plan__amount"]
-        * df_sub["quantity"]
-        * (1 - df_sub["discount__coupon__percent_off"] / 100),
+        df_sub["plan__amount"] * df_sub["quantity"] * (1 - df_sub["discount__coupon__percent_off"] / 100) / 100,
         np.where(
             df_sub["plan__interval"] == "year",
-            (1 / 100)
-            * (1 / 12)
-            * df_sub["plan__amount"]
-            * df_sub["quantity"]
-            * (1 - df_sub["discount__coupon__percent_off"] / 100),
+            df_sub["plan__amount"] * df_sub["quantity"] * (1 - df_sub["discount__coupon__percent_off"] / 100) / 100 / 12,
             np.nan,
-        ),
+        )
     )
 
     df_sub["created"] = pd.to_datetime(df_sub["created"], unit="s").dt.tz_localize(None)
@@ -47,12 +41,13 @@ def calculate_mrr(df_sub: pd.DataFrame) -> float:
     next_month = first_day + timedelta(32)
     first_day_next_month = next_month.replace(day=1)
 
-    def total_mrr(df_sub: pd.DataFrame, end_date: datetime = datetime.today()) -> float:
+    def total_mrr(df_sub: pd.DataFrame, end_date: Optional[datetime] = None) -> float:
         """
         Total MRR
         end_date: first day of the next month
         """
-        df_sub = df_sub[df_sub["created"] < end_date]
+        if end_date:
+            df_sub = df_sub[df_sub["created"] < end_date]
 
         return float(df_sub[df_sub["status"].isin(["active", "past_due"])][
             "plan_amount_month"
