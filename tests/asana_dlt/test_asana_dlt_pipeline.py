@@ -20,7 +20,7 @@ def test_all_resources(destination_name: str) -> None:
 
     print(table_counts)
 
-    assert table_counts['workspaces'] == 1   
+    assert table_counts['workspaces'] == 1
     assert table_counts['tags'] == 2
     assert table_counts['projects'] == 2
     assert table_counts['sections'] == 6

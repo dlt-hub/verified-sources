@@ -303,8 +303,7 @@ def users(workspace, access_token: str = dlt.config.value) -> t.Iterator[dict]:
 
 
 @dlt.source
-def asana_source(
-) -> Sequence[DltResource]:
+def asana_source(access_token: str = dlt.config.value) -> Sequence[DltResource]:
     """The Asana dlt source."""
     return (
         workspaces,
