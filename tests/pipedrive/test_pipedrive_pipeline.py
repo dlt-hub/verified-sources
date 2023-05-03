@@ -120,22 +120,22 @@ def test_custom_fields_munger(destination_name: str) -> None:
 
 def test_since_timestamp() -> None:
     """since_timestamp is coerced correctly to UTC implicit ISO timestamp and passed to endpoint function"""
-    pipeline = dlt.pipeline(pipeline_name='pipedrive')
-
     with mock.patch('pipelines.pipedrive.recents._get_pages', autospec=True, return_value=iter([])) as m:
+        pipeline = dlt.pipeline(pipeline_name='pipedrive', full_refresh=True)
         incremental_source = pipedrive_source(since_timestamp='1986-03-03T04:00:00+04:00').with_resources('persons')
         pipeline.extract(incremental_source)
 
     assert m.call_args.kwargs['extra_params']['since_timestamp'] == '1986-03-03 00:00:00'
 
     with mock.patch('pipelines.pipedrive.recents._get_pages', autospec=True, return_value=iter([])) as m:
+        pipeline = dlt.pipeline(pipeline_name='pipedrive', full_refresh=True)
         pipeline.extract(pipedrive_source(since_timestamp=pendulum.parse('1986-03-03T04:00:00+04:00')).with_resources('persons'))  # type: ignore[arg-type]
 
     assert m.call_args.kwargs['extra_params']['since_timestamp'] == '1986-03-03 00:00:00'
 
     with mock.patch('pipelines.pipedrive.recents._get_pages', autospec=True, return_value=iter([])) as m:
-        no_incremental_source = pipedrive_source(incremental=False).with_resources('persons')
-        pipeline.extract(no_incremental_source)
+        pipeline = dlt.pipeline(pipeline_name='pipedrive', full_refresh=True)
+        pipeline.extract(pipedrive_source().with_resources('persons'))
 
     assert m.call_args.kwargs['extra_params']['since_timestamp'] == '1970-01-01 00:00:00'
 
@@ -159,21 +159,6 @@ def test_incremental(destination_name: str) -> None:
     # Just check that incremental state is created
     state: TSourceState = pipeline.state  # type: ignore[assignment]
     assert isinstance(state['sources']['pipedrive']['resources']['persons']['incremental']['update_time|modified'], dict)
-
-
-@pytest.mark.parametrize('destination_name', ALL_DESTINATIONS)
-def test_no_incremental(destination_name: str) -> None:
-    pipeline = dlt.pipeline(pipeline_name='pipedrive', destination=destination_name, dataset_name='pipedrive', full_refresh=True)
-
-    # No items older than initial value are loaded
-    source = pipedrive_source(incremental=False).with_resources('persons')
-
-    load_info = pipeline.run(source)
-    assert_load_info(load_info)
-
-    # Incremental state is not created
-    state: TSourceState = pipeline.state  # type: ignore[assignment]
-    assert state['sources']['pipedrive'].get('resources', {}).get('persons', {}).get('incremental') is None
 
 
 def test_resource_settings() -> None:

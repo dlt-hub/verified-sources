@@ -12,7 +12,7 @@ To get an api key: https://pipedrive.readme.io/docs/how-to-find-the-api-token
 import dlt
 
 from .custom_fields_munger import update_fields_mapping
-from .recents import _get_recent_items, _get_recent_items_incremental
+from .recents import _get_recent_items_incremental
 from .helpers import _get_pages
 from .typing import TDataPage
 from dlt.extract.source import DltResource
@@ -51,7 +51,6 @@ RECENTS_ENTITIES = {
 def pipedrive_source(
     pipedrive_api_key: str = dlt.secrets.value,
     since_timestamp: Optional[Union[pendulum.DateTime, str]] = dlt.config.value,
-    incremental: bool = True
 ) -> Iterator[DltResource]:
     """
     Get data from the Pipedrive API. Supports incremental loading and custom fields mapping.
@@ -96,12 +95,10 @@ def pipedrive_source(
         since_timestamp = since_timestamp.in_timezone("UTC")
         kw['since_timestamp'] = since_timestamp.to_iso8601_string().replace("T", " ").replace("Z", "")  # pd datetime format
 
-    recents_func: Any = _get_recent_items_incremental if incremental else _get_recent_items
-
     endpoints_resources = {}
     for entity, resource_name in RECENTS_ENTITIES.items():
         endpoints_resources[resource_name] = dlt.resource(
-            recents_func, name=resource_name, primary_key="id", write_disposition='merge'
+            _get_recent_items_incremental, name=resource_name, primary_key="id", write_disposition='merge'
         )(entity, **kw)
 
     yield from endpoints_resources.values()
