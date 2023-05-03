@@ -53,7 +53,6 @@ RECENTS_ENTITIES = {
 @dlt.source(name="pipedrive")
 def pipedrive_source(
     pipedrive_api_key: str = dlt.secrets.value,
-    write_disposition: TWriteDisposition = 'merge',
     since_timestamp: Optional[Union[pendulum.DateTime, str]] = dlt.config.value,
     incremental: bool = True
 ) -> Iterator[DltResource]:
@@ -62,7 +61,6 @@ def pipedrive_source(
 
     Args:
         pipedrive_api_key: https://pipedrive.readme.io/docs/how-to-find-the-api-token
-        write_disposition: Write disposition for loaded data (e.g. `merge` or `replace`)
         since_timestamp: Starting timestamp for incremental loading. By default complete history is loaded on first run.
         incremental: Enable or disable incremental loading.
 
@@ -106,16 +104,16 @@ def pipedrive_source(
     endpoints_resources = {}
     for entity, resource_name in RECENTS_ENTITIES.items():
         endpoints_resources[resource_name] = dlt.resource(
-            recents_func, name=resource_name, primary_key="id", write_disposition=write_disposition
+            recents_func, name=resource_name, primary_key="id", write_disposition='merge'
         )(entity, **kw)
 
     yield from endpoints_resources.values()
     yield endpoints_resources['deals'] | dlt.transformer(
-        name='deals_participants', write_disposition=write_disposition, primary_key="id"
+        name='deals_participants', write_disposition='merge', primary_key="id"
     )(_get_deals_participants)(pipedrive_api_key)
 
     yield endpoints_resources['deals'] | dlt.transformer(
-        name='deals_flow', write_disposition=write_disposition, primary_key=["id", "object"]
+        name='deals_flow', write_disposition='merge', primary_key=["id", "object"]
     )(_get_deals_flow)(pipedrive_api_key)
 
 
