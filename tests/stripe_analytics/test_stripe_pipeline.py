@@ -50,8 +50,17 @@ def test_load_subscription(destination_name: str) -> None:
     # tables are typed dicts
     subscription_table = user_tables[0]
     assert subscription_table["name"] == "subscription"
-    # TODO: if we have any columns of interest ie. that should be timestamps or have certain performance hints, we can also check it
     assert subscription_table["columns"]["created"]["data_type"] == "timestamp"
+    assert subscription_table["columns"]["billing_cycle_anchor"]["data_type"] == "timestamp"
+    assert subscription_table["columns"]["current_period_end"]["data_type"] == "timestamp"
+    assert subscription_table["columns"]["current_period_start"]["data_type"] == "timestamp"
+    assert subscription_table["columns"]["plan__created"]["data_type"] == "timestamp"
+    assert subscription_table["columns"]["start_date"]["data_type"] == "timestamp"
+    assert subscription_table["columns"]["discount__coupon__created"]["data_type"] == "timestamp"
+    assert subscription_table["columns"]["discount__start"]["data_type"] == "timestamp"
+    assert subscription_table["columns"]["canceled_at"]["data_type"] == "timestamp"
+    assert subscription_table["columns"]["ended_at"]["data_type"] == "timestamp"
+
     # we can also test the data
     with pipeline.sql_client() as c:
         # you can use parametrized queries as well, see python dbapi
