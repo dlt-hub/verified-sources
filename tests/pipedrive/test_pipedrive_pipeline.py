@@ -42,9 +42,10 @@ def test_all_resources(destination_name: str) -> None:
     assert_load_info(load_info)
 
     # ALl root tables exist in schema
-    assert set(pipeline.default_schema.tables) > TESTED_RESOURCES
-
-    # TODO: validate schema and data: write a test helper for that
+    schema_tables = set(pipeline.default_schema.tables)
+    assert schema_tables > TESTED_RESOURCES - {"deals_flow"}
+    assert "deals_flow_activity" in schema_tables
+    assert "deals_flow_deal_change" in schema_tables
 
 
 @pytest.mark.parametrize('destination_name', ALL_DESTINATIONS)
@@ -174,5 +175,3 @@ def test_resource_settings() -> None:
         rs = source.resources[rs_name]
         assert rs.write_disposition == 'merge'
         assert rs.table_schema()['columns']['id']['primary_key'] is True
-        if rs_name == 'deals_flow':  # Flow has a composite key
-            assert rs.table_schema()['columns']['object']['primary_key'] is True

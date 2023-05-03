@@ -9,15 +9,19 @@ Api changelog: https://developers.pipedrive.com/changelog
 To get an api key: https://pipedrive.readme.io/docs/how-to-find-the-api-token
 """
 
+from typing import Any, Dict, Iterator, List, Optional, Union, Iterable, Iterator, Tuple
+from itertools import groupby
+
+
 import dlt
 
-from .custom_fields_munger import update_fields_mapping
+from .custom_fields_munger import update_fields_mapping, rename_fields
 from .recents import _get_recent_items_incremental
 from .helpers import _get_pages
 from .typing import TDataPage
 from dlt.extract.source import DltResource
 from dlt.common import pendulum
-from typing import Any, Dict, Iterator, List, Optional, Union
+from dlt.extract.typing import DataItemWithMeta
 
 
 ENTITY_MAPPINGS = [
@@ -107,22 +111,28 @@ def pipedrive_source(
     )(_get_deals_participants)(pipedrive_api_key)
 
     yield endpoints_resources['deals'] | dlt.transformer(
-        name='deals_flow', write_disposition='merge', primary_key=["id", "object"]
+        name='deals_flow', write_disposition='merge', primary_key="id"
     )(_get_deals_flow)(pipedrive_api_key)
 
 
-def _process_deals_flow(flow_page: TDataPage) -> Iterator[Dict[str, Any]]:
-    for item in flow_page:
-        item = dict(item, id=item['data']['id'])
-        del item['data']['id']
-        yield item
+
+def _deals_flow_group_key(item: Dict[str, Any]) -> str:
+    return item['object']  # type: ignore[no-any-return]
 
 
-def _get_deals_flow(deals_page: TDataPage, pipedrive_api_key: str) -> Iterator[Iterator[Dict[str, Any]]]:
+def _grouped_deals_flow(pages: Iterable[Iterable[Dict[str, Any]]]) -> Iterator[Tuple[str, List[Dict[str, Any]]]]:
+    for page in pages:
+        for entity, items in groupby(sorted(page, key=_deals_flow_group_key), key=_deals_flow_group_key):
+            yield entity, [dict(item['data'], timestamp=item['timestamp']) for item in items]
+
+
+def _get_deals_flow(deals_page: TDataPage, pipedrive_api_key: str) -> Iterator[DataItemWithMeta]:
+    custom_fields_mapping = dlt.state().get('custom_fields_mapping', {})
     for row in deals_page:
         url = f"deals/{row['id']}/flow"
-        for page in _get_pages(url, pipedrive_api_key):
-            yield _process_deals_flow(page)
+        pages = _get_pages(url, pipedrive_api_key)
+        for entity, page in _grouped_deals_flow(pages):
+            yield dlt.mark.with_table_name(rename_fields(page, custom_fields_mapping.get(entity, {})), "deals_flow_"+entity)
 
 
 def _get_deals_participants(deals_page: TDataPage, pipedrive_api_key: str) -> Iterator[TDataPage]:
