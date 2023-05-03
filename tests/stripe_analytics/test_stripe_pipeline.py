@@ -1,0 +1,127 @@
+from datetime import datetime
+
+import dlt
+import pytest
+
+from pipelines.stripe_analytics.stripe_analytics import (
+    Endpoints,
+    metrics_resource,
+    stripe_source,
+)
+
+from tests.utils import ALL_DESTINATIONS, assert_load_info
+
+
+@pytest.mark.parametrize("destination_name", ALL_DESTINATIONS)
+def test_all_resources(destination_name: str) -> None:
+    # mind the full_refresh flag - it makes sure that data is loaded to unique dataset. this allows you to run the tests on the same database in parallel
+    pipeline = dlt.pipeline(
+        pipeline_name="stripe_analytics_test",
+        destination=destination_name,
+        dataset_name="stripe_test",
+        full_refresh=True,
+    )
+    data = stripe_source(limit=10, get_all_data=False, end_date=datetime(2023, 5, 3))
+    # load all endpoints out of the data source
+    info = pipeline.run(data)
+    assert_load_info(info)
+
+
+@pytest.mark.parametrize("destination_name", ALL_DESTINATIONS)
+def test_load_subscription(destination_name: str) -> None:
+    # mind the full_refresh flag - it makes sure that data is loaded to unique dataset. this allows you to run the tests on the same database in parallel
+    pipeline = dlt.pipeline(
+        pipeline_name="stripe_analytics_test",
+        destination=destination_name,
+        dataset_name="stripe_subscriptions_test",
+        full_refresh=True,
+    )
+    data = stripe_source(limit=100, get_all_data=True, end_date=datetime(2023, 5, 3))
+    # load the "Subscription" out of the data source
+    info = pipeline.run(data.with_resources(Endpoints.subscriptions.value))
+    # let's print it (pytest -s will show it)
+    print(info)
+    # make sure all jobs were loaded
+    assert_load_info(info)
+    # now let's inspect the generates schema. it should contain just one table with user data
+    schema = pipeline.default_schema
+    user_tables = schema.data_tables()
+    assert len(user_tables) == 2
+    # tables are typed dicts
+    subscription_table = user_tables[0]
+    assert subscription_table["name"] == "subscription"
+    # TODO: if we have any columns of interest ie. that should be timestamps or have certain performance hints, we can also check it
+    assert subscription_table["columns"]["created"]["data_type"] == "timestamp"
+    # we can also test the data
+    with pipeline.sql_client() as c:
+        # you can use parametrized queries as well, see python dbapi
+        # you can use unqualified table names
+        with c.execute_query(
+            "SELECT COUNT(customer) FROM subscription WHERE status IN (%s) GROUP BY customer",
+            "canceled",
+        ) as cur:
+            rows = list(cur.fetchall())
+            assert len(rows) == 50  # 50 customers canceled their subscriptions
+
+
+@pytest.mark.parametrize("destination_name", ALL_DESTINATIONS)
+def test_incremental_subscriptions_load(destination_name: str) -> None:
+    # do the initial load
+    pipeline = dlt.pipeline(
+        pipeline_name="stripe_analytics_test",
+        destination=destination_name,
+        dataset_name="stripe_subscriptions_test",
+        full_refresh=True,
+    )
+    data = stripe_source(limit=100, get_all_data=False, end_date=datetime(2023, 5, 3))
+    info = pipeline.run(data.with_resources(Endpoints.subscriptions.value))
+    assert_load_info(info)
+
+    def get_canceled_subs() -> int:
+        with pipeline.sql_client() as c:
+            with c.execute_query(
+                "SELECT COUNT(customer) FROM subscription WHERE status IN (%s) GROUP BY customer",
+                "canceled",
+            ) as cur:
+                rows = list(cur.fetchall())
+                return len(rows)  # how many customers canceled their subscriptions
+
+    canceled_subs = get_canceled_subs()
+    assert canceled_subs > 0  # should have canceled subscriptions
+
+    # do load with the same range into the existing dataset
+    data = stripe_source(limit=100, get_all_data=False, end_date=datetime(2023, 5, 3))
+    info = pipeline.run(data.with_resources(Endpoints.subscriptions.value))
+    # the dlt figured out that there's no new data at all and skipped the loading package
+    assert_load_info(info, expected_load_packages=0)
+    # there are no more subscriptions as pipeline is skipping existing subscriptions
+    assert get_canceled_subs() == canceled_subs
+
+    # get some new subscriptions
+    data = stripe_source(limit=100, get_all_data=False, start_date=datetime(2023, 5, 3))
+    info = pipeline.run(data.with_resources(Endpoints.subscriptions.value))
+    # we have new subscriptions in the next day!
+    assert_load_info(info)
+    assert get_canceled_subs() > canceled_subs
+
+
+@pytest.mark.parametrize("destination_name", ALL_DESTINATIONS)
+def test_metrics(destination_name: str) -> None:
+    # mind the full_refresh flag - it makes sure that data is loaded to unique dataset. this allows you to run the tests on the same database in parallel
+    pipeline = dlt.pipeline(
+        pipeline_name="stripe_analytics_test",
+        destination=destination_name,
+        dataset_name="stripe_metric_test",
+        full_refresh=True,
+    )
+    data = stripe_source(limit=100, get_all_data=False)
+    # load the "Subscription" and the "Event" out of the data source
+    pipeline.run(
+        data.with_resources(Endpoints.subscriptions.value, Endpoints.events.value)
+    )
+    # let's print it (pytest -s will show it)
+    resource = metrics_resource(pipeline)
+    load_info = pipeline.run(resource)
+    print(load_info)
+
+    assert_load_info(load_info)
