@@ -1,21 +1,35 @@
 import pytest
-import random
-from time import time
+from unittest import mock
 
 import dlt
-from dlt.common.utils import uniq_id
-from dlt.common.configuration.resolve import inject_section
-from dlt.common.configuration.specs import ConfigSectionContext
-
-try:
-    from dlt.pipeline.state import StateInjectableContext
-except ImportError:
-    from dlt.common.pipeline import StateInjectableContext
+from dlt.common import pendulum
+from dlt.common.pipeline import TSourceState
 
 from pipelines.pipedrive import pipedrive_source
-from pipelines.pipedrive.custom_fields_munger import pull_munge_func
-
 from tests.utils import ALL_DESTINATIONS, assert_load_info, assert_query_data
+
+
+ALL_RESOURCES = {
+    "custom_fields_mapping",
+    "activities",
+    "activityTypes",
+    "deals",
+    "deals_flow",
+    "deals_participants",
+    "files",
+    "filters",
+    "notes",
+    "persons",
+    "organizations",
+    "pipelines",
+    "products",
+    "stages",
+    "users",
+}
+
+TESTED_RESOURCES = ALL_RESOURCES - {  # Currently there is no test data for these resources
+    "pipelines", "stages", "filters", "files", "activityTypes", "notes"
+}
 
 
 @pytest.mark.parametrize('destination_name', ALL_DESTINATIONS)
@@ -26,15 +40,20 @@ def test_all_resources(destination_name: str) -> None:
     load_info = pipeline.run(pipedrive_source())
     print(load_info)
     assert_load_info(load_info)
-    # TODO: validate schema and data: write a test helper for that
+
+    # ALl root tables exist in schema
+    schema_tables = set(pipeline.default_schema.tables)
+    assert schema_tables > TESTED_RESOURCES - {"deals_flow"}
+    assert "deals_flow_activity" in schema_tables
+    assert "deals_flow_deal_change" in schema_tables
 
 
 @pytest.mark.parametrize('destination_name', ALL_DESTINATIONS)
 def test_custom_fields_munger(destination_name: str) -> None:
-
     pipeline = dlt.pipeline(pipeline_name='pipedrive', destination=destination_name, dataset_name='pipedrive_data', full_refresh=True)
 
-    load_info = pipeline.run(pipedrive_source().with_resources('persons', 'personFields', 'products', 'productFields', 'custom_fields_mapping'))
+    load_info = pipeline.run(pipedrive_source().with_resources('persons', 'products', 'custom_fields_mapping'))
+
     print(load_info)
     assert_load_info(load_info)
 
@@ -42,10 +61,9 @@ def test_custom_fields_munger(destination_name: str) -> None:
 
     raw_query_string = "SELECT {fields} FROM {table} WHERE {condition} ORDER BY {fields}"
 
-    # test personFields' custom fields data munging
-
-    condition = "name IN ('TEST FIELD 1', 'TEST FIELD 2 ')"
-    query_string = raw_query_string.format(fields="key", table="person_fields", condition=condition)
+    # test person custom fields data munging
+    condition = "name IN ('TEST FIELD 1', 'TEST FIELD 2 ') AND endpoint = 'person'"
+    query_string = raw_query_string.format(fields="normalized_name", table="custom_fields_mapping", condition=condition)
     table_data = ['test_field_1', 'test_field_2']
     assert_query_data(pipeline, query_string, table_data)
 
@@ -65,10 +83,10 @@ def test_custom_fields_munger(destination_name: str) -> None:
     table_data = ['Test Value 2']
     assert_query_data(pipeline, query_string, table_data)
 
-    # test productFields' custom fields data munging
+    # test product custom fields data munging
 
-    condition = "name = 'TEST FIELD 1'"
-    query_string = raw_query_string.format(fields="key", table="product_fields", condition=condition)
+    condition = "name = 'TEST FIELD 1' AND endpoint='product'"
+    query_string = raw_query_string.format(fields="normalized_name", table="custom_fields_mapping", condition=condition)
     table_data = ['test_field_1']
     assert_query_data(pipeline, query_string, table_data)
 
@@ -90,41 +108,70 @@ def test_custom_fields_munger(destination_name: str) -> None:
     assert 'name' in custom_fields_mapping['columns']
     assert 'normalized_name' in custom_fields_mapping['columns']
 
-    condition = "endpoint = 'personFields' AND normalized_name IN ('test_field_1', 'test_field_2')"
+    condition = "endpoint = 'person' AND normalized_name IN ('test_field_1', 'test_field_2')"
     query_string = raw_query_string.format(fields="name", table="custom_fields_mapping", condition=condition)
     table_data = ['TEST FIELD 1', 'TEST FIELD 2 ']
     assert_query_data(pipeline, query_string, table_data)
 
-    condition = "endpoint = 'productFields' AND normalized_name = 'test_field_1'"
+    condition = "endpoint = 'product' AND normalized_name = 'test_field_1'"
     query_string = raw_query_string.format(fields="name", table="custom_fields_mapping", condition=condition)
     table_data = ['TEST FIELD 1']
     assert_query_data(pipeline, query_string, table_data)
 
 
-def test_munger_throughput() -> None:
-    # create pipeline so state is available
-    pipeline = dlt.pipeline()
+def test_since_timestamp() -> None:
+    """since_timestamp is coerced correctly to UTC implicit ISO timestamp and passed to endpoint function"""
+    with mock.patch('pipelines.pipedrive.recents._get_pages', autospec=True, return_value=iter([])) as m:
+        pipeline = dlt.pipeline(pipeline_name='pipedrive', full_refresh=True)
+        incremental_source = pipedrive_source(since_timestamp='1986-03-03T04:00:00+04:00').with_resources('persons')
+        pipeline.extract(incremental_source)
 
-    with inject_section(ConfigSectionContext(sections=("sources", __name__, "munger"))):
-        with pipeline._container.injectable_context(StateInjectableContext(state={})) as state:
-            # create N data items with X columns each
-            data_items = []
-            # add 100 renames
-            renames = {uniq_id():{"name": uniq_id()} for _ in range(0, 100)}
-            rename_keys = list(renames.keys())
-            # 10.000 records
-            for _ in range(0, 10000):
-                # with more or less ~100 columns
-                d = {uniq_id():uniq_id() for _ in range(0, 95)}
-                # with ~5 columns to be munged/
-                for _ in range(0, 5):
-                    assert random.choice(rename_keys) in renames
-                    d[random.choice(rename_keys)] = uniq_id()
-                # assert len(d) == 100
-                data_items.append(d)
+    assert m.call_args.kwargs['extra_params']['since_timestamp'] == '1986-03-03 00:00:00'
 
-            state.state["custom_fields_mapping"] = {"endpoint": renames}
+    with mock.patch('pipelines.pipedrive.recents._get_pages', autospec=True, return_value=iter([])) as m:
+        pipeline = dlt.pipeline(pipeline_name='pipedrive', full_refresh=True)
+        pipeline.extract(pipedrive_source(since_timestamp=pendulum.parse('1986-03-03T04:00:00+04:00')).with_resources('persons'))  # type: ignore[arg-type]
 
-            start_ts = time()
-            pull_munge_func(data_items, "endpoint")
-            print(f"munging time: {time() - start_ts} seconds")
+    assert m.call_args.kwargs['extra_params']['since_timestamp'] == '1986-03-03 00:00:00'
+
+    with mock.patch('pipelines.pipedrive.recents._get_pages', autospec=True, return_value=iter([])) as m:
+        pipeline = dlt.pipeline(pipeline_name='pipedrive', full_refresh=True)
+        pipeline.extract(pipedrive_source().with_resources('persons'))
+
+    assert m.call_args.kwargs['extra_params']['since_timestamp'] == '1970-01-01 00:00:00'
+
+
+@pytest.mark.parametrize('destination_name', ALL_DESTINATIONS)
+def test_incremental(destination_name: str) -> None:
+    pipeline = dlt.pipeline(pipeline_name='pipedrive', destination=destination_name, dataset_name='pipedrive', full_refresh=True)
+
+    # No items older than initial value are loaded
+    ts = pendulum.parse('2023-03-15T10:17:44Z')
+    source = pipedrive_source(since_timestamp=ts).with_resources('persons', 'custom_fields_mapping')  # type: ignore[arg-type]
+
+    pipeline.run(source)
+
+    with pipeline.sql_client() as c:
+        with c.execute_query("SELECT min(update_time) FROM persons") as cur:
+            row = cur.fetchone()
+
+    assert pendulum.instance(row[0]) >= ts  # type: ignore
+
+    # Just check that incremental state is created
+    state: TSourceState = pipeline.state  # type: ignore[assignment]
+    assert isinstance(state['sources']['pipedrive']['resources']['persons']['incremental']['update_time|modified'], dict)
+
+
+def test_resource_settings() -> None:
+    source = pipedrive_source()
+
+    resource_names = set(source.resources)
+
+    assert resource_names == ALL_RESOURCES
+
+    assert source.resources['custom_fields_mapping'].write_disposition == 'replace'
+
+    for rs_name in resource_names - {'custom_fields_mapping'}:
+        rs = source.resources[rs_name]
+        assert rs.write_disposition == 'merge'
+        assert rs.table_schema()['columns']['id']['primary_key'] is True
