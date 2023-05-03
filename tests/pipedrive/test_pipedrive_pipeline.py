@@ -162,7 +162,7 @@ def test_incremental(destination_name: str) -> None:
         with c.execute_query("SELECT min(update_time) FROM persons") as cur:
             row = cur.fetchone()
 
-    assert row[0] >= ts
+    assert pendulum.instance(row[0]) >= ts  # type: ignore
 
     # Just check that incremental state is created
     state: TSourceState = pipeline.state  # type: ignore[assignment]
