@@ -1,10 +1,11 @@
 from datetime import datetime, timedelta
 from enum import Enum
-from typing import Any, Generator, Optional
+from typing import Any, Generator, Optional, Dict
 
 import dlt
 import stripe
 from dlt.extract.source import DltResource
+from dlt.pipeline import Pipeline
 
 from .metrics import calculate_mrr, churn_rate
 
@@ -18,8 +19,8 @@ class Endpoints(Enum):
 
 
 def stripe_get_data(
-    resource: Endpoints, start_date=None, end_date=None, **kwargs
-) -> dict:
+    resource: Endpoints, start_date: Optional[Any] = None, end_date: Optional[Any] = None, **kwargs
+) -> Dict[Any, Any]:
     if start_date:
         if isinstance(start_date, str):
             start_date = datetime.strptime(start_date, "%Y-%m-%dT%H:%M:%SZ")
@@ -36,7 +37,7 @@ def stripe_get_data(
     resource_dict = getattr(stripe, resource.value).list(
         created={"gte": start_date, "lt": end_date}, **kwargs
     )
-    return resource_dict
+    return dict(resource_dict)
 
 
 @dlt.source
@@ -52,8 +53,8 @@ def stripe_source(
 
     def get_resource(
         endpoint: Endpoints,
-        created=dlt.sources.incremental("created", initial_value=-3600),
-    ) -> Generator[dict, Any, None]:
+        created: Optional[Any] = dlt.sources.incremental("created", initial_value=-3600),
+    ) -> Generator[Dict[Any, Any], Any, None]:
         get_more = True
         starting_after = None
         start_value = created.last_value
@@ -83,7 +84,7 @@ def stripe_source(
 
 
 @dlt.resource(name="Metrics", write_disposition="append", primary_key="created")
-def metrics_resource(pipeline):
+def metrics_resource(pipeline: Pipeline):
     with pipeline.sql_client() as client:
         with client.execute_query("SELECT * FROM subscription") as table:
             sub_info = table.df()
