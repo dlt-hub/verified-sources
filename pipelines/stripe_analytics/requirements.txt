@@ -1,3 +1,2 @@
-Faker==18.5.1
 pandas==2.0.1
 stripe>=5.0.0
