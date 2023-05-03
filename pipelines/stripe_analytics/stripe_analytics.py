@@ -84,7 +84,7 @@ def stripe_source(
 
 
 @dlt.resource(name="Metrics", write_disposition="append", primary_key="created")
-def metrics_resource(pipeline: Pipeline):
+def metrics_resource(pipeline: Pipeline) -> Generator[Dict[str, Any]]:
     with pipeline.sql_client() as client:
         with client.execute_query("SELECT * FROM subscription") as table:
             sub_info = table.df()
