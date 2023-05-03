@@ -1,37 +1,24 @@
 """Fetches Asana workspaces, projects, tasks and other associated objects, using parallel requests wherever possible."""
 import typing as t
 from datetime import datetime
-
+from typing import Sequence
 import dlt
 from asana import Client as AsanaClient
+from dlt.extract.source import DltResource
 
 
 DEFAULT_START_DATE = "2010-01-01T00:00:00.000Z"
 
 
 def get_client(
-    client_id: str,
-    client_secret: str,
-    redirect_uri: str,
-    refresh_token: str,
+    access_token: str,
 ) -> AsanaClient:
     """Returns an Asana client with a valid access token"""
-    asana = AsanaClient.oauth(
-        client_id=client_id,
-        client_secret=client_secret,
-        redirect_uri=redirect_uri,
-    )
-    asana.session.refresh_token(
-        asana.session.token_url,
-        client_id=client_id,
-        client_secret=client_secret,
-        redirect_uri=redirect_uri,
-        refresh_token=refresh_token,
-    )
+    asana = AsanaClient.access_token(access_token)
     return asana
 
 
-@dlt.resource(table_name="workspaces", write_disposition="replace")
+@dlt.resource(write_disposition="replace")
 def workspaces(client: AsanaClient) -> t.Iterator[dict]:
     """Returns a list of workspaces"""
     print("Fetching workspaces...")
@@ -45,7 +32,6 @@ def workspaces(client: AsanaClient) -> t.Iterator[dict]:
 
 @dlt.transformer(
     data_from=workspaces,
-    table_name="projects",
     write_disposition="replace",
 )
 @dlt.defer
@@ -99,7 +85,6 @@ def projects(workspace, client: AsanaClient) -> t.Iterator[dict]:
 
 @dlt.transformer(
     data_from=projects,
-    table_name="sections",
     write_disposition="replace",
 )
 @dlt.defer
@@ -129,7 +114,7 @@ def sections(project_array, client: AsanaClient) -> t.Iterator[dict]:
         print(f"Done fetching sections for {len(project_array)} projects.")
 
 
-@dlt.transformer(data_from=workspaces, table_name="tags", write_disposition="replace")
+@dlt.transformer(data_from=workspaces, write_disposition="replace")
 @dlt.defer
 def tags(workspace, client: AsanaClient) -> t.Iterator[dict]:
     """Fetches all tags for a given workspace."""
@@ -161,7 +146,6 @@ def tags(workspace, client: AsanaClient) -> t.Iterator[dict]:
 
 @dlt.transformer(
     data_from=projects,
-    table_name="tasks",
     write_disposition="append",
 )
 def tasks(project_array, client: AsanaClient) -> t.Iterator[dict]:
@@ -218,7 +202,6 @@ def tasks(project_array, client: AsanaClient) -> t.Iterator[dict]:
 
 @dlt.transformer(
     data_from=tasks,
-    table_name="stories",
     write_disposition="append",
 )
 @dlt.defer
@@ -267,7 +250,6 @@ def stories(task, client: AsanaClient) -> t.Iterator[dict]:
 
 @dlt.transformer(
     data_from=workspaces,
-    table_name="teams",
     write_disposition="replace",
 )
 @dlt.defer
@@ -299,7 +281,6 @@ def teams(workspace, client: AsanaClient) -> t.Iterator[dict]:
 
 @dlt.transformer(
     data_from=workspaces,
-    table_name="users",
     write_disposition="replace",
 )
 @dlt.defer
@@ -321,22 +302,19 @@ def users(workspace, client: AsanaClient) -> t.Iterator[dict]:
         print(f"Done fetching users for workspace {workspace['name']}.")
 
 
-@dlt.source(name="asana")
+@dlt.source
 def asana_source(
-    client_id: str = dlt.config.value,
-    client_secret: str = dlt.secrets.value,
-    redirect_uri: str = dlt.config.value,
-    refresh_token: str = dlt.secrets.value,
-):
+     access_token: str = dlt.config.value,
+) -> Sequence[DltResource]:
     """The Asana dlt source."""
-    client = get_client(client_id, client_secret, redirect_uri, refresh_token)
+    client = get_client(access_token)
     return (
-        workspaces.bind(client=client)(),
-        projects.bind(client=client)(),
-        sections.bind(client=client)(),
-        tags.bind(client=client)(),
-        tasks.bind(client=client)(),
-        stories.bind(client=client)(),
-        teams.bind(client=client)(),
-        users.bind(client=client)(),
+        workspaces.bind(client=client),
+        projects.bind(client=client),
+        sections.bind(client=client),
+        tags.bind(client=client),
+        tasks.bind(client=client),
+        stories.bind(client=client),
+        teams.bind(client=client),
+        users.bind(client=client),
     )
