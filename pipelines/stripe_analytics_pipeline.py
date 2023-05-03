@@ -1,5 +1,5 @@
 import dlt
-from stripe_analytics.stripe_analytics import metrics_resource, stripe_source
+from stripe_analytics import metrics_resource, stripe_source
 
 if __name__ == "__main__":
     pipeline = dlt.pipeline(
