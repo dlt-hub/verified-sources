@@ -11,16 +11,13 @@ To get an api key: https://pipedrive.readme.io/docs/how-to-find-the-api-token
 
 import dlt
 
-from .custom_fields_munger import update_fields_mapping, rename_fields
-from .recents import _extract_recents_data, _get_recent_items, _get_recent_items_incremental
-from .helpers import _paginated_get, _get_pages
+from .custom_fields_munger import update_fields_mapping
+from .recents import _get_recent_items, _get_recent_items_incremental
+from .helpers import _get_pages
 from .typing import TDataPage
-from dlt.common.typing import TDataItems
 from dlt.extract.source import DltResource
-from dlt.sources.helpers import requests
-from dlt.common.schema.typing import TWriteDisposition
 from dlt.common import pendulum
-from typing import Any, Dict, Iterator, List, Optional, Sequence, Union, Callable
+from typing import Any, Dict, Iterator, List, Optional, Union
 
 
 ENTITY_MAPPINGS = [

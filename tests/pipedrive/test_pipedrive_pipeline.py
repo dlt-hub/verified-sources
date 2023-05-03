@@ -1,19 +1,11 @@
 import pytest
-import random
-from time import time
 from unittest import mock
 
 import dlt
-from dlt.common.utils import uniq_id
-from dlt.common.configuration.resolve import inject_section
-from dlt.common.configuration.specs import ConfigSectionContext
 from dlt.common import pendulum
+from dlt.common.pipeline import TSourceState
 
-from dlt.common.pipeline import StateInjectableContext, TSourceState
-
-from pipelines.pipedrive import pipedrive_source, RECENTS_ENTITIES
-from pipelines import pipedrive as _pipedrive
-
+from pipelines.pipedrive import pipedrive_source
 from tests.utils import ALL_DESTINATIONS, assert_load_info, assert_query_data
 
 
@@ -199,32 +191,3 @@ def test_resource_settings() -> None:
         assert rs.table_schema()['columns']['id']['primary_key'] is True
         if rs_name == 'deals_flow':  # Flow has a composite key
             assert rs.table_schema()['columns']['object']['primary_key'] is True
-
-
-# def test_munger_throughput() -> None:
-#     # create pipeline so state is available
-#     pipeline = dlt.pipeline()
-
-#     with inject_section(ConfigSectionContext(sections=("sources", __name__, "munger"))):
-#         with pipeline._container.injectable_context(StateInjectableContext(state={})) as state:
-#             # create N data items with X columns each
-#             data_items = []
-#             # add 100 renames
-#             renames = {uniq_id():{"name": uniq_id()} for _ in range(0, 100)}
-#             rename_keys = list(renames.keys())
-#             # 10.000 records
-#             for _ in range(0, 10000):
-#                 # with more or less ~100 columns
-#                 d = {uniq_id():uniq_id() for _ in range(0, 95)}
-#                 # with ~5 columns to be munged/
-#                 for _ in range(0, 5):
-#                     assert random.choice(rename_keys) in renames
-#                     d[random.choice(rename_keys)] = uniq_id()
-#                 # assert len(d) == 100
-#                 data_items.append(d)
-
-#             state.state["custom_fields_mapping"] = {"endpoint": renames}
-
-#             start_ts = time()
-#             pull_munge_func(data_items, "endpoint")
-#             print(f"munging time: {time() - start_ts} seconds")
