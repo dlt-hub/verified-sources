@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timedelta
 
 import numpy as np
 import pandas as pd
@@ -42,17 +42,23 @@ def calculate_mrr(df_sub: pd.DataFrame) -> float:
 
     df_sub["created"] = pd.to_datetime(df_sub["created"], unit="s").dt.tz_localize(None)
 
-    def total_mrr(df_sub: pd.DataFrame, end_date: datetime = datetime(2023, 5, 1)) -> float:
+    today = datetime.today()
+    first_day = today.replace(day=1)
+    next_month = first_day + timedelta(32)
+    first_day_next_month = next_month.replace(day=1)
+
+    def total_mrr(df_sub: pd.DataFrame, end_date: datetime = datetime.today()) -> float:
         """
         Total MRR
         end_date: first day of the next month
         """
         df_sub = df_sub[df_sub["created"] < end_date]
+
         return df_sub[df_sub["status"].isin(["active", "past_due"])][
             "plan_amount_month"
         ].sum()
 
-    return float(total_mrr(df_sub))
+    return float(round(total_mrr(df_sub, end_date=first_day_next_month), 2))
 
 
 def churn_rate(df_event: pd.DataFrame, df_subscription: pd.DataFrame) -> float:
