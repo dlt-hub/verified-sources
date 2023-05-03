@@ -1,5 +1,5 @@
 """Contains functions that run the matomo pipeline."""
-from matomo import matomo_reports, matomo_events
+from matomo import matomo_reports, matomo_visits
 import dlt
 
 
@@ -9,7 +9,7 @@ def run_full_load() -> None:
     """
     pipeline_reports = dlt.pipeline(dataset_name="matomo_full_load", export_schema_path="schemas/export", full_refresh=False, destination="postgres", pipeline_name="matomo")
     data_reports = matomo_reports()
-    data_events = matomo_events()
+    data_events = matomo_visits()
     info = pipeline_reports.run([data_reports, data_events])
     print(info)
 
@@ -55,15 +55,15 @@ def run_reports():
 
 def run_live_events():
     """
-    Runs the pipeline only loading live events.
+    Runs the pipeline loading live visits and visitors data, getting only todays data
     :return:
     """
 
-    pipeline_events = dlt.pipeline(dataset_name="matomo_events", full_refresh=False, destination="postgres", pipeline_name="matomo")
-    data = matomo_events(get_live_event_visitors=False)
+    pipeline_events = dlt.pipeline(dataset_name="matomo_events", full_refresh=False, destination="duckdb", pipeline_name="matomo")
+    data = matomo_visits(initial_load_past_days=1, get_live_event_visitors=True)
     info = pipeline_events.run(data)
     print(info)
 
 
 if __name__ == "__main__":
-    run_full_load()
+    run_live_events()

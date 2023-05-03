@@ -7,7 +7,7 @@ from dlt.common.pendulum import pendulum
 from dlt.common.typing import DictStrAny, TDataItem
 
 FIRST_DAY_OF_MILLENNIUM = "2000-01-01"
-FIRST_DAY_OF_MILLENNIUM_TIMESTAMP = 946684800.0
+# FIRST_DAY_OF_MILLENNIUM_TIMESTAMP = 946684800.0
 TIMESTAMP_10_DAYS_AGO = pendulum.today().subtract(days=10).timestamp()
 
 
@@ -41,16 +41,18 @@ def process_report(report: Iterator[TDataItem]) -> Union[DictStrAny, List[TDataI
     return processed_report
 
 
-def process_visitors(visitors_list: List[DictStrAny]) -> Iterator[TDataItem]:
-    """
-    Helper to process data from Matomo live visits data.
-    :param visitors_list: A list of dicts as returned by Matomo API
-    :returns: A generator of processed dicts from the raw API call
-    """
-    for visitor_info in visitors_list:
-        last_visit_datetime = pendulum.from_timestamp(visitor_info["serverTimestamp"])
-        visitor_info["last_visit_datetime"] = last_visit_datetime
-        yield visitor_info
+def remove_active_visits(visits: List[DictStrAny], visit_timeout_seconds: int, visit_max_duration_seconds: int, now: float) -> List[DictStrAny]:
+    """Removes visits that can still add actions and all the visits preceding them. visit_timeout_seconds controls when we consider active visit closed.
+    visit_max_duration_seconds is a safeguard that makes visits longer than this argument closed."""
+    cutoff = -1
+    for idx, visit in enumerate(visits):
+        last_action_delta = now - visit["lastActionTimestamp"]
+        visit_duration = now - visit["firstActionTimestamp"]
+        if last_action_delta < visit_timeout_seconds and visit_duration < visit_max_duration_seconds:
+            # print(f"visit {visit['idVisit']} must be eliminated due to {last_action_delta} and {visit_duration}")
+            # remove this element and all elements earlier in the list
+            cutoff = idx
+    return visits[cutoff + 1:]
 
 
 def get_matomo_date_range(start_date: str, last_date: dlt.sources.incremental[pendulum.DateTime]) -> str:

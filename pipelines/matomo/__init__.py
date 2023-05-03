@@ -1,21 +1,21 @@
-"""Contains all sources and resources for the Matomo pipeline."""
+"""Loads reports and raw visits data from Matomo"""
 from typing import Iterator, List
 import dlt
 import pendulum
 from dlt.common.typing import DictStrAny, TDataItem
 from dlt.extract.source import DltResource
 from .helpers.matomo_client import MatomoAPIClient
-from .helpers.data_processing import FIRST_DAY_OF_MILLENNIUM, TIMESTAMP_10_DAYS_AGO, get_matomo_date_range, process_report, process_visitors
+from .helpers.data_processing import get_matomo_date_range, process_report, remove_active_visits
 
 
 @dlt.source(max_table_nesting=2)
 def matomo_reports(api_token: str = dlt.secrets.value, url: str = dlt.config.value, queries: List[DictStrAny] = dlt.config.value, site_id: int = dlt.config.value) -> List[DltResource]:
     """
-    The source for the pipeline.
+    Executes and loads a set of reports defined in `queries` for a Matomo site site_id.
     :param api_token:
-    :param url: Url of the website
+    :param url:
     :param queries: Dicts that contain information on the reports to retrieve
-    :param site_id: Every matomo site has a unique site_id
+    :param site_id: site id of the website as per your matomo account
     :return: List of dlt resources, each containing a matomo report.
     """
 
@@ -63,27 +63,54 @@ def get_data_batch(client: MatomoAPIClient, query: DictStrAny, last_date: dlt.so
 
 
 @dlt.source(max_table_nesting=2)
-def matomo_events(api_token: str = dlt.secrets.value, url: str = dlt.config.value, live_events_site_id: int = dlt.config.value, get_live_event_visitors: bool = False) -> List[DltResource]:
+def matomo_visits(
+    api_token: str = dlt.secrets.value,
+    url: str = dlt.config.value,
+    live_events_site_id: int = dlt.config.value,
+    initial_load_past_days: int = 10,
+    visit_timeout_seconds: int = 1800,
+    visit_max_duration_seconds: int = 3600,
+    get_live_event_visitors: bool = False
+) -> List[DltResource]:
     """
-    The source for the pipeline.
+    Loads a list of visits. Initially loads the current day visits and all visits in `initial_past_days`. On subsequent loads, continues from last load. Active visits are skipped
+    until a visit is closed and does not get more actions.
     :param api_token:
     :param url:
     :param live_events_site_id:
+    :param load_past_days: how many past days to load on initial load.
+    :param visit_timeout_seconds: a session timeout, after that inactivity time, visit is considered closed. this is a setting in Matomo. default is 30 min.
+    :param visit_max_duration_seconds: maximum visit length after which we consider the visit closed. this is a safety mechanism - in case of visits that may take days we'd never count them as finalized as well as visits after them.
     :param get_live_event_visitors: Option, if set to true will retrieve data about unique visitors.
     :return: A list of resources containing event data.
     """
 
     # Create an instance of the Matomo API client
     client = MatomoAPIClient(api_token=api_token, url=url)
-    visits_data_generator = get_last_visits(client=client, last_date=dlt.sources.incremental("serverTimestamp"), site_id=live_events_site_id)
+    # 10 days into the past is a default
+    initial_server_timestamp = pendulum.today().subtract(days=initial_load_past_days).timestamp()
+    visits_data_generator = get_last_visits(
+        client=client,
+        site_id=live_events_site_id,
+        last_date=dlt.sources.incremental("serverTimestamp", initial_value=initial_server_timestamp),
+        visit_timeout_seconds=visit_timeout_seconds,
+        visit_max_duration_seconds=visit_max_duration_seconds
+        )
     resource_list = [visits_data_generator]
     if get_live_event_visitors:
         resource_list.append(visits_data_generator | get_unique_visitors(client=client, site_id=live_events_site_id))
     return resource_list
 
 
-@dlt.resource(name="visits", write_disposition="merge", primary_key="idVisit", selected=True)
-def get_last_visits(client: MatomoAPIClient, site_id: int,  last_date: dlt.sources.incremental[pendulum.DateTime], rows_per_page: int = 1000) -> Iterator[TDataItem]:
+@dlt.resource(name="visits", write_disposition="append", primary_key="idVisit", selected=True)
+def get_last_visits(
+    client: MatomoAPIClient,
+    site_id: int,
+    last_date: dlt.sources.incremental[float],
+    visit_timeout_seconds: int = 1800,
+    visit_max_duration_seconds: int = 3600,
+    rows_per_page: int = 2000
+) -> Iterator[TDataItem]:
     """
     Dlt resource which gets the visits in the given site id for the given timeframe. If there was a previous load the chosen timeframe is always last_load -> now. Otherwise, a start date can be
     provided to make the chosen timeframe start_date -> now. The default behaviour would be to get all visits available until now if neither last_load nor start_date are given.
@@ -95,10 +122,15 @@ def get_last_visits(client: MatomoAPIClient, site_id: int,  last_date: dlt.sourc
     """
 
     extra_params = {
-        "minTimestamp": last_date.last_value if last_date.last_value else TIMESTAMP_10_DAYS_AGO,
+        "minTimestamp": last_date.last_value,
     }
-    method_data = client.get_method(site_id=site_id, method="Live.getLastVisitsDetails", extra_params=extra_params, rows_per_page=rows_per_page)
-    yield from method_data
+    now = pendulum.now().timestamp()
+    visits = client.get_method(site_id=site_id, method="Live.getLastVisitsDetails", extra_params=extra_params, rows_per_page=rows_per_page)
+    for page_no, page in enumerate(visits):
+        # remove active visits only from the first page
+        if page_no == 0:
+            page = remove_active_visits(page, visit_timeout_seconds, visit_max_duration_seconds, now)
+        yield page
 
 
 @dlt.transformer(data_from=get_last_visits, write_disposition="merge", name="visitors", primary_key="visitorId")    # type: ignore
@@ -117,10 +149,3 @@ def get_unique_visitors(visits: List[DictStrAny], client: MatomoAPIClient, site_
         method_data = client.get_visitors_batch(visitor_list=visitor_list, site_id=site_id)
         for method_dict in method_data:
             yield method_dict
-
-    """
-    for visit in visits:
-        visitor_id = visit["visitorId"]
-        method_data = client.get_method(site_id=site_id, method="Live.getVisitorProfile", extra_params={"visitorId": visitor_id})
-        yield from method_data
-    """

@@ -1,7 +1,14 @@
 """This module contains an implementation of a Matomo API client for python."""
-from typing import List, Union
-from dlt.common.typing import DictStrAny, DictStrStr, TDataItem
+from typing import Iterator, List, Union
+from dlt.common.typing import DictStrAny, DictStrStr, TDataItem, TDataItems
 from dlt.sources.helpers.requests import client
+
+
+class MatomoResponseError(Exception):
+    """Raised when matomo response contains an error """
+    def __init__(self, message: str) -> None:
+        self.message = message
+        super().__init__(f"Matomo error response: {self.message}")
 
 
 class MatomoAPIClient:
@@ -33,6 +40,11 @@ class MatomoAPIClient:
         response = client.get(url=url, headers=headers, params=params)
         response.raise_for_status()
         json_response = response.json()
+        # matomo returns error with HTTP 200
+        if isinstance(json_response, list):
+            for part in json_response:
+                if isinstance(part, dict) and part.get("result") == "error":
+                    raise MatomoResponseError(part["message"])
         return json_response
 
     def get_query(self, date: str, extra_params: DictStrAny, methods: List[str], period: str, site_id: int) -> TDataItem:
@@ -61,7 +73,7 @@ class MatomoAPIClient:
         # Send the API request
         return self._request(params=params)
 
-    def get_method(self, extra_params: DictStrAny, method: str, site_id: int, rows_per_page: int = 10000) -> TDataItem:
+    def get_method(self, extra_params: DictStrAny, method: str, site_id: int, rows_per_page: int = 10000) -> Iterator[TDataItems]:
         """
         Helper that gets data using a Matomo API method
         :param extra_params: Extra parameters as a dict
@@ -92,7 +104,7 @@ class MatomoAPIClient:
             params["urls[0]"] = f"method={method}&idSite={site_id}&filter_limit={rows_per_page}&filter_offset={filter_offset}"
             method_data = self._request(params=params)[0]
 
-    def get_visitors_batch(self, visitor_list: List[str], site_id: int, extra_params: DictStrAny = None) -> TDataItem:
+    def get_visitors_batch(self, visitor_list: List[str], site_id: int, extra_params: DictStrAny = None) -> TDataItems:
         """
         Gets visitors for Matomo.
         :param visitor_list:
@@ -113,4 +125,3 @@ class MatomoAPIClient:
         params.update(extra_params)
         method_data = self._request(params=params)
         return method_data
-
