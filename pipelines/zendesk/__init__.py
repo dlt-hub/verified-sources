@@ -88,7 +88,7 @@ def zendesk_support(credentials: Union[ZendeskCredentialsEmailPass, ZendeskCrede
 
 # Zendesk Support resources
 @dlt.resource(primary_key="timestamp")
-def ticket_events(zendesk_client: Zenpy, timestamp = dlt.sources.incremental("timestamp", initial_value=1683054527)) -> Iterator[TDataItem]:
+def ticket_events(zendesk_client: Zenpy, timestamp = dlt.sources.incremental("timestamp", initial_value=0)) -> Iterator[TDataItem]:
     dt = pendulum.from_timestamp(timestamp.last_value)
     result_generator = zendesk_client.tickets.events(start_time=dt)
     for event in result_generator:
