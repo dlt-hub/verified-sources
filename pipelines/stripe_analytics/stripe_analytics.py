@@ -104,4 +104,4 @@ def metrics_resource(pipeline: Pipeline) -> Generator[Dict[str, Any], Any, None]
     churn = churn_rate(event_info, sub_info)
     print(f"Churn rate: {round(churn * 100, 1)}%")
 
-    yield {"MRR": mrr, "Churn rate": churn, "created": datetime.now()}
+    yield {"MRR": mrr, "Churn rate": churn, "created": pendulum.now()}
