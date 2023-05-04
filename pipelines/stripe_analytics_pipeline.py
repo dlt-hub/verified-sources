@@ -7,7 +7,7 @@ if __name__ == "__main__":
         destination="duckdb",
         dataset_name="stripe_customers_subscriptions",
     )
-    source = stripe_source(limit=100, get_all_data=True)
+    source = stripe_source()
 
     load_info = pipeline.run(source)
     print(load_info)

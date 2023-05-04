@@ -36,7 +36,7 @@ def stripe_get_data(
         kwargs.update({"status": "all"})
 
     resource_dict = getattr(stripe, resource.value).list(
-        created={"gte": start_date, "lt": end_date}, **kwargs
+        created={"gte": start_date, "lt": end_date}, limit=100, **kwargs
     )
     return dict(resource_dict)
 
@@ -44,13 +44,13 @@ def stripe_get_data(
 @dlt.source
 def stripe_source(
     stripe_secret_key: str = dlt.secrets.value,
-    limit: int = 100,
-    get_all_data: bool = False,
     start_date: Optional[datetime] = None,
     end_date: Optional[datetime] = None,
 ) -> Generator[DltResource, Any, None]:
     stripe.api_key = stripe_secret_key
     stripe.api_version = "2022-11-15"
+
+    start_date = int(start_date.timestamp()) if start_date is not None else -1
 
     def get_resource(
         endpoint: Endpoints,
@@ -58,16 +58,16 @@ def stripe_source(
     ) -> Generator[Dict[Any, Any], Any, None]:
         get_more = True
         starting_after = None
+        start_value = created.last_value
 
         while get_more:
             response = stripe_get_data(
                 endpoint,
-                start_date=created.last_value,
+                start_date=start_value,
                 end_date=end_date,
-                limit=limit,
                 starting_after=starting_after,
             )
-            get_more = False if not get_all_data else response["has_more"]
+            get_more = response["has_more"]
 
             if len(response["data"]) > 0:
                 starting_after = response["data"][-1]["id"]

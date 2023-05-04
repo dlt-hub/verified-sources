@@ -21,7 +21,7 @@ def test_all_resources(destination_name: str) -> None:
         dataset_name="stripe_test",
         full_refresh=True,
     )
-    data = stripe_source(limit=10, get_all_data=False, end_date=datetime(2023, 5, 3))
+    data = stripe_source(end_date=datetime(2023, 5, 3))
     # load all endpoints out of the data source
     info = pipeline.run(data)
     assert_load_info(info)
@@ -36,7 +36,7 @@ def test_load_subscription(destination_name: str) -> None:
         dataset_name="stripe_subscriptions_test",
         full_refresh=True,
     )
-    data = stripe_source(limit=100, get_all_data=True, end_date=datetime(2023, 5, 3))
+    data = stripe_source(end_date=datetime(2023, 5, 3))
     # load the "Subscription" out of the data source
     info = pipeline.run(data.with_resources(Endpoints.subscriptions.value))
     # let's print it (pytest -s will show it)
@@ -66,7 +66,7 @@ def test_load_subscription(destination_name: str) -> None:
         # you can use parametrized queries as well, see python dbapi
         # you can use unqualified table names
         with c.execute_query(
-            "SELECT COUNT(customer) FROM subscription WHERE status IN (%s) GROUP BY customer",
+            "SELECT customer FROM subscription WHERE status IN (%s)",
             "canceled",
         ) as cur:
             rows = list(cur.fetchall())
@@ -82,14 +82,14 @@ def test_incremental_subscriptions_load(destination_name: str) -> None:
         dataset_name="stripe_subscriptions_test",
         full_refresh=True,
     )
-    data = stripe_source(limit=100, get_all_data=False, end_date=datetime(2023, 5, 3))
+    data = stripe_source(end_date=datetime(2023, 5, 3))
     info = pipeline.run(data.with_resources(Endpoints.subscriptions.value))
     assert_load_info(info)
 
     def get_canceled_subs() -> int:
         with pipeline.sql_client() as c:
             with c.execute_query(
-                "SELECT COUNT(customer) FROM subscription WHERE status IN (%s) GROUP BY customer",
+                "SELECT customer FROM subscription WHERE status IN (%s) GROUP BY customer",
                 "canceled",
             ) as cur:
                 rows = list(cur.fetchall())
@@ -99,7 +99,7 @@ def test_incremental_subscriptions_load(destination_name: str) -> None:
     assert canceled_subs > 0  # should have canceled subscriptions
 
     # do load with the same range into the existing dataset
-    data = stripe_source(limit=100, get_all_data=False, end_date=datetime(2023, 5, 3))
+    data = stripe_source(end_date=datetime(2023, 5, 3))
     info = pipeline.run(data.with_resources(Endpoints.subscriptions.value))
     # the dlt figured out that there's no new data at all and skipped the loading package
     assert_load_info(info, expected_load_packages=0)
@@ -107,7 +107,7 @@ def test_incremental_subscriptions_load(destination_name: str) -> None:
     assert get_canceled_subs() == canceled_subs
 
     # get some new subscriptions
-    data = stripe_source(limit=100, get_all_data=False, start_date=datetime(2023, 5, 3))
+    data = stripe_source()
     info = pipeline.run(data.with_resources(Endpoints.subscriptions.value))
     # we have new subscriptions in the next day!
     assert_load_info(info)
@@ -123,7 +123,7 @@ def test_metrics(destination_name: str) -> None:
         dataset_name="stripe_metric_test",
         full_refresh=True,
     )
-    data = stripe_source(limit=100, get_all_data=False)
+    data = stripe_source()
     # load the "Subscription" and the "Event" out of the data source
     pipeline.run(
         data.with_resources(Endpoints.subscriptions.value, Endpoints.events.value)
