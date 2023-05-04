@@ -1,31 +1,29 @@
-# Pipedrive pipeline setup guide
+---
+title: Pipedrive
+description: dlt pipeline for Pipedrive API
+keywords: [pipedrive api, pipedrive pipeline, pipedrive]
+---
 
-## Pipedrive setup
+# Pipedrive
 
-1. Set up a pipedrive account.
-2. Pipedrive provides a unique domain name. The domain name is generally [yourbusiness].pipedrive.com
-3. For eg. If a company name is dlthub, then the domain name shall be dlthub.pipedrive.com or something similar.
+Here you will find a setup guide for the [Pipedrive](https://developers.pipedrive.com/docs/api/v1) pipeline.
 
-## API token for authentication
+## Set up account
 
-1. In Pipedrive, go to your name(in the top right corner) and company settings.
-2. Go to personal preferences
-3. Select the API tab and copy your API token(to be used in the dlt configuration).
-4. To learn more about pipedrive API token please read the [docs](https://pipedrive.readme.io/docs/how-to-find-the-api-token). 
+**To get started:**
+1. Set up a Pipedrive account
+2. Grab your Pipedrive subdomain
 
-## Initing the pipeline
+Pipedrive provides a unique domain name that is generally `[company].pipedrive.com`. For example, if your company name is `dltHub`, then the subdomain name is `dlthub.pipedrive.com`.
 
-1. Initialise the pipeline by using the following command
+## Initialize the pipeline
 
+**Initialize the pipeline by using the following command with your [destination](../general-usage/glossary.md#destination) of choice:**
 ```bash
-dlt init pipedrive destination
-
+dlt init pipedrive [destination]
 ```
 
-       To know more about destinations, please read the [docs](https://dlthub.com/docs/destinations).
-
-1. The file structure for the inited repository shall look like below:
-
+This will create a directory that includes the following file structure:
 ```bash
 pipedrive_pipeline
 ├── .dlt
@@ -35,45 +33,52 @@ pipedrive_pipeline
 │   └── pipedrive_docs_images
 │   └── __init__.py
 │   └── custom_fields_munger.py
-│   └── ReadMe.md
+│   └── README.md
 ├── .gitignore
 ├── pipedrive_pipeline.py
 └── requirements.txt
 ```
 
-1. To learn more about initing please read the docs [“Adding a pipeline”](https://dlthub.com/docs/walkthroughs/add-a-pipeline).
+## Grab API auth token
 
-## Configuring credentials
+**On Pipedrive:**
+1. Go to your name (in the top right corner)
+2. Select company settings
+3. Go to personal preferences
+4. Select the API tab
+5. Copy your API token (to be used in the dlt configuration)
 
-1. In .dlt folder is  secrets.toml. It should look like the code below
+You can learn more about Pipedrive API token authentication in the docs [here](https://pipedrive.readme.io/docs/how-to-find-the-api-token).
 
+## Configure `dlt` credentials
+
+1. In the `.dlt` folder, you will find `secrets.toml`, which looks like this:
 ```bash
-# put your secret values and credentials here. do not share this file and do not push it to github
-pipedrive_api_key = "Pipedrive API Token" # please set me up!
+# Put your secret values and credentials here
+# Note: Do not share this file and do not push it to GitHub!
+pipedrive_api_key = "PIPEDRIVE_API_TOKEN" # please set me up :)
 
-[destination.bigquery.credentials]
-project_id = "set me up" # GCP project ID!
-private_key = "set me up" # Unique private key !(Must be copied fully including BEGIN and END PRIVATE KEY)
-client_email = "set me up" # Email for service account
-location = "set me up" #Project Location For ex. “US”
+[destination.bigquery.credentials] # the credentials require will change based on the destination
+project_id = "set me up" # GCP project ID
+private_key = "set me up" # Unique private key (including `BEGINand END PRIVATE KEY`)
+client_email = "set me up" # Service account email
+location = "set me up" # Project location (e.g. “US”)
 ```
 
-1. For the pipedrive API token go to your name(in the top right corner) > company settings> personal preferences > API token *(Copy that and paste above in pipedrive_api_key)* 
-2. Google cloud credentials may be copied from secrets manager in GCP.
-3. To learn more on bigquery authentication please read the [docs](https://cloud.google.com/bigquery/docs/authentication).
+2. Replace `PIPEDRIVE_API_TOKEN` with the API token you [copied above](#grab-api-auth-token)
 
-## Running the pipeline
+3. Add the credentials required by your destination (e.g. [Google BigQuery](http://localhost:3000/docs/destinations#google-bigquery))
 
-1. To install requirements for the pipeline, run the following command
+## Run the pipeline
 
+1. Install requirements for the pipeline by running the following command:
 ```bash
 pip install -r requirements.txt
 ```
 
-1. To run the pipeline, run the following command.
-
+2. Run the pipeline with the following command:
 ```bash
 python3 pipedrive_pipeline.py
 ```
 
-1. After a successful pipeline run, the load job shall be completed and data shall be loaded to destination.
+3. Use `dlt pipeline pipedrive_pipeline show` to make sure that everything loaded as expected.
