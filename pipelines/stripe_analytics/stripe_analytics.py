@@ -89,14 +89,14 @@ def stripe_source(
 
 
 @dlt.resource(name="Metrics", write_disposition="append", primary_key="created")
-def metrics_resource(pipeline: Pipeline) -> Generator[Dict[str, Any], Any, None]:
-    with pipeline.sql_client() as client:
+def metrics_resource() -> Generator[Dict[str, Any], Any, None]:
+    with dlt.current.pipeline().sql_client() as client:
         with client.execute_query("SELECT * FROM subscription") as table:
             sub_info = table.df()
 
     # Access to events through the Retrieve Event API is guaranteed only for 30 days.
     # But we probably have old data in the database.
-    with pipeline.sql_client() as client:
+    with dlt.current.pipeline().sql_client() as client:
         with client.execute_query(
             "SELECT * FROM event WHERE created > %s", pendulum.now().subtract(days=30)
         ) as table:

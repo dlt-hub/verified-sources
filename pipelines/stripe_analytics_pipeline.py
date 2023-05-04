@@ -12,6 +12,6 @@ if __name__ == "__main__":
     load_info = pipeline.run(source)
     print(load_info)
 
-    resource = metrics_resource(pipeline)
+    resource = metrics_resource()
     load_info = pipeline.run(resource)
     print(load_info)
