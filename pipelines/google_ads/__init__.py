@@ -1,5 +1,3 @@
-
-
 from typing import Dict, List, Union
 import dlt
 from dlt.common.configuration.specs import GcpClientCredentialsWithDefault
@@ -16,6 +14,10 @@ try:
     from google.oauth2.credentials import Credentials
 except ImportError:
     raise MissingDependencyException("Google OAuth Library", ["google-auth-oauthlib"])
+
+
+DIMENSION_TABLES = ["accounts", "ad_group", "ad_group_ad", "ad_group_ad_label", "ad_group_label", "campaign_label", "click_view", "customer", "keyword_view", "geographic_view"]
+REPORT_TABLES = []
 
 
 @dlt.source(max_table_nesting=2)
@@ -84,7 +86,7 @@ def google_ads(credentials: Union[GoogleAnalyticsCredentialsOAuth, GcpClientCred
     return resource_list
 
 
-@dlt.resource(name="dimension_tables", write_disposition="replace")
+@dlt.resource(write_disposition="replace")
 def get_dimensions(client):
     """
     Dlt resource which loads dimensions.
@@ -93,14 +95,12 @@ def get_dimensions(client):
     """
     # Issues a search request using streaming.
     ga_service = client.get_service("GoogleAdsService")
-    stream = ga_service.search_stream(customer_id="", query=query)
-    for batch in stream:
-        """
-        Could be faster to just yield
-        yield batch.results
-        """
-        processed_row_generator = process_dimension(batch=batch)
-        yield from processed_row_generator
+    for dimension_query in DIMENSION_TABLES:
+        query = f"SELECT * FROM {dimension_query}"
+        stream = ga_service.search_stream(customer_id="", query=query)
+        for batch in stream:
+            processed_row_generator = process_dimension(batch=batch)
+            yield from dlt.mark.with_table_name(dimension_query, processed_row_generator)
 
 
 @dlt.resource(name="reports_table", write_disposition="append")
