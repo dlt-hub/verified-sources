@@ -54,16 +54,15 @@ def stripe_source(
 
     def get_resource(
         endpoint: Endpoints,
-        created: Optional[Any] = dlt.sources.incremental("created", initial_value=-3600),
+        created: Optional[Any] = dlt.sources.incremental("created", initial_value=start_date),
     ) -> Generator[Dict[Any, Any], Any, None]:
         get_more = True
         starting_after = None
-        start_value = created.last_value
 
         while get_more:
             response = stripe_get_data(
                 endpoint,
-                start_date=start_value if start_date is None else start_date,
+                start_date=created.last_value,
                 end_date=end_date,
                 limit=limit,
                 starting_after=starting_after,
