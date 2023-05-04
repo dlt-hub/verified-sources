@@ -93,7 +93,7 @@ def metrics_resource(pipeline: Pipeline) -> Generator[Dict[str, Any], Any, None]
     # But we probably have old data in the database.
     with pipeline.sql_client() as client:
         with client.execute_query(
-            "SELECT * FROM event WHERE CAST(created AS DATETIME) > %s", datetime.now() - timedelta(30)
+            "SELECT * FROM event WHERE created > %s", datetime.now() - timedelta(30)
         ) as table:
             event_info = table.df()
 

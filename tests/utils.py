@@ -18,6 +18,7 @@ TEST_STORAGE_ROOT = "_storage"
 
 # get env variable with destinations
 ALL_DESTINATIONS = dlt.config.get("ALL_DESTINATIONS", list) or ["bigquery", "redshift", "postgres", "duckdb"]
+ALL_DESTINATIONS_WO_BQ = ["redshift", "postgres", "duckdb"]
 # ALL_DESTINATIONS = ["duckdb"]
 # ALL_DESTINATIONS = ["bigquery"]
 
