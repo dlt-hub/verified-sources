@@ -1,12 +1,12 @@
-from datetime import datetime
 from enum import Enum
-from typing import Any, Generator, Optional, Dict
+from typing import Any, Dict, Generator, Optional
 
 import dlt
 import stripe
+from dlt.common import pendulum
 from dlt.extract.source import DltResource
 from dlt.pipeline import Pipeline
-from dlt.common import pendulum
+from pendulum import DateTime, datetime
 
 from .metrics import calculate_mrr, churn_rate
 
@@ -20,12 +20,15 @@ class Endpoints(Enum):
 
 
 def stripe_get_data(
-    resource: Endpoints, start_date: Optional[Any] = None, end_date: Optional[Any] = None, **kwargs : Any
+    resource: Endpoints,
+    start_date: Optional[Any] = None,
+    end_date: Optional[Any] = None,
+    **kwargs: Any,
 ) -> Dict[Any, Any]:
     if start_date:
         if isinstance(start_date, str):
-            start_date = datetime.strptime(start_date, "%Y-%m-%dT%H:%M:%SZ")
-        if isinstance(start_date, datetime):
+            start_date = pendulum.from_format(start_date, "%Y-%m-%dT%H:%M:%SZ")
+        if isinstance(start_date, DateTime):
             # convert to unix timestamp
             start_date = int(start_date.timestamp())
     if end_date:
@@ -54,7 +57,9 @@ def stripe_source(
 
     def get_resource(
         endpoint: Endpoints,
-        created: Optional[Any] = dlt.sources.incremental("created", initial_value=start_date),
+        created: Optional[Any] = dlt.sources.incremental(
+            "created", initial_value=start_date
+        ),
     ) -> Generator[Dict[Any, Any], Any, None]:
         get_more = True
         starting_after = None
