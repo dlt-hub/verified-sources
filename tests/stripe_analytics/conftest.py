@@ -1,6 +1,5 @@
-from datetime import datetime, timedelta
-
 import pandas as pd
+import pendulum
 import pytest
 
 
@@ -13,9 +12,9 @@ def subscription_dataset():
         "plan__amount": [1000, 10000, 120000],
         "quantity": [1, 1, 1],
         "created": [
-            datetime.today(),
-            datetime.today() - timedelta(30),
-            datetime.today() - timedelta(60),
+            pendulum.today(),
+            pendulum.today().subtract(days=30),
+            pendulum.today().subtract(days=60),
         ],
         "status": ["canceled", "past_due", "active"],
     }

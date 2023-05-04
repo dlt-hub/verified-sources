@@ -1,7 +1,6 @@
-from datetime import datetime
-
 import dlt
 import pytest
+from pendulum import datetime
 
 from pipelines.stripe_analytics.stripe_analytics import (
     Endpoints,
@@ -129,7 +128,7 @@ def test_metrics(destination_name: str) -> None:
         data.with_resources(Endpoints.subscriptions.value, Endpoints.events.value)
     )
     # let's print it (pytest -s will show it)
-    resource = metrics_resource(pipeline)
+    resource = metrics_resource()
     load_info = pipeline.run(resource)
     print(load_info)
 
