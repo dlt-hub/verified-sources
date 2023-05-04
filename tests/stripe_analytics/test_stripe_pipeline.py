@@ -9,7 +9,7 @@ from pipelines.stripe_analytics.stripe_analytics import (
     stripe_source,
 )
 
-from tests.utils import ALL_DESTINATIONS, ALL_DESTINATIONS_WO_BQ, assert_load_info
+from tests.utils import ALL_DESTINATIONS, assert_load_info
 
 
 @pytest.mark.parametrize("destination_name", ALL_DESTINATIONS)
@@ -114,7 +114,7 @@ def test_incremental_subscriptions_load(destination_name: str) -> None:
     assert get_canceled_subs() > canceled_subs
 
 
-@pytest.mark.parametrize("destination_name", ALL_DESTINATIONS_WO_BQ)
+@pytest.mark.parametrize("destination_name", ALL_DESTINATIONS)
 def test_metrics(destination_name: str) -> None:
     # mind the full_refresh flag - it makes sure that data is loaded to unique dataset. this allows you to run the tests on the same database in parallel
     pipeline = dlt.pipeline(

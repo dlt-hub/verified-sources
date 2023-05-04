@@ -1,4 +1,4 @@
-from datetime import datetime, timedelta
+from datetime import datetime
 from enum import Enum
 from typing import Any, Generator, Optional, Dict
 
@@ -6,6 +6,7 @@ import dlt
 import stripe
 from dlt.extract.source import DltResource
 from dlt.pipeline import Pipeline
+from dlt.common import pendulum
 
 from .metrics import calculate_mrr, churn_rate
 
@@ -93,7 +94,7 @@ def metrics_resource(pipeline: Pipeline) -> Generator[Dict[str, Any], Any, None]
     # But we probably have old data in the database.
     with pipeline.sql_client() as client:
         with client.execute_query(
-            "SELECT * FROM event WHERE created > %s", datetime.now() - timedelta(30)
+            "SELECT * FROM event WHERE created > %s", pendulum.now().subtract(days=30)
         ) as table:
             event_info = table.df()
 
