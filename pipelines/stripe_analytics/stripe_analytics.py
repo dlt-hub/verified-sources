@@ -43,7 +43,7 @@ def stripe_get_data(
     return dict(resource_dict)
 
 
-@dlt.source
+@dlt.source(name="stripe")
 def stripe_source(
     stripe_secret_key: str = dlt.secrets.value,
     start_date: Optional[DateTime] = None,
