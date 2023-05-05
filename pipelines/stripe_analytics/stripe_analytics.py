@@ -5,8 +5,7 @@ import dlt
 import stripe
 from dlt.common import pendulum
 from dlt.extract.source import DltResource
-from dlt.pipeline import Pipeline
-from pendulum import DateTime, datetime
+from pendulum import DateTime
 
 from .metrics import calculate_mrr, churn_rate
 
@@ -47,18 +46,18 @@ def stripe_get_data(
 @dlt.source
 def stripe_source(
     stripe_secret_key: str = dlt.secrets.value,
-    start_date: Optional[datetime] = None,
-    end_date: Optional[datetime] = None,
+    start_date: Optional[DateTime] = None,
+    end_date: Optional[DateTime] = None,
 ) -> Generator[DltResource, Any, None]:
     stripe.api_key = stripe_secret_key
     stripe.api_version = "2022-11-15"
 
-    start_date = int(start_date.timestamp()) if start_date is not None else -1
+    start_date_unix = int(start_date.timestamp()) if start_date is not None else -1
 
     def get_resource(
         endpoint: Endpoints,
         created: Optional[Any] = dlt.sources.incremental(
-            "created", initial_value=start_date
+            "created", initial_value=start_date_unix
         ),
     ) -> Generator[Dict[Any, Any], Any, None]:
         get_more = True
@@ -90,13 +89,14 @@ def stripe_source(
 
 @dlt.resource(name="Metrics", write_disposition="append", primary_key="created")
 def metrics_resource() -> Generator[Dict[str, Any], Any, None]:
-    with dlt.current.pipeline().sql_client() as client:
+    pipeline = dlt.current.pipeline()  # type: ignore
+    with pipeline.sql_client() as client:
         with client.execute_query("SELECT * FROM subscription") as table:
             sub_info = table.df()
 
     # Access to events through the Retrieve Event API is guaranteed only for 30 days.
     # But we probably have old data in the database.
-    with dlt.current.pipeline().sql_client() as client:
+    with pipeline.sql_client() as client:
         with client.execute_query(
             "SELECT * FROM event WHERE created > %s", pendulum.now().subtract(days=30)
         ) as table:
