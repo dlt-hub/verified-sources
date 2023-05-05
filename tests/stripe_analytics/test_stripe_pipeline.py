@@ -3,7 +3,8 @@ import pytest
 from pendulum import datetime
 
 from pipelines.stripe_analytics import (
-    Endpoints,
+    IncrementalEndpoints,
+    UpdatedEndpoints,
     metrics_resource,
     stripe_source,
 )
@@ -37,7 +38,7 @@ def test_load_subscription(destination_name: str) -> None:
     )
     data = stripe_source(end_date=datetime(2023, 5, 3))
     # load the "Subscription" out of the data source
-    info = pipeline.run(data.with_resources(Endpoints.subscriptions.value))
+    info = pipeline.run(data.with_resources(UpdatedEndpoints.subscriptions.value))
     # let's print it (pytest -s will show it)
     print(info)
     # make sure all jobs were loaded
@@ -78,18 +79,18 @@ def test_incremental_subscriptions_load(destination_name: str) -> None:
     pipeline = dlt.pipeline(
         pipeline_name="stripe_analytics_test",
         destination=destination_name,
-        dataset_name="stripe_subscriptions_test",
+        dataset_name="stripe_events_test",
         full_refresh=True,
     )
     data = stripe_source(end_date=datetime(2023, 5, 3))
-    info = pipeline.run(data.with_resources(Endpoints.subscriptions.value))
+    info = pipeline.run(data.with_resources(IncrementalEndpoints.events.value))
     assert_load_info(info)
 
     def get_canceled_subs() -> int:
         with pipeline.sql_client() as c:
             with c.execute_query(
-                "SELECT customer FROM subscription WHERE status IN (%s) GROUP BY customer",
-                "canceled",
+                "SELECT id FROM event WHERE type IN (%s)",
+                "customer.subscription.deleted",
             ) as cur:
                 rows = list(cur.fetchall())
                 return len(rows)  # how many customers canceled their subscriptions
@@ -99,7 +100,7 @@ def test_incremental_subscriptions_load(destination_name: str) -> None:
 
     # do load with the same range into the existing dataset
     data = stripe_source(end_date=datetime(2023, 5, 3))
-    info = pipeline.run(data.with_resources(Endpoints.subscriptions.value))
+    info = pipeline.run(data.with_resources(IncrementalEndpoints.events.value))
     # the dlt figured out that there's no new data at all and skipped the loading package
     assert_load_info(info, expected_load_packages=0)
     # there are no more subscriptions as pipeline is skipping existing subscriptions
@@ -107,7 +108,7 @@ def test_incremental_subscriptions_load(destination_name: str) -> None:
 
     # get some new subscriptions
     data = stripe_source()
-    info = pipeline.run(data.with_resources(Endpoints.subscriptions.value))
+    info = pipeline.run(data.with_resources(IncrementalEndpoints.events.value))
     # we have new subscriptions in the next day!
     assert_load_info(info)
     assert get_canceled_subs() > canceled_subs
@@ -125,7 +126,9 @@ def test_metrics(destination_name: str) -> None:
     data = stripe_source()
     # load the "Subscription" and the "Event" out of the data source
     pipeline.run(
-        data.with_resources(Endpoints.subscriptions.value, Endpoints.events.value)
+        data.with_resources(
+            UpdatedEndpoints.subscriptions.value, IncrementalEndpoints.events.value
+        )
     )
     # let's print it (pytest -s will show it)
     resource = metrics_resource()

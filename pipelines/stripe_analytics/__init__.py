@@ -1,6 +1,5 @@
 """ This pipeline uses Stripe API and dlt to load data such as Customer, Subscription, Event and etc. to the database and to calculate the MRR and churn rate. """
 
-from enum import Enum
 from typing import Any, Dict, Generator, Optional
 
 import dlt
@@ -9,40 +8,8 @@ from dlt.common import pendulum
 from dlt.extract.source import DltResource
 from pendulum import DateTime
 
+from .helpers import IncrementalEndpoints, UpdatedEndpoints, pagination, transform_date
 from .metrics import calculate_mrr, churn_rate
-
-
-class Endpoints(Enum):
-    customers: str = "Customer"
-    subscriptions: str = "Subscription"
-    prices: str = "Price"
-    discounts: str = "Coupon"
-    events: str = "Event"
-
-
-def stripe_get_data(
-    resource: Endpoints,
-    start_date: Optional[Any] = None,
-    end_date: Optional[Any] = None,
-    **kwargs: Any,
-) -> Dict[Any, Any]:
-    if start_date:
-        if isinstance(start_date, str):
-            start_date = pendulum.from_format(start_date, "%Y-%m-%dT%H:%M:%SZ")
-        if isinstance(start_date, DateTime):
-            # convert to unix timestamp
-            start_date = int(start_date.timestamp())
-    if end_date:
-        # convert to unix timestamp
-        end_date = int(end_date.timestamp())
-
-    if resource == Endpoints.subscriptions:
-        kwargs.update({"status": "all"})
-
-    resource_dict = getattr(stripe, resource.value).list(
-        created={"gte": start_date, "lt": end_date}, limit=100, **kwargs
-    )
-    return dict(resource_dict)
 
 
 @dlt.source(name="stripe")
@@ -53,36 +20,34 @@ def stripe_source(
 ) -> Generator[DltResource, Any, None]:
     stripe.api_key = stripe_secret_key
     stripe.api_version = "2022-11-15"
+    start_date_unix = transform_date(start_date) if start_date is not None else -1
 
-    start_date_unix = int(start_date.timestamp()) if start_date is not None else -1
-
-    def get_resource(
-        endpoint: Endpoints,
+    def incremental_resource(
+        endpoint: IncrementalEndpoints,
         created: Optional[Any] = dlt.sources.incremental(
             "created", initial_value=start_date_unix
         ),
     ) -> Generator[Dict[Any, Any], Any, None]:
-        get_more = True
-        starting_after = None
         start_value = created.last_value
 
-        while get_more:
-            response = stripe_get_data(
-                endpoint,
-                start_date=start_value,
-                end_date=end_date,
-                starting_after=starting_after,
-            )
-            get_more = response["has_more"]
+        yield pagination(endpoint.value, start_value, end_date)
 
-            if len(response["data"]) > 0:
-                starting_after = response["data"][-1]["id"]
+    def updated_resource(
+        endpoint: UpdatedEndpoints,
+    ) -> Generator[Dict[Any, Any], Any, None]:
+        yield pagination(endpoint.value, start_date, end_date)
 
-            yield response["data"]
-
-    for endpoint in Endpoints:
+    for endpoint in IncrementalEndpoints:
         yield dlt.resource(
-            get_resource,
+            incremental_resource,
+            name=endpoint.value,
+            write_disposition="append",
+            primary_key="id",
+        )(endpoint)
+
+    for endpoint in UpdatedEndpoints:
+        yield dlt.resource(
+            updated_resource,
             name=endpoint.value,
             write_disposition="merge",
             primary_key="id",
