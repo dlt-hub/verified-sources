@@ -16,7 +16,7 @@ def test_all_resources(destination_name: str) -> None:
     expected_tables = ['products', 'orders', 'customers']
     assert set(table_counts.keys()) > set(expected_tables)
     assert table_counts['products'] == 17
-    assert table_counts['orders'] == 10
+    assert table_counts['orders'] == 11
     assert table_counts['customers'] == 3
 
     # load again to check there are no dupicates
