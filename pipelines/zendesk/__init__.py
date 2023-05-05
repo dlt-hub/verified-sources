@@ -10,6 +10,7 @@ from dlt.extract.source import DltResource
 from .helpers.api_helpers import auth_zenpy, basic_load, get_latest_timestamp, process_talk_resource, process_ticket, Zenpy
 from .helpers.talk_api import INCREMENTAL_ENDPOINTS, TALK_ENDPOINTS, ZendeskAPIClient
 from .helpers.credentials import ZendeskCredentialsEmailPass, ZendeskCredentialsOAuth, ZendeskCredentialsToken
+import pendulum
 
 EXTRA_RESOURCES_SUPPORT = [
     "activities", "automations", "custom_agent_roles", "dynamic_content", "group_memberships", "job_status", "macros", "organization_fields", "organization_memberships", "recipient_addresses",
@@ -69,7 +70,8 @@ def zendesk_support(credentials: Union[ZendeskCredentialsEmailPass, ZendeskCrede
     zendesk_client = auth_zenpy(credentials=credentials)
 
     # loading base tables
-    resource_list = [ticket_fields_table(zendesk_client=zendesk_client),
+    resource_list = [ticket_events(zendesk_client=zendesk_client),
+                     ticket_fields_table(zendesk_client=zendesk_client),
                      ticket_table(zendesk_client=zendesk_client, pivot_fields=pivot_ticket_fields, start_time=incremental_start_time),
                      ticket_metric_table(zendesk_client=zendesk_client, start_time=incremental_start_time)]
 
@@ -85,6 +87,14 @@ def zendesk_support(credentials: Union[ZendeskCredentialsEmailPass, ZendeskCrede
 
 
 # Zendesk Support resources
+@dlt.resource(primary_key="timestamp")
+def ticket_events(zendesk_client: Zenpy, timestamp: dlt.sources.incremental[int]  = dlt.sources.incremental("timestamp", initial_value=0)) -> Iterator[TDataItem]:
+    dt = pendulum.from_timestamp(timestamp.last_value)
+    result_generator = zendesk_client.tickets.events(start_time=dt)
+    for event in result_generator:
+        yield event.to_dict()
+
+
 @dlt.resource(name="ticket_fields", write_disposition="replace")
 def ticket_fields_table(zendesk_client: Zenpy) -> Iterator[TDataItem]:
     """
