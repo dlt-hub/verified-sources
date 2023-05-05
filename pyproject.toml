@@ -48,3 +48,6 @@ asana = "^3.2.1"
 [build-system]
 requires = ["poetry-core"]
 build-backend = "poetry.core.masonry.api"
+
+[tool.poetry.group.shopify_dlt.dependencies]
+shopifyapi = "^12.3.0"
