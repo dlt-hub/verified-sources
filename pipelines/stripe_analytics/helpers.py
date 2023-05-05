@@ -7,12 +7,11 @@ from pendulum import DateTime
 
 
 class UpdatedEndpoints(Enum):
-    customers: str = "Customer"
-    subscriptions: str = "Subscription"
+    subscription: str = "Subscription"
 
 
 class IncrementalEndpoints(Enum):
-    events: str = "Event"
+    event: str = "Event"
 
 
 def pagination(
@@ -55,7 +54,7 @@ def stripe_get_data(
     if end_date:
         end_date = transform_date(end_date)
 
-    if resource == UpdatedEndpoints.subscriptions.value:
+    if resource == UpdatedEndpoints.subscription.value:
         kwargs.update({"status": "all"})
 
     resource_dict = getattr(stripe, resource).list(

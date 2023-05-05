@@ -8,12 +8,13 @@ from dlt.common import pendulum
 from dlt.extract.source import DltResource
 from pendulum import DateTime
 
-from .helpers import IncrementalEndpoints, UpdatedEndpoints, pagination, transform_date
+from .helpers import pagination, transform_date
 from .metrics import calculate_mrr, churn_rate
 
 
-@dlt.source(name="stripe")
-def stripe_source(
+@dlt.source
+def incremental_stripe_source(
+    endpoints: list,
     stripe_secret_key: str = dlt.secrets.value,
     start_date: Optional[DateTime] = None,
     end_date: Optional[DateTime] = None,
@@ -23,32 +24,43 @@ def stripe_source(
     start_date_unix = transform_date(start_date) if start_date is not None else -1
 
     def incremental_resource(
-        endpoint: IncrementalEndpoints,
+        endpoint: str,
         created: Optional[Any] = dlt.sources.incremental(
             "created", initial_value=start_date_unix
         ),
     ) -> Generator[Dict[Any, Any], Any, None]:
         start_value = created.last_value
 
-        yield pagination(endpoint.value, start_value, end_date)
+        yield pagination(endpoint, start_value, end_date)
 
-    def updated_resource(
-        endpoint: UpdatedEndpoints,
-    ) -> Generator[Dict[Any, Any], Any, None]:
-        yield pagination(endpoint.value, start_date, end_date)
-
-    for endpoint in IncrementalEndpoints:
+    for endpoint in endpoints:
         yield dlt.resource(
             incremental_resource,
-            name=endpoint.value,
+            name=endpoint,
             write_disposition="append",
             primary_key="id",
         )(endpoint)
 
-    for endpoint in UpdatedEndpoints:
+
+@dlt.source
+def updated_stripe_source(
+    endpoints: list,
+    stripe_secret_key: str = dlt.secrets.value,
+    start_date: Optional[DateTime] = None,
+    end_date: Optional[DateTime] = None,
+) -> Generator[DltResource, Any, None]:
+    stripe.api_key = stripe_secret_key
+    stripe.api_version = "2022-11-15"
+
+    def updated_resource(
+        endpoint: str,
+    ) -> Generator[Dict[Any, Any], Any, None]:
+        yield pagination(endpoint, start_date, end_date)
+
+    for endpoint in endpoints:
         yield dlt.resource(
             updated_resource,
-            name=endpoint.value,
+            name=endpoint,
             write_disposition="merge",
             primary_key="id",
         )(endpoint)
