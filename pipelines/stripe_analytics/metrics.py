@@ -3,7 +3,7 @@ from typing import Optional
 import numpy as np
 import pandas as pd
 import pendulum
-from pendulum import datetime
+from pendulum import DateTime
 
 
 def calculate_mrr(df_sub: pd.DataFrame) -> float:
@@ -38,7 +38,7 @@ def calculate_mrr(df_sub: pd.DataFrame) -> float:
     first_day = pendulum.today().start_of("month")
     first_day_next_month = first_day.add(months=1)
 
-    def total_mrr(df_sub: pd.DataFrame, end_date: Optional[datetime] = None) -> float:
+    def total_mrr(df_sub: pd.DataFrame, end_date: Optional[DateTime] = None) -> float:
         """
         Total MRR
         end_date: first day of the next month
