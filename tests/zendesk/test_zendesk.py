@@ -5,7 +5,7 @@ from dlt.pipeline.pipeline import Pipeline
 from pipelines.zendesk import zendesk_chat, zendesk_support, zendesk_talk
 from pipelines.zendesk.helpers.api_helpers import _make_json_serializable
 from zenpy.lib.api_objects import Ticket
-from tests.utils import ALL_DESTINATIONS, assert_load_info
+from tests.utils import ALL_DESTINATIONS, assert_load_info, load_table_counts
 
 # TODO: several endpoints are not returning data from test account. tables for those endpoints will not be created
 # list expected tables and the number of columns they are supposed to have
@@ -17,7 +17,6 @@ CHAT_TABLES = ["chats"]
 TALK_TABLES = {"calls", "addresses", "agents_activity", "current_queue_activity", "greeting_categories", "greetings", "ivrs", "lines", "phone_numbers", "settings", "calls_incremental",
                "legs_incremental"} - {'lines', 'phone_numbers', 'calls', 'agents_activity', 'addresses', 'ivrs', 'legs_incremental', 'calls_incremental'}
 # all the timezones saved in dlt state
-INCREMENTAL_SAVED_KEYS = ["last_load_tickets", "last_load_ticket_metric_events", "last_load_chats", "last_load_talk_calls", "last_load_talk_legs"]
 INCREMENTAL_TABLES = ["tickets", "ticket_metric_events", "chats"]  # calls_incremental and legs_incremental have no data so not added here yet
 
 
@@ -55,34 +54,15 @@ def test_incrementing(destination_name: str) -> None:
     @:param: destination_name - redshift/bigquery/postgres
     """
 
-    data_point_count_per_table = {}
     # run pipeline
     pipeline_incremental = _create_pipeline(destination_name=destination_name, full_refresh=True, dataset_name="test_incremental", include_chat=True, include_support=True, include_talk=True)
-
-    # check that the expected keys are saved now in dlt state
-    for saved_timezone in INCREMENTAL_SAVED_KEYS:
-        assert isinstance(pipeline_incremental.state["sources"]["zendesk"][saved_timezone], (float, int))
-
-    # save the number of distinct data_points for each incremental table
-    with pipeline_incremental.sql_client() as c:
-        for table in INCREMENTAL_TABLES:
-            # check every table has the correct name in the metadata table and the correct number of columns
-            sql_query = f"SELECT * FROM {table};"
-            with c.execute_query(sql_query) as cur:
-                rows = list(cur.fetchall())
-                data_point_count_per_table[table] = len(rows)
+    counts = load_table_counts(pipeline_incremental, *INCREMENTAL_TABLES)
 
     # run pipeline again and check that the number of distinct data points hasn't changed
-    pipeline_incremental2 = _create_pipeline(destination_name=destination_name, full_refresh=True, dataset_name="test_incremental", include_chat=True, include_support=True, include_talk=True)
-    # save the number of distinct data_points for each incremental table
-    with pipeline_incremental2.sql_client() as c:
-        for table in INCREMENTAL_TABLES:
-            # check every table has the correct name in the metadata table and the correct number of columns
-            sql_query = f"SELECT * FROM {table};"
-            with c.execute_query(sql_query) as cur:
-                rows = list(cur.fetchall())
-                assert data_point_count_per_table[table] == len(rows)
-
+    info = pipeline_incremental.run([zendesk_support(load_all=True), zendesk_chat(), zendesk_talk()])
+    # there are no more chats to load
+    assert_load_info(info, expected_load_packages=2)
+    assert load_table_counts(pipeline_incremental, *INCREMENTAL_TABLES) == counts
 
 @pytest.mark.parametrize("destination_name", ALL_DESTINATIONS)
 def test_full_load_support(destination_name: str) -> None:

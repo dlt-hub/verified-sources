@@ -60,8 +60,6 @@ def process_ticket(ticket: Ticket, custom_fields: DictStrStr, pivot_custom_field
     """
 
     base_dict: DictStrAny = ticket.to_dict()
-    # get tags as a string eliminating the square brackets from string
-    base_dict["tags"] = base_dict["tags"]
 
     # pivot custom field if indicated as such
     # get custom fields
@@ -100,48 +98,6 @@ def basic_load(resource_api: Iterator[Any]) -> Iterator[TDataItem]:
             else:
                 dict_res = _make_json_serializable(element.to_dict())
                 yield dict_res
-
-
-def process_talk_resource(response: Iterator[TDataItems]) -> Iterator[DictStrAny]:
-    """
-    Processes the response from a request to the ZendeskTalk API and yields results one line at a time for every page in the response
-    :param response: Can contain one or multiple pages of data, if multiple pages this will be a generator of lists containing data (dictionaries), otherwise it will just a list
-    of dictionaries
-    :returns: A generator of dicts
-    """
-    if response:
-        my_pages = [page for page in response]
-        for page in my_pages:
-            # multiple records in page
-            if isinstance(page, list):
-                for record in page:
-                    yield record
-            # only 1 record in the page, just yield page
-            else:
-                yield page
-
-
-def get_latest_timestamp(chosen_col: str, default_col: str, object_dict: DictStrAny) -> Union[float, int, Any]:
-    """
-    Checks the dictionary returned from a row of an endpoint to deduce when the object was last created/modified and save it to dlt state.
-    :param chosen_col: The column which the user wants to save into dlt state as the last load time
-    :param default_col: The column in which this value is usually expected, to be used if the user provided column doesn't exist
-    :param object_dict: The dict containing a row of data from an endpoint
-    :return return_timestamp: The timestamp of the date-type object in the dict
-    """
-    if chosen_col in object_dict:
-        parsed_date = pendulum.parse(object_dict[chosen_col])
-        if isinstance(parsed_date, pendulum.DateTime):
-            return_timestamp = parsed_date.timestamp()
-        else:
-            raise ValueError(f"Column passed to save the last load time: {chosen_col} doesn't contain a format which can be converted into a DateTime by the pendulum parser!")
-    else:
-        parsed_date = pendulum.parse(object_dict[default_col])
-        if isinstance(parsed_date, pendulum.DateTime):
-            return_timestamp = parsed_date.timestamp()
-        else:
-            raise ValueError(f"Error! {default_col} doesn't contain a format which can be converted into a DateTime by the pendulum parser!")
-    return return_timestamp
 
 
 def _make_json_serializable(the_dict: DictStrAny) -> DictStrAny:

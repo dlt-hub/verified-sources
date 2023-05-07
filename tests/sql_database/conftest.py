@@ -1,8 +1,8 @@
 from typing import Iterator
-
 import pytest
+
 import dlt
-from dlt.common.configuration.specs import ConnectionStringCredentials
+from dlt.sources.credentials import ConnectionStringCredentials
 
 from tests.sql_database.sql_source import SQLAlchemySourceDB
 

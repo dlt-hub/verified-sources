@@ -2,7 +2,8 @@ from typing import cast, TypedDict, Any, List, Optional, Mapping, Iterator, Dict
 import operator
 
 import dlt
-from dlt.common.configuration.specs import ConnectionStringCredentials
+from dlt.sources.credentials import ConnectionStringCredentials
+
 from sqlalchemy import Table, tuple_, create_engine
 from sqlalchemy.engine import Engine, Row
 from sqlalchemy.sql import Select
