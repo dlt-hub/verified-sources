@@ -59,12 +59,12 @@ Building blocks used right:
 * [Read the participants for each deal using transformers and pipe operator](https://github.com/dlt-hub/pipelines/blob/master/pipelines/pipedrive/__init__.py#L67)
 * [Read the events for each ticket by attaching transformer to resource explicitly](https://github.com/dlt-hub/pipelines/blob/master/pipelines/hubspot/__init__.py#L125)
 * [Set `tags` column data type to complex to load them as JSON/struct](https://github.com/dlt-hub/pipelines/blob/master/pipelines/zendesk/__init__.py#L108)
-* Typical use of `merge` with incremental load for endpoints returning a list of updates in [Shopify pipeline]().
-* A `dlt` mega-combo in pipedrive pipeline, where the deals from `deal` endpoint are [fed into]() `deals_flow` resource to obtain events for a particular deal. [Both resources use `merge` write disposition and incremental load to get just the newest updates](). [The `deals_flow` is dispatching different event types to separate tables with `dlt.mark.with_table_name`]().
-* An example of using JSONPath expression to get cursor value for incremental loading. In pipedrive some objects have `timestamp` property and others `update_time`. [The dlt.sources.incremental('update_time|modified') expression lets you bind the incremental to either]().
-* If your source/resource needs google credentials, just use `dlt` build it credentials as we do in [google sheets]() and [google analytics]()
-* If your source/resource accepts several different credential types look how [we deal with 3 different types of Zendesk credentilas]()
-* See database connection string credentials [applied to sql_database pipeline]()
+* Typical use of `merge` with incremental load for endpoints returning a list of updates to entities in [Shopify pipeline](https://github.com/dlt-hub/pipelines/blob/master/pipelines/shopify_dlt/__init__.py#L36).
+* A `dlt` mega-combo in `pipedrive` pipeline, where the deals from `deal` endpoint are [fed into](https://github.com/dlt-hub/pipelines/blob/master/pipelines/pipedrive/__init__.py#L113) `deals_flow` resource to obtain events for a particular deal. [Both resources use `merge` write disposition and incremental load to get just the newest updates](https://github.com/dlt-hub/pipelines/blob/master/pipelines/pipedrive/__init__.py#L103). [The `deals_flow` is dispatching different event types to separate tables with `dlt.mark.with_table_name`](https://github.com/dlt-hub/pipelines/blob/master/pipelines/pipedrive/__init__.py#L135).
+* An example of using JSONPath expression to get cursor value for incremental loading. In pipedrive some objects have `timestamp` property and others `update_time`. [The dlt.sources.incremental('update_time|modified') expression lets you bind the incremental to either](https://github.com/dlt-hub/pipelines/blob/master/pipelines/pipedrive/recents.py#L39).
+* If your source/resource needs google credentials, just use `dlt` build it credentials as we do in [google sheets](https://github.com/dlt-hub/pipelines/blob/master/pipelines/google_sheets/__init__.py#L26) and [google analytics](https://github.com/dlt-hub/pipelines/blob/master/pipelines/google_analytics/__init__.py#L32). Also note how `credentials.to_native_credentials()` is used to initialize google api client.
+* If your source/resource accepts several different credential types look how [we deal with 3 different types of Zendesk credentials](https://github.com/dlt-hub/pipelines/blob/master/pipelines/zendesk/helpers/credentials.py#L10)
+* See database connection string credentials [applied to sql_database pipeline](https://github.com/dlt-hub/pipelines/blob/master/pipelines/sql_database/sql_database.py#L22)
 
 # Contribute pipeline step by step
 
