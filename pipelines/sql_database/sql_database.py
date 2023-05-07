@@ -1,12 +1,13 @@
 from typing import List, Optional, Union, Any
+from sqlalchemy import MetaData, Table
+from sqlalchemy.engine import Engine
 
 import dlt
 from dlt.extract.source import DltResource
-from dlt.common.configuration.specs.base_configuration import BaseConfiguration, configspec
-from dlt.common.configuration.specs import ConnectionStringCredentials
+from dlt.common.configuration.specs import BaseConfiguration, configspec
 from dlt.common.schema.typing import TWriteDisposition
-from sqlalchemy import MetaData, Table
-from sqlalchemy.engine import Engine
+
+from dlt.sources.credentials import ConnectionStringCredentials
 
 from .util import table_rows, engine_from_credentials, get_primary_key
 

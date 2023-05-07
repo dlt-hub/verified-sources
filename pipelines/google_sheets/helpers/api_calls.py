@@ -3,9 +3,11 @@
 from typing import List
 
 from dlt.common import logger
-from dlt.common.configuration.specs import GcpClientCredentialsWithDefault
 from dlt.common.exceptions import MissingDependencyException
 from dlt.common.typing import DictStrAny
+
+from dlt.sources.credentials import GcpCredentials, GcpOAuthCredentials
+
 from .data_processing import get_first_line, get_range_headers, metadata_preprocessing
 
 try:
@@ -14,14 +16,16 @@ except ImportError:
     raise MissingDependencyException("Google API Client", ["google-api-python-client"])
 
 
-def api_auth(credentials: GcpClientCredentialsWithDefault) -> Resource:
+def api_auth(credentials: GcpCredentials) -> Resource:
     """
     Uses GCP credentials to authenticate with Google Sheets API
     @:param: credentials - credentials needed to log in to gcp
     @:return: service - object needed to make api calls to google sheets api
     """
+    if isinstance(credentials, GcpOAuthCredentials):
+        credentials.auth("https://www.googleapis.com/auth/spreadsheets.readonly")
     # Build the service object for Google sheets api.
-    service = build("sheets", "v4", credentials=credentials.to_service_account_credentials())
+    service = build("sheets", "v4", credentials=credentials.to_native_credentials())
     return service
 
 

@@ -13,7 +13,6 @@ ALL_TABLES = ["all_types", "empty_row", "empty_rows", "has_empty", "hole_middle"
 COL_NUMS = [6, 5, 5, 5, 7, 5, 4, 8, 4, 2, 2, 4, 5, 9, 1, 9]
 ALL_TABLES_LOADED = ["all_types", "empty_row", "empty_rows", "has_empty", "hole_middle", "inconsistent_types", "more_data", "more_headers_than_data", "named_range1", "only_data", "only_headers",
                      "sheet_1", "sheet2", "sheet3", "sheet4", "spreadsheet_info", "two_tables"]
-ALL_DESTINATIONS = ["postgres"]
 
 
 def create_pipeline(destination_name, dataset_name, full_refresh=True, range_names=None, get_sheets=True, get_named_ranges=True) -> (LoadInfo, dlt.Pipeline):

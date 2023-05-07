@@ -9,7 +9,7 @@ packages = [{include = "pipelines"}]
 
 [tool.poetry.dependencies]
 python = "^3.8.1"
-dlt = {version = "^0.2.5", extras = ["redshift", "bigquery", "postgres", "duckdb"]}
+dlt = {version = "^0.2.6a2", extras = ["redshift", "bigquery", "postgres", "duckdb"]}
 
 [tool.poetry.group.dev.dependencies]
 mypy = "^0.991"
@@ -48,6 +48,7 @@ asana = "^3.2.1"
 [build-system]
 requires = ["poetry-core"]
 build-backend = "poetry.core.masonry.api"
+
 
 [tool.poetry.group.shopify_dlt.dependencies]
 shopifyapi = "^12.3.0"

@@ -20,15 +20,17 @@ from dlt.common.configuration.exceptions import ConfigFieldMissingException
 from dlt.sources.credentials import GcpOAuthCredentials
 
 
-@with_config(sections=("sources", "google_analytics"))
+@with_config(sections=("sources", "google_sheets"))
 def print_refresh_token(credentials: GcpOAuthCredentials = dlt.secrets.value) -> None:
     """
     Will get client_id, client_secret and project_id from secrets.toml and then will print the refresh token.
     """
-    credentials.auth("https://www.googleapis.com/auth/analytics.readonly")
+    # remove exiting refresh token
+    credentials.refresh_token = None
+    # full flow again
+    credentials.auth("https://www.googleapis.com/auth/spreadsheets.readonly")
     print("Add to secrets.toml")
     print(f"refresh_token: {credentials.refresh_token}")
-    # print(f"Access token: {credentials.token}")
 
 
 if __name__ == "__main__":
@@ -47,5 +49,9 @@ Before running this script you must:
     try:
         print_refresh_token()
     except ConfigFieldMissingException:
-        print("*****\nMissing secrets! Make sure you added client_id, client_secret and project_id to secrets.toml or environment variables. See details below\n*****")
+        print("""
+*****
+Missing secrets! Make sure you added client_id, client_secret and project_id to secrets.toml or environment variables. See details below
+Make sure your .dlt folder is in your current working directory!
+*****""")
         raise

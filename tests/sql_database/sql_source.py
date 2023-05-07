@@ -20,7 +20,7 @@ from sqlalchemy import (
 )
 
 from dlt.common.utils import chunks, uniq_id
-from dlt.common.configuration.specs import ConnectionStringCredentials
+from dlt.sources.credentials import ConnectionStringCredentials
 from dlt.common.pendulum import pendulum, timedelta
 
 
