@@ -10,7 +10,7 @@ on:
 
 env:
   ALL_DESTINATIONS: '["bigquery", "redshift"]'
-  DLT_SECRETS_TOML: ${{ secrets.DESTINATIONS_SECRETS }}
+  DLT_SECRETS_TOML: ${{ secrets.DLT_SECRETS_TOML }}
   RUNTIME__LOG_LEVEL: ERROR
 
 jobs:
