@@ -2,7 +2,8 @@ from typing import cast, TypedDict, Any, List, Optional, Mapping, Iterator, Dict
 import operator
 
 import dlt
-from dlt.common.configuration.specs import ConnectionStringCredentials
+from dlt.sources.credentials import ConnectionStringCredentials
+
 from sqlalchemy import Table, tuple_, create_engine
 from sqlalchemy.engine import Engine, Row
 from sqlalchemy.sql import Select
@@ -75,10 +76,12 @@ def table_rows(
     yield from loader.load_rows()
 
 
-def engine_from_credentials(credentials: Union[ConnectionStringCredentials, Engine]) -> Engine:
+def engine_from_credentials(credentials: Union[ConnectionStringCredentials, Engine, str]) -> Engine:
     if isinstance(credentials, Engine):
         return credentials
-    return create_engine(credentials.to_native_representation())
+    if isinstance(credentials, ConnectionStringCredentials):
+        credentials = credentials.to_native_representation()
+    return create_engine(credentials)
 
 
 def get_primary_key(table: Table) -> List[str]:

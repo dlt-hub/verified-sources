@@ -1,12 +1,12 @@
 import urllib.parse
-from typing import Generator, Dict, Any
+from typing import Generator, Dict, Any, List
 
 from dlt.sources.helpers import requests
 
 BASE_URL = 'https://api.hubapi.com/'
 
 
-def get_url(endpoint, **kwargs):
+def get_url(endpoint: str, **kwargs: Any) -> str:
     return urllib.parse.urljoin(BASE_URL, endpoint.format(**kwargs))
 
 
@@ -28,7 +28,7 @@ def _get_headers(api_key: str) -> Dict[str, str]:
     )
 
 
-def _parse_response(r: requests.Response, **kwargs) -> Generator[Dict[str, Any], None, None]:
+def _parse_response(r: requests.Response, **kwargs: str) -> Generator[List[Dict[str, Any]], None, None]:
     """
     Parse a JSON response from HUBSPOT and yield the properties of each result.
 
@@ -55,6 +55,7 @@ def _parse_response(r: requests.Response, **kwargs) -> Generator[Dict[str, Any],
 
     # Yield the properties of each result in the API response
     if 'results' in _data:
+        _objects: List[Dict[str, Any]] = []
         for _result in _data['results']:
             _obj = _result['properties']
             if 'associations' in _result:
@@ -66,7 +67,9 @@ def _parse_response(r: requests.Response, **kwargs) -> Generator[Dict[str, Any],
                     __values = [dict(t) for t in {tuple(d.items()) for d in __values}]
 
                     _obj[association] = __values
-            yield _obj
+            _objects.append(_obj)
+        if _objects:
+            yield _objects
 
     # Follow pagination links if they exist
     if 'paging' in _data:
@@ -78,7 +81,7 @@ def _parse_response(r: requests.Response, **kwargs) -> Generator[Dict[str, Any],
             yield from fetch_data(next_url, **kwargs)
 
 
-def fetch_data(endpoint: str, api_key: str, **kwargs) -> Generator[Dict[str, Any], None, None]:
+def fetch_data(endpoint: str, api_key: str, **kwargs: str) -> Generator[List[Dict[str, Any]], None, None]:
     """
     Fetch data from HUBSPOT endpoint using a specified API key and yield the properties of each result.
 
@@ -88,7 +91,7 @@ def fetch_data(endpoint: str, api_key: str, **kwargs) -> Generator[Dict[str, Any
         **kwargs: Additional keyword arguments to pass to the `_parse_response` function.
 
     Yields:
-        dict: The properties of each result in the API response.
+        List[dict]: The properties of each result in the API response.
 
     Raises:
         requests.exceptions.HTTPError: If the API returns an HTTP error status code.

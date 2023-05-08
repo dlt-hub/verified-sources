@@ -1,12 +1,13 @@
 from typing import List, Optional, Union, Any
+from sqlalchemy import MetaData, Table
+from sqlalchemy.engine import Engine
 
 import dlt
 from dlt.extract.source import DltResource
-from dlt.common.configuration.specs.base_configuration import BaseConfiguration, configspec
-from dlt.common.configuration.specs import ConnectionStringCredentials
+from dlt.common.configuration.specs import BaseConfiguration, configspec
 from dlt.common.schema.typing import TWriteDisposition
-from sqlalchemy import MetaData, Table
-from sqlalchemy.engine import Engine
+
+from dlt.sources.credentials import ConnectionStringCredentials
 
 from .util import table_rows, engine_from_credentials, get_primary_key
 
@@ -18,7 +19,7 @@ class SqlTableConfiguration(BaseConfiguration):
 
 @dlt.resource
 def sql_table(
-    credentials: Union[ConnectionStringCredentials, Engine] = dlt.secrets.value,
+    credentials: Union[ConnectionStringCredentials, Engine, str] = dlt.secrets.value,
     table: str = dlt.config.value,
     schema: Optional[str] = dlt.config.value,
     metadata: Optional[MetaData] = None,
@@ -48,7 +49,7 @@ def sql_table(
 
 @dlt.source
 def sql_database(
-    credentials: Union[ConnectionStringCredentials, Engine] = dlt.secrets.value,
+    credentials: Union[ConnectionStringCredentials, Engine, str] = dlt.secrets.value,
     schema: Optional[str] = dlt.config.value,
     metadata: Optional[MetaData] = None,
     table_names: Optional[List[str]] = dlt.config.value,

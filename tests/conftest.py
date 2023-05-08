@@ -12,14 +12,14 @@ DuckDbCredentials.database = ":pipeline:"
 def pytest_configure(config):
 
     # patch which providers to enable
-    from dlt.common.configuration.providers import ConfigProvider, EnvironProvider, SecretsTomlProvider, ConfigTomlProvider
-    from dlt.common.configuration.specs.config_providers_context import ConfigProvidersContext
+    # from dlt.common.configuration.providers import ConfigProvider, EnvironProvider, SecretsTomlProvider, ConfigTomlProvider
+    # from dlt.common.configuration.specs.config_providers_context import ConfigProvidersContext
 
-    def initial_providers() -> List[ConfigProvider]:
-        # do not read the global config
-        return [EnvironProvider(), SecretsTomlProvider(add_global_config=False), ConfigTomlProvider(add_global_config=False)]
+    # def initial_providers() -> List[ConfigProvider]:
+    #     # do not read the global config
+    #     return [EnvironProvider(), SecretsTomlProvider(add_global_config=False), ConfigTomlProvider(add_global_config=False)]
 
-    ConfigProvidersContext.initial_providers = initial_providers
+    # ConfigProvidersContext.initial_providers = initial_providers
 
     # push telemetry to CI
     os.environ["RUNTIME__DLTHUB_TELEMETRY"] = "False"
