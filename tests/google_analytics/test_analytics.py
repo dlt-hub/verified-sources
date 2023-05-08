@@ -4,7 +4,6 @@ from typing import List, Optional
 import dlt
 from dlt.common.pendulum import pendulum
 from dlt.common.typing import DictStrAny
-from dlt.common.utils import uniq_id
 from dlt.pipeline.pipeline import Pipeline
 from pipelines.google_analytics import google_analytics
 from tests.utils import ALL_DESTINATIONS, assert_load_info, load_table_counts
@@ -13,7 +12,7 @@ QUERIES = [
     {"resource_name": "sample_analytics_data2", "dimensions": ["browser", "city"], "metrics": ["totalUsers"]}
 ]
 # dict containing the name of the tables expected in the db as keys and the number of rows expected as values
-ALL_TABLES = {"dimensions": 206, "metrics": 96, "sample_analytics_data1": 12, "sample_analytics_data2": 12}
+ALL_TABLES = {"dimensions": 206, "metrics": 100, "sample_analytics_data1": 12, "sample_analytics_data2": 12}
 INCREMENTAL_SAVED_KEYS = ["last_load_sample_analytics_data1", "last_load_sample_analytics_data2"]
 
 

@@ -1,6 +1,5 @@
 import pytest
 from pipelines.google_sheets.helpers import data_processing
-from datetime import datetime
 from typing import Union, List
 
 from dlt.common.typing import DictStrAny
@@ -103,7 +102,7 @@ def test_get_spreadsheet_id(url_or_id: str, expected: str):
 
 
 @pytest.mark.parametrize("serial_number, expected", TEST_CASES_DATE)
-def test_serial_date_to_datetime(serial_number: Union[int, float], expected: datetime):
+def test_serial_date_to_datetime(serial_number: Union[int, float], expected: pendulum.DateTime):
     """
     Tester for serial_date_to_datetime function
     :param: serial_number- float or int date input
