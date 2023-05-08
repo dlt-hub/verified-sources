@@ -1,11 +1,10 @@
 """Fetches Asana workspaces, projects, tasks and other associated objects, using parallel requests wherever possible."""
 import typing as t
-from datetime import datetime
 from typing import Sequence
 import dlt
 from asana import Client as AsanaClient
+
 from dlt.extract.source import DltResource
-from functools import partial
 
 DEFAULT_START_DATE = "2010-01-01T00:00:00.000Z"
 
@@ -19,7 +18,7 @@ def get_client(
 
 
 @dlt.resource(write_disposition="replace")
-def workspaces(access_token: str = dlt.config.value) -> t.Iterator[dict]:
+def workspaces(access_token: str = dlt.secrets.value) -> t.Iterator[dict]:
     """Returns a list of workspaces"""
     print("Fetching workspaces...")
     yield from get_client(access_token).workspaces.find_all(
@@ -35,7 +34,7 @@ def workspaces(access_token: str = dlt.config.value) -> t.Iterator[dict]:
     write_disposition="replace",
 )
 @dlt.defer
-def projects(workspace, access_token: str = dlt.config.value) -> t.Iterator[dict]:
+def projects(workspace, access_token: str = dlt.secrets.value) -> t.Iterator[dict]:
     """Returns a list of projects for a given workspace"""
     print(f"Fetching projects for workspace {workspace['name']}...")
     try:
@@ -88,7 +87,7 @@ def projects(workspace, access_token: str = dlt.config.value) -> t.Iterator[dict
     write_disposition="replace",
 )
 @dlt.defer
-def sections(project_array, access_token: str = dlt.config.value) -> t.Iterator[dict]:
+def sections(project_array, access_token: str = dlt.secrets.value) -> t.Iterator[dict]:
     """Fetches all sections for a given project."""
     print(f"Fetching sections for {len(project_array)} projects...")
     try:
@@ -116,7 +115,7 @@ def sections(project_array, access_token: str = dlt.config.value) -> t.Iterator[
 
 @dlt.transformer(data_from=workspaces, write_disposition="replace")
 @dlt.defer
-def tags(workspace, access_token: str = dlt.config.value) -> t.Iterator[dict]:
+def tags(workspace, access_token: str = dlt.secrets.value) -> t.Iterator[dict]:
     """Fetches all tags for a given workspace."""
     print(f"Fetching tags for workspace {workspace['name']}...")
     try:
@@ -146,19 +145,23 @@ def tags(workspace, access_token: str = dlt.config.value) -> t.Iterator[dict]:
 
 @dlt.transformer(
     data_from=projects,
-    write_disposition="append",
+    write_disposition="merge",
+    primary_key="gid"
 )
-def tasks(project_array, access_token: str = dlt.config.value) -> t.Iterator[dict]:
+def tasks(
+    project_array,
+    access_token: str = dlt.secrets.value,
+    modified_at: dlt.sources.incremental[str] = dlt.sources.incremental("modified_at", initial_value=DEFAULT_START_DATE)
+) -> t.Iterator[dict]:
     """Fetches all tasks for a given project."""
     print(f"Fetching tasks for {len(project_array)} projects...")
-    state = dlt.state().setdefault("tasks", {"modified_since": DEFAULT_START_DATE})
     yield from (
         task
         for project in project_array
         for task in get_client(access_token).tasks.find_all(
             project=project["gid"],
             timeout=300,
-            modified_since=state["modified_since"],
+            modified_since=modified_at.start_value,
             opt_fields=",".join(
                 [
                     "gid",
@@ -196,7 +199,6 @@ def tasks(project_array, access_token: str = dlt.config.value) -> t.Iterator[dic
             ),
         )
     )
-    state["modified_since"] = datetime.utcnow().isoformat() + "Z"
     print(f"Done fetching tasks for {len(project_array)} projects.")
 
 
@@ -205,7 +207,7 @@ def tasks(project_array, access_token: str = dlt.config.value) -> t.Iterator[dic
     write_disposition="append",
 )
 @dlt.defer
-def stories(task, access_token: str = dlt.config.value) -> t.Iterator[dict]:
+def stories(task, access_token: str = dlt.secrets.value) -> t.Iterator[dict]:
     """Fetch stories for a task."""
     print(f"Fetching stories for task {task['name']}...")
     try:
@@ -253,7 +255,7 @@ def stories(task, access_token: str = dlt.config.value) -> t.Iterator[dict]:
     write_disposition="replace",
 )
 @dlt.defer
-def teams(workspace, access_token: str = dlt.config.value) -> t.Iterator[dict]:
+def teams(workspace, access_token: str = dlt.secrets.value) -> t.Iterator[dict]:
     """Fetches all teams for a given workspace."""
     print(f"Fetching teams for workspace {workspace['name']}...")
     try:
@@ -284,7 +286,7 @@ def teams(workspace, access_token: str = dlt.config.value) -> t.Iterator[dict]:
     write_disposition="replace",
 )
 @dlt.defer
-def users(workspace, access_token: str = dlt.config.value) -> t.Iterator[dict]:
+def users(workspace, access_token: str = dlt.secrets.value) -> t.Iterator[dict]:
     """Fetches all users for a given workspace."""
     print(f"Fetching users for workspace {workspace['name']}...")
     try:
@@ -303,7 +305,7 @@ def users(workspace, access_token: str = dlt.config.value) -> t.Iterator[dict]:
 
 
 @dlt.source
-def asana_source(access_token: str = dlt.config.value) -> Sequence[DltResource]:
+def asana_source(access_token: str = dlt.secrets.value) -> Sequence[DltResource]:
     """The Asana dlt source."""
     return (
         workspaces,

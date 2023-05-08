@@ -5,13 +5,12 @@ from typing import List, Optional
 import dlt
 from dlt.common.utils import uniq_id
 from dlt.extract.source import DltResource
-from dlt.common.configuration.specs import ConnectionStringCredentials
+from dlt.sources.credentials import ConnectionStringCredentials
 
 from pipelines.sql_database import sql_database, sql_table
 
 from tests.utils import ALL_DESTINATIONS, assert_load_info, load_table_counts
 from tests.sql_database.sql_source import SQLAlchemySourceDB
-
 
 
 def make_pipeline(destination_name: str) -> dlt.Pipeline:

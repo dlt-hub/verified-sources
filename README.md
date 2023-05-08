@@ -1,32 +1,33 @@
 # Pipelines contrib repo
 
 
-# Add pipelines to your project
+# Add pipelines from here to your project
 `dlt` offers an `init` command that will clone and inject any pipeline from this repository into your project, setup the credentials and python dependencies. Please follow our [docs](https://dlthub.com/docs/walkthroughs/add-a-pipeline)
 
 # Contact us and get help
 Join our slack by following the [invitation link](https://join.slack.com/t/dlthub-community/shared_invite/zt-1n5193dbq-rCBmJ6p~ckpSFK4hCF2dYA)
 
-For people using the pipelines: `technical-help` channel
+If you added a pipeline and something does not work: `technical-help` channel
 
-For contributors: `dlt-contributors` channel
+If you want to contribute pipeline, customization or a fix: `dlt-contributors` channel
 
 # Submit new pipelines or bugfixes
 
-**If you want to share your working pipeline with the community**
+> 💡 **If you want to share your working pipeline with the community**
 
-1. Create an issue that describes the pipeline using [community pipeline template](https://github.com/dlt-hub/pipelines/issues/new?template=new-community-pipeline.md)
-2. Make a feature branch
-3. Follow the guidelines from **How to contribute** chapter
-4. Commit to that branch when you work. Please use descriptive commit names
-5. Make a PR to master branch
-6. We'll do code reviews quickly
+1. Follow the [guide](SHARE_PIPELINE.md) on how to prepare your pipeline started with `dlt init` to be shared here.
+2. Create an issue that describes the pipeline using [community pipeline template](https://github.com/dlt-hub/pipelines/issues/new?template=new-community-pipeline.md)
+3. Fork the [pipelines]() repository
+4. Create a feature branch in your fork
+5. Commit to that branch when you work. Please use descriptive commit names
+6. Make a PR to a master branch of this repository (upstream) [from your fork](https://docs.github.com/en/pull-requests/collaborating-with-pull-requests/proposing-changes-to-your-work-with-pull-requests/creating-a-pull-request-from-a-fork)
+7. We'll do code reviews quickly
 
-**If you want us or someone else to build a new pipeline**
+> 💡 **If you want us or someone else to build a new pipeline**
 
 Here's the [pipeline request template](https://github.com/dlt-hub/pipelines/issues/new?template=pipeline-request.md)
 
-**If you want to report a bug in one of the pipelines**
+> 💡 **If you want to report a bug in one of the pipelines**
 
 Use the [bug report template](https://github.com/dlt-hub/pipelines/issues/new?template=bug-report.md)
 
@@ -44,6 +45,8 @@ We strongly suggest that you build your pipelines out of existing **building blo
 * [Set up "last value" incremental loading](https://dlthub.com/docs/general-usage/incremental-loading#incremental-loading-with-last-value)
 * [Dispatch data to several tables from a single resource](https://dlthub.com/docs/general-usage/resource#dispatch-data-to-many-tables)
 * [Set primary and merge keys, define the columns nullability and data types](https://dlthub.com/docs/general-usage/resource#define-schema)
+* [Pass config and credentials into your sources and resources](https://dlthub.com/docs/general-usage/credentials)
+* Use google oauth2 and service account credentials, database connection strings and define your own complex credentials: see examples below
 
 Concepts to grasp
 * [Credentials](https://dlthub.com/docs/general-usage/credentials) and their ["under the hood"](https://github.com/dlt-hub/dlt/blob/devel/docs/technical/secrets_and_config.md)
@@ -56,10 +59,18 @@ Building blocks used right:
 * [Read the participants for each deal using transformers and pipe operator](https://github.com/dlt-hub/pipelines/blob/master/pipelines/pipedrive/__init__.py#L67)
 * [Read the events for each ticket by attaching transformer to resource explicitly](https://github.com/dlt-hub/pipelines/blob/master/pipelines/hubspot/__init__.py#L125)
 * [Set `tags` column data type to complex to load them as JSON/struct](https://github.com/dlt-hub/pipelines/blob/master/pipelines/zendesk/__init__.py#L108)
+* Typical use of `merge` with incremental load for endpoints returning a list of updates to entities in [Shopify pipeline](https://github.com/dlt-hub/pipelines/blob/master/pipelines/shopify_dlt/__init__.py#L36).
+* A `dlt` mega-combo in `pipedrive` pipeline, where the deals from `deal` endpoint are [fed into](https://github.com/dlt-hub/pipelines/blob/master/pipelines/pipedrive/__init__.py#L113) `deals_flow` resource to obtain events for a particular deal. [Both resources use `merge` write disposition and incremental load to get just the newest updates](https://github.com/dlt-hub/pipelines/blob/master/pipelines/pipedrive/__init__.py#L103). [The `deals_flow` is dispatching different event types to separate tables with `dlt.mark.with_table_name`](https://github.com/dlt-hub/pipelines/blob/master/pipelines/pipedrive/__init__.py#L135).
+* An example of using JSONPath expression to get cursor value for incremental loading. In pipedrive some objects have `timestamp` property and others `update_time`. [The dlt.sources.incremental('update_time|modified') expression lets you bind the incremental to either](https://github.com/dlt-hub/pipelines/blob/master/pipelines/pipedrive/recents.py#L39).
+* If your source/resource needs google credentials, just use `dlt` build it credentials as we do in [google sheets](https://github.com/dlt-hub/pipelines/blob/master/pipelines/google_sheets/__init__.py#L26) and [google analytics](https://github.com/dlt-hub/pipelines/blob/master/pipelines/google_analytics/__init__.py#L32). Also note how `credentials.to_native_credentials()` is used to initialize google api client.
+* If your source/resource accepts several different credential types look how [we deal with 3 different types of Zendesk credentials](https://github.com/dlt-hub/pipelines/blob/master/pipelines/zendesk/helpers/credentials.py#L10)
+* See database connection string credentials [applied to sql_database pipeline](https://github.com/dlt-hub/pipelines/blob/master/pipelines/sql_database/sql_database.py#L22)
 
 # Contribute pipeline step by step
 
-All repo code reside in `pipelines` folder. Each pipeline has its own **pipeline folder** (ie. `chess`) where the `dlt.source` and `dlt.resource` functions are present. The internal organization of this folder is up to the contributor. For each pipeline there's a also a script with the example usages (ie. `chess_pipeline.py`). The intention is to show the user how the sources/resources may be called and let the user to copy the code from it.
+Code of the community and verified pipelines reside in `pipelines` folder. Each pipeline has its own **pipeline folder** (ie. `chess`) where the `dlt.source` and `dlt.resource` functions are present. The internal organization of this folder is up to the contributor. For each pipeline there's a also a script with the example usages (ie. `chess_pipeline.py`). The intention is to show the user how the sources/resources may be called and let the user to copy the code from it.
+
+> 💡 if you are sharing a pipeline created with `dlt init` here is a [guide](SHARE_PIPELINE.md). Below you can find in-depth information.
 
 ## Steps to add a new pipeline `<name>`
 
@@ -218,12 +229,3 @@ ALL_DESTINATIONS='["duckdb"]' pytest tests/chess
 ```
 
 there's also ` make test-local` command that will run all the tests on `duckdb` and `postgres`
-
-# Continuous integration
-We have CI on github actions. Workflows need full set of credentials for sources and destinations to run. We put those as `toml` fragments in
-1. DESTINATIONS_SECRETS - fragment with all destination credentials
-2. SOURCES_SECRETS - fragment with all sources credentials
-
-**If you are contributing from fork ping us on slack to get those**
-
-Selective running of tests is not yet implemented. When done we'll run only the tests for the pipelines that were modified by given PR.
