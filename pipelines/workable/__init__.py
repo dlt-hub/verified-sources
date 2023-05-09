@@ -23,44 +23,10 @@ def workable_source(access_token=dlt.secrets.value, config=dlt.config.value, sta
         params = {"updated_after": updated_at.last_value}
         yield pagination(url, "candidates", headers, params)
 
-        return fetch_candidates_resource()
-    else:
-        @dlt.resource(write_disposition="append", primary_key="id")
-        def load_candidates_resource(
-            created_at: Optional[Any] = dlt.sources.incremental("created_at", initial_value=start_date_unix),
-        ) -> list:
-            logging.warning("'fetch' is False. Loading only new data by 'created_at'...")
-            params = {"created_after": created_at.last_value}
-            yield dlt.mark.with_table_name(pagination(url, "candidates", headers, params), "candidates")
-
-        return load_candidates_resource()
-
-
-@dlt.resource
-def workable_events(headers: dict, config: dict) -> list:
-    url = f"{config['subdomain_url']}/events"
-    response = requests.get(url, headers=headers)
-
-    print(response.text)
-
-    yield response.json()["events"]
-
-
-def pagination(url: str, endpoint: str, headers: dict, params: dict) -> Generator:
-    url = f"{url}/{endpoint}"
-
-    has_more = True
-    while has_more:
-        response = requests.get(url, headers=headers, params=params)
-        response_json = response.json()
-        paging = response_json.get("paging")
-
-        if paging is not None:
-            url = paging.get("next")
-        else:
-            has_more = False
-
-        yield response_json[endpoint]
+    @dlt.resource(name="jobs", write_disposition="merge", primary_key="id")
+    def jobs_resource(
+    ) -> list:
+        yield pagination(url, "jobs", headers, {})
 
     return fetch_candidates_resource()
 
