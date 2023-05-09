@@ -19,6 +19,7 @@ import dlt
 from dlt.common import logger, pendulum
 from dlt.common.configuration.inject import with_config
 from dlt.sources.helpers import requests
+from dlt.sources.helpers.requests import Client
 
 from .exceptions import InsightsJobTimeout
 
@@ -71,12 +72,19 @@ def get_long_lived_token(
 def get_ads_account(account_id: str, access_token: str, request_timeout: float) -> AdAccount:
     notify_on_token_expiration()
 
-    API = FacebookAdsApi.init(account_id="act_" + account_id, access_token=access_token)
-    # patch dlt requests session with retries
-    retry_session = requests.Session(timeout=request_timeout, raise_for_status=False)
+    def retry_on_limit(response: requests.Response, exception: BaseException) -> bool:
+        try:
+            code = response.json()["error"]["code"]
+            return code in (1, 2, 4, 17, 341, 32, 613, *range(80000, 80007), 800008, 800009, 80014)
+        except Exception:
+            return False
+
+    retry_session = Client(timeout=request_timeout, raise_for_status=False, condition=retry_on_limit, max_attempts=12, backoff_factor=2).session
     retry_session.params.update({  # type: ignore
             'access_token': access_token
         })
+    # patch dlt requests session with retries
+    API = FacebookAdsApi.init(account_id="act_" + account_id, access_token=access_token)
     API._session.requests = retry_session
     user = User(fbid='me')
 

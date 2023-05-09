@@ -49,4 +49,5 @@ shop_url="https://dlthub-test.myshopify.com"
 api_version="2023-01"
 
 [sources.facebook_ads]
+account_id="10150974068878324"
 access_token_expires_at=1688821881
