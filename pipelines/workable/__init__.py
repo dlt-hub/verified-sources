@@ -1,13 +1,13 @@
-from typing import Any, Union, Generator, Optional
+from typing import Any, Optional
 import logging
 
-import requests
 import dlt
-from pendulum import DateTime, datetime, parse
+from pendulum import DateTime, datetime
+from .helpers import pagination
 
 
 @dlt.source(name="workable")
-def workable_source(access_token=dlt.secrets.value, config=dlt.config.value, start_date: Optional[DateTime] = None, fetch: bool = False,):
+def workable_source(access_token=dlt.secrets.value, config=dlt.config.value, start_date: Optional[DateTime] = None,):
     headers = {
         "accept": "application/json",
         "Authorization": f"Bearer {access_token}"
@@ -15,14 +15,13 @@ def workable_source(access_token=dlt.secrets.value, config=dlt.config.value, sta
     url = config["subdomain_url"]
     start_date_unix = start_date.isoformat() if start_date is not None else datetime(2000, 1, 1).isoformat()
 
-    if fetch:
-        @dlt.resource(write_disposition="merge", primary_key="id")
-        def fetch_candidates_resource(
-            updated_at: Optional[Any] = dlt.sources.incremental("updated_at", initial_value=start_date_unix)
-        ) -> list:
-            logging.warning("Fetching data by 'updated_at'. Loading modified and new data...")
-            params = {"updated_after": updated_at.last_value}
-            yield dlt.mark.with_table_name(pagination(url, "candidates", headers, params), "candidates")
+    @dlt.resource(name="candidates", write_disposition="merge", primary_key="id")
+    def fetch_candidates_resource(
+        updated_at: Optional[Any] = dlt.sources.incremental("updated_at", initial_value=start_date_unix)
+    ) -> list:
+        logging.warning("Fetching data by 'updated_at'. Loading modified and new data...")
+        params = {"updated_after": updated_at.last_value}
+        yield pagination(url, "candidates", headers, params)
 
         return fetch_candidates_resource()
     else:
@@ -63,13 +62,5 @@ def pagination(url: str, endpoint: str, headers: dict, params: dict) -> Generato
 
         yield response_json[endpoint]
 
-
-def transform_date(date: Union[str, DateTime, int]) -> int:
-    if isinstance(date, str):
-        date = parse(date)
-    if isinstance(date, DateTime):
-        # convert to unix timestamp
-        date = int(date.timestamp())
-    return date
-
+    return fetch_candidates_resource()
 
