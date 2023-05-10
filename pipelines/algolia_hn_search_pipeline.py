@@ -5,7 +5,7 @@ from datetime import datetime, timedelta
 from algolia_hn_search import algolia_hn_search
 
 
-keywords = ["data loading", "data load tool","load"] # Specify your list of keywords here
+keywords = ["data loading", "data load tool"] # Specify your list of keywords here
 
 def load_data_by_date():
 	'''
