@@ -10,6 +10,7 @@ class TFieldMapping(TypedDict):
     name: str
     normalized_name: str
     options: Optional[Dict[str, str]]
+    field_type: str
 
 
 def update_fields_mapping(new_fields_mapping: TDataPage, existing_fields_mapping: Dict[str, Any]) -> Dict[str, Any]:
@@ -44,12 +45,14 @@ def _update_field(data_item: Dict[str, Any], existing_fields_mapping: Optional[D
         existing_fields_mapping[key] = dict(
             name=data_item['name'],
             normalized_name=_normalized_name(data_item['name']),
-            options=new_options_map
+            options=new_options_map,
+            field_type=data_item['field_type']
         )
         return existing_fields_mapping
     existing_options = existing_field.get('options', {})
     if not existing_options or existing_options == new_options_map:
         existing_field['options'] = new_options_map
+        existing_field['field_type'] = data_item['field_type']  # Add for backwards compat
         return existing_fields_mapping
     # Add new enum options to the existing options array
     # so that when option is renamed the original label remains valid
@@ -71,9 +74,15 @@ def rename_fields(data: TDataPage, fields_mapping: Dict[str, Any]) -> TDataPage:
         return data
     for data_item in data:
         for hash_string, field in fields_mapping.items():
-            if hash_string in data_item:
-                field_value = data_item.pop(hash_string)
-                # Get label instead of ID for enum fields
-                options_map = field.get('options', {})
-                data_item[field['name']] = options_map.get(field_value, field_value)
+            if hash_string not in data_item:
+                continue
+            field_value = data_item.pop(hash_string)
+            field_name = field['name']
+            options_map = field['options']
+            # Get label instead of ID for 'enum' and 'set' fields
+            if field_value and field['field_type'] == 'set':  # Multiple choice
+                field_value = ','.join(options_map.get(enum_id, enum_id) for enum_id in field_value.split(','))
+            elif field_value and field['field_type'] == 'enum':
+                field_value = options_map.get(field_value, field_value)
+            data_item[field_name] = field_value
     return data

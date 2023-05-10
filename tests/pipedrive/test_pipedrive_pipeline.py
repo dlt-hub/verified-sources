@@ -187,6 +187,7 @@ def test_update_fields_new_enum_field() -> None:
             'edit_flag': True,
             'name': 'custom_field_1',
             'key': 'random_hash_1',
+            'field_type': 'enum',
             'options': [{'id': 3, 'label': 'a'}, {'id': 4, 'label': 'b'}, {'id': 5, 'label': 'c'}]
         }
     ]
@@ -196,7 +197,10 @@ def test_update_fields_new_enum_field() -> None:
 
     assert result == {
         'random_hash_1': {
-            'name': 'custom_field_1', 'normalized_name': 'custom_field_1', 'options': {'3': 'a', '4': 'b', '5': 'c'}
+            'name': 'custom_field_1',
+            'normalized_name': 'custom_field_1',
+            'field_type': 'enum',
+            'options': {'3': 'a', '4': 'b', '5': 'c'}
         }
     }
 
@@ -212,6 +216,7 @@ def test_update_fields_add_enum_field_options() -> None:
             'edit_flag': True,
             'name': 'custom_field_1',
             'key': 'random_hash_1',
+            'field_type': 'enum',
             'options': [{'id': 3, 'label': 'a'}, {'id': 4, 'label': 'previously_b'}, {'id': 5, 'label': 'c'}, {'id': 7, 'label': 'd'}]
         }
     ]
@@ -226,10 +231,28 @@ def test_rename_fields_with_enum() -> None:
     data_item = {'random_hash_1': '42', 'id': 44, 'name': 'asdf'}
     mapping = {
         'random_hash_1': {
-            'name': 'custom_field_1', 'normalized_name': 'custom_field_1', 'options': {'3': 'a', '42': 'b', '5': 'c'}
+            'name': 'custom_field_1',
+            'normalized_name': 'custom_field_1',
+            'field_type': 'enum',
+            'options': {'3': 'a', '42': 'b', '5': 'c'}
         }
     }
 
     result = rename_fields([data_item], mapping)
 
     assert result == [{'custom_field_1': 'b', 'id': 44, 'name': 'asdf'}]
+
+def test_rename_fields_with_set() -> None:
+    data_item = {'random_hash_1': '42,44,23', 'id': 44, 'name': 'asdf'}
+    mapping = {
+        'random_hash_1': {
+            'name': 'custom_field_1',
+            'normalized_name': 'custom_field_1',
+            'field_type': 'set',
+            'options': {'44': 'a', '42': 'b', '522': 'c', '23': 'c'}
+        }
+    }
+
+    result = rename_fields([data_item], mapping)
+
+    assert result == [{'custom_field_1': 'b,a,c', 'id': 44, 'name': 'asdf'}]
