@@ -1,5 +1,5 @@
 import dlt
-from workable import workable_candidates, workable_jobs_activities, workable_load_data
+from workable import workable_incremental, workable_jobs_activities, workable_source
 
 
 def load_all_data(
@@ -10,7 +10,7 @@ def load_all_data(
         destination="duckdb",
         dataset_name="workable_all_data",
     )
-    load_data = workable_load_data(endpoints=endpoints)
+    load_data = workable_source(endpoints=endpoints)
     # run the pipeline with your parameters
     load_info = pipeline.run(load_data)
     # pretty print the information on data that was loaded
@@ -19,11 +19,11 @@ def load_all_data(
 
 def load_incremental_candidates():
     pipeline = dlt.pipeline(
-        pipeline_name="workable_incremental",
+        pipeline_name="workable",
         destination="duckdb",
         dataset_name="workable_candidates",
     )
-    candidates = workable_candidates()
+    candidates = workable_incremental()
     # run the pipeline with your parameters
     load_info = pipeline.run(candidates)
     # pretty print the information on data that was loaded
@@ -32,7 +32,7 @@ def load_incremental_candidates():
 
 def load_jobs_activities():
     pipeline = dlt.pipeline(
-        pipeline_name="workable_ja",
+        pipeline_name="workable",
         destination="duckdb",
         dataset_name="workable_activities",
     )
@@ -44,6 +44,6 @@ def load_jobs_activities():
 
 
 if __name__ == "__main__":
-    load_all_data()
-    load_incremental_candidates()
+    # load_all_data()
+    # load_incremental_candidates()
     load_jobs_activities()

@@ -7,7 +7,12 @@ import requests
 
 
 class WorkableClient:
-    def __init__(self, access_token: str, subdomain: str, start_date=None):
+    def __init__(
+        self,
+        access_token: str,
+        subdomain: str,
+        start_date: Optional[pendulum.DateTime] = None,
+    ):
         self.access_token = access_token
         self.subdomain = subdomain
         # Authorization headers. Content-Type is not necessary,
@@ -22,15 +27,21 @@ class WorkableClient:
         # Increase default limit for downloading lists from 50 to 100,
         # so we need to make fewer requests
         self.default_limit = 100
+        self.params = {"limit": self.default_limit}
+        # Initialize an ISO-formatted start date.
+        # If the `start_date` argument is not provided, it defaults to January 1, 2000.
         self.default_start_date = pendulum.datetime(2000, 1, 1).isoformat()
         self.start_date_iso = (
             start_date.isoformat()
             if start_date is not None
             else self.default_start_date
         )
-        self.params = {"limit": self.default_limit}
 
     def _request_with_rate_limit(self, url, **kwargs):
+        """
+        Handling rate limits in HTTP requests and ensuring
+        that the client doesn't exceed the limit set by the server
+        """
         response = requests.get(url, **kwargs)
         if response.status_code == 429:
             logging.warning("Rate limited. Waiting to retry...")
@@ -42,8 +53,19 @@ class WorkableClient:
         return response
 
     def pagination(
-        self, endpoint: str, custom_url: str = None, params: Optional[dict] = None
+        self,
+        endpoint: str,
+        custom_url: Optional[str] = None,
+        params: Optional[dict] = None,
     ) -> list:
+        """
+        Queries an API endpoint using pagination and returns the results as a generator.
+        Parameters:
+            endpoint (str): The API endpoint to query.
+            custom_url (str, optional): A custom URL to use instead of the default base URL.
+            params (dict, optional): A dictionary of query parameters to include in the API request.
+
+        """
         base_url = self.base_url if custom_url is None else custom_url
         url = f"{base_url}/{endpoint}"
 
