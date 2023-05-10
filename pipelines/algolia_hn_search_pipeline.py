@@ -68,6 +68,6 @@ if __name__ == '__main__':
 	## Then run load_new_data() on schedule to load fresh data daily
 
 	start = time.time()
-	# load_data_by_date() 
-	load_new_data() 
+	load_data_by_date() 
+	# load_new_data() 
 	print(f"Time taken: {time.time() - start}")
