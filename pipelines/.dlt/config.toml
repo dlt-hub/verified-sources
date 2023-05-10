@@ -47,3 +47,5 @@ spreadsheet_identifier = "https://docs.google.com/spreadsheets/d/1HhWHjqouQnnCIZ
 shop_url="https://dlthub-test.myshopify.com"
 api_version="2023-01"
 
+[sources.workable]
+subdomain="dlthub-test"
