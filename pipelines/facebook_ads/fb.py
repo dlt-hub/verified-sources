@@ -28,6 +28,7 @@ from .exceptions import InsightsJobTimeout
 def notify_on_token_expiration(
     access_token_expires_at: int = None
 ) -> None:
+    """Notifies (currently via logger) if access token expires in less than 7 days. Needs `access_token_expires_at` to be configured."""
     if not access_token_expires_at:
         logger.warning("Token expiration time notification disabled. Configure token expiration timestamp in access_token_expires_at config value")
     else:
@@ -42,6 +43,7 @@ def debug_access_token(
     client_id: str = dlt.secrets.value,
     client_secret: str = dlt.secrets.value
 ) -> str:
+    """Debugs the `access_token` providing info on expiration time, scopes etc. If arguments are not provides, `dlt` will inject them from configuration"""
     debug_url = f'https://graph.facebook.com/debug_token?input_token={access_token}&access_token={client_id}|{client_secret}'
     response = requests.get(debug_url)
     data: Dict[str, str] = response.json()
@@ -58,7 +60,7 @@ def get_long_lived_token(
     client_id: str = dlt.secrets.value,
     client_secret: str = dlt.secrets.value
 ) -> str:
-
+    """Gets the long lived access token (60 days) from `access_token`. If arguments are not provides, `dlt` will inject them from configuration"""
     exchange_url = f"https://graph.facebook.com/v13.0/oauth/access_token?grant_type=fb_exchange_token&client_id={client_id}&client_secret={client_secret}&fb_exchange_token={access_token}"
     response = requests.get(exchange_url)
     data: Dict[str, str] = response.json()
@@ -74,8 +76,13 @@ def get_ads_account(account_id: str, access_token: str, request_timeout: float) 
 
     def retry_on_limit(response: requests.Response, exception: BaseException) -> bool:
         try:
-            code = response.json()["error"]["code"]
-            return code in (1, 2, 4, 17, 341, 32, 613, *range(80000, 80007), 800008, 800009, 80014)
+            error = response.json()["error"]
+            code = error["code"]
+            message = error["message"]
+            should_retry = code in (1, 2, 4, 17, 341, 32, 613, *range(80000, 80007), 800008, 800009, 80014)
+            if should_retry:
+                logger.warning("facebook_ads pipeline will retry due to %s with error code %i" % (message, code))
+            return should_retry
         except Exception:
             return False
 

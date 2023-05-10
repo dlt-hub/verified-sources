@@ -21,20 +21,6 @@ from .settings import DEFAULT_AD_FIELDS, DEFAULT_ADCREATIVE_FIELDS, DEFAULT_ADSE
 from .settings import (FACEBOOK_INSIGHTS_RETENTION_PERIOD, ALL_ACTION_BREAKDOWNS, ALL_ACTION_ATTRIBUTION_WINDOWS, DEFAULT_INSIGHT_FIELDS,
                        INSIGHTS_PRIMARY_KEY, INSIGHTS_BREAKDOWNS_OPTIONS, INVALID_INSIGHTS_FIELDS, TInsightsLevels)
 
-"""
-Authorization setup:
-1. You must have Ads Manager active for your facebook account
-2. Find your account id. It is against Account Overview dropdown or in the link ie. https://adsmanager.facebook.com/adsmanager/manage/accounts?act=10150974068878324
-3. Create new facebook app. for that you need developers account
-4. To get short lived access token use https://developers.facebook.com/tools/explorer/
-5. Select app you just created
-6. Select get user access token
-7. Add permissions: `ads_read`, `leads_retrieval` (to retrieve the leads)
-8. Generate token
-9. Exchange the token with the link below
-"""
-
-
 @dlt.source(name="facebook_ads")
 def facebook_ads_source(
     account_id: str = dlt.config.value,
@@ -42,7 +28,25 @@ def facebook_ads_source(
     chunk_size: int = 50,
     request_timeout: float = 300.0
 ) -> Sequence[DltResource]:
+    """Returns a list of resources to load campaigns, ad sets, ads, creatives and ad leads data from Facebook Marketing API.
 
+    All the resources have `replace` write disposition by default and define primary keys. Resources are parametrized and allow the user
+    to change the set of fields that will be loaded from the API and the object statuses that will be loaded. See the demonstration script for details.
+
+    You can convert the source into merge resource to keep the deleted objects. Currently Marketing API does not return deleted objects. See the demo script.
+
+    We also provide a transformation `enrich_ad_objects` that you can add to any of the resources to get additional data per object via `object.get_api`
+
+    Args:
+        account_id (str, optional): Account id associated with add manager. See README.md
+        access_token (str, optional): Access token associated with the Business Facebook App. See README.md
+        chunk_size (int, optional): A size of the page and batch request. You may need to decrease it if you request a lot of fields. Defaults to 50.
+        request_timeout (float, optional): Connection timeout. Defaults to 300.0.
+
+    Returns:
+        Sequence[DltResource]: campaigns, ads, ad_sets, ad_creatives, leads
+
+    """
     account = get_ads_account(account_id, access_token, request_timeout)
 
     def _get_data_chunked(method: TFbMethod, fields: Sequence[str], states: Sequence[str]) -> Iterator[TDataItems]:
@@ -83,7 +87,21 @@ def facebook_ads_source(
 
 
 def enrich_ad_objects(fb_obj_type: AbstractObject, fields: Sequence[str]) -> ItemTransformFunctionWithMeta[TDataItems]:
+    """Returns a transformation that will enrich any of the resources returned by `` with additional fields
 
+    In example below we add "thumbnail_url" to all objects loaded by `ad_creatives` resource:
+    >>> fb_ads = facebook_ads_source()
+    >>> fb_ads.ad_creatives.add_step(enrich_ad_objects(AdCreative, ["thumbnail_url"]))
+
+    Internally, the method uses batch API to get data efficiently. Refer to demo script for full examples
+
+    Args:
+        fb_obj_type (AbstractObject): A Facebook Business object type (Ad, Campaign, AdSet, AdCreative, Lead). Import those types from this module
+        fields (Sequence[str]): A list/tuple of fields to add to each object.
+
+    Returns:
+        ItemTransformFunctionWithMeta[TDataItems]: _description_
+    """
     def _wrap(items: TDataItems, meta: Any = None) -> TDataItems:
         api_batch = FacebookAdsApi.get_default_api().new_batch()
 
@@ -117,7 +135,32 @@ def facebook_insights_source(
     batch_size: int = 50,
     request_timeout: int = 300
 ) -> DltResource:
+    """Incrementally loads insight reports with defined granularity level, fields, breakdowns etc.
 
+    By default, the reports are generated one by one for each day, starting with today - attribution_window_days_lag. On subsequent runs, only the reports
+    from the last report date until today are loaded (incremental load). The reports from last 7 days (`attribution_window_days_lag`) are refreshed on each load to
+    account for changes during attribution window.
+
+    Mind that each report is a job and takes some time to execute.
+
+    Args:
+        account_id: str = dlt.config.value,
+        access_token: str = dlt.secrets.value,
+        initial_load_past_days (int, optional): How many past days (starting from today) to intially load. Defaults to 30.
+        fields (Sequence[str], optional): A list of fields to include in each reports. Note that `breakdowns` option adds fields automatically. Defaults to DEFAULT_INSIGHT_FIELDS.
+        attribution_window_days_lag (int, optional): Attribution window in days. The reports in attribution window are refreshed on each run.. Defaults to 7.
+        time_increment_days (int, optional): The report aggregation window in days. use 7 for weekly aggregation. Defaults to 1.
+        breakdowns (TInsightsBreakdownOptions, optional): A presents with common aggregations. See settings.py for details. Defaults to "ads_insights_age_and_gender".
+        action_breakdowns (Sequence[str], optional): Action aggregation types. See settings.py for details. Defaults to ALL_ACTION_BREAKDOWNS.
+        level (TInsightsLevels, optional): The granularity level. Defaults to "ad".
+        action_attribution_windows (Sequence[str], optional): Attribution windows for actions. Defaults to ALL_ACTION_ATTRIBUTION_WINDOWS.
+        batch_size (int, optional): Page size when reading data from particular report. Defaults to 50.
+        request_timeout (int, optional): Connection timeout. Defaults to 300.
+
+    Returns:
+        DltResource: facebook_insights
+
+    """
     account = get_ads_account(account_id, access_token, request_timeout)
 
     # we load with a defined lag

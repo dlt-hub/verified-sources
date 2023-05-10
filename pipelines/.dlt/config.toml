@@ -1,4 +1,8 @@
 ### Global & dlt components
+# progress="log"
+# [data_writer]
+# buffer_max_items=100
+
 [runtime]
 log_level="WARNING"
 
