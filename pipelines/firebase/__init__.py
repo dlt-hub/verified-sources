@@ -20,6 +20,23 @@ def firebase_source(
 ) -> Sequence[DltResource]:
     
     def _get_data(credentials: Any, database_url: str) -> Iterator[TDataItem]:
+        """
+        Note: For this pipeline, we use a mock json template such below,
+        your firebase realtime data likely different:
+        {
+            "discography": [
+                {
+                    "albums": [
+                        {
+                            "album_name": str,
+                            "year": int
+                        }
+                    ],
+                    "band_name": str
+                }
+            ]
+        }
+        """
 
         # initialize app
         try:
@@ -33,6 +50,7 @@ def firebase_source(
         ref = db.reference("/")
         data = json.loads(ref.get())
 
+        """Please adjust the loop part according to your firebase database json schema"""
         for item in data["discography"]:
             for album in item["albums"]:
                 yield {
