@@ -55,7 +55,7 @@ def test_all_resources(destination_name: str) -> None:
 def test_custom_fields_munger(destination_name: str) -> None:
     pipeline = dlt.pipeline(pipeline_name='pipedrive', destination=destination_name, dataset_name='pipedrive_data', full_refresh=True)
 
-    load_info = pipeline.run(pipedrive_source().with_resources('persons', 'products', 'custom_fields_mapping'))
+    load_info = pipeline.run(pipedrive_source().with_resources('persons', 'products', 'deals', 'custom_fields_mapping'))
 
     print(load_info)
     assert_load_info(load_info)
@@ -100,8 +100,13 @@ def test_custom_fields_munger(destination_name: str) -> None:
     # Test set field is mapped in value table
     person_multiple_options_table = schema.get_table('persons__multiple_options')
     assert 'value' in person_multiple_options_table['columns']
-    query_string = raw_query_string.format(fields="value", table="persons__multiple_options", condition="abc") + " LIMIT 1"
+    query_string = raw_query_string.format(fields="value", table="persons__multiple_options", condition="value = 'abc'") + " LIMIT 1"
     assert_query_data(pipeline, query_string,  ["abc"])
+
+    # Test deal field label
+    condition = "value = 'label with, comma'"
+    query_string = raw_query_string.format(fields='value', table='deals__label', condition=condition) + " LIMIT 1"
+    assert_query_data(pipeline, query_string, ["label with, comma"])
 
     # test product custom fields data munging
 
