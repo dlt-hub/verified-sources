@@ -35,9 +35,9 @@ def stripe_source(
     """
     Retrieves data from the Stripe API for the specified endpoints.
     For all endpoints, Stripe API responses do not provide key "updated",
-    so in most cases we are forced to load the date in 'replace' mode.
+    so in most cases we are forced to load the data in 'replace' mode.
     This source is suitable for all types of endpoints, including 'Events', 'Invoice' etc.
-    but this endpoint can also be loaded in incremental mode (see source incremental_stripe_source)
+    but these endpoints can also be loaded in incremental mode (see source incremental_stripe_source)
 
     Parameters:
         endpoints: A tuple of endpoint names to retrieve data from. Defaults to most popular Stripe API endpoints.
@@ -71,8 +71,8 @@ def incremental_stripe_source(
     end_date: Optional[DateTime] = None
 ) -> Generator[DltResource, Any, None]:
     """
-    Stripe API does not provide the key "updated" in responses.
-    Therefore, we can download data incrementally, only from endpoints where all objects are uneditable.
+    As Stripe API does not include the "updated" key in its responses,
+    we are only able to perform incremental downloads from endpoints where all objects are uneditable.
     This source yields the resources with incremental loading based on "append" mode.
     You will load only the newest data without duplicating and without downloading a huge amount of data each time.
 
