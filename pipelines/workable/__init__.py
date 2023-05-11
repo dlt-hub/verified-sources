@@ -63,42 +63,7 @@ def workable_source(
 
 
 @dlt.source(name="workable")
-def workable_incremental(
-    access_token: str = dlt.secrets.value,
-    subdomain: str = dlt.config.value,
-    start_date: Optional[DateTime] = None,
-) -> DltResource:
-    """
-    Retrieves updated data from the Workable API for the 'candidates' endpoint in incremental mode.
-    'Сandidates' are the only endpoints that have a key 'updated_at',
-    which means that we can update the data incrementally,
-    without duplicating data and without downloading a huge amount of data each time.
-
-    Parameters:
-        access_token: The API access token for authentication. Defaults to the value in the `dlt.secrets` object.
-        subdomain: The subdomain name for the Workable account. Defaults to the value in the `dlt.config` object.
-        start_date: An optional start date to limit the data retrieved. Defaults to January 1, 2000.
-    """
-    workable = WorkableClient(access_token, subdomain, start_date=start_date)
-
-    @dlt.resource(name="candidates", write_disposition="merge", primary_key="id")
-    def fetch_candidates_resource(
-        updated_at: Optional[Any] = dlt.sources.incremental(
-            "updated_at", initial_value=workable.start_date_iso
-        )
-    ) -> list:
-        """
-        The 'updated_at' parameter is managed by the dlt.sources.incremental method.
-        This function is suitable only for the 'candidates' endpoint in incremental mode.
-        """
-        logging.info("Fetching data from 'candidates' by 'updated_at'. Loading modified and new data...")
-        yield workable.pagination(endpoint="candidates", params={"updated_after": updated_at.last_value})
-
-    return fetch_candidates_resource()
-
-
-@dlt.source(name="workable")
-def workable_data_from_jobs(
+def workable_jobs_with_details(
     access_token: str = dlt.secrets.value,
     subdomain: str = dlt.config.value,
     start_date: Optional[DateTime] = None,
@@ -142,22 +107,23 @@ def workable_data_from_jobs(
 
 
 @dlt.source(name="workable")
-def workable_data_from_candidates(
+def workable_incremental_candidates_with_details(
     access_token: str = dlt.secrets.value,
     subdomain: str = dlt.config.value,
     start_date: Optional[DateTime] = None,
 ) -> Sequence[DltResource]:
     """
-    Retrieves jobs and their activities data from the Workable API.
-    Returns a transformer function that yields the activities for each job.
-    For jobs, Workable API responses do not provide the "updated_at" key, so they can be loaded only in "replace" mode.
-    For activities, a custom URL is constructed for each job item to retrieve the corresponding activities.
-    The transformer function takes the data from the "jobs_resource" and yields the activities for each job item.
+    Retrieves candidates and their details from the Workable API.
+    'Сandidates' are the only endpoints that have a key 'updated_at', which means that we can update the data incrementally,
+    For details, a custom URL is constructed for each candidate item to retrieve the corresponding details.
+    The transformer function takes the data from the "candidates_resource" and yields the details for each candidate item.
 
     Parameters:
         access_token: The API access token for authentication. Defaults to the value in the `dlt.secrets` object.
         subdomain: The subdomain name for the Workable account. Defaults to the value in the `dlt.config` object.
         start_date: An optional start date to limit the data retrieved. Defaults to January 1, 2000.
+    Returns:
+        A transformer functions that yield the activities, offers and comments for each candidate.
     """
     workable = WorkableClient(access_token, subdomain, start_date=start_date)
 

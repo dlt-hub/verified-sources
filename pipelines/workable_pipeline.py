@@ -1,5 +1,5 @@
 import dlt
-from workable import workable_incremental, workable_source, workable_data_from_jobs, workable_data_from_candidates
+from workable import workable_source, workable_jobs_with_details, workable_incremental_candidates_with_details
 
 
 def load_all_data(
@@ -17,48 +17,34 @@ def load_all_data(
     print(load_info)
 
 
-def load_incremental_candidates():
-    pipeline = dlt.pipeline(
-        pipeline_name="workable",
-        destination="duckdb",
-        dataset_name="workable_incremental",
-    )
-    candidates = workable_incremental()
-    # run the pipeline with your parameters
-    load_info = pipeline.run(candidates)
-    # pretty print the information on data that was loaded
-    print(load_info)
-
-
-def load_job_details():
+def load_job_with_details():
     pipeline = dlt.pipeline(
         pipeline_name="workable",
         destination="duckdb",
         dataset_name="workable_jobs",
     )
-    job_details = workable_data_from_jobs()
+    job_with_details = workable_jobs_with_details()
     # run the pipeline with your parameters
-    load_info = pipeline.run(job_details)
+    load_info = pipeline.run(job_with_details)
     # pretty print the information on data that was loaded
     print(load_info)
 
 
-def load_candidates_details():
+def load_candidates_with_details():
     pipeline = dlt.pipeline(
         pipeline_name="workable",
         destination="duckdb",
         dataset_name="workable_candidates",
     )
-    candidates_details = workable_data_from_candidates()
+    candidates_with_details = workable_incremental_candidates_with_details()
     # run the pipeline with your parameters
-    load_info = pipeline.run(candidates_details)
+    load_info = pipeline.run(candidates_with_details)
     # pretty print the information on data that was loaded
     print(load_info)
 
 
 if __name__ == "__main__":
     # load_all_data()
-    # load_incremental_candidates()
-    # load_job_details()
-    load_candidates_details()
+    # load_job_with_details()
+    load_candidates_with_details()
 
