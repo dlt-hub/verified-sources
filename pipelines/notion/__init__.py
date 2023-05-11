@@ -41,6 +41,7 @@ def notion_databases(
         yield dlt.resource(
             notion_database.query(),
             name=database['use_name'],
+            write_disposition='replace',
         )
 
 
