@@ -29,7 +29,7 @@ def notion_databases(
 
     if database_ids is None:
         search_results = notion_client.search(
-            filter={'value': 'database', 'property': 'object'}
+            filter_criteria={'value': 'database', 'property': 'object'}
         )
         database_ids = [
             {'id': result['id'], 'use_name': result['title'][0]['plain_text']}

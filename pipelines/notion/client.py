@@ -28,37 +28,37 @@ class NotionClient:
         return {k: v for k, v in dict_in.items() if v is not None}
 
     def get_endpoint(
-        self, resource: str, id: str, subresource: Optional[str] = None
+        self, resource: str, resource_id: str, subresource: Optional[str] = None
     ) -> str:
         """Returns the endpoint for a given resource.
 
         Args:
             resource (str): The resource to get the endpoint for.
-            id (str): The id of the resource.
+            resource_id (str): The id of the resource.
             subresource (str, optional): The subresource to get the endpoint for.
 
         Returns:
             str: The endpoint for the resource.
         """
-        url = f'{self.BASE_URL}/{resource}/{id}'
+        url = f'{self.BASE_URL}/{resource}/{resource_id}'
         if subresource:
             url += f'/{subresource}'
         return url
 
     def fetch_resource(
-        self, resource: str, id: str, subresource: Optional[str] = None
+        self, resource: str, resource_id: str, subresource: Optional[str] = None
     ) -> Dict[str, Any]:
         """Fetches a resource from the Notion API.
 
         Args:
             resource (str): The resource to fetch.
-            id (str): The id of the resource.
+            resource_id (str): The id of the resource.
             subresource (str, optional): The subresource to fetch. Defaults to None.
 
         Returns:
             Dict[str, Any]: The resource from the Notion API.
         """
-        url = self.get_endpoint(resource, id, subresource)
+        url = self.get_endpoint(resource, resource_id, subresource)
         headers = self._create_headers()
         response = requests.get(url, headers=headers)
         response.raise_for_status()
@@ -67,7 +67,7 @@ class NotionClient:
     def send_payload(
         self,
         resource: str,
-        id: str,
+        resource_id: str,
         subresource: Optional[str] = None,
         query_params: Optional[Dict[str, Any]] = None,
         payload: Optional[Dict[str, Any]] = None,
@@ -76,7 +76,7 @@ class NotionClient:
 
         Args:
             resource (str): The resource to send the payload to.
-            id (str): The id of the resource.
+            resource_id (str): The id of the resource.
             subresource (str, optional): The subresource to send the payload to.
                 Defaults to None.
             query_params (Dict[str, Any], optional): The query parameters to send
@@ -90,7 +90,7 @@ class NotionClient:
             requests.HTTPError: If the response from the Notion API is not 200.
         """
 
-        url = self.get_endpoint(resource, id, subresource)
+        url = self.get_endpoint(resource, resource_id, subresource)
         headers = self._create_headers()
 
         if payload is None:
@@ -107,25 +107,25 @@ class NotionClient:
     def search(
         self,
         query: Optional[str] = None,
-        filter: Optional[Dict[str, Any]] = None,
+        filter_criteria: Optional[Dict[str, Any]] = None,
         sort: Optional[Dict[str, Any]] = None,
         start_cursor: Optional[str] = None,
         page_size: Optional[int] = None,
     ) -> Dict[str, Any]:
-        """Searches all parent or child pages and databases that have been 
+        """Searches all parent or child pages and databases that have been
         shared with an integration.
-        
+
         Notion API Reference. Search:
             https://developers.notion.com/reference/post-search
 
         Args:
             query (str, optional): The string to search for. Defaults to None.
-            filter (Dict[str, Any], optional): The filter to apply to 
+            filter_criteria (Dict[str, Any], optional): The filter to apply to
                 the results.
             sort (Dict[str, Any], optional): The sort to apply to the results.
             start_cursor (str, optional): The cursor to start the query at.
                 Defaults to None.
-            page_size (int, optional): The number of results to return. 
+            page_size (int, optional): The number of results to return.
                 Defaults to None.
 
         Yields:
@@ -137,7 +137,7 @@ class NotionClient:
             payload = {
                 'query': query,
                 'sort': sort,
-                'filter': filter,
+                'filter': filter_criteria,
                 'start_cursor': start_cursor,
                 'page_size': page_size,
             }

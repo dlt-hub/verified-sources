@@ -29,7 +29,7 @@ class NotionDatabase:
     def query(
         self,
         filter_properties: Optional[Dict[str, Any]] = None,
-        filter: Optional[Dict[str, Any]] = None,
+        filter_criteria: Optional[Dict[str, Any]] = None,
         sorts: Optional[Dict[str, Any]] = None,
         start_cursor: Optional[str] = None,
         page_size: Optional[int] = None,
@@ -42,8 +42,8 @@ class NotionDatabase:
         Args:
             filter_properties (Dict[str, Any], optional): A dictionary of
                 properties to filter the records by. Defaults to None.
-            filter (Dict[str, Any], optional): A dictionary of filters to
-                apply to the records. Defaults to None.
+            filter_criteria (Dict[str, Any], optional): A dictionary of filters
+                to apply to the records. Defaults to None.
             sorts (Dict[str, Any], optional): A dictionary of sorts to apply
                 to the records. Defaults to None.
             start_cursor (str, optional): The cursor to start the query at.
@@ -55,7 +55,7 @@ class NotionDatabase:
             Dict[str, Any]: A record from the database.
         """
         payload = {
-            'filter': filter,
+            'filter': filter_criteria,
             'sorts': sorts,
             'start_cursor': start_cursor,
             'page_size': page_size,
