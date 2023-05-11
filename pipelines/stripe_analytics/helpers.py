@@ -1,4 +1,3 @@
-from enum import Enum
 from typing import Any, Dict, Generator, Optional, Union
 
 import stripe
@@ -6,16 +5,10 @@ from dlt.common import pendulum
 from pendulum import DateTime
 
 
-class UpdatedEndpoints(Enum):
-    subscription: str = "Subscription"
-
-
-class IncrementalEndpoints(Enum):
-    event: str = "Event"
-
-
 def pagination(
-    endpoint: str, start_date, end_date
+    endpoint: str,
+    start_date: Optional[Any] = None,
+    end_date: Optional[Any] = None
 ) -> Generator[Dict[Any, Any], Any, None]:
     get_more = True
     starting_after = None
@@ -54,7 +47,7 @@ def stripe_get_data(
     if end_date:
         end_date = transform_date(end_date)
 
-    if resource == UpdatedEndpoints.subscription.value:
+    if resource == "Subscription":
         kwargs.update({"status": "all"})
 
     resource_dict = getattr(stripe, resource).list(
