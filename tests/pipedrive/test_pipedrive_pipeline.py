@@ -75,6 +75,7 @@ def test_custom_fields_munger(destination_name: str) -> None:
     persons_table = schema.get_table('persons')
     assert 'test_field_1' in persons_table['columns']
     assert 'test_field_2' in persons_table['columns']
+    assert 'single_option' in persons_table['columns']
 
     condition = "test_field_1 = 'Test Value 1'"
     query_string = raw_query_string.format(fields="test_field_1", table="persons", condition=condition)
@@ -85,6 +86,22 @@ def test_custom_fields_munger(destination_name: str) -> None:
     query_string = raw_query_string.format(fields="test_field_2", table="persons", condition=condition)
     table_data = ['Test Value 2']
     assert_query_data(pipeline, query_string, table_data)
+
+    # Test enum field is mapped to its string value
+    condition = "single_option = 'aaa'"
+    query_string = raw_query_string.format(fields="single_option", table="persons", condition=condition) + " LIMIT 1"
+    assert_query_data(pipeline, query_string, ["aaa"])
+
+    # Test standard person enum field have values mapped
+    condition = "label = 'Hot lead'"
+    query_string = raw_query_string.format(fields="label", table="persons", condition=condition) + " LIMIT 1"
+    assert_query_data(pipeline, query_string, ["Hot lead"])
+
+    # Test set field is mapped in value table
+    person_multiple_options_table = schema.get_table('persons__multiple_options')
+    assert 'value' in person_multiple_options_table['columns']
+    query_string = raw_query_string.format(fields="value", table="persons__multiple_options", condition="abc") + " LIMIT 1"
+    assert_query_data(pipeline, query_string,  ["abc"])
 
     # test product custom fields data munging
 
@@ -255,4 +272,4 @@ def test_rename_fields_with_set() -> None:
 
     result = rename_fields([data_item], mapping)
 
-    assert result == [{'custom_field_1': 'b,a,c', 'id': 44, 'name': 'asdf'}]
+    assert result == [{'custom_field_1': ['b', 'a', 'c'], 'id': 44, 'name': 'asdf'}]

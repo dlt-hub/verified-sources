@@ -19,15 +19,19 @@ def update_fields_mapping(new_fields_mapping: TDataPage, existing_fields_mapping
     The endpoint must be an entity fields' endpoint
     """
     for data_item in new_fields_mapping:
-        # 'edit_flag' field contains a boolean value, which is set to 'True' for custom fields and 'False' otherwise
-        if all([data_item.get('edit_flag'), data_item.get('name'), data_item.get('key')]):
+        # 'edit_flag' field contains a boolean value, which is set to 'True' for custom fields and 'False' otherwise.
+        if data_item.get('edit_flag'):
             # Regarding custom fields, 'key' field contains pipedrive's hash string representation of its name
             # We assume that pipedrive's hash strings are meant to be an univoque representation of custom fields' name, so dlt's state shouldn't be updated while those values
             # remain unchanged
-            # First of all, we search on and update dlt's state
             existing_fields_mapping = _update_field(data_item, existing_fields_mapping)
-            # We end up updating data with dlt's state
-            # data_item['key'] = existing_fields_mapping[data_item['key']]['normalized_name']
+        # Built in enum and set fields are mapped if their options have int ids
+        # Enum fields with bool and string key options are left intact
+        elif data_item.get('field_type') in {'set', 'enum'}:
+            options = data_item.get('options', [])
+            first_option = options[0]['id'] if len(options) >= 1 else None
+            if isinstance(first_option, int) and not isinstance(first_option, bool):
+                existing_fields_mapping = _update_field(data_item, existing_fields_mapping)
     return existing_fields_mapping
 
 
@@ -81,8 +85,8 @@ def rename_fields(data: TDataPage, fields_mapping: Dict[str, Any]) -> TDataPage:
             options_map = field['options']
             # Get label instead of ID for 'enum' and 'set' fields
             if field_value and field['field_type'] == 'set':  # Multiple choice
-                field_value = ','.join(options_map.get(enum_id, enum_id) for enum_id in field_value.split(','))
+                field_value = [options_map.get(str(enum_id), enum_id) for enum_id in field_value.split(',')]
             elif field_value and field['field_type'] == 'enum':
-                field_value = options_map.get(field_value, field_value)
+                field_value = options_map.get(str(field_value), field_value)
             data_item[field_name] = field_value
     return data
