@@ -84,4 +84,14 @@ class WorkableClient:
             else:
                 has_more = False
 
-            yield response_json[endpoint]
+            yield response_json.get(endpoint)
+
+    def _get_dependent_endpoint(self, code: str, from_endpoint: str, to_endpoint: str):
+        custom_url = f"{self.base_url}/{from_endpoint}/{code}"
+        return self.pagination(to_endpoint, custom_url=custom_url)
+
+    def from_jobs_with_shortcode(self, shortcode: str, endpoint: str):
+        yield self._get_dependent_endpoint(shortcode, "jobs", endpoint)
+
+    def from_candidates_with_id(self, id: str, endpoint: str):
+        yield self._get_dependent_endpoint(id, "candidates", endpoint)

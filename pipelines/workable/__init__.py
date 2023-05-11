@@ -33,7 +33,7 @@ def workable_source(
 ) -> Sequence[DltResource]:
     """
     Retrieves data from the Workable API for the specified endpoints.
-    For almost all endpoints Workable API responses do not provide keys "updated_at",
+    For almost all endpoints, Workable API responses do not provide keys "updated_at",
     so in most cases we are forced to load the date in 'replace' mode.
     This source is suitable for all types of endpoints, including 'customers',
     but endpoint 'customers' can also be loaded in incremental mode (see source workable_incremental)
@@ -98,7 +98,7 @@ def workable_incremental(
 
 
 @dlt.source(name="workable")
-def workable_jobs_activities(
+def workable_data_from_jobs(
     access_token: str = dlt.secrets.value,
     subdomain: str = dlt.config.value,
     start_date: Optional[DateTime] = None,
@@ -123,13 +123,70 @@ def workable_jobs_activities(
             "jobs", params={"created_after": workable.start_date_iso}
         )
 
-    def _get_activities(url: str, shortcode: str):
-        url_with_shortcode = f"{url}/jobs/{shortcode}"
-        yield workable.pagination("activities", custom_url=url_with_shortcode)
-
     @dlt.transformer(data_from=jobs_resource)
     def jobs_activities(job_item):
         for job in job_item:
-            yield _get_activities(workable.base_url, job["shortcode"])
+            yield workable.from_jobs_with_shortcode(job["shortcode"], "activities")
 
-    return jobs_resource(), jobs_activities()
+    @dlt.transformer(data_from=jobs_resource)
+    def jobs_application_form(job_item):
+        for job in job_item:
+            yield workable.from_jobs_with_shortcode(job["shortcode"], "application_form")
+
+    @dlt.transformer(data_from=jobs_resource)
+    def jobs_questions(job_item):
+        for job in job_item:
+            yield workable.from_jobs_with_shortcode(job["shortcode"], "questions")
+
+    return jobs_resource, jobs_activities(), jobs_application_form(), jobs_questions()
+
+
+@dlt.source(name="workable")
+def workable_data_from_candidates(
+    access_token: str = dlt.secrets.value,
+    subdomain: str = dlt.config.value,
+    start_date: Optional[DateTime] = None,
+) -> Sequence[DltResource]:
+    """
+    Retrieves jobs and their activities data from the Workable API.
+    Returns a transformer function that yields the activities for each job.
+    For jobs, Workable API responses do not provide the "updated_at" key, so they can be loaded only in "replace" mode.
+    For activities, a custom URL is constructed for each job item to retrieve the corresponding activities.
+    The transformer function takes the data from the "jobs_resource" and yields the activities for each job item.
+
+    Parameters:
+        access_token: The API access token for authentication. Defaults to the value in the `dlt.secrets` object.
+        subdomain: The subdomain name for the Workable account. Defaults to the value in the `dlt.config` object.
+        start_date: An optional start date to limit the data retrieved. Defaults to January 1, 2000.
+    """
+    workable = WorkableClient(access_token, subdomain, start_date=start_date)
+
+    @dlt.resource(name="candidates", write_disposition="merge", primary_key="id")
+    def fetch_candidates_resource(
+        updated_at: Optional[Any] = dlt.sources.incremental(
+            "updated_at", initial_value=workable.start_date_iso
+        )
+    ) -> list:
+        """
+        The 'updated_at' parameter is managed by the dlt.sources.incremental method.
+        This function is suitable only for the 'candidates' endpoint in incremental mode.
+        """
+        logging.info("Fetching data from 'candidates' by 'updated_at'. Loading modified and new data...")
+        yield workable.pagination(endpoint="candidates", params={"updated_after": updated_at.last_value})
+
+    @dlt.transformer(data_from=fetch_candidates_resource)
+    def candidates_activities(candidates_item):
+        for candidate in candidates_item:
+            yield workable.from_candidates_with_id(candidate["id"], "activities")
+
+    @dlt.transformer(data_from=fetch_candidates_resource)
+    def candidates_offer(candidates_item):
+        for candidate in candidates_item:
+            yield workable.from_candidates_with_id(candidate["id"], "offer")
+
+    @dlt.transformer(data_from=fetch_candidates_resource)
+    def candidates_comments(candidates_item):
+        for candidate in candidates_item:
+            yield workable.from_candidates_with_id(candidate["id"], "comments")
+
+    return fetch_candidates_resource, candidates_activities(), candidates_offer(), candidates_comments()
