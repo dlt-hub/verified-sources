@@ -27,7 +27,7 @@ INCREMENTAL_ENDPOINTS = ("Event", "Invoice", "BalanceTransaction")
 
 @dlt.source
 def stripe_source(
-    endpoints: Tuple[str, ...] = ENDPOINTS + INCREMENTAL_ENDPOINTS,
+    endpoints: Tuple[str, ...] = ENDPOINTS,
     stripe_secret_key: str = dlt.secrets.value,
     start_date: Optional[DateTime] = None,
     end_date: Optional[DateTime] = None,
