@@ -1,3 +1,5 @@
+""" This pipeline uses Workable API and dlt to load data such as Candidates, Jobs, Events, etc. to the database."""
+
 import logging
 from typing import Any, Generator, Iterator, Optional, Sequence
 
