@@ -79,8 +79,8 @@ def workable_source(
     # This resource is suitable for all types of endpoints, including 'candidates',
     # but endpoint 'candidates' can also be loaded in incremental mode (see candidates_resource).
     def load_data(endpoint: str) -> Generator[list, Any, None]:
-        logging.debug(
-            f"Loading all data from '{endpoint}' by 'created_at' in 'replace' mode..."
+        logging.info(
+            f"Loading data from '{endpoint}' by 'created_at' in 'replace' mode."
         )
         yield workable.pagination(endpoint=endpoint, params=params)
 
@@ -103,7 +103,7 @@ def workable_source(
         The 'updated_at' parameter is managed by the dlt.sources.incremental method.
         This function is suitable only for the 'candidates' endpoint in incremental mode.
         """
-        logging.debug("Fetching data from 'candidates' by 'updated_at'. Loading modified and new data...")
+        logging.info("Fetching data from 'candidates' by 'updated_at'. Loading modified and new data.")
         yield workable.pagination(endpoint="candidates", params={"updated_after": updated_at.last_value})
 
     yield candidates_resource
@@ -115,12 +115,18 @@ def workable_source(
 
         # A transformer functions that yield the activities, questions, etc. for each job.
         for sub_endpoint in DEFAULT_DETAILS["jobs"]:
+            logging.info(
+                f"Loading additional data for 'jobs' from '{sub_endpoint}' in 'replace' mode."
+            )
             yield resources["jobs"] | dlt.transformer(
                 name=f'jobs_{sub_endpoint}', write_disposition='replace'
             )(_get_details)("jobs", sub_endpoint, "shortcode")
 
         # A transformer functions that yield the activities and offers for each candidate.
         for sub_endpoint in DEFAULT_DETAILS["candidates"]:
+            logging.info(
+                f"Loading additional data for 'candidates' from '{sub_endpoint}' in 'merge' mode."
+            )
             yield candidates_resource | dlt.transformer(
                 name=f'candidates_{sub_endpoint}', write_disposition='merge'
             )(_get_details)("candidates", sub_endpoint, "id")
