@@ -17,14 +17,14 @@ class WorkableClient:
         self.subdomain = subdomain
         # Authorization headers. Content-Type is not necessary,
         # but should workable start providing alternate
-        # content types such as XML, this won't break
+        # content types such as XML this won't break
         self.headers = {
             "accept": "application/json",
             "Authorization": "Bearer " + access_token,
         }
         # Base URL Endpoint for all API requests
         self.base_url = f"https://{subdomain}.workable.com/spi/v3"
-        # Increase default limit for downloading lists from 50 to 100,
+        # Increase the default limit for downloading lists from 50 to 100,
         # so we need to make fewer requests
         self.default_limit = 100
         self.params = {"limit": self.default_limit}
@@ -86,12 +86,7 @@ class WorkableClient:
 
             yield response_json.get(endpoint)
 
-    def _get_dependent_endpoint(self, code: str, from_endpoint: str, to_endpoint: str):
-        custom_url = f"{self.base_url}/{from_endpoint}/{code}"
-        return self.pagination(to_endpoint, custom_url=custom_url)
+    def details_from_endpoint(self, main_endpoint:str, code: str, dependent_endpoint: str):
+        custom_url = f"{self.base_url}/{main_endpoint}/{code}"
+        return self.pagination(dependent_endpoint, custom_url=custom_url)
 
-    def from_jobs_with_shortcode(self, shortcode: str, endpoint: str):
-        yield self._get_dependent_endpoint(shortcode, "jobs", endpoint)
-
-    def from_candidates_with_id(self, id: str, endpoint: str):
-        yield self._get_dependent_endpoint(id, "candidates", endpoint)
