@@ -1,11 +1,15 @@
 import pytest
 from unittest import mock
 from typing import Dict, Any
+from pathlib import Path
+import json
 
+import requests_mock
 import dlt
 from dlt.common import pendulum
 from dlt.common.pipeline import TSourceState
 from dlt.common.schema import Schema
+from dlt.sources.helpers import requests
 
 from pipelines.pipedrive import pipedrive_source
 from tests.utils import ALL_DESTINATIONS, assert_load_info, assert_query_data
@@ -278,3 +282,14 @@ def test_rename_fields_with_set() -> None:
     result = rename_fields([data_item], mapping)
 
     assert result == [{'custom_field_1': ['b', 'a', 'c'], 'id': 44, 'name': 'asdf'}]
+
+
+def test_recents_none_data_items_from_recents() -> None:
+    """Pages from /recents sometimes contain `None` data items which cause errors.
+    Reproduces this with a mocked response. Simply verify that extract runs without exceptions, meaning nones are filtered out.
+    """
+    mock_data = json.loads(Path('./tests/pipedrive/recents_response_with_null.json').read_text(encoding='utf8'))
+    with requests_mock.Mocker(session=requests.client.session, real_http=True) as m:
+        m.register_uri('GET', '/v1/recents', json=mock_data)
+        pipeline = dlt.pipeline(pipeline_name='pipedrive', dataset_name='pipedrive_data', full_refresh=True)
+        pipeline.extract(pipedrive_source().with_resources('persons', 'custom_fields_mapping'))
