@@ -4,6 +4,11 @@ from workable import workable_source
 
 
 def load_all_data():
+    """
+    This demo script uses the resources with non-incremental
+    loading based on "replace" mode to load all data from provided endpoints,
+    and only one "candidate" resource that loads incrementally.
+    """
     pipeline = dlt.pipeline(
         pipeline_name="workable",
         destination="duckdb",
@@ -17,6 +22,14 @@ def load_all_data():
 
 
 def load_all_data_with_details():
+    """
+    This demo script uses the resources with non-incremental
+    loading based on "replace" mode to load all data from provided endpoints,
+    and only one "candidate" resource that loads incrementally.
+
+    Additionally, data is loaded from endpoints that depend on the main endpoints.
+    Example: /jobs/:shortcode/members, /candidates/:id/comments
+    """
     pipeline = dlt.pipeline(
         pipeline_name="workable",
         destination="duckdb",
@@ -30,6 +43,15 @@ def load_all_data_with_details():
 
 
 def load_data_by_date():
+    """
+    This demo script uses the resources with non-incremental
+    loading based on "replace" mode to load all data from provided endpoints,
+    and only one "candidate" resource that loads incrementally.
+
+    All non-incremental data filtered by start_date.
+    Incremental resource uses start_date as initial_value.
+    It does not affect dependent resources (jobs_activities, candidates_activities, etc).
+    """
     pipeline = dlt.pipeline(
         pipeline_name="workable",
         destination="duckdb",
