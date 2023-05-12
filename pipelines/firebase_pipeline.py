@@ -10,7 +10,7 @@ def load_realtime_database() -> None:
         dataset_name="firebase_realtime_database",
         full_refresh=True
     )
-    info = pipeline.run(firebase_source.with_resource("realtime_db"))
+    info = pipeline.run(firebase_source().with_resource("realtime_db"))
     print(info)
 
 if __name__=='__main__':

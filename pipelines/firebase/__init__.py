@@ -3,7 +3,7 @@
 from typing import Any, Iterator, List, Sequence
 
 import dlt
-from dlt.extract.source import DltResource, DltSource
+from dlt.extract.source import DltResource
 from dlt.common.typing import TDataItem
 
 from firebase_admin import credentials, db
@@ -11,12 +11,12 @@ from firebase_admin import credentials, db
 
 @dlt.source(name="firebase")
 def firebase_source(
-    project_id: dlt.secrets.value,
-    private_key_id: dlt.secrets.value,
-    private_key: dlt.secrets.value,
-    client_email: dlt.secrets.value,
-    client_id: dlt.secrets.value,
-    database_url: dlt.secrets.value
+    project_id: str =  dlt.secrets.value,
+    private_key_id: str =  dlt.secrets.value,
+    private_key: str = dlt.secrets.value,
+    client_email: str = dlt.secrets.value,
+    client_id: str = dlt.secrets.value,
+    database_url:  str = dlt.secrets.value
 ) -> Sequence[DltResource]:
     
     def _get_data(credentials: Any, database_url: str) -> Iterator[TDataItem]:
