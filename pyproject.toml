@@ -22,6 +22,7 @@ flake8-encodings = "^0.5.0.post1"
 flake8-builtins = "^2.1.0"
 types-requests = "^2.28.11.7"
 mimesis = "^7.0.0"
+requests-mock = "^1.1.0"
 
 [tool.poetry.group.sql_database.dependencies]
 sqlalchemy = ">=1.4"
@@ -52,6 +53,9 @@ asana = "^3.2.1"
 [build-system]
 requires = ["poetry-core"]
 build-backend = "poetry.core.masonry.api"
+
+
+
 
 
 [tool.poetry.group.shopify_dlt.dependencies]
