@@ -1,13 +1,13 @@
-import pytest
-
 import dlt
+import pytest
+from pendulum import datetime
 
 from pipelines.workable import workable_source
 
 from tests.utils import ALL_DESTINATIONS, assert_load_info
 
 
-@pytest.mark.parametrize('destination_name', ALL_DESTINATIONS)
+@pytest.mark.parametrize("destination_name", ALL_DESTINATIONS)
 def test_load_all_data(destination_name: str) -> None:
     # mind the full_refresh flag - it makes sure that data is loaded to unique dataset. this allows you to run the tests on the same database in parallel
     pipeline = dlt.pipeline(
@@ -24,7 +24,7 @@ def test_load_all_data(destination_name: str) -> None:
     assert_load_info(load_info)
 
 
-@pytest.mark.parametrize('destination_name', ALL_DESTINATIONS)
+@pytest.mark.parametrize("destination_name", ALL_DESTINATIONS)
 def test_load_candidates(destination_name: str) -> None:
     # mind the full_refresh flag - it makes sure that data is loaded to unique dataset. this allows you to run the tests on the same database in parallel
     pipeline = dlt.pipeline(
@@ -54,8 +54,7 @@ def test_load_candidates(destination_name: str) -> None:
         # you can use parametrized queries as well, see python dbapi
         # you can use unqualified table names
         with c.execute_query(
-            "SELECT * FROM candidates WHERE stage IN (%s, %s)",
-            "Hired", "Offer"
+            "SELECT * FROM candidates WHERE stage IN (%s, %s)", "Hired", "Offer"
         ) as cur:
             rows = list(cur.fetchall())
             assert len(rows) == 4  # 4 candidates passed all stages of the interview
@@ -78,11 +77,10 @@ def test_incremental_event_load(destination_name: str) -> None:
             # you can use parametrized queries as well, see python dbapi
             # you can use unqualified table names
             with c.execute_query(
-                "SELECT * FROM candidates WHERE stage IN (%s, %s)",
-                "Hired", "Offer"
+                "SELECT * FROM candidates WHERE stage IN (%s, %s)", "Hired", "Offer"
             ) as cur:
                 rows = list(cur.fetchall())
-                return len(rows) # 4 candidates passed all stages of the interview
+                return len(rows)  # 4 candidates passed all stages of the interview
 
     succeeded_candidates = get_succeeded_candidates()
     assert succeeded_candidates > 0  # should have all succeeded candidates
@@ -96,3 +94,40 @@ def test_incremental_event_load(destination_name: str) -> None:
     assert get_succeeded_candidates() == succeeded_candidates
 
 
+@pytest.mark.parametrize("destination_name", ALL_DESTINATIONS)
+def test_load_data_by_time(destination_name: str) -> None:
+    def get_count_candidates(date) -> int:
+        with pipeline.sql_client() as c:
+            # you can use parametrized queries as well, see python dbapi
+            # you can use unqualified table names
+            with c.execute_query(
+                "SELECT * FROM candidates WHERE updated_at <= %s", date
+            ) as cur:
+                rows = list(cur.fetchall())
+                return len(rows)
+
+    pipeline = dlt.pipeline(
+        pipeline_name="workable_with_start_date",
+        destination="duckdb",
+        dataset_name="workable_test",
+    )
+    load_data = workable_source(start_date=datetime(2023, 5, 1)).with_resources(
+        "candidates"
+    )
+    load_info = pipeline.run(load_data)
+    assert_load_info(load_info)
+
+    candidates = get_count_candidates(datetime(2023, 5, 1))
+    assert candidates == 0
+
+    pipeline = dlt.pipeline(
+        pipeline_name="workable_without_start_date",
+        destination="duckdb",
+        dataset_name="workable_test",
+    )
+    load_data = workable_source().with_resources("candidates")
+    load_info = pipeline.run(load_data)
+    assert_load_info(load_info)
+
+    candidates = get_count_candidates(datetime(2023, 5, 1))
+    assert candidates > 0
