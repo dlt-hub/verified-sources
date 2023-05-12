@@ -86,7 +86,8 @@ class WorkableClient:
 
             yield response_json.get(endpoint)
 
-    def details_from_endpoint(self, main_endpoint:str, code: str, dependent_endpoint: str):
+    def details_from_endpoint(
+        self, main_endpoint: str, code: str, dependent_endpoint: str
+    ):
         custom_url = f"{self.base_url}/{main_endpoint}/{code}"
         return self.pagination(dependent_endpoint, custom_url=custom_url)
-

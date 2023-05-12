@@ -1,5 +1,5 @@
 import logging
-from typing import Any, Generator, Optional, Sequence, Iterator
+from typing import Any, Generator, Iterator, Optional, Sequence
 
 import dlt
 from dlt.extract.source import DltResource
@@ -45,7 +45,7 @@ DEFAULT_DETAILS = {
         "custom_attributes",
         "members",
         "recruiters",
-    )
+    ),
 }
 
 
@@ -103,15 +103,22 @@ def workable_source(
         The 'updated_at' parameter is managed by the dlt.sources.incremental method.
         This function is suitable only for the 'candidates' endpoint in incremental mode.
         """
-        logging.info("Fetching data from 'candidates' by 'updated_at'. Loading modified and new data.")
-        yield workable.pagination(endpoint="candidates", params={"updated_after": updated_at.last_value})
+        logging.info(
+            "Fetching data from 'candidates' by 'updated_at'. Loading modified and new data."
+        )
+        yield workable.pagination(
+            endpoint="candidates", params={"updated_after": updated_at.last_value}
+        )
 
     yield candidates_resource
 
     if load_details:
+
         def _get_details(page, main_endpoint, sub_endpoint_name: str, code_key: str):
             for item in page:
-                yield workable.details_from_endpoint(main_endpoint, item[code_key], sub_endpoint_name)
+                yield workable.details_from_endpoint(
+                    main_endpoint, item[code_key], sub_endpoint_name
+                )
 
         # A transformer functions that yield the activities, questions, etc. for each job.
         for sub_endpoint in DEFAULT_DETAILS["jobs"]:
@@ -119,7 +126,7 @@ def workable_source(
                 f"Loading additional data for 'jobs' from '{sub_endpoint}' in 'replace' mode."
             )
             yield resources["jobs"] | dlt.transformer(
-                name=f'jobs_{sub_endpoint}', write_disposition='replace'
+                name=f"jobs_{sub_endpoint}", write_disposition="replace"
             )(_get_details)("jobs", sub_endpoint, "shortcode")
 
         # A transformer functions that yield the activities and offers for each candidate.
@@ -128,8 +135,8 @@ def workable_source(
                 f"Loading additional data for 'candidates' from '{sub_endpoint}' in 'merge' mode."
             )
             yield candidates_resource | dlt.transformer(
-                name=f'candidates_{sub_endpoint}', write_disposition='merge'
+                name=f"candidates_{sub_endpoint}", write_disposition="merge"
             )(_get_details)("candidates", sub_endpoint, "id")
 
 
-#TODO: add Events https://workable.readme.io/reference/events
+# TODO: add Events https://workable.readme.io/reference/events

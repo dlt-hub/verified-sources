@@ -1,13 +1,9 @@
 import dlt
 from pendulum import datetime
-
-from workable import (
-    workable_source
-)
+from workable import workable_source
 
 
-def load_all_data(
-):
+def load_all_data():
     pipeline = dlt.pipeline(
         pipeline_name="workable",
         destination="duckdb",
@@ -20,8 +16,7 @@ def load_all_data(
     print(load_info)
 
 
-def load_all_data_with_details(
-):
+def load_all_data_with_details():
     pipeline = dlt.pipeline(
         pipeline_name="workable",
         destination="duckdb",
@@ -34,8 +29,7 @@ def load_all_data_with_details(
     print(load_info)
 
 
-def load_data_by_date(
-):
+def load_data_by_date():
     pipeline = dlt.pipeline(
         pipeline_name="workable",
         destination="duckdb",
@@ -50,5 +44,5 @@ def load_data_by_date(
 
 if __name__ == "__main__":
     # load_all_data()
-    # load_all_data_with_details()
-    load_data_by_date()
+    load_all_data_with_details()
+    # load_data_by_date()
