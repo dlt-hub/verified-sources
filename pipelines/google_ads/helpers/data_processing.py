@@ -10,7 +10,11 @@ def process_dimension(batch) -> Iterator[TDataItem]:
     """
 
     for row in batch.results:
-        yield row
+        customer_data = row.customer
+        attributes = dir(customer_data)
+        json_customer = {attribute: getattr(customer_data, attribute) for attribute in attributes if "__" not in attribute}
+        processed_json_customer = {attribute: json_customer[attribute] if not hasattr(json_customer[attribute], "__dict__") else str(json_customer[attribute]) for attribute in json_customer.keys()}
+        yield processed_json_customer
 
 
 def process_report(batch) -> Iterator[TDataItem]:
