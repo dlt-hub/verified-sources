@@ -26,7 +26,7 @@ Here you will find a setup guide for the [Google sheets](https://www.google.com/
 
 **Initialize the pipeline by using the following command with your [destination](/destinations.md) of choice:**
 ```bash
-dlt init pipedrive [destination]
+dlt init google_sheets [destination]
 ```
 
 This will create a directory that includes the following file structure:
