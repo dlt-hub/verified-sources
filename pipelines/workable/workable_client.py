@@ -1,6 +1,6 @@
 import logging
 import time
-from typing import Optional
+from typing import Optional, Any
 
 import pendulum
 
@@ -38,7 +38,7 @@ class WorkableClient:
             else self.default_start_date
         )
 
-    def _request_with_rate_limit(self, url, **kwargs):
+    def _request_with_rate_limit(self, url: str, **kwargs):
         """
         Handling rate limits in HTTP requests and ensuring
         that the client doesn't exceed the limit set by the server
@@ -57,7 +57,7 @@ class WorkableClient:
         self,
         endpoint: str,
         custom_url: Optional[str] = None,
-        params: Optional[dict] = None,
+        params: Optional[dict[str, Any]] = None,
     ) -> list:
         """
         Queries an API endpoint using pagination and returns the results as a generator.

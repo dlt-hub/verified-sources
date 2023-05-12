@@ -117,7 +117,7 @@ def workable_source(
 
     if load_details:
 
-        def _get_details(page, main_endpoint, sub_endpoint_name: str, code_key: str):
+        def _get_details(page: Iterator[dict], main_endpoint: str, sub_endpoint_name: str, code_key: str):
             for item in page:
                 yield workable.details_from_endpoint(
                     main_endpoint, item[code_key], sub_endpoint_name
