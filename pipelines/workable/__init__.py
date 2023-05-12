@@ -30,6 +30,7 @@ DEFAULT_ENDPOINTS = (
     "requisitions",
     "jobs",
     "custom_attributes",
+    "events"
 )
 
 DEFAULT_DETAILS = {
@@ -137,6 +138,3 @@ def workable_source(
             yield candidates_resource | dlt.transformer(
                 name=f"candidates_{sub_endpoint}", write_disposition="merge"
             )(_get_details)("candidates", sub_endpoint, "id")
-
-
-# TODO: add Events https://workable.readme.io/reference/events
