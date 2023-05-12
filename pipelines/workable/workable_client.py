@@ -3,7 +3,8 @@ import time
 from typing import Optional
 
 import pendulum
-import requests
+
+from dlt.sources.helpers import requests
 
 
 class WorkableClient:
