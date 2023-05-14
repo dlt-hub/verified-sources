@@ -220,7 +220,6 @@ def zendesk_support(
         yield [d for d in basic_load(resource_api)]
 
 
-    # TODO: Make caching manageable and editable by users
     # Authenticate
     zendesk_client = auth_zenpy(credentials=credentials)
 
