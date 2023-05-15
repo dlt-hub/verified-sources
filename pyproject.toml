@@ -22,6 +22,7 @@ flake8-encodings = "^0.5.0.post1"
 flake8-builtins = "^2.1.0"
 types-requests = "^2.28.11.7"
 mimesis = "^7.0.0"
+requests-mock = "^1.1.0"
 
 [tool.poetry.group.sql_database.dependencies]
 sqlalchemy = ">=1.4"
@@ -42,12 +43,19 @@ google-api-python-client = "^2.86.0"
 google-auth-oauthlib = "^1.0.0"
 requests-oauthlib = "^1.3.1"
 
+[tool.poetry.group.stripe_analytics.dependencies]
+pandas = "^2.0.0"
+stripe = "^5.0.0"
+
 [tool.poetry.group.asana_dlt.dependencies]
 asana = "^3.2.1"
 
 [build-system]
 requires = ["poetry-core"]
 build-backend = "poetry.core.masonry.api"
+
+
+
 
 
 [tool.poetry.group.shopify_dlt.dependencies]

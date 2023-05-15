@@ -1,12 +1,19 @@
 import pytest
 from unittest import mock
+from typing import Dict, Any
+from pathlib import Path
+import json
 
+import requests_mock
 import dlt
 from dlt.common import pendulum
 from dlt.common.pipeline import TSourceState
+from dlt.common.schema import Schema
+from dlt.sources.helpers import requests
 
 from pipelines.pipedrive import pipedrive_source
 from tests.utils import ALL_DESTINATIONS, assert_load_info, assert_query_data
+from pipelines.pipedrive.custom_fields_munger import update_fields_mapping, rename_fields
 
 
 ALL_RESOURCES = {
@@ -52,7 +59,7 @@ def test_all_resources(destination_name: str) -> None:
 def test_custom_fields_munger(destination_name: str) -> None:
     pipeline = dlt.pipeline(pipeline_name='pipedrive', destination=destination_name, dataset_name='pipedrive_data', full_refresh=True)
 
-    load_info = pipeline.run(pipedrive_source().with_resources('persons', 'products', 'custom_fields_mapping'))
+    load_info = pipeline.run(pipedrive_source().with_resources('persons', 'products', 'deals', 'custom_fields_mapping'))
 
     print(load_info)
     assert_load_info(load_info)
@@ -72,6 +79,7 @@ def test_custom_fields_munger(destination_name: str) -> None:
     persons_table = schema.get_table('persons')
     assert 'test_field_1' in persons_table['columns']
     assert 'test_field_2' in persons_table['columns']
+    assert 'single_option' in persons_table['columns']
 
     condition = "test_field_1 = 'Test Value 1'"
     query_string = raw_query_string.format(fields="test_field_1", table="persons", condition=condition)
@@ -82,6 +90,27 @@ def test_custom_fields_munger(destination_name: str) -> None:
     query_string = raw_query_string.format(fields="test_field_2", table="persons", condition=condition)
     table_data = ['Test Value 2']
     assert_query_data(pipeline, query_string, table_data)
+
+    # Test enum field is mapped to its string value
+    condition = "single_option = 'aaa'"
+    query_string = raw_query_string.format(fields="single_option", table="persons", condition=condition) + " LIMIT 1"
+    assert_query_data(pipeline, query_string, ["aaa"])
+
+    # Test standard person enum field have values mapped
+    condition = "label = 'Hot lead'"
+    query_string = raw_query_string.format(fields="label", table="persons", condition=condition) + " LIMIT 1"
+    assert_query_data(pipeline, query_string, ["Hot lead"])
+
+    # Test set field is mapped in value table
+    person_multiple_options_table = schema.get_table('persons__multiple_options')
+    assert 'value' in person_multiple_options_table['columns']
+    query_string = raw_query_string.format(fields="value", table="persons__multiple_options", condition="value = 'abc'") + " LIMIT 1"
+    assert_query_data(pipeline, query_string,  ["abc"])
+
+    # Test deal field label
+    condition = "value = 'label with, comma'"
+    query_string = raw_query_string.format(fields='value', table='deals__label', condition=condition) + " LIMIT 1"
+    assert_query_data(pipeline, query_string, ["label with, comma"])
 
     # test product custom fields data munging
 
@@ -175,3 +204,92 @@ def test_resource_settings() -> None:
         rs = source.resources[rs_name]
         assert rs.write_disposition == 'merge'
         assert rs.table_schema()['columns']['id']['primary_key'] is True
+
+
+def test_update_fields_new_enum_field() -> None:
+    mapping: Dict[str, Any] = {}
+    items = [
+        {
+            'edit_flag': True,
+            'name': 'custom_field_1',
+            'key': 'random_hash_1',
+            'field_type': 'enum',
+            'options': [{'id': 3, 'label': 'a'}, {'id': 4, 'label': 'b'}, {'id': 5, 'label': 'c'}]
+        }
+    ]
+
+    with mock.patch.object(dlt.current, 'source_schema', return_value=Schema('test')):
+        result = update_fields_mapping(items, mapping)
+
+    assert result == {
+        'random_hash_1': {
+            'name': 'custom_field_1',
+            'normalized_name': 'custom_field_1',
+            'field_type': 'enum',
+            'options': {'3': 'a', '4': 'b', '5': 'c'}
+        }
+    }
+
+
+def test_update_fields_add_enum_field_options() -> None:
+    mapping: Dict[str, Any] = {
+        'random_hash_1': {
+            'name': 'custom_field_1', 'normalized_name': 'custom_field_1', 'options': {'3': 'a', '4': 'b', '5': 'c'}
+        }
+    }
+    items = [
+        {
+            'edit_flag': True,
+            'name': 'custom_field_1',
+            'key': 'random_hash_1',
+            'field_type': 'enum',
+            'options': [{'id': 3, 'label': 'a'}, {'id': 4, 'label': 'previously_b'}, {'id': 5, 'label': 'c'}, {'id': 7, 'label': 'd'}]
+        }
+    ]
+
+    with mock.patch.object(dlt.current, 'source_schema', return_value=Schema('test')):
+        result = update_fields_mapping(items, mapping)
+
+    assert result['random_hash_1']['options'] == {'3': 'a', '4': 'b', '5': 'c', '7': 'd'}
+
+
+def test_rename_fields_with_enum() -> None:
+    data_item = {'random_hash_1': '42', 'id': 44, 'name': 'asdf'}
+    mapping = {
+        'random_hash_1': {
+            'name': 'custom_field_1',
+            'normalized_name': 'custom_field_1',
+            'field_type': 'enum',
+            'options': {'3': 'a', '42': 'b', '5': 'c'}
+        }
+    }
+
+    result = rename_fields([data_item], mapping)
+
+    assert result == [{'custom_field_1': 'b', 'id': 44, 'name': 'asdf'}]
+
+def test_rename_fields_with_set() -> None:
+    data_item = {'random_hash_1': '42,44,23', 'id': 44, 'name': 'asdf'}
+    mapping = {
+        'random_hash_1': {
+            'name': 'custom_field_1',
+            'normalized_name': 'custom_field_1',
+            'field_type': 'set',
+            'options': {'44': 'a', '42': 'b', '522': 'c', '23': 'c'}
+        }
+    }
+
+    result = rename_fields([data_item], mapping)
+
+    assert result == [{'custom_field_1': ['b', 'a', 'c'], 'id': 44, 'name': 'asdf'}]
+
+
+def test_recents_none_data_items_from_recents() -> None:
+    """Pages from /recents sometimes contain `None` data items which cause errors.
+    Reproduces this with a mocked response. Simply verify that extract runs without exceptions, meaning nones are filtered out.
+    """
+    mock_data = json.loads(Path('./tests/pipedrive/recents_response_with_null.json').read_text(encoding='utf8'))
+    with requests_mock.Mocker(session=requests.client.session, real_http=True) as m:
+        m.register_uri('GET', '/v1/recents', json=mock_data)
+        pipeline = dlt.pipeline(pipeline_name='pipedrive', dataset_name='pipedrive_data', full_refresh=True)
+        pipeline.extract(pipedrive_source().with_resources('persons', 'custom_fields_mapping'))
