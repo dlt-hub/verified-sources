@@ -11,7 +11,9 @@ def load_google_play_review() -> None:
         dataset_name="google_play_dataset",
         full_refresh=True
     )
-    info = pipeline.run(google_play_reviews_source().with_resources("review_and_rating"))
+    info = pipeline.run(google_play_reviews_source(
+        package_name="com.facebook.katana"
+    ).with_resources("review_and_rating"))
     print(info)
 
 if __name__ == "__main__":

@@ -4,7 +4,7 @@ from datetime import datetime
 from typing import Any, Dict, Iterator, List, Sequence
 
 import dlt
-from dlt.extract.source import DltResource, DltSource
+from dlt.extract.source import DltResource
 from dlt.common.typing import TDataItem
 
 from googleapiclient.discovery import build
@@ -12,12 +12,12 @@ from googleapiclient.discovery import build
 _SERVICE_NAME = "androidpublisher"
 _SERVICE_VERSION = "v3"
 """Package name. Note: you must replace this with your own package name"""
-package_name = "com.facebook.katana"
+_PACKAGE_NAME = "com.facebook.katana"
 
 @dlt.source(name="google_play_reviews")
 def google_play_reviews_source(
+    package_name: str,
     api_secrets_key: str = dlt.secrets.value,
-    package_name: str = package_name
 ) -> Sequence[DltResource]:
 
     def _get_review_and_rating(
@@ -35,7 +35,7 @@ def google_play_reviews_source(
             review_and_rating: JSON contains review and rating
         """
         response = service.reviews().list(
-            packageName=package_name
+            packageName=_PACKAGE_NAME
         ).execute()
 
         next_page_token = True
@@ -61,7 +61,7 @@ def google_play_reviews_source(
     @dlt.resource(write_disposition="append")
     def review_and_rating(
         package_name: str,
-        api_secrets_key: dlt.secrets.value
+        api_secrets_key = api_secrets_key
     ) -> Iterator[TDataItem]:
         
         # build resource
