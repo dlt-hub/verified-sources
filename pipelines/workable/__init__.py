@@ -114,8 +114,6 @@ def workable_source(
             endpoint="candidates", params={"updated_after": updated_at.last_value}
         )
 
-    yield candidates_resource
-
     if load_details:
 
         def _get_details(
@@ -148,3 +146,6 @@ def workable_source(
             )(_get_details)(
                 "candidates", sub_endpoint, "id"
             )  # type: ignore
+
+        else:
+            yield candidates_resource()
