@@ -43,15 +43,16 @@ class WorkableClient:
         Handling rate limits in HTTP requests and ensuring
         that the client doesn't exceed the limit set by the server
         """
-        response = requests.get(url, **kwargs)
-        if response.status_code == 429:
-            logging.warning("Rate limited. Waiting to retry...")
-            seconds_to_wait = (
-                int(response.headers["X-Rate-Limit-Reset"]) - pendulum.now().timestamp()
-            )
-            time.sleep(seconds_to_wait + 10)
-            return self._request_with_rate_limit(url, **kwargs)
-        return response
+        while True:
+            try:
+                response = requests.get(url, **kwargs)
+                return response
+            except requests.HTTPError as e:
+                logging.warning("Rate limited. Waiting to retry...")
+                seconds_to_wait = (
+                    int(e.response.headers["X-Rate-Limit-Reset"]) - pendulum.now().timestamp()
+                )
+                time.sleep(seconds_to_wait)
 
     def pagination(
         self,
