@@ -1,6 +1,5 @@
 """
- Uses the Google Places API to get detail information (Ratings, Reviews, Business Hours) for specified locations (Businesses / Public Places etc).
- For more Info on Places API: "https://developers.google.com/maps/documentation/places/web-service/overview"  
+ Loads location information (Ratings, Reviews, Business Hours) from Google Maps. 
 """
 
 import dlt
@@ -24,22 +23,22 @@ def text_search(api_secret_key=dlt.secrets.value):
     Creates a text search resource. A Text Search returns information about a set of places based on a text string provided.
 
     For more Info: "https://developers.google.com/maps/documentation/places/web-service/search-text"
-    
+
+    The Parameters to be passed to endpoint:
+    @:params: query - The text against which a search will be made.
+    @:params: radius (optional)  - Defines the distance (in meters) within which to return place results. You may bias results to a specified circle by passing a location and a radius parameter. Default value is 50,000 meters for text search.
+    @:params: location (optional) - Can be used with the radius parameter to bias result.
+    @:params: api_secret_key - The api key for the Places API defined in dlt.secrets.
     """
 
     # API Endpoint.
     text_search_url = "https://maps.googleapis.com/maps/api/place/textsearch/json?"
 
-    '''
-    The Parameters to be passsed to endpoint:
-    @:params: query - The text against which a search will be made.
-    @:params: radius  - Defines the distance (in meters) within which to return place results.
-    @:params: api_secret_key - The api key for the Places API defined in dlt.secrets.
-    '''
     payload = {
-        'query' : 'FitX',
-        'radius' : '',
-        'key': {api_secret_key}
+        'query' : 'ADD SEARCH TEXT HERE',
+        'radius': 'ADD RADIUS FOR SEARCH',
+        'location': 'LATITUDE, LONGITUDE',
+        'key': api_secret_key
     }
 
 
@@ -47,26 +46,6 @@ def text_search(api_secret_key=dlt.secrets.value):
     response = requests.get(text_search_url, params=payload)
     response.raise_for_status()
     yield response.json().get('results')
-
-
-@dlt.resource(write_disposition="append")
-def search_find_place(api_secret_key=dlt.secrets.value):
-    """
-    A Find Place request takes a text input and returns a place. The input can be any kind of Places text data, such as a name, address, or phone number.
-    For more Info: "https://developers.google.com/maps/documentation/places/web-service/search-find-place"
-
-    """
-    pass
-
-
-@dlt.resource(write_disposition="append")
-def nearby_search(api_secret_key=dlt.secrets.value):
-    """
-    A Nearby Search lets you search for places within a specified area. You can refine your search request by supplying keywords or specifying the type of place you are searching for.
-    For more Info: "https://developers.google.com/maps/documentation/places/web-service/search-nearby"
-    
-    """
-    pass
 
 
 @dlt.transformer(data_from=text_search) 
