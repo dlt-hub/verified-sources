@@ -25,7 +25,7 @@ def test_load_youtube_data(destination_name: str) -> None:
     # test if job is loaded
     assert_load_info(info)
     # test if table exists
-    assert load_table_counts(pipeline, "youtube_metrics")["youtube_metrics"] == 1
+    assert load_table_counts(pipeline, "youtube_data")["youtube_data"] == 1
     # assert column datatype
     table = pipeline.default_schema.data_tables()[0]
     assert table["columns"]["channel_id"]["data_type"] == "text"
