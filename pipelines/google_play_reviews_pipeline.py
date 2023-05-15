@@ -12,7 +12,7 @@ def load_google_play_review() -> None:
         full_refresh=True
     )
     info = pipeline.run(google_play_reviews_source(
-        package_name="com.facebook.katana"
+        package_name="com.facebook.katana" # please change the package_name with your own package name
     ).with_resources("review_and_rating"))
     print(info)
 
