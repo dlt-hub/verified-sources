@@ -1,21 +1,21 @@
 import dlt
 
-from hubspot import hubspot
+from hubspot import hubspot, hubspot_events_for_objects, THubspotObjectType
 
 
-def load_without_events():
+def load_crm_data():
     """
-    This function loads data from HubSpot into a PostgreSQL database without enabling company events.
+    This function loads all resources from HubSpot CRM
 
     Returns:
         None
     """
 
     # Create a DLT pipeline object with the pipeline name, dataset name, and destination database type
-    p = dlt.pipeline(pipeline_name='hubspot',
+    p = dlt.pipeline(pipeline_name='hubspot_pipeline',
                      dataset_name='hubspot',
-                     destination='postgres',
-                     full_refresh=False)
+                     destination='redshift',
+                     full_refresh=True)
 
     # Run the pipeline with the HubSpot source connector
     info = p.run(
@@ -26,9 +26,9 @@ def load_without_events():
     print(info)
 
 
-def load_with_company_events():
+def load_web_analytics_events(object_type: THubspotObjectType, object_ids):
     """
-    This function loads data from HubSpot into a PostgreSQL database with company and contacts events selected.
+    This function loads web analytics events for a list objects in `object_ids` of type `object_type`
 
     Returns:
         None
@@ -40,20 +40,16 @@ def load_with_company_events():
                      destination='postgres',
                      full_refresh=False)
 
-    source = hubspot()
-
-    source.companies_events.selected = True
-    source.contacts_events.selected = True
-
-    # Run the pipeline with the HubSpot source connector and enable company events
-    info = p.run(source)
+    # you can get many resources by calling this function for various object types
+    resource = hubspot_events_for_objects(object_type, object_ids)
+    # and load them together passing resources in the list
+    info = p.run([resource])
 
     # Print information about the pipeline run
     print(info)
 
 
 if __name__ == "__main__":
-
     # Call the functions to load HubSpot data into the database with and without company events enabled
-    load_without_events()
-    load_with_company_events()
+    load_crm_data()
+    # load_web_analytics_events("company", ["7086461639", "7086464459"])

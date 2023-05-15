@@ -1,9 +1,9 @@
 """A pipeline loading player profiles and games from chess.com api"""
 
-import datetime
 from typing import Callable, Iterator, List, Sequence, Dict, Any
 
 import dlt
+from dlt.common import pendulum
 from dlt.common.typing import TDataItem, StrAny
 from dlt.extract.source import DltResource
 from dlt.sources.helpers import requests
@@ -124,7 +124,7 @@ def players_online_status(players: List[str]) -> Iterator[TDataItem]:
             "username": player,
             "onlineStatus": status["onlineStatus"],
             "lastLoginDate": status["lastLoginDate"],
-            "check_time": datetime.datetime.now()  # dlt can deal with native python dates
+            "check_time": pendulum.now()  # dlt can deal with native python dates
         }
 
 

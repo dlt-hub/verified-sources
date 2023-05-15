@@ -6,36 +6,30 @@ from pendulum.datetime import DateTime
 
 import dlt
 from dlt.common import logger, pendulum
-from dlt.common.configuration.specs import GcpClientCredentialsWithDefault
 from dlt.common.exceptions import MissingDependencyException
 from dlt.common.typing import TDataItem, DictStrAny
+
 from dlt.extract.source import DltResource
-from .helpers.credentials import GoogleAnalyticsCredentialsOAuth
-from .helpers.data_processing import get_report, process_dimension, process_metric, process_report
-try:
-    from google.oauth2.credentials import Credentials
-except ImportError:
-    raise MissingDependencyException("Google OAuth Library", ["google-auth-oauthlib"])
+from dlt.sources.credentials import GcpOAuthCredentials, GcpServiceAccountCredentials
+
+from .helpers.data_processing import get_report, process_dimension, process_metric
+
 try:
     from google.analytics.data_v1beta import BetaAnalyticsDataClient
-    from google.analytics.data_v1beta.types import DateRange, Dimension, DimensionExpression, DimensionMetadata, GetMetadataRequest, Metadata, Metric, MetricMetadata, RunReportRequest
+    from google.analytics.data_v1beta.types import Dimension, GetMetadataRequest, Metadata, Metric
 except ImportError:
     raise MissingDependencyException("Google Analytics API Client", ["google-analytics-data"])
 try:
     from apiclient.discovery import Resource
 except ImportError:
     raise MissingDependencyException("Google API Client", ["google-api-python-client"])
-try:
-    from requests_oauthlib import OAuth2Session
-except ImportError:
-    raise MissingDependencyException("Requests-OAuthlib", ["requests_oauthlib"])
 
 FIRST_DAY_OF_MILLENNIUM = "2000-01-01"
 
 
 @dlt.source(max_table_nesting=2)
 def google_analytics(
-    credentials: Union[GoogleAnalyticsCredentialsOAuth, GcpClientCredentialsWithDefault] = dlt.secrets.value,
+    credentials: Union[GcpOAuthCredentials, GcpServiceAccountCredentials] = dlt.secrets.value,
     property_id: int = dlt.config.value,
     queries: List[DictStrAny] = dlt.config.value,
     start_date: Optional[str] = FIRST_DAY_OF_MILLENNIUM,
@@ -61,20 +55,11 @@ def google_analytics(
     if not rows_per_page:
         raise ValueError("Rows per page cannot be 0")
     # generate access token for credentials if we are using OAuth2.0
-    if isinstance(credentials, GoogleAnalyticsCredentialsOAuth):
+    if isinstance(credentials, GcpOAuthCredentials):
         credentials.auth("https://www.googleapis.com/auth/analytics.readonly")
-        credentials = Credentials.from_authorized_user_info(info={
-            "client_id": credentials.client_id,
-            "client_secret": credentials.client_secret,
-            "refresh_token": credentials.refresh_token,
-            "token": credentials.access_token
-        })
-    # use service account to authenticate if not using OAuth2.0
-    else:
-        credentials = credentials.to_service_account_credentials()
 
     # Build the service object for Google Analytics api.
-    client = BetaAnalyticsDataClient(credentials=credentials)
+    client = BetaAnalyticsDataClient(credentials=credentials.to_native_credentials())
     # get metadata needed for some resources
     metadata = get_metadata(client=client, property_id=property_id)
     resource_list = [metadata | metrics_table, metadata | dimensions_table]

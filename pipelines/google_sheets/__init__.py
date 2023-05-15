@@ -1,26 +1,32 @@
 """Loads Google Sheets data from tabs, named and explicit ranges. Contains the main pipeline functions."""
 
-from typing import Iterator, List, Sequence
+from typing import Iterator, List, Sequence, Union
 
 import dlt
 from dlt.common import logger
-from dlt.common.configuration.specs import GcpClientCredentialsWithDefault
 from dlt.common.typing import DictStrAny, Dict, TDataItem, StrAny
 from dlt.common.exceptions import MissingDependencyException
+from dlt.sources.credentials import GcpServiceAccountCredentials, GcpOAuthCredentials
 from dlt.extract.source import DltResource
+
 from .helpers.data_processing import convert_named_range_to_a1, get_spreadsheet_id, process_range
 from .helpers.api_calls import api_auth
 from .helpers import api_calls
 
 try:
-    from apiclient.discovery import build, Resource
+    from apiclient.discovery import Resource
 except ImportError:
     raise MissingDependencyException("Google API Client", ["google-api-python-client"])
 
 
 @dlt.source
-def google_spreadsheet(spreadsheet_identifier: str = dlt.config.value, range_names: Sequence[str] = dlt.config.value, credentials: GcpClientCredentialsWithDefault = dlt.secrets.value,
-                       get_sheets: bool = True, get_named_ranges: bool = True) -> List[DltResource]:
+def google_spreadsheet(
+    spreadsheet_identifier: str = dlt.config.value,
+    range_names: Sequence[str] = dlt.config.value,
+    credentials: Union[GcpServiceAccountCredentials, GcpOAuthCredentials] = dlt.secrets.value,
+    get_sheets: bool = True,
+    get_named_ranges: bool = True
+) -> List[DltResource]:
     """
     The source for the dlt pipeline. It returns the following resources: 1 dlt resource for every range in sheet_names
     @:param: spreadsheet_identifier - the id or url to the spreadsheet
@@ -32,7 +38,6 @@ def google_spreadsheet(spreadsheet_identifier: str = dlt.config.value, range_nam
     """
     # authenticate to the service using the helper function
     service = api_auth(credentials)
-    logger.info("Successful Authentication")
     # get spreadsheet id from url or id
     spreadsheet_id = get_spreadsheet_id(spreadsheet_identifier)
     # Initialize a list with the values in range_names (can be an array if declared in config.toml). This needs to be converted to a list because it will be used as input by google-api-python-client

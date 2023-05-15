@@ -5,13 +5,12 @@ from typing import List, Optional
 import dlt
 from dlt.common.utils import uniq_id
 from dlt.extract.source import DltResource
-from dlt.common.configuration.specs import ConnectionStringCredentials
+from dlt.sources.credentials import ConnectionStringCredentials
 
 from pipelines.sql_database import sql_database, sql_table
 
 from tests.utils import ALL_DESTINATIONS, assert_load_info, load_table_counts
 from tests.sql_database.sql_source import SQLAlchemySourceDB
-
 
 
 def make_pipeline(destination_name: str) -> dlt.Pipeline:
@@ -88,10 +87,7 @@ def test_load_sql_table_incremental(sql_source_db: SQLAlchemySourceDB, destinati
 @pytest.mark.parametrize("destination_name", ALL_DESTINATIONS)
 def test_load_mysql_data_load(destination_name: str) -> None:
     # reflect a database
-    # TODO: fix the mandatory password field in ConnectionStringCredentials
-    credentials = ConnectionStringCredentials()
-    credentials.parse_native_representation("mysql+pymysql://rfamro@mysql-rfam-public.ebi.ac.uk:4497/Rfam")
-    credentials.__is_resolved__ = True
+    credentials = ConnectionStringCredentials("mysql+pymysql://rfamro@mysql-rfam-public.ebi.ac.uk:4497/Rfam")
     database = sql_database(credentials)
     assert "family" in database.resources
 

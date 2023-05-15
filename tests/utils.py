@@ -63,10 +63,12 @@ def test_config_providers() -> Iterator[ConfigProvidersContext]:
     ctx = ConfigProvidersContext()
     ctx.providers.clear()
     ctx.add_provider(EnvironProvider())
-    ctx.add_provider(SecretsTomlProvider(project_dir=config_root))
-    ctx.add_provider(ConfigTomlProvider(project_dir=config_root))
+    ctx.add_provider(SecretsTomlProvider(project_dir=config_root, add_global_config=False))
+    ctx.add_provider(ConfigTomlProvider(project_dir=config_root, add_global_config=False))
     # replace in container
     Container()[ConfigProvidersContext] = ctx
+    # extras work when container updated
+    ctx.add_extras()
 
 
 @pytest.fixture(autouse=True)

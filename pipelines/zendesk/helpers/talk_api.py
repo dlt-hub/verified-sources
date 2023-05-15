@@ -33,11 +33,6 @@ possible_endpoints = {
     "agents_overview": "/api/v2/channels/voice/stats/agents_overview",
     "account_overview": "/api/v2/channels/voice/stats/account_overview",
 }
-ZENDESK_STATUS_CODES = {
-    "ok": 200,
-    "rate_limit": 429
-}
-
 
 class ZendeskAPIClient:
     """
@@ -79,34 +74,16 @@ class ZendeskAPIClient:
         @:param data_point_name: name of the endpoint, i.e. calls
         @:returns: A generator of json responses
         """
-        # TODO: automatic retry on normal failures
-        # TODO: caching
-        # TODO: side loading
         # make request and keep looping until there is no next page
         get_url = f"{self.url}{endpoint}"
         while get_url:
-            try:
-                response = client.get(get_url, headers=self.headers, auth=self.auth, params=params)
-                if response.status_code == ZENDESK_STATUS_CODES["ok"]:
-                    # check if there is a next page and yield the response,
-                    # usually all relevant data is stored in a key with same name as endpoint
-                    response_json = response.json()
-                    get_url = response_json.get("next_page", None)
-                    yield response_json[data_point_name]
-                elif response.status_code == ZENDESK_STATUS_CODES["rate_limit"]:
-                    # handle being rate limited
-                    rate_limit = float(response.headers["retry-after"])
-                    logger.warning(f"The rate limit for Zendesk API is being hit! Waiting for {rate_limit} seconds.")
-                    _wait_rate_limit(rate_limit=rate_limit)
-                else:
-                    get_url = None
-                    logger.warning(f"API call failed on endpoint {endpoint} with error code {response.status_code}")
-            except Exception as e:
-                logger.warning(f"Encountered an error on url: {get_url}")
-                logger.warning(str(e))
-                get_url = None
+            response = client.get(get_url, headers=self.headers, auth=self.auth, params=params)
+            response.raise_for_status()
+            response_json = response.json()
+            get_url = response_json.get("next_page", None)
+            yield response_json[data_point_name]
 
-    def make_request_incremental(self, endpoint: str, data_point_name: str, start_date: float) -> Iterator[TDataItems]:
+    def make_request_incremental(self, endpoint: str, data_point_name: str, start_date: int) -> Iterator[TDataItems]:
         """
         Makes a request to an incremental API endpoint
         @:param endpoint: the url to the endpoint, i.e. api/v2/calls
@@ -115,13 +92,5 @@ class ZendeskAPIClient:
         @:returns: A generator of json responses
         """
         # start date comes as unix epoch float, need to convert to an integer to make the call to the API
-        params = {"start_time": int(start_date)}
+        params = {"start_time": start_date}
         yield from self.make_request(endpoint=endpoint, data_point_name=data_point_name, params=params)
-
-
-def _wait_rate_limit(rate_limit: float) -> None:
-    """
-    Helper, that simply waits for the rate limit to end by using sleep
-    @:param rate_limit: dictates how many seconds should be waited for.
-    """
-    sleep(rate_limit)
