@@ -11,8 +11,15 @@ except ImportError:
 from .credentials import ZendeskCredentialsToken, ZendeskCredentialsEmailPass, ZendeskCredentialsOAuth
 
 
-def auth_zenpy(credentials: Union[ZendeskCredentialsOAuth, ZendeskCredentialsToken, ZendeskCredentialsEmailPass], domain: str = "zendesk.com", timeout: Optional[float] = None,
-               ratelimit_budget: Optional[int] = None, proactive_ratelimit: Optional[int] = None, proactive_ratelimit_request_interval: int = 10, disable_cache: bool = False) -> Zenpy:
+def auth_zenpy(
+    credentials: Union[ZendeskCredentialsOAuth, ZendeskCredentialsToken, ZendeskCredentialsEmailPass],
+    domain: str = "zendesk.com",
+    timeout: Optional[float] = None,
+    ratelimit_budget: Optional[int] = None,
+    proactive_ratelimit: Optional[int] = None,
+    proactive_ratelimit_request_interval: int = 10,
+    disable_cache: bool = True
+) -> Zenpy:
     """
     Helper, gets a Zendesk Credentials object and authenticates to the Zendesk API
     @:param: credentials - Zendesk Credentials Object, stores the credentials
