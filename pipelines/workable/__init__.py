@@ -1,9 +1,10 @@
 """ This pipeline uses Workable API and dlt to load data such as Candidates, Jobs, Events, etc. to the database."""
 
 import logging
-from typing import Any, Generator, Iterator, Optional, Sequence
+from typing import Any, Generator, Iterator, Optional
 
 import dlt
+from dlt.common.typing import TDataItem, TDataItems
 from dlt.extract.source import DltResource
 from pendulum import DateTime
 
@@ -32,7 +33,7 @@ DEFAULT_ENDPOINTS = (
     "requisitions",
     "jobs",
     "custom_attributes",
-    "events"
+    "events",
 )
 
 DEFAULT_DETAILS = {
@@ -58,7 +59,7 @@ def workable_source(
     subdomain: str = dlt.config.value,
     start_date: Optional[DateTime] = None,
     load_details: bool = False,
-) -> Sequence[DltResource]:
+) -> Iterator[DltResource]:
     """
     Retrieves data from the Workable API for the specified endpoints (DEFAULT_ENDPOINTS + 'candidates').
     For almost all endpoints, Workable API responses do not provide keys "updated_at",
@@ -81,7 +82,7 @@ def workable_source(
 
     # This resource is suitable for all types of endpoints, including 'candidates',
     # but endpoint 'candidates' can also be loaded in incremental mode (see candidates_resource).
-    def load_data(endpoint: str) -> Generator[list, Any, None]:
+    def load_data(endpoint: str) -> Generator[TDataItems, Any, None]:
         logging.info(
             f"Loading data from '{endpoint}' by 'created_at' in 'replace' mode."
         )
@@ -101,7 +102,7 @@ def workable_source(
         updated_at: Optional[Any] = dlt.sources.incremental(
             "updated_at", initial_value=workable.start_date_iso
         )
-    ) -> Iterator[DltResource]:
+    ) -> Generator[TDataItems, Any, None]:
         """
         The 'updated_at' parameter is managed by the dlt.sources.incremental method.
         This function is suitable only for the 'candidates' endpoint in incremental mode.
@@ -117,7 +118,12 @@ def workable_source(
 
     if load_details:
 
-        def _get_details(page: Iterator[dict], main_endpoint: str, sub_endpoint_name: str, code_key: str):
+        def _get_details(
+            page: Iterator[TDataItem],
+            main_endpoint: str,
+            sub_endpoint_name: str,
+            code_key: str,
+        ) -> Generator[TDataItems, Any, None]:
             for item in page:
                 yield workable.details_from_endpoint(
                     main_endpoint, item[code_key], sub_endpoint_name
@@ -139,4 +145,6 @@ def workable_source(
             )
             yield candidates_resource | dlt.transformer(
                 name=f"candidates_{sub_endpoint}", write_disposition="merge"
-            )(_get_details)("candidates", sub_endpoint, "id")
+            )(_get_details)(
+                "candidates", sub_endpoint, "id"
+            )  # type: ignore

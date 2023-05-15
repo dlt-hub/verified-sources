@@ -1,9 +1,9 @@
 import logging
 import time
-from typing import Optional, Any
+from typing import Any, Dict, Generator, Optional
 
 import pendulum
-
+from dlt.common.typing import TDataItems
 from dlt.sources.helpers import requests
 
 
@@ -38,7 +38,7 @@ class WorkableClient:
             else self.default_start_date
         )
 
-    def _request_with_rate_limit(self, url: str, **kwargs):
+    def _request_with_rate_limit(self, url: str, **kwargs: Any) -> requests.Response:
         """
         Handling rate limits in HTTP requests and ensuring
         that the client doesn't exceed the limit set by the server
@@ -49,7 +49,7 @@ class WorkableClient:
             seconds_to_wait = (
                 int(response.headers["X-Rate-Limit-Reset"]) - pendulum.now().timestamp()
             )
-            time.sleep(seconds_to_wait)
+            time.sleep(seconds_to_wait + 10)
             return self._request_with_rate_limit(url, **kwargs)
         return response
 
@@ -57,8 +57,8 @@ class WorkableClient:
         self,
         endpoint: str,
         custom_url: Optional[str] = None,
-        params: Optional[dict[str, Any]] = None,
-    ) -> list:
+        params: Optional[Dict[str, Any]] = None,
+    ) -> Generator[TDataItems, Any, None]:
         """
         Queries an API endpoint using pagination and returns the results as a generator.
         Parameters:
@@ -89,6 +89,6 @@ class WorkableClient:
 
     def details_from_endpoint(
         self, main_endpoint: str, code: str, dependent_endpoint: str
-    ):
+    ) -> Generator[TDataItems, Any, None]:
         custom_url = f"{self.base_url}/{main_endpoint}/{code}"
         return self.pagination(dependent_endpoint, custom_url=custom_url)
