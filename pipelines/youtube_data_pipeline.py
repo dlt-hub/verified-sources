@@ -4,8 +4,6 @@ from typing import List, Any
 import dlt
 from youtube_data import youtube_data
 
-today = date.today()
-
 def load_youtube_data(
     channel_names: List[str],
     start_date: str,
@@ -30,6 +28,7 @@ def load_youtube_data(
     print(info)
 
 if __name__ == "__main__":
+    today = date.today()
     channel_names = ["mrbeast"]
     start_date="2022-01-01T00:00:00Z"
     end_date=today.strftime("%Y-%m-%d")+"T00:00:00Z"

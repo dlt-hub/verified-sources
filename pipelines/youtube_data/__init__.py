@@ -1,20 +1,19 @@
 import datetime
 from typing import Any, Dict, Iterator, List, Sequence
 
-from googleapiclient.discovery import build
-
 import dlt
-from dlt.extract.source import DltResource, DltSource
+from dlt.extract.source import DltResource
 from dlt.common.typing import TDataItem
+
+from googleapiclient.discovery import build
 
 
 _SERVICE_NAME = "youtube"
 _SERVICE_VERSION = "v3"
-current_time = datetime.datetime.now()
 
-def _get_channel_id(youtube: Any, channel_name: str) -> List[str]:
+def _get_channel_id(youtube: Any, channel_name: str) -> str:
     """
-    function to retrieve channel id given channel custom name e.g. MrBeast
+    Function to retrieve channel id given channel custom name e.g. MrBeast
 
     params:
         youtube: YouTube resource object
@@ -23,26 +22,39 @@ def _get_channel_id(youtube: Any, channel_name: str) -> List[str]:
     return:
         channel_id: YouTube channel id
     """
-    response = youtube.search().list(
-        part="snippet",
-        q={channel_name},
-        type="channel"
-    ).execute()
+    try:
+         response = youtube.search().list(
+              part="snippet",
+              q=f"{channel_name}",
+              type="channle"
+         ).execute
+    except HttpError as e:
+        if e.resp.status == 400:
+            print("Bad request. Invalid channel name or parameter.")
+            return
+        else:
+             print(" An HTTP error occured: ", e)
+             return 
 
-    for item in response["items"]:
-        #filter only youtube channel
-        if item["id"]["kind"] == "youtube#channel":
-            return item["id"]["channelId"]
+    # retrive the channel id and handle if null
+    if "items" in response:
+        for item in response["items"]:
+            #filter only youtube channel
+            if item["id"]["kind"] == "youtube#channel":
+                return item["id"]["channelId"]
+    else:
+        print(f"{channel_name} was not found, make sure you input the correct channel name")
+        return
 
 def _get_channel_video(
         youtube: Any, 
-        channel_id: List[str], 
-        max_results: int,
+        channel_id: str,
         start_date: str,
-        end_date: str
+        end_date: str,
+        max_results: int = 50
 ) -> List[str]:
     """
-    function to retrieve all published videos given channel id
+    Function to retrieve all published videos given channel id
 
     params:
         youtube: YouTube resource object
@@ -55,9 +67,9 @@ def _get_channel_video(
         video_ids: list of videos ids
     """
     video_ids = []
-    next_page_token = None
+    next_page_token = True
 
-    while True:
+    while next_page_token:
         response = youtube.search().list(
             channelId=channel_id,
             part="id",
@@ -74,13 +86,13 @@ def _get_channel_video(
         
         # check if there are next page results
         if 'nextPageToken' not in response:
-            break
+            next_page_token = False
 
     return video_ids
 
-def _get_video_details(youtube: Any, video_list: List[str], max_results: int) -> Dict[str, str]:
+def _get_video_details(youtube: Any, video_list: List[str], max_results: int) -> List[Dict[str, str]]:
     """
-    function to retrieve detail information given an video id
+    Function to retrieve detail information given an video id
 
     params:
         youtube: YouTube resource object
@@ -129,8 +141,7 @@ def youtube_data_source(
     channel_names: List[str],
     start_date: str,
     end_date: str,
-    max_results: int,
-    api_secrets_key: dlt.secrets.value
+    max_results: int
 ) -> Sequence[DltResource]:
     
     # youtube API using YYYY-MM-DDTHH:MM:SSZ format
@@ -150,13 +161,17 @@ def youtube_data(
     channel_names: List[str],
     start_date: str,
     end_date: str,
-    max_results: int = 50,
+    max_results: int,
     youtube: Any = build(_SERVICE_NAME, _SERVICE_VERSION, developerKey=dlt.secrets.value),
 ) -> Iterator[TDataItem]:
     
     for channel_name in channel_names:
         # get channel_id given channel_name
         channel_id = _get_channel_id(youtube, channel_name)
+
+        # handle if channel_id return null (channel id not found)
+        if not channel_id:
+            continue
 
         # get channel video ids
         video_ids = _get_channel_video(youtube, channel_id, start_date, end_date, max_results)
@@ -165,7 +180,7 @@ def youtube_data(
         video_details = _get_video_details(youtube, video_ids, max_results)
 
         for item in video_details:
-            yield{
+            yield {
                 "channel_id": channel_id,
                 "channel_name": channel_name,
                 "title": item["title"],
@@ -177,5 +192,5 @@ def youtube_data(
                 "likes_count": item["likes_count"],
                 "dislikes_count": item["dislikes_count"],
                 "comments_count": item["comments_count"],
-                "created_at": current_time
+                "created_at": datetime.datetime.now()
             }

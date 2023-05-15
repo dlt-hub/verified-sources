@@ -1,5 +1,5 @@
 
-# Edamam Nutirion Analysis API
+# Youtube Analytics API
 
 
 The YouTube Analytics API is a tool that allows developers to retrieve YouTube channel and video data such as views, likes, comments, and other metrics. With this API, developers can access data on a granular level and create custom dashboards or tools to analyze YouTube data.
@@ -66,7 +66,7 @@ youtube_data_pipeline
 
  
 
-1. To learn more about initing please read the docs [“Adding a pipeline”](https://dlthub.com/docs/walkthroughs/add-a-pipeline).
+1. To learn more about initiating please read the docs [“Adding a pipeline”](https://dlthub.com/docs/walkthroughs/add-a-pipeline).
 
 ## Configuring credentials
 
