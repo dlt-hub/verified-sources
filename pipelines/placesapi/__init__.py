@@ -5,20 +5,29 @@
 import dlt
 from dlt.sources.helpers import requests
 from dlt.extract.source import DltResource
+from collections import namedtuple
 
 
 @dlt.source
-def places_api_source(api_secret_key=dlt.secrets.value) ->  DltResource:
+def places_api_source(query: str, radius: int = None, location: namedtuple('Coordinates',['lat','long']) = None, api_secret_key = dlt.secrets.value) -> DltResource:
     """
     The main source for dlt pipeline returns the text_search_resource.
 
+    @:params: query - The text against which a search will be made.
+    @:params: radius (optional)  - Defines the distance (in meters) within which to return place results. You may bias results to a specified circle by passing a location and a radius parameter. Default value is 50,000 meters for text search.
+    @:params: location (optional) - Coordinates (latitude and longitude) can be used with the radius parameter to bias result.
     @:params: api_secret_key - The api key for the Places API defined in dlt.secrets.
     """
-    return text_search(api_secret_key)
+    return( 
+        text_search(query, radius, location, api_secret_key),
+        text_search(query, radius, location, api_secret_key) | dlt.transformer(
+        name ='place_info',
+        write_disposition='append'
+    )(_get_places_info))
 
 
 @dlt.resource(write_disposition="append")
-def text_search(api_secret_key=dlt.secrets.value):
+def text_search(query: str, radius: int = None, location: namedtuple('Coordinates',['lat','long']) = None, api_secret_key = dlt.secrets.value):
     """
     Creates a text search resource. A Text Search returns information about a set of places based on a text string provided.
 
@@ -27,7 +36,7 @@ def text_search(api_secret_key=dlt.secrets.value):
     The Parameters to be passed to endpoint:
     @:params: query - The text against which a search will be made.
     @:params: radius (optional)  - Defines the distance (in meters) within which to return place results. You may bias results to a specified circle by passing a location and a radius parameter. Default value is 50,000 meters for text search.
-    @:params: location (optional) - Can be used with the radius parameter to bias result.
+    @:params: location (optional) - Coordinates (latitude and longitude) can be used with the radius parameter to bias result.
     @:params: api_secret_key - The api key for the Places API defined in dlt.secrets.
     """
 
@@ -35,9 +44,9 @@ def text_search(api_secret_key=dlt.secrets.value):
     text_search_url = "https://maps.googleapis.com/maps/api/place/textsearch/json?"
 
     payload = {
-        'query' : 'ADD SEARCH TEXT HERE',
-        'radius': 'ADD RADIUS FOR SEARCH',
-        'location': 'LATITUDE, LONGITUDE',
+        'query' : query,
+        'radius': radius,
+        'location': location,
         'key': api_secret_key
     }
 
@@ -48,8 +57,7 @@ def text_search(api_secret_key=dlt.secrets.value):
     yield response.json().get('results')
 
 
-@dlt.transformer(data_from=text_search) 
-def places_info(results, api_secret_key=dlt.secrets.value):
+def _get_places_info(results, api_secret_key=dlt.secrets.value):
     """
     Uses the Place Detail endpoint to get detail information about particular place. It uses the place_ids returned by text_search as input.
     For more Info: "https://developers.google.com/maps/documentation/places/web-service/details"

@@ -25,7 +25,6 @@ Running this command will create a directory with the following structure:
 │   ├── config.toml
 │   └── secrets.toml
 ├── placesapi
-│   └── __pycache__
 │   └── __init__.py
 ├── .gitignore
 ├── placesapi_pipeline.py
