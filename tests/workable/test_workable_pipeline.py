@@ -12,8 +12,9 @@ def test_load_all_data(destination_name: str) -> None:
     # mind the full_refresh flag - it makes sure that data is loaded to unique dataset. this allows you to run the tests on the same database in parallel
     pipeline = dlt.pipeline(
         pipeline_name="workable",
-        destination="duckdb",
+        destination=destination_name,
         dataset_name="workable_test",
+        full_refresh=True,
     )
     load_data = workable_source()
     # run the pipeline with your parameters
@@ -29,8 +30,9 @@ def test_load_candidates(destination_name: str) -> None:
     # mind the full_refresh flag - it makes sure that data is loaded to unique dataset. this allows you to run the tests on the same database in parallel
     pipeline = dlt.pipeline(
         pipeline_name="workable",
-        destination="duckdb",
+        destination=destination_name,
         dataset_name="workable_test",
+        full_refresh=True,
     )
     load_data = workable_source().with_resources("candidates")
     # run the pipeline with your parameters
@@ -65,8 +67,9 @@ def test_incremental_event_load(destination_name: str) -> None:
     # do the initial load
     pipeline = dlt.pipeline(
         pipeline_name="workable",
-        destination="duckdb",
+        destination=destination_name,
         dataset_name="workable_test",
+        full_refresh=True,
     )
     load_data = workable_source().with_resources("candidates")
     load_info = pipeline.run(load_data)
@@ -108,8 +111,9 @@ def test_load_data_by_time(destination_name: str) -> None:
 
     pipeline = dlt.pipeline(
         pipeline_name="workable_with_start_date",
-        destination="duckdb",
+        destination=destination_name,
         dataset_name="workable_test",
+        full_refresh=True,
     )
     load_data = workable_source(start_date=datetime(2023, 5, 1)).with_resources(
         "candidates"
@@ -122,8 +126,9 @@ def test_load_data_by_time(destination_name: str) -> None:
 
     pipeline = dlt.pipeline(
         pipeline_name="workable_without_start_date",
-        destination="duckdb",
+        destination=destination_name,
         dataset_name="workable_test",
+        full_refresh=True,
     )
     load_data = workable_source().with_resources("candidates")
     load_info = pipeline.run(load_data)
