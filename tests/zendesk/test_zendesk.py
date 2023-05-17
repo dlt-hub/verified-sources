@@ -5,7 +5,7 @@ from dlt.pipeline.pipeline import Pipeline
 from pipelines.zendesk import zendesk_chat, zendesk_support, zendesk_talk
 from pipelines.zendesk.helpers.api_helpers import _make_json_serializable
 from zenpy.lib.api_objects import Ticket
-from tests.utils import ALL_DESTINATIONS, assert_load_info, load_table_counts
+from tests.utils import ALL_DESTINATIONS, assert_load_info, load_table_counts, assert_query_data
 
 # TODO: several endpoints are not returning data from test account. tables for those endpoints will not be created
 # list expected tables and the number of columns they are supposed to have
@@ -45,6 +45,9 @@ def test_pivoting_tickets(destination_name: str) -> None:
     pivoted_tickets = schema2.data_tables()[1]["columns"].keys()
     assert "test_field" in pivoted_tickets
     assert "custom_field" not in pivoted_tickets
+    assert "dummy_dropdown" in pivoted_tickets
+    assert_query_data(pipeline_pivoting_2, "SELECT 1 FROM tickets WHERE dummy_dropdown = 'Here is a value::asdf' LIMIT 1", [1])
+    assert_query_data(pipeline_pivoting_2, "SELECT 1 FROM tickets__test_multiple_choice WHERE value = 'Option number 1' LIMIT 1", [1])
 
 
 @pytest.mark.parametrize("destination_name", ALL_DESTINATIONS)

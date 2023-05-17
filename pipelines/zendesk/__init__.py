@@ -23,6 +23,8 @@ FIRST_DAY_OF_CURRENT_YEAR = pendulum.datetime(year=pendulum.now().year, month=1,
 FIRST_DAY_OF_MILLENNIUM = pendulum.datetime(year=2000, month=1, day=1)
 FIRST_DAY_OF_MILLENNIUM_STRING = "2000-01-01T00:00:00Z"
 
+CUSTOM_FIELDS_STATE_KEY = "ticket_custom_fields_v2"
+
 
 @dlt.source(max_table_nesting=2)
 def zendesk_talk(
@@ -151,15 +153,28 @@ def zendesk_support(
         @:returns: Generator of dicts
         """
         # get dlt state
-        ticket_custom_fields = dlt.state().setdefault("ticket_custom_fields", {})
+        ticket_custom_fields = dlt.state().setdefault(CUSTOM_FIELDS_STATE_KEY, {})
         # get all custom fields and update state if needed, otherwise just load dicts into tables
         all_fields = zendesk_client.ticket_fields()
         for field in all_fields:
             return_dict = field.to_dict()
             field_id = str(field.id)
-            # grab id and update state dict if the id is new, add a new key to indicate that this is the initial value for title
-            if not (field_id in ticket_custom_fields):
-                ticket_custom_fields[field_id] = field.title
+            # grab id and update state dict
+            # if the id is new, add a new key to indicate that this is the initial value for title
+            # New dropdown options are added to existing field but existing options are not changed
+            options = getattr(field, 'custom_field_options', [])
+            new_options = {o.value: o.name for o in options}
+            existing_field = ticket_custom_fields.get(field_id)
+            if existing_field:
+                existing_options = existing_field['options']
+                if return_options := return_dict.get('custom_field_options'):
+                    for item in return_options:
+                        item['name'] = existing_options.get(item['value'], item['name'])
+                for key, value in new_options.items():
+                    if key not in existing_options:
+                        existing_options[key] = value
+            else:
+                ticket_custom_fields[field_id] = dict(title=field.title, options=new_options)
                 return_dict["initial_title"] = field.title
             yield return_dict
 
@@ -180,7 +195,7 @@ def zendesk_support(
         """
 
         # grab the custom fields from dlt state if any
-        fields_dict = dlt.state().setdefault("ticket_custom_fields", {})
+        fields_dict = dlt.state().setdefault(CUSTOM_FIELDS_STATE_KEY, {})
         all_tickets = zendesk_client.tickets.incremental(paginate_by_time=False,
                                                         per_page=per_page,
                                                         start_time=int(updated_at.last_value.timestamp()),
