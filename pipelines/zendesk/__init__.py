@@ -10,7 +10,7 @@ from dlt.common.time import parse_iso_like_datetime
 from dlt.common.typing import TDataItem
 from dlt.extract.source import DltResource
 
-from .helpers.api_helpers import auth_zenpy, basic_load, process_ticket, Zenpy
+from .helpers.api_helpers import auth_zenpy, basic_load, process_ticket, Zenpy, process_ticket_field
 from .helpers.talk_api import INCREMENTAL_ENDPOINTS, TALK_ENDPOINTS, ZendeskAPIClient
 from .helpers.credentials import ZendeskCredentialsEmailPass, ZendeskCredentialsOAuth, ZendeskCredentialsToken
 
@@ -157,26 +157,7 @@ def zendesk_support(
         # get all custom fields and update state if needed, otherwise just load dicts into tables
         all_fields = zendesk_client.ticket_fields()
         for field in all_fields:
-            return_dict = field.to_dict()
-            field_id = str(field.id)
-            # grab id and update state dict
-            # if the id is new, add a new key to indicate that this is the initial value for title
-            # New dropdown options are added to existing field but existing options are not changed
-            options = getattr(field, 'custom_field_options', [])
-            new_options = {o.value: o.name for o in options}
-            existing_field = ticket_custom_fields.get(field_id)
-            if existing_field:
-                existing_options = existing_field['options']
-                if return_options := return_dict.get('custom_field_options'):
-                    for item in return_options:
-                        item['name'] = existing_options.get(item['value'], item['name'])
-                for key, value in new_options.items():
-                    if key not in existing_options:
-                        existing_options[key] = value
-            else:
-                ticket_custom_fields[field_id] = dict(title=field.title, options=new_options)
-                return_dict["initial_title"] = field.title
-            yield return_dict
+            yield process_ticket_field(field, ticket_custom_fields)
 
     @dlt.resource(name="tickets", primary_key="id", write_disposition="append", columns={"tags": {"data_type": "complex"}, "custom_fields": {"data_type": "complex"}})
     def ticket_table(

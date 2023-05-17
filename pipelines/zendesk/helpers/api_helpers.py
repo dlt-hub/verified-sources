@@ -1,11 +1,11 @@
 import json
-from typing import Iterator, Any, Optional, Union, TypedDict, Dict
+from typing import Iterator, Any, Optional, Union, TypedDict, Dict, Iterable
 from dlt.common import logger, pendulum
 from dlt.common.exceptions import MissingDependencyException
 from dlt.common.typing import DictStrAny, DictStrStr, TDataItem, TDataItems
 try:
     from zenpy import Zenpy
-    from zenpy.lib.api_objects import Ticket, JobStatus
+    from zenpy.lib.api_objects import Ticket, JobStatus, TicketField
 except ImportError:
     raise MissingDependencyException("Zenpy", ["zenpy>=2.0.25"])
 from .credentials import ZendeskCredentialsToken, ZendeskCredentialsEmailPass, ZendeskCredentialsOAuth
@@ -100,6 +100,31 @@ def process_ticket(ticket: Ticket, custom_fields: Dict[str, TCustomFieldInfo], p
     base_dict["created_at"] = ticket.created
     base_dict["due_at"] = ticket.due
     return base_dict
+
+
+def process_ticket_field(field: TicketField, custom_fields_state: Dict[str, TCustomFieldInfo]) -> TDataItem:
+    """Update custom field mapping in dlt state for the given field.
+    """
+    return_dict = field.to_dict()
+    field_id = str(field.id)
+    # grab id and update state dict
+    # if the id is new, add a new key to indicate that this is the initial value for title
+    # New dropdown options are added to existing field but existing options are not changed
+    options = getattr(field, 'custom_field_options', [])
+    new_options = {o.value: o.name for o in options}
+    existing_field = custom_fields_state.get(field_id)
+    if existing_field:
+        existing_options = existing_field['options']
+        if return_options := return_dict.get('custom_field_options'):
+            for item in return_options:
+                item['name'] = existing_options.get(item['value'], item['name'])
+        for key, value in new_options.items():
+            if key not in existing_options:
+                existing_options[key] = value
+    else:
+        custom_fields_state[field_id] = dict(title=field.title, options=new_options)
+        return_dict["initial_title"] = field.title
+    return return_dict
 
 
 def basic_load(resource_api: Iterator[Any]) -> Iterator[TDataItem]:

@@ -1,10 +1,10 @@
 import pytest
-from typing import List
+from typing import List, Dict, Any
 import dlt
 from dlt.pipeline.pipeline import Pipeline
 from pipelines.zendesk import zendesk_chat, zendesk_support, zendesk_talk
-from pipelines.zendesk.helpers.api_helpers import _make_json_serializable
-from zenpy.lib.api_objects import Ticket
+from pipelines.zendesk.helpers.api_helpers import _make_json_serializable, process_ticket, process_ticket_field
+from zenpy.lib.api_objects import Ticket, TicketField, CustomFieldOption
 from tests.utils import ALL_DESTINATIONS, assert_load_info, load_table_counts, assert_query_data
 
 # TODO: several endpoints are not returning data from test account. tables for those endpoints will not be created
@@ -147,3 +147,73 @@ def _check_pipeline_has_tables(pipeline: Pipeline, tables: List[str]):
     user_tables = schema.data_tables()
     assert set(tables).difference([t["name"] for t in user_tables]) == set()
 
+
+def test_process_ticket_custom_fields() -> None:
+    fields_state: Dict[str, Any] = {
+        '42': {'title': 'Dummy field', 'options': {
+            'test_value_1': 'Test Value 1', 'test_value_2': 'Test Value 2', 'test_value_3': 'Test Value 3'
+        }},
+        '55': {'title': 'Another field', 'options': {}}
+    }
+    # Test single choice dropdown
+    ticket = Ticket(id=123, custom_fields=[{'id': 42, 'value': 'test_value_2'}])
+
+    result = process_ticket(ticket, fields_state, pivot_custom_fields=True)
+
+    assert result['Dummy field'] == 'Test Value 2'
+
+    # Test multiple choice field
+    ticket = Ticket(id=123, custom_fields=[{'id': 42, 'value': ['test_value_2', 'test_value_1']}])
+
+    result = process_ticket(ticket, fields_state, pivot_custom_fields=True)
+
+    assert result['Dummy field'] == ['Test Value 2', 'Test Value 1']
+
+    # Test non dropdown
+
+    ticket = Ticket(id=123, custom_fields=[{'id': 55, 'value': 'Some value'}])
+
+    result = process_ticket(ticket, fields_state, pivot_custom_fields=True)
+
+    assert result['Another field'] == 'Some value'
+
+
+def test_process_ticket_field() -> None:
+    fields_state: Dict[str, Any] = {
+        '55': {'title': 'Another field', 'options': {}}
+    }
+
+    field = TicketField(id=42, title='Dummy dropdown', custom_field_options=[
+        CustomFieldOption(value='test_1', name='Test 1'),
+        CustomFieldOption(value='test_2', name='Test 2'),
+    ])
+
+    process_ticket_field(field, fields_state)
+
+    # New field is added to state
+    assert fields_state['42'] == {'title': 'Dummy dropdown', 'options': {
+        'test_1': 'Test 1', 'test_2': 'Test 2'
+    }}
+
+    # Add new option to field
+    field = TicketField(id=42, title='Dummy dropdown', custom_field_options=[
+        CustomFieldOption(value='test_1', name='Test 1'),
+        CustomFieldOption(value='test_2', name='Test 2'),
+        CustomFieldOption(value='test_3', name='Test 3'),
+    ])
+
+    process_ticket_field(field, fields_state)
+
+    assert fields_state['42']['options'] == {'test_1': 'Test 1', 'test_2': 'Test 2', 'test_3': 'Test 3'}
+
+    # Rename option in field
+    process_ticket_field(field, fields_state)
+
+    field = TicketField(id=42, title='Dummy dropdown', custom_field_options=[
+        CustomFieldOption(value='test_1', name='Test 1'),
+        CustomFieldOption(value='test_2', name='Test 2 updated'),
+        CustomFieldOption(value='test_3', name='Test 3'),
+    ])
+
+    # original option name is still valid
+    assert fields_state['42']['options'] == {'test_1': 'Test 1', 'test_2': 'Test 2', 'test_3': 'Test 3'}
