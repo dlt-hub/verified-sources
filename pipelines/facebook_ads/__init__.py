@@ -82,7 +82,7 @@ def facebook_ads_source(
     def ad_creatives(fields: Sequence[str] = DEFAULT_ADCREATIVE_FIELDS, states: Sequence[str] = None) -> Iterator[TDataItems]:
         yield _get_data_chunked(account.get_ad_creatives, fields, states)
 
-    return campaigns, ads, ad_sets, ad_creatives, ads | leads  # type: ignore
+    return campaigns, ads, ad_sets, ad_creatives, ads | leads
 
 
 def enrich_ad_objects(fb_obj_type: AbstractObject, fields: Sequence[str]) -> ItemTransformFunctionWithMeta[TDataItems]:
@@ -217,4 +217,4 @@ def facebook_insights_source(
             yield _get_insights_for_day(start_date)
             start_date = start_date.add(days=time_increment_days)
 
-    return facebook_insights  # type: ignore
+    return facebook_insights
