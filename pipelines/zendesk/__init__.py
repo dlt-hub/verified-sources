@@ -10,7 +10,7 @@ from dlt.common.time import parse_iso_like_datetime
 from dlt.common.typing import TDataItem
 from dlt.extract.source import DltResource
 
-from .helpers.api_helpers import auth_zenpy, basic_load, process_ticket, Zenpy
+from .helpers.api_helpers import auth_zenpy, basic_load, process_ticket, Zenpy, process_ticket_field
 from .helpers.talk_api import INCREMENTAL_ENDPOINTS, TALK_ENDPOINTS, ZendeskAPIClient
 from .helpers.credentials import ZendeskCredentialsEmailPass, ZendeskCredentialsOAuth, ZendeskCredentialsToken
 
@@ -22,6 +22,8 @@ EXTRA_RESOURCES_SUPPORT = [
 FIRST_DAY_OF_CURRENT_YEAR = pendulum.datetime(year=pendulum.now().year, month=1, day=1)
 FIRST_DAY_OF_MILLENNIUM = pendulum.datetime(year=2000, month=1, day=1)
 FIRST_DAY_OF_MILLENNIUM_STRING = "2000-01-01T00:00:00Z"
+
+CUSTOM_FIELDS_STATE_KEY = "ticket_custom_fields_v2"
 
 
 @dlt.source(max_table_nesting=2)
@@ -151,17 +153,11 @@ def zendesk_support(
         @:returns: Generator of dicts
         """
         # get dlt state
-        ticket_custom_fields = dlt.state().setdefault("ticket_custom_fields", {})
+        ticket_custom_fields = dlt.state().setdefault(CUSTOM_FIELDS_STATE_KEY, {})
         # get all custom fields and update state if needed, otherwise just load dicts into tables
         all_fields = zendesk_client.ticket_fields()
         for field in all_fields:
-            return_dict = field.to_dict()
-            field_id = str(field.id)
-            # grab id and update state dict if the id is new, add a new key to indicate that this is the initial value for title
-            if not (field_id in ticket_custom_fields):
-                ticket_custom_fields[field_id] = field.title
-                return_dict["initial_title"] = field.title
-            yield return_dict
+            yield process_ticket_field(field, ticket_custom_fields)
 
     @dlt.resource(name="tickets", primary_key="id", write_disposition="append", columns={"tags": {"data_type": "complex"}, "custom_fields": {"data_type": "complex"}})
     def ticket_table(
@@ -180,7 +176,7 @@ def zendesk_support(
         """
 
         # grab the custom fields from dlt state if any
-        fields_dict = dlt.state().setdefault("ticket_custom_fields", {})
+        fields_dict = dlt.state().setdefault(CUSTOM_FIELDS_STATE_KEY, {})
         all_tickets = zendesk_client.tickets.incremental(paginate_by_time=False,
                                                         per_page=per_page,
                                                         start_time=int(updated_at.last_value.timestamp()),

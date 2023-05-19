@@ -1,14 +1,19 @@
 import json
-from typing import Iterator, Any, Optional, Union
+from typing import Iterator, Any, Optional, Union, TypedDict, Dict, Iterable
 from dlt.common import logger, pendulum
 from dlt.common.exceptions import MissingDependencyException
 from dlt.common.typing import DictStrAny, DictStrStr, TDataItem, TDataItems
 try:
     from zenpy import Zenpy
-    from zenpy.lib.api_objects import Ticket, JobStatus
+    from zenpy.lib.api_objects import Ticket, JobStatus, TicketField
 except ImportError:
     raise MissingDependencyException("Zenpy", ["zenpy>=2.0.25"])
 from .credentials import ZendeskCredentialsToken, ZendeskCredentialsEmailPass, ZendeskCredentialsOAuth
+
+
+class TCustomFieldInfo(TypedDict):
+    title: str
+    options: DictStrStr
 
 
 def auth_zenpy(
@@ -56,7 +61,7 @@ def auth_zenpy(
     return zendesk_client
 
 
-def process_ticket(ticket: Ticket, custom_fields: DictStrStr, pivot_custom_fields: bool = True) -> DictStrAny:
+def process_ticket(ticket: Ticket, custom_fields: Dict[str, TCustomFieldInfo], pivot_custom_fields: bool = True) -> DictStrAny:
     """
     Helper that returns a dictionary of the ticket class provided as a parameter. This is done since to_dict()
     method of Ticket class doesn't return all the required information
@@ -65,7 +70,6 @@ def process_ticket(ticket: Ticket, custom_fields: DictStrStr, pivot_custom_field
     @:param pivot_fields: Bool that indicates whether to pivot all custom fields or not.
     @:return base_dict: A dict containing 'cleaned' data about a ticket.
     """
-
     base_dict: DictStrAny = ticket.to_dict()
 
     # pivot custom field if indicated as such
@@ -73,8 +77,17 @@ def process_ticket(ticket: Ticket, custom_fields: DictStrStr, pivot_custom_field
     for custom_field in base_dict["custom_fields"]:
         if pivot_custom_fields:
             cus_field_id = str(custom_field["id"])
-            field_name = custom_fields[cus_field_id]
-            base_dict[field_name] = custom_field["value"]
+            field = custom_fields[cus_field_id]
+            field_name = field['title']
+            current_value = custom_field['value']
+            options = field['options']
+            # Map dropdown values to labels
+            if not current_value or not options:
+                base_dict[field_name] = current_value
+            elif isinstance(current_value, list):  # Multiple choice field has a list of values
+                base_dict[field_name] = [options.get(key, key) for key in current_value]
+            else:
+                base_dict[field_name] = options.get(current_value)
         else:
             custom_field["ticket_id"] = ticket.id
     # delete fields that are not needed for pivoting
@@ -87,6 +100,31 @@ def process_ticket(ticket: Ticket, custom_fields: DictStrStr, pivot_custom_field
     base_dict["created_at"] = ticket.created
     base_dict["due_at"] = ticket.due
     return base_dict
+
+
+def process_ticket_field(field: TicketField, custom_fields_state: Dict[str, TCustomFieldInfo]) -> TDataItem:
+    """Update custom field mapping in dlt state for the given field.
+    """
+    return_dict = field.to_dict()
+    field_id = str(field.id)
+    # grab id and update state dict
+    # if the id is new, add a new key to indicate that this is the initial value for title
+    # New dropdown options are added to existing field but existing options are not changed
+    options = getattr(field, 'custom_field_options', [])
+    new_options = {o.value: o.name for o in options}
+    existing_field = custom_fields_state.get(field_id)
+    if existing_field:
+        existing_options = existing_field['options']
+        if return_options := return_dict.get('custom_field_options'):
+            for item in return_options:
+                item['name'] = existing_options.get(item['value'], item['name'])
+        for key, value in new_options.items():
+            if key not in existing_options:
+                existing_options[key] = value
+    else:
+        custom_fields_state[field_id] = dict(title=field.title, options=new_options)
+        return_dict["initial_title"] = field.title
+    return return_dict
 
 
 def basic_load(resource_api: Iterator[Any]) -> Iterator[TDataItem]:
