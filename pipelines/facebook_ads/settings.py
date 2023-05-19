@@ -24,11 +24,10 @@ DEFAULT_CAMPAIGN_FIELDS = DEFAULT_FIELDS + (
 
 DEFAULT_AD_FIELDS = DEFAULT_FIELDS + (
     'adset_id',
-    'campaign_id'
+    'campaign_id',
     'creative',
     'targeting',
     'tracking_specs',
-    'updated_time',
     'conversion_specs'
 )
 

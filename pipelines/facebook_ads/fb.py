@@ -12,7 +12,6 @@ from facebook_business.adobjects.adcreative import AdCreative
 from facebook_business.adobjects.ad import Ad
 from facebook_business.adobjects.adset import AdSet
 from facebook_business.adobjects.campaign import Campaign
-from facebook_business.adobjects.ad import Ad
 from facebook_business.adobjects.lead import Lead
 
 import dlt

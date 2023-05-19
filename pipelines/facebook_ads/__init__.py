@@ -8,7 +8,6 @@ from facebook_business import FacebookAdsApi
 from facebook_business.api import FacebookResponse
 
 import dlt
-# import requests
 from dlt.common import pendulum, logger
 from dlt.common.typing import TDataItems, TDataItem, DictStrAny
 from dlt.common.time import parse_iso_like_datetime
@@ -100,7 +99,7 @@ def enrich_ad_objects(fb_obj_type: AbstractObject, fields: Sequence[str]) -> Ite
         fields (Sequence[str]): A list/tuple of fields to add to each object.
 
     Returns:
-        ItemTransformFunctionWithMeta[TDataItems]: _description_
+        ItemTransformFunctionWithMeta[TDataItems]: A transformation function to be added to a resource with `add_step` method
     """
     def _wrap(items: TDataItems, meta: Any = None) -> TDataItems:
         api_batch = FacebookAdsApi.get_default_api().new_batch()
