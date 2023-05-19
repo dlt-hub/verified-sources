@@ -24,8 +24,7 @@ def assets_resource(MUX_API_ACCESS_TOKEN=dlt.secrets.value, MUX_API_SECRET_KEY=d
 
     response = requests.get(url, params=params, auth=HTTPBasicAuth(MUX_API_ACCESS_TOKEN, MUX_API_SECRET_KEY))
     response.raise_for_status()
-    for item in response.json()["data"]:
-        yield item
+    yield response.json()["data"]
 
 
 @dlt.resource(write_disposition="append")
@@ -42,9 +41,8 @@ def views_resource(MUX_API_ACCESS_TOKEN=dlt.secrets.value, MUX_API_SECRET_KEY=dl
         params = { "limit": limit, "page": page, "timeframe[]": [yest_start, yest_end] }
         response = requests.get(url, params=params, auth=HTTPBasicAuth(MUX_API_ACCESS_TOKEN, MUX_API_SECRET_KEY))
         response.raise_for_status()
-        data = response.json()["data"]
-        if data == []:
+        if response.json()["data"] == []:
             break
-        for item in data:
-            yield item
-        page += 1
+        else:
+            yield response.json()["data"]
+            page += 1
