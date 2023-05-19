@@ -87,24 +87,21 @@ def test_load_sql_table_incremental(sql_source_db: SQLAlchemySourceDB, destinati
 @pytest.mark.parametrize("destination_name", ALL_DESTINATIONS)
 def test_load_mysql_data_load(destination_name: str) -> None:
     # reflect a database
-    # TODO: fix the mandatory password field in ConnectionStringCredentials
-    credentials = ConnectionStringCredentials()
-    credentials.parse_native_representation("mysql+pymysql://rfamro@mysql-rfam-public.ebi.ac.uk:4497/Rfam")
-    credentials.__is_resolved__ = True
+    credentials = ConnectionStringCredentials("mysql+pymysql://rfamro@mysql-rfam-public.ebi.ac.uk:4497/Rfam")
     database = sql_database(credentials)
     assert "family" in database.resources
 
     # load a single table
-    family_table = sql_table(credentials="mysql+pymysql://rfamro@mysql-rfam-public.ebi.ac.uk:4497/Rfam", table='family', write_disposition="merge")
+    family_table = sql_table(credentials="mysql+pymysql://rfamro@mysql-rfam-public.ebi.ac.uk:4497/Rfam", table='family')
 
     pipeline = make_pipeline(destination_name)
-    load_info = pipeline.run(family_table)
+    load_info = pipeline.run(family_table, write_disposition='merge')
     assert_load_info(load_info)
     counts_1 = load_table_counts(pipeline, "family")
 
     # load again also with merge
-    family_table = sql_table(credentials="mysql+pymysql://rfamro@mysql-rfam-public.ebi.ac.uk:4497/Rfam", table='family', write_disposition="merge")
-    load_info = pipeline.run(family_table)
+    family_table = sql_table(credentials="mysql+pymysql://rfamro@mysql-rfam-public.ebi.ac.uk:4497/Rfam", table='family')
+    load_info = pipeline.run(family_table, write_disposition='merge')
     assert_load_info(load_info)
     counts_2 = load_table_counts(pipeline, "family")
     # no duplicates

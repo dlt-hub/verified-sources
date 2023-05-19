@@ -22,7 +22,7 @@ def _extract_recents_data(data: Iterable[Dict[str, Any]]) -> List[Dict[str, Any]
 
     This returns a flat list of entities from an iterable of recent results
     """
-    return list(chain.from_iterable((list_wrapped(item['data']) for item in data)))
+    return [data_item for data_item in chain.from_iterable((list_wrapped(item['data']) for item in data)) if data_item is not None]
 
 
 def _get_recent_pages(entity: str, pipedrive_api_key: str, since_timestamp: str) -> Iterator[TDataPage]:
