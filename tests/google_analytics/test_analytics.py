@@ -12,7 +12,7 @@ QUERIES = [
     {"resource_name": "sample_analytics_data2", "dimensions": ["browser", "city"], "metrics": ["totalUsers"]}
 ]
 # dict containing the name of the tables expected in the db as keys and the number of rows expected as values
-ALL_TABLES = {"dimensions": 206, "metrics": 100, "sample_analytics_data1": 12, "sample_analytics_data2": 12}
+ALL_TABLES = {"dimensions": 207, "metrics": 100, "sample_analytics_data1": 12, "sample_analytics_data2": 12}
 INCREMENTAL_SAVED_KEYS = ["last_load_sample_analytics_data1", "last_load_sample_analytics_data2"]
 
 

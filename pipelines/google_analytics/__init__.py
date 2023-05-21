@@ -143,7 +143,7 @@ def get_metadata(client: Resource, property_id: int) -> Iterator[Metadata]:
     yield metadata
 
 
-@dlt.transformer(data_from=get_metadata, write_disposition="replace", name="metrics")   # type: ignore
+@dlt.transformer(data_from=get_metadata, write_disposition="replace", name="metrics")
 def metrics_table(metadata: Metadata) -> Iterator[TDataItem]:
     """
     Loads data for metrics
@@ -156,7 +156,7 @@ def metrics_table(metadata: Metadata) -> Iterator[TDataItem]:
         yield processed_metric
 
 
-@dlt.transformer(data_from=get_metadata, write_disposition="replace", name="dimensions")    # type: ignore
+@dlt.transformer(data_from=get_metadata, write_disposition="replace", name="dimensions")
 def dimensions_table(metadata: Metadata) -> Iterator[TDataItem]:
     """
     Loads data for dimensions
