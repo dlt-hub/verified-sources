@@ -1,57 +1,73 @@
-from unittest.mock import patch, Mock
 from pipelines.notion import notion_databases
-from pipelines.notion.client import NotionClient
-from pipelines.notion.database import NotionDatabase
 
+import dlt
 
-@patch.object(NotionDatabase, 'query')
-@patch('pipelines.notion.NotionClient')
-def test_notion_databases(mock_NotionClient, mock_query):
-    mock_client_instance = mock_NotionClient.return_value
-    mock_client_instance.search.return_value = [
-        {'id': '123', 'title': [{'plain_text': 'Test Database'}]}
-    ]
-    mock_query.return_value = [{'id': '123', 'name': 'Test Record'}]
+from tests.utils import assert_load_info, load_table_counts
 
-    databases = list(notion_databases(api_key='test_api_key'))
-
-    mock_NotionClient.assert_called_once_with('test_api_key')
-    mock_client_instance.search.assert_called_once_with(
-        filter_criteria={'value': 'database', 'property': 'object'}
-    )
-    mock_query.assert_called_once()
-
-    assert len(databases) == 1
-    assert databases[0] == {'id': '123', 'name': 'Test Record'}
-
-
-@patch.object(NotionDatabase, 'query')
-@patch('pipelines.notion.NotionClient')
-def test_notion_databases_with_database_ids(mock_NotionClient, mock_query):
-    mock_client_instance = mock_NotionClient.return_value
-    mock_query.return_value = [{'id': '123', 'name': 'Test Record'}]
-
-    databases = list(
-        notion_databases(
-            database_ids=[{'id': '123', 'use_name': 'Test Database'}],
-            api_key='test_api_key',
-        )
+def test_load_all_notion_databases():
+    pipeline = dlt.pipeline(
+        pipeline_name='notion',
+        destination='duckdb',
+        dataset_name='notion_data',
     )
 
-    mock_NotionClient.assert_called_once_with('test_api_key')
-    mock_client_instance.search.assert_not_called()
-    mock_query.assert_called_once()
+    info = pipeline.run(notion_databases())
+    assert_load_info(info)
 
-    assert len(databases) == 1
-    assert databases[0] == {'id': '123', 'name': 'Test Record'}
+    expected_tables = {
+        'sales_crm',
+        'sales_crm__properties__account_owner__people',
+        'sales_crm__properties__company__rich_text',
+        'sales_crm__properties__name__title',
+        'second_db',
+        'second_db__properties__name__title',
+        'second_db__properties__text_property__rich_text',
+        'second_db__properties__second_db_related__relation',
+        'second_db_items',
+        'second_db_items__properties__text_property__rich_text',
+        'second_db_items__properties__name__title',
+        'second_db_items__properties__second_db__relation'
+    }
+
+    loaded_tables = set(t["name"] for t in pipeline.default_schema.data_tables())
+
+    assert loaded_tables == expected_tables
+    assert all(c > 0 for c in load_table_counts(pipeline, *expected_tables).values())
 
 
-@patch.object(NotionDatabase, 'query')
-@patch('pipelines.notion.NotionClient')
-def test_notion_databases_no_databases(mock_NotionClient, mock_query):
-    mock_client_instance = mock_NotionClient.return_value
-    mock_client_instance.search.return_value = []
+def test_load_selected_notion_database():
+    sales_database = notion_databases(
+        database_ids=[{
+            'id': 'a94223535c674d33a24e313e7921ce15',
+            'use_name': 'new_name' # To test if use_name is used
+        }],
+    )
 
-    databases = list(notion_databases(api_key='test_api_key'))
+    pipeline = dlt.pipeline(
+        pipeline_name='notion',
+        destination='duckdb',
+        dataset_name='notion_data',
+    )
 
-    assert len(databases) == 0
+    info = pipeline.run(sales_database)
+    assert_load_info(info)
+
+    expected_table_names = {
+        'new_name',
+        'new_name__properties__name__title',
+        'new_name__properties__second_db_related__relation',
+        'new_name__properties__text_property__rich_text'
+    }
+
+    data_tables = pipeline.default_schema.data_tables()
+
+    loaded_table_names = set(t["name"] for t in data_tables)
+    assert loaded_table_names == expected_table_names
+    assert all(c > 0 for c in load_table_counts(pipeline, *expected_table_names).values())
+
+    new_name_table = next(t for t in data_tables if t["name"] == "new_name")
+
+    # Validate data types of columns
+    assert new_name_table["columns"]["created_time"]["data_type"] == "timestamp"
+    assert new_name_table["columns"]["properties__number_property__number"]["data_type"] == "bigint"
+    assert new_name_table["columns"]["properties__number_with_commas__number"]["data_type"] == "double"

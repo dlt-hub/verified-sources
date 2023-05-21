@@ -1,4 +1,4 @@
-from typing import Dict, Optional, Any
+from typing import Dict, Optional, Any, Iterator
 from .client import NotionClient
 
 
@@ -15,14 +15,14 @@ class NotionDatabase:
         self.database_id = database_id
         self.notion_client = notion_client
 
-    def get_structure(self) -> Dict[str, Any]:
+    def get_structure(self) -> Any:
         """Retrieves the structure of the database.
 
         Notion API Reference. Retrieve a database:
             https://developers.notion.com/reference/retrieve-a-database
 
         Returns:
-            Dict[str, Any]: The structure of the database.
+            Any: The structure of the database.
         """
         return self.notion_client.fetch_resource('databases', self.database_id)
 
@@ -33,7 +33,7 @@ class NotionDatabase:
         sorts: Optional[Dict[str, Any]] = None,
         start_cursor: Optional[str] = None,
         page_size: Optional[int] = None,
-    ) -> Dict[str, Any]:
+    ) -> Iterator[Dict[str, Any]]:
         """Queries the database for records.
 
         Notion API Reference. Query a database:

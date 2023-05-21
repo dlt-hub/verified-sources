@@ -40,6 +40,7 @@ def notion_databases(
         notion_database = NotionDatabase(database['id'], notion_client)
         yield dlt.resource(
             notion_database.query(),
+            primary_key="id",
             name=database['use_name'],
             write_disposition='replace',
         )

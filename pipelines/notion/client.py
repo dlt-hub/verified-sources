@@ -1,4 +1,4 @@
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Optional, Iterator
 from dlt.sources.helpers import requests
 
 
@@ -47,7 +47,7 @@ class NotionClient:
 
     def fetch_resource(
         self, resource: str, resource_id: str, subresource: Optional[str] = None
-    ) -> Dict[str, Any]:
+    ) -> Any:
         """Fetches a resource from the Notion API.
 
         Args:
@@ -56,7 +56,7 @@ class NotionClient:
             subresource (str, optional): The subresource to fetch. Defaults to None.
 
         Returns:
-            Dict[str, Any]: The resource from the Notion API.
+            Any: The resource from the Notion API.
         """
         url = self.get_endpoint(resource, resource_id, subresource)
         headers = self._create_headers()
@@ -71,7 +71,7 @@ class NotionClient:
         subresource: Optional[str] = None,
         query_params: Optional[Dict[str, Any]] = None,
         payload: Optional[Dict[str, Any]] = None,
-    ) -> Dict[str, Any]:
+    ) -> Any:
         """Sends a payload to the Notion API using the POST method.
 
         Args:
@@ -84,7 +84,7 @@ class NotionClient:
             payload (Dict[str, Any], optional): The payload to send. Defaults to None.
 
         Returns:
-            Dict[str, Any]: The response from the Notion API.
+            Any: The response from the Notion API.
 
         Raises:
             requests.HTTPError: If the response from the Notion API is not 200.
@@ -111,7 +111,7 @@ class NotionClient:
         sort: Optional[Dict[str, Any]] = None,
         start_cursor: Optional[str] = None,
         page_size: Optional[int] = None,
-    ) -> Dict[str, Any]:
+    ) -> Iterator[Dict[str, Any]]:
         """Searches all parent or child pages and databases that have been
         shared with an integration.
 
