@@ -1,22 +1,29 @@
 """Loads data from firebase realtime database"""
 
-from typing import Any, Iterator, List, Sequence
+from typing import Any, Iterator, Sequence, Union
+
+try:
+    from firebase_admin import credentials, db
+except ImportError:
+    raise MissingDependencyException("Firebase Admin Python SDK", ["firebase-admin"])
+
+try:
+    from apiclient.discovery import Resource
+except ImportError:
+    raise MissingDependencyException("Google API Client", ["google-api-python-client"])
 
 import dlt
 from dlt.extract.source import DltResource
 from dlt.common.typing import TDataItem
+from dlt.sources.credentials import GcpOAuthCredentials, GcpServiceAccountCredentials
 
-from firebase_admin import credentials, db
 
 
 @dlt.source(name="firebase")
 def firebase_source(
-    project_id: str =  dlt.secrets.value,
-    private_key_id: str =  dlt.secrets.value,
-    private_key: str = dlt.secrets.value,
-    client_email: str = dlt.secrets.value,
-    client_id: str = dlt.secrets.value,
-    database_url:  str = dlt.secrets.value
+    credentials: Union[GcpOAuthCredentials, GcpServiceAccountCredentials] = dlt.secrets.value,
+    database_url:  str = dlt.secrets.value,
+    path: str = "/"
 ) -> Sequence[DltResource]:
     
     def _get_data(credentials: Any, database_url: str) -> Iterator[TDataItem]:
@@ -47,7 +54,7 @@ def firebase_source(
         except ValueError:
             firebase_admin.get_app(name="[DEFAULT]")
 
-        ref = db.reference("/")
+        ref = db.reference(f"{path}")
         data = json.loads(ref.get())
 
         """Please adjust the loop part according to your firebase database json schema"""
@@ -59,22 +66,8 @@ def firebase_source(
                     "year": album["year"]
                 }
 
-
     # build credentials
-    client_email_split = client_email.split("@")
-    credentials_dict = {
-        "type": "service_account",
-        "project_id": project_id,
-        "private_key_id": private_key_id,
-        "private_key": private_key,
-        "client_email": client_email,
-        "client_id": client_id,
-        "auth_uri": "https://accounts.google.com/o/oauth2/auth",
-        "token_uri": "https://accounts.google.com/o/oauth2/token",
-        "auth_provider_x509_cert_url": "https://www.googleapis.com/oauth2/v1/certs",
-        "client_x509_cert_url": f"https://www.googleapis.com/robot/v1/metadata/x509/{client_email_split[0]}%40{client_email_split[1]}"
-    }
-    cred = credentials.Certificate(credentials_dict)
+    cred = credentials.Certificate(credentials)
 
     @dlt.resource(write_disposition="replace")
     def realtime_db(
