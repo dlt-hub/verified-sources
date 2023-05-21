@@ -1,4 +1,4 @@
-from typing import Dict, Optional, Any, Iterator
+from typing import List, Dict, Optional, Any, Iterator
 from .client import NotionClient
 
 
@@ -33,7 +33,7 @@ class NotionDatabase:
         sorts: Optional[Dict[str, Any]] = None,
         start_cursor: Optional[str] = None,
         page_size: Optional[int] = None,
-    ) -> Iterator[Dict[str, Any]]:
+    ) -> Iterator[List[Dict[str, Any]]]:
         """Queries the database for records.
 
         Notion API Reference. Query a database:
@@ -52,7 +52,7 @@ class NotionDatabase:
                 Defaults to None.
 
         Yields:
-            Dict[str, Any]: A record from the database.
+            List[Dict[str, Any]]: A record from the database.
         """
         payload = {
             'filter': filter_criteria,
@@ -72,8 +72,7 @@ class NotionDatabase:
                 payload=payload,
             )
 
-            for result in response.get('results', []):
-                yield result
+            yield response.get('results', [])
 
             has_more = response.get('has_more')
             start_cursor = response.get('next_cursor')
