@@ -1,13 +1,17 @@
+import pytest
+
 from pipelines.notion import notion_databases
 
 import dlt
 
-from tests.utils import assert_load_info, load_table_counts
+from tests.utils import ALL_DESTINATIONS, assert_load_info, load_table_counts
 
-def test_load_all_notion_databases():
+
+@pytest.mark.parametrize('destination_name', ALL_DESTINATIONS)
+def test_load_all_notion_databases(destination_name: str):
     pipeline = dlt.pipeline(
         pipeline_name='notion',
-        destination='duckdb',
+        destination=destination_name,
         dataset_name='notion_data',
     )
 
@@ -35,7 +39,8 @@ def test_load_all_notion_databases():
     assert all(c > 0 for c in load_table_counts(pipeline, *expected_tables).values())
 
 
-def test_load_selected_notion_database():
+@pytest.mark.parametrize('destination_name', ALL_DESTINATIONS)
+def test_load_selected_notion_database(destination_name: str):
     sales_database = notion_databases(
         database_ids=[{
             'id': 'a94223535c674d33a24e313e7921ce15',
@@ -45,7 +50,7 @@ def test_load_selected_notion_database():
 
     pipeline = dlt.pipeline(
         pipeline_name='notion',
-        destination='duckdb',
+        destination=destination_name,
         dataset_name='notion_data',
     )
 
