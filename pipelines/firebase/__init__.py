@@ -26,55 +26,32 @@ except ImportError:
 def firebase_source(
     firebase_credentials: Union[GcpOAuthCredentials, GcpServiceAccountCredentials] = dlt.secrets.value,
     database_url:  str = dlt.secrets.value,
-    path: str = "/"
+    path: str = "/",
+    app_name: str = "[DEFAULT]"
 ) -> Sequence[DltResource]:
     
     def _get_data(credentials: Any, database_url: str) -> Iterator[TDataItem]:
-        """
-        Note: For this pipeline, we use a mock json template such below,
-        your firebase realtime data likely different:
-        {
-            "discography": [
-                {
-                    "albums": [
-                        {
-                            "album_name": str,
-                            "year": int
-                        }
-                    ],
-                    "band_name": str
-                }
-            ]
-        }
-        """
-
-        # initialize app
         try:
+            # if there is no app created yet, create an app and choose the database
             firebase_admin.initialize_app(
                 credentials, 
                 {"databaseUrl": database_url}
             )
         except ValueError:
-            firebase_admin.get_app(name="[DEFAULT]")
+            # choose already created app 
+            firebase_admin.get_app(name=f"{app_name}")
 
         ref = db.reference(f"{path}")
         data = json.loads(ref.get())
 
-        """Please adjust the loop part according to your firebase database json schema"""
-        for item in data["discography"]:
-            for album in item["albums"]:
-                yield {
-                    "band_name": item["band_name"],
-                    "album": album["album_name"],
-                    "year": album["year"]
-                }
+        yield data
 
     # build credentials
-    credentials = credentials.Certificate(firebase_credentials.to_native_representation)
+    app_credentials = credentials.Certificate(firebase_credentials.to_native_representation)
 
     @dlt.resource(write_disposition="replace")
     def realtime_db(
         database_url: database_url,
-        credentials: Any = cred
+        credentials: Any = app_credentials
     ) -> Iterator[TDataItem]:
-        yield _get_data(database_url, credentials=credentials)
+        yield _get_data(database_url)
