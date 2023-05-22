@@ -162,10 +162,13 @@ def create_state(pipedrive_api_key: str) -> Iterator[Dict[str, Any]]:
     yield custom_fields_mapping
 
 
-@dlt.transformer(name='custom_fields_mapping', write_disposition='replace')
+@dlt.transformer(name='custom_fields_mapping', write_disposition='replace', columns={"options": {"data_type": "complex"}})
 def parsed_mapping(custom_fields_mapping: Dict[str, Any]) -> Optional[Iterator[List[Dict[str, str]]]]:
     """
     Parses and yields custom fields' mapping in order to be stored in destiny by dlt
     """
     for endpoint, data_item_mapping in custom_fields_mapping.items():
-        yield [{'endpoint': endpoint, 'hash_string': hash_string, 'name': names['name'], 'normalized_name': names['normalized_name']} for hash_string, names in data_item_mapping.items()]
+        yield [{
+            'endpoint': endpoint, 'hash_string': hash_string, 'name': names['name'],
+            'normalized_name': names['normalized_name'], 'options': names['options'], 'field_type': names['field_type']
+        } for hash_string, names in data_item_mapping.items()]

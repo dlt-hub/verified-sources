@@ -7,7 +7,7 @@ from pipelines.asana_dlt import asana_source
 
 @pytest.mark.parametrize('destination_name', ALL_DESTINATIONS)
 def test_all_resources(destination_name: str) -> None:
-    pipeline = dlt.pipeline(pipeline_name='hubspot', destination=destination_name, dataset_name='asana_data', full_refresh=True)
+    pipeline = dlt.pipeline(pipeline_name='asana', destination=destination_name, dataset_name='asana_data', full_refresh=True)
     load_info = pipeline.run(asana_source())
     print(load_info)
     assert_load_info(load_info)
@@ -28,3 +28,8 @@ def test_all_resources(destination_name: str) -> None:
     assert table_counts['stories'] == 13
     assert table_counts['teams'] == 1
     assert table_counts['users'] == 4
+
+    # load tasks incrementally
+    load_info = pipeline.run(asana_source().with_resources("tasks"))
+    # no data loaded
+    assert_load_info(load_info, 0)

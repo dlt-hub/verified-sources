@@ -24,7 +24,7 @@ use case description is not only targeted at the developers but also by people c
 
 # Sources / Resources / Endpoints
 Define pipeline interface to the user in terms of sources and resources.
-- enumerate all the sources with information form which endpoints the data comes from
+- enumerate all the sources with information from which endpoints the data comes from
 - ideally provide the config arguments to each source (ie. start dates, report ranges etc.)
 - you can use pseudocode to show how you intend to use the source
 - provide the default write disposition for resources in the source (all append, all replace?)

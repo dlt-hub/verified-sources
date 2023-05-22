@@ -133,7 +133,7 @@ def get_last_visits(
         yield page
 
 
-@dlt.transformer(data_from=get_last_visits, write_disposition="merge", name="visitors", primary_key="visitorId")    # type: ignore
+@dlt.transformer(data_from=get_last_visits, write_disposition="merge", name="visitors", primary_key="visitorId")
 def get_unique_visitors(visits: List[DictStrAny], client: MatomoAPIClient, site_id: int) -> Iterator[TDataItem]:
     """
     Dlt transformer. Receives information about visits from get_last_visits

@@ -82,7 +82,7 @@ def github_repo_events(
                 print(f"Overlap with previous run created at {last_created_at.initial_value}")
                 break
 
-    return repo_events  # type: ignore
+    return repo_events
 
 
 def _get_reactions_data(
