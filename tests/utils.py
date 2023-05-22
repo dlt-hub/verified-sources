@@ -144,7 +144,7 @@ def assert_load_info(info: LoadInfo, expected_load_packages: int = 1) -> None:
 
 def load_table_counts(p: dlt.Pipeline, *table_names: str) -> DictStrAny:
     """Returns row counts for `table_names` as dict"""
-    query = "\nUNION ALL\n".join([f"SELECT '{name}' as name, COUNT(1) as c FROM {name}" for name in table_names])
+    query = "\nUNION ALL\n".join([f"SELECT '{name}' as name, COUNT(1) as c FROM '{name}'" for name in table_names])
     with p.sql_client() as c:
         with c.execute_query(query) as cur:
             rows = list(cur.fetchall())

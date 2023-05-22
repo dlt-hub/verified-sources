@@ -1,5 +1,5 @@
 import typing as t
-from datetime import datetime
+from pendulum import datetime
 
 import dlt
 from simple_salesforce import Salesforce
@@ -12,37 +12,6 @@ def is_production() -> bool:
     add a LIMIT 100 clause to the queries.
     """
     return True
-
-
-def load_contract(name: str) -> t.List[str]:
-    """Load an ingest contract from the contracts directory.
-
-    The contract is a list of fields, one per line. Lines starting with
-    a hash are ignored. The contract can be used to generate the list of
-    fields to extract from the Salesforce API. A contract might look like:
-
-    # This is a comment
-    Id
-    Name
-    Email
-    Phone
-    # Traverse the Account relationship
-    Account.Name
-    # Grab some custom fields
-    Custom_Field__c
-    Another_Custom_Field__c
-
-    These contracts are designed to be human-readable and easy to edit by non-technical
-    stakeholders. This function exists as an example of how you might manage contracts.
-    Ultimately, a field list, can be passed to the resource factory function.
-    """
-    with open(f"contracts/ingest/{name}") as f:
-        return [
-            spec.split("#")[0].strip()
-            for spec in f.read().splitlines()
-            if spec.strip() and not spec.strip().startswith("#")
-        ]
-
 
 def get_records(
     sf: Salesforce,
