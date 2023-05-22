@@ -153,7 +153,7 @@ def salesforce_source(
     # https://developer.salesforce.com/docs/atlas.en-us.object_reference.meta/object_reference/sforce_api_objects_list.htm
     # See the `sobject_factory` function docstring for info on the arguments
     return (
-        sobject_factory(name="user", sobject="User", client=client, deferrable=True),
+        sobject_factory(name="sf_user", sobject="User", client=client, deferrable=True),
         sobject_factory(
             name="user_role", sobject="UserRole", client=client, deferrable=True
         ),

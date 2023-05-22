@@ -6,7 +6,7 @@ from pipelines.salesforce import salesforce_source
 @pytest.mark.parametrize('destination_name', ALL_DESTINATIONS)
 def test_all_resources(destination_name: str) -> None:
 
-    expected_tables = ['account', 'campaign', 'contact', 'lead', 'opportunity', 'pricebook_2', 'pricebook_entry', 'product_2', 'user', 'user_role']
+    expected_tables = ['account', 'campaign', 'contact', 'lead', 'opportunity', 'pricebook_2', 'pricebook_entry', 'product_2', 'sf_user', 'user_role']
 
     pipeline = dlt.pipeline(
         pipeline_name="salesforce", destination=destination_name, dataset_name="salesforce_data",
@@ -35,6 +35,6 @@ def test_all_resources(destination_name: str) -> None:
     assert table_counts['pricebook_2'] == 2
     assert table_counts['pricebook_entry'] == 34
     assert table_counts['product_2'] == 17
-    assert table_counts['user'] == 7
+    assert table_counts['sf_user'] == 7
     assert table_counts['user_role'] == 18
 
