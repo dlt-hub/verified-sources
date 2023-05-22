@@ -8,7 +8,8 @@ To get the security token: https://onlinehelp.coveo.com/en/ces/7.0/administrator
 """
 
 import typing as t
-from pendulum import datetime
+import pendulum
+
 
 import dlt
 from simple_salesforce import Salesforce
@@ -73,7 +74,7 @@ def get_records(
             for field in date_fields:
                 # Convert Salesforce timestamps to ISO 8601
                 if record.get(field):
-                    record[field] = datetime.utcfromtimestamp(
+                    record[field] = pendulum.from_timestamp(
                         record[field] / 1000,
                     ).strftime("%Y-%m-%dT%H:%M:%S.%fZ")
         yield page
