@@ -142,7 +142,7 @@ def sobject_factory(
 
 @dlt.source(name="salesforce")
 def salesforce_source(
-    username: str = dlt.config.value,
+    username: str = dlt.secrets.value,
     password: str = dlt.secrets.value,
     security_token: str = dlt.secrets.value,
 ):
