@@ -1,3 +1,12 @@
+"""Pipeline for Salesforce depending on the simple_salesforce python package.
+
+Imported resources are: account, campaign, contact, lead, opportunity, pricebook_2, pricebook_entry, product_2, user and user_role
+
+Salesforce api docs: https://developer.salesforce.com/docs/apis
+
+To get the security token: https://onlinehelp.coveo.com/en/ces/7.0/administrator/getting_the_security_token_for_your_salesforce_account.htm
+"""
+
 import typing as t
 from pendulum import datetime
 

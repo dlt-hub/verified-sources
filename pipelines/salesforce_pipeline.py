@@ -4,11 +4,11 @@ import dlt
 from salesforce import salesforce_source
 
 
-def load(destination: str) -> None:
+def load() -> None:
     """Execute a pipeline from Salesforce."""
 
     pipeline = dlt.pipeline(
-        pipeline_name="salesforce", destination=destination, dataset_name="salesforce_data"
+        pipeline_name="salesforce", destination='duckdb', dataset_name="salesforce_data"
     )
     source = salesforce_source()
 
@@ -23,4 +23,4 @@ def load(destination: str) -> None:
 
 
 if __name__ == "__main__":
-    load(destination="duckdb")
+    load()
