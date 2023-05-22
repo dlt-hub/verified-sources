@@ -10,6 +10,7 @@ packages = [{include = "pipelines"}]
 [tool.poetry.dependencies]
 python = "^3.8.1"
 dlt = {version = "^0.2.7", extras = ["redshift", "bigquery", "postgres", "duckdb"]}
+simple-salesforce = "^1.12.4"
 
 [tool.poetry.group.dev.dependencies]
 mypy = "^0.991"
@@ -28,14 +29,11 @@ requests-mock = "^1.10.0"
 sqlalchemy = ">=1.4"
 pymysql = "^1.0.3"
 
-
 [tool.poetry.group.google_sheets.dependencies]
 google-api-python-client = "^2.78.0"
 
-
 [tool.poetry.group.zenpy.dependencies]
 zenpy = "^2.0.25"
-
 
 [tool.poetry.group.google_analytics.dependencies]
 google-analytics-data = "^0.16.2"
@@ -55,6 +53,9 @@ shopifyapi = "^12.3.0"
 
 [tool.poetry.group.facebook_ads.dependencies]
 facebook-business = "^16.0.2"
+
+[tool.poetry.group.salesforce.dependencies]
+simple-salesforce = "^1.12.4"
 
 [build-system]
 requires = ["poetry-core"]
