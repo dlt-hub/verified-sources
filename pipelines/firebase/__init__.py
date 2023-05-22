@@ -2,6 +2,15 @@
 
 from typing import Any, Iterator, Sequence, Union
 
+import duckdb
+import pandas as pd
+
+import dlt
+from dlt.extract.source import DltResource
+from dlt.common.typing import TDataItem
+from dlt.sources.credentials import GcpOAuthCredentials, GcpServiceAccountCredentials
+from dlt.common.exceptions import MissingDependencyException
+
 try:
     from firebase_admin import credentials, db
 except ImportError:
@@ -12,16 +21,10 @@ try:
 except ImportError:
     raise MissingDependencyException("Google API Client", ["google-api-python-client"])
 
-import dlt
-from dlt.extract.source import DltResource
-from dlt.common.typing import TDataItem
-from dlt.sources.credentials import GcpOAuthCredentials, GcpServiceAccountCredentials
-
-
 
 @dlt.source(name="firebase")
 def firebase_source(
-    credentials: Union[GcpOAuthCredentials, GcpServiceAccountCredentials] = dlt.secrets.value,
+    firebase_credentials: Union[GcpOAuthCredentials, GcpServiceAccountCredentials] = dlt.secrets.value,
     database_url:  str = dlt.secrets.value,
     path: str = "/"
 ) -> Sequence[DltResource]:
@@ -67,7 +70,7 @@ def firebase_source(
                 }
 
     # build credentials
-    cred = credentials.Certificate(credentials)
+    credentials = credentials.Certificate(firebase_credentials.to_native_representation)
 
     @dlt.resource(write_disposition="replace")
     def realtime_db(
