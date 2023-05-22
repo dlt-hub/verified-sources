@@ -1,8 +1,8 @@
 import dlt
 from placesapi import places_api_source
-from collections import namedtuple
 
-def load_text_search_places_info(query: str, radius: int = None, location: namedtuple('Coordinates',['lat','long']) = None):
+
+def load_text_search_places_info(query: str, radius: int = None, location: str = None):
     """
     Constructs the pipeline that loads location information for specified search.
 

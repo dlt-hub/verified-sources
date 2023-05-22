@@ -5,11 +5,10 @@
 import dlt
 from dlt.sources.helpers import requests
 from dlt.extract.source import DltResource
-from collections import namedtuple
 
 
 @dlt.source
-def places_api_source(query: str, radius: int = None, location: namedtuple('Coordinates',['lat','long']) = None, api_secret_key = dlt.secrets.value) -> DltResource:
+def places_api_source(query: str, radius: int = None, location: str = None, api_secret_key = dlt.secrets.value) -> DltResource:
     """
     The main source for dlt pipeline returns the text_search_resource.
 
@@ -27,7 +26,7 @@ def places_api_source(query: str, radius: int = None, location: namedtuple('Coor
 
 
 @dlt.resource(write_disposition="append")
-def text_search(query: str, radius: int = None, location: namedtuple('Coordinates',['lat','long']) = None, api_secret_key = dlt.secrets.value):
+def text_search(query: str, radius: int = None, location: str = None, api_secret_key = dlt.secrets.value):
     """
     Creates a text search resource. A Text Search returns information about a set of places based on a text string provided.
 
@@ -69,7 +68,7 @@ def _get_places_info(results, api_secret_key=dlt.secrets.value):
     # Place Detail Endpoint
     place_info_url = "https://maps.googleapis.com/maps/api/place/details/json"
 
-    for ids in list(results):
+    for ids in results:
         payload = {
         'place_id' : ids['place_id'],
         'key': api_secret_key
