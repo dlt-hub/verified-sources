@@ -1,4 +1,8 @@
 ### Global & dlt components
+# progress="log"
+# [data_writer]
+# buffer_max_items=100
+
 [runtime]
 log_level="WARNING"
 
@@ -9,6 +13,7 @@ log_level="WARNING"
 ### Sources
 
 ## chess
+dlthub_telemetry = false
 
 [sources.chess.extract]
 max_parallel_items = 5
@@ -46,6 +51,10 @@ spreadsheet_identifier = "https://docs.google.com/spreadsheets/d/1HhWHjqouQnnCIZ
 [sources.shopify_dlt]
 shop_url="https://dlthub-test.myshopify.com"
 api_version="2023-01"
+
+[sources.facebook_ads]
+account_id="10150974068878324"
+access_token_expires_at=1688821881
 
 [sources.workable]
 subdomain="dlthub-test"

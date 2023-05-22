@@ -64,7 +64,7 @@ def workable_source(
     Retrieves data from the Workable API for the specified endpoints (DEFAULT_ENDPOINTS + 'candidates').
     For almost all endpoints, Workable API responses do not provide keys "updated_at",
     so in most cases we are forced to load the date in 'replace' mode.
-    'Сandidates' are the only endpoints that have a key 'updated_at', which means that we can update the data incrementally.
+    'Candidates' are the only endpoints that have a key 'updated_at', which means that we can update the data incrementally.
 
     Resources that depend on another resource are implemented as transformers,
     so they can re-use the original resource data without re-downloading.
@@ -114,7 +114,7 @@ def workable_source(
             endpoint="candidates", params={"updated_after": updated_at.last_value}
         )
 
-    yield candidates_resource # type: ignore
+    yield candidates_resource
 
     if load_details:
 
@@ -147,4 +147,4 @@ def workable_source(
                 name=f"candidates_{sub_endpoint}", write_disposition="merge"
             )(_get_details)(
                 "candidates", sub_endpoint, "id"
-            )  # type: ignore
+            )
