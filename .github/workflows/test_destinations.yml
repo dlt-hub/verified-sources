@@ -24,7 +24,7 @@ jobs:
     needs: get_changed_pipelines
     if: needs.get_changed_pipelines.outputs.pipelines_list != ''
     strategy:
-      max-parallel: 2
+      max-parallel: 1 
       fail-fast: false
       matrix:
         os: ["ubuntu-latest", "macos-latest", "windows-latest"]

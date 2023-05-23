@@ -7,10 +7,10 @@ Salesforce api docs: https://developer.salesforce.com/docs/apis
 To get the security token: https://onlinehelp.coveo.com/en/ces/7.0/administrator/getting_the_security_token_for_your_salesforce_account.htm
 """
 
-import typing as t
 import pendulum
+from dlt.extract.source import DltResource, Incremental
 
-from typing import Any, Dict, Iterator, Iterator, Optional
+from typing import Any, Dict, Iterator, Iterator, Optional, Dict, Optional, Iterable
 
 import dlt
 from simple_salesforce import Salesforce
@@ -27,9 +27,9 @@ def is_production() -> bool:
 def get_records(
     sf: Salesforce,
     sobject: str,
-    last_state: t.Optional[dict] = None,
-    replication_key: t.Optional[str] = None,
-) -> t.Iterable[dict]:
+    last_state:Optional[str] = None,
+    replication_key:Optional[str] = None,
+) -> Iterable[Dict[str, Any]]:
 
     # Get all fields for the sobject
     desc = getattr(sf, sobject).describe()
@@ -75,7 +75,7 @@ def salesforce_source(
     username: str = dlt.secrets.value,
     password: str = dlt.secrets.value,
     security_token: str = dlt.secrets.value,
-):
+) ->Iterable[DltResource]:
     client = Salesforce(username, password, security_token)
 
     # define resources
@@ -88,19 +88,19 @@ def salesforce_source(
         yield from get_records(client, "UserRole")
 
     @dlt.resource(write_disposition="merge")
-    def opportunity(last_timestamp = dlt.sources.incremental("SystemModstamp", initial_value=None)) -> Iterator[Dict[str, Any]]:
+    def opportunity(last_timestamp: Incremental[str] = dlt.sources.incremental("SystemModstamp", initial_value=None)) -> Iterator[Dict[str, Any]]:
         yield from get_records(client, "Opportunity", last_timestamp.last_value, "SystemModstamp")
 
     @dlt.resource(write_disposition="merge")
-    def opportunity_line_item(last_timestamp = dlt.sources.incremental("SystemModstamp", initial_value=None)) -> Iterator[Dict[str, Any]]:
+    def opportunity_line_item(last_timestamp: Incremental[str] = dlt.sources.incremental("SystemModstamp", initial_value=None)) -> Iterator[Dict[str, Any]]:
         yield from get_records(client, "OpportunityLineItem", last_timestamp.last_value, "SystemModstamp")
 
     @dlt.resource(write_disposition="merge")
-    def opportunity_contact_role(last_timestamp = dlt.sources.incremental("SystemModstamp", initial_value=None)) -> Iterator[Dict[str, Any]]:
+    def opportunity_contact_role(last_timestamp: Incremental[str] = dlt.sources.incremental("SystemModstamp", initial_value=None)) -> Iterator[Dict[str, Any]]:
         yield from get_records(client, "OpportunityContactRole", last_timestamp.last_value, "SystemModstamp")
 
     @dlt.resource(write_disposition="merge")
-    def account(last_timestamp = dlt.sources.incremental("LastModifiedDate", initial_value=None)) -> Iterator[Dict[str, Any]]:
+    def account(last_timestamp: Incremental[str] = dlt.sources.incremental("LastModifiedDate", initial_value=None)) -> Iterator[Dict[str, Any]]:
         yield from get_records(client, "Account", last_timestamp.last_value, "LastModifiedDate")
 
     @dlt.resource(write_disposition="replace")
@@ -116,7 +116,7 @@ def salesforce_source(
         yield from get_records(client, "Campaign")
 
     @dlt.resource(write_disposition="merge")
-    def campaign_member(last_timestamp = dlt.sources.incremental("SystemModstamp", initial_value=None)) -> Iterator[Dict[str, Any]]:
+    def campaign_member(last_timestamp: Incremental[str] = dlt.sources.incremental("SystemModstamp", initial_value=None)) -> Iterator[Dict[str, Any]]:
         yield from get_records(client, "CampaignMember", last_timestamp.last_value, "SystemModstamp")
 
     @dlt.resource(write_disposition="replace")
@@ -132,11 +132,11 @@ def salesforce_source(
         yield from get_records(client, "PricebookEntry")
 
     @dlt.resource(write_disposition="merge")
-    def task(last_timestamp = dlt.sources.incremental("SystemModstamp", initial_value=None)) -> Iterator[Dict[str, Any]]:
+    def task(last_timestamp: Incremental[str] = dlt.sources.incremental("SystemModstamp", initial_value=None)) -> Iterator[Dict[str, Any]]:
         yield from get_records(client, "Task", last_timestamp.last_value, "SystemModstamp")
 
     @dlt.resource(write_disposition="merge")
-    def event(last_timestamp = dlt.sources.incremental("SystemModstamp", initial_value=None)) -> Iterator[Dict[str, Any]]:
+    def event(last_timestamp: Incremental[str] = dlt.sources.incremental("SystemModstamp", initial_value=None)) -> Iterator[Dict[str, Any]]:
         yield from get_records(client, "Event", last_timestamp.last_value, "SystemModstamp")
 
     return (sf_user, user_role, opportunity,opportunity_line_item, opportunity_contact_role, account, contact, lead, campaign, campaign_member, product_2, pricebook_2,pricebook_entry, task, event)
