@@ -10,13 +10,8 @@ def load() -> None:
     pipeline = dlt.pipeline(
         pipeline_name="salesforce", destination='duckdb', dataset_name="salesforce_data"
     )
-    source = salesforce_source()
-
-    # Add schema hints as needed...
-    source.schema.merge_hints({"not_null": ["id"]})
-
     # Execute the pipeline
-    load_info = pipeline.run(source)
+    load_info = pipeline.run(salesforce_source())
 
     # Print the load info
     print(load_info)
