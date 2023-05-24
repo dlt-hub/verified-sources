@@ -26,35 +26,7 @@ ALL_DESTINATIONS = dlt.config.get("ALL_DESTINATIONS", list) or ["bigquery", "red
 def drop_pipeline() -> Iterator[None]:
     """Drops all the datasets for the pipeline created in the test. Does not drop the working dir - see new_test_storage"""
     yield
-    if Container()[PipelineContext].is_active():
-        # take existing pipeline
-        p = dlt.pipeline()
-
-        def _drop_dataset(schema_name: str) -> None:
-            try:
-                with p.sql_client(schema_name) as c:
-                    try:
-                        c.drop_dataset()
-                        # print("dropped")
-                    except Exception as exc:
-                        print(exc)
-            except SqlClientNotAvailable:
-                pass
-
-        # take all schemas and if destination was set
-        if p.destination:
-            if p.config.use_single_dataset:
-                # drop just the dataset for default schema
-                if p.default_schema_name:
-                    _drop_dataset(p.default_schema_name)
-            else:
-                # for each schema, drop the dataset
-                for schema_name in p.schema_names:
-                    _drop_dataset(schema_name)
-        p._wipe_working_folder()
-        # deactivate context
-        Container()[PipelineContext].deactivate()
-
+    drop_active_pipeline_data()
 
 @pytest.fixture(autouse=True, scope="session")
 def test_config_providers() -> Iterator[ConfigProvidersContext]:
@@ -98,6 +70,38 @@ def preserve_environ() -> None:
     yield
     environ.clear()
     environ.update(saved_environ)
+
+
+def drop_active_pipeline_data() -> None:
+    """Drops all the datasets for currently active pipeline and then deactivated it. Does not drop the working dir - see new_test_storage"""
+    if Container()[PipelineContext].is_active():
+        # take existing pipeline
+        p = dlt.pipeline()
+
+        def _drop_dataset(schema_name: str) -> None:
+            try:
+                with p.sql_client(schema_name) as c:
+                    try:
+                        c.drop_dataset()
+                        # print("dropped")
+                    except Exception as exc:
+                        print(exc)
+            except SqlClientNotAvailable:
+                pass
+
+        # take all schemas and if destination was set
+        if p.destination:
+            if p.config.use_single_dataset:
+                # drop just the dataset for default schema
+                if p.default_schema_name:
+                    _drop_dataset(p.default_schema_name)
+            else:
+                # for each schema, drop the dataset
+                for schema_name in p.schema_names:
+                    _drop_dataset(schema_name)
+        # p._wipe_working_folder()
+        # deactivate context
+        Container()[PipelineContext].deactivate()
 
 
 def clean_test_storage(init_normalize: bool = False, init_loader: bool = False, mode: str = "t") -> FileStorage:
