@@ -72,11 +72,11 @@ def get_records(
 
 @dlt.source(name="salesforce")
 def salesforce_source(
-    username: str = dlt.secrets.value,
+    user_name: str = dlt.secrets.value,
     password: str = dlt.secrets.value,
     security_token: str = dlt.secrets.value,
 ) ->Iterable[DltResource]:
-    client = Salesforce(username, password, security_token)
+    client = Salesforce(user_name, password, security_token)
 
     # define resources
     @dlt.resource(write_disposition="replace")
