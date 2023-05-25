@@ -9,7 +9,7 @@ def test_all_resources(destination_name: str) -> None:
     expected_tables = ['account', 'campaign', 'contact', 'lead', 'opportunity', 'pricebook_2', 'pricebook_entry', 'product_2', 'sf_user', 'user_role']
 
     pipeline = dlt.pipeline(
-        pipeline_name="salesforce", destination=destination_name, dataset_name="salesforce_data",
+        pipeline_name="salesforce", destination=destination_name, dataset_name="salesforce_data", full_refresh=True
     )
     source = salesforce_source()
 
@@ -19,9 +19,6 @@ def test_all_resources(destination_name: str) -> None:
 
     table_names = [t["name"] for t in pipeline.default_schema.data_tables()]
     table_counts = load_table_counts(pipeline, *table_names)
-
-
-    print(set(table_counts.keys()))
 
     assert set(table_counts.keys()) >= set(expected_tables)
     assert table_counts['sf_user'] == 7
