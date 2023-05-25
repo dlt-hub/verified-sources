@@ -6,6 +6,10 @@
 # -- Project information -----------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#project-information
 
+# the following to lines make sure that the pipelines folder is the root
+import sys, os
+sys.path.insert(0, os.path.abspath(os.path.join('..', '..', 'pipelines')))
+
 project = 'pipelines'
 copyright = '2023, dlthub'
 author = 'dlthub'
@@ -26,3 +30,4 @@ exclude_patterns = []
 html_theme = 'furo'
 html_static_path = ['_static']
 extensions = ['sphinx.ext.autodoc']
+extensions = ['sphinx.ext.napoleon']
