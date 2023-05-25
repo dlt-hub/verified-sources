@@ -38,6 +38,12 @@ def drop_pipeline() -> Iterator[None]:
                         # print("dropped")
                     except Exception as exc:
                         print(exc)
+                    with c.with_staging_dataset(staging=True):
+                        try:
+                            c.drop_dataset()
+                            # print("dropped")
+                        except Exception as exc:
+                            print(exc)
             except SqlClientNotAvailable:
                 pass
 
