@@ -5,7 +5,7 @@ from dlt.pipeline.pipeline import Pipeline
 from pipelines.zendesk import zendesk_chat, zendesk_support, zendesk_talk
 from pipelines.zendesk.helpers.api_helpers import _make_json_serializable, process_ticket, process_ticket_field
 from zenpy.lib.api_objects import Ticket, TicketField, CustomFieldOption
-from tests.utils import ALL_DESTINATIONS, assert_load_info, load_table_counts, assert_query_data
+from tests.utils import ALL_DESTINATIONS, assert_load_info, load_table_counts, assert_query_data, drop_active_pipeline_data
 
 # TODO: several endpoints are not returning data from test account. tables for those endpoints will not be created
 # list expected tables and the number of columns they are supposed to have
@@ -35,6 +35,9 @@ def test_pivoting_tickets(destination_name: str) -> None:
     unpivoted_tickets = schema.data_tables()[1]["columns"].keys()
     assert "custom_fields" in unpivoted_tickets
     assert "test_field" not in unpivoted_tickets
+    # drop the pipeline explicitly. fixture drops only one active pipeline
+    # TODO: fix the drop_pipeline fixture to drop all pipelines created during test
+    drop_active_pipeline_data()
 
     # run pipeline with pivoting - get columns of tickets and check that it has the expected columns
     pipeline_pivoting_2 = dlt.pipeline(destination=destination_name, full_refresh=True, dataset_name="test_pivot_tickets_support")
