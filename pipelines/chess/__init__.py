@@ -61,8 +61,15 @@ def players_profiles(players: List[str]) -> Iterator[TDataItem]:
 
 @dlt.resource(write_disposition="replace", selected=False)
 def players_archives(players: List[str]) -> Iterator[List[TDataItem]]:
-    """Yields url to game archives for specified players."""
+    """
+    This function yields URLs to game archives for specified players.
 
+    Args:
+        players (List[str]): A list of players for whom the game archives' URLs will be yielded.
+
+    Yields:
+        Iterator[List[TDataItem]]: An iterator that returns lists of game archives' data items for each player.
+    """
     for username in players:
         data = _get_path_with_retry(f"player/{username}/games/archives")
         yield data.get("archives", [])
