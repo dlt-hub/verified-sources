@@ -1,11 +1,14 @@
-from typing import Dict, List, Union
+"""
+Preliminary implementation of Google Ads pipeline.
+"""
+
+from typing import List, Union
 import dlt
-from dlt.common.configuration.specs import GcpClientCredentialsWithDefault
-from pipelines.google_analytics.helpers.credentials import GoogleAnalyticsCredentialsOAuth
+import tempfile
 from dlt.common.exceptions import MissingDependencyException
-from dlt.common.typing import DictStrAny, DictStrStr, TDataItem
-from dlt.common.pendulum import pendulum
-from pipelines.google_ads.helpers.data_processing import process_dimension, process_report, process_query
+from dlt.sources.credentials import GcpOAuthCredentials, GcpServiceAccountCredentials
+import json
+from pipelines.google_ads.helpers.data_processing import to_dict
 try:
     from google.ads.googleads.client import GoogleAdsClient
 except ImportError:
@@ -17,50 +20,35 @@ except ImportError:
 
 
 DIMENSION_TABLES = ["accounts", "ad_group", "ad_group_ad", "ad_group_ad_label", "ad_group_label", "campaign_label", "click_view", "customer", "keyword_view", "geographic_view"]
-REPORT_TABLES = []
 
 
-@dlt.source(max_table_nesting=2)
-def google_ads_query(credentials: Union[GoogleAnalyticsCredentialsOAuth, GcpClientCredentialsWithDefault] = dlt.secrets.value,
-                     dev_token: str = dlt.secrets.value,
-                     query_list: List[DictStrAny] = dlt.config.value):
-    """
-    This source reads custom queries from the API.
-    :param credentials:
-    :param dev_token:
-    :param query_list:
-    :return:
-    """
-
+def get_client(credentials: Union[GcpOAuthCredentials, GcpServiceAccountCredentials], dev_token: str,impersonated_email:str) -> GoogleAdsClient:
     # generate access token for credentials if we are using OAuth2.0
-    if isinstance(credentials, GoogleAnalyticsCredentialsOAuth):
-        credentials.auth("https://www.googleapis.com/auth/analytics.readonly")
+    if isinstance(credentials, GcpOAuthCredentials):
+        credentials.auth("https://www.googleapis.com/auth/adwords.readonly")
         credentials = {
             "developer_token": dev_token,
-            "refresh_token": credentials.refresh_token,
-            "client_id": credentials.client_id,
-            "client_secret": credentials.client_secret
+            "use_proto_plus": True,
+            **json.loads(credentials.to_native_representation())
         }
-        client = GoogleAdsClient.load_from_dict(config_dict=credentials)
+        return GoogleAdsClient.load_from_dict(config_dict=credentials)
     # use service account to authenticate if not using OAuth2.0
     else:
-        pass
-
-    resource_list = []
-    for query in query_list:
-        query_name = query["name"]
-        query_sql = query["sql"]
-        resource_list.append(
-            dlt.resource(query_resource, name=query_name, write_disposition="append")(
-                client=client,
-                query=query_sql
-            )
-        )
-    return resource_list
+        # google ads client requires the key to be in a file on the disc..
+        with tempfile.NamedTemporaryFile() as f:
+            f.write(credentials.to_native_representation().encode())
+            f.seek(0)
+            return GoogleAdsClient.load_from_dict(config_dict={
+                "json_key_file_path": f.name,
+                "impersonated_email": impersonated_email,
+                "use_proto_plus": True,
+                "developer_token": dev_token,
+            })
 
 
 @dlt.source(max_table_nesting=2)
-def google_ads(credentials: Union[GoogleAnalyticsCredentialsOAuth, GcpClientCredentialsWithDefault] = dlt.secrets.value,
+def google_ads(credentials: Union[GcpOAuthCredentials, GcpServiceAccountCredentials] = dlt.secrets.value,
+                impersonated_email: str = dlt.secrets.value,
                dev_token: str = dlt.secrets.value):
     """
     Loads default tables for google ads in the database.
@@ -68,26 +56,17 @@ def google_ads(credentials: Union[GoogleAnalyticsCredentialsOAuth, GcpClientCred
     :param dev_token:
     :return:
     """
-    # generate access token for credentials if we are using OAuth2.0
-    if isinstance(credentials, GoogleAnalyticsCredentialsOAuth):
-        credentials.auth("https://www.googleapis.com/auth/analytics.readonly")
-        credentials = {
-            "developer_token": dev_token,
-            "refresh_token": credentials.refresh_token,
-            "client_id": credentials.client_id,
-            "client_secret": credentials.client_secret
-        }
-        client = GoogleAdsClient.load_from_dict(config_dict=credentials)
-    # use service account to authenticate if not using OAuth2.0
-    else:
-        pass
-
-    resource_list = [get_dimensions(client=client), get_reports(client=client)]
-    return resource_list
+    client = get_client(credentials=credentials, dev_token=dev_token, impersonated_email=impersonated_email)
+    return [
+        customers(client=client),
+        campaigns(client=client),
+        change_events(client=client),
+        customer_clients(client=client)
+        ]
 
 
 @dlt.resource(write_disposition="replace")
-def get_dimensions(client):
+def customers(client, customer_id: str = dlt.secrets.value):
     """
     Dlt resource which loads dimensions.
     :param client:
@@ -95,47 +74,53 @@ def get_dimensions(client):
     """
     # Issues a search request using streaming.
     ga_service = client.get_service("GoogleAdsService")
-    for dimension_query in DIMENSION_TABLES:
-        query = f"SELECT * FROM {dimension_query}"
-        stream = ga_service.search_stream(customer_id="", query=query)
-        for batch in stream:
-            processed_row_generator = process_dimension(batch=batch)
-            yield from dlt.mark.with_table_name(dimension_query, processed_row_generator)
+    query = "SELECT customer.id, customer.descriptive_name FROM customer"
+    stream = ga_service.search_stream(customer_id=customer_id, query=query)
+    for batch in stream:
+        for row in batch.results:
+            yield to_dict(row.customer)
 
-
-@dlt.resource(name="reports_table", write_disposition="append")
-def get_reports(client):
+@dlt.resource(write_disposition="replace")
+def campaigns(client, customer_id: str = dlt.secrets.value):
     """
-    Dlt resource which loads reports.
+    Dlt resource which loads dimensions.
     :param client:
     :return:
     """
     # Issues a search request using streaming.
     ga_service = client.get_service("GoogleAdsService")
-    stream = ga_service.search_stream(customer_id="", query=query)
+    query = "SELECT campaign.id, campaign.labels FROM campaign"
+    stream = ga_service.search_stream(customer_id=customer_id, query=query)
     for batch in stream:
-        """
-        Could be faster to just yield
-        yield batch.results
-        """
-        processed_row_generator = process_report(batch=batch)
-        yield from processed_row_generator
+        for row in batch.results:
+            yield to_dict(row.campaign)
 
-
-def query_resource(client, query):
+@dlt.resource(write_disposition="replace")
+def change_events(client, customer_id: str = dlt.secrets.value):
     """
-    Dlt resource which loads queries.
+    Dlt resource which loads dimensions.
     :param client:
-    :param query:
     :return:
     """
     # Issues a search request using streaming.
     ga_service = client.get_service("GoogleAdsService")
-    stream = ga_service.search_stream(customer_id="", query=query)
+    query = "SELECT change_event.change_date_time FROM change_event WHERE change_event.change_date_time during LAST_14_DAYS LIMIT 1000"
+    stream = ga_service.search_stream(customer_id=customer_id, query=query)
     for batch in stream:
-        """
-        Could be faster to just yield
-        yield batch.results
-        """
-        processed_row_generator = process_query(batch=batch)
-        yield from processed_row_generator
+        for row in batch.results:
+            yield to_dict(row.change_event)
+
+@dlt.resource(write_disposition="replace")
+def customer_clients(client, customer_id: str = dlt.secrets.value):
+    """
+    Dlt resource which loads dimensions.
+    :param client:
+    :return:
+    """
+    # Issues a search request using streaming.
+    ga_service = client.get_service("GoogleAdsService")
+    query = "SELECT customer_client.status FROM customer_client"
+    stream = ga_service.search_stream(customer_id=customer_id, query=query)
+    for batch in stream:
+        for row in batch.results:
+            yield to_dict(row.customer_client)

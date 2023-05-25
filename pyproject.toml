@@ -56,6 +56,9 @@ shopifyapi = "^12.3.0"
 [tool.poetry.group.facebook_ads.dependencies]
 facebook-business = "^16.0.2"
 
+[tool.poetry.group.google_ads.dependencies]
+google-ads = "^21.1.0"
+
 [build-system]
 requires = ["poetry-core"]
 build-backend = "poetry.core.masonry.api"
