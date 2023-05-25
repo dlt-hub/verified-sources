@@ -28,6 +28,7 @@ def drop_pipeline() -> Iterator[None]:
     yield
     drop_active_pipeline_data()
 
+
 @pytest.fixture(autouse=True, scope="session")
 def test_config_providers() -> Iterator[ConfigProvidersContext]:
     """Creates set of config providers where tomls are loaded from tests/.dlt"""
@@ -86,6 +87,12 @@ def drop_active_pipeline_data() -> None:
                         # print("dropped")
                     except Exception as exc:
                         print(exc)
+                    with c.with_staging_dataset(staging=True):
+                        try:
+                            c.drop_dataset()
+                            # print("dropped")
+                        except Exception as exc:
+                            print(exc)
             except SqlClientNotAvailable:
                 pass
 
