@@ -25,7 +25,7 @@ DIMENSION_TABLES = ["accounts", "ad_group", "ad_group_ad", "ad_group_ad_label", 
 def get_client(credentials: Union[GcpOAuthCredentials, GcpServiceAccountCredentials], dev_token: str,impersonated_email:str) -> GoogleAdsClient:
     # generate access token for credentials if we are using OAuth2.0
     if isinstance(credentials, GcpOAuthCredentials):
-        credentials.auth("https://www.googleapis.com/auth/adwords.readonly")
+        credentials.auth("https://www.googleapis.com/auth/adwords")
         credentials = {
             "developer_token": dev_token,
             "use_proto_plus": True,

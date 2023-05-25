@@ -25,7 +25,7 @@ def print_refresh_token(credentials: GcpOAuthCredentials = dlt.secrets.value) ->
     """
     Will get client_id, client_secret and project_id from secrets.toml and then will print the refresh token.
     """
-    credentials.auth("https://www.googleapis.com/auth/adwords.readonly")
+    credentials.auth("https://www.googleapis.com/auth/adwords")
     print("Add to secrets.toml")
     print(f"refresh_token: {credentials.refresh_token}")
     # print(f"Access token: {credentials.token}")
@@ -42,10 +42,11 @@ Before running this script you must:
 6. Download the credentials and fill client_id, client_secret and project_id in secrets.toml
 7. Go back to credentials and select OAuth consent screen in the left
 8. Fill in App name, user support email(your email), authorized domain (localhost.com), dev contact info (your email again)
-9. Add the following scope: “https://www.googleapis.com/auth/analytics.readonly”
+9. Add the following scope: “https://www.googleapis.com/auth/adwords”
 10. Add your own email as a test user.""")
     try:
         print_refresh_token()
     except ConfigFieldMissingException:
         print("*****\nMissing secrets! Make sure you added client_id, client_secret and project_id to secrets.toml or environment variables. See details below\n*****")
         raise
+
