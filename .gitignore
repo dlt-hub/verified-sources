@@ -138,3 +138,7 @@ secrets.toml
 # temp
 tmp
 **/tmp
+
+# docs
+docs/build
+docs/source/reference

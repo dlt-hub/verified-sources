@@ -40,3 +40,10 @@ test:
 
 test-local:
 	ALL_DESTINATIONS='["duckdb", "postgres"]' DESTINATION__POSTGRES__CREDENTIALS=postgresql://loader:loader@localhost:5432/dlt_data poetry run pytest tests
+
+docs-build:
+	poetry run sphinx-apidoc pipelines -o ./docs/source/reference
+	poetry run sphinx-build -b html ./docs/source ./docs/build
+
+docs-publish: 
+	

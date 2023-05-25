@@ -10,6 +10,8 @@ packages = [{include = "pipelines"}]
 [tool.poetry.dependencies]
 python = "^3.8.1"
 dlt = {version = "^0.2.7", extras = ["redshift", "bigquery", "postgres", "duckdb"]}
+sphinx = "^7.0.1"
+furo = "^2023.5.20"
 
 [tool.poetry.group.dev.dependencies]
 mypy = "^0.991"
