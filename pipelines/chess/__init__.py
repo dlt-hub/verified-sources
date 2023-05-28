@@ -89,6 +89,7 @@ def players_games(players: List[str], start_month: str = None, end_month: str = 
         print(f"Getting archive from {url}")
         try:
             games = _get_url_with_retry(url).get("games", [])
+            print(f"Got archive from {url}")
             return games  # type: ignore
         except requests.HTTPError as http_err:
             # sometimes archives are not available and the error seems to be permanent

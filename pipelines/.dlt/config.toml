@@ -15,12 +15,11 @@ log_level="WARNING"
 ## chess
 dlthub_telemetry = false
 
-[sources.chess.extract]
+# the section below defines config values for "chess_dlt_config_example" source in chess/__init__.py
+[sources.chess]
 max_parallel_items = 5
 workers = 2  # limit the parallel execution
 
-# the section below defines config values for "chess_dlt_config_example" source in chess/__init__.py
-[sources.chess]
 config_int=123
 
 # Google Analytics config
