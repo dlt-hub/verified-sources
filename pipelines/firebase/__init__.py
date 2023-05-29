@@ -2,9 +2,6 @@
 
 from typing import Any, Iterator, Sequence, Union
 
-import duckdb
-import pandas as pd
-
 import dlt
 from dlt.extract.source import DltResource
 from dlt.common.typing import TDataItem
@@ -16,10 +13,39 @@ try:
 except ImportError:
     raise MissingDependencyException("Firebase Admin Python SDK", ["firebase-admin"])
 
-try:
-    from apiclient.discovery import Resource
-except ImportError:
-    raise MissingDependencyException("Google API Client", ["google-api-python-client"])
+
+def add_data():
+    # add discography data
+    return {
+        "discography": [
+            {
+                "band_name": "korn",
+                "albums": [
+                    {
+                        "album_name": "Requiem",
+                        "year": 2022
+                    },
+                    {
+                        "album_name": "The Nothing",
+                        "year": 2019
+                    }
+                ]
+            },
+            {
+                "band_name": "slipknot",
+                "albums": [
+                    {
+                        "album_name": "The End, So Far",
+                        "year": 2022
+                    },
+                    {
+                        "album_name": "We Are Not Your Kind",
+                        "year": 2019
+                    }
+                ]
+            }
+        ]
+    }
 
 
 @dlt.source(name="firebase")
@@ -32,15 +58,19 @@ def firebase_source(
     
     def _get_data(credentials: Any, database_url: str) -> Iterator[TDataItem]:
         try:
+            # choose already created app 
+            firebase_admin.get_app(name=f"{app_name}")
+        except ValueError:
             # if there is no app created yet, create an app and choose the database
             firebase_admin.initialize_app(
                 credentials, 
                 {"databaseUrl": database_url}
             )
-        except ValueError:
-            # choose already created app 
-            firebase_admin.get_app(name=f"{app_name}")
+            # since we have not data yet, lets add discography data into the db
+            db.push(add_data())
+            db.child("discography").set(add_data)
 
+        # load stored data
         ref = db.reference(f"{path}")
         data = json.loads(ref.get())
 
