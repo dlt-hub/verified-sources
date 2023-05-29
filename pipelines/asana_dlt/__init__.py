@@ -1,4 +1,11 @@
-"""Fetches Asana workspaces, projects, tasks and other associated objects, using parallel requests wherever possible."""
+"""
+This pipeline provides data extraction from the Asana platform via their API. 
+
+It defines several functions to fetch data from different parts of Asana including 
+workspaces, projects, sections, tags, tasks, stories, teams, and users. These 
+functions are meant to be used as part of a data loading pipeline.
+"""
+
 import typing as t
 from typing import Sequence
 import dlt
@@ -21,7 +28,15 @@ from .helpers import get_client
 
 @dlt.resource(write_disposition="replace")
 def workspaces(access_token: str = dlt.secrets.value) -> t.Iterator[dict]:
-    """Returns a list of workspaces"""
+    """
+    Fetches and returns a list of workspaces from Asana.
+
+    Args:
+        access_token (str): The access token to authenticate the Asana API client, provided in the secrets file
+
+    Yields:
+        dict: The workspace data.
+    """
     print("Fetching workspaces...")
     yield from get_client(access_token).workspaces.find_all(
         opt_fields=",".join(WORKSPACE_FIELDS)
@@ -35,7 +50,16 @@ def workspaces(access_token: str = dlt.secrets.value) -> t.Iterator[dict]:
 )
 @dlt.defer
 def projects(workspace, access_token: str = dlt.secrets.value) -> t.Iterator[dict]:
-    """Returns a list of projects for a given workspace"""
+    """
+    Fetches and returns a list of projects for a given workspace from Asana.
+
+    Args:
+        workspace (dict): The workspace data.
+        access_token (str): The access token to authenticate the Asana API client, provided in the secrets file
+
+    Returns:
+        list[dict]: The project data for the given workspace.
+    """
     print(f"Fetching projects for workspace {workspace['name']}...")
     try:
         return list(
@@ -55,7 +79,16 @@ def projects(workspace, access_token: str = dlt.secrets.value) -> t.Iterator[dic
 )
 @dlt.defer
 def sections(project_array, access_token: str = dlt.secrets.value) -> t.Iterator[dict]:
-    """Fetches all sections for a given project."""
+    """
+    Fetches all sections for a given project from Asana.
+
+    Args:
+        project_array (list): The project data.
+        access_token (str): The access token to authenticate the Asana API client, provided in the secrets file
+
+    Returns:
+        list[dict]: The sections data for the given project.
+    """
     print(f"Fetching sections for {len(project_array)} projects...")
     try:
         return [
@@ -74,7 +107,16 @@ def sections(project_array, access_token: str = dlt.secrets.value) -> t.Iterator
 @dlt.transformer(data_from=workspaces, write_disposition="replace")
 @dlt.defer
 def tags(workspace, access_token: str = dlt.secrets.value) -> t.Iterator[dict]:
-    """Fetches all tags for a given workspace."""
+    """
+    Fetches all tags for a given workspace from Asana.
+
+    Args:
+        workspace (dict): The workspace data.
+        access_token (str): The access token to authenticate the Asana API client, provided in the secrets file
+
+    Returns:
+        list[dict]: The tags data for the given workspace.
+    """
     print(f"Fetching tags for workspace {workspace['name']}...")
     try:
         return [
@@ -97,7 +139,18 @@ def tasks(
         "modified_at", initial_value=DEFAULT_START_DATE
     ),
 ) -> t.Iterator[dict]:
-    """Fetches all tasks for a given project."""
+    """
+    Fetches all tasks for a given project from Asana.
+
+    Args:
+        project_array (list): The project data.
+        access_token (str): The access token to authenticate the Asana API client, provided in the secrets file
+
+        modified_at (str): The date from which to fetch modified tasks.
+
+    Yields:
+        dict: The task data for the given project.
+    """
     print(f"Fetching tasks for {len(project_array)} projects...")
     yield from (
         task
@@ -118,7 +171,16 @@ def tasks(
 )
 @dlt.defer
 def stories(task, access_token: str = dlt.secrets.value) -> t.Iterator[dict]:
-    """Fetch stories for a task."""
+    """
+    Fetches stories for a task from Asana.
+
+    Args:
+        task (dict): The task data.
+        access_token (str): The access token to authenticate the Asana API client, provided in the secrets file
+
+    Returns:
+        list[dict]: The stories data for the given task.
+    """
     print(f"Fetching stories for task {task['name']}...")
     try:
         return [
@@ -139,7 +201,16 @@ def stories(task, access_token: str = dlt.secrets.value) -> t.Iterator[dict]:
 )
 @dlt.defer
 def teams(workspace, access_token: str = dlt.secrets.value) -> t.Iterator[dict]:
-    """Fetches all teams for a given workspace."""
+    """
+    Fetches all teams for a given workspace from Asana.
+
+    Args:
+        workspace (dict): The workspace data.
+        access_token (str): The access token to authenticate the Asana API client, provided in the secrets file
+
+    Returns:
+        list[dict]: The teams data for the given workspace.
+    """
     print(f"Fetching teams for workspace {workspace['name']}...")
     try:
         return [
@@ -160,7 +231,16 @@ def teams(workspace, access_token: str = dlt.secrets.value) -> t.Iterator[dict]:
 )
 @dlt.defer
 def users(workspace, access_token: str = dlt.secrets.value) -> t.Iterator[dict]:
-    """Fetches all users for a given workspace."""
+    """
+    Fetches all users for a given workspace from Asana.
+
+    Args:
+        workspace (dict): The workspace data.
+        access_token (str): The access token to authenticate the Asana API client, provided in the secrets file
+
+    Returns:
+        list[dict]: The user data for the given workspace.
+    """
     print(f"Fetching users for workspace {workspace['name']}...")
     try:
         return [
@@ -177,7 +257,15 @@ def users(workspace, access_token: str = dlt.secrets.value) -> t.Iterator[dict]:
 
 @dlt.source
 def asana_source(access_token: str = dlt.secrets.value) -> Sequence[DltResource]:
-    """The Asana dlt source."""
+    """
+    The main function that runs all the other functions to fetch data from Asana.
+
+    Args:
+        access_token (str): The access token to authenticate the Asana API client, provided in the secrets file
+
+    Returns:
+        Sequence[DltResource]: A sequence of DltResource objects containing the fetched data.
+    """
     return (
         workspaces,
         projects,
