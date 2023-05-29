@@ -10,7 +10,7 @@ def parse_data(data: dict[Any, Any]) -> dict[Any, Any]:
         for album in item["albums"]:
             yield {
                 "band_name": item["band_name"],
-                "album": album["album_name"],
+                "album_name": album["album_name"],
                 "year": album["year"]
             }
 
