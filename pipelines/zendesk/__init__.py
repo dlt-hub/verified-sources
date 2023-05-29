@@ -153,7 +153,7 @@ def zendesk_support(
         @:returns: Generator of dicts
         """
         # get dlt state
-        ticket_custom_fields = dlt.state().setdefault(CUSTOM_FIELDS_STATE_KEY, {})
+        ticket_custom_fields = dlt.current.source_state().setdefault(CUSTOM_FIELDS_STATE_KEY, {})
         # get all custom fields and update state if needed, otherwise just load dicts into tables
         all_fields = zendesk_client.ticket_fields()
         for field in all_fields:
@@ -176,7 +176,7 @@ def zendesk_support(
         """
 
         # grab the custom fields from dlt state if any
-        fields_dict = dlt.state().setdefault(CUSTOM_FIELDS_STATE_KEY, {})
+        fields_dict = dlt.current.source_state().setdefault(CUSTOM_FIELDS_STATE_KEY, {})
         all_tickets = zendesk_client.tickets.incremental(paginate_by_time=False,
                                                         per_page=per_page,
                                                         start_time=int(updated_at.last_value.timestamp()),
