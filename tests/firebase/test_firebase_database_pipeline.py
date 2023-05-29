@@ -21,3 +21,8 @@ def test_load_firebase_source(destination: str) -> None:
     assert_load_info(info)
     # assert if table exists
     assert load_table_counts(pipeline, "realtime_db")["realtime_db"] == 1
+    # assert columns datatype using discography example data
+    table = pipeline.default_schema.data_tables()[0]
+    assert table["columns"]["band_name"]["data_type"] == "text"
+    assert table["columns"]["album_name"]["data_type"] == "text"
+    assert table["columns"]["year"]["data_type"] == "bigint"
