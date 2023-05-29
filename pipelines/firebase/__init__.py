@@ -14,9 +14,7 @@ except ImportError:
     raise MissingDependencyException("Firebase Admin Python SDK", ["firebase-admin"])
 
 
-def add_data():
-    # add discography data
-    return {
+_DATA =  {
         "discography": [
             {
                 "band_name": "korn",
@@ -66,9 +64,8 @@ def firebase_source(
                 credentials, 
                 {"databaseUrl": database_url}
             )
-            # since we have not data yet, lets add discography data into the db
-            db.push(add_data())
-            db.child("discography").set(add_data)
+            # since we dont have data yet, lets add discography data into the db
+            db.child("discography").set(db.push(_DATA))
 
         # load stored data
         ref = db.reference(f"{path}")
