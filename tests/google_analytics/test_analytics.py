@@ -6,13 +6,13 @@ from dlt.common.pendulum import pendulum
 from dlt.common.typing import DictStrAny
 from dlt.pipeline.pipeline import Pipeline
 from pipelines.google_analytics import google_analytics
-from tests.utils import ALL_DESTINATIONS, assert_load_info, load_table_counts
+from tests.utils import ALL_DESTINATIONS, assert_load_info, load_table_counts, drop_active_pipeline_data
 QUERIES = [
     {"resource_name": "sample_analytics_data1", "dimensions": ["browser", "city"], "metrics": ["totalUsers", "transactions"]},
     {"resource_name": "sample_analytics_data2", "dimensions": ["browser", "city"], "metrics": ["totalUsers"]}
 ]
 # dict containing the name of the tables expected in the db as keys and the number of rows expected as values
-ALL_TABLES = {"dimensions": 206, "metrics": 100, "sample_analytics_data1": 12, "sample_analytics_data2": 12}
+ALL_TABLES = {"dimensions": 207, "metrics": 100, "sample_analytics_data1": 12, "sample_analytics_data2": 12}
 INCREMENTAL_SAVED_KEYS = ["last_load_sample_analytics_data1", "last_load_sample_analytics_data2"]
 
 
@@ -139,6 +139,9 @@ def test_pagination(destination_name: str) -> None:
     os.environ["SOURCES__GOOGLE_ANALYTICS__GOOGLE_ANALYTICS__ROWS_PER_PAGE"] = "5"
     pipeline_pagination_5 = _create_pipeline(queries=QUERIES, destination_name=destination_name, dataset_name="analytics_dataset_pagination_5", full_refresh=True)
     first_load_counts = load_table_counts(pipeline_pagination_5, *ALL_TABLES.keys())
+    # drop the pipeline explicitly. fixture drops only one active pipeline
+    # TODO: fix the drop_pipeline fixture to drop all pipelines created during test
+    drop_active_pipeline_data()
 
     # do 2nd load of data and check that no new data is added, i.e. number of rows is the same
     os.environ["SOURCES__GOOGLE_ANALYTICS__GOOGLE_ANALYTICS__ROWS_PER_PAGE"] = "10"
@@ -158,6 +161,7 @@ def test_starting_date(destination_name: str) -> None:
     # Load the pipeline twice with different starting dates, earlier starting date has more data with our current testing set: 18th April 2023.
     pipeline_start_date_1 = _create_pipeline(queries=QUERIES, destination_name=destination_name, dataset_name="analytics_dataset_start_date_1", full_refresh=True, start_date="2021-01-01")
     first_load_counts = load_table_counts(pipeline_start_date_1, *ALL_TABLES.keys())
+    drop_active_pipeline_data()
 
     pipeline_start_date_2 = _create_pipeline(queries=QUERIES, destination_name=destination_name, dataset_name="analytics_dataset_start_date_2", full_refresh=True, start_date="2022-01-01")
     second_load_counts = load_table_counts(pipeline_start_date_2, *ALL_TABLES.keys())
