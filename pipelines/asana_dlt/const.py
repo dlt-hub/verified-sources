@@ -1,10 +1,13 @@
+# Default start date for Asana API requests, only tasks started after this date will be collected
 DEFAULT_START_DATE = "2010-01-01T00:00:00.000Z"
 
+# Asana API request timeout
 TIMEOUT = 300
 
+# list of workspace fields to be retrieved from Asana API
 WORKSPACE_FIELDS = ["gid", "name", "is_organization", "resource_type", "email_domains"]
 
-
+# List of project fields to be retrieved from Asana API
 PROJECT_FIELDS = [
     "name",
     "gid",
@@ -38,6 +41,7 @@ PROJECT_FIELDS = [
     "project_brief",
 ]
 
+# List of section fields to be retrieved from Asana API
 SECTION_FIELDS = [
     "gid",
     "resource_type",
@@ -47,6 +51,7 @@ SECTION_FIELDS = [
     "projects",
 ]
 
+# List of tag fields to be retrieved from Asana API
 TAG_FIELDS = [
     "gid",
     "resource_type",
@@ -59,6 +64,7 @@ TAG_FIELDS = [
     "workspace",
 ]
 
+# List of task fields to be retrieved from Asana API
 TASK_FIELDS = [
     "gid",
     "resource_type",
@@ -93,6 +99,7 @@ TASK_FIELDS = [
     "memberships.section.name",
 ]
 
+# List of story fields to be retrieved from Asana API
 STORY_FIELDS = [
     "gid",
     "resource_type",
@@ -120,6 +127,7 @@ STORY_FIELDS = [
     "type",
 ]
 
+# List of team fields to be retrieved from Asana API
 TEAMS_FIELD = [
     "gid",
     "resource_type",
@@ -130,4 +138,5 @@ TEAMS_FIELD = [
     "visibility",
 ]
 
+# List of user fields to be retrieved from Asana API
 USER_FIELDS = ["gid", "resource_type", "name", "email", "photo", "workspaces"]
