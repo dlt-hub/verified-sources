@@ -1,13 +1,13 @@
 """
-This pipeline provides data extraction from the Asana platform via their API. 
+This pipeline provides data extraction from the Asana platform via their API.
 
-It defines several functions to fetch data from different parts of Asana including 
-workspaces, projects, sections, tags, tasks, stories, teams, and users. These 
+It defines several functions to fetch data from different parts of Asana including
+workspaces, projects, sections, tags, tasks, stories, teams, and users. These
 functions are meant to be used as part of a data loading pipeline.
 """
 
 import typing as t
-from typing import Sequence
+from typing import Sequence, Iterable, Dict, Any
 import dlt
 
 from dlt.extract.source import DltResource
@@ -27,7 +27,7 @@ from .helpers import get_client
 
 
 @dlt.resource(write_disposition="replace")
-def workspaces(access_token: str = dlt.secrets.value) -> t.Iterator[dict]:
+def workspaces(access_token: str = dlt.secrets.value) -> Iterable[Dict[str, Any]]:
     """
     Fetches and returns a list of workspaces from Asana.
 
@@ -49,7 +49,9 @@ def workspaces(access_token: str = dlt.secrets.value) -> t.Iterator[dict]:
     write_disposition="replace",
 )
 @dlt.defer
-def projects(workspace, access_token: str = dlt.secrets.value) -> t.Iterator[dict]:
+def projects(
+    workspace: Dict[str, Any], access_token: str = dlt.secrets.value
+) -> Iterable[Dict[str, Any]]:
     """
     Fetches and returns a list of projects for a given workspace from Asana.
 
@@ -78,7 +80,9 @@ def projects(workspace, access_token: str = dlt.secrets.value) -> t.Iterator[dic
     write_disposition="replace",
 )
 @dlt.defer
-def sections(project_array, access_token: str = dlt.secrets.value) -> t.Iterator[dict]:
+def sections(
+    project_array: t.List[Dict[str, Any]], access_token: str = dlt.secrets.value
+) -> Iterable[Dict[str, Any]]:
     """
     Fetches all sections for a given project from Asana.
 
@@ -106,7 +110,9 @@ def sections(project_array, access_token: str = dlt.secrets.value) -> t.Iterator
 
 @dlt.transformer(data_from=workspaces, write_disposition="replace")
 @dlt.defer
-def tags(workspace, access_token: str = dlt.secrets.value) -> t.Iterator[dict]:
+def tags(
+    workspace: Dict[str, Any], access_token: str = dlt.secrets.value
+) -> Iterable[Dict[str, Any]]:
     """
     Fetches all tags for a given workspace from Asana.
 
@@ -133,12 +139,12 @@ def tags(workspace, access_token: str = dlt.secrets.value) -> t.Iterator[dict]:
 
 @dlt.transformer(data_from=projects, write_disposition="merge", primary_key="gid")
 def tasks(
-    project_array,
+    project_array: t.List[Dict[str, Any]],
     access_token: str = dlt.secrets.value,
     modified_at: dlt.sources.incremental[str] = dlt.sources.incremental(
         "modified_at", initial_value=DEFAULT_START_DATE
     ),
-) -> t.Iterator[dict]:
+) -> Iterable[Dict[str, Any]]:
     """
     Fetches all tasks for a given project from Asana.
 
@@ -170,7 +176,9 @@ def tasks(
     write_disposition="append",
 )
 @dlt.defer
-def stories(task, access_token: str = dlt.secrets.value) -> t.Iterator[dict]:
+def stories(
+    task: Dict[str, Any], access_token: str = dlt.secrets.value
+) -> Iterable[Dict[str, Any]]:
     """
     Fetches stories for a task from Asana.
 
@@ -200,7 +208,9 @@ def stories(task, access_token: str = dlt.secrets.value) -> t.Iterator[dict]:
     write_disposition="replace",
 )
 @dlt.defer
-def teams(workspace, access_token: str = dlt.secrets.value) -> t.Iterator[dict]:
+def teams(
+    workspace: Dict[str, Any], access_token: str = dlt.secrets.value
+) -> Iterable[Dict[str, Any]]:
     """
     Fetches all teams for a given workspace from Asana.
 
@@ -230,7 +240,9 @@ def teams(workspace, access_token: str = dlt.secrets.value) -> t.Iterator[dict]:
     write_disposition="replace",
 )
 @dlt.defer
-def users(workspace, access_token: str = dlt.secrets.value) -> t.Iterator[dict]:
+def users(
+    workspace: Dict[str, Any], access_token: str = dlt.secrets.value
+) -> Iterable[Dict[str, Any]]:
     """
     Fetches all users for a given workspace from Asana.
 
@@ -256,7 +268,9 @@ def users(workspace, access_token: str = dlt.secrets.value) -> t.Iterator[dict]:
 
 
 @dlt.source
-def asana_source(access_token: str = dlt.secrets.value) -> Sequence[DltResource]:
+def asana_source(
+    access_token: str = dlt.secrets.value,
+) -> Any:  # should be Sequence[DltResource]:
     """
     The main function that runs all the other functions to fetch data from Asana.
 
@@ -266,7 +280,7 @@ def asana_source(access_token: str = dlt.secrets.value) -> Sequence[DltResource]
     Returns:
         Sequence[DltResource]: A sequence of DltResource objects containing the fetched data.
     """
-    return (
+    return [
         workspaces,
         projects,
         sections,
@@ -275,4 +289,4 @@ def asana_source(access_token: str = dlt.secrets.value) -> Sequence[DltResource]
         stories,
         teams,
         users,
-    )
+    ]
