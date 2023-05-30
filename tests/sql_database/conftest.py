@@ -7,10 +7,12 @@ from dlt.sources.credentials import ConnectionStringCredentials
 from tests.sql_database.sql_source import SQLAlchemySourceDB
 
 
-@pytest.fixture(scope='package')
+@pytest.fixture(scope="package")
 def sql_source_db(request: pytest.FixtureRequest) -> Iterator[SQLAlchemySourceDB]:
     # TODO: parametrize the fixture so it takes the credentials for all destinations
-    credentials = dlt.secrets.get('destination.postgres.credentials', expected_type=ConnectionStringCredentials)
+    credentials = dlt.secrets.get(
+        "destination.postgres.credentials", expected_type=ConnectionStringCredentials
+    )
     db = SQLAlchemySourceDB(credentials)
     db.create_schema()
     try:
@@ -19,4 +21,3 @@ def sql_source_db(request: pytest.FixtureRequest) -> Iterator[SQLAlchemySourceDB
         yield db
     finally:
         db.drop_schema()
-
