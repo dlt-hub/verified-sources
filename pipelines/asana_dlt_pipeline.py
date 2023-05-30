@@ -14,6 +14,7 @@ import dlt
 from asana_dlt import asana_source
 from typing import List
 
+
 def load(resources: List[str]) -> None:
     """Execute a pipeline that will load all the resources for the given endpoints."""
 
@@ -26,5 +27,14 @@ def load(resources: List[str]) -> None:
 
 if __name__ == "__main__":
     # Add your desired resources to the list...
-    resources = ["projects", "tasks", "users", "workspaces", "tags", "stories", "sections", "teams"]
+    resources = [
+        "projects",
+        "tasks",
+        "users",
+        "workspaces",
+        "tags",
+        "stories",
+        "sections",
+        "teams",
+    ]
     load(resources)

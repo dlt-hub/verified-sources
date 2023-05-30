@@ -32,8 +32,14 @@ lint-code:
 	poetry run mypy --config-file mypy.ini $(shell find pipelines -type f -name py.typed -exec dirname "{}" \; |sort -u)
 	poetry run flake8 --max-line-length=200 pipelines init --show-source
 	poetry run flake8 --max-line-length=200 tests --show-source
+	poetry run black ./ --check
 
 lint: lint-code lint-dlt-init
+
+format:
+	poetry run black ./
+
+format-lint: format lint 
 
 test:
 	poetry run pytest tests

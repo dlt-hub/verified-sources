@@ -143,15 +143,13 @@ def tags(workspace, access_token: str = dlt.secrets.value) -> t.Iterator[dict]:
         print(f"Done fetching tags for workspace {workspace['name']}.")
 
 
-@dlt.transformer(
-    data_from=projects,
-    write_disposition="merge",
-    primary_key="gid"
-)
+@dlt.transformer(data_from=projects, write_disposition="merge", primary_key="gid")
 def tasks(
     project_array,
     access_token: str = dlt.secrets.value,
-    modified_at: dlt.sources.incremental[str] = dlt.sources.incremental("modified_at", initial_value=DEFAULT_START_DATE)
+    modified_at: dlt.sources.incremental[str] = dlt.sources.incremental(
+        "modified_at", initial_value=DEFAULT_START_DATE
+    ),
 ) -> t.Iterator[dict]:
     """Fetches all tasks for a given project."""
     print(f"Fetching tasks for {len(project_array)} projects...")
