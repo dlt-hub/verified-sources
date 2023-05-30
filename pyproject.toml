@@ -10,6 +10,7 @@ packages = [{include = "pipelines"}]
 [tool.poetry.dependencies]
 python = "^3.8.1"
 dlt = {version = "^0.2.7", extras = ["redshift", "bigquery", "postgres", "duckdb"]}
+firebase-admin = "^6.1.0"
 
 [tool.poetry.group.dev.dependencies]
 mypy = "^0.991"
