@@ -50,7 +50,7 @@ def test_load_subscription(destination_name: str) -> None:
         dataset_name="stripe_subscriptions_test",
         full_refresh=True,
     )
-    data = stripe_source(endpoints=("Subscription", ), end_date=datetime(2023, 5, 3))
+    data = stripe_source(endpoints=("Subscription",), end_date=datetime(2023, 5, 3))
     # load the "Subscription" out of the data source
     info = pipeline.run(data)
     # let's print it (pytest -s will show it)
@@ -65,12 +65,23 @@ def test_load_subscription(destination_name: str) -> None:
     subscription_table = user_tables[0]
     assert subscription_table["name"] == "subscription"
     assert subscription_table["columns"]["created"]["data_type"] == "timestamp"
-    assert subscription_table["columns"]["billing_cycle_anchor"]["data_type"] == "timestamp"
-    assert subscription_table["columns"]["current_period_end"]["data_type"] == "timestamp"
-    assert subscription_table["columns"]["current_period_start"]["data_type"] == "timestamp"
+    assert (
+        subscription_table["columns"]["billing_cycle_anchor"]["data_type"]
+        == "timestamp"
+    )
+    assert (
+        subscription_table["columns"]["current_period_end"]["data_type"] == "timestamp"
+    )
+    assert (
+        subscription_table["columns"]["current_period_start"]["data_type"]
+        == "timestamp"
+    )
     assert subscription_table["columns"]["plan__created"]["data_type"] == "timestamp"
     assert subscription_table["columns"]["start_date"]["data_type"] == "timestamp"
-    assert subscription_table["columns"]["discount__coupon__created"]["data_type"] == "timestamp"
+    assert (
+        subscription_table["columns"]["discount__coupon__created"]["data_type"]
+        == "timestamp"
+    )
     assert subscription_table["columns"]["discount__start"]["data_type"] == "timestamp"
     assert subscription_table["columns"]["canceled_at"]["data_type"] == "timestamp"
     assert subscription_table["columns"]["ended_at"]["data_type"] == "timestamp"
@@ -96,7 +107,9 @@ def test_incremental_event_load(destination_name: str) -> None:
         dataset_name="stripe_event_test",
         full_refresh=True,
     )
-    data = incremental_stripe_source(endpoints=("Event", ), end_date=datetime(2023, 5, 3))
+    data = incremental_stripe_source(
+        endpoints=("Event",), end_date=datetime(2023, 5, 3)
+    )
     info = pipeline.run(data)
     assert_load_info(info)
 
@@ -113,7 +126,9 @@ def test_incremental_event_load(destination_name: str) -> None:
     assert canceled_subs > 0  # should have canceled subscriptions
 
     # do load with the same range into the existing dataset
-    data = incremental_stripe_source(endpoints=("Event", ), end_date=datetime(2023, 5, 3))
+    data = incremental_stripe_source(
+        endpoints=("Event",), end_date=datetime(2023, 5, 3)
+    )
     info = pipeline.run(data)
     # the dlt figured out that there's no new data at all and skipped the loading package
     assert_load_info(info, expected_load_packages=0)
@@ -121,7 +136,7 @@ def test_incremental_event_load(destination_name: str) -> None:
     assert get_canceled_subs() == canceled_subs
 
     # get some new subscriptions
-    data = incremental_stripe_source(endpoints=("Event", ))
+    data = incremental_stripe_source(endpoints=("Event",))
     info = pipeline.run(data)
     # we have new subscriptions in the next day!
     assert_load_info(info)
@@ -138,12 +153,12 @@ def test_metrics(destination_name: str) -> None:
         full_refresh=True,
     )
     #  Event has only uneditable data, so we should use 'incremental_stripe_source'.
-    source = incremental_stripe_source(endpoints=("Event", ))
+    source = incremental_stripe_source(endpoints=("Event",))
     load_info = pipeline.run(source)
     print(load_info)
 
     # Subscription has editable data, use stripe_source.
-    source = stripe_source(endpoints=("Subscription", ))
+    source = stripe_source(endpoints=("Subscription",))
     load_info = pipeline.run(source)
     print(load_info)
 

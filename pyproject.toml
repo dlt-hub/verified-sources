@@ -26,7 +26,7 @@ mimesis = "^7.0.0"
 requests-mock = "^1.10.0"
 
 [tool.black] 
-include = 'pipelines/asana_dlt.*py'
+include = 'tests.*py'
 
 [tool.poetry.group.sql_database.dependencies]
 sqlalchemy = ">=1.4"
