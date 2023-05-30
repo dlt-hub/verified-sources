@@ -77,9 +77,9 @@ def players_games(players: List[str], start_month: str = None, end_month: str = 
     if end_month and end_month[4] != "/":
         raise ValueError(end_month)
 
-    # get a list of already checked archives, you will read more about the dlt.state on Day 3 of our workshop
+    # get a list of already checked archives
     # from your point of view, the state is python dictionary that will have the same content the next time this function is called
-    checked_archives = dlt.state().setdefault("archives", [])
+    checked_archives = dlt.current.resource_state().setdefault("archives", [])
     # get player archives, note that you can call the resource like any other function and just iterate it like a list
     archives = players_archives(players)
 

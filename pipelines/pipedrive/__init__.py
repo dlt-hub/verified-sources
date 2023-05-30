@@ -127,7 +127,7 @@ def _grouped_deals_flow(pages: Iterable[Iterable[Dict[str, Any]]]) -> Iterator[T
 
 
 def _get_deals_flow(deals_page: TDataPage, pipedrive_api_key: str) -> Iterator[DataItemWithMeta]:
-    custom_fields_mapping = dlt.state().get('custom_fields_mapping', {})
+    custom_fields_mapping = dlt.current.source_state().get('custom_fields_mapping', {})
     for row in deals_page:
         url = f"deals/{row['id']}/flow"
         pages = _get_pages(url, pipedrive_api_key)
@@ -153,7 +153,7 @@ def create_state(pipedrive_api_key: str) -> Iterator[Dict[str, Any]]:
 
 
     # gets all *Fields data and stores in state
-    custom_fields_mapping = dlt.state().setdefault('custom_fields_mapping', {})
+    custom_fields_mapping = dlt.current.source_state().setdefault('custom_fields_mapping', {})
     for entity, fields_entity, _ in ENTITY_MAPPINGS:
         if fields_entity is None:
             continue
