@@ -26,7 +26,7 @@ def _extract_recents_data(data: Iterable[Dict[str, Any]]) -> List[Dict[str, Any]
 
 
 def _get_recent_pages(entity: str, pipedrive_api_key: str, since_timestamp: str) -> Iterator[TDataPage]:
-    custom_fields_mapping = dlt.state().get('custom_fields_mapping', {}).get(entity, {})
+    custom_fields_mapping = dlt.current.source_state().get('custom_fields_mapping', {}).get(entity, {})
     pages = _get_pages(
         "recents", pipedrive_api_key,
         extra_params=dict(since_timestamp=since_timestamp, items=entity),

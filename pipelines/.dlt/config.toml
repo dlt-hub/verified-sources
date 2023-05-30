@@ -17,10 +17,13 @@ dlthub_telemetry = false
 
 # the section below defines config values for "chess_dlt_config_example" source in chess/__init__.py
 [sources.chess]
-max_parallel_items = 5
-workers = 2  # limit the parallel execution
-
 config_int=123
+
+# chess pipeline uses @dlt.defer decorator to parallelize extraction. below we limit the concurrency to not get blocked by api server
+[sources.chess.extract]  # you can specify config up to source.resource level
+max_parallel_items = 5  # how many items max in the futures pool
+workers = 2  # how many items processed in parallel
+
 
 # Google Analytics config
 [sources.google_analytics.google_analytics]
