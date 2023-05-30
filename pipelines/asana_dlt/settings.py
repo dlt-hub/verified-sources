@@ -2,13 +2,13 @@
 DEFAULT_START_DATE = "2010-01-01T00:00:00.000Z"
 
 # Asana API request timeout
-TIMEOUT = 300
+REQUEST_TIMEOUT = 300
 
 # list of workspace fields to be retrieved from Asana API
-WORKSPACE_FIELDS = ["gid", "name", "is_organization", "resource_type", "email_domains"]
+WORKSPACE_FIELDS = ("gid", "name", "is_organization", "resource_type", "email_domains")
 
 # List of project fields to be retrieved from Asana API
-PROJECT_FIELDS = [
+PROJECT_FIELDS = (
     "name",
     "gid",
     "owner",
@@ -39,20 +39,20 @@ PROJECT_FIELDS = [
     "completed_by",
     "created_from_template",
     "project_brief",
-]
+)
 
 # List of section fields to be retrieved from Asana API
-SECTION_FIELDS = [
+SECTION_FIELDS = (
     "gid",
     "resource_type",
     "name",
     "created_at",
     "project",
     "projects",
-]
+)
 
 # List of tag fields to be retrieved from Asana API
-TAG_FIELDS = [
+TAG_FIELDS = (
     "gid",
     "resource_type",
     "created_at",
@@ -62,10 +62,10 @@ TAG_FIELDS = [
     "notes",
     "permalink_url",
     "workspace",
-]
+)
 
 # List of task fields to be retrieved from Asana API
-TASK_FIELDS = [
+TASK_FIELDS = (
     "gid",
     "resource_type",
     "name",
@@ -97,10 +97,10 @@ TASK_FIELDS = [
     "memberships",
     "memberships.project.name",
     "memberships.section.name",
-]
+)
 
 # List of story fields to be retrieved from Asana API
-STORY_FIELDS = [
+STORY_FIELDS = (
     "gid",
     "resource_type",
     "created_at",
@@ -125,10 +125,10 @@ STORY_FIELDS = [
     "sticker_name",
     "custom_field",
     "type",
-]
+)
 
 # List of team fields to be retrieved from Asana API
-TEAMS_FIELD = [
+TEAMS_FIELD = (
     "gid",
     "resource_type",
     "name",
@@ -136,7 +136,7 @@ TEAMS_FIELD = [
     "organization",
     "permalink_url",
     "visibility",
-]
+)
 
 # List of user fields to be retrieved from Asana API
-USER_FIELDS = ["gid", "resource_type", "name", "email", "photo", "workspaces"]
+USER_FIELDS = ("gid", "resource_type", "name", "email", "photo", "workspaces")

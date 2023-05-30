@@ -6,7 +6,6 @@ def get_client(
 ) -> AsanaClient:
     """
     Returns an Asana API client.
-
     Returns:
         AsanaClient: The Asana API client.
     """
