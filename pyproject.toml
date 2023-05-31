@@ -11,6 +11,7 @@ packages = [{include = "pipelines"}]
 python = "^3.8.1"
 dlt = {version = "^0.2.7", extras = ["redshift", "bigquery", "postgres", "duckdb"]}
 firebase-admin = "^6.1.0"
+black = "^23.3.0"
 
 [tool.poetry.group.dev.dependencies]
 mypy = "^0.991"
@@ -24,6 +25,9 @@ flake8-builtins = "^2.1.0"
 types-requests = "^2.28.11.7"
 mimesis = "^7.0.0"
 requests-mock = "^1.10.0"
+
+[tool.black] 
+include = 'tests.*py|pipelines/asana_dlt.*py'
 
 [tool.poetry.group.sql_database.dependencies]
 sqlalchemy = ">=1.4"
@@ -60,3 +64,4 @@ simple-salesforce = "^1.12.4"
 [build-system]
 requires = ["poetry-core"]
 build-backend = "poetry.core.masonry.api"
+
