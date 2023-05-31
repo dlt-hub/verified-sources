@@ -58,6 +58,7 @@ def facebook_ads_source(
     access_token: str = dlt.secrets.value,
     chunk_size: int = 50,
     request_timeout: float = 300.0,
+    app_api_version: str = None,
 ) -> Sequence[DltResource]:
     """Returns a list of resources to load campaigns, ad sets, ads, creatives and ad leads data from Facebook Marketing API.
 
@@ -73,11 +74,14 @@ def facebook_ads_source(
         access_token (str, optional): Access token associated with the Business Facebook App. See README.md
         chunk_size (int, optional): A size of the page and batch request. You may need to decrease it if you request a lot of fields. Defaults to 50.
         request_timeout (float, optional): Connection timeout. Defaults to 300.0.
+        app_api_version(str, optional): A version of the facebook api required by the app for which the access tokens were issued ie. 'v17.0'. Defaults to the facebook_business library default version
 
     Returns:
         Sequence[DltResource]: campaigns, ads, ad_sets, ad_creatives, leads
     """
-    account = get_ads_account(account_id, access_token, request_timeout)
+    account = get_ads_account(
+        account_id, access_token, request_timeout, app_api_version
+    )
 
     @dlt.resource(primary_key="id", write_disposition="replace")
     def campaigns(
@@ -130,6 +134,7 @@ def facebook_insights_source(
     action_attribution_windows: Sequence[str] = ALL_ACTION_ATTRIBUTION_WINDOWS,
     batch_size: int = 50,
     request_timeout: int = 300,
+    app_api_version: str = None,
 ) -> DltResource:
     """Incrementally loads insight reports with defined granularity level, fields, breakdowns etc.
 
@@ -152,12 +157,15 @@ def facebook_insights_source(
         action_attribution_windows (Sequence[str], optional): Attribution windows for actions. Defaults to ALL_ACTION_ATTRIBUTION_WINDOWS.
         batch_size (int, optional): Page size when reading data from particular report. Defaults to 50.
         request_timeout (int, optional): Connection timeout. Defaults to 300.
+        app_api_version(str, optional): A version of the facebook api required by the app for which the access tokens were issued ie. 'v17.0'. Defaults to the facebook_business library default version
 
     Returns:
         DltResource: facebook_insights
 
     """
-    account = get_ads_account(account_id, access_token, request_timeout)
+    account = get_ads_account(
+        account_id, access_token, request_timeout, app_api_version
+    )
 
     # we load with a defined lag
     initial_load_start_date = pendulum.today().subtract(days=initial_load_past_days)

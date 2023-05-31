@@ -73,7 +73,7 @@ def get_long_lived_token(
 
 
 def get_ads_account(
-    account_id: str, access_token: str, request_timeout: float
+    account_id: str, access_token: str, request_timeout: float, app_api_version: str
 ) -> AdAccount:
     notify_on_token_expiration()
 
@@ -113,7 +113,11 @@ def get_ads_account(
     ).session
     retry_session.params.update({"access_token": access_token})  # type: ignore
     # patch dlt requests session with retries
-    API = FacebookAdsApi.init(account_id="act_" + account_id, access_token=access_token)
+    API = FacebookAdsApi.init(
+        account_id="act_" + account_id,
+        access_token=access_token,
+        api_version=app_api_version,
+    )
     API._session.requests = retry_session
     user = User(fbid="me")
 
