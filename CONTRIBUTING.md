@@ -1,9 +1,9 @@
 # Contributing
-The following guide will walk you through contributing new pipelines or changes to existing pipelines and contains a troubleshooting section. Please also read [DISTRIBUTION.md](DISTRIBUTION.md) to understand how our pipelines are distributed to the users.
+The following guide will walk you through contributing new pipelines or changes to existing pipelines and contains a troubleshooting section. Please also read [DISTRIBUTION.md](docs/DISTRIBUTION.md) to understand how our pipelines are distributed to the users.
 
 ## Walktrough: Prerequesites
 
-To start development in the pipelines repository, there are a few steps you need to do to ensure you have the setup. 
+To start development in the pipelines repository, there are a few steps you need to do to ensure you have the setup.
 
 
 ### 1. Prepare the repository
@@ -22,7 +22,7 @@ git checkout -b <your-branch-name>
 ### 2. Prepare the development environment
 Development on the pipelines repository depends on python 3.8 or higher and poetry being available as well as the needed dependencies being installed. Make is used to automate tasks
 
-1. Install poetry: 
+1. Install poetry:
 ```sh
 make install-poetry
 ```
@@ -42,7 +42,7 @@ If this command fails, something is not set up correctly yet.
 
 
 ## Walktrough: Create and contribute a new pipeline
-In this section you will learn how to contribute a new pipeline based on the `chess` pipeline. The `chess` pipeline is a very basic pipeline with two sources and a few resources. For an even simpler starting point, you can use the `pokemon` pipeline as the starting point with the same method. Please also read [DISTRIBUTION.md](DISTRIBUTION.md) before you start this guide to get an understand of how your pipeline will be distributed to other users once it is accepted into our repo.
+In this section you will learn how to contribute a new pipeline based on the `chess` pipeline. The `chess` pipeline is a very basic pipeline with two sources and a few resources. For an even simpler starting point, you can use the `pokemon` pipeline as the starting point with the same method. Please also read [DISTRIBUTION.md](docs/DISTRIBUTION.md) before you start this guide to get an understand of how your pipeline will be distributed to other users once it is accepted into our repo.
 
 1. Ensure you have followed all steps in the prerequesites section.
 2. We will copy the chess pipeline as a starting point. You can copy any other pipeline you wish to serve as your starting point. Another fairly simple pipeline is the chess pipeline for example. We will assume your new pipeline is called `animals`.
@@ -57,11 +57,11 @@ to see if they work. They should :).
 3. You can now implement your custom pipeline. Consult our extensive docs on how to create dlt pipelines at [dlthub docs](https://dlthub.com/docs/intro). The typical development workflow will look something like this:
 	1. Make changes to your pipeline code, in our example you could add resources like `fish` or `predators`.
 	2. Execute the pipeline example script `python animals_pipeline.py` and see if there are any errors and wether the expected data ends up in your destination.
-	3. Adjust your tests to test for the new features you have added in `./tests/animals/test_pipeline.py` and run the tests again duckdb locally with this command: 
+	3. Adjust your tests to test for the new features you have added in `./tests/animals/test_pipeline.py` and run the tests again duckdb locally with this command:
 ```sh
 ALL_DESTINATIONS='["duckdb"]' pytest tests/animals
 ```
-	4. Run the linter and formatter to check for any problems: 
+	4. Run the linter and formatter to check for any problems:
 ```sh
 make lint-code
 ```
@@ -73,13 +73,13 @@ make lint-code
 In this section you will learn how to contribute changes to an existing pipeline. It is helpful to also read through the above section to see all the very basic things that are part of a pipeline.
 
 1. Ensure you have followed all steps in the prerequesites section and the format-lint command works.
-2. Make the changes you want to do in the pipeline. 
+2. Make the changes you want to do in the pipeline.
 3. Proceed to the pull request section to create a pull request to the main repo.
 
 
 ## Making a pull request to the main repo
 
-1. Ensure the linter and formatter pass by running 
+1. Ensure the linter and formatter pass by running
 ```sh
 make lint-code
 ```
