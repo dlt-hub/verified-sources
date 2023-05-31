@@ -10,7 +10,7 @@ from dlt.common.typing import TDataItem, DictStrAny
 from dlt.extract.source import DltResource
 from dlt.sources.credentials import GcpOAuthCredentials, GcpServiceAccountCredentials
 
-from .helpers.data_processing import process_dimension, process_metric
+from .helpers.data_processing import to_dict
 from .helpers import basic_report
 
 from .settings import START_DATE
@@ -126,8 +126,7 @@ def metrics_table(metadata: Metadata) -> Iterator[TDataItem]:
         Generator of dicts, 1 metric at a time.
     """
     for metric in metadata.metrics:
-        processed_metric = process_metric(metric=metric)
-        yield processed_metric
+        yield to_dict(metric)
 
 
 @dlt.transformer(data_from=get_metadata, write_disposition="replace", name="dimensions")
@@ -142,5 +141,4 @@ def dimensions_table(metadata: Metadata) -> Iterator[TDataItem]:
         Generator of dicts, 1 dimension at a time.
     """
     for dimension in metadata.dimensions:
-        processed_dimension = process_dimension(dimension=dimension)
-        yield processed_dimension
+        yield to_dict(dimension)

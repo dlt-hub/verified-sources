@@ -6,6 +6,8 @@ from typing import Any, Iterator, List, Union
 from dlt.common.pendulum import pendulum
 from dlt.common.exceptions import MissingDependencyException
 from dlt.common.typing import DictStrAny, TDataItem, TDataItems
+import proto
+import json
 
 try:
     from google.analytics.data_v1beta import BetaAnalyticsDataClient
@@ -32,46 +34,22 @@ except ImportError:
     raise MissingDependencyException("Google API Client", ["google-api-python-client"])
 
 
-def process_metric(metric: MetricMetadata) -> DictStrAny:
+def to_dict(item: Any) -> Iterator[TDataItem]:
     """
-    Processes a MetricMetadata object into a dictionary.
-
-    Args:
-        metric: MetricMetadata object.
-
-    Returns:
-        metric_dict: The dictionary version of the object.
+    Processes a batch result (page of results per dimension) accordingly
+    :param batch:
+    :return:
     """
-    metric_dict = {
-        "api_name": metric.api_name,
-        "category": metric.category,
-        "custom_definition": metric.custom_definition,
-        "description": metric.description,
-        "expression": metric.expression,
-        "type": metric.type_,
-        "ui_name": metric.ui_name,
-    }
-    return metric_dict
-
-
-def process_dimension(dimension: DimensionMetadata) -> DictStrAny:
-    """
-    Processes a DimensionMetadata object into a dictionary.
-
-    Args:
-        dimension: DimensionMetadata object.
-
-    Returns:
-        dimension_dict: The dictionary version of the object.
-    """
-    dimension_dict = {
-        "api_name": dimension.api_name,
-        "category": dimension.category,
-        "custom_definition": dimension.custom_definition,
-        "description": dimension.description,
-        "ui_name": dimension.ui_name,
-    }
-    return dimension_dict
+    item = json.loads(
+        proto.Message.to_json(
+            item,
+            preserving_proto_field_name=True,
+            use_integers_for_enums=False,
+            including_default_value_fields=False,
+        )
+    )
+    print(item)
+    yield item
 
 
 def get_report(

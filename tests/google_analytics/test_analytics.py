@@ -68,7 +68,7 @@ def test_metrics(destination_name: str) -> None:
         dataset_name="analytics_dataset",
     )
     with pipeline.sql_client() as client:
-        sql_query = "SELECT api_name, category, custom_definition, description, expression, type, ui_name FROM metrics;"
+        sql_query = "SELECT api_name, category, description, ui_name FROM metrics;"
         with client.execute_query(sql_query) as cur:
             rows = list(cur.fetchall())
             assert len(rows) == ALL_TABLES["metrics"]
