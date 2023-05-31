@@ -2,7 +2,7 @@ import pytest
 
 import dlt
 
-from pipelines.firebase import firebase_source
+from pipelines.firebase_pipeline import firebase_source_demo, parse_data
 
 from tests.utils import ALL_DESTINATIONS, assert_load_info, load_table_counts
 
@@ -16,12 +16,12 @@ def test_load_firebase_source(destination: str) -> None:
         full_refresh=True
     )
 
-    info = pipeline.run(firebase_source().with_resources("realtime_db"))
+    info = pipeline.run(firebase_source_demo().with_resources("realtime_db").add_map(parse_data))
     # assert if job is loaded
     assert_load_info(info)
     # assert if table exists
     assert load_table_counts(pipeline, "realtime_db")["realtime_db"] == 1
-    # assert columns datatype using discography example data
+    # assert columns datatype
     table = pipeline.default_schema.data_tables()[0]
     assert table["columns"]["band_name"]["data_type"] == "text"
     assert table["columns"]["album_name"]["data_type"] == "text"
