@@ -114,11 +114,11 @@ def fetch_data(
 
     """
     # Construct the URL and headers for the API request
-    _url = get_url(endpoint, **kwargs)
-    _headers = _get_headers(api_key)
+    url = get_url(endpoint, **kwargs)
+    headers = _get_headers(api_key)
 
     # Make the API request
-    r = requests.get(_url, headers=_headers)
+    r = requests.get(url, headers=headers)
 
     # Parse the API response and yield the properties of each result
     return _parse_response(r, api_key=api_key, **kwargs)

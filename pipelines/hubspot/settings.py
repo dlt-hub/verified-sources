@@ -1,3 +1,7 @@
+from dlt.common import pendulum
+
+STARTDATE = pendulum.datetime(year=2000, month=1, day=1)
+
 CRM_CONTACTS_ENDPOINT = (
     "/crm/v3/objects/contacts?associations=deals,products,tickets,quotes&limit=100"
 )
