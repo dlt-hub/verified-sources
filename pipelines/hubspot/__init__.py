@@ -32,9 +32,15 @@ from dlt.common.typing import TDataItems
 from dlt.extract.source import DltResource
 
 from .client import fetch_data
-from .endpoints import CRM_CONTACTS_ENDPOINT, CRM_COMPANIES_ENDPOINT, \
-    CRM_DEALS_ENDPOINT, CRM_TICKETS_ENDPOINT, CRM_PRODUCTS_ENDPOINT, WEB_ANALYTICS_EVENTS_ENDPOINT, \
-    CRM_QUOTES_ENDPOINT
+from .endpoints import (
+    CRM_CONTACTS_ENDPOINT,
+    CRM_COMPANIES_ENDPOINT,
+    CRM_DEALS_ENDPOINT,
+    CRM_TICKETS_ENDPOINT,
+    CRM_PRODUCTS_ENDPOINT,
+    WEB_ANALYTICS_EVENTS_ENDPOINT,
+    CRM_QUOTES_ENDPOINT,
+)
 
 FIRST_DAY_OF_MILLENNIUM = pendulum.datetime(year=2000, month=1, day=1)
 THubspotObjectType = Literal["company", "contact", "deal", "ticket", "product", "quote"]
@@ -99,7 +105,8 @@ def hubspot_events_for_objects(
     object_type: THubspotObjectType,
     object_ids: List[str],
     api_key: str = dlt.secrets.value,
-    start_date: pendulum.DateTime = FIRST_DAY_OF_MILLENNIUM) -> DltResource:
+    start_date: pendulum.DateTime = FIRST_DAY_OF_MILLENNIUM,
+) -> DltResource:
     """
     A standalone DLT resources that retrieves web analytics events from the HubSpot API for a particular object type and list of object ids.
 
@@ -117,7 +124,9 @@ def hubspot_events_for_objects(
     end_date = pendulum.now().isoformat()
     name = object_type + "_events"
 
-    def _get_web_analytics_events(occurred_at: dlt.sources.incremental[str]) -> Iterator[List[Dict[str, Any]]]:
+    def _get_web_analytics_events(
+        occurred_at: dlt.sources.incremental[str],
+    ) -> Iterator[List[Dict[str, Any]]]:
         """
         A helper function that retrieves web analytics events for a given object type from the HubSpot API.
 
@@ -136,9 +145,9 @@ def hubspot_events_for_objects(
                     objectType=object_type,
                     objectId=object_id,
                     occurredAfter=quote(occurred_at.last_value),
-                    occurredBefore=quote(end_date)
+                    occurredBefore=quote(end_date),
                 ),
-                api_key=api_key
+                api_key=api_key,
             )
 
     return dlt.resource(
@@ -147,6 +156,5 @@ def hubspot_events_for_objects(
         primary_key="id",
         write_disposition="append",
         selected=True,
-        table_name=lambda e: name + "_" + str(e["eventType"]))(
-            dlt.sources.incremental("occurredAt", initial_value=start_date.isoformat())
-        )
+        table_name=lambda e: name + "_" + str(e["eventType"]),
+    )(dlt.sources.incremental("occurredAt", initial_value=start_date.isoformat()))
