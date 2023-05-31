@@ -32,7 +32,8 @@ def print_refresh_token(credentials: GcpOAuthCredentials = dlt.secrets.value) ->
 
 
 if __name__ == "__main__":
-    print("""
+    print(
+        """
 Before running this script you must:
 1. Ensure your email used for the GCP account has access to the GA4 property.
 2. Open a gcp project in your GCP account.
@@ -43,9 +44,12 @@ Before running this script you must:
 7. Go back to credentials and select OAuth consent screen in the left
 8. Fill in App name, user support email(your email), authorized domain (localhost.com), dev contact info (your email again)
 9. Add the following scope: “https://www.googleapis.com/auth/analytics.readonly”
-10. Add your own email as a test user.""")
+10. Add your own email as a test user."""
+    )
     try:
         print_refresh_token()
     except ConfigFieldMissingException:
-        print("*****\nMissing secrets! Make sure you added client_id, client_secret and project_id to secrets.toml or environment variables. See details below\n*****")
+        print(
+            "*****\nMissing secrets! Make sure you added client_id, client_secret and project_id to secrets.toml or environment variables. See details below\n*****"
+        )
         raise
