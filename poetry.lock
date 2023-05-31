@@ -1994,6 +1994,7 @@ asyncstdlib = [
     {file = "asyncstdlib-3.10.7.tar.gz", hash = "sha256:e7238a519d3be21cff167838028d67c2531a735907a177aaca25146989b70864"},
 ]
 <<<<<<< HEAD
+<<<<<<< HEAD
 
 [package.extras]
 doc = ["sphinx", "sphinxcontrib-trio"]
@@ -2010,6 +2011,9 @@ files = [
 =======
 attrs = [
 >>>>>>> ffafb379da1d21f5bc73775f412e7884874cde6e
+=======
+attrs = [
+>>>>>>> ffafb379da1d21f5bc73775f412e7884874cde6e
     {file = "attrs-23.1.0-py3-none-any.whl", hash = "sha256:1f28b4522cdc2fb4256ac1a020c78acf9cba2c6b461ccd2c126f3aa8e8335d04"},
     {file = "attrs-23.1.0.tar.gz", hash = "sha256:6279836d581513a26f1bf235f9acd333bc9115683f14f7e8fae46c98fc50e015"},
 ]
@@ -2017,6 +2021,7 @@ bandit = [
     {file = "bandit-1.7.5-py3-none-any.whl", hash = "sha256:75665181dc1e0096369112541a056c59d1c5f66f9bb74a8d686c3c362b83f549"},
     {file = "bandit-1.7.5.tar.gz", hash = "sha256:bdfc739baa03b880c2d15d0431b31c658ffc348e907fe197e54e0389dd59e11e"},
 ]
+<<<<<<< HEAD
 <<<<<<< HEAD
 
 [package.dependencies]
@@ -2060,6 +2065,8 @@ optional = false
 python-versions = "~=3.7"
 files = [
 =======
+=======
+>>>>>>> ffafb379da1d21f5bc73775f412e7884874cde6e
 black = [
     {file = "black-23.3.0-cp310-cp310-macosx_10_16_arm64.whl", hash = "sha256:0945e13506be58bf7db93ee5853243eb368ace1c08a24c65ce108986eac65915"},
     {file = "black-23.3.0-cp310-cp310-macosx_10_16_universal2.whl", hash = "sha256:67de8d0c209eb5b330cce2469503de11bca4085880d62f1628bd9972cc3366b9"},
@@ -2088,6 +2095,9 @@ black = [
     {file = "black-23.3.0.tar.gz", hash = "sha256:1c7b8d606e728a41ea1ccbd7264677e494e87cf630e399262ced92d4a8dac940"},
 ]
 cachetools = [
+<<<<<<< HEAD
+>>>>>>> ffafb379da1d21f5bc73775f412e7884874cde6e
+=======
 >>>>>>> ffafb379da1d21f5bc73775f412e7884874cde6e
     {file = "cachetools-5.3.0-py3-none-any.whl", hash = "sha256:429e1a1e845c008ea6c85aa35d4b98b65d6a9763eeef3e37e92728a12d1de9d4"},
     {file = "cachetools-5.3.0.tar.gz", hash = "sha256:13dfddc7b8df938c21a940dfa6557ce6e94a2f1cdfa58eb90c805721d58f2c14"},
@@ -2348,6 +2358,7 @@ facebook-business = [
     {file = "facebook_business-16.0.2.tar.gz", hash = "sha256:29418b469fd31235a6084cb5168445a8a4e90c56ebb15646d77df5fbea4af739"},
 ]
 <<<<<<< HEAD
+<<<<<<< HEAD
 
 [package.dependencies]
 aiohttp = {version = "*", markers = "python_version >= \"3.5.3\""}
@@ -2384,6 +2395,9 @@ category = "dev"
 optional = false
 python-versions = ">=3.8.1"
 files = [
+=======
+flake8 = [
+>>>>>>> ffafb379da1d21f5bc73775f412e7884874cde6e
 =======
 flake8 = [
 >>>>>>> ffafb379da1d21f5bc73775f412e7884874cde6e
@@ -2514,6 +2528,7 @@ google-api-core = [
     {file = "google-api-core-2.11.0.tar.gz", hash = "sha256:4b9bb5d5a380a0befa0573b302651b8a9a89262c1730e37bf423cec511804c22"},
     {file = "google_api_core-2.11.0-py3-none-any.whl", hash = "sha256:ce222e27b0de0d7bc63eb043b956996d6dccab14cc3b690aaea91c9cc99dc16e"},
 ]
+<<<<<<< HEAD
 
 [package.dependencies]
 google-auth = ">=2.14.1,<3.0dev"
@@ -2542,6 +2557,8 @@ category = "main"
 optional = false
 python-versions = ">=3.7"
 files = [
+=======
+>>>>>>> ffafb379da1d21f5bc73775f412e7884874cde6e
 google-api-python-client = [
     {file = "google-api-python-client-2.86.0.tar.gz", hash = "sha256:3ca4e93821f4e9ac29b91ab0d9df168b42c8ad0fb8bff65b8c2ccb2d462b0464"},
     {file = "google_api_python_client-2.86.0-py2.py3-none-any.whl", hash = "sha256:0f320190ab9d5bd2fdb0cb894e8e53bb5e17d4888ee8dc4d26ba65ce378409e2"},
@@ -2550,6 +2567,7 @@ google-auth = [
     {file = "google-auth-2.18.1.tar.gz", hash = "sha256:d7a3249027e7f464fbbfd7ee8319a08ad09d2eea51578575c4bd360ffa049ccb"},
     {file = "google_auth-2.18.1-py2.py3-none-any.whl", hash = "sha256:55a395cdfd3f3dd3f649131d41f97c17b4ed8a2aac1be3502090c716314e8a37"},
 ]
+<<<<<<< HEAD
 
 [package.dependencies]
 cachetools = ">=2.0.0,<6.0"
@@ -2573,6 +2591,8 @@ category = "main"
 optional = false
 python-versions = "*"
 files = [
+=======
+>>>>>>> ffafb379da1d21f5bc73775f412e7884874cde6e
 google-auth-httplib2 = [
     {file = "google-auth-httplib2-0.1.0.tar.gz", hash = "sha256:a07c39fd632becacd3f07718dfd6021bf396978f03ad3ce4321d060015cc30ac"},
     {file = "google_auth_httplib2-0.1.0-py2.py3-none-any.whl", hash = "sha256:31e49c36c6b5643b57e82617cb3e021e3e1d2df9da63af67252c02fa9c1f4a10"},
@@ -2589,6 +2609,7 @@ google-cloud-core = [
     {file = "google-cloud-core-2.3.2.tar.gz", hash = "sha256:b9529ee7047fd8d4bf4a2182de619154240df17fbe60ead399078c1ae152af9a"},
     {file = "google_cloud_core-2.3.2-py2.py3-none-any.whl", hash = "sha256:8417acf6466be2fa85123441696c4badda48db314c607cf1e5d543fa8bdc22fe"},
 ]
+<<<<<<< HEAD
 
 [package.dependencies]
 google-api-core = ">=1.31.6,<2.0.0 || >2.3.0,<3.0.0dev"
@@ -2648,6 +2669,8 @@ category = "main"
 optional = false
 python-versions = ">=3.7"
 files = [
+=======
+>>>>>>> ffafb379da1d21f5bc73775f412e7884874cde6e
 google-cloud-storage = [
     {file = "google-cloud-storage-2.9.0.tar.gz", hash = "sha256:9b6ae7b509fc294bdacb84d0f3ea8e20e2c54a8b4bbe39c5707635fec214eff3"},
     {file = "google_cloud_storage-2.9.0-py2.py3-none-any.whl", hash = "sha256:83a90447f23d5edd045e0037982c270302e3aeb45fc1288d2c2ca713d27bad94"},
@@ -2847,6 +2870,7 @@ hexbytes = [
     {file = "hexbytes-0.3.0-py3-none-any.whl", hash = "sha256:21c3a5bd00a383097f0369c387174e79839d75c4ccc3a7edda315c9644f4458a"},
     {file = "hexbytes-0.3.0.tar.gz", hash = "sha256:afeebfb800f5f15a3ca5bab52e49eabcb4b6dac06ec8ff01a94fdb890c6c0712"},
 ]
+<<<<<<< HEAD
 
 [package.extras]
 dev = ["Sphinx (>=4.0.0,<5)", "black (>=22,<23)", "bumpversion (>=0.5.3,<1)", "eth-utils (>=1.0.1,<3)", "flake8 (==3.7.9)", "hypothesis (>=3.44.24,<=6.31.6)", "ipython", "isort (>=4.2.15,<5)", "mypy (==0.971)", "pydocstyle (>=5.0.0,<6)", "pytest (>=7,<8)", "pytest-watch (>=4.1.0,<5)", "pytest-xdist", "sphinx-rtd-theme (>=0.1.9,<1)", "towncrier (>=21,<22)", "tox (>=3.25.1,<4)", "twine", "wheel"]
@@ -2862,6 +2886,8 @@ category = "main"
 optional = false
 python-versions = ">=2.7, !=3.0.*, !=3.1.*, !=3.2.*, !=3.3.*"
 files = [
+=======
+>>>>>>> ffafb379da1d21f5bc73775f412e7884874cde6e
 httplib2 = [
     {file = "httplib2-0.22.0-py3-none-any.whl", hash = "sha256:14ae0a53c1ba8f3d37e9e27cf37eabb0fb9980f435ba405d546948b009dd64dc"},
     {file = "httplib2-0.22.0.tar.gz", hash = "sha256:d7a10bc5ef5ab08322488bde8c726eeee5c8618723fdb399597ec58f3d82df81"},
@@ -2882,6 +2908,7 @@ iniconfig = [
     {file = "iniconfig-2.0.0-py3-none-any.whl", hash = "sha256:b6a85871a79d2e3b22d2d1b94ac2824226a63c6b741c88f7ae975f18b6778374"},
     {file = "iniconfig-2.0.0.tar.gz", hash = "sha256:2d91e135bf72d31a410b17c16da610a82cb55f6b0477d1a902134b24a455b8b3"},
 ]
+<<<<<<< HEAD
 
 [[package]]
 name = "isodate"
@@ -2891,6 +2918,8 @@ category = "dev"
 optional = false
 python-versions = "*"
 files = [
+=======
+>>>>>>> ffafb379da1d21f5bc73775f412e7884874cde6e
 isodate = [
     {file = "isodate-0.6.1-py2.py3-none-any.whl", hash = "sha256:0751eece944162659049d35f4f549ed815792b38793f07cf73381c1c87cbed96"},
     {file = "isodate-0.6.1.tar.gz", hash = "sha256:48c5881de7e8b0a0d648cb024c8062dc84e7b840ed81e864c7614fd3c127bde9"},
@@ -2904,6 +2933,7 @@ jsonpath-ng = [
     {file = "jsonpath_ng-1.5.3-py2-none-any.whl", hash = "sha256:f75b95dbecb8a0f3b86fd2ead21c2b022c3f5770957492b9b6196ecccfeb10aa"},
     {file = "jsonpath_ng-1.5.3-py3-none-any.whl", hash = "sha256:292a93569d74029ba75ac2dc3d3630fc0e17b2df26119a165fa1d498ca47bf65"},
 ]
+<<<<<<< HEAD
 
 [package.dependencies]
 decorator = "*"
@@ -2918,6 +2948,8 @@ category = "dev"
 optional = false
 python-versions = ">=2.7, !=3.0.*, !=3.1.*, !=3.2.*, !=3.3.*, != 3.4.*"
 files = [
+=======
+>>>>>>> ffafb379da1d21f5bc73775f412e7884874cde6e
 lxml = [
     {file = "lxml-4.9.2-cp27-cp27m-macosx_10_15_x86_64.whl", hash = "sha256:76cf573e5a365e790396a5cc2b909812633409306c6531a6877c59061e42c4f2"},
     {file = "lxml-4.9.2-cp27-cp27m-manylinux_2_5_i686.manylinux1_i686.whl", hash = "sha256:b1f42b6921d0e81b1bcb5e395bc091a70f41c4d4e55ba99c6da2b31626c44892"},
@@ -3016,6 +3048,7 @@ mdurl = [
 mimesis = [
     {file = "mimesis-7.1.0-py3-none-any.whl", hash = "sha256:da65bea6d6d5d5d87d5c008e6b23ef5f96a49cce436d9f8708dabb5152da0290"},
     {file = "mimesis-7.1.0.tar.gz", hash = "sha256:c83b55d35536d7e9b9700a596b7ccfb639a740e3e1fb5e08062e8ab2a67dcb37"},
+<<<<<<< HEAD
 ]
 
 [[package]]
@@ -3099,6 +3132,9 @@ category = "dev"
 optional = false
 python-versions = ">=3.7"
 files = [
+=======
+]
+>>>>>>> ffafb379da1d21f5bc73775f412e7884874cde6e
 multidict = [
     {file = "multidict-6.0.4-cp310-cp310-macosx_10_9_universal2.whl", hash = "sha256:0b1a97283e0c85772d613878028fec909f003993e1007eafa715b24b377cb9b8"},
     {file = "multidict-6.0.4-cp310-cp310-macosx_10_9_x86_64.whl", hash = "sha256:eeb6dcc05e911516ae3d1f207d4b0520d07f54484c49dfc294d6e7d63b734171"},
@@ -3367,6 +3403,7 @@ pipdeptree = [
     {file = "pipdeptree-2.7.1-py3-none-any.whl", hash = "sha256:bb0ffa98a49b0b4076364b367d1df37fcf6628ec3b5cbb61cf4bbaedc7502db0"},
     {file = "pipdeptree-2.7.1.tar.gz", hash = "sha256:550bd7679379e7290739384f3e9518835620e814cc29ba709513952b627da506"},
 ]
+<<<<<<< HEAD
 
 [package.extras]
 graphviz = ["graphviz (>=0.20.1)"]
@@ -3380,6 +3417,8 @@ category = "dev"
 optional = false
 python-versions = ">=3.7"
 files = [
+=======
+>>>>>>> ffafb379da1d21f5bc73775f412e7884874cde6e
 platformdirs = [
     {file = "platformdirs-3.5.1-py3-none-any.whl", hash = "sha256:e2378146f1964972c03c085bb5662ae80b2b8c06226c54b2ff4aa9483e8a13a5"},
     {file = "platformdirs-3.5.1.tar.gz", hash = "sha256:412dae91f52a6f84830f39a8078cecd0e866cb72294a5c66808e74d5e88d251f"},
@@ -3555,6 +3594,7 @@ pyjwt = [
     {file = "PyJWT-2.7.0-py3-none-any.whl", hash = "sha256:ba2b425b15ad5ef12f200dc67dd56af4e26de2331f965c5439994dad075876e1"},
     {file = "PyJWT-2.7.0.tar.gz", hash = "sha256:bd6ca4a3c4285c1a2d4349e5a035fdf8fb94e04ccd0fcbe6ba289dae9cc3e074"},
 ]
+<<<<<<< HEAD
 
 [package.dependencies]
 cryptography = {version = ">=3.4.0", optional = true, markers = "extra == \"crypto\""}
@@ -3593,6 +3633,12 @@ pymysql = [
     {file = "PyMySQL-1.0.3-py3-none-any.whl", hash = "sha256:89fc6ae41c0aeb6e1f7710cdd623702ea2c54d040565767a78b00a5ebb12f4e5"},
     {file = "PyMySQL-1.0.3.tar.gz", hash = "sha256:3dda943ef3694068a75d69d071755dbecacee1adf9a1fc5b206830d2b67d25e8"},
 ]
+=======
+pymysql = [
+    {file = "PyMySQL-1.0.3-py3-none-any.whl", hash = "sha256:89fc6ae41c0aeb6e1f7710cdd623702ea2c54d040565767a78b00a5ebb12f4e5"},
+    {file = "PyMySQL-1.0.3.tar.gz", hash = "sha256:3dda943ef3694068a75d69d071755dbecacee1adf9a1fc5b206830d2b67d25e8"},
+]
+>>>>>>> ffafb379da1d21f5bc73775f412e7884874cde6e
 pyparsing = [
     {file = "pyparsing-3.0.9-py3-none-any.whl", hash = "sha256:5026bae9a10eeaefb61dab2f09052b9f4307d44aee4eda64b309723d8d206bbc"},
     {file = "pyparsing-3.0.9.tar.gz", hash = "sha256:2b020ecf7d21b687f219b71ecad3631f644a47f01403fa1d1036b0c6416d70fb"},
@@ -3659,6 +3705,7 @@ requests = [
     {file = "requests-2.30.0-py3-none-any.whl", hash = "sha256:10e94cc4f3121ee6da529d358cdaeaff2f1c409cd377dbc72b825852f2f7e294"},
     {file = "requests-2.30.0.tar.gz", hash = "sha256:239d7d4458afcb28a692cdd298d87542235f4ca8d36d03a15bfc128a6559a2f4"},
 ]
+<<<<<<< HEAD
 
 [package.dependencies]
 certifi = ">=2017.4.17"
@@ -3678,6 +3725,8 @@ category = "dev"
 optional = false
 python-versions = "*"
 files = [
+=======
+>>>>>>> ffafb379da1d21f5bc73775f412e7884874cde6e
 requests-file = [
     {file = "requests-file-1.5.1.tar.gz", hash = "sha256:07d74208d3389d01c38ab89ef403af0cfec63957d53a0081d8eca738d0247d8e"},
     {file = "requests_file-1.5.1-py2.py3-none-any.whl", hash = "sha256:dfe5dae75c12481f68ba353183c53a65e6044c923e64c24b2209f6c7570ca953"},
@@ -3690,6 +3739,7 @@ requests-oauthlib = [
     {file = "requests-oauthlib-1.3.1.tar.gz", hash = "sha256:75beac4a47881eeb94d5ea5d6ad31ef88856affe2332b9aafb52c6452ccf0d7a"},
     {file = "requests_oauthlib-1.3.1-py2.py3-none-any.whl", hash = "sha256:2577c501a2fb8d05a304c09d090d6e47c306fef15809d102b327cf8364bddab5"},
 ]
+<<<<<<< HEAD
 
 [package.dependencies]
 oauthlib = ">=3.0.0"
@@ -3706,6 +3756,8 @@ category = "dev"
 optional = false
 python-versions = ">=2.7, !=3.0.*, !=3.1.*, !=3.2.*, !=3.3.*"
 files = [
+=======
+>>>>>>> ffafb379da1d21f5bc73775f412e7884874cde6e
 requests-toolbelt = [
     {file = "requests-toolbelt-1.0.0.tar.gz", hash = "sha256:7681a0a3d047012b5bdc0ee37d7f8f07ebe76ab08caeccfc3921ce23c88d5bc6"},
     {file = "requests_toolbelt-1.0.0-py2.py3-none-any.whl", hash = "sha256:cccfdd665f0a24fcf4726e690f65639d272bb0637b9b92dfd91a5568ccf6bd06"},
@@ -3737,6 +3789,7 @@ setuptools = [
 shopifyapi = [
     {file = "ShopifyAPI-12.3.0.tar.gz", hash = "sha256:416a2ee7c05b0d22182fbe8edfec4c8c3b37961aaae0e4c096738a82a0c543a4"},
 ]
+<<<<<<< HEAD
 
 [package.dependencies]
 pyactiveresource = ">=2.2.2"
@@ -3752,6 +3805,8 @@ category = "dev"
 optional = false
 python-versions = "*"
 files = [
+=======
+>>>>>>> ffafb379da1d21f5bc73775f412e7884874cde6e
 simple-salesforce = [
     {file = "simple-salesforce-1.12.4.tar.gz", hash = "sha256:e9205f8041226c8273f020448c7fbd37999d481d25edd67f9bf86dc159cd3939"},
     {file = "simple_salesforce-1.12.4-py2.py3-none-any.whl", hash = "sha256:87f1ac1363987ebf9b7a66ac9e7395534ec3f5a9545e08b664cb695dc085b1ac"},
@@ -3934,6 +3989,7 @@ tzdata = [
     {file = "tzdata-2023.3-py2.py3-none-any.whl", hash = "sha256:7e65763eef3120314099b6939b5546db7adce1e7d6f2e179e3df563c70511eda"},
     {file = "tzdata-2023.3.tar.gz", hash = "sha256:11ef1e08e54acb0d4f95bdb1be05da659673de4acbd21bf9c69e94cc5e907a3a"},
 ]
+<<<<<<< HEAD
 
 [[package]]
 name = "uritemplate"
@@ -3943,6 +3999,8 @@ category = "main"
 optional = false
 python-versions = ">=3.6"
 files = [
+=======
+>>>>>>> ffafb379da1d21f5bc73775f412e7884874cde6e
 uritemplate = [
     {file = "uritemplate-4.1.1-py2.py3-none-any.whl", hash = "sha256:830c08b8d99bdd312ea4ead05994a38e8936266f84b9a7878232db50b044e02e"},
     {file = "uritemplate-4.1.1.tar.gz", hash = "sha256:4346edfc5c3b79f694bccd6d6099a322bbeb628dbf2cd86eea55a456ce5124f0"},
@@ -4108,6 +4166,7 @@ yarl = [
     {file = "yarl-1.9.2-cp39-cp39-win_amd64.whl", hash = "sha256:61016e7d582bc46a5378ffdd02cd0314fb8ba52f40f9cf4d9a5e7dbef88dee18"},
     {file = "yarl-1.9.2.tar.gz", hash = "sha256:04ab9d4b9f587c06d801c2abfe9317b77cdf996c65a90d5e84ecc45010823571"},
 ]
+<<<<<<< HEAD
 
 [package.dependencies]
 idna = ">=2.0"
@@ -4121,6 +4180,8 @@ category = "dev"
 optional = false
 python-versions = ">=3.7"
 files = [
+=======
+>>>>>>> ffafb379da1d21f5bc73775f412e7884874cde6e
 zeep = [
     {file = "zeep-4.2.1-py3-none-any.whl", hash = "sha256:6754feb4c34a4b6d65fbc359252bf6654dcce3937bf1d95aae4402a60a8f5939"},
     {file = "zeep-4.2.1.tar.gz", hash = "sha256:72093acfdb1d8360ed400869b73fbf1882b95c4287f798084c42ee0c1ff0e425"},
@@ -4133,6 +4194,7 @@ zipp = [
     {file = "zipp-3.15.0.tar.gz", hash = "sha256:112929ad649da941c23de50f356a2b5570c954b65150642bccdd66bf194d224b"},
 ]
 <<<<<<< HEAD
+<<<<<<< HEAD
 
 [package.extras]
 docs = ["furo", "jaraco.packaging (>=9)", "jaraco.tidelift (>=1.4)", "rst.linker (>=1.9)", "sphinx (>=3.5)", "sphinx-lint"]
@@ -4142,5 +4204,7 @@ testing = ["big-O", "flake8 (<5)", "jaraco.functools", "jaraco.itertools", "more
 lock-version = "2.0"
 python-versions = "^3.8.1"
 content-hash = "320d1b5fe5eea9d85ed02a6e9310a21a3d841a599f98e526989a0a92e2eec014"
+=======
+>>>>>>> ffafb379da1d21f5bc73775f412e7884874cde6e
 =======
 >>>>>>> ffafb379da1d21f5bc73775f412e7884874cde6e
