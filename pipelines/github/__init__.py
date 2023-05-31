@@ -18,7 +18,7 @@ def github_reactions(
     access_token: str = dlt.secrets.value,
     items_per_page: int = 100,
     max_items: int = None,
-    max_item_age_seconds: float = None
+    max_item_age_seconds: float = None,
 ) -> Sequence[DltResource]:
     """Get reactions associated with issues, pull requests and comments in the repo `name` with owner `owner`
 
@@ -40,17 +40,37 @@ def github_reactions(
         Sequence[DltResource]: Two DltResources: `issues` with issues and `pull_requests` with pull requests
     """
     return (
-        dlt.resource(_get_reactions_data("issues", owner, name, access_token, items_per_page, max_items, max_item_age_seconds), name="issues", write_disposition="replace"),
-        dlt.resource(_get_reactions_data("pullRequests", owner, name, access_token, items_per_page, max_items, max_item_age_seconds), name="pull_requests", write_disposition="replace")
+        dlt.resource(
+            _get_reactions_data(
+                "issues",
+                owner,
+                name,
+                access_token,
+                items_per_page,
+                max_items,
+                max_item_age_seconds,
+            ),
+            name="issues",
+            write_disposition="replace",
+        ),
+        dlt.resource(
+            _get_reactions_data(
+                "pullRequests",
+                owner,
+                name,
+                access_token,
+                items_per_page,
+                max_items,
+                max_item_age_seconds,
+            ),
+            name="pull_requests",
+            write_disposition="replace",
+        ),
     )
 
 
 @dlt.source(max_table_nesting=2)
-def github_repo_events(
-    owner: str,
-    name: str,
-    access_token: str = None
-) -> DltResource:
+def github_repo_events(owner: str, name: str, access_token: str = None) -> DltResource:
     """Gets events for repository `name` with owner `owner` incrementally.
 
     This source contains a single resource `repo_events` that gets given repository's events and dispatches them to separate tables with names based on event type.
@@ -66,10 +86,18 @@ def github_repo_events(
         DltSource: source with the `repo_events` resource
 
     """
+
     # use naming function in table name to generate separate tables for each event
-    @dlt.resource(primary_key="id", table_name=lambda i: i['type'])  # type: ignore
-    def repo_events(last_created_at: dlt.sources.incremental[str] = dlt.sources.incremental("created_at", initial_value="1970-01-01T00:00:00Z", last_value_func=max)) -> Iterator[TDataItems]:
-        repos_path = "/repos/%s/%s/events" % (urllib.parse.quote(owner), urllib.parse.quote(name))
+    @dlt.resource(primary_key="id", table_name=lambda i: i["type"])  # type: ignore
+    def repo_events(
+        last_created_at: dlt.sources.incremental[str] = dlt.sources.incremental(
+            "created_at", initial_value="1970-01-01T00:00:00Z", last_value_func=max
+        )
+    ) -> Iterator[TDataItems]:
+        repos_path = "/repos/%s/%s/events" % (
+            urllib.parse.quote(owner),
+            urllib.parse.quote(name),
+        )
 
         for page in _get_rest_pages(access_token, repos_path + "?per_page=100"):
             yield page
@@ -78,7 +106,9 @@ def github_repo_events(
             # note: incremental will skip those items anyway, we just do not want to use the api limits
             if page and page[-1]["created_at"] < last_created_at.initial_value:
                 # do not get more pages, we overlap with previous run
-                print(f"Overlap with previous run created at {last_created_at.initial_value}")
+                print(
+                    f"Overlap with previous run created at {last_created_at.initial_value}"
+                )
                 break
 
     return repo_events
@@ -91,7 +121,7 @@ def _get_reactions_data(
     access_token: str,
     items_per_page: int,
     max_items: int,
-    max_item_age_seconds: float = None
+    max_item_age_seconds: float = None,
 ) -> Iterator[Iterator[StrAny]]:
     variables = {
         "owner": owner,
@@ -99,21 +129,25 @@ def _get_reactions_data(
         "issues_per_page": items_per_page,
         "first_reactions": 100,
         "first_comments": 100,
-        "node_type": node_type
+        "node_type": node_type,
     }
-    for page_items in _get_graphql_pages(access_token, ISSUES_QUERY % node_type, variables, node_type, max_items):
+    for page_items in _get_graphql_pages(
+        access_token, ISSUES_QUERY % node_type, variables, node_type, max_items
+    ):
         # use reactionGroups to query for reactions to comments that have any reactions. reduces cost by 10-50x
         reacted_comment_ids = {}
         for item in page_items:
             for comment in item["comments"]["nodes"]:
                 if any(group["createdAt"] for group in comment["reactionGroups"]):
                     # print(f"for comment {comment['id']}: has reaction")
-                    reacted_comment_ids[comment['id']] = comment
+                    reacted_comment_ids[comment["id"]] = comment
                 # if "reactionGroups" in comment:
                 comment.pop("reactionGroups", None)
 
         # get comment reactions by querying comment nodes separately
-        comment_reactions = _get_comment_reaction(list(reacted_comment_ids.keys()), access_token)
+        comment_reactions = _get_comment_reaction(
+            list(reacted_comment_ids.keys()), access_token
+        )
         # attach the reaction nodes where they should be
         for comment in comment_reactions.values():
             comment_id = comment["id"]
@@ -122,7 +156,9 @@ def _get_reactions_data(
 
 
 def _extract_top_connection(data: StrAny, node_type: str) -> StrAny:
-    assert isinstance(data, dict) and len(data) == 1, f"The data with list of {node_type} must be a dictionary and contain only one element"
+    assert (
+        isinstance(data, dict) and len(data) == 1
+    ), f"The data with list of {node_type} must be a dictionary and contain only one element"
     data = next(iter(data.values()))
     return data[node_type]  # type: ignore
 
@@ -150,10 +186,15 @@ def _get_auth_header(access_token: str) -> StrAny:
         return {}
 
 
-def _run_graphql_query(access_token: str, query: str, variables: DictStrAny) -> Tuple[StrAny, StrAny]:
-
+def _run_graphql_query(
+    access_token: str, query: str, variables: DictStrAny
+) -> Tuple[StrAny, StrAny]:
     def _request() -> requests.Response:
-        r = requests.post('https://api.github.com/graphql', json={'query': query, 'variables': variables}, headers=_get_auth_header(access_token))
+        r = requests.post(
+            "https://api.github.com/graphql",
+            json={"query": query, "variables": variables},
+            headers=_get_auth_header(access_token),
+        )
         return r
 
     data = _request().json()
@@ -165,19 +206,25 @@ def _run_graphql_query(access_token: str, query: str, variables: DictStrAny) -> 
     return data, rate_limit
 
 
-def _get_graphql_pages(access_token: str, query: str, variables: DictStrAny, node_type: str, max_items: int) -> Iterator[List[DictStrAny]]:
+def _get_graphql_pages(
+    access_token: str, query: str, variables: DictStrAny, node_type: str, max_items: int
+) -> Iterator[List[DictStrAny]]:
     items_count = 0
     while True:
         data, rate_limit = _run_graphql_query(access_token, query, variables)
         data_items = _extract_top_connection(data, node_type)["nodes"]
         items_count += len(data_items)
-        print(f'Got {len(data_items)}/{items_count} {node_type}s, query cost {rate_limit["cost"]}, remaining credits: {rate_limit["remaining"]}')
+        print(
+            f'Got {len(data_items)}/{items_count} {node_type}s, query cost {rate_limit["cost"]}, remaining credits: {rate_limit["remaining"]}'
+        )
         if data_items:
             yield data_items
         else:
             return
         # print(data["repository"][node_type]["pageInfo"]["endCursor"])
-        variables["page_after"] = _extract_top_connection(data, node_type)["pageInfo"]["endCursor"]
+        variables["page_after"] = _extract_top_connection(data, node_type)["pageInfo"][
+            "endCursor"
+        ]
         if max_items and items_count >= max_items:
             print(f"Max items limit reached: {items_count} >= {max_items}")
             return
@@ -196,19 +243,20 @@ def _get_comment_reaction(comment_ids: List[str], access_token: str) -> StrAny:
         query = "{" + ",\n".join(subs) + "}"
         # print(query)
         page, rate_limit = _run_graphql_query(access_token, query, {})
-        print(f'Got {len(page)} comments, query cost {rate_limit["cost"]}, remaining credits: {rate_limit["remaining"]}')
+        print(
+            f'Got {len(page)} comments, query cost {rate_limit["cost"]}, remaining credits: {rate_limit["remaining"]}'
+        )
         data.update(page)
     return data
 
 
 def _get_rest_pages(access_token: str, query: str) -> Iterator[List[StrAny]]:
-
     def _request(url: str) -> requests.Response:
         r = requests.get(url, headers=_get_auth_header(access_token))
         print(f"got page {url}, requests left: " + r.headers["x-ratelimit-remaining"])
         return r
 
-    url = 'https://api.github.com' + query
+    url = "https://api.github.com" + query
     while True:
         r: requests.Response = _request(url)
         page_items = r.json()

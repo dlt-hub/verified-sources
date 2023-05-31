@@ -1,22 +1,33 @@
 import functools
 import itertools
+import time
 from typing import Any, Iterator, Sequence
 
 import dlt
+import humanize
 import pendulum
+
 from dlt.common import logger
+from dlt.common.configuration.inject import with_config
 from dlt.common.time import parse_iso_like_datetime
 from dlt.common.typing import DictStrAny, TDataItem, TDataItems
 from dlt.extract.typing import ItemTransformFunctionWithMeta
+from dlt.sources.helpers import requests
+from dlt.sources.helpers.requests import Client
+
 from facebook_business import FacebookAdsApi
+from facebook_business.adobjects.adaccount import AdAccount
+from facebook_business.adobjects.jobsjob import JobsJob
+from facebook_business.adobjects.user import User
 from facebook_business.api import FacebookResponse
 
-from .fb import AbstractCrudObject, AbstractObject
+from .exceptions import InsightsJobTimeout
 from .settings import (
     FACEBOOK_INSIGHTS_RETENTION_PERIOD,
     INSIGHTS_PRIMARY_KEY,
     TFbMethod,
 )
+from .utils import AbstractCrudObject, AbstractObject
 
 
 def get_start_date(
@@ -114,3 +125,132 @@ def enrich_ad_objects(
         return items
 
     return _wrap
+
+
+JOB_TIMEOUT_INFO = """This is an intermittent error and may resolve itself on subsequent queries to the Facebook API.
+You should remove the fields in `fields` argument that are not necessary, as that may help improve the reliability of the Facebook API."""
+
+
+def execute_job(
+    job: JobsJob,
+    insights_max_wait_to_start_seconds: int = 5 * 60,
+    insights_max_wait_to_finish_seconds: int = 30 * 60,
+    insights_max_async_sleep_seconds: int = 5 * 60,
+) -> JobsJob:
+    status: str = None
+    time_start = time.time()
+    sleep_time = 10
+    while status != "Job Completed":
+        duration = time.time() - time_start
+        job = job.api_get()
+        status = job["async_status"]
+        percent_complete = job["async_percent_completion"]
+
+        job_id = job["id"]
+        logger.info("%s, %d%% done", status, percent_complete)
+
+        if status == "Job Completed":
+            return job
+
+        if duration > insights_max_wait_to_start_seconds and percent_complete == 0:
+            pretty_error_message = (
+                "Insights job {} did not start after {} seconds. " + JOB_TIMEOUT_INFO
+            )
+            raise InsightsJobTimeout(
+                "facebook_insights",
+                pretty_error_message.format(job_id, insights_max_wait_to_start_seconds),
+            )
+        elif (
+            duration > insights_max_wait_to_finish_seconds and status != "Job Completed"
+        ):
+            pretty_error_message = (
+                "Insights job {} did not complete after {} seconds. " + JOB_TIMEOUT_INFO
+            )
+            raise InsightsJobTimeout(
+                "facebook_insights",
+                pretty_error_message.format(
+                    job_id, insights_max_wait_to_finish_seconds // 60
+                ),
+            )
+
+        logger.info("sleeping for %d seconds until job is done", sleep_time)
+        time.sleep(sleep_time)
+        if sleep_time < insights_max_async_sleep_seconds:
+            sleep_time = 2 * sleep_time
+    return job
+
+
+def get_ads_account(
+    account_id: str, access_token: str, request_timeout: float, app_api_version: str
+) -> AdAccount:
+    notify_on_token_expiration()
+
+    def retry_on_limit(response: requests.Response, exception: BaseException) -> bool:
+        try:
+            error = response.json()["error"]
+            code = error["code"]
+            message = error["message"]
+            should_retry = code in (
+                1,
+                2,
+                4,
+                17,
+                341,
+                32,
+                613,
+                *range(80000, 80007),
+                800008,
+                800009,
+                80014,
+            )
+            if should_retry:
+                logger.warning(
+                    "facebook_ads pipeline will retry due to %s with error code %i"
+                    % (message, code)
+                )
+            return should_retry
+        except Exception:
+            return False
+
+    retry_session = Client(
+        timeout=request_timeout,
+        raise_for_status=False,
+        condition=retry_on_limit,
+        max_attempts=12,
+        backoff_factor=2,
+    ).session
+    retry_session.params.update({"access_token": access_token})  # type: ignore
+    # patch dlt requests session with retries
+    API = FacebookAdsApi.init(
+        account_id="act_" + account_id,
+        access_token=access_token,
+        api_version=app_api_version,
+    )
+    API._session.requests = retry_session
+    user = User(fbid="me")
+
+    accounts = user.get_ad_accounts()
+    account: AdAccount = None
+    for acc in accounts:
+        if acc["account_id"] == account_id:
+            account = acc
+
+    if not account:
+        raise ValueError("Couldn't find account with id {}".format(account_id))
+
+    return account
+
+
+@with_config(sections=("sources", "facebook_ads"))
+def notify_on_token_expiration(access_token_expires_at: int = None) -> None:
+    """Notifies (currently via logger) if access token expires in less than 7 days. Needs `access_token_expires_at` to be configured."""
+    if not access_token_expires_at:
+        logger.warning(
+            "Token expiration time notification disabled. Configure token expiration timestamp in access_token_expires_at config value"
+        )
+    else:
+        expires_at = pendulum.from_timestamp(access_token_expires_at)
+        if expires_at < pendulum.now().add(days=7):
+            logger.error(
+                f"Access Token expires in {humanize.precisedelta(pendulum.now() - expires_at)}. Replace the token now!"
+            )

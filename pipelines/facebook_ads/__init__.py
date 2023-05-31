@@ -2,6 +2,7 @@
 
 import functools
 from typing import Any, Iterator, Sequence
+import time
 
 from facebook_business import FacebookAdsApi
 from facebook_business.api import FacebookResponse
@@ -18,10 +19,10 @@ from .helpers import (
     enrich_ad_objects,
     get_start_date,
     process_report_item,
-)
-from .fb import (
     execute_job,
     get_ads_account,
+)
+from .utils import (
     AbstractObject,
     AbstractCrudObject,
     Ad,
@@ -30,7 +31,7 @@ from .fb import (
     AdCreative,
     Lead,
 )
-from .fb import debug_access_token, get_long_lived_token
+from .utils import debug_access_token, get_long_lived_token
 from .settings import (
     DEFAULT_AD_FIELDS,
     DEFAULT_ADCREATIVE_FIELDS,
