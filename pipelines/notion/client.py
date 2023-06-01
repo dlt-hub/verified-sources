@@ -9,22 +9,20 @@ class NotionClient:
         api_key (str): The Notion API secret key.
     """
 
-    BASE_URL = 'https://api.notion.com/v1'
+    BASE_URL = "https://api.notion.com/v1"
 
     def __init__(self, api_key: Optional[str] = None):
         self.api_key = api_key
 
     def _create_headers(self) -> Dict[str, str]:
         headers = {
-            'accept': 'application/json',
-            'Notion-Version': '2022-06-28',
-            'Authorization': f'Bearer {self.api_key}',
+            "accept": "application/json",
+            "Notion-Version": "2022-06-28",
+            "Authorization": f"Bearer {self.api_key}",
         }
         return headers
 
-    def _filter_out_none_values(
-        self, dict_in: Dict[str, Any]
-    ) -> Dict[str, Any]:
+    def _filter_out_none_values(self, dict_in: Dict[str, Any]) -> Dict[str, Any]:
         return {k: v for k, v in dict_in.items() if v is not None}
 
     def get_endpoint(
@@ -40,9 +38,9 @@ class NotionClient:
         Returns:
             str: The endpoint for the resource.
         """
-        url = f'{self.BASE_URL}/{resource}/{resource_id}'
+        url = f"{self.BASE_URL}/{resource}/{resource_id}"
         if subresource:
-            url += f'/{subresource}'
+            url += f"/{subresource}"
         return url
 
     def fetch_resource(
@@ -135,22 +133,20 @@ class NotionClient:
 
         while has_more:
             payload = {
-                'query': query,
-                'sort': sort,
-                'filter': filter_criteria,
-                'start_cursor': start_cursor,
-                'page_size': page_size,
+                "query": query,
+                "sort": sort,
+                "filter": filter_criteria,
+                "start_cursor": start_cursor,
+                "page_size": page_size,
             }
 
             filtered_payload = self._filter_out_none_values(payload)
 
-            response = self.send_payload(
-                'search', '', payload=filtered_payload
-            )
+            response = self.send_payload("search", "", payload=filtered_payload)
 
-            for result in response.get('results', []):
+            for result in response.get("results", []):
                 yield result
 
-            next_cursor = response.get('next_cursor')
+            next_cursor = response.get("next_cursor")
             has_more = next_cursor is not None
             start_cursor = next_cursor

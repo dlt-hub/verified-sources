@@ -24,7 +24,7 @@ class NotionDatabase:
         Returns:
             Any: The structure of the database.
         """
-        return self.notion_client.fetch_resource('databases', self.database_id)
+        return self.notion_client.fetch_resource("databases", self.database_id)
 
     def query(
         self,
@@ -55,24 +55,24 @@ class NotionDatabase:
             List[Dict[str, Any]]: A record from the database.
         """
         payload = {
-            'filter': filter_criteria,
-            'sorts': sorts,
-            'start_cursor': start_cursor,
-            'page_size': page_size,
+            "filter": filter_criteria,
+            "sorts": sorts,
+            "start_cursor": start_cursor,
+            "page_size": page_size,
         }
 
         has_more = True
 
         while has_more:
             response = self.notion_client.send_payload(
-                'databases',
+                "databases",
                 self.database_id,
-                subresource='query',
+                subresource="query",
                 query_params=filter_properties,
                 payload=payload,
             )
 
-            yield response.get('results', [])
+            yield response.get("results", [])
 
-            has_more = response.get('has_more')
-            start_cursor = response.get('next_cursor')
+            has_more = response.get("has_more")
+            start_cursor = response.get("next_cursor")

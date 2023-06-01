@@ -29,28 +29,28 @@ def notion_databases(
 
     if database_ids is None:
         search_results = notion_client.search(
-            filter_criteria={'value': 'database', 'property': 'object'}
+            filter_criteria={"value": "database", "property": "object"}
         )
         database_ids = [
-            {'id': result['id'], 'use_name': result['title'][0]['plain_text']}
+            {"id": result["id"], "use_name": result["title"][0]["plain_text"]}
             for result in search_results
         ]
 
     for database in database_ids:
-        notion_database = NotionDatabase(database['id'], notion_client)
+        notion_database = NotionDatabase(database["id"], notion_client)
         yield dlt.resource(
             notion_database.query(),
             primary_key="id",
-            name=database['use_name'],
-            write_disposition='replace',
+            name=database["use_name"],
+            write_disposition="replace",
         )
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     pipeline = dlt.pipeline(
-        pipeline_name='notion',
-        destination='duckdb',
-        dataset_name='notion_data',
+        pipeline_name="notion",
+        destination="duckdb",
+        dataset_name="notion_data",
     )
 
     data = notion_databases()
