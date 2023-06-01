@@ -24,13 +24,13 @@ def is_production() -> bool:
     """
     return True
 
+
 def get_records(
     sf: Salesforce,
     sobject: str,
-    last_state:Optional[str] = None,
-    replication_key:Optional[str] = None,
+    last_state: Optional[str] = None,
+    replication_key: Optional[str] = None,
 ) -> Iterable[Dict[str, Any]]:
-
     # Get all fields for the sobject
     desc = getattr(sf, sobject).describe()
     # Salesforce returns compound fields as separate fields, so we need to filter them out
@@ -70,12 +70,13 @@ def get_records(
         yield page
         n_records += len(page)
 
+
 @dlt.source(name="salesforce")
 def salesforce_source(
     user_name: str = dlt.secrets.value,
     password: str = dlt.secrets.value,
     security_token: str = dlt.secrets.value,
-) ->Iterable[DltResource]:
+) -> Iterable[DltResource]:
     client = Salesforce(user_name, password, security_token)
 
     # define resources
@@ -88,20 +89,47 @@ def salesforce_source(
         yield from get_records(client, "UserRole")
 
     @dlt.resource(write_disposition="merge")
-    def opportunity(last_timestamp: Incremental[str] = dlt.sources.incremental("SystemModstamp", initial_value=None)) -> Iterator[Dict[str, Any]]:
-        yield from get_records(client, "Opportunity", last_timestamp.last_value, "SystemModstamp")
+    def opportunity(
+        last_timestamp: Incremental[str] = dlt.sources.incremental(
+            "SystemModstamp", initial_value=None
+        )
+    ) -> Iterator[Dict[str, Any]]:
+        yield from get_records(
+            client, "Opportunity", last_timestamp.last_value, "SystemModstamp"
+        )
 
     @dlt.resource(write_disposition="merge")
-    def opportunity_line_item(last_timestamp: Incremental[str] = dlt.sources.incremental("SystemModstamp", initial_value=None)) -> Iterator[Dict[str, Any]]:
-        yield from get_records(client, "OpportunityLineItem", last_timestamp.last_value, "SystemModstamp")
+    def opportunity_line_item(
+        last_timestamp: Incremental[str] = dlt.sources.incremental(
+            "SystemModstamp", initial_value=None
+        )
+    ) -> Iterator[Dict[str, Any]]:
+        yield from get_records(
+            client, "OpportunityLineItem", last_timestamp.last_value, "SystemModstamp"
+        )
 
     @dlt.resource(write_disposition="merge")
-    def opportunity_contact_role(last_timestamp: Incremental[str] = dlt.sources.incremental("SystemModstamp", initial_value=None)) -> Iterator[Dict[str, Any]]:
-        yield from get_records(client, "OpportunityContactRole", last_timestamp.last_value, "SystemModstamp")
+    def opportunity_contact_role(
+        last_timestamp: Incremental[str] = dlt.sources.incremental(
+            "SystemModstamp", initial_value=None
+        )
+    ) -> Iterator[Dict[str, Any]]:
+        yield from get_records(
+            client,
+            "OpportunityContactRole",
+            last_timestamp.last_value,
+            "SystemModstamp",
+        )
 
     @dlt.resource(write_disposition="merge")
-    def account(last_timestamp: Incremental[str] = dlt.sources.incremental("LastModifiedDate", initial_value=None)) -> Iterator[Dict[str, Any]]:
-        yield from get_records(client, "Account", last_timestamp.last_value, "LastModifiedDate")
+    def account(
+        last_timestamp: Incremental[str] = dlt.sources.incremental(
+            "LastModifiedDate", initial_value=None
+        )
+    ) -> Iterator[Dict[str, Any]]:
+        yield from get_records(
+            client, "Account", last_timestamp.last_value, "LastModifiedDate"
+        )
 
     @dlt.resource(write_disposition="replace")
     def contact() -> Iterator[Dict[str, Any]]:
@@ -116,8 +144,14 @@ def salesforce_source(
         yield from get_records(client, "Campaign")
 
     @dlt.resource(write_disposition="merge")
-    def campaign_member(last_timestamp: Incremental[str] = dlt.sources.incremental("SystemModstamp", initial_value=None)) -> Iterator[Dict[str, Any]]:
-        yield from get_records(client, "CampaignMember", last_timestamp.last_value, "SystemModstamp")
+    def campaign_member(
+        last_timestamp: Incremental[str] = dlt.sources.incremental(
+            "SystemModstamp", initial_value=None
+        )
+    ) -> Iterator[Dict[str, Any]]:
+        yield from get_records(
+            client, "CampaignMember", last_timestamp.last_value, "SystemModstamp"
+        )
 
     @dlt.resource(write_disposition="replace")
     def product_2() -> Iterator[Dict[str, Any]]:
@@ -132,11 +166,39 @@ def salesforce_source(
         yield from get_records(client, "PricebookEntry")
 
     @dlt.resource(write_disposition="merge")
-    def task(last_timestamp: Incremental[str] = dlt.sources.incremental("SystemModstamp", initial_value=None)) -> Iterator[Dict[str, Any]]:
-        yield from get_records(client, "Task", last_timestamp.last_value, "SystemModstamp")
+    def task(
+        last_timestamp: Incremental[str] = dlt.sources.incremental(
+            "SystemModstamp", initial_value=None
+        )
+    ) -> Iterator[Dict[str, Any]]:
+        yield from get_records(
+            client, "Task", last_timestamp.last_value, "SystemModstamp"
+        )
 
     @dlt.resource(write_disposition="merge")
-    def event(last_timestamp: Incremental[str] = dlt.sources.incremental("SystemModstamp", initial_value=None)) -> Iterator[Dict[str, Any]]:
-        yield from get_records(client, "Event", last_timestamp.last_value, "SystemModstamp")
+    def event(
+        last_timestamp: Incremental[str] = dlt.sources.incremental(
+            "SystemModstamp", initial_value=None
+        )
+    ) -> Iterator[Dict[str, Any]]:
+        yield from get_records(
+            client, "Event", last_timestamp.last_value, "SystemModstamp"
+        )
 
-    return (sf_user, user_role, opportunity,opportunity_line_item, opportunity_contact_role, account, contact, lead, campaign, campaign_member, product_2, pricebook_2,pricebook_entry, task, event)
+    return (
+        sf_user,
+        user_role,
+        opportunity,
+        opportunity_line_item,
+        opportunity_contact_role,
+        account,
+        contact,
+        lead,
+        campaign,
+        campaign_member,
+        product_2,
+        pricebook_2,
+        pricebook_entry,
+        task,
+        event,
+    )
