@@ -1,28 +1,29 @@
-from typing import Any, Dict, Generator, Optional, Union
+from typing import Any, Dict, Generator, Optional, Union, Iterable
 
 import stripe
 from dlt.common import pendulum
 from pendulum import DateTime
+from dlt.common.typing import TDataItem
 
 
 def pagination(
     endpoint: str, start_date: Optional[Any] = None, end_date: Optional[Any] = None
-) -> Generator[Dict[Any, Any], Any, None]:
-    get_more = True
+) -> Iterable[TDataItem]:
     starting_after = None
-    while get_more:
+    while True:
         response = stripe_get_data(
             endpoint,
             start_date=start_date,
             end_date=end_date,
             starting_after=starting_after,
         )
-        get_more = response["has_more"]
 
         if len(response["data"]) > 0:
             starting_after = response["data"][-1]["id"]
-
         yield response["data"]
+
+        if not response["has_more"]:
+            break
 
 
 def transform_date(date: Union[str, DateTime, int]) -> int:
