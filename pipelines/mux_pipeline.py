@@ -6,9 +6,7 @@ def load_yesterday_video_views():
     pipeline = dlt.pipeline(
         pipeline_name="mux", destination="duckdb", dataset_name="mux_data"
     )
-
     load_info = pipeline.run(mux_source())
-
     print(load_info)
 
 
