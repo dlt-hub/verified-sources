@@ -13,18 +13,7 @@ from pendulum import DateTime
 from .helpers import pagination, transform_date
 from .metrics import calculate_mrr, churn_rate
 
-# the most popular endpoints
-# Full list of the Stripe API endpoints you can find here: https://stripe.com/docs/api.
-ENDPOINTS = (
-    "Subscription",
-    "Account",
-    "Coupon",
-    "Customer",
-    "Product",
-    "Price",
-)
-# possible incremental endpoints
-INCREMENTAL_ENDPOINTS = ("Event", "Invoice", "BalanceTransaction")
+from .settings import ENDPOINTS, INCREMENTAL_ENDPOINTS
 
 
 @dlt.source
@@ -36,18 +25,20 @@ def stripe_source(
 ) -> Iterable[DltResource]:
     """
     Retrieves data from the Stripe API for the specified endpoints.
-    For all endpoints, Stripe API responses do not provide key "updated",
-    so in most cases we are forced to load the data in 'replace' mode.
-    This source is suitable for all types of endpoints, including 'Events', 'Invoice' etc.
-    but these endpoints can also be loaded in incremental mode (see source incremental_stripe_source)
 
-    Args:
-        endpoints: A tuple of endpoint names to retrieve data from. Defaults to most popular Stripe API endpoints.
-        stripe_secret_key: The API access token for authentication. Defaults to the value in the `dlt.secrets` object.
-        start_date: An optional start date to limit the data retrieved. Format: datetime(YYYY, MM, DD). Defaults to None.
-        end_date: An optional end date to limit the data retrieved. Format: datetime(YYYY, MM, DD). Defaults to None.
+    For all endpoints, Stripe API responses do not provide the key "updated",
+    so in most cases, we are forced to load the data in 'replace' mode.
+    This source is suitable for all types of endpoints, including 'Events', 'Invoice', etc.
+    but these endpoints can also be loaded in incremental mode (see source incremental_stripe_source).
+
+    Parameters:
+        endpoints (Tuple[str, ...]): A tuple of endpoint names to retrieve data from. Defaults to most popular Stripe API endpoints.
+        stripe_secret_key (str): The API access token for authentication. Defaults to the value in the `dlt.secrets` object.
+        start_date (Optional[DateTime]): An optional start date to limit the data retrieved. Format: datetime(YYYY, MM, DD). Defaults to None.
+        end_date (Optional[DateTime]): An optional end date to limit the data retrieved. Format: datetime(YYYY, MM, DD). Defaults to None.
+
     Returns:
-        Resources with data that was created during the period greater than or equal to 'start_date' and less than 'end_date'.
+        Iterable[DltResource]: Resources with data that was created during the period greater than or equal to 'start_date' and less than 'end_date'.
     """
     stripe.api_key = stripe_secret_key
     stripe.api_version = "2022-11-15"
@@ -79,16 +70,16 @@ def incremental_stripe_source(
     This source yields the resources with incremental loading based on "append" mode.
     You will load only the newest data without duplicating and without downloading a huge amount of data each time.
 
-    Args:
-        endpoints: A tuple of endpoint names to retrieve data from. Defaults to Stripe API endpoints with uneditable data.
-        stripe_secret_key: The API access token for authentication. Defaults to the value in the `dlt.secrets` object.
-        initial_start_date: An optional parameter that specifies the initial value for dlt.sources.incremental.
+    Parameters:
+        endpoints (tuple): A tuple of endpoint names to retrieve data from. Defaults to Stripe API endpoints with uneditable data.
+        stripe_secret_key (str): The API access token for authentication. Defaults to the value in the `dlt.secrets` object.
+        initial_start_date (Optional[DateTime]): An optional parameter that specifies the initial value for dlt.sources.incremental.
                             If parameter is not None, then load only data that were created after initial_start_date on the first run.
                             Defaults to None. Format: datetime(YYYY, MM, DD).
-        end_date: An optional end date to limit the data retrieved.
+        end_date (Optional[DateTime]): An optional end date to limit the data retrieved.
                   Defaults to None. Format: datetime(YYYY, MM, DD).
     Returns:
-        Resources with only that data has not yet been loaded.
+        Iterable[DltResource]: Resources with only that data has not yet been loaded.
     """
     stripe.api_key = stripe_secret_key
     stripe.api_version = "2022-11-15"
@@ -123,6 +114,9 @@ def metrics_resource() -> Iterable[TDataItem]:
     The function returns a generator that yields a dictionary containing
     the calculated metrics data, including MRR (Monthly Recurring Revenue)
     and Churn rate, as well as the current timestamp.
+
+    Returns:
+        Iterable[TDataItem]: A generator that yields a dictionary containing the calculated metrics data.
     """
     pipeline = dlt.current.pipeline()  # type: ignore
     with pipeline.sql_client() as client:

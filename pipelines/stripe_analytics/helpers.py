@@ -9,6 +9,17 @@ from dlt.common.typing import TDataItem
 def pagination(
     endpoint: str, start_date: Optional[Any] = None, end_date: Optional[Any] = None
 ) -> Iterable[TDataItem]:
+    """
+    Retrieves data from an endpoint with pagination.
+
+    Parameters:
+        endpoint (str): The endpoint to retrieve data from.
+        start_date (Optional[Any]): An optional start date to limit the data retrieved. Defaults to None.
+        end_date (Optional[Any]): An optional end date to limit the data retrieved. Defaults to None.
+
+    Returns:
+        Iterable[TDataItem]: Data items retrieved from the endpoint.
+    """
     starting_after = None
     while True:
         response = stripe_get_data(
