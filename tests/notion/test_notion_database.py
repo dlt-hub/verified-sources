@@ -1,7 +1,6 @@
 import pytest
 from unittest.mock import patch, Mock
-from pipelines.notion.database import NotionDatabase
-from pipelines.notion.client import NotionClient
+from pipelines.notion.helpers import NotionClient, NotionDatabase
 
 
 @patch.object(NotionClient, "fetch_resource")
@@ -36,4 +35,4 @@ def test_query(mock_send_payload):
     )
 
     assert len(results) == 1
-    assert results[0] == [{"id": "123", "title": "Test Record"}]
+    assert results[0] == {"id": "123", "title": "Test Record"}
