@@ -8,7 +8,12 @@ def incremental_load_all_default():
     Loads all possible tables for Zendesk Support, Chat, Talk
     """
     # FULL PIPELINE RUN
-    pipeline = dlt.pipeline(pipeline_name="dlt_zendesk_pipeline", destination="postgres", full_refresh=False, dataset_name="sample_zendesk_data3")
+    pipeline = dlt.pipeline(
+        pipeline_name="dlt_zendesk_pipeline",
+        destination="postgres",
+        full_refresh=False,
+        dataset_name="sample_zendesk_data3",
+    )
 
     # zendesk support source function
     data_support = zendesk_support(load_all=True)
@@ -25,7 +30,11 @@ def load_support_with_pivoting():
     """
     Loads Zendesk Support data with pivoting. Simply done by setting the pivot_ticket_fields to true - default option. Loads only the base tables.
     """
-    pipeline = dlt.pipeline(pipeline_name="zendesk_support_pivoting", destination="postgres", full_refresh=False)
+    pipeline = dlt.pipeline(
+        pipeline_name="zendesk_support_pivoting",
+        destination="postgres",
+        full_refresh=False,
+    )
     data = zendesk_support(load_all=False, pivot_ticket_fields=True)
     info = pipeline.run(data=data)
     return info
@@ -43,7 +52,12 @@ def incremental_load_all_start_time():
     # start time needs to be a pendulum datetime object
     start_time = pendulum.DateTime(year=2023, month=1, day=1)
 
-    pipeline = dlt.pipeline(pipeline_name="dlt_zendesk_pipeline", destination="postgres", full_refresh=False, dataset_name="sample_zendesk_data")
+    pipeline = dlt.pipeline(
+        pipeline_name="dlt_zendesk_pipeline",
+        destination="postgres",
+        full_refresh=False,
+        dataset_name="sample_zendesk_data",
+    )
     data = zendesk_support(load_all=True, incremental_start_time=start_time)
     data_chat = zendesk_chat(incremental_start_time=start_time)
     data_talk = zendesk_talk(incremental_start_time=start_time)

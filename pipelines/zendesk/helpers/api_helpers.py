@@ -3,12 +3,17 @@ from typing import Iterator, Any, Optional, Union, TypedDict, Dict, Iterable
 from dlt.common import logger, pendulum
 from dlt.common.exceptions import MissingDependencyException
 from dlt.common.typing import DictStrAny, DictStrStr, TDataItem, TDataItems
+
 try:
     from zenpy import Zenpy
     from zenpy.lib.api_objects import Ticket, JobStatus, TicketField
 except ImportError:
     raise MissingDependencyException("Zenpy", ["zenpy>=2.0.25"])
-from .credentials import ZendeskCredentialsToken, ZendeskCredentialsEmailPass, ZendeskCredentialsOAuth
+from .credentials import (
+    ZendeskCredentialsToken,
+    ZendeskCredentialsEmailPass,
+    ZendeskCredentialsOAuth,
+)
 
 
 class TCustomFieldInfo(TypedDict):
@@ -17,13 +22,15 @@ class TCustomFieldInfo(TypedDict):
 
 
 def auth_zenpy(
-    credentials: Union[ZendeskCredentialsOAuth, ZendeskCredentialsToken, ZendeskCredentialsEmailPass],
+    credentials: Union[
+        ZendeskCredentialsOAuth, ZendeskCredentialsToken, ZendeskCredentialsEmailPass
+    ],
     domain: str = "zendesk.com",
     timeout: Optional[float] = None,
     ratelimit_budget: Optional[int] = None,
     proactive_ratelimit: Optional[int] = None,
     proactive_ratelimit_request_interval: int = 10,
-    disable_cache: bool = True
+    disable_cache: bool = True,
 ) -> Zenpy:
     """
     Helper, gets a Zendesk Credentials object and authenticates to the Zendesk API
@@ -39,29 +46,50 @@ def auth_zenpy(
     # oauth token is the preferred way to authenticate, followed by api token and then email + password combo
     if isinstance(credentials, ZendeskCredentialsOAuth):
         zendesk_client = Zenpy(
-            subdomain=credentials.subdomain, oauth_token=credentials.oauth_token,
-            domain=domain, timeout=timeout, ratelimit_budget=ratelimit_budget, proactive_ratelimit=proactive_ratelimit, proactive_ratelimit_request_interval=proactive_ratelimit_request_interval,
-            disable_cache=disable_cache
+            subdomain=credentials.subdomain,
+            oauth_token=credentials.oauth_token,
+            domain=domain,
+            timeout=timeout,
+            ratelimit_budget=ratelimit_budget,
+            proactive_ratelimit=proactive_ratelimit,
+            proactive_ratelimit_request_interval=proactive_ratelimit_request_interval,
+            disable_cache=disable_cache,
         )
         logger.info("Zenpy Received OAuth Credentials.")
     elif isinstance(credentials, ZendeskCredentialsToken):
         zendesk_client = Zenpy(
-            token=credentials.token, email=credentials.email, subdomain=credentials.subdomain,
-            domain=domain, timeout=timeout, ratelimit_budget=ratelimit_budget, proactive_ratelimit=proactive_ratelimit, proactive_ratelimit_request_interval=proactive_ratelimit_request_interval,
-            disable_cache=disable_cache
+            token=credentials.token,
+            email=credentials.email,
+            subdomain=credentials.subdomain,
+            domain=domain,
+            timeout=timeout,
+            ratelimit_budget=ratelimit_budget,
+            proactive_ratelimit=proactive_ratelimit,
+            proactive_ratelimit_request_interval=proactive_ratelimit_request_interval,
+            disable_cache=disable_cache,
         )
         logger.info("Zenpy Received API token Credentials.")
     elif isinstance(credentials, ZendeskCredentialsEmailPass):
         zendesk_client = Zenpy(
-            email=credentials.email, subdomain=credentials.subdomain, password=credentials.password,
-            domain=domain, timeout=timeout, ratelimit_budget=ratelimit_budget, proactive_ratelimit=proactive_ratelimit, proactive_ratelimit_request_interval=proactive_ratelimit_request_interval,
-            disable_cache=disable_cache
+            email=credentials.email,
+            subdomain=credentials.subdomain,
+            password=credentials.password,
+            domain=domain,
+            timeout=timeout,
+            ratelimit_budget=ratelimit_budget,
+            proactive_ratelimit=proactive_ratelimit,
+            proactive_ratelimit_request_interval=proactive_ratelimit_request_interval,
+            disable_cache=disable_cache,
         )
         logger.info("Zenpy Received Email and Password Credentials.")
     return zendesk_client
 
 
-def process_ticket(ticket: Ticket, custom_fields: Dict[str, TCustomFieldInfo], pivot_custom_fields: bool = True) -> DictStrAny:
+def process_ticket(
+    ticket: Ticket,
+    custom_fields: Dict[str, TCustomFieldInfo],
+    pivot_custom_fields: bool = True,
+) -> DictStrAny:
     """
     Helper that returns a dictionary of the ticket class provided as a parameter. This is done since to_dict()
     method of Ticket class doesn't return all the required information
@@ -78,13 +106,15 @@ def process_ticket(ticket: Ticket, custom_fields: Dict[str, TCustomFieldInfo], p
         if pivot_custom_fields:
             cus_field_id = str(custom_field["id"])
             field = custom_fields[cus_field_id]
-            field_name = field['title']
-            current_value = custom_field['value']
-            options = field['options']
+            field_name = field["title"]
+            current_value = custom_field["value"]
+            options = field["options"]
             # Map dropdown values to labels
             if not current_value or not options:
                 base_dict[field_name] = current_value
-            elif isinstance(current_value, list):  # Multiple choice field has a list of values
+            elif isinstance(
+                current_value, list
+            ):  # Multiple choice field has a list of values
                 base_dict[field_name] = [options.get(key, key) for key in current_value]
             else:
                 base_dict[field_name] = options.get(current_value)
@@ -102,22 +132,23 @@ def process_ticket(ticket: Ticket, custom_fields: Dict[str, TCustomFieldInfo], p
     return base_dict
 
 
-def process_ticket_field(field: TicketField, custom_fields_state: Dict[str, TCustomFieldInfo]) -> TDataItem:
-    """Update custom field mapping in dlt state for the given field.
-    """
+def process_ticket_field(
+    field: TicketField, custom_fields_state: Dict[str, TCustomFieldInfo]
+) -> TDataItem:
+    """Update custom field mapping in dlt state for the given field."""
     return_dict = field.to_dict()
     field_id = str(field.id)
     # grab id and update state dict
     # if the id is new, add a new key to indicate that this is the initial value for title
     # New dropdown options are added to existing field but existing options are not changed
-    options = getattr(field, 'custom_field_options', [])
+    options = getattr(field, "custom_field_options", [])
     new_options = {o.value: o.name for o in options}
     existing_field = custom_fields_state.get(field_id)
     if existing_field:
-        existing_options = existing_field['options']
-        if return_options := return_dict.get('custom_field_options'):
+        existing_options = existing_field["options"]
+        if return_options := return_dict.get("custom_field_options"):
             for item in return_options:
-                item['name'] = existing_options.get(item['value'], item['name'])
+                item["name"] = existing_options.get(item["value"], item["name"])
         for key, value in new_options.items():
             if key not in existing_options:
                 existing_options[key] = value

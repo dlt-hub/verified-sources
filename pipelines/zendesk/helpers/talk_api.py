@@ -7,7 +7,11 @@ from typing import Dict, Iterator, Optional, Tuple, Union
 from dlt.common import logger
 from dlt.common.typing import DictStrStr, TDataItems, TSecretValue
 from dlt.sources.helpers.requests import client
-from .credentials import ZendeskCredentialsEmailPass, ZendeskCredentialsOAuth, ZendeskCredentialsToken
+from .credentials import (
+    ZendeskCredentialsEmailPass,
+    ZendeskCredentialsOAuth,
+    ZendeskCredentialsToken,
+)
 
 TALK_ENDPOINTS = {
     "calls": "/api/v2/channels/voice/calls",
@@ -19,11 +23,11 @@ TALK_ENDPOINTS = {
     "settings": "/api/v2/channels/voice/settings",
     "lines": "/api/v2/channels/voice/lines",
     "agents_activity": "/api/v2/channels/voice/stats/agents_activity",
-    "current_queue_activity": "/api/v2/channels/voice/stats/current_queue_activity"
+    "current_queue_activity": "/api/v2/channels/voice/stats/current_queue_activity",
 }
 INCREMENTAL_ENDPOINTS = {
     "calls": "/api/v2/channels/voice/stats/incremental/calls.json",
-    "legs": "/api/v2/channels/voice/stats/incremental/legs.json"
+    "legs": "/api/v2/channels/voice/stats/incremental/legs.json",
 }
 
 possible_endpoints = {
@@ -34,16 +38,25 @@ possible_endpoints = {
     "account_overview": "/api/v2/channels/voice/stats/account_overview",
 }
 
+
 class ZendeskAPIClient:
     """
     API client used to make requests to Zendesk TALK.
     """
+
     subdomain: str = ""
     url: str = ""
     headers: Optional[DictStrStr]
     auth: Optional[Tuple[str, TSecretValue]]
 
-    def __init__(self, credentials: Union[ZendeskCredentialsOAuth, ZendeskCredentialsToken, ZendeskCredentialsEmailPass]) -> None:
+    def __init__(
+        self,
+        credentials: Union[
+            ZendeskCredentialsOAuth,
+            ZendeskCredentialsToken,
+            ZendeskCredentialsEmailPass,
+        ],
+    ) -> None:
         """
         Initializer for the API client which is then used to make API calls to the ZendeskAPI
         @:param credentials: ZendeskCredentials object which contains the necessary credentials to authenticate to ZendeskAPI
@@ -61,13 +74,20 @@ class ZendeskAPIClient:
             self.auth = (credentials.email, credentials.password)
             self.headers = None
         else:
-            raise TypeError("Wrong credentials type provided to ZendeskAPIClient. The credentials need to be of type: ZendeskCredentialsOAuth, ZendeskCredentialsToken or ZendeskCredentialsEmailPass")
+            raise TypeError(
+                "Wrong credentials type provided to ZendeskAPIClient. The credentials need to be of type: ZendeskCredentialsOAuth, ZendeskCredentialsToken or ZendeskCredentialsEmailPass"
+            )
 
         # set subdomain, this is always needed to configure endpoints
         self.subdomain = credentials.subdomain
         self.url = f"https://{self.subdomain}.zendesk.com"
 
-    def make_request(self, endpoint: str, data_point_name: str, params: Optional[Dict[str, int]] = None) -> Iterator[TDataItems]:
+    def make_request(
+        self,
+        endpoint: str,
+        data_point_name: str,
+        params: Optional[Dict[str, int]] = None,
+    ) -> Iterator[TDataItems]:
         """
         Makes a get request on a given endpoint.
         @:param endpoint: the url to the endpoint, i.e. api/v2/calls
@@ -77,13 +97,17 @@ class ZendeskAPIClient:
         # make request and keep looping until there is no next page
         get_url = f"{self.url}{endpoint}"
         while get_url:
-            response = client.get(get_url, headers=self.headers, auth=self.auth, params=params)
+            response = client.get(
+                get_url, headers=self.headers, auth=self.auth, params=params
+            )
             response.raise_for_status()
             response_json = response.json()
             get_url = response_json.get("next_page", None)
             yield response_json[data_point_name]
 
-    def make_request_incremental(self, endpoint: str, data_point_name: str, start_date: int) -> Iterator[TDataItems]:
+    def make_request_incremental(
+        self, endpoint: str, data_point_name: str, start_date: int
+    ) -> Iterator[TDataItems]:
         """
         Makes a request to an incremental API endpoint
         @:param endpoint: the url to the endpoint, i.e. api/v2/calls
@@ -93,4 +117,6 @@ class ZendeskAPIClient:
         """
         # start date comes as unix epoch float, need to convert to an integer to make the call to the API
         params = {"start_time": start_date}
-        yield from self.make_request(endpoint=endpoint, data_point_name=data_point_name, params=params)
+        yield from self.make_request(
+            endpoint=endpoint, data_point_name=data_point_name, params=params
+        )
