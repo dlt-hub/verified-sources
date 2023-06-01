@@ -1,6 +1,7 @@
 import pytest
 from unittest.mock import patch, Mock
-from pipelines.notion.helpers import NotionClient, NotionDatabase
+from pipelines.notion.helpers.database import NotionDatabase
+from pipelines.notion.helpers.client import NotionClient
 
 
 @patch.object(NotionClient, "fetch_resource")
