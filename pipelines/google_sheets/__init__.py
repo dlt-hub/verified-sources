@@ -9,7 +9,11 @@ from dlt.common.exceptions import MissingDependencyException
 from dlt.sources.credentials import GcpServiceAccountCredentials, GcpOAuthCredentials
 from dlt.extract.source import DltResource
 
-from .helpers.data_processing import convert_named_range_to_a1, get_spreadsheet_id, process_range
+from .helpers.data_processing import (
+    convert_named_range_to_a1,
+    get_spreadsheet_id,
+    process_range,
+)
 from .helpers.api_calls import api_auth
 from .helpers import api_calls
 
@@ -23,9 +27,11 @@ except ImportError:
 def google_spreadsheet(
     spreadsheet_identifier: str = dlt.config.value,
     range_names: Sequence[str] = dlt.config.value,
-    credentials: Union[GcpServiceAccountCredentials, GcpOAuthCredentials] = dlt.secrets.value,
+    credentials: Union[
+        GcpServiceAccountCredentials, GcpOAuthCredentials
+    ] = dlt.secrets.value,
     get_sheets: bool = True,
-    get_named_ranges: bool = True
+    get_named_ranges: bool = True,
 ) -> List[DltResource]:
     """
     The source for the dlt pipeline. It returns the following resources: 1 dlt resource for every range in sheet_names
@@ -50,24 +56,46 @@ def google_spreadsheet(
     named_ranges = None
     if get_sheets or get_named_ranges:
         # get metadata and append to list of ranges as needed
-        simple_metadata = api_calls.get_metadata_simple(spreadsheet_id=spreadsheet_id, service=service)
+        simple_metadata = api_calls.get_metadata_simple(
+            spreadsheet_id=spreadsheet_id, service=service
+        )
         if get_sheets:
             ranges_list += list(simple_metadata["sheets"].values())
         if get_named_ranges:
-            named_ranges = {convert_named_range_to_a1(named_range_dict=named_range, sheet_names_dict=simple_metadata["sheets"]): named_range["name"] for named_range in simple_metadata["named_ranges"]}
+            named_ranges = {
+                convert_named_range_to_a1(
+                    named_range_dict=named_range,
+                    sheet_names_dict=simple_metadata["sheets"],
+                ): named_range["name"]
+                for named_range in simple_metadata["named_ranges"]
+            }
             ranges_list += list(named_ranges.keys())
     # get data and metadata
-    metadata_ranges_all = api_calls.get_metadata(spreadsheet_id=spreadsheet_id, service=service, ranges=ranges_list, named_ranges=named_ranges)
-    data_resources_list: List[DltResource] = get_data(service=service, spreadsheet_id=spreadsheet_id, range_names=ranges_list, metadata_dict=metadata_ranges_all)
+    metadata_ranges_all = api_calls.get_metadata(
+        spreadsheet_id=spreadsheet_id,
+        service=service,
+        ranges=ranges_list,
+        named_ranges=named_ranges,
+    )
+    data_resources_list: List[DltResource] = get_data(
+        service=service,
+        spreadsheet_id=spreadsheet_id,
+        range_names=ranges_list,
+        metadata_dict=metadata_ranges_all,
+    )
 
     # create metadata resource
-    metadata_resource = metadata_table(spreadsheet_info=metadata_ranges_all, spreadsheet_id=spreadsheet_id)
+    metadata_resource = metadata_table(
+        spreadsheet_info=metadata_ranges_all, spreadsheet_id=spreadsheet_id
+    )
     data_resources_list.append(metadata_resource)
     return data_resources_list
 
 
 @dlt.resource(write_disposition="replace", name="spreadsheet_info")
-def metadata_table(spreadsheet_info: StrAny, spreadsheet_id: str) -> Iterator[TDataItem]:
+def metadata_table(
+    spreadsheet_info: StrAny, spreadsheet_id: str
+) -> Iterator[TDataItem]:
     """
     Creates the metadata_table resource. It adds a table with all loaded ranges into a table
     @:param: spreadsheet_info - This is a dict where all loaded ranges are keys. Inside the dict there is another dict with keys: "headers", "sheet_name", "index" and "values"
@@ -88,7 +116,7 @@ def metadata_table(spreadsheet_info: StrAny, spreadsheet_id: str) -> Iterator[TD
             "spreadsheet_id": spreadsheet_id,
             "loaded_range": loaded_range,
             "sheet_name": range_sheet_name,
-            "num_cols": range_num_headers
+            "num_cols": range_num_headers,
         }
         # change name of loaded range name if it is a ranged name
         if loaded_range_meta["name"]:
@@ -96,7 +124,12 @@ def metadata_table(spreadsheet_info: StrAny, spreadsheet_id: str) -> Iterator[TD
         yield table_dict
 
 
-def get_data(service: Resource, spreadsheet_id: str, range_names: List[str], metadata_dict: Dict[str, DictStrAny]) -> List[DltResource]:
+def get_data(
+    service: Resource,
+    spreadsheet_id: str,
+    range_names: List[str],
+    metadata_dict: Dict[str, DictStrAny],
+) -> List[DltResource]:
     """
     Makes an api call to Google sheets and retrieve all the ranges listed in range_names and process them into dlt resources
     @:param: service - Object to make api calls to Google Sheets
@@ -108,7 +141,9 @@ def get_data(service: Resource, spreadsheet_id: str, range_names: List[str], met
 
     # get data from Google Sheets and iterate through them to process each range into a separate dlt resource
     my_resources = []
-    values = api_calls.get_data_batch(service=service, spreadsheet_id=spreadsheet_id, range_names=range_names)
+    values = api_calls.get_data_batch(
+        service=service, spreadsheet_id=spreadsheet_id, range_names=range_names
+    )
     for value in values:
         # get range name and metadata for sheet. Extra quotation marks returned by the API call are removed.
         range_part1, range_part2 = value["range"].split("!")
@@ -128,10 +163,13 @@ def get_data(service: Resource, spreadsheet_id: str, range_names: List[str], met
         # get range values
         sheet_range = value["values"]
         # create a resource from processing both sheet/range values
-        my_resources.append(dlt.resource(process_range(sheet_val=sheet_range, sheet_meta=sheet_meta_batch),
-                                         name=named_range_name or sheet_range_name,
-                                         write_disposition="replace")
-                            )
+        my_resources.append(
+            dlt.resource(
+                process_range(sheet_val=sheet_range, sheet_meta=sheet_meta_batch),
+                name=named_range_name or sheet_range_name,
+                write_disposition="replace",
+            )
+        )
         logger.info(f"Data for {sheet_range_name} loaded")
     logger.info("Finished loading all ranges")
     return my_resources

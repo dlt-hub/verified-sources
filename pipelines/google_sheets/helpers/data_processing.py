@@ -17,7 +17,7 @@ TIMESTAMP_CONST = -2209161600.0
 
 
 def get_spreadsheet_id(url_or_id: str) -> str:
-    """"
+    """ "
     Receives an id or url to a Google Spreadsheet and returns the spreadsheet_id as a string
     @:param: url_or_id a string which is the id or url of the spreadsheet
     @:return: spreadsheet_id a string which is definitely the id of the spreadsheet
@@ -34,7 +34,7 @@ def get_spreadsheet_id(url_or_id: str) -> str:
 
 
 def process_url(url: str) -> str:
-    """"
+    """ "
     Takes an url to a Google spreadsheet and computes the spreadsheet id from it according to the spreadsheet url formula: https://docs.google.com/spreadsheets/d/<spreadsheet_id>/edit
     If the url is not formatted correctly a Value Error will be returned
     @:param: url- the string containing the url to the spreadsheet
@@ -46,12 +46,12 @@ def process_url(url: str) -> str:
     # loop through parts
     for i in range(len(parts)):
         # if we find
-        if parts[i] == URL_ID_IDENTIFIER and i+1 < len(parts):
+        if parts[i] == URL_ID_IDENTIFIER and i + 1 < len(parts):
             # if the id part is left empty then the url is not formatted correctly
-            if parts[i+1] == "":
+            if parts[i + 1] == "":
                 raise ValueError("Spreadsheet ID is an empty string")
             else:
-                return parts[i+1]
+                return parts[i + 1]
     # if url cannot be found, raise error
     raise ValueError("Invalid URL. Cannot find spreadsheet ID")
 
@@ -71,14 +71,18 @@ def get_first_rows(sheet_range: str) -> List[str]:
     if len(sheet_parts) == 1:
         return [sheet_name, f"{sheet_name}!1:2"]
     elif len(sheet_parts) > 2:
-        raise ValueError("Range format is incorrect! Check documentation for correct usage.")
+        raise ValueError(
+            "Range format is incorrect! Check documentation for correct usage."
+        )
 
     range_name = sheet_parts[1]
     # split on the :, expecting strings in the form start:end, i.e 2 parts after splitting on the :
     # separate row and column letters from both the range start and end
     range_parts = range_name.split(":")
     if len(range_parts) != 2:
-        raise ValueError("Range format is incorrect! Check documentation for correct usage.")
+        raise ValueError(
+            "Range format is incorrect! Check documentation for correct usage."
+        )
     starting_row, starting_col = _separate_row_col(range_parts[0])
     ending_row, ending_col = _separate_row_col(range_parts[1])
 
@@ -91,7 +95,10 @@ def get_first_rows(sheet_range: str) -> List[str]:
         ending_row = str(int(starting_row) + 1)
     except ValueError:
         raise ValueError(f"Crashed while reading range part: {range_parts[0]}")
-    return [sheet_name, f"{sheet_name}!{starting_col}{starting_row}:{ending_col}{ending_row}"]
+    return [
+        sheet_name,
+        f"{sheet_name}!{starting_col}{starting_row}:{ending_col}{ending_row}",
+    ]
 
 
 def _separate_row_col(row_col_str: str) -> Tuple[str, str]:
@@ -110,7 +117,9 @@ def _separate_row_col(row_col_str: str) -> Tuple[str, str]:
     return range_row, range_col
 
 
-def convert_named_range_to_a1(named_range_dict: DictStrAny, sheet_names_dict: Dict[str, DictStrAny] = None) -> str:
+def convert_named_range_to_a1(
+    named_range_dict: DictStrAny, sheet_names_dict: Dict[str, DictStrAny] = None
+) -> str:
     """
     Converts a named_range dict returned from Google Sheets API metadata call to an A1 range
     @:param: named_range_dict - dict returned from Google Sheets API, it contains all the information about a named range
@@ -144,7 +153,35 @@ def _convert_col_a1(col_idx: int) -> str:
     @:param: col_idx - index of column
     @:return: col_name - name of a column
     """
-    letters = ["", "A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L", "M", "N", "O", "P", "Q", "R", "S", "T", "U", "V", "W", "X", "Y", "Z"]
+    letters = [
+        "",
+        "A",
+        "B",
+        "C",
+        "D",
+        "E",
+        "F",
+        "G",
+        "H",
+        "I",
+        "J",
+        "K",
+        "L",
+        "M",
+        "N",
+        "O",
+        "P",
+        "Q",
+        "R",
+        "S",
+        "T",
+        "U",
+        "V",
+        "W",
+        "X",
+        "Y",
+        "Z",
+    ]
     col_name = ""
     while col_idx > 0:
         col_idx, remainder = divmod(col_idx, 26)
@@ -155,7 +192,7 @@ def _convert_col_a1(col_idx: int) -> str:
                 col_idx = col_idx - 1
             col_name = letters[remainder] + col_name
         else:
-            col_name = letters[remainder+1] + col_name
+            col_name = letters[remainder + 1] + col_name
     return col_name or "A"
 
 
@@ -173,14 +210,18 @@ def get_range_headers(range_metadata: List[DictStrAny], range_name: str) -> List
             header_val = header["formattedValue"]
             # warn user when reading non string values as header - metadata is the only place to check this info
             if not ("stringValue" in header["effectiveValue"]):
-                logger.warning(f"In range {range_name}, header value: {header_val} is not a string! Name changed when loaded in database!")
+                logger.warning(
+                    f"In range {range_name}, header value: {header_val} is not a string! Name changed when loaded in database!"
+                )
             headers.append(header_val)
         else:
             headers.append(f"empty_header_filler{empty_header_index}")
             empty_header_index = empty_header_index + 1
     # report if a header was empty
     if empty_header_index:
-        logger.warning(f"In range {range_name}, {empty_header_index} headers were found empty!")
+        logger.warning(
+            f"In range {range_name}, {empty_header_index} headers were found empty!"
+        )
     # manage headers being empty
     if len(headers) == empty_header_index:
         return []
@@ -222,7 +263,9 @@ def is_date_datatype(value_list: List[DictStrAny]) -> List[bool]:
     return value_type_list
 
 
-def serial_date_to_datetime(serial_number: Union[int, float, str, bool]) -> Union[pendulum.DateTime, str, bool]:
+def serial_date_to_datetime(
+    serial_number: Union[int, float, str, bool]
+) -> Union[pendulum.DateTime, str, bool]:
     """
     Receives a serial number which can be an int or float(depending on the serial number) and outputs a datetime object
     @:param: serial_number- int/float. The integer part shows the number of days since December 30th 1899, the decimal part shows the fraction of the day. Sometimes if a table is not formatted
@@ -234,11 +277,17 @@ def serial_date_to_datetime(serial_number: Union[int, float, str, bool]) -> Unio
     if not isinstance(serial_number, (int, float)):
         return serial_number
     # To get the seconds passed since the start date of serial numbers we round the product of the number of seconds in a day and the serial number
-    conv_datetime: pendulum.DateTime = pendulum.from_timestamp(0, DLT_TIMEZONE) + pendulum.duration(seconds=TIMESTAMP_CONST + round(SECONDS_PER_DAY * serial_number))
+    conv_datetime: pendulum.DateTime = pendulum.from_timestamp(
+        0, DLT_TIMEZONE
+    ) + pendulum.duration(
+        seconds=TIMESTAMP_CONST + round(SECONDS_PER_DAY * serial_number)
+    )
     return conv_datetime
 
 
-def metadata_preprocessing(ranges: List[str], named_ranges: DictStrAny = None) -> Tuple[List[str], Dict[str, List[DictStrAny]]]:
+def metadata_preprocessing(
+    ranges: List[str], named_ranges: DictStrAny = None
+) -> Tuple[List[str], Dict[str, List[DictStrAny]]]:
     """
     Helper, will iterate through input ranges and process them so only the first 2 rows are returned per range. It will also structure all the ranges inside a dict similar to how they are returned
     by the Google Sheets API metadata request
@@ -262,10 +311,11 @@ def metadata_preprocessing(ranges: List[str], named_ranges: DictStrAny = None) -
         sheet_name = range_info[0]
         # initialize the dict containing information about the metadata of this range, headers contains the names of all header columns and
         # cols_is_date contains booleans indicating whether the data expected in that column is a datetime object or not.
-        unfilled_range_dict = {"range": requested_range,
-                               "headers": [],
-                               "cols_is_datetime": []
-                               }
+        unfilled_range_dict = {
+            "range": requested_range,
+            "headers": [],
+            "cols_is_datetime": [],
+        }
         # try to fill information about range name if the range has a name by checking named ranges
         try:
             unfilled_range_dict["name"] = named_ranges[requested_range]
@@ -280,7 +330,9 @@ def metadata_preprocessing(ranges: List[str], named_ranges: DictStrAny = None) -
     return meta_ranges, response_like_dict
 
 
-def process_range(sheet_val: List[List[Any]], sheet_meta: DictStrAny) -> Iterator[DictStrAny]:
+def process_range(
+    sheet_val: List[List[Any]], sheet_meta: DictStrAny
+) -> Iterator[DictStrAny]:
     """
     Receives 2 arrays of tabular data inside a sheet. This will be processed into a schema that is later stored into a database table
     @:param: sheet_val - 2D array of values
