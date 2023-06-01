@@ -25,14 +25,14 @@ from dlt.extract.typing import DataItemWithMeta
 
 
 ENTITY_MAPPINGS = [
-    ('activity', 'activityFields', {'user_id': 0}),
-    ('organization', "organizationFields", None),
-    ('person', 'personFields', None),
-    ('product', 'productFields', None),
-    ('deal', 'dealFields', None),
+    ("activity", "activityFields", {"user_id": 0}),
+    ("organization", "organizationFields", None),
+    ("person", "personFields", None),
+    ("product", "productFields", None),
+    ("deal", "dealFields", None),
     ("pipeline", None, None),
-    ('stage', None, None),
-    ('user', None, None)
+    ("stage", None, None),
+    ("user", None, None),
 ]
 
 RECENTS_ENTITIES = {
@@ -95,47 +95,66 @@ def pipedrive_source(
     if since_timestamp:
         if isinstance(since_timestamp, str):
             since_timestamp = pendulum.parse(since_timestamp)  # type: ignore[assignment]
-        assert isinstance(since_timestamp, pendulum.DateTime), "since_timestamp must be a valid ISO datetime string or pendulum.DateTime object"
+        assert isinstance(
+            since_timestamp, pendulum.DateTime
+        ), "since_timestamp must be a valid ISO datetime string or pendulum.DateTime object"
         since_timestamp = since_timestamp.in_timezone("UTC")
-        kw['since_timestamp'] = since_timestamp.to_iso8601_string().replace("T", " ").replace("Z", "")  # pd datetime format
+        kw["since_timestamp"] = (
+            since_timestamp.to_iso8601_string().replace("T", " ").replace("Z", "")
+        )  # pd datetime format
 
     endpoints_resources = {}
     for entity, resource_name in RECENTS_ENTITIES.items():
         endpoints_resources[resource_name] = dlt.resource(
-            _get_recent_items_incremental, name=resource_name, primary_key="id", write_disposition='merge'
+            _get_recent_items_incremental,
+            name=resource_name,
+            primary_key="id",
+            write_disposition="merge",
         )(entity, **kw)
 
     yield from endpoints_resources.values()
-    yield endpoints_resources['deals'] | dlt.transformer(
-        name='deals_participants', write_disposition='merge', primary_key="id"
+    yield endpoints_resources["deals"] | dlt.transformer(
+        name="deals_participants", write_disposition="merge", primary_key="id"
     )(_get_deals_participants)(pipedrive_api_key)
 
-    yield endpoints_resources['deals'] | dlt.transformer(
-        name='deals_flow', write_disposition='merge', primary_key="id"
+    yield endpoints_resources["deals"] | dlt.transformer(
+        name="deals_flow", write_disposition="merge", primary_key="id"
     )(_get_deals_flow)(pipedrive_api_key)
 
 
-
 def _deals_flow_group_key(item: Dict[str, Any]) -> str:
-    return item['object']  # type: ignore[no-any-return]
+    return item["object"]  # type: ignore[no-any-return]
 
 
-def _grouped_deals_flow(pages: Iterable[Iterable[Dict[str, Any]]]) -> Iterator[Tuple[str, List[Dict[str, Any]]]]:
+def _grouped_deals_flow(
+    pages: Iterable[Iterable[Dict[str, Any]]]
+) -> Iterator[Tuple[str, List[Dict[str, Any]]]]:
     for page in pages:
-        for entity, items in groupby(sorted(page, key=_deals_flow_group_key), key=_deals_flow_group_key):
-            yield entity, [dict(item['data'], timestamp=item['timestamp']) for item in items]
+        for entity, items in groupby(
+            sorted(page, key=_deals_flow_group_key), key=_deals_flow_group_key
+        ):
+            yield entity, [
+                dict(item["data"], timestamp=item["timestamp"]) for item in items
+            ]
 
 
-def _get_deals_flow(deals_page: TDataPage, pipedrive_api_key: str) -> Iterator[DataItemWithMeta]:
-    custom_fields_mapping = dlt.current.source_state().get('custom_fields_mapping', {})
+def _get_deals_flow(
+    deals_page: TDataPage, pipedrive_api_key: str
+) -> Iterator[DataItemWithMeta]:
+    custom_fields_mapping = dlt.current.source_state().get("custom_fields_mapping", {})
     for row in deals_page:
         url = f"deals/{row['id']}/flow"
         pages = _get_pages(url, pipedrive_api_key)
         for entity, page in _grouped_deals_flow(pages):
-            yield dlt.mark.with_table_name(rename_fields(page, custom_fields_mapping.get(entity, {})), "deals_flow_"+entity)
+            yield dlt.mark.with_table_name(
+                rename_fields(page, custom_fields_mapping.get(entity, {})),
+                "deals_flow_" + entity,
+            )
 
 
-def _get_deals_participants(deals_page: TDataPage, pipedrive_api_key: str) -> Iterator[TDataPage]:
+def _get_deals_participants(
+    deals_page: TDataPage, pipedrive_api_key: str
+) -> Iterator[TDataPage]:
     for row in deals_page:
         url = f"deals/{row['id']}/participants"
         yield from _get_pages(url, pipedrive_api_key)
@@ -143,32 +162,53 @@ def _get_deals_participants(deals_page: TDataPage, pipedrive_api_key: str) -> It
 
 @dlt.resource(selected=False)
 def create_state(pipedrive_api_key: str) -> Iterator[Dict[str, Any]]:
-    def _get_pages_for_rename(entity: str, fields_entity: str, pipedrive_api_key: str) -> Dict[str, Any]:
-
-        existing_fields_mapping: Dict[str, Dict[str, str]] = custom_fields_mapping.setdefault(entity, {})
+    def _get_pages_for_rename(
+        entity: str, fields_entity: str, pipedrive_api_key: str
+    ) -> Dict[str, Any]:
+        existing_fields_mapping: Dict[
+            str, Dict[str, str]
+        ] = custom_fields_mapping.setdefault(entity, {})
         # we need to process all pages before yielding
         for page in _get_pages(fields_entity, pipedrive_api_key):
-            existing_fields_mapping = update_fields_mapping(page, existing_fields_mapping)
+            existing_fields_mapping = update_fields_mapping(
+                page, existing_fields_mapping
+            )
         return existing_fields_mapping
 
-
     # gets all *Fields data and stores in state
-    custom_fields_mapping = dlt.current.source_state().setdefault('custom_fields_mapping', {})
+    custom_fields_mapping = dlt.current.source_state().setdefault(
+        "custom_fields_mapping", {}
+    )
     for entity, fields_entity, _ in ENTITY_MAPPINGS:
         if fields_entity is None:
             continue
-        custom_fields_mapping[entity] = _get_pages_for_rename(entity, fields_entity, pipedrive_api_key)
+        custom_fields_mapping[entity] = _get_pages_for_rename(
+            entity, fields_entity, pipedrive_api_key
+        )
 
     yield custom_fields_mapping
 
 
-@dlt.transformer(name='custom_fields_mapping', write_disposition='replace', columns={"options": {"data_type": "complex"}})
-def parsed_mapping(custom_fields_mapping: Dict[str, Any]) -> Optional[Iterator[List[Dict[str, str]]]]:
+@dlt.transformer(
+    name="custom_fields_mapping",
+    write_disposition="replace",
+    columns={"options": {"data_type": "complex"}},
+)
+def parsed_mapping(
+    custom_fields_mapping: Dict[str, Any]
+) -> Optional[Iterator[List[Dict[str, str]]]]:
     """
     Parses and yields custom fields' mapping in order to be stored in destiny by dlt
     """
     for endpoint, data_item_mapping in custom_fields_mapping.items():
-        yield [{
-            'endpoint': endpoint, 'hash_string': hash_string, 'name': names['name'],
-            'normalized_name': names['normalized_name'], 'options': names['options'], 'field_type': names['field_type']
-        } for hash_string, names in data_item_mapping.items()]
+        yield [
+            {
+                "endpoint": endpoint,
+                "hash_string": hash_string,
+                "name": names["name"],
+                "normalized_name": names["normalized_name"],
+                "options": names["options"],
+                "field_type": names["field_type"],
+            }
+            for hash_string, names in data_item_mapping.items()
+        ]
