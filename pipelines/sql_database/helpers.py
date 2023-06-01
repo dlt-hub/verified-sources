@@ -1,23 +1,25 @@
 from typing import (
     cast,
-    TypedDict,
     Any,
     List,
     Optional,
-    Mapping,
     Iterator,
     Dict,
     Union,
-    Sequence,
 )
 import operator
 
 import dlt
 from dlt.sources.credentials import ConnectionStringCredentials
+from dlt.extract.source import DltResource
+from dlt.common.configuration.specs import BaseConfiguration, configspec
+from dlt.common.typing import TDataItem
+from .settings import DEFAULT_CHUNK_SIZE
 
-from sqlalchemy import Table, tuple_, create_engine
+from sqlalchemy import Table, create_engine
 from sqlalchemy.engine import Engine, Row
 from sqlalchemy.sql import Select
+from sqlalchemy import MetaData, Table
 
 
 class TableLoader:
@@ -67,25 +69,33 @@ class TableLoader:
             Select[Any], query.where(filter_op(self.cursor_column, self.last_value))
         )
 
-    def load_rows(self) -> Iterator[List[Dict[str, Any]]]:
+    def load_rows(self) -> Iterator[TDataItem]:
         query = self.make_query()
-
         with self.engine.connect() as conn:
             result = conn.execution_options(yield_per=self.chunk_size).execute(query)
             for partition in result.partitions():
-                yield [dict(row._mapping) for row in partition]
+                for row in partition:
+                    yield dict(row._mapping)
 
 
 def table_rows(
     engine: Engine,
     table: Table,
-    chunk_size: int = 1000,
+    chunk_size: int = DEFAULT_CHUNK_SIZE,
     incremental: Optional[dlt.sources.incremental[Any]] = None,
-) -> Iterator[List[Dict[str, Any]]]:
-    """Yields rows from the given database table.
-    :param table: The table name to load data from
-    :param incremental: Option to enable incremental loading for the table. E.g. `incremental=dlt.source.incremental('updated_at', initial_value=pendulum.parse('2022-01-01T00:00:00Z'))`
-    :param chunk_size: How many rows to read from db at a time
+) -> Iterator[TDataItem]:
+    """
+    A DLT source which loads data from an SQL database using SQLAlchemy.
+    Resources are automatically created for each table in the schema or from the given list of tables.
+
+    Args:
+        credentials (Union[ConnectionStringCredentials, Engine, str]): Database credentials or an `sqlalchemy.Engine` instance.
+        schema (Optional[str]): Name of the database schema to load (if different from default).
+        metadata (Optional[MetaData]): Optional `sqlalchemy.MetaData` instance. `schema` argument is ignored when this is used.
+        table_names (Optional[List[str]]): A list of table names to load. By default, all tables in the schema are loaded.
+
+    Returns:
+        Iterable[DltResource]: A list of DLT resources for each table to be loaded.
     """
     loader = TableLoader(engine, table, incremental=incremental, chunk_size=chunk_size)
     yield from loader.load_rows()
@@ -103,6 +113,19 @@ def engine_from_credentials(
 
 def get_primary_key(table: Table) -> List[str]:
     return [c.name for c in table.primary_key]
+
+
+@configspec
+class SqlDatabaseTableConfiguration(BaseConfiguration):
+    incremental: Optional[dlt.sources.incremental] = None  # type: ignore[type-arg]
+
+
+@configspec
+class SqlTableResourceConfiguration(BaseConfiguration):
+    credentials: ConnectionStringCredentials
+    table: str
+    incremental: Optional[dlt.sources.incremental] = None  # type: ignore[type-arg]
+    schema: Optional[str]
 
 
 __source_name__ = "sql_database"
