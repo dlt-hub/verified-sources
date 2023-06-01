@@ -68,7 +68,7 @@ def incremental_stripe_source(
     endpoints: Tuple[str, ...] = INCREMENTAL_ENDPOINTS,
     stripe_secret_key: str = dlt.secrets.value,
     initial_start_date: Optional[DateTime] = None,
-    end_date: Optional[DateTime] = None
+    end_date: Optional[DateTime] = None,
 ) -> Generator[DltResource, Any, None]:
     """
     As Stripe API does not include the "updated" key in its responses,
@@ -89,7 +89,9 @@ def incremental_stripe_source(
     """
     stripe.api_key = stripe_secret_key
     stripe.api_version = "2022-11-15"
-    start_date_unix = transform_date(initial_start_date) if initial_start_date is not None else -1
+    start_date_unix = (
+        transform_date(initial_start_date) if initial_start_date is not None else -1
+    )
 
     def incremental_resource(
         endpoint: str,

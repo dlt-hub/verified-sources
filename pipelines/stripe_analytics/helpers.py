@@ -6,9 +6,7 @@ from pendulum import DateTime
 
 
 def pagination(
-    endpoint: str,
-    start_date: Optional[Any] = None,
-    end_date: Optional[Any] = None
+    endpoint: str, start_date: Optional[Any] = None, end_date: Optional[Any] = None
 ) -> Generator[Dict[Any, Any], Any, None]:
     get_more = True
     starting_after = None

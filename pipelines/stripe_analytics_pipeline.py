@@ -40,7 +40,7 @@ def load_data(
 def load_incremental_endpoints(
     endpoints: Tuple[str] = INCREMENTAL_ENDPOINTS,
     initial_start_date: Optional[DateTime] = None,
-    end_date:  Optional[DateTime] = None
+    end_date: Optional[DateTime] = None,
 ):
     """
     This demo script demonstrates the use of resources with incremental loading, based on the "append" mode.
@@ -66,21 +66,26 @@ def load_incremental_endpoints(
     )
     # load all data on the first run that created before end_date
     source = incremental_stripe_source(
-        endpoints=endpoints, initial_start_date=initial_start_date, end_date=end_date,
+        endpoints=endpoints,
+        initial_start_date=initial_start_date,
+        end_date=end_date,
     )
     load_info = pipeline.run(source)
     print(load_info)
 
     # load nothing, because incremental loading and end date limit
     source = incremental_stripe_source(
-        endpoints=endpoints, initial_start_date=initial_start_date, end_date=end_date,
+        endpoints=endpoints,
+        initial_start_date=initial_start_date,
+        end_date=end_date,
     )
     load_info = pipeline.run(source)
     print(load_info)
 
     # load only the new data that created after end_date
     source = incremental_stripe_source(
-        endpoints=endpoints, initial_start_date=initial_start_date,
+        endpoints=endpoints,
+        initial_start_date=initial_start_date,
     )
     load_info = pipeline.run(source)
     print(load_info)
@@ -125,6 +130,10 @@ if __name__ == "__main__":
     load_data(start_date=datetime(2023, 5, 1), end_date=datetime(2023, 5, 3))
     # load only data that was created during the period between the May 3, 2023 (incl.), and the May 5, 2023 (not incl.).
     # after that, we load all new data that created after May 5, 2023
-    load_incremental_endpoints(endpoints=("Event", ), initial_start_date=datetime(2023, 5, 3), end_date=datetime(2023, 5, 5))
+    load_incremental_endpoints(
+        endpoints=("Event",),
+        initial_start_date=datetime(2023, 5, 3),
+        end_date=datetime(2023, 5, 5),
+    )
     # load Subscription and Event data, calculate metrics, store them in a database
     load_data_and_get_metrics()
