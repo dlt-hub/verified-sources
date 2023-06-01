@@ -13,6 +13,7 @@ from .credentials import (
     ZendeskCredentialsToken,
     ZendeskCredentialsEmailPass,
     ZendeskCredentialsOAuth,
+    TZendeskCredentials,
 )
 
 
@@ -22,9 +23,7 @@ class TCustomFieldInfo(TypedDict):
 
 
 def auth_zenpy(
-    credentials: Union[
-        ZendeskCredentialsOAuth, ZendeskCredentialsToken, ZendeskCredentialsEmailPass
-    ],
+    credentials: TZendeskCredentials,
     domain: str = "zendesk.com",
     timeout: Optional[float] = None,
     ratelimit_budget: Optional[int] = None,
@@ -33,15 +32,21 @@ def auth_zenpy(
     disable_cache: bool = True,
 ) -> Zenpy:
     """
-    Helper, gets a Zendesk Credentials object and authenticates to the Zendesk API
-    @:param: credentials - Zendesk Credentials Object, stores the credentials
-    @:param disable_cache: bool, If true disables the caching of already retrieved objects.
-    @:param domain: str, domain of your Zendesk company account
-    @:param proactive_ratelimit: int, user imposed rate limit due to budgeting issues, etc.
-    @:param proactive_ratelimit_request_interval: int, indicates how many seconds to wait when rate limit is reached, default is 10 seconds
-    @:param ratelimit_budget: int that sets the maximum amount of time that the user can spend being rate limited
-    @:param timeout: float that sets the global timeout on Zenpy
-    @:returns: API client to make requests to Zendesk API
+    Helper function that authenticates to the Zendesk API using the provided credentials.
+
+    Args:
+        credentials (TZendeskCredentials): The Zendesk credentials object that stores the credentials.
+        domain (str, optional): The domain of your Zendesk company account. Defaults to "zendesk.com".
+        timeout (float, optional): The global timeout on Zenpy. Defaults to None.
+        ratelimit_budget (int, optional): The maximum amount of time that the user can spend being rate limited.
+            Defaults to None.
+        proactive_ratelimit (int, optional): User-imposed rate limit due to budgeting issues, etc. Defaults to None.
+        proactive_ratelimit_request_interval (int, optional): Indicates how many seconds to wait when rate limit is reached.
+            Defaults to 10 seconds.
+        disable_cache (bool, optional): If True, disables the caching of already retrieved objects. Defaults to True.
+
+    Returns:
+        Zenpy: An API client to make requests to the Zendesk API.
     """
     # oauth token is the preferred way to authenticate, followed by api token and then email + password combo
     if isinstance(credentials, ZendeskCredentialsOAuth):
@@ -91,12 +96,16 @@ def process_ticket(
     pivot_custom_fields: bool = True,
 ) -> DictStrAny:
     """
-    Helper that returns a dictionary of the ticket class provided as a parameter. This is done since to_dict()
-    method of Ticket class doesn't return all the required information
-    @:param sample_ticket: Ticket Object returned by a Zenpy API call, contains info on a single ticket.
-    @:param custom_fields: A dict containing all the custom fields available for tickets.
-    @:param pivot_fields: Bool that indicates whether to pivot all custom fields or not.
-    @:return base_dict: A dict containing 'cleaned' data about a ticket.
+    Helper function that processes a ticket object and returns a dictionary of ticket data.
+
+    Args:
+        ticket (Ticket): The ticket object returned by a Zenpy API call.
+        custom_fields (Dict[str, TCustomFieldInfo]): A dictionary containing all the custom fields available for tickets.
+        pivot_custom_fields (bool, optional): A boolean indicating whether to pivot all custom fields or not.
+            Defaults to True.
+
+    Returns:
+        DictStrAny: A dictionary containing cleaned data about a ticket.
     """
     base_dict: DictStrAny = ticket.to_dict()
 
@@ -160,8 +169,13 @@ def process_ticket_field(
 
 def basic_load(resource_api: Iterator[Any]) -> Iterator[TDataItem]:
     """
-    Receives a generator/iterable of Zenpy Objects and returns a generator of dicts. Loader helper
-    @:param resource_api: generator/iterable of Zenpy Objects
+    Receives a generator/iterable of Zenpy objects and returns a generator of dictionaries.
+
+    Args:
+        resource_api (Iterator[Any]): Generator/iterable of Zenpy objects.
+
+    Yields:
+        Iterator[TDataItem]: Generator of dictionaries.
     """
     # sometimes there is a single element which is a dict instead of a generator of objects
     if isinstance(resource_api, dict):
@@ -178,9 +192,13 @@ def basic_load(resource_api: Iterator[Any]) -> Iterator[TDataItem]:
 
 def _make_json_serializable(the_dict: DictStrAny) -> DictStrAny:
     """
-    Helper that makes a dict json serializable
-    @:param the_dict: The dict that needs to be made json serializable.
-    @:return the_dict: Processed dict that no longer contains any non json serializable values
+    Helper that makes a dict JSON serializable.
+
+    Args:
+        the_dict (DictStrAny): The dictionary that needs to be made JSON serializable.
+
+    Returns:
+        DictStrAny: Processed dictionary that no longer contains any non-JSON serializable values.
     """
 
     for key, value in the_dict.items():

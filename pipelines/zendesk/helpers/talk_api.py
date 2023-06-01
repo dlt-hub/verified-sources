@@ -11,32 +11,8 @@ from .credentials import (
     ZendeskCredentialsEmailPass,
     ZendeskCredentialsOAuth,
     ZendeskCredentialsToken,
+    TZendeskCredentials,
 )
-
-TALK_ENDPOINTS = {
-    "calls": "/api/v2/channels/voice/calls",
-    "addresses": "/api/v2/channels/voice/addresses",
-    "greeting_categories": "/api/v2/channels/voice/greeting_categories",
-    "greetings": "/api/v2/channels/voice/greetings",
-    "ivrs": "/api/v2/channels/voice/ivr",
-    "phone_numbers": "/api/v2/channels/voice/phone_numbers",
-    "settings": "/api/v2/channels/voice/settings",
-    "lines": "/api/v2/channels/voice/lines",
-    "agents_activity": "/api/v2/channels/voice/stats/agents_activity",
-    "current_queue_activity": "/api/v2/channels/voice/stats/current_queue_activity",
-}
-INCREMENTAL_ENDPOINTS = {
-    "calls": "/api/v2/channels/voice/stats/incremental/calls.json",
-    "legs": "/api/v2/channels/voice/stats/incremental/legs.json",
-}
-
-possible_endpoints = {
-    "availabilities": "/api/v2/channels/voice/availabilities",
-    "recordings": "/api/v2/channels/voice/calls/{call_id}/recordings",
-    "digital_lines": "/api/v2/channels/voice/digital_lines",
-    "agents_overview": "/api/v2/channels/voice/stats/agents_overview",
-    "account_overview": "/api/v2/channels/voice/stats/account_overview",
-}
 
 
 class ZendeskAPIClient:
@@ -51,11 +27,7 @@ class ZendeskAPIClient:
 
     def __init__(
         self,
-        credentials: Union[
-            ZendeskCredentialsOAuth,
-            ZendeskCredentialsToken,
-            ZendeskCredentialsEmailPass,
-        ],
+        credentials: TZendeskCredentials,
     ) -> None:
         """
         Initializer for the API client which is then used to make API calls to the ZendeskAPI
