@@ -41,21 +41,32 @@ def process_report(report: Iterator[TDataItem]) -> Union[DictStrAny, List[TDataI
     return processed_report
 
 
-def remove_active_visits(visits: List[DictStrAny], visit_timeout_seconds: int, visit_max_duration_seconds: int, now: float) -> List[DictStrAny]:
+def remove_active_visits(
+    visits: List[DictStrAny],
+    visit_timeout_seconds: int,
+    visit_max_duration_seconds: int,
+    now: float,
+) -> List[DictStrAny]:
     """Removes visits that can still add actions and all the visits preceding them. visit_timeout_seconds controls when we consider active visit closed.
-    visit_max_duration_seconds is a safeguard that makes visits longer than this argument closed."""
+    visit_max_duration_seconds is a safeguard that makes visits longer than this argument closed.
+    """
     cutoff = -1
     for idx, visit in enumerate(visits):
         last_action_delta = now - visit["lastActionTimestamp"]
         visit_duration = now - visit["firstActionTimestamp"]
-        if last_action_delta < visit_timeout_seconds and visit_duration < visit_max_duration_seconds:
+        if (
+            last_action_delta < visit_timeout_seconds
+            and visit_duration < visit_max_duration_seconds
+        ):
             # print(f"visit {visit['idVisit']} must be eliminated due to {last_action_delta} and {visit_duration}")
             # remove this element and all elements earlier in the list
             cutoff = idx
-    return visits[cutoff + 1:]
+    return visits[cutoff + 1 :]
 
 
-def get_matomo_date_range(start_date: str, last_date: dlt.sources.incremental[pendulum.DateTime]) -> str:
+def get_matomo_date_range(
+    start_date: str, last_date: dlt.sources.incremental[pendulum.DateTime]
+) -> str:
     """
     Given a default starting date and the last load date for a resource, it will output a valid date range for Matomo API data retrieval
     :param start_date: Default starting date string
@@ -65,7 +76,9 @@ def get_matomo_date_range(start_date: str, last_date: dlt.sources.incremental[pe
     # configure incremental loading. start_date prio: last dlt load -> set start time -> 2000-01-01
     if last_date.last_value:
         if start_date:
-            logger.warning(f"Using the starting date: {last_date.last_value} for the query and ignoring start date passed as argument {start_date}!")
+            logger.warning(
+                f"Using the starting date: {last_date.last_value} for the query and ignoring start date passed as argument {start_date}!"
+            )
         # take next day after yesterday to avoid double loads
         start_date = last_date.last_value.add(days=1).to_date_string()
     else:

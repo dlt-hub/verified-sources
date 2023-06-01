@@ -26,7 +26,7 @@ mimesis = "^7.0.0"
 requests-mock = "^1.10.0"
 
 [tool.black] 
-include = 'tests.*py|pipelines/asana_dlt.*py|pipelines/github.*py|pipelines/chess.*py|pipelines/pokemon.*py|pipelines/pipedrive.*py|pipelines/shopify.*py|pipelines/hubspot.*py'
+include = 'tests.*py|pipelines/asana_dlt.*py|pipelines/github.*py|pipelines/chess.*py|pipelines/pokemon.*py|pipelines/pipedrive.*py|pipelines/shopify.*py|pipelines/hubspot.*py|pipelines/matomo.*py'
 
 [tool.poetry.group.sql_database.dependencies]
 sqlalchemy = ">=1.4"

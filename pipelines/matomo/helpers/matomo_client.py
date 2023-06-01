@@ -5,7 +5,8 @@ from dlt.sources.helpers.requests import client
 
 
 class MatomoResponseError(Exception):
-    """Raised when matomo response contains an error """
+    """Raised when matomo response contains an error"""
+
     def __init__(self, message: str) -> None:
         self.message = message
         super().__init__(f"Matomo error response: {self.message}")
@@ -35,7 +36,7 @@ class MatomoAPIClient:
 
         # loop through all the pages
         # the total number of rows is received after the first request, for the first request to be sent through, initializing the row_count to 1 would suffice
-        headers = {'Content-type': 'application/json'}
+        headers = {"Content-type": "application/json"}
         url = f"{self.base_url}/index.php"
         response = client.get(url=url, headers=headers, params=params)
         response.raise_for_status()
@@ -47,7 +48,14 @@ class MatomoAPIClient:
                     raise MatomoResponseError(part["message"])
         return json_response
 
-    def get_query(self, date: str, extra_params: DictStrAny, methods: List[str], period: str, site_id: int) -> TDataItem:
+    def get_query(
+        self,
+        date: str,
+        extra_params: DictStrAny,
+        methods: List[str],
+        period: str,
+        site_id: int,
+    ) -> TDataItem:
         """
         Helper that gets data in a batch from Matomo.
         :param date: Can be a single date or a date range in the form start_date,end_date
@@ -64,16 +72,24 @@ class MatomoAPIClient:
             "module": "API",
             "method": "API.getBulkRequest",
             "format": "json",
-            "token_auth": self.auth_token
+            "token_auth": self.auth_token,
         }
         for i, method in enumerate(methods):
-            params[f"urls[{i}]"] = f"method={method}&idSite={site_id}&period={period}&date={date}"
+            params[
+                f"urls[{i}]"
+            ] = f"method={method}&idSite={site_id}&period={period}&date={date}"
         # Merge the additional parameters into the request parameters
         params.update(extra_params)
         # Send the API request
         return self._request(params=params)
 
-    def get_method(self, extra_params: DictStrAny, method: str, site_id: int, rows_per_page: int = 10000) -> Iterator[TDataItems]:
+    def get_method(
+        self,
+        extra_params: DictStrAny,
+        method: str,
+        site_id: int,
+        rows_per_page: int = 10000,
+    ) -> Iterator[TDataItems]:
         """
         Helper that gets data using a Matomo API method
         :param extra_params: Extra parameters as a dict
@@ -92,7 +108,7 @@ class MatomoAPIClient:
             "method": "API.getBulkRequest",
             "format": "json",
             "token_auth": self.auth_token,
-            "urls[0]": f"method={method}&idSite={site_id}&filter_limit={rows_per_page}&filter_offset={filter_offset}"
+            "urls[0]": f"method={method}&idSite={site_id}&filter_limit={rows_per_page}&filter_offset={filter_offset}",
         }
         # Merge the additional parameters into the request parameters
         params.update(extra_params)
@@ -101,10 +117,14 @@ class MatomoAPIClient:
         while len(method_data):
             yield method_data
             filter_offset += len(method_data)
-            params["urls[0]"] = f"method={method}&idSite={site_id}&filter_limit={rows_per_page}&filter_offset={filter_offset}"
+            params[
+                "urls[0]"
+            ] = f"method={method}&idSite={site_id}&filter_limit={rows_per_page}&filter_offset={filter_offset}"
             method_data = self._request(params=params)[0]
 
-    def get_visitors_batch(self, visitor_list: List[str], site_id: int, extra_params: DictStrAny = None) -> TDataItems:
+    def get_visitors_batch(
+        self, visitor_list: List[str], site_id: int, extra_params: DictStrAny = None
+    ) -> TDataItems:
         """
         Gets visitors for Matomo.
         :param visitor_list:
@@ -119,9 +139,14 @@ class MatomoAPIClient:
             "method": "API.getBulkRequest",
             "format": "json",
             "site_id": site_id,
-            "token_auth": self.auth_token
+            "token_auth": self.auth_token,
         }
-        params.update({f"urls[{i}]": f"method=Live.getVisitorProfile&idSite={site_id}&visitorId={visitor_list[i]}" for i in range(len(visitor_list))})
+        params.update(
+            {
+                f"urls[{i}]": f"method=Live.getVisitorProfile&idSite={site_id}&visitorId={visitor_list[i]}"
+                for i in range(len(visitor_list))
+            }
+        )
         params.update(extra_params)
         method_data = self._request(params=params)
         return method_data
