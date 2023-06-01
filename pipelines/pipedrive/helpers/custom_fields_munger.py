@@ -2,7 +2,7 @@ from typing import Any, Dict, Iterable, Iterator, TypedDict, Optional
 
 import dlt
 
-from .typing import TDataPage
+from ..typing import TDataPage
 
 
 class TFieldMapping(TypedDict):
