@@ -20,10 +20,9 @@ def run_full_load() -> None:
     print(info)
 
 
-def run_custom_reports():
+def run_custom_reports() -> None:
     """
     Defines some custom reports you can use and shows how to use for different custom reports
-    :return:
     """
 
     queries = [
@@ -54,10 +53,9 @@ def run_custom_reports():
     print(info)
 
 
-def run_reports():
+def run_reports() -> None:
     """
     Runs the pipeline only loading reports.
-    :return:
     """
 
     # site id can also be assigned explicitly. Default is to read from config.toml
@@ -73,10 +71,9 @@ def run_reports():
     print(info)
 
 
-def run_live_events():
+def run_live_events() -> None:
     """
     Runs the pipeline loading live visits and visitors data, getting only todays data
-    :return:
     """
 
     pipeline_events = dlt.pipeline(

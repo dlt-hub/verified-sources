@@ -1,5 +1,5 @@
 """Loads reports and raw visits data from Matomo"""
-from typing import Iterator, List
+from typing import Iterator, List, Iterable
 import dlt
 import pendulum
 from dlt.common.typing import DictStrAny, TDataItem
@@ -18,19 +18,22 @@ def matomo_reports(
     url: str = dlt.config.value,
     queries: List[DictStrAny] = dlt.config.value,
     site_id: int = dlt.config.value,
-) -> List[DltResource]:
+) -> Iterable[DltResource]:
     """
     Executes and loads a set of reports defined in `queries` for a Matomo site site_id.
-    :param api_token:
-    :param url:
-    :param queries: Dicts that contain information on the reports to retrieve
-    :param site_id: site id of the website as per your matomo account
-    :return: List of dlt resources, each containing a matomo report.
+
+    Parameters:
+        api_token (str): The API access token for authentication. Defaults to the value in the `dlt.secrets` object.
+        url (str): The URL of the Matomo server. Defaults to the value in the `dlt.config` object.
+        queries (List[DictStrAny]): Dicts that contain information on the reports to retrieve.
+        site_id (int): Site ID of the website as per your Matomo account.
+
+    Returns:
+        Iterable[DltResource]: List of dlt resources, each containing a Matomo report.
     """
 
     # Create an instance of the Matomo API client
     client = MatomoAPIClient(api_token=api_token, url=url)
-    resource_list = []
     for query in queries:
         name = query.get("resource_name")
         batch_data = dlt.resource(
@@ -43,8 +46,7 @@ def matomo_reports(
                 "date", primary_key=()
             ),  # disables unique checks in incremental
         )
-        resource_list.append(batch_data)
-    return resource_list
+        yield batch_data
 
 
 def get_data_batch(
@@ -55,11 +57,15 @@ def get_data_batch(
 ) -> Iterator[TDataItem]:
     """
     Gets data for a query in a batch.
-    :param client: API Client used to make calls to Matomo API
-    :param query: Dict specified in config.toml containing info on what data to retrieve from Matomo API
-    :param last_date: Last date timestamp of the last data loaded for the batch data.
-    :param site_id: Specifies the matomo site data is gathered from
-    :return:
+
+    Parameters:
+        client (MatomoAPIClient): API Client used to make calls to Matomo API.
+        query (DictStrAny): Dict specified in config.toml containing info on what data to retrieve from Matomo API.
+        last_date (dlt.sources.incremental[pendulum.DateTime]): Last date timestamp of the last data loaded for the batch data.
+        site_id (int): Specifies the Matomo site data is gathered from.
+
+    Returns:
+        Iterator[TDataItem]: Iterator yielding data items for the query.
     """
 
     # unpack query data and process date range
@@ -97,16 +103,20 @@ def matomo_visits(
     get_live_event_visitors: bool = False,
 ) -> List[DltResource]:
     """
-    Loads a list of visits. Initially loads the current day visits and all visits in `initial_past_days`. On subsequent loads, continues from last load. Active visits are skipped
-    until a visit is closed and does not get more actions.
-    :param api_token:
-    :param url:
-    :param live_events_site_id:
-    :param load_past_days: how many past days to load on initial load.
-    :param visit_timeout_seconds: a session timeout, after that inactivity time, visit is considered closed. this is a setting in Matomo. default is 30 min.
-    :param visit_max_duration_seconds: maximum visit length after which we consider the visit closed. this is a safety mechanism - in case of visits that may take days we'd never count them as finalized as well as visits after them.
-    :param get_live_event_visitors: Option, if set to true will retrieve data about unique visitors.
-    :return: A list of resources containing event data.
+    Loads a list of visits. Initially loads the current day visits and all visits in `initial_past_days`.
+    On subsequent loads, continues from last load. Active visits are skipped until a visit is closed and does not get more actions.
+
+    Parameters:
+        api_token (str): The API access token for authentication. Defaults to the value in the `dlt.secrets` object.
+        url (str): The URL of the Matomo server. Defaults to the value in the `dlt.config` object.
+        live_events_site_id (int): Site ID of the website for live events.
+        initial_load_past_days (int): Number of past days to load on initial load. Defaults to 10.
+        visit_timeout_seconds (int): Session timeout in seconds, after which a visit is considered closed. Defaults to 1800.
+        visit_max_duration_seconds (int): Maximum visit duration in seconds after which a visit is considered closed. Defaults to 3600.
+        get_live_event_visitors (bool): Option to retrieve data about unique visitors. Defaults to False.
+
+    Returns:
+        List[DltResource]: A list of resources containing event data.
     """
 
     # Create an instance of the Matomo API client
@@ -145,13 +155,20 @@ def get_last_visits(
     rows_per_page: int = 2000,
 ) -> Iterator[TDataItem]:
     """
-    Dlt resource which gets the visits in the given site id for the given timeframe. If there was a previous load the chosen timeframe is always last_load -> now. Otherwise, a start date can be
-    provided to make the chosen timeframe start_date -> now. The default behaviour would be to get all visits available until now if neither last_load nor start_date are given.
-    :param client: Used to make calls to Matomo API
-    :param site_id: Every site in Matomo has a unique id
-    :param last_date: date of last load for this resource if it exists
-    :param rows_per_page: How many rows will be there per page.
-    :returns: Iterator of dicts containing information on last visits in the given timeframe
+    Dlt resource which gets the visits in the given site id for the given timeframe. If there was a previous load, the chosen timeframe is always last_load -> now.
+    Otherwise, a start date can be provided to make the chosen timeframe start_date -> now.
+    The default behavior would be to get all visits available until now if neither last_load nor start_date are given.
+
+    Parameters:
+        client (MatomoAPIClient): Used to make calls to Matomo API.
+        site_id (int): Every site in Matomo has a unique id.
+        last_date (dlt.sources.incremental[float]): Date of last load for this resource if it exists.
+        visit_timeout_seconds (int): A session timeout in seconds, after that inactivity time, visit is considered closed. Defaults to 1800.
+        visit_max_duration_seconds (int): Maximum visit length in seconds after which we consider the visit closed. Defaults to 3600.
+        rows_per_page (int): How many rows will be there per page.
+
+    Returns:
+        Iterator[TDataItem]: Iterator of dicts containing information on last visits in the given timeframe.
     """
 
     extra_params = {
@@ -183,11 +200,15 @@ def get_unique_visitors(
     visits: List[DictStrAny], client: MatomoAPIClient, site_id: int
 ) -> Iterator[TDataItem]:
     """
-    Dlt transformer. Receives information about visits from get_last_visits
-    :param visits: List of dicts containing information on last visits in the given timeframe
-    :param client: Used to make calls to Matomo API
-    :param site_id: Every site in Matomo has a unique id
-    :returns: Dict containing information about  the visitor
+    Dlt transformer. Receives information about visits from get_last_visits.
+
+    Parameters:
+        visits (List[DictStrAny]): List of dicts containing information on last visits in the given timeframe.
+        client (MatomoAPIClient): Used to make calls to Matomo API.
+        site_id (int): Every site in Matomo has a unique id.
+
+    Returns:
+        Iterator[TDataItem]: Dict containing information about the visitor.
     """
 
     visitor_ids = [visit["visitorId"] for visit in visits]

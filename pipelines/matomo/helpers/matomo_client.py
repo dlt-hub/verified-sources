@@ -19,9 +19,11 @@ class MatomoAPIClient:
 
     def __init__(self, api_token: str, url: str) -> None:
         """
-        Initializes the client which is then used to make api requests.
-        :param api_token: Token used to authenticate for Matomo API
-        :param url: Url of the website
+        Initializes the client.
+
+        Parameters:
+            api_token (str): Token used to authenticate for Matomo API.
+            url (str): URL of the Matomo website.
         """
 
         self.base_url = url
@@ -29,9 +31,13 @@ class MatomoAPIClient:
 
     def _request(self, params: DictStrAny) -> TDataItem:
         """
-        Helper that retrieves the data and returns the json response from the API
-        :param params:
-        :returns: Json returned from API
+        Helper method that retrieves data and returns the JSON response from the API.
+
+        Parameters:
+            params (DictStrAny): Parameters for the API request.
+
+        Returns:
+            TDataItem: JSON response from the API.
         """
 
         # loop through all the pages
@@ -57,13 +63,17 @@ class MatomoAPIClient:
         site_id: int,
     ) -> TDataItem:
         """
-        Helper that gets data in a batch from Matomo.
-        :param date: Can be a single date or a date range in the form start_date,end_date
-        :param extra_params: Extra parameters as a dict
-        :param methods: List of methods we want data for
-        :param period: Period can be day, month, year
-        :param site_id: Unique id of the Matomo site
-        :returns: JSON data from the response.
+        Helper method that gets data in a batch from Matomo.
+
+        Parameters:
+            date (str): Date or date range for the data retrieval.
+            extra_params (DictStrAny): Extra parameters for the API request.
+            methods (List[str]): List of methods to retrieve data for.
+            period (str): Period for the data retrieval (e.g., "day", "month", "year").
+            site_id (int): Unique ID of the Matomo site.
+
+        Returns:
+            TDataItem: JSON data from the response.
         """
         # Set up the API URL and parameters
         if not extra_params:
@@ -91,12 +101,16 @@ class MatomoAPIClient:
         rows_per_page: int = 10000,
     ) -> Iterator[TDataItems]:
         """
-        Helper that gets data using a Matomo API method
-        :param extra_params: Extra parameters as a dict
-        :param method: Unique report from Matomo API
-        :param site_id: Unique id of the Matomo site
-        :param rows_per_page: How many rows are returned per page from the request.
-        :returns: JSON data from the response.
+        Helper method that gets data using a Matomo API method.
+
+        Parameters:
+            extra_params (DictStrAny): Extra parameters for the API request.
+            method (str): Unique report from the Matomo API.
+            site_id (int): Unique ID of the Matomo site.
+            rows_per_page (int): Number of rows returned per page from the request.
+
+        Yields:
+            Iterator[TDataItems]: JSON data from the response.
         """
 
         # Set up the API URL and parameters
@@ -127,10 +141,14 @@ class MatomoAPIClient:
     ) -> TDataItems:
         """
         Gets visitors for Matomo.
-        :param visitor_list:
-        :param site_id:
-        :param extra_params:
-        :return:
+
+        Parameters:
+            visitor_list (List[str]): List of visitor IDs.
+            site_id (int): Unique ID of the Matomo site.
+            extra_params (DictStrAny): Extra parameters for the API request.
+
+        Returns:
+            TDataItems: JSON data from the response.
         """
         if not extra_params:
             extra_params = {}
