@@ -1,4 +1,15 @@
-from typing import cast, TypedDict, Any, List, Optional, Mapping, Iterator, Dict, Union, Sequence
+from typing import (
+    cast,
+    TypedDict,
+    Any,
+    List,
+    Optional,
+    Mapping,
+    Iterator,
+    Dict,
+    Union,
+    Sequence,
+)
 import operator
 
 import dlt
@@ -39,7 +50,9 @@ class TableLoader:
         if not self.incremental:
             return query
         last_value_func = self.incremental.last_value_func
-        if last_value_func is max:  # Query ordered and filtered according to last_value function
+        if (
+            last_value_func is max
+        ):  # Query ordered and filtered according to last_value function
             order_by = self.cursor_column.asc()
             filter_op = operator.ge
         elif last_value_func is min:
@@ -50,7 +63,9 @@ class TableLoader:
         query = query.order_by(order_by)
         if self.last_value is None:
             return cast(Select[Any], query)  # TODO: typing in sqlalchemy 2
-        return cast(Select[Any], query.where(filter_op(self.cursor_column, self.last_value)))
+        return cast(
+            Select[Any], query.where(filter_op(self.cursor_column, self.last_value))
+        )
 
     def load_rows(self) -> Iterator[List[Dict[str, Any]]]:
         query = self.make_query()
@@ -65,7 +80,7 @@ def table_rows(
     engine: Engine,
     table: Table,
     chunk_size: int = 1000,
-    incremental: Optional[dlt.sources.incremental[Any]] = None
+    incremental: Optional[dlt.sources.incremental[Any]] = None,
 ) -> Iterator[List[Dict[str, Any]]]:
     """Yields rows from the given database table.
     :param table: The table name to load data from
@@ -76,7 +91,9 @@ def table_rows(
     yield from loader.load_rows()
 
 
-def engine_from_credentials(credentials: Union[ConnectionStringCredentials, Engine, str]) -> Engine:
+def engine_from_credentials(
+    credentials: Union[ConnectionStringCredentials, Engine, str]
+) -> Engine:
     if isinstance(credentials, Engine):
         return credentials
     if isinstance(credentials, ConnectionStringCredentials):
@@ -88,4 +105,4 @@ def get_primary_key(table: Table) -> List[str]:
     return [c.name for c in table.primary_key]
 
 
-__source_name__ = 'sql_database'
+__source_name__ = "sql_database"

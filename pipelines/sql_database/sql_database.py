@@ -25,7 +25,9 @@ class SqlTableResourceConfiguration(BaseConfiguration):
     schema: Optional[str]
 
 
-@dlt.common.configuration.with_config(sections=('sources', 'sql_database'), spec=SqlTableResourceConfiguration)
+@dlt.common.configuration.with_config(
+    sections=("sources", "sql_database"), spec=SqlTableResourceConfiguration
+)
 def sql_table(
     credentials: Union[ConnectionStringCredentials, Engine, str] = dlt.secrets.value,
     table: str = dlt.config.value,
@@ -75,10 +77,7 @@ def sql_database(
     metadata = metadata or MetaData(schema=schema)
 
     if table_names:
-        tables = [
-            Table(name, metadata, autoload_with=engine)
-            for name in table_names
-        ]
+        tables = [Table(name, metadata, autoload_with=engine) for name in table_names]
     else:
         metadata.reflect(bind=engine)
         tables = list(metadata.tables.values())
