@@ -50,7 +50,8 @@ class WorkableClient:
             except requests.HTTPError as e:
                 logging.warning("Rate limited. Waiting to retry...")
                 seconds_to_wait = (
-                    int(e.response.headers["X-Rate-Limit-Reset"]) - pendulum.now().timestamp()
+                    int(e.response.headers["X-Rate-Limit-Reset"])
+                    - pendulum.now().timestamp()
                 )
                 time.sleep(seconds_to_wait)
 
