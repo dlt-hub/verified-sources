@@ -17,10 +17,14 @@ TIMESTAMP_CONST = -2209161600.0
 
 
 def get_spreadsheet_id(url_or_id: str) -> str:
-    """ "
-    Receives an id or url to a Google Spreadsheet and returns the spreadsheet_id as a string
-    @:param: url_or_id a string which is the id or url of the spreadsheet
-    @:return: spreadsheet_id a string which is definitely the id of the spreadsheet
+    """
+    Receives an ID or URL to a Google Spreadsheet and returns the spreadsheet ID as a string.
+
+    Args:
+        url_or_id (str): The ID or URL of the spreadsheet.
+
+    Returns:
+        str: The spreadsheet ID as a string.
     """
 
     # check if this is an url: http or https in it
@@ -34,11 +38,18 @@ def get_spreadsheet_id(url_or_id: str) -> str:
 
 
 def process_url(url: str) -> str:
-    """ "
-    Takes an url to a Google spreadsheet and computes the spreadsheet id from it according to the spreadsheet url formula: https://docs.google.com/spreadsheets/d/<spreadsheet_id>/edit
-    If the url is not formatted correctly a Value Error will be returned
-    @:param: url- the string containing the url to the spreadsheet
-    @:return: spreadsheet_id as a string or ValueError if the url is not properly formatted
+    """
+    Takes a URL to a Google spreadsheet and computes the spreadsheet ID from it according to the spreadsheet URL formula: https://docs.google.com/spreadsheets/d/<spreadsheet_id>/edit.
+    If the URL is not formatted correctly, a ValueError will be raised.
+
+    Args:
+        url (str): The URL to the spreadsheet.
+
+    Returns:
+        str: The spreadsheet ID as a string.
+
+    Raises:
+        ValueError: If the URL is not properly formatted.
     """
 
     # split on the '/'
@@ -58,10 +69,14 @@ def process_url(url: str) -> str:
 
 def get_first_rows(sheet_range: str) -> List[str]:
     """
-    Receives the range of a Google sheet, parses it and outputs the sheet name, a range which includes the first 2 rows only. Is used for only getting the first 2 rows when collecting metadata.
-    @:param: sheet_range - Ex: sheet1, sheet3!G18:O28. General formula {sheet_name}![Starting_column][Starting_row]:[Ending_column]:[Ending_row]
-    @:param: limited_sheet_range - same format but only first 2 rows in range
-    @:return: [sheet_name, modified_range] - list containing strings: sheet_name and the range modified to only have the first 2 rows
+    Receives the range of a Google sheet, parses it and outputs the sheet name, a range which includes the first 2 rows only.
+    Is used for only getting the first 2 rows when collecting metadata.
+
+    Args:
+        sheet_range (str): Range of a Google sheet. Example: sheet1, sheet3!G18:O28. General formula {sheet_name}![Starting_column][Starting_row]:[Ending_column]:[Ending_row]
+
+    Returns:
+        List[str]: List containing the sheet name and the modified range to only have the first 2 rows.
     """
 
     # split on the !
@@ -103,9 +118,13 @@ def get_first_rows(sheet_range: str) -> List[str]:
 
 def _separate_row_col(row_col_str: str) -> Tuple[str, str]:
     """
-    Helper function that receives a row and column together from the A1 range and returns the row and column separately
-    @:param: row_col_str - ex: A1, BB2, ZZ25, etc
-    @:return range_row, range_col - ex: ("A", "1"), etc
+    Helper function that receives a row and column together from the A1 range and returns the row and column separately.
+
+    Args:
+        row_col_str (str): Row and column together from the A1 range. Example: "A1", "BB2", "ZZ25", etc.
+
+    Returns:
+        Tuple[str, str]: Row and column separately. Example: ("A", "1"), etc.
     """
     range_row = ""
     range_col = ""
@@ -121,12 +140,15 @@ def convert_named_range_to_a1(
     named_range_dict: DictStrAny, sheet_names_dict: Dict[str, DictStrAny] = None
 ) -> str:
     """
-    Converts a named_range dict returned from Google Sheets API metadata call to an A1 range
-    @:param: named_range_dict - dict returned from Google Sheets API, it contains all the information about a named range
-    @:param: sheet_names_dict - dict containing all the sheets inside the spreadsheet where the sheet id is the key and the sheet name is the corresponding value.
-    @:returns: A string which represents the named range as an A1 range.
-    """
+    Converts a named_range dict returned from Google Sheets API metadata call to an A1 range.
 
+    Args:
+        named_range_dict (DictStrAny): Dict returned from Google Sheets API, containing information about a named range.
+        sheet_names_dict (Dict[str, DictStrAny], optional): Dict containing all the sheets inside the spreadsheet where the sheet id is the key and the sheet name is the corresponding value.
+
+    Returns:
+        str: A string representing the named range as an A1 range.
+    """
     if not sheet_names_dict:
         sheet_names_dict = {}
     start_row_idx = named_range_dict["range"]["startRowIndex"]
@@ -198,10 +220,14 @@ def _convert_col_a1(col_idx: int) -> str:
 
 def get_range_headers(range_metadata: List[DictStrAny], range_name: str) -> List[str]:
     """
-    Helper. Receives the metadata for a range of cells and outputs only the headers for columns, i.e. first line of data
-    @:param: range_metadata - Dict containing metadata for the first 2 rows of a range, taken from Google Sheets API response.
-    @:param: range_name - the name of the range as appears in the metadata, might be different from actual range name if this is a named range. Needed for error reporting
-    @:return: headers - list of headers
+    Retrieves the headers for columns from the metadata of a range.
+
+    Args:
+        range_metadata (List[DictStrAny]): Metadata for the first 2 rows of a range.
+        range_name (str): The name of the range as appears in the metadata.
+
+    Returns:
+        List[str]: A list of headers.
     """
     headers = []
     empty_header_index = 0
@@ -230,9 +256,13 @@ def get_range_headers(range_metadata: List[DictStrAny], range_name: str) -> List
 
 def get_first_line(range_metadata: List[DictStrAny]) -> List[bool]:
     """
-    Helper. Parses through the metadata for a range and checks whether a column contains datetime types or not
-    @:param: range_metadata - Metadata for first 2 rows in a range
-    @:return: is_datetime_cols - list containing True of False depending on whether the first line of data is a datetime object or not.
+    Determines if each column in the first line of a range contains datetime objects.
+
+    Args:
+        range_metadata (List[DictStrAny]): Metadata for the first 2 rows in a range.
+
+    Returns:
+        List[bool]: A list of boolean values indicating whether each column in the first line contains datetime objects.
     """
 
     # get data for 1st column and process them, if empty just return an empty list
@@ -245,9 +275,13 @@ def get_first_line(range_metadata: List[DictStrAny]) -> List[bool]:
 
 def is_date_datatype(value_list: List[DictStrAny]) -> List[bool]:
     """
-    Helper function that receives a list of value lists from Google Sheets API, and for each data type deduces if the value contains a datetime object or not
-    @:param: value_list - a list of the values in the first row of data returned by google sheets api. They are all dicts containing different information about the value
-    @:return: value_type_list - list containing bool values. True if the value is a date, False otherwise
+    Determines if each value in a list is a datetime object.
+
+    Args:
+        value_list (List[DictStrAny]): A list of values from the first row of data returned by Google Sheets API.
+
+    Returns:
+        List[bool]: A list of boolean values indicating whether each value is a datetime object.
     """
 
     value_type_list = []
@@ -267,10 +301,13 @@ def serial_date_to_datetime(
     serial_number: Union[int, float, str, bool]
 ) -> Union[pendulum.DateTime, str, bool]:
     """
-    Receives a serial number which can be an int or float(depending on the serial number) and outputs a datetime object
-    @:param: serial_number- int/float. The integer part shows the number of days since December 30th 1899, the decimal part shows the fraction of the day. Sometimes if a table is not formatted
-    properly this can be also be a bool or str.
-    @:return: converted_date: datetime object for the same date as the serial number
+    Converts a serial number to a datetime object.
+
+    Args:
+        serial_number (Union[int, float, str, bool]): The serial number, which can be an int, float, bool, or str.
+
+    Returns:
+        Union[pendulum.DateTime, str, bool]: The converted datetime object, or the original value if conversion fails.
     """
 
     # if called with a different data type, return with whatever input was, handled by the dlt pipeline later - edge case
@@ -289,15 +326,18 @@ def metadata_preprocessing(
     ranges: List[str], named_ranges: DictStrAny = None
 ) -> Tuple[List[str], Dict[str, List[DictStrAny]]]:
     """
-    Helper, will iterate through input ranges and process them so only the first 2 rows are returned per range. It will also structure all the ranges inside a dict similar to how they are returned
-    by the Google Sheets API metadata request
-    @:param: ranges - list of range names
-    @:param named_ranges: dict containing ranges as keys and the corresponding named ranges as the values
-    @:return meta_ranges: List containing all the ranges where metadata is gathered from, ex: sheet1!1:2 would be an element of this list
-    @:return response_like_dict: This dictionary copies how google sheets API returns data from ranges: all ranges are organized into their parent sheets which are keys to the dict.
-                                 All ranges belonging to a sheet are in a list with the order in which they appear in the request being preserved, ex: {"sheet1" : ["range3", "range1"]
-                                 range3 is returned before range1 because it would have been ahead in the list of ranges given in the request. Here instead of storing a string for
-                                 range1 or range3, a dict with all the metadata for that range is stored. as showed in unfilled_range_dict
+    Helper function that iterates through the input ranges and processes them so that only the first 2 rows are returned per range.
+    It also structures all the ranges inside a dictionary similar to how they are returned by the Google Sheets API metadata request.
+
+    Args:
+        ranges (List[str]): List of range names.
+        named_ranges (DictStrAny, optional): Dictionary containing ranges as keys and the corresponding named ranges as values.
+
+    Returns:
+        Tuple[List[str], Dict[str, List[DictStrAny]]]: A tuple containing:
+            - meta_ranges: List containing all the ranges where metadata is gathered from.
+            - response_like_dict: A dictionary that mirrors the structure of the Google Sheets API response.
+              The keys are the parent sheets, and the values are lists of dictionaries containing metadata for each range.
     """
 
     # process metadata ranges so only the first 2 rows are appended
@@ -334,10 +374,14 @@ def process_range(
     sheet_val: List[List[Any]], sheet_meta: DictStrAny
 ) -> Iterator[DictStrAny]:
     """
-    Receives 2 arrays of tabular data inside a sheet. This will be processed into a schema that is later stored into a database table
-    @:param: sheet_val - 2D array of values
-    @:param: sheet_meta - Metadata gathered for this specific range
-    @:return:  table_dict - a dict version of the table. It generates a dict of the type {header:value} for every row.
+    Receives 2 arrays of tabular data inside a sheet. This will be processed into a schema that is later stored into a database table.
+
+    Args:
+        sheet_val (List[List[Any]]): 2D array of values.
+        sheet_meta (DictStrAny): Metadata gathered for this specific range.
+
+    Yields:
+        DictStrAny: A dictionary version of the table. It generates a dictionary of the type {header: value} for every row.
     """
     # get headers and first line data types which is just Datetime or not Datetime so far and loop through the remaining values
     headers = sheet_meta["headers"]

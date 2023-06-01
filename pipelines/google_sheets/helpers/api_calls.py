@@ -18,9 +18,13 @@ except ImportError:
 
 def api_auth(credentials: GcpCredentials) -> Resource:
     """
-    Uses GCP credentials to authenticate with Google Sheets API
-    @:param: credentials - credentials needed to log in to gcp
-    @:return: service - object needed to make api calls to google sheets api
+    Uses GCP credentials to authenticate with Google Sheets API.
+
+    Args:
+        credentials (GcpCredentials): Credentials needed to log in to GCP.
+
+    Returns:
+        Resource: Object needed to make API calls to Google Sheets API.
     """
     if isinstance(credentials, GcpOAuthCredentials):
         credentials.auth("https://www.googleapis.com/auth/spreadsheets.readonly")
@@ -31,12 +35,14 @@ def api_auth(credentials: GcpCredentials) -> Resource:
 
 def get_metadata_simple(spreadsheet_id: str, service: Resource) -> DictStrAny:
     """
-    Makes a simple get metadata API call which just returns information about the spreadsheet such as: sheet_names and named_ranges
-    @:param: spreadsheet_id - string containing the id of the spreadsheet
-    @:param: service - Resource object used to make api calls to Google Sheets API
-    @:param: get_sheets - setting: if true will return all sheets inside spreadsheet
-    @:param: get_named_ranges - setting: if true will return all named ranges inside spreadsheet
-    @:return: return_info - dict containing information on sheets inside if any and named ranges inside if any. Has 2 keys: "sheets" and "named_ranges"
+    Makes a simple get metadata API call which just returns information about the spreadsheet such as sheet names and named ranges.
+
+    Args:
+        spreadsheet_id (str): The ID of the spreadsheet.
+        service (Resource): Resource object used to make API calls to Google Sheets API.
+
+    Returns:
+        DictStrAny: A dictionary containing information on sheets and named ranges. It has two keys: "sheets" and "named_ranges".
     """
     return_info: DictStrAny = {"sheets": {}, "named_ranges": []}
     # get metadata of spreadsheet to check for number of sheets inside
@@ -65,13 +71,17 @@ def get_metadata(
     named_ranges: DictStrAny = None,
 ) -> DictStrAny:
     """
-    # TODO: add fields to save on info returned
-    Gets the metadata for the first 2 rows of every range specified. The first row is deduced as the header and the 2nd row specifies the format the rest of the data should follow
-    @:param spreadsheet_id: - the id of the spreadsheet
-    @:param service: - Resource object used by google-api-python-client to make api calls
-    @:param ranges: - List of ranges to get data from. If left empty, every sheet inside the spreadsheet will be included instead. named ranges not supported
-    @:param named_ranges: Dict containing ranges as keys and the corresponding named ranges as the values
-    @:returns: - A dict where all the range names are the key. The values for each key are the corresponding sheet metadata: sheet_name, headers, values
+    TODO: add fields to save on info returned
+    Gets the metadata for the first 2 rows of every range specified. The first row is deduced as the header and the 2nd row specifies the format the rest of the data should follow.
+
+    Args:
+        spreadsheet_id (str): The ID of the spreadsheet.
+        service (Resource): Resource object used by google-api-python-client to make API calls.
+        ranges (List[str]): List of ranges to get data from. If left empty, every sheet inside the spreadsheet will be included instead. Named ranges not supported.
+        named_ranges (DictStrAny, optional): Dict containing ranges as keys and the corresponding named ranges as the values.
+
+    Returns:
+        DictStrAny: A dict where all the range names are the key. The values for each key are the corresponding sheet metadata: sheet_name, headers, values.
     """
 
     # process metadata ranges so only the first 2 rows are appended
@@ -133,12 +143,16 @@ def get_data_batch(
     service: Resource, spreadsheet_id: str, range_names: List[str]
 ) -> List[DictStrAny]:
     """
-    Calls Google Sheets API to get data in a batch. This is the most efficient way to get data for multiple ranges inside a spreadsheet. However, this API call will return the data for each range
-    without the same name that the range was called
-    @:param: service - Object to make api calls to Google Sheets
-    @:param: spredsheet_id - the id of the spreadsheet
-    @:param: range_names - list of range names
-    @:return: values - list of dictionaries, each dictionary will contain all data for one of the requested ranges
+    Calls Google Sheets API to get data in a batch. This is the most efficient way to get data for multiple ranges inside a spreadsheet.
+    However, this API call will return the data for each range without the same name that the range was called.
+
+    Args:
+        service (Resource): Object to make API calls to Google Sheets.
+        spreadsheet_id (str): The ID of the spreadsheet.
+        range_names (List[str]): List of range names.
+
+    Returns:
+        List[DictStrAny]: List of dictionaries, each dictionary will contain all data for one of the requested ranges.
     """
     # handle requests with no ranges - edge case
     if not range_names:
