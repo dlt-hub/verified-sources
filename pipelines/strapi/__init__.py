@@ -14,8 +14,16 @@ def strapi_source(
     api_secret_key: str = dlt.secrets.value,
     domain: str = dlt.secrets.value,
 ) -> Iterable[DltResource]:
-    """strapi behaves like a mongo db, with topics and documents
-    endpoints represents a list of collections
+    """
+    Source function for retrieving data from Strapi.
+
+    Parameters:
+        endpoints (List[str]): List of collections to retrieve data from.
+        api_secret_key (str): API secret key for authentication. Defaults to the value in the `dlt.secrets` object.
+        domain (str): Domain name for the Strapi API. Defaults to the value in the `dlt.secrets` object.
+
+    Yields:
+        DltResource: Data resources from the specified collections.
     """
     for endpoint in endpoints:
         yield dlt.resource(  # type: ignore

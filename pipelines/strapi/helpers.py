@@ -10,14 +10,13 @@ def get_endpoint(token: str, domain: str, endpoint: str) -> Iterable[TDataItem]:
     """
     A generator that yields data from a paginated API endpoint.
 
-    :param token: The access token for the API.
-    :type token: str
-    :param domain: The domain name of the API.
-    :type domain: str
-    :param endpoint: The API endpoint to query, defaults to ''.
-    :type endpoint: str
-    :yield: A list of data from the API endpoint.
-    :rtype: list
+    Args:
+        token (str): The access token for the API.
+        domain (str): The domain name of the API.
+        endpoint (str): The API endpoint to query, defaults to ''.
+
+    Yields:
+        TDataItem: A data item from the API endpoint.
     """
     api_endpoint = f"https://{domain}/api/{endpoint}"
     headers = {"Content-Type": "application/json", "Authorization": f"Bearer {token}"}
