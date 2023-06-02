@@ -6,16 +6,18 @@ from dlt.common import logger
 from dlt.common.pendulum import pendulum
 from dlt.common.typing import DictStrAny, TDataItem
 
-FIRST_DAY_OF_MILLENNIUM = "2000-01-01"
-# FIRST_DAY_OF_MILLENNIUM_TIMESTAMP = 946684800.0
-TIMESTAMP_10_DAYS_AGO = pendulum.today().subtract(days=10).timestamp()
+from ..settings import DEFAULT_START_DATE
 
 
 def process_report(report: Iterator[TDataItem]) -> Union[DictStrAny, List[TDataItem]]:
     """
-    Helper, loops through multiple formats of method_data and processes them into dlt resources
-    :param report: Response from Matomo API containing data for a single method.
-    :returns: generator of dicts.
+    Processes the report data from the Matomo API into a suitable format.
+
+    Parameters:
+        report (Iterator[TDataItem]): Response from Matomo API containing data for a single method.
+
+    Returns:
+        Union[DictStrAny, List[TDataItem]]: Processed report data in a suitable format.
     """
 
     processed_report = []
@@ -41,35 +43,61 @@ def process_report(report: Iterator[TDataItem]) -> Union[DictStrAny, List[TDataI
     return processed_report
 
 
-def remove_active_visits(visits: List[DictStrAny], visit_timeout_seconds: int, visit_max_duration_seconds: int, now: float) -> List[DictStrAny]:
-    """Removes visits that can still add actions and all the visits preceding them. visit_timeout_seconds controls when we consider active visit closed.
-    visit_max_duration_seconds is a safeguard that makes visits longer than this argument closed."""
+def remove_active_visits(
+    visits: List[DictStrAny],
+    visit_timeout_seconds: int,
+    visit_max_duration_seconds: int,
+    now: float,
+) -> List[DictStrAny]:
+    """
+    Removes active visits from the list of visits based on timeout and max duration criteria.
+
+    Parameters:
+        visits (List[DictStrAny]): List of visits.
+        visit_timeout_seconds (int): Session timeout in seconds.
+        visit_max_duration_seconds (int): Maximum visit duration in seconds.
+        now (float): Current timestamp.
+
+    Returns:
+        List[DictStrAny]: Updated list of visits with active visits removed.
+    """
     cutoff = -1
     for idx, visit in enumerate(visits):
         last_action_delta = now - visit["lastActionTimestamp"]
         visit_duration = now - visit["firstActionTimestamp"]
-        if last_action_delta < visit_timeout_seconds and visit_duration < visit_max_duration_seconds:
+        if (
+            last_action_delta < visit_timeout_seconds
+            and visit_duration < visit_max_duration_seconds
+        ):
             # print(f"visit {visit['idVisit']} must be eliminated due to {last_action_delta} and {visit_duration}")
             # remove this element and all elements earlier in the list
             cutoff = idx
-    return visits[cutoff + 1:]
+    return visits[cutoff + 1 :]
 
 
-def get_matomo_date_range(start_date: str, last_date: dlt.sources.incremental[pendulum.DateTime]) -> str:
+def get_matomo_date_range(
+    start_date: str, last_date: dlt.sources.incremental[pendulum.DateTime]
+) -> str:
     """
-    Given a default starting date and the last load date for a resource, it will output a valid date range for Matomo API data retrieval
-    :param start_date: Default starting date string
-    :param last_date: Last date loaded saved in dlt state
-    :return date_range: formatted string for a date range - starting_date,end_date
+    Generates a valid date range for Matomo API data retrieval based on the start date and last load date.
+
+    Parameters:
+        start_date (str): Default starting date string.
+        last_date (dlt.sources.incremental[pendulum.DateTime]): Last date loaded saved in dlt state.
+
+    Returns:
+        str: Formatted date range string for the API request.
     """
     # configure incremental loading. start_date prio: last dlt load -> set start time -> 2000-01-01
     if last_date.last_value:
         if start_date:
-            logger.warning(f"Using the starting date: {last_date.last_value} for the query and ignoring start date passed as argument {start_date}!")
+            logger.warning(
+                f"Using the starting date: {last_date.last_value} for the query and ignoring start date passed as argument {start_date}!"
+            )
         # take next day after yesterday to avoid double loads
         start_date = last_date.last_value.add(days=1).to_date_string()
     else:
-        start_date = start_date or FIRST_DAY_OF_MILLENNIUM
+        start_date = start_date or DEFAULT_START_DATE
     # configure end_date to yesterday as a date string and format date_range with starting and end dates
     end_date = pendulum.yesterday().to_date_string()
     date_range = f"{start_date},{end_date}"

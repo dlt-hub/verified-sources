@@ -5,7 +5,8 @@ from dlt.sources.helpers.requests import client
 
 
 class MatomoResponseError(Exception):
-    """Raised when matomo response contains an error """
+    """Raised when matomo response contains an error"""
+
     def __init__(self, message: str) -> None:
         self.message = message
         super().__init__(f"Matomo error response: {self.message}")
@@ -18,9 +19,11 @@ class MatomoAPIClient:
 
     def __init__(self, api_token: str, url: str) -> None:
         """
-        Initializes the client which is then used to make api requests.
-        :param api_token: Token used to authenticate for Matomo API
-        :param url: Url of the website
+        Initializes the client.
+
+        Parameters:
+            api_token (str): Token used to authenticate for Matomo API.
+            url (str): URL of the Matomo website.
         """
 
         self.base_url = url
@@ -28,14 +31,18 @@ class MatomoAPIClient:
 
     def _request(self, params: DictStrAny) -> TDataItem:
         """
-        Helper that retrieves the data and returns the json response from the API
-        :param params:
-        :returns: Json returned from API
+        Helper method that retrieves data and returns the JSON response from the API.
+
+        Parameters:
+            params (DictStrAny): Parameters for the API request.
+
+        Returns:
+            TDataItem: JSON response from the API.
         """
 
         # loop through all the pages
         # the total number of rows is received after the first request, for the first request to be sent through, initializing the row_count to 1 would suffice
-        headers = {'Content-type': 'application/json'}
+        headers = {"Content-type": "application/json"}
         url = f"{self.base_url}/index.php"
         response = client.get(url=url, headers=headers, params=params)
         response.raise_for_status()
@@ -47,15 +54,26 @@ class MatomoAPIClient:
                     raise MatomoResponseError(part["message"])
         return json_response
 
-    def get_query(self, date: str, extra_params: DictStrAny, methods: List[str], period: str, site_id: int) -> TDataItem:
+    def get_query(
+        self,
+        date: str,
+        extra_params: DictStrAny,
+        methods: List[str],
+        period: str,
+        site_id: int,
+    ) -> TDataItem:
         """
-        Helper that gets data in a batch from Matomo.
-        :param date: Can be a single date or a date range in the form start_date,end_date
-        :param extra_params: Extra parameters as a dict
-        :param methods: List of methods we want data for
-        :param period: Period can be day, month, year
-        :param site_id: Unique id of the Matomo site
-        :returns: JSON data from the response.
+        Helper method that gets data in a batch from Matomo.
+
+        Parameters:
+            date (str): Date or date range for the data retrieval.
+            extra_params (DictStrAny): Extra parameters for the API request.
+            methods (List[str]): List of methods to retrieve data for.
+            period (str): Period for the data retrieval (e.g., "day", "month", "year").
+            site_id (int): Unique ID of the Matomo site.
+
+        Returns:
+            TDataItem: JSON data from the response.
         """
         # Set up the API URL and parameters
         if not extra_params:
@@ -64,23 +82,35 @@ class MatomoAPIClient:
             "module": "API",
             "method": "API.getBulkRequest",
             "format": "json",
-            "token_auth": self.auth_token
+            "token_auth": self.auth_token,
         }
         for i, method in enumerate(methods):
-            params[f"urls[{i}]"] = f"method={method}&idSite={site_id}&period={period}&date={date}"
+            params[
+                f"urls[{i}]"
+            ] = f"method={method}&idSite={site_id}&period={period}&date={date}"
         # Merge the additional parameters into the request parameters
         params.update(extra_params)
         # Send the API request
         return self._request(params=params)
 
-    def get_method(self, extra_params: DictStrAny, method: str, site_id: int, rows_per_page: int = 10000) -> Iterator[TDataItems]:
+    def get_method(
+        self,
+        extra_params: DictStrAny,
+        method: str,
+        site_id: int,
+        rows_per_page: int = 10000,
+    ) -> Iterator[TDataItems]:
         """
-        Helper that gets data using a Matomo API method
-        :param extra_params: Extra parameters as a dict
-        :param method: Unique report from Matomo API
-        :param site_id: Unique id of the Matomo site
-        :param rows_per_page: How many rows are returned per page from the request.
-        :returns: JSON data from the response.
+        Helper method that gets data using a Matomo API method.
+
+        Parameters:
+            extra_params (DictStrAny): Extra parameters for the API request.
+            method (str): Unique report from the Matomo API.
+            site_id (int): Unique ID of the Matomo site.
+            rows_per_page (int): Number of rows returned per page from the request.
+
+        Yields:
+            Iterator[TDataItems]: JSON data from the response.
         """
 
         # Set up the API URL and parameters
@@ -92,7 +122,7 @@ class MatomoAPIClient:
             "method": "API.getBulkRequest",
             "format": "json",
             "token_auth": self.auth_token,
-            "urls[0]": f"method={method}&idSite={site_id}&filter_limit={rows_per_page}&filter_offset={filter_offset}"
+            "urls[0]": f"method={method}&idSite={site_id}&filter_limit={rows_per_page}&filter_offset={filter_offset}",
         }
         # Merge the additional parameters into the request parameters
         params.update(extra_params)
@@ -101,16 +131,24 @@ class MatomoAPIClient:
         while len(method_data):
             yield method_data
             filter_offset += len(method_data)
-            params["urls[0]"] = f"method={method}&idSite={site_id}&filter_limit={rows_per_page}&filter_offset={filter_offset}"
+            params[
+                "urls[0]"
+            ] = f"method={method}&idSite={site_id}&filter_limit={rows_per_page}&filter_offset={filter_offset}"
             method_data = self._request(params=params)[0]
 
-    def get_visitors_batch(self, visitor_list: List[str], site_id: int, extra_params: DictStrAny = None) -> TDataItems:
+    def get_visitors_batch(
+        self, visitor_list: List[str], site_id: int, extra_params: DictStrAny = None
+    ) -> TDataItems:
         """
         Gets visitors for Matomo.
-        :param visitor_list:
-        :param site_id:
-        :param extra_params:
-        :return:
+
+        Parameters:
+            visitor_list (List[str]): List of visitor IDs.
+            site_id (int): Unique ID of the Matomo site.
+            extra_params (DictStrAny): Extra parameters for the API request.
+
+        Returns:
+            TDataItems: JSON data from the response.
         """
         if not extra_params:
             extra_params = {}
@@ -119,9 +157,14 @@ class MatomoAPIClient:
             "method": "API.getBulkRequest",
             "format": "json",
             "site_id": site_id,
-            "token_auth": self.auth_token
+            "token_auth": self.auth_token,
         }
-        params.update({f"urls[{i}]": f"method=Live.getVisitorProfile&idSite={site_id}&visitorId={visitor_list[i]}" for i in range(len(visitor_list))})
+        params.update(
+            {
+                f"urls[{i}]": f"method=Live.getVisitorProfile&idSite={site_id}&visitorId={visitor_list[i]}"
+                for i in range(len(visitor_list))
+            }
+        )
         params.update(extra_params)
         method_data = self._request(params=params)
         return method_data
