@@ -1,5 +1,5 @@
 from unittest.mock import patch, Mock
-from pipelines.notion.client import NotionClient
+from pipelines.notion.helpers.client import NotionClient
 
 
 @patch("dlt.sources.helpers.requests.get")
