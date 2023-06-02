@@ -25,7 +25,7 @@ def get_records(
         replication_key (str, optional): The replication key for incremental loading. Defaults to None.
 
     Yields:
-        Dict[str, Any]: A dictionary representing a record from the Salesforce sObject.
+        Dict[TDataItem]: A dictionary representing a record from the Salesforce sObject.
     """
 
     # Get all fields for the sobject
