@@ -13,7 +13,7 @@ from dlt.sources.helpers import requests
 
 from pipelines.pipedrive import pipedrive_source
 from tests.utils import ALL_DESTINATIONS, assert_load_info, assert_query_data
-from pipelines.pipedrive.custom_fields_munger import (
+from pipelines.pipedrive.helpers.custom_fields_munger import (
     update_fields_mapping,
     rename_fields,
 )
@@ -212,7 +212,9 @@ def test_custom_fields_munger(destination_name: str) -> None:
 def test_since_timestamp() -> None:
     """since_timestamp is coerced correctly to UTC implicit ISO timestamp and passed to endpoint function"""
     with mock.patch(
-        "pipelines.pipedrive.recents._get_pages", autospec=True, return_value=iter([])
+        "pipelines.pipedrive.helpers.pages.get_pages",
+        autospec=True,
+        return_value=iter([]),
     ) as m:
         pipeline = dlt.pipeline(pipeline_name="pipedrive", full_refresh=True)
         incremental_source = pipedrive_source(
@@ -225,7 +227,9 @@ def test_since_timestamp() -> None:
     )
 
     with mock.patch(
-        "pipelines.pipedrive.recents._get_pages", autospec=True, return_value=iter([])
+        "pipelines.pipedrive.helpers.pages.get_pages",
+        autospec=True,
+        return_value=iter([]),
     ) as m:
         pipeline = dlt.pipeline(pipeline_name="pipedrive", full_refresh=True)
         pipeline.extract(pipedrive_source(since_timestamp=pendulum.parse("1986-03-03T04:00:00+04:00")).with_resources("persons"))  # type: ignore[arg-type]
@@ -235,7 +239,9 @@ def test_since_timestamp() -> None:
     )
 
     with mock.patch(
-        "pipelines.pipedrive.recents._get_pages", autospec=True, return_value=iter([])
+        "pipelines.pipedrive.helpers.pages.get_pages",
+        autospec=True,
+        return_value=iter([]),
     ) as m:
         pipeline = dlt.pipeline(pipeline_name="pipedrive", full_refresh=True)
         pipeline.extract(pipedrive_source().with_resources("persons"))
