@@ -20,7 +20,7 @@ def load_data(
     This demo script uses the resources with non-incremental
     loading based on "replace" mode to load all data from provided endpoints.
 
-    Parameters:
+    Args:
         endpoints: A tuple of endpoint names to retrieve data from. Defaults to most popular Stripe API endpoints.
         start_date: An optional start date to limit the data retrieved. Defaults to None.
         end_date: An optional end date to limit the data retrieved. Defaults to None.
@@ -50,7 +50,7 @@ def load_incremental_endpoints(
 
     Make sure you're loading objects that don't change over time.
 
-    Parameters:
+    Args:
         endpoints: A tuple of incremental endpoint names to retrieve data from.
                    Defaults to Stripe API endpoints with uneditable data.
         initial_start_date: An optional parameter that specifies the initial value for dlt.sources.incremental.
