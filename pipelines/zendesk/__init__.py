@@ -155,9 +155,13 @@ def chats_table_resource(
 ) -> Iterator[TDataItem]:
     """
     Resource for Chats
-    @:param zendesk_client: Zenpy type object, used to make calls to Zendesk API through zenpy module
-    @:param start_date: Datetime object that serves as the starting date of when to retrieve objects
-    @:returns: Generator returning dicts for every row of data
+
+    Args:
+        zendesk_client (Zenpy): Zenpy type object, used to make calls to Zendesk API through the Zenpy module.
+        update_timestamp (dlt.sources.incremental[str]): Incremental source specifying the timestamp for incremental loading.
+
+    Yields:
+        dict: A dictionary representing each row of data.
     """
     # Send query and process it
     all_chats = zendesk_client.chats.incremental(
