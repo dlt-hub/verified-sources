@@ -33,7 +33,7 @@ def assets_resource(
     """
     Resource function that yields metadata about every asset to be loaded.
 
-    Parameters:
+    Args:
         mux_api_access_token (str): API access token for Mux.
         mux_api_secret_key (str): API secret key for Mux.
         limit (int): Limit on the number of assets to retrieve. Defaults to DEFAULT_LIMIT.
@@ -60,7 +60,7 @@ def views_resource(
     """
     Resource function that yields metadata about every video view from yesterday to be loaded.
 
-    Parameters:
+    Args:
         mux_api_access_token (str): API access token for Mux.
         mux_api_secret_key (str): API secret key for Mux.
         limit (int): Limit on the number of video views to retrieve. Defaults to DEFAULT_LIMIT.
