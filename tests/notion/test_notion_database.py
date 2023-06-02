@@ -36,4 +36,4 @@ def test_query(mock_send_payload):
     )
 
     assert len(results) == 1
-    assert results[0] == {"id": "123", "title": "Test Record"}
+    assert results[0] == [{"id": "123", "title": "Test Record"}]

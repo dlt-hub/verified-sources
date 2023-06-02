@@ -222,7 +222,7 @@ class NotionDatabase:
                 payload=payload,
             )
 
-            yield from response.get("results", [])
+            yield response.get("results", [])
             if not response.get("has_more"):
                 break
             start_cursor = response.get("next_cursor")
