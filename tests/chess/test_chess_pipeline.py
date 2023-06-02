@@ -2,7 +2,7 @@ import pytest
 
 import dlt
 
-from pipelines.chess import chess, chess_dlt_config_example
+from pipelines.chess import source, chess_dlt_config_example
 
 from tests.utils import ALL_DESTINATIONS, assert_load_info
 
@@ -16,7 +16,7 @@ def test_load_players_games(destination_name: str) -> None:
         dataset_name="chess_players_games_data",
         full_refresh=True,
     )
-    data = chess(
+    data = source(
         ["magnuscarlsen", "vincentkeymer", "dommarajugukesh", "rpragchess"],
         start_month="2022/11",
         end_month="2022/12",
@@ -58,7 +58,7 @@ def test_incremental_games_load(destination_name: str) -> None:
         dataset_name="chess_players_games_data",
         full_refresh=True,
     )
-    data = chess(["magnuscarlsen"], start_month="2022/11", end_month="2022/11")
+    data = source(["magnuscarlsen"], start_month="2022/11", end_month="2022/11")
     info = pipeline.run(data.with_resources("players_games"))
     assert_load_info(info)
 
@@ -75,7 +75,7 @@ def test_incremental_games_load(destination_name: str) -> None:
     assert magnus_games_no > 0  # should have games
 
     # do load with the same range into the existing dataset
-    data = chess(["magnuscarlsen"], start_month="2022/11", end_month="2022/11")
+    data = source(["magnuscarlsen"], start_month="2022/11", end_month="2022/11")
     info = pipeline.run(data.with_resources("players_games"))
     # the dlt figured out that there's no new data at all and skipped the loading package
     assert_load_info(info, expected_load_packages=0)
@@ -83,7 +83,7 @@ def test_incremental_games_load(destination_name: str) -> None:
     assert get_magnus_games() == magnus_games_no
 
     # get some new games
-    data = chess(["magnuscarlsen"], start_month="2022/12", end_month="2022/12")
+    data = source(["magnuscarlsen"], start_month="2022/12", end_month="2022/12")
     info = pipeline.run(data.with_resources("players_games"))
     # we have new games in December!
     assert_load_info(info)
