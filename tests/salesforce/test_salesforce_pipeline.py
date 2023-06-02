@@ -3,13 +3,27 @@ import pytest
 import dlt
 from pipelines.salesforce import salesforce_source
 
-@pytest.mark.parametrize('destination_name', ALL_DESTINATIONS)
-def test_all_resources(destination_name: str) -> None:
 
-    expected_tables = ['account', 'campaign', 'contact', 'lead', 'opportunity', 'pricebook_2', 'pricebook_entry', 'product_2', 'sf_user', 'user_role']
+@pytest.mark.parametrize("destination_name", ALL_DESTINATIONS)
+def test_all_resources(destination_name: str) -> None:
+    expected_tables = [
+        "account",
+        "campaign",
+        "contact",
+        "lead",
+        "opportunity",
+        "pricebook_2",
+        "pricebook_entry",
+        "product_2",
+        "sf_user",
+        "user_role",
+    ]
 
     pipeline = dlt.pipeline(
-        pipeline_name="salesforce", destination=destination_name, dataset_name="salesforce_data", full_refresh=True
+        pipeline_name="salesforce",
+        destination=destination_name,
+        dataset_name="salesforce_data",
+        full_refresh=True,
     )
     source = salesforce_source()
 
@@ -21,16 +35,16 @@ def test_all_resources(destination_name: str) -> None:
     table_counts = load_table_counts(pipeline, *table_names)
 
     assert set(table_counts.keys()) >= set(expected_tables)
-    assert table_counts['sf_user'] == 7
-    assert table_counts['account'] == 13
-    assert table_counts['campaign'] == 4
-    assert table_counts['contact'] == 20
-    assert table_counts['lead'] == 22
-    assert table_counts['opportunity'] == 31
-    assert table_counts['pricebook_2'] == 2
-    assert table_counts['pricebook_entry'] == 34
-    assert table_counts['product_2'] == 17
-    assert table_counts['user_role'] == 18
+    assert table_counts["sf_user"] == 7
+    assert table_counts["account"] == 13
+    assert table_counts["campaign"] == 4
+    assert table_counts["contact"] == 20
+    assert table_counts["lead"] == 22
+    assert table_counts["opportunity"] == 31
+    assert table_counts["pricebook_2"] == 2
+    assert table_counts["pricebook_entry"] == 34
+    assert table_counts["product_2"] == 17
+    assert table_counts["user_role"] == 18
 
     # Execute the pipeline
     source = salesforce_source()

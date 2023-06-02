@@ -65,7 +65,9 @@ def test_init_list_pipelines() -> None:
     assert set(get_pipeline_candidates()) == set(pipelines.keys())
     # check docstrings
     for k_p in pipelines:
-        assert pipelines[k_p].doc, f"Please provide module docstring in the __init__.py of {k_p} pipeline"
+        assert pipelines[
+            k_p
+        ].doc, f"Please provide module docstring in the __init__.py of {k_p} pipeline"
 
 
 def assert_requests_txt(project_files: FileStorage) -> None:
@@ -74,10 +76,14 @@ def assert_requests_txt(project_files: FileStorage) -> None:
     assert "dlt" in project_files.load(cli_utils.REQUIREMENTS_TXT)
 
 
-def assert_pipeline_files(project_files: FileStorage, pipeline_name: str, destination_name: str) -> None:
+def assert_pipeline_files(
+    project_files: FileStorage, pipeline_name: str, destination_name: str
+) -> None:
     # inspect script
     pipeline_script = pipeline_name + "_pipeline.py"
-    visitor = cli_utils.parse_init_script("test", project_files.load(pipeline_script), pipeline_script)
+    visitor = cli_utils.parse_init_script(
+        "test", project_files.load(pipeline_script), pipeline_script
+    )
     # check destinations
     for args in visitor.known_calls[n.PIPELINE]:
         assert args.arguments["destination"].value == destination_name
