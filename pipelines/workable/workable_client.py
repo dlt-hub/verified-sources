@@ -1,9 +1,9 @@
 import logging
 import time
-from typing import Any, Dict, Generator, Optional
+from typing import Any, Dict, Iterable, Optional
 
 import pendulum
-from dlt.common.typing import TDataItems
+from dlt.common.typing import TDataItem
 from dlt.sources.helpers import requests
 
 
@@ -50,7 +50,8 @@ class WorkableClient:
             except requests.HTTPError as e:
                 logging.warning("Rate limited. Waiting to retry...")
                 seconds_to_wait = (
-                    int(e.response.headers["X-Rate-Limit-Reset"]) - pendulum.now().timestamp()
+                    int(e.response.headers["X-Rate-Limit-Reset"])
+                    - pendulum.now().timestamp()
                 )
                 time.sleep(seconds_to_wait)
 
@@ -59,7 +60,7 @@ class WorkableClient:
         endpoint: str,
         custom_url: Optional[str] = None,
         params: Optional[Dict[str, Any]] = None,
-    ) -> Generator[TDataItems, Any, None]:
+    ) -> Iterable[TDataItem]:
         """
         Queries an API endpoint using pagination and returns the results as a generator.
         Args:
@@ -90,6 +91,6 @@ class WorkableClient:
 
     def details_from_endpoint(
         self, main_endpoint: str, code: str, dependent_endpoint: str
-    ) -> Generator[TDataItems, Any, None]:
+    ) -> Iterable[TDataItem]:
         custom_url = f"{self.base_url}/{main_endpoint}/{code}"
         return self.pagination(dependent_endpoint, custom_url=custom_url)
