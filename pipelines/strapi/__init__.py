@@ -17,7 +17,7 @@ def strapi_source(
     """
     Source function for retrieving data from Strapi.
 
-    Parameters:
+    Args:
         endpoints (List[str]): List of collections to retrieve data from.
         api_secret_key (str): API secret key for authentication. Defaults to the value in the `dlt.secrets` object.
         domain (str): Domain name for the Strapi API. Defaults to the value in the `dlt.secrets` object.

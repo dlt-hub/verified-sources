@@ -62,7 +62,7 @@ class WorkableClient:
     ) -> Generator[TDataItems, Any, None]:
         """
         Queries an API endpoint using pagination and returns the results as a generator.
-        Parameters:
+        Args:
             endpoint (str): The API endpoint to query.
             custom_url (str, optional): A custom URL to use instead of the default base URL.
             params (dict, optional): A dictionary of query parameters to include in the API request.

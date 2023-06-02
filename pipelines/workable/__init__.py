@@ -69,7 +69,7 @@ def workable_source(
     Resources that depend on another resource are implemented as transformers,
     so they can re-use the original resource data without re-downloading.
 
-    Parameters:
+    Args:
         access_token: The API access token for authentication. Defaults to the value in the `dlt.secrets` object.
         subdomain: The subdomain name for the Workable account. Defaults to the value in the `dlt.config` object.
         start_date: An optional start date to limit the data retrieved. Defaults to January 1, 2000.
