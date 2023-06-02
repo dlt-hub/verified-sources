@@ -21,7 +21,7 @@ class MatomoAPIClient:
         """
         Initializes the client.
 
-        Parameters:
+        Args:
             api_token (str): Token used to authenticate for Matomo API.
             url (str): URL of the Matomo website.
         """
@@ -33,7 +33,7 @@ class MatomoAPIClient:
         """
         Helper method that retrieves data and returns the JSON response from the API.
 
-        Parameters:
+        Args:
             params (DictStrAny): Parameters for the API request.
 
         Returns:
@@ -65,7 +65,7 @@ class MatomoAPIClient:
         """
         Helper method that gets data in a batch from Matomo.
 
-        Parameters:
+        Args:
             date (str): Date or date range for the data retrieval.
             extra_params (DictStrAny): Extra parameters for the API request.
             methods (List[str]): List of methods to retrieve data for.
@@ -103,7 +103,7 @@ class MatomoAPIClient:
         """
         Helper method that gets data using a Matomo API method.
 
-        Parameters:
+        Args:
             extra_params (DictStrAny): Extra parameters for the API request.
             method (str): Unique report from the Matomo API.
             site_id (int): Unique ID of the Matomo site.
@@ -142,7 +142,7 @@ class MatomoAPIClient:
         """
         Gets visitors for Matomo.
 
-        Parameters:
+        Args:
             visitor_list (List[str]): List of visitor IDs.
             site_id (int): Unique ID of the Matomo site.
             extra_params (DictStrAny): Extra parameters for the API request.

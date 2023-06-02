@@ -22,7 +22,7 @@ def matomo_reports(
     """
     Executes and loads a set of reports defined in `queries` for a Matomo site site_id.
 
-    Parameters:
+    Args:
         api_token (str): The API access token for authentication. Defaults to the value in the `dlt.secrets` object.
         url (str): The URL of the Matomo server. Defaults to the value in the `dlt.config` object.
         queries (List[DictStrAny]): Dicts that contain information on the reports to retrieve.
@@ -58,7 +58,7 @@ def get_data_batch(
     """
     Gets data for a query in a batch.
 
-    Parameters:
+    Args:
         client (MatomoAPIClient): API Client used to make calls to Matomo API.
         query (DictStrAny): Dict specified in config.toml containing info on what data to retrieve from Matomo API.
         last_date (dlt.sources.incremental[pendulum.DateTime]): Last date timestamp of the last data loaded for the batch data.
@@ -106,7 +106,7 @@ def matomo_visits(
     Loads a list of visits. Initially loads the current day visits and all visits in `initial_past_days`.
     On subsequent loads, continues from last load. Active visits are skipped until a visit is closed and does not get more actions.
 
-    Parameters:
+    Args:
         api_token (str): The API access token for authentication. Defaults to the value in the `dlt.secrets` object.
         url (str): The URL of the Matomo server. Defaults to the value in the `dlt.config` object.
         live_events_site_id (int): Site ID of the website for live events.
@@ -159,7 +159,7 @@ def get_last_visits(
     Otherwise, a start date can be provided to make the chosen timeframe start_date -> now.
     The default behavior would be to get all visits available until now if neither last_load nor start_date are given.
 
-    Parameters:
+    Args:
         client (MatomoAPIClient): Used to make calls to Matomo API.
         site_id (int): Every site in Matomo has a unique id.
         last_date (dlt.sources.incremental[float]): Date of last load for this resource if it exists.
@@ -202,7 +202,7 @@ def get_unique_visitors(
     """
     Dlt transformer. Receives information about visits from get_last_visits.
 
-    Parameters:
+    Args:
         visits (List[DictStrAny]): List of dicts containing information on last visits in the given timeframe.
         client (MatomoAPIClient): Used to make calls to Matomo API.
         site_id (int): Every site in Matomo has a unique id.
