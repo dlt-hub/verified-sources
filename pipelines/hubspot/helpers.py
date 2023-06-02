@@ -3,7 +3,7 @@ from typing import Generator, Dict, Any, List
 
 from dlt.sources.helpers import requests
 
-BASE_URL = 'https://api.hubapi.com/'
+BASE_URL = "https://api.hubapi.com/"
 
 
 def get_url(endpoint: str, **kwargs: Any) -> str:
@@ -23,12 +23,12 @@ def _get_headers(api_key: str) -> Dict[str, str]:
 
     """
     # Construct the dictionary of HTTP headers to use for API requests
-    return dict(
-        authorization=f'Bearer {api_key}'
-    )
+    return dict(authorization=f"Bearer {api_key}")
 
 
-def _parse_response(r: requests.Response, **kwargs: str) -> Generator[List[Dict[str, Any]], None, None]:
+def _parse_response(
+    r: requests.Response, **kwargs: str
+) -> Generator[List[Dict[str, Any]], None, None]:
     """
     Parse a JSON response from HUBSPOT and yield the properties of each result.
 
@@ -54,14 +54,16 @@ def _parse_response(r: requests.Response, **kwargs: str) -> Generator[List[Dict[
     _data = r.json()
 
     # Yield the properties of each result in the API response
-    if 'results' in _data:
+    if "results" in _data:
         _objects: List[Dict[str, Any]] = []
-        for _result in _data['results']:
-            _obj = _result['properties']
-            if 'associations' in _result:
-                for association in _result['associations']:
-                    __values = [{'value': _obj['hs_object_id'], f'{association}_id': __r['id']} for __r in
-                                _result['associations'][association]['results']]
+        for _result in _data["results"]:
+            _obj = _result["properties"]
+            if "associations" in _result:
+                for association in _result["associations"]:
+                    __values = [
+                        {"value": _obj["hs_object_id"], f"{association}_id": __r["id"]}
+                        for __r in _result["associations"][association]["results"]
+                    ]
 
                     # remove duplicates from list of dicts
                     __values = [dict(t) for t in {tuple(d.items()) for d in __values}]
@@ -72,16 +74,18 @@ def _parse_response(r: requests.Response, **kwargs: str) -> Generator[List[Dict[
             yield _objects
 
     # Follow pagination links if they exist
-    if 'paging' in _data:
-        _next = _data['paging'].get('next', None)
+    if "paging" in _data:
+        _next = _data["paging"].get("next", None)
         if _next:
             # Replace the base URL with an empty string to get the relative URL for the next page
-            next_url = _next['link'].replace(BASE_URL, '')
+            next_url = _next["link"].replace(BASE_URL, "")
             # Recursively call the `fetch_data` function to get the next page of results
             yield from fetch_data(next_url, **kwargs)
 
 
-def fetch_data(endpoint: str, api_key: str, **kwargs: str) -> Generator[List[Dict[str, Any]], None, None]:
+def fetch_data(
+    endpoint: str, api_key: str, **kwargs: str
+) -> Generator[List[Dict[str, Any]], None, None]:
     """
     Fetch data from HUBSPOT endpoint using a specified API key and yield the properties of each result.
 
@@ -110,11 +114,11 @@ def fetch_data(endpoint: str, api_key: str, **kwargs: str) -> Generator[List[Dic
 
     """
     # Construct the URL and headers for the API request
-    _url = get_url(endpoint, **kwargs)
-    _headers = _get_headers(api_key)
+    url = get_url(endpoint, **kwargs)
+    headers = _get_headers(api_key)
 
     # Make the API request
-    r = requests.get(_url, headers=_headers)
+    r = requests.get(url, headers=headers)
 
     # Parse the API response and yield the properties of each result
     return _parse_response(r, api_key=api_key, **kwargs)

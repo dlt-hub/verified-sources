@@ -12,15 +12,15 @@ def load_crm_data():
     """
 
     # Create a DLT pipeline object with the pipeline name, dataset name, and destination database type
-    p = dlt.pipeline(pipeline_name='hubspot_pipeline',
-                     dataset_name='hubspot',
-                     destination='redshift',
-                     full_refresh=True)
+    p = dlt.pipeline(
+        pipeline_name="hubspot_pipeline",
+        dataset_name="hubspot",
+        destination="redshift",
+        full_refresh=True,
+    )
 
     # Run the pipeline with the HubSpot source connector
-    info = p.run(
-        hubspot()
-    )
+    info = p.run(hubspot())
 
     # Print information about the pipeline run
     print(info)
@@ -35,10 +35,12 @@ def load_web_analytics_events(object_type: THubspotObjectType, object_ids):
     """
 
     # Create a DLT pipeline object with the pipeline name, dataset name, and destination database type
-    p = dlt.pipeline(pipeline_name='hubspot',
-                     dataset_name='hubspot',
-                     destination='postgres',
-                     full_refresh=False)
+    p = dlt.pipeline(
+        pipeline_name="hubspot",
+        dataset_name="hubspot",
+        destination="postgres",
+        full_refresh=False,
+    )
 
     # you can get many resources by calling this function for various object types
     resource = hubspot_events_for_objects(object_type, object_ids)
