@@ -15,7 +15,7 @@ def calculate_mrr(df_sub: pd.DataFrame) -> float:
     You can calculate the approximate MRR by summing the monthly-normalized
     amounts of all subscriptions from which payment is being collected at that time.
 
-    Parameters:
+    Args:
         df_sub (pd.DataFrame): DataFrame containing subscription data.
 
     Returns:
@@ -78,7 +78,7 @@ def churn_rate(df_event: pd.DataFrame, df_subscription: pd.DataFrame) -> float:
     in the past 30 days divided by the number of active subscribers
     as of 30 days ago, plus any new subscribers in those 30 days.
 
-    Parameters:
+    Args:
         df_event (pd.DataFrame): DataFrame containing event data.
         df_subscription (pd.DataFrame): DataFrame containing subscription data.
 

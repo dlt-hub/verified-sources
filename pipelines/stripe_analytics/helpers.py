@@ -12,7 +12,7 @@ def pagination(
     """
     Retrieves data from an endpoint with pagination.
 
-    Parameters:
+    Args:
         endpoint (str): The endpoint to retrieve data from.
         start_date (Optional[Any]): An optional start date to limit the data retrieved. Defaults to None.
         end_date (Optional[Any]): An optional end date to limit the data retrieved. Defaults to None.

@@ -31,7 +31,7 @@ def stripe_source(
     This source is suitable for all types of endpoints, including 'Events', 'Invoice', etc.
     but these endpoints can also be loaded in incremental mode (see source incremental_stripe_source).
 
-    Parameters:
+    Args:
         endpoints (Tuple[str, ...]): A tuple of endpoint names to retrieve data from. Defaults to most popular Stripe API endpoints.
         stripe_secret_key (str): The API access token for authentication. Defaults to the value in the `dlt.secrets` object.
         start_date (Optional[DateTime]): An optional start date to limit the data retrieved. Format: datetime(YYYY, MM, DD). Defaults to None.
@@ -70,7 +70,7 @@ def incremental_stripe_source(
     This source yields the resources with incremental loading based on "append" mode.
     You will load only the newest data without duplicating and without downloading a huge amount of data each time.
 
-    Parameters:
+    Args:
         endpoints (tuple): A tuple of endpoint names to retrieve data from. Defaults to Stripe API endpoints with uneditable data.
         stripe_secret_key (str): The API access token for authentication. Defaults to the value in the `dlt.secrets` object.
         initial_start_date (Optional[DateTime]): An optional parameter that specifies the initial value for dlt.sources.incremental.

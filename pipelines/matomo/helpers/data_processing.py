@@ -13,7 +13,7 @@ def process_report(report: Iterator[TDataItem]) -> Union[DictStrAny, List[TDataI
     """
     Processes the report data from the Matomo API into a suitable format.
 
-    Parameters:
+    Args:
         report (Iterator[TDataItem]): Response from Matomo API containing data for a single method.
 
     Returns:
@@ -52,7 +52,7 @@ def remove_active_visits(
     """
     Removes active visits from the list of visits based on timeout and max duration criteria.
 
-    Parameters:
+    Args:
         visits (List[DictStrAny]): List of visits.
         visit_timeout_seconds (int): Session timeout in seconds.
         visit_max_duration_seconds (int): Maximum visit duration in seconds.
@@ -81,7 +81,7 @@ def get_matomo_date_range(
     """
     Generates a valid date range for Matomo API data retrieval based on the start date and last load date.
 
-    Parameters:
+    Args:
         start_date (str): Default starting date string.
         last_date (dlt.sources.incremental[pendulum.DateTime]): Last date loaded saved in dlt state.
 
