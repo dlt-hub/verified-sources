@@ -10,133 +10,152 @@ To get the security token: https://onlinehelp.coveo.com/en/ces/7.0/administrator
 import pendulum
 from dlt.extract.source import DltResource, Incremental
 
-from typing import Any, Dict, Iterator, Iterator, Optional, Dict, Optional, Iterable
+from typing import Iterable
 
 import dlt
 from simple_salesforce import Salesforce
+from dlt.common.typing import TDataItem
 
 
-def is_production() -> bool:
-    """Return True if the current environment is production.
+from .helpers import get_records
 
-    You can override this function based on your own setup. It will
-    add a LIMIT 100 clause to the queries.
-    """
-    return True
-
-def get_records(
-    sf: Salesforce,
-    sobject: str,
-    last_state:Optional[str] = None,
-    replication_key:Optional[str] = None,
-) -> Iterable[Dict[str, Any]]:
-
-    # Get all fields for the sobject
-    desc = getattr(sf, sobject).describe()
-    # Salesforce returns compound fields as separate fields, so we need to filter them out
-    compound_fields = {
-        f["compoundFieldName"]
-        for f in desc["fields"]
-        if f["compoundFieldName"] is not None
-    } - {"Name"}
-    # Salesforce returns datetime fields as timestamps, so we need to convert them
-    date_fields = {
-        f["name"] for f in desc["fields"] if f["type"] in ("datetime",) and f["name"]
-    }
-    # If no fields are specified, use all fields except compound fields
-    fields = [f["name"] for f in desc["fields"] if f["name"] not in compound_fields]
-
-    # Generate a predicate to filter records by the replication key
-    predicate, order_by, n_records = "", "", 0
-    if replication_key:
-        if last_state:
-            predicate = f"WHERE {replication_key} > {last_state}"
-        order_by = f"ORDER BY {replication_key} ASC"
-    query = f"SELECT {', '.join(fields)} FROM {sobject} {predicate} {order_by}"
-    if not is_production():
-        query += " LIMIT 100"
-
-    # Query all records in batches
-    for page in getattr(sf.bulk, sobject).query_all(query, lazy_operation=True):
-        for record in page:
-            # Strip out the attributes field
-            record.pop("attributes", None)
-            for field in date_fields:
-                # Convert Salesforce timestamps to ISO 8601
-                if record.get(field):
-                    record[field] = pendulum.from_timestamp(
-                        record[field] / 1000,
-                    ).strftime("%Y-%m-%dT%H:%M:%S.%fZ")
-        yield page
-        n_records += len(page)
 
 @dlt.source(name="salesforce")
 def salesforce_source(
     user_name: str = dlt.secrets.value,
     password: str = dlt.secrets.value,
     security_token: str = dlt.secrets.value,
-) ->Iterable[DltResource]:
+) -> Iterable[DltResource]:
+    """
+    Retrieves data from Salesforce using the Salesforce API.
+
+    Args:
+        user_name (str): The username for authentication. Defaults to the value in the `dlt.secrets` object.
+        password (str): The password for authentication. Defaults to the value in the `dlt.secrets` object.
+        security_token (str): The security token for authentication. Defaults to the value in the `dlt.secrets` object.
+
+    Yields:
+        DltResource: Data resources from Salesforce.
+    """
+
     client = Salesforce(user_name, password, security_token)
 
     # define resources
     @dlt.resource(write_disposition="replace")
-    def sf_user() -> Iterator[Dict[str, Any]]:
-        yield from get_records(client, "User")
+    def sf_user() -> Iterable[TDataItem]:
+        yield get_records(client, "User")
 
     @dlt.resource(write_disposition="replace")
-    def user_role() -> Iterator[Dict[str, Any]]:
-        yield from get_records(client, "UserRole")
+    def user_role() -> Iterable[TDataItem]:
+        yield get_records(client, "UserRole")
 
     @dlt.resource(write_disposition="merge")
-    def opportunity(last_timestamp: Incremental[str] = dlt.sources.incremental("SystemModstamp", initial_value=None)) -> Iterator[Dict[str, Any]]:
-        yield from get_records(client, "Opportunity", last_timestamp.last_value, "SystemModstamp")
+    def opportunity(
+        last_timestamp: Incremental[str] = dlt.sources.incremental(
+            "SystemModstamp", initial_value=None
+        )
+    ) -> Iterable[TDataItem]:
+        yield get_records(
+            client, "Opportunity", last_timestamp.last_value, "SystemModstamp"
+        )
 
     @dlt.resource(write_disposition="merge")
-    def opportunity_line_item(last_timestamp: Incremental[str] = dlt.sources.incremental("SystemModstamp", initial_value=None)) -> Iterator[Dict[str, Any]]:
-        yield from get_records(client, "OpportunityLineItem", last_timestamp.last_value, "SystemModstamp")
+    def opportunity_line_item(
+        last_timestamp: Incremental[str] = dlt.sources.incremental(
+            "SystemModstamp", initial_value=None
+        )
+    ) -> Iterable[TDataItem]:
+        yield get_records(
+            client, "OpportunityLineItem", last_timestamp.last_value, "SystemModstamp"
+        )
 
     @dlt.resource(write_disposition="merge")
-    def opportunity_contact_role(last_timestamp: Incremental[str] = dlt.sources.incremental("SystemModstamp", initial_value=None)) -> Iterator[Dict[str, Any]]:
-        yield from get_records(client, "OpportunityContactRole", last_timestamp.last_value, "SystemModstamp")
+    def opportunity_contact_role(
+        last_timestamp: Incremental[str] = dlt.sources.incremental(
+            "SystemModstamp", initial_value=None
+        )
+    ) -> Iterable[TDataItem]:
+        yield get_records(
+            client,
+            "OpportunityContactRole",
+            last_timestamp.last_value,
+            "SystemModstamp",
+        )
 
     @dlt.resource(write_disposition="merge")
-    def account(last_timestamp: Incremental[str] = dlt.sources.incremental("LastModifiedDate", initial_value=None)) -> Iterator[Dict[str, Any]]:
-        yield from get_records(client, "Account", last_timestamp.last_value, "LastModifiedDate")
+    def account(
+        last_timestamp: Incremental[str] = dlt.sources.incremental(
+            "LastModifiedDate", initial_value=None
+        )
+    ) -> Iterable[TDataItem]:
+        yield get_records(
+            client, "Account", last_timestamp.last_value, "LastModifiedDate"
+        )
 
     @dlt.resource(write_disposition="replace")
-    def contact() -> Iterator[Dict[str, Any]]:
-        yield from get_records(client, "Contact")
+    def contact() -> Iterable[TDataItem]:
+        yield get_records(client, "Contact")
 
     @dlt.resource(write_disposition="replace")
-    def lead() -> Iterator[Dict[str, Any]]:
-        yield from get_records(client, "Lead")
+    def lead() -> Iterable[TDataItem]:
+        yield get_records(client, "Lead")
 
     @dlt.resource(write_disposition="replace")
-    def campaign() -> Iterator[Dict[str, Any]]:
-        yield from get_records(client, "Campaign")
+    def campaign() -> Iterable[TDataItem]:
+        yield get_records(client, "Campaign")
 
     @dlt.resource(write_disposition="merge")
-    def campaign_member(last_timestamp: Incremental[str] = dlt.sources.incremental("SystemModstamp", initial_value=None)) -> Iterator[Dict[str, Any]]:
-        yield from get_records(client, "CampaignMember", last_timestamp.last_value, "SystemModstamp")
+    def campaign_member(
+        last_timestamp: Incremental[str] = dlt.sources.incremental(
+            "SystemModstamp", initial_value=None
+        )
+    ) -> Iterable[TDataItem]:
+        yield get_records(
+            client, "CampaignMember", last_timestamp.last_value, "SystemModstamp"
+        )
 
     @dlt.resource(write_disposition="replace")
-    def product_2() -> Iterator[Dict[str, Any]]:
-        yield from get_records(client, "Product2")
+    def product_2() -> Iterable[TDataItem]:
+        yield get_records(client, "Product2")
 
     @dlt.resource(write_disposition="replace")
-    def pricebook_2() -> Iterator[Dict[str, Any]]:
-        yield from get_records(client, "Pricebook2")
+    def pricebook_2() -> Iterable[TDataItem]:
+        yield get_records(client, "Pricebook2")
 
     @dlt.resource(write_disposition="replace")
-    def pricebook_entry() -> Iterator[Dict[str, Any]]:
-        yield from get_records(client, "PricebookEntry")
+    def pricebook_entry() -> Iterable[TDataItem]:
+        yield get_records(client, "PricebookEntry")
 
     @dlt.resource(write_disposition="merge")
-    def task(last_timestamp: Incremental[str] = dlt.sources.incremental("SystemModstamp", initial_value=None)) -> Iterator[Dict[str, Any]]:
-        yield from get_records(client, "Task", last_timestamp.last_value, "SystemModstamp")
+    def task(
+        last_timestamp: Incremental[str] = dlt.sources.incremental(
+            "SystemModstamp", initial_value=None
+        )
+    ) -> Iterable[TDataItem]:
+        yield get_records(client, "Task", last_timestamp.last_value, "SystemModstamp")
 
     @dlt.resource(write_disposition="merge")
-    def event(last_timestamp: Incremental[str] = dlt.sources.incremental("SystemModstamp", initial_value=None)) -> Iterator[Dict[str, Any]]:
-        yield from get_records(client, "Event", last_timestamp.last_value, "SystemModstamp")
+    def event(
+        last_timestamp: Incremental[str] = dlt.sources.incremental(
+            "SystemModstamp", initial_value=None
+        )
+    ) -> Iterable[TDataItem]:
+        yield get_records(client, "Event", last_timestamp.last_value, "SystemModstamp")
 
-    return (sf_user, user_role, opportunity,opportunity_line_item, opportunity_contact_role, account, contact, lead, campaign, campaign_member, product_2, pricebook_2,pricebook_entry, task, event)
+    return (
+        sf_user,
+        user_role,
+        opportunity,
+        opportunity_line_item,
+        opportunity_contact_role,
+        account,
+        contact,
+        lead,
+        campaign,
+        campaign_member,
+        product_2,
+        pricebook_2,
+        pricebook_entry,
+        task,
+        event,
+    )

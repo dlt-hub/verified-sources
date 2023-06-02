@@ -8,7 +8,7 @@ def load() -> None:
     """Execute a pipeline from Salesforce."""
 
     pipeline = dlt.pipeline(
-        pipeline_name="salesforce", destination='duckdb', dataset_name="salesforce_data"
+        pipeline_name="salesforce", destination="duckdb", dataset_name="salesforce_data"
     )
     # Execute the pipeline
     load_info = pipeline.run(salesforce_source())
