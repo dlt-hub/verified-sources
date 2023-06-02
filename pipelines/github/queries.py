@@ -7,7 +7,6 @@ RATE_LIMIT = """
   }
 """
 
-
 ISSUES_QUERY = """
 query($owner: String!, $name: String!, $issues_per_page: Int!, $first_reactions: Int!, $first_comments: Int!, $page_after: String) {
   repository(owner: $owner, name: $name) {

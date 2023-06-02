@@ -57,8 +57,8 @@
                 "54c74499aa8a8cb3c586535836d606db006c2d9a": null,
                 "bf5573de8d07c503ac2bb92909121185f164daf6": null,
                 "cc_email": "adrian-sandbox3@pipedrivemail.com",
-                "owner_name": "Adrian",
-            },
+                "owner_name": "Adrian"
+            }
         },
         {"item": "person", "id": 4, "data": null},
         {
@@ -117,13 +117,13 @@
                 "54c74499aa8a8cb3c586535836d606db006c2d9a": null,
                 "bf5573de8d07c503ac2bb92909121185f164daf6": null,
                 "cc_email": "adrian-sandbox3@pipedrivemail.com",
-                "owner_name": "Adrian",
-            },
-        },
+                "owner_name": "Adrian"
+            }
+        }
     ],
     "additional_data": {
         "since_timestamp": "1970-01-01 00:00:00",
         "last_timestamp_on_page": "2023-05-12 12:41:52",
-        "pagination": {"start": 500, "limit": 500, "more_items_in_collection": false},
-    },
+        "pagination": {"start": 500, "limit": 500, "more_items_in_collection": false}
+    }
 }
