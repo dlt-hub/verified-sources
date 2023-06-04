@@ -36,18 +36,20 @@ In this section you will learn how to contribute changes to an existing pipeline
 3. Proceed to the pull request section to create a pull request to the main repo.
 
 ## Walktrough: Create and contribute a new pipeline
-In this section you will learn how to contribute a new pipeline. It is helpful to also read through the above section to see all the steps that are part of pipeline development. The `chess` pipeline is a very basic pipeline with two sources and a few resources. For an even simpler starting point, you can use the `pokemon` pipeline as the starting point with the same method. Please also read [DISTRIBUTION.md](docs/DISTRIBUTION.md) before you start this guide to get an understanding of how your pipeline will be distributed to other users once it is accepted into our repo.
+In this section you will learn how to contribute a new pipeline. It is helpful to also read through the above section to see all the steps that are part of pipeline development. 
+
+1. Before starting development on a new pipeline, please open a ticket [here](https://github.com/dlt-hub/pipelines/issues/new?assignees=&labels=verified+pipeline&projects=&template=new-verified-pipeline.md&title=%5Bpipeline+name%5D+verified+pipeline) and let us know what you have planned
+2. We will acknowledge your ticket and figure out how to proceed. This mostly has to do with creating a test account for the desired pipeline source and providing you with the needed credentials. We will also ensure that no parallel development is happening.
+
+Now you can get to coding. As a starting point we will copy the `chess` pipeline. The `chess` pipeline is a very basic pipeline with two sources and a few resources. For an even simpler starting point, you can use the `pokemon` pipeline as the starting point with the same method. Please also read [DISTRIBUTION.md](docs/DISTRIBUTION.md) before you start this guide to get an understanding of how your pipeline will be distributed to other users once it is accepted into our repo.
 
 1. Ensure you have followed all steps in the coding prerequesites section and the format-lint command works.
-2. We will copy the chess pipeline as a starting point. You can copy any other pipeline you wish to serve as your starting point. Another fairly simple pipeline is the chess pipeline for example. We will assume your new pipeline is called `animals`.
-	1. Duplicate the `chess` folder in` ./pipelines` and rename it to `animals`. This folder will contain all your sources and resources, as well as some settings and helpers code (if any).
-	2. Duplicate the `chess_pipeline.py` in `./pipelines` and rename it to `chess_pipeline.py`. This folder contains the example script that users will see when they install your pipeline with `dlt init`. Inside your `chess_pipeline.py` change `from chess import source` to `from animals import source` to make sure the correct source is used in your animals example script.
-	3. Duplicate the `chess` folder in the `./tests` and rename it to `animals`. Inside the test_pipeline file again make sure that the right source is imported. These are the tests for your pipeline that you can run to make sure everything works. Run the tests now with `pytest tests/animals` to see if they work. They should :).
-	4. You are now set to start development on your animals pipeline.
+2. We will copy the chess pipeline as a starting point. There is a convenient script that creates a copy of the chess pipeline to a new name. Run it with `python tools/new_pipeline.py my_pipeline`. This will create a new example script and pipeline folder in the `pipelines` directory and a new test folder in the `tests` directory. You will have to update a few imports to make it work.
+3. You are now set to start development on your new pipeline.
 
-3. You can now implement your custom pipeline. Consult our extensive docs on how to create dlt pipelines at [dlthub create pipeline walkthrough](https://dlthub.com/docs/walkthroughs/create-a-pipeline). 
-4. Read the rest of this document and [BUILDING-BLOCKS.md](docs/BUILDING-BLOCKS.md) for information on various topics.
-5. Proceed to the pull request section to create a pull request to the main repo.
+4. You can now implement your custom pipeline. Consult our extensive docs on how to create dlt pipelines at [dlthub create pipeline walkthrough](https://dlthub.com/docs/walkthroughs/create-a-pipeline). 
+5. Read the rest of this document and [BUILDING-BLOCKS.md](docs/BUILDING-BLOCKS.md) for information on various topics.
+6. Proceed to the pull request section to create a pull request to the main repo.
 
 ## Coding Prerequesites
 
@@ -105,7 +107,8 @@ commit -am "my changes"
 ```
 4. Push to your fork
 5. Make a PR to a master branch of this repository (upstream) [from your fork](https://docs.github.com/en/pull-requests/collaborating-with-pull-requests/proposing-changes-to-your-work-with-pull-requests/creating-a-pull-request-from-a-fork). You can see the result of our automated testing and linting scripts in the PR on Github.
-6. Wait for our code review/merge.
+6. If you are connecting to a new datasource, we will need instructions on how to connect there or reproduce the tests data.
+7. Wait for our code review/merge.
 
 
 
