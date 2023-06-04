@@ -18,9 +18,13 @@ except ImportError:
 
 def api_auth(credentials: GcpCredentials) -> Resource:
     """
-    Uses GCP credentials to authenticate with Google Sheets API
-    @:param: credentials - credentials needed to log in to gcp
-    @:return: service - object needed to make api calls to google sheets api
+    Uses GCP credentials to authenticate with Google Sheets API.
+
+    Args:
+        credentials (GcpCredentials): Credentials needed to log in to GCP.
+
+    Returns:
+        Resource: Object needed to make API calls to Google Sheets API.
     """
     if isinstance(credentials, GcpOAuthCredentials):
         credentials.auth("https://www.googleapis.com/auth/spreadsheets.readonly")
@@ -31,17 +35,16 @@ def api_auth(credentials: GcpCredentials) -> Resource:
 
 def get_metadata_simple(spreadsheet_id: str, service: Resource) -> DictStrAny:
     """
-    Makes a simple get metadata API call which just returns information about the spreadsheet such as: sheet_names and named_ranges
-    @:param: spreadsheet_id - string containing the id of the spreadsheet
-    @:param: service - Resource object used to make api calls to Google Sheets API
-    @:param: get_sheets - setting: if true will return all sheets inside spreadsheet
-    @:param: get_named_ranges - setting: if true will return all named ranges inside spreadsheet
-    @:return: return_info - dict containing information on sheets inside if any and named ranges inside if any. Has 2 keys: "sheets" and "named_ranges"
+    Makes a simple get metadata API call which just returns information about the spreadsheet such as sheet names and named ranges.
+
+    Args:
+        spreadsheet_id (str): The ID of the spreadsheet.
+        service (Resource): Resource object used to make API calls to Google Sheets API.
+
+    Returns:
+        DictStrAny: A dictionary containing information on sheets and named ranges. It has two keys: "sheets" and "named_ranges".
     """
-    return_info: DictStrAny = {
-        "sheets": {},
-        "named_ranges": []
-    }
+    return_info: DictStrAny = {"sheets": {}, "named_ranges": []}
     # get metadata of spreadsheet to check for number of sheets inside
     metadata = service.spreadsheets().get(spreadsheetId=spreadsheet_id).execute()
 
@@ -61,25 +64,36 @@ def get_metadata_simple(spreadsheet_id: str, service: Resource) -> DictStrAny:
     return return_info
 
 
-def get_metadata(spreadsheet_id: str, service: Resource, ranges: List[str], named_ranges: DictStrAny = None) -> DictStrAny:
+def get_metadata(
+    spreadsheet_id: str,
+    service: Resource,
+    ranges: List[str],
+    named_ranges: DictStrAny = None,
+) -> DictStrAny:
     """
-    # TODO: add fields to save on info returned
-    Gets the metadata for the first 2 rows of every range specified. The first row is deduced as the header and the 2nd row specifies the format the rest of the data should follow
-    @:param spreadsheet_id: - the id of the spreadsheet
-    @:param service: - Resource object used by google-api-python-client to make api calls
-    @:param ranges: - List of ranges to get data from. If left empty, every sheet inside the spreadsheet will be included instead. named ranges not supported
-    @:param named_ranges: Dict containing ranges as keys and the corresponding named ranges as the values
-    @:returns: - A dict where all the range names are the key. The values for each key are the corresponding sheet metadata: sheet_name, headers, values
+    TODO: add fields to save on info returned
+    Gets the metadata for the first 2 rows of every range specified. The first row is deduced as the header and the 2nd row specifies the format the rest of the data should follow.
+
+    Args:
+        spreadsheet_id (str): The ID of the spreadsheet.
+        service (Resource): Resource object used by google-api-python-client to make API calls.
+        ranges (List[str]): List of ranges to get data from. If left empty, every sheet inside the spreadsheet will be included instead. Named ranges not supported.
+        named_ranges (DictStrAny, optional): Dict containing ranges as keys and the corresponding named ranges as the values.
+
+    Returns:
+        DictStrAny: A dict where all the range names are the key. The values for each key are the corresponding sheet metadata: sheet_name, headers, values.
     """
 
     # process metadata ranges so only the first 2 rows are appended
     # response like dict will contain a dict similar to the response by the Google Sheets API: ranges are returned inside the sheets they belong in the order given in the API request.
-    meta_ranges, response_like_dict = metadata_preprocessing(ranges=ranges, named_ranges=named_ranges)
-    spr_meta = service.spreadsheets().get(
-        spreadsheetId=spreadsheet_id,
-        ranges=meta_ranges,
-        includeGridData=True
-    ).execute()
+    meta_ranges, response_like_dict = metadata_preprocessing(
+        ranges=ranges, named_ranges=named_ranges
+    )
+    spr_meta = (
+        service.spreadsheets()
+        .get(spreadsheetId=spreadsheet_id, ranges=meta_ranges, includeGridData=True)
+        .execute()
+    )
 
     # process and populate metadata in response like dict but return in from metadata_all_ranges because we need the data returned in a more organized format
     metadata_all_ranges = {}
@@ -100,43 +114,66 @@ def get_metadata(spreadsheet_id: str, service: Resource, ranges: List[str], name
                 continue
             # get headers and 1st row data
             range_metadata = sheet_data[i]["rowData"]
-            headers = get_range_headers(range_metadata=range_metadata, range_name=metadata_range_name)
+            headers = get_range_headers(
+                range_metadata=range_metadata, range_name=metadata_range_name
+            )
             if not headers:
-                logger.warning(f"Metadata: Skipped range with empty headers: {metadata_range_name}")
+                logger.warning(
+                    f"Metadata: Skipped range with empty headers: {metadata_range_name}"
+                )
                 continue
             first_line_values = get_first_line(range_metadata=range_metadata)
             if not first_line_values:
-                logger.warning(f"Metadata: No data values for the first line of data {metadata_range_name}")
+                logger.warning(
+                    f"Metadata: No data values for the first line of data {metadata_range_name}"
+                )
             # add headers and values
             response_like_dict[meta_sheet_name][i]["headers"] = headers
-            response_like_dict[meta_sheet_name][i]["cols_is_datetime"] = first_line_values
+            response_like_dict[meta_sheet_name][i][
+                "cols_is_datetime"
+            ] = first_line_values
             # append dict to response
-            metadata_all_ranges[metadata_range_name] = response_like_dict[meta_sheet_name][i]
+            metadata_all_ranges[metadata_range_name] = response_like_dict[
+                meta_sheet_name
+            ][i]
     return metadata_all_ranges
 
 
-def get_data_batch(service: Resource, spreadsheet_id: str, range_names: List[str]) -> List[DictStrAny]:
+def get_data_batch(
+    service: Resource, spreadsheet_id: str, range_names: List[str]
+) -> List[DictStrAny]:
     """
-    Calls Google Sheets API to get data in a batch. This is the most efficient way to get data for multiple ranges inside a spreadsheet. However, this API call will return the data for each range
-    without the same name that the range was called
-    @:param: service - Object to make api calls to Google Sheets
-    @:param: spredsheet_id - the id of the spreadsheet
-    @:param: range_names - list of range names
-    @:return: values - list of dictionaries, each dictionary will contain all data for one of the requested ranges
+    Calls Google Sheets API to get data in a batch. This is the most efficient way to get data for multiple ranges inside a spreadsheet.
+    However, this API call will return the data for each range without the same name that the range was called.
+
+    Args:
+        service (Resource): Object to make API calls to Google Sheets.
+        spreadsheet_id (str): The ID of the spreadsheet.
+        range_names (List[str]): List of range names.
+
+    Returns:
+        List[DictStrAny]: List of dictionaries, each dictionary will contain all data for one of the requested ranges.
     """
     # handle requests with no ranges - edge case
     if not range_names:
-        logger.warning("Fetching data error: No ranges to get data from. Check the input ranges are not empty.")
+        logger.warning(
+            "Fetching data error: No ranges to get data from. Check the input ranges are not empty."
+        )
         return []
     # Make an api call to get the data for all sheets and ranges
     # get dates as serial number
-    values: List[DictStrAny] = service.spreadsheets().values().batchGet(
-        spreadsheetId=spreadsheet_id,
-        ranges=range_names,
-        # un formatted returns typed values
-        valueRenderOption="UNFORMATTED_VALUE",
-        # will return formatted dates as a serial number
-        dateTimeRenderOption="SERIAL_NUMBER"
-    ).execute()["valueRanges"]
+    values: List[DictStrAny] = (
+        service.spreadsheets()
+        .values()
+        .batchGet(
+            spreadsheetId=spreadsheet_id,
+            ranges=range_names,
+            # un formatted returns typed values
+            valueRenderOption="UNFORMATTED_VALUE",
+            # will return formatted dates as a serial number
+            dateTimeRenderOption="SERIAL_NUMBER",
+        )
+        .execute()["valueRanges"]
+    )
     logger.info("Data fetched")
     return values
