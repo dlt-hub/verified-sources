@@ -15,7 +15,7 @@ def load_data(
     endpoints: Tuple[str] = ENDPOINTS + INCREMENTAL_ENDPOINTS,
     start_date: Optional[DateTime] = None,
     end_date: Optional[DateTime] = None,
-):
+) -> None:
     """
     This demo script uses the resources with non-incremental
     loading based on "replace" mode to load all data from provided endpoints.
@@ -41,7 +41,7 @@ def load_incremental_endpoints(
     endpoints: Tuple[str] = INCREMENTAL_ENDPOINTS,
     initial_start_date: Optional[DateTime] = None,
     end_date: Optional[DateTime] = None,
-):
+) -> None:
     """
     This demo script demonstrates the use of resources with incremental loading, based on the "append" mode.
     This approach enables us to load all the data
@@ -91,7 +91,7 @@ def load_incremental_endpoints(
     print(load_info)
 
 
-def load_data_and_get_metrics():
+def load_data_and_get_metrics() -> None:
     """
     With the pipeline, you can calculate the most important metrics
     and store them in a database as a resource.

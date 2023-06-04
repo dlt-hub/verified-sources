@@ -2,7 +2,7 @@ import dlt
 from chess import source
 
 
-def load_players_games_example(start_month: str, end_month: str):
+def load_players_games_example(start_month: str, end_month: str) -> None:
     """Constructs a pipeline that will load chess games of specific players for a range of months."""
 
     # configure the pipeline: provide the destination and dataset name to which the data should go
@@ -22,7 +22,7 @@ def load_players_games_example(start_month: str, end_month: str):
     print(info)
 
 
-def load_players_online_status():
+def load_players_online_status() -> None:
     """Constructs a pipeline that will append online status of selected players"""
 
     pipeline = dlt.pipeline(
@@ -35,7 +35,7 @@ def load_players_online_status():
     print(info)
 
 
-def load_players_games_incrementally():
+def load_players_games_incrementally() -> None:
     """Pipeline will not load the same game archive twice"""
     # loads games for 11.2022
     load_players_games_example("2022/11", "2022/11")

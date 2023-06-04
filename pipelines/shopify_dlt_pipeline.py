@@ -6,7 +6,7 @@ from typing import List
 from shopify_dlt import shopify_source
 
 
-def load(resources: List[str], start_date) -> None:
+def load(resources: List[str], start_date: str) -> None:
     """Execute a pipeline that will load all the resources for the given endpoints."""
 
     pipeline = dlt.pipeline(

@@ -1,9 +1,10 @@
 import dlt
+
 from pendulum import datetime
 from workable import workable_source
 
 
-def load_all_data():
+def load_all_data() -> None:
     """
     This demo script uses the resources with non-incremental
     loading based on "replace" mode to load all data from provided endpoints,
@@ -21,7 +22,7 @@ def load_all_data():
     print(load_info)
 
 
-def load_all_data_with_details():
+def load_all_data_with_details() -> None:
     """
     This demo script uses the resources with non-incremental
     loading based on "replace" mode to load all data from provided endpoints,
@@ -42,7 +43,7 @@ def load_all_data_with_details():
     print(load_info)
 
 
-def load_data_by_date():
+def load_data_by_date() -> None:
     """
     This demo script uses the resources with non-incremental
     loading based on "replace" mode to load all data from provided endpoints,

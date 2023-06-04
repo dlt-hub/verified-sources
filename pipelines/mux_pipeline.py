@@ -2,7 +2,7 @@ import dlt
 from mux import mux_source
 
 
-def load_yesterday_video_views():
+def load_yesterday_video_views() -> None:
     pipeline = dlt.pipeline(
         pipeline_name="mux", destination="duckdb", dataset_name="mux_data"
     )
