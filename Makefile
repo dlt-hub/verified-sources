@@ -29,7 +29,7 @@ lint-dlt-init:
 
 lint-code:
 	./check-package.sh
-	poetry run mypy --config-file mypy.ini $(shell find pipelines -type f -name py.typed -exec dirname "{}" \; |sort -u)
+	poetry run mypy --config-file mypy.ini ./pipelines
 	poetry run flake8 --max-line-length=200 --extend-ignore=W503 pipelines init --show-source
 	poetry run flake8 --max-line-length=200 --extend-ignore=W503 tests --show-source
 	poetry run black ./ --check

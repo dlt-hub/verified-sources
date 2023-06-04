@@ -1,8 +1,9 @@
+from typing import List
 import dlt
 from strapi import strapi_source
 
 
-def load(endpoints=None):
+def load(endpoints: List[str] = None) -> None:
     endpoints = ["athletes"] or endpoints
     pipeline = dlt.pipeline(
         pipeline_name="strapi", destination="bigquery", dataset_name="strapi_data"

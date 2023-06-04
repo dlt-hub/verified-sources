@@ -1,9 +1,10 @@
+from typing import List
 import dlt
 
 from hubspot import hubspot, hubspot_events_for_objects, THubspotObjectType
 
 
-def load_crm_data():
+def load_crm_data() -> None:
     """
     This function loads all resources from HubSpot CRM
 
@@ -26,7 +27,9 @@ def load_crm_data():
     print(info)
 
 
-def load_web_analytics_events(object_type: THubspotObjectType, object_ids):
+def load_web_analytics_events(
+    object_type: THubspotObjectType, object_ids: List[str]
+) -> None:
     """
     This function loads web analytics events for a list objects in `object_ids` of type `object_type`
 

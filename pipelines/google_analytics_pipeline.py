@@ -3,6 +3,7 @@
 import time
 import dlt
 from google_analytics import google_analytics
+from dlt.common.telemetry import TRunMetrics
 
 
 # this can also be filled in config.toml and be left empty as a parameter.
@@ -20,7 +21,7 @@ QUERIES = [
 ]
 
 
-def simple_load():
+def simple_load() -> TRunMetrics:
     """
     Just loads the data normally. Incremental loading for this pipeline is on,
     the last load time is saved in dlt_state, and the next load of the pipeline will have the last load as a starting date.
@@ -43,7 +44,7 @@ def simple_load():
     return info
 
 
-def simple_load_config():
+def simple_load_config() -> TRunMetrics:
     """
     Just loads the data normally. QUERIES are taken from config. Incremental loading for this pipeline is on,
     the last load time is saved in dlt_state, and the next load of the pipeline will have the last load as a starting date.
@@ -65,7 +66,7 @@ def simple_load_config():
     return info
 
 
-def chose_date_first_load(start_date: str = "2000-01-01"):
+def chose_date_first_load(start_date: str = "2000-01-01") -> TRunMetrics:
     """
     Chooses the starting date for the first pipeline load. Subsequent loads of the pipeline will be from the last loaded date.
 

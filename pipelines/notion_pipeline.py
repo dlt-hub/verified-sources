@@ -3,7 +3,7 @@ import dlt
 from notion import notion_databases
 
 
-def load_databases():
+def load_databases() -> None:
     """Loads all databases from a Notion workspace which have been shared with
     an integration.
     """

@@ -2,7 +2,7 @@ import dlt
 from pipedrive import pipedrive_source
 
 
-def load_pipedrive():
+def load_pipedrive() -> None:
     """Constructs a pipeline that will load all pipedrive data"""
     # configure the pipeline with your destination details
     pipeline = dlt.pipeline(
@@ -12,7 +12,7 @@ def load_pipedrive():
     print(load_info)
 
 
-def load_selected_data():
+def load_selected_data() -> None:
     """Shows how to load just selected tables using `with_resources`"""
     pipeline = dlt.pipeline(
         pipeline_name="pipedrive", destination="postgres", dataset_name="pipedrive_data"
@@ -40,7 +40,7 @@ def load_selected_data():
     print(pipedrive_data.persons)
 
 
-def load_from_start_date():
+def load_from_start_date() -> None:
     """Example to incrementally load activities limited to items updated after a given date"""
     pipeline = dlt.pipeline(
         pipeline_name="pipedrive", destination="duckdb", dataset_name="pipedrive_data"

@@ -9,9 +9,7 @@ def source(api_secret_key=dlt.secrets.value):
 
 def _create_auth_headers(api_secret_key):
     """Constructs Bearer type authorization header which is the most common authorization method"""
-    headers = {
-        "Authorization": f"Bearer {api_secret_key}"
-    }
+    headers = {"Authorization": f"Bearer {api_secret_key}"}
     return headers
 
 
@@ -28,13 +26,15 @@ def resource(api_secret_key=dlt.secrets.value):
     # yield response.json()
 
     # test data for loading validation, delete it once you yield actual data
-    test_data = [{'id': 0}, {'id': 1}]
+    test_data = [{"id": 0}, {"id": 1}]
     yield test_data
 
 
-if __name__=='__main__':
+if __name__ == "__main__":
     # configure the pipeline with your destination details
-    pipeline = dlt.pipeline(pipeline_name="pipeline", destination="bigquery", dataset_name="pipeline_data")
+    pipeline = dlt.pipeline(
+        pipeline_name="pipeline", destination="bigquery", dataset_name="pipeline_data"
+    )
 
     # print credentials by running the resource
     data = list(resource())
