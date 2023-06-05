@@ -19,39 +19,39 @@ The following guide will walk you through contributing new pipelines or changes 
 
 
 What do you can do here:
- - Contribute a change to an existing pipeline: Go to the "Walktrough: Fix, improve, customize, document an existing pipeline" section
- - Contribute a new pipeline: Go to the "Walktrough: Create and contribute a new pipeline" section.
+ - Contribute a change to an existing pipeline: Go to the ["Walktrough: Fix, improve, customize, document an existing pipeline"](#walktrough-fix-improve-customize-document-an-existing-pipeline) section
+ - Contribute a new pipeline: Go to the ["Walktrough: Create and contribute a new pipeline"](#walktrough-create-and-contribute-a-new-pipeline) section.
  - Join our slack to get support from us by following the [invitation link](https://join.slack.com/t/dlthub-community/shared_invite/zt-1n5193dbq-rCBmJ6p~ckpSFK4hCF2dYA).
 
 
-## Walktrough: Fix, improve, customize, document an existing pipeline 
-In this section you will learn how to contribute changes to an existing pipeline. 
+## Walktrough: Fix, improve, customize, document an existing pipeline
+In this section you will learn how to contribute changes to an existing pipeline.
 
-1. Ensure you have followed all steps in the coding prerequesites section and the format-lint command works.
-2. Start changing the code of an existing pipeline. The typical development workflow will look something like this (the code examples assume you are changing the chess pipeline):
+1. Ensure you have followed all steps in the coding prerequisites section and the `format-lint` command works.
+2. Start changing the code of an existing pipeline. The typical development workflow will look something like this (the code examples assume you are changing the `chess` pipeline):
 	1. Make changes to your pipeline code, for example adding new resources or fixing bugs.
-	2. Execute the pipeline example script, for example `python chess_pipeline.py` and see if there are any errors and wether the expected data ends up in your destination.
+	2. Execute the pipeline example script, for example `python chess_pipeline.py` (from `pipelines` folder!) and see if there are any errors and wether the expected data ends up in your destination.
 	3. Adjust your tests to test for the new features you have added or changes you have made in `./tests/chess/test_pipeline.py` and run the tests again duckdb locally with this command: `pytest tests/chess`
-	1. Run the linter and formatter to check for any problems: `make lint-code`
+	4. Run the linter and formatter to check for any problems: `make lint-code`
 3. Proceed to the pull request section to create a pull request to the main repo.
 
 ## Walktrough: Create and contribute a new pipeline
-In this section you will learn how to contribute a new pipeline. It is helpful to also read through the above section to see all the steps that are part of pipeline development. 
+In this section you will learn how to contribute a new pipeline. It is helpful to also read through the above section to see all the steps that are part of pipeline development.
 
 1. Before starting development on a new pipeline, please open a ticket [here](https://github.com/dlt-hub/pipelines/issues/new?assignees=&labels=verified+pipeline&projects=&template=new-verified-pipeline.md&title=%5Bpipeline+name%5D+verified+pipeline) and let us know what you have planned
 2. We will acknowledge your ticket and figure out how to proceed. This mostly has to do with creating a test account for the desired pipeline source and providing you with the needed credentials. We will also ensure that no parallel development is happening.
 
 Now you can get to coding. As a starting point we will copy the `chess` pipeline. The `chess` pipeline is a very basic pipeline with two sources and a few resources. For an even simpler starting point, you can use the `pokemon` pipeline as the starting point with the same method. Please also read [DISTRIBUTION.md](docs/DISTRIBUTION.md) before you start this guide to get an understanding of how your pipeline will be distributed to other users once it is accepted into our repo.
 
-1. Ensure you have followed all steps in the coding prerequesites section and the format-lint command works.
+1. Ensure you have followed all steps in the coding prerequisites section and the format-lint command works.
 2. We will copy the chess pipeline as a starting point. There is a convenient script that creates a copy of the chess pipeline to a new name. Run it with `python tools/new_pipeline.py my_pipeline`. This will create a new example script and pipeline folder in the `pipelines` directory and a new test folder in the `tests` directory. You will have to update a few imports to make it work.
 3. You are now set to start development on your new pipeline.
 
-4. You can now implement your custom pipeline. Consult our extensive docs on how to create dlt pipelines at [dlthub create pipeline walkthrough](https://dlthub.com/docs/walkthroughs/create-a-pipeline). 
+4. You can now implement your custom pipeline. Consult our extensive docs on how to create dlt pipelines at [dlthub create pipeline walkthrough](https://dlthub.com/docs/walkthroughs/create-a-pipeline).
 5. Read the rest of this document and [BUILDING-BLOCKS.md](docs/BUILDING-BLOCKS.md) for information on various topics.
 6. Proceed to the pull request section to create a pull request to the main repo.
 
-## Coding Prerequesites
+## Coding Prerequisites
 
 To start development in the pipelines repository, there are a few steps you need to do to ensure you have the setup.
 
@@ -87,7 +87,7 @@ poetry shell
 ```sh
 make format-lint
 ```
-If this command fails, something is not set up correctly yet. Now you are ready to 
+If this command fails, something is not set up correctly yet. Now you are ready to
 
 
 
@@ -217,7 +217,7 @@ from .helpers import api_calls
 2. If you contributed a pipeline and created any credentials, test accounts, test dataset please include them in the tests or share them with `dlt` team so we can configure the CI job. If sharing is not possible please help us to reproduce your test cases so CI job will pass.
 
 ### Source config and credentials
-If you add a new pipeline that require a secret value, please add the secrets to `pipelines/.dlt/secrets.toml`, this file will not be commited into the git repository. When adding the source config and secrets please follow the [section layout for sources](https://github.com/dlt-hub/dlt/blob/devel/docs/technical/secrets_and_config.md#default-layout-and-default-key-lookup-during-injection). 
+If you add a new pipeline that require a secret value, please add the secrets to `pipelines/.dlt/secrets.toml`, this file will not be committed into the git repository. When adding the source config and secrets please follow the [section layout for sources](https://github.com/dlt-hub/dlt/blob/devel/docs/technical/secrets_and_config.md#default-layout-and-default-key-lookup-during-injection).
 
 ### Destination credentials
 Please look at `example.secrets.toml` in `.dlt` folder on how to configure `postgres`, `redshift` and `bigquery` destination credentials. Those credentials are shared by all pipelines.
@@ -228,11 +228,3 @@ As explained in technical docs, both native form (ie. database connection string
 
 ### Local Postgres instance
 There's compose file with fully prepared postgres instance [here](tests/postgres/README.md)
-
-
-
-## Troubleshooting
-
-
-
-
