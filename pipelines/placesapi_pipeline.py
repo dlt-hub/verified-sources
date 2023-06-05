@@ -23,9 +23,9 @@ def load_text_search_places_info(query: str, radius: int = None, location: str =
 if __name__=='__main__':
 
     # Add Search Parameters 
-    search_query = 'Add Search Text Here!'
-    search_radius =  'Add Search Radius Here!'
-    search_location = ('Latitude, Longitude')
+    search_query = 'coffee places'
+    search_radius =  '5000'
+    search_location = '52.533, 13.424'
 
 
     load_text_search_places_info(query=search_query, radius=search_radius, location=search_location)
