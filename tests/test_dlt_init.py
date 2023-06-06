@@ -39,7 +39,7 @@ def unload_modules() -> None:
 
 
 def get_pipeline_candidates() -> List[str]:
-    """Get all pipelines in `pipelines` folder"""
+    """Get all pipelines in `sources` folder"""
     pipelines_storage = FileStorage(os.path.join(".", SOURCES_MODULE_NAME))
     # enumerate all candidate pipelines
     return files_ops.get_verified_source_names(pipelines_storage)

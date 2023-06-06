@@ -20,7 +20,7 @@ We'll use the [dlt init](https://dlthub.com/docs/walkthroughs/add-a-pipeline) co
 
 For example if someone issues `dlt init chess bigquery`:
 
-1. `dlt` clones the repo and finds the `chess` in `pipelines` folder.
+1. `dlt` clones the repo and finds the `chess` in `sources` folder.
 2. it copies the `chess` folder and `chess_pipeline.py` to user's project folder
 3. it modifies the example script `chess_pipeline.py` to use `bigquery` to load data
 4. it inspects the `dlt.resource` and `dlt.source` functions in `chess` module and generates config/credentials sections
