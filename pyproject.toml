@@ -1,11 +1,11 @@
 [tool.poetry]
-name = "dlt-verified-pipelines"
+name = "dlt-verified-sources"
 version = "0.1.0"
-description = "Initial set of dlt pipelines installable with `dlt init` command"
+description = "Initial set of dlt sources with demo pipelines installable with `dlt init` command"
 authors = ["Various Authors <team@dlthub.com>"]
 license = "MIT"
 readme = "README.md"
-packages = [{include = "pipelines"}]
+packages = [{include = "sources"}]
 
 [tool.poetry.dependencies]
 python = "^3.8.1"

@@ -1,4 +1,4 @@
 # files to be copied from the template
 TEMPLATE_FILES = [".gitignore", ".dlt/config.toml", ".dlt/secrets.toml"]
-# the default pipeline script
-PIPELINE_SCRIPT = "pipeline.py"
+# the default pipeline script. TODO: renaming this breaks core init command
+PIPELINE_SCRIPT = "source.py"

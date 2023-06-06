@@ -14,6 +14,8 @@ from dlt.reflection import names as n
 
 from tests.utils import TEST_STORAGE_ROOT
 
+# todo change in core
+PIPELINES_MODULE_NAME = "sources"
 
 INIT_REPO_LOCATION = os.path.abspath(".")  # scan this very repo
 PROJECT_DIR = os.path.join(TEST_STORAGE_ROOT, "project")

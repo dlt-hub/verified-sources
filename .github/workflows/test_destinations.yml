@@ -62,8 +62,8 @@ jobs:
         run: poetry install --no-interaction --all-extras
 
       - name: create secrets.toml
-        run: pwd && echo "$DLT_SECRETS_TOML" > pipelines/.dlt/secrets.toml
-      #   run: pwd && echo "$DESTINATIONS_SECRETS" > pipelines/.dlt/secrets.toml && echo "$SOURCES_SECRETS" >> pipelines/.dlt/secrets.toml
+        run: pwd && echo "$DLT_SECRETS_TOML" > sources/.dlt/secrets.toml
+      #   run: pwd && echo "$DESTINATIONS_SECRETS" > sources/.dlt/secrets.toml && echo "$SOURCES_SECRETS" >> sources/.dlt/secrets.toml
       # - name: Setup upterm session
       #   uses: lhotari/action-upterm@v1
       - run: |
