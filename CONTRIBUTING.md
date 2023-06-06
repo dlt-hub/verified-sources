@@ -15,7 +15,7 @@
 </div>
 <br>
 
-The following guide will walk you through contributing new pipelines or changes to existing pipelines and contains a troubleshooting section. Please also read [DISTRIBUTION.md](docs/DISTRIBUTION.md) to understand how our pipelines are distributed to the users. Refer to [BUILDING-BLOCKS.md](docs/BUILDING-BLOCKS.md) to learn about the basic building blocks of a dlt pipeline.
+The following guide will walk you through contributing new sources or changes to existing sources and their demo pipelines and contains a troubleshooting section. Please also read [DISTRIBUTION.md](docs/DISTRIBUTION.md) to understand how our sources are distributed to the users. Refer to [BUILDING-BLOCKS.md](docs/BUILDING-BLOCKS.md) to learn about the basic building blocks of a dlt source.
 
 
 What do you can do here:
