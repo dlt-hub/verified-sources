@@ -1,3 +1,5 @@
+"""Hubspot source helpers"""
+
 import urllib.parse
 from typing import Generator, Dict, Any, List
 

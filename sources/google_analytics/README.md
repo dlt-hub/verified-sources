@@ -29,7 +29,7 @@ Before creating the pipeline, we need to first get the necessary API credentials
 6. Select “Add users”, and add the *client_email* with at least viewer privileges. You will find this *client_email* in the JSON that you downloaded above.
 7. Finally, click on the “Add” button in the top right corner.
 
-## Initialize the pipeline
+## Initialize the source with a demo pipeline
 
 We can now create the pipeline.
 
@@ -54,7 +54,7 @@ directory
     │   └── data_processing.py
     ├── __init__.py
 		├── setup_script_gcp_oauth.py
-└── google_analytics_pipelines.py
+└── demo_google_analytics_pipelines.py
 └── requirements.txt
 ```
 
@@ -91,8 +91,8 @@ directory
     ]
     ```
     In this example, we pass our request parameters inside a list called `queries`. The data from each request will be loaded onto a table having the table name specified by the parameter `resource_name`.
-4. If you're adding the property_id and queries to `.dlt/config.toml`, then you will need to modify the script `google_analytics_pipeline.py`.
-5. In the main method of the script `google_analytics_pipeline.py`, replace the function `simple_load()` with the function `simple_load_config()`. This function will automatically read the property_id and queries from `.dlt/config.toml`.
+4. If you're adding the property_id and queries to `.dlt/config.toml`, then you will need to modify the script `demo_google_analytics_pipeline.py`.
+5. In the main method of the script `demo_google_analytics_pipeline.py`, replace the function `simple_load()` with the function `simple_load_config()`. This function will automatically read the property_id and queries from `.dlt/config.toml`.
     ```python
     if __name__ == "__main__":
         start_time = time.time()
@@ -119,14 +119,14 @@ directory
     To change this, you can replace it in  
     `dlt.pipeline(pipeline_name="dlt_google_analytics_pipeline", ... )`
 
-## Customize the pipeline
+## Customize the source
 
-This pipeline has some predefined methods that you can use; or you can also define your own methods to run the pipeline. The predefined methods are:  
+This source has some predefined methods that you can use; or you can also define your own methods to run the source. The predefined methods are:  
 
-- **Incremental Loading**: The incremental loading for these pipelines is on which means the last load time is saved in dlt_state and the next load of the pipeline will have the last load as a starting date.
+- **Incremental Loading**: The incremental loading for these sources is on which means the last load time is saved in dlt_state and the next load of the source will have the last load as a starting date.
 
 - **simple_load()**
-    1. If you don’t want to define the `property_id` and `queries` in the `config.toml` you can define them in the `google_analytics_pipeline.py` as defined below:
+    1. If you don’t want to define the `property_id` and `queries` in the `config.toml` you can define them in the `demo_google_analytics_pipeline.py` as defined below:
         
         ```python
             queries = [
@@ -149,7 +149,7 @@ This pipeline has some predefined methods that you can use; or you can also defi
                 return info
         ```
         
-    2. Include the function `simple_load()` in the main method in `google_analytics_pipeline.py`
+    2. Include the function `simple_load()` in the main method in `demo_google_analytics_pipeline.py`
     3. Run the pipeline as above.
 - **chose_date_first_load()**
 

@@ -310,7 +310,7 @@ def serial_date_to_datetime(
         Union[pendulum.DateTime, str, bool]: The converted datetime object, or the original value if conversion fails.
     """
 
-    # if called with a different data type, return with whatever input was, handled by the dlt pipeline later - edge case
+    # if called with a different data type, return with whatever input was, handled by the dlt source later - edge case
     if not isinstance(serial_number, (int, float)):
         return serial_number
     # To get the seconds passed since the start date of serial numbers we round the product of the number of seconds in a day and the serial number

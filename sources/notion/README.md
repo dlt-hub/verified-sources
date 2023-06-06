@@ -1,12 +1,12 @@
 ---
 title: Notion
-description: dlt pipeline for Notion API
-keywords: [notion api, notion pipeline, notion]
+description: dlt source for Notion API
+keywords: [notion api, notion source, notion]
 ---
 
 # Notion
 
-Use this pipeline to fetch databases from Notion API.
+Use this source to fetch databases from Notion API.
 
 ## Account Setup
 
@@ -15,7 +15,7 @@ Use this pipeline to fetch databases from Notion API.
 3. Give your integration a name, select the workspace you want to use, and click `Submit`.
 4. Copy the `Internal Integration Token` and save it somewhere safe. You will need it later.
 
-## Pipeline Initialization
+## Source wiht example pipeline Initialization
 
 Use the following command to initialize the pipeline, replacing `[destination]` with your preferred [destination](../general-usage/glossary.md#destination):
 
@@ -36,7 +36,7 @@ notion_pipeline
 │   └── database.py
 │   └── README.md
 ├── .gitignore
-├── notion_pipeline.py
+├── demo_notion_pipeline.py
 └── requirements.txt
 ```
 
@@ -73,7 +73,7 @@ To authenticate with the Notion API, you'll need to provide the integration toke
 2. Run the pipeline with this command:
 
     ```bash
-    python3 notion_pipeline.py
+    python3 demo_notion_pipeline.py
     ```
 
 3. To verify successful execution, use the `dlt pipeline notion_pipeline show` command.

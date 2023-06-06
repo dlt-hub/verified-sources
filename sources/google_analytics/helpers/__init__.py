@@ -1,3 +1,5 @@
+"""Google analytics source helpers"""
+
 from typing import Iterator, List
 from pendulum.datetime import DateTime
 

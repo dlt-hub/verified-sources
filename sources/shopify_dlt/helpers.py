@@ -1,3 +1,5 @@
+"""Shopify source helpers"""
+
 from dlt.common.typing import TDataItem
 from typing import Any, Iterable
 

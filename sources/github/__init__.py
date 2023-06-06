@@ -1,4 +1,4 @@
-"""Loads github issues, pull requests and reactions for a specific repository via customizable graphql query. Loads events incrementally."""
+"""Source that load github issues, pull requests and reactions for a specific repository via customizable graphql query. Loads events incrementally."""
 import urllib.parse
 from typing import Any, Iterator, List, Sequence, Tuple
 

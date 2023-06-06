@@ -1,4 +1,4 @@
-"""Pipeline for Salesforce depending on the simple_salesforce python package.
+"""Source for Salesforce depending on the simple_salesforce python package.
 
 Imported resources are: account, campaign, contact, lead, opportunity, pricebook_2, pricebook_entry, product_2, user and user_role
 

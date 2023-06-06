@@ -1,3 +1,5 @@
+"""Workable source settings and constants"""
+
 # define which endpoints to load
 DEFAULT_ENDPOINTS = (
     "members",

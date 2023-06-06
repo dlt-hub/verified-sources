@@ -1,7 +1,7 @@
 ---
 title: Zendesk
-description: dlt pipeline for Zendesk API
-keywords: [zendesk api, zendesk pipeline, zendesk]
+description: dlt source for Zendesk API
+keywords: [zendesk api, zendesk source, zendesk]
 ---
 # Zendesk
 
@@ -106,7 +106,7 @@ To get an `OAuth token` follow these steps:
 
 8. After running the above curl command in terminal (or the Python script), you will get an access token in the response.
 
-9. This is the OAuth token. Save it, as this will need to be added to the pipeline.
+9. This is the OAuth token. Save it, as this will need to be added to the source.
 
 </details>
 <details>
@@ -146,7 +146,7 @@ http://localhost:8080/#**access_token=cSWY9agzy9hsgsEdX5F2PCsBlvSu3tDk3lh4xmISIH
 
 #access token is "**cSWY9agzy9hsgsEdX5F2PCsBlvSu3tDk3lh4xmISIHFhR4lKtpVqqDRVvkiZPqbI"**
 ```
-10. Save the access token. This will need to be added to the pipeline later.
+10. Save the access token. This will need to be added to the source later.
 
 
 </details>
@@ -157,9 +157,9 @@ http://localhost:8080/#**access_token=cSWY9agzy9hsgsEdX5F2PCsBlvSu3tDk3lh4xmISIH
 
 </details>
 
-## Initialize the pipeline
+## Initialize the source with an example pipeline
 
-Initialize the pipeline with the following command:
+Initialize the source with an example pipeline with the following command:
 
 ```bash
 dlt init zendesk bigquery
@@ -180,7 +180,7 @@ zendesk_pipeline
 │   └── __init__.py
 │   └── running_guide
 ├── .gitignore
-├── zendesk_pipeline.py
+├── demo_zendesk_pipeline.py
 └── requirements.txt`
 ```
 
@@ -221,9 +221,9 @@ location = "set me up" # Project location for ex. “US”
 2. Only add credentials for the APIs from which you wish to request data and remove the rest.
 3. Add credentials as required by your destination. See [here](https://dlthub.com/docs/destinations) for steps on how to do this.
 
-## Specify source methods in `zendesk_pipeline.py`
+## Specify source methods in `demo_zendesk_pipeline.py`
 
-1. You can easily specify which APIs the pipeline will load the data from by modifying the data loading function `incremental_load_all_default` in the script `zendesk_pipeline.py`.
+1. You can easily specify which APIs the source will load the data from by modifying the data loading function `incremental_load_all_default` in the script `demo_zendesk_pipeline.py`.
 2. By default, the function calls all three source methods, `zendesk_support()`, `zendesk_chat()`, and `zendesk_talk()`.
 3. To adjust this, simply remove the lines that correspond to the APIs from which you do not wish to request data.
 4. Also make the corresponding change in the line `info = pipeline.run(data=[data_support, data_chat, data_talk])`.
@@ -255,7 +255,7 @@ def incremental_load_all_default():
 
 2. Run the pipeline with the following command:
 
-`python3 zendesk_pipeline.py`
+`python3 demo_zendesk_pipeline.py`
 
 3. To make sure everything is loaded as expected, use the command:
 
@@ -266,12 +266,12 @@ def incremental_load_all_default():
 
 The Zendesk pipeline has some default customizations that make it more useful:
 
-1. **Pivoting ticket fields:** By default, the pipeline pivots the custom fields in tickets when loading the data, which allows the custom fields to be used as columns after loading. This behavior is due to the fact that the boolean parameter `pivot_ticket_fields` in the source method `zendesk_support()` is set to `True` by default. To change this, set `pivot_ticket_fields=False` when calling the source method from inside the data loading function.
+1. **Pivoting ticket fields:** By default, the source pivots the custom fields in tickets when loading the data, which allows the custom fields to be used as columns after loading. This behavior is due to the fact that the boolean parameter `pivot_ticket_fields` in the source method `zendesk_support()` is set to `True` by default. To change this, set `pivot_ticket_fields=False` when calling the source method from inside the data loading function.
 ```python
 data_support = zendesk_support(pivot_ticket_fields=False)
 ```
 
-  Alternatively, this can be explicitly done by using the function `load_support_with_pivoting` in the script `zendesk_pipeline.py`.
+  Alternatively, this can be explicitly done by using the function `load_support_with_pivoting` in the script `demo_zendesk_pipeline.py`.
   ```python
   def load_support_with_pivoting():
     """
@@ -288,7 +288,7 @@ data_support = zendesk_support(pivot_ticket_fields=False)
     load_support_with_pivoting()
   ```
 
-2. **Custom field rename**: The pipeline loads the custom fields with their label names. If the label changes between loads, the initial label continues to be used (is persisted in state). To reset the labels, do a full refresh. This can be achieved by passing `full_refresh=True` when calling `dlt.pipeline`:
+2. **Custom field rename**: The source loads the custom fields with their label names. If the label changes between loads, the initial label continues to be used (is persisted in state). To reset the labels, do a full refresh. This can be achieved by passing `full_refresh=True` when calling `dlt.pipeline`:
 ```python
 pipeline = dlt.pipeline(pipeline_name="dlt_zendesk_pipeline", destination='bigquery', full_refresh=True, dataset_name="sample_zendesk_data3")
 ```

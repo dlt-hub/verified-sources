@@ -1,4 +1,4 @@
-"""Loads Google Sheets data from tabs, named and explicit ranges. Contains the main pipeline functions."""
+"""Loads Google Sheets data from tabs, named and explicit ranges. Contains the main source functions."""
 
 from typing import Iterator, List, Sequence, Union, Iterable
 

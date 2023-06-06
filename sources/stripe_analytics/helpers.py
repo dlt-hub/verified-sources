@@ -1,3 +1,5 @@
+"""Stripe analytics source helpers"""
+
 from typing import Any, Dict, Generator, Optional, Union, Iterable
 
 import stripe

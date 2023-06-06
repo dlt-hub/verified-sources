@@ -1,3 +1,5 @@
+"""Pipedrive source settings and constants"""
+
 ENTITY_MAPPINGS = [
     ("activity", "activityFields", {"user_id": 0}),
     ("organization", "organizationFields", None),

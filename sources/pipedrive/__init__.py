@@ -1,4 +1,4 @@
-"""Highly customizable pipeline for Pipedrive, supports endpoint addition, selection and column rename
+"""Highly customizable source for Pipedrive, supports endpoint addition, selection and column rename
 
 Pipedrive api docs: https://developers.pipedrive.com/docs/api/v1
 

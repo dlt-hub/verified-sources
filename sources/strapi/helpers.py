@@ -1,3 +1,5 @@
+"""Strapi source helpers"""
+
 import math
 from typing import Iterable
 

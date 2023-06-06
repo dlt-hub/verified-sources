@@ -1,14 +1,14 @@
 ---
 title: Hubspot
-description: dlt pipeline for Hubspot API
-keywords: [hubspot api, hubspot pipeline, hubspot]
+description: dlt source for Hubspot API
+keywords: [hubspot api, hubspot source, hubspot]
 ---
 
 # HubSpot
 
 HubSpot is a customer relationship management (CRM) software and inbound marketing platform that helps businesses to attract visitors, engage customers, and close leads. 
 
-The `dlt` HubSpot pipeline allows you to automatically load data from HubSpot into a [destination](https://dlthub.com/docs/destinations) of your choice. It loads data from the following endpoints:
+The `dlt` HubSpot source allows you to automatically load data from HubSpot into a [destination](https://dlthub.com/docs/destinations) of your choice. It loads data from the following endpoints:
 
 |API|Data|
 | --- | --- |
@@ -44,7 +44,7 @@ Before running the pipeline, you will need to get API credentials. HubSpot no lo
 8. Click on Show token, and copy the displayed token. This will need to be added to the pipeline.
         
 
-## Initialize the pipeline
+## Initialize the source with an example pipeline
 
 Initialize the pipeline with the following command:
 
@@ -65,7 +65,7 @@ hubspot_pipeline
 │   └── client.py
 │   └── endpoints.py
 ├── .gitignore
-├── hubspot_pipeline.py
+├── demo_hubspot_pipeline.py
 └── requirements.txt
 ```
 ## Add credentials
@@ -80,7 +80,7 @@ api_key = "api_key" # please set me up!
 3. Enter credentials for your chosen destination as per the [docs](https://dlthub.com/docs/destinations#google-bigquery)
 ## Define the data loading function
 
-1. There are two data loading functions inside the script `hubspot_pipeline.py`:
+1. There are two data loading functions inside the script `demo_hubspot_pipeline.py`:
     1. `load_without_events()`: This function loads data from HubSpot to the destination without enabling company events.
     2. `load_with_company_events()`: This function loads data from HubSpot to the destination with company and contacts events selected.
     
@@ -104,7 +104,7 @@ pip install -r requirements.txt
 2. Run the pipeline with the following command:
 
 ```
-python3 hubspot_pipeline.py
+python3 demo_hubspot_pipeline.py
 
 ```
 

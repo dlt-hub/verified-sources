@@ -1,12 +1,12 @@
 ---
 title: Pipedrive
-description: dlt pipeline for Pipedrive API
-keywords: [pipedrive api, pipedrive pipeline, pipedrive]
+description: dlt source for Pipedrive API
+keywords: [pipedrive api, pipedrive source, pipedrive]
 ---
 
 # Pipedrive
 
-Here you will find a setup guide for the [Pipedrive](https://developers.pipedrive.com/docs/api/v1) pipeline.
+Here you will find a setup guide for the [Pipedrive](https://developers.pipedrive.com/docs/api/v1) source.
 
 ## Set up account
 
@@ -16,9 +16,9 @@ Here you will find a setup guide for the [Pipedrive](https://developers.pipedriv
 
 Pipedrive provides a unique domain name that is generally `[company].pipedrive.com`. For example, if your company name is `dltHub`, then the subdomain name is `dlthub.pipedrive.com`.
 
-## Initialize the pipeline
+## Initialize the source with an example pipeline
 
-**Initialize the pipeline by using the following command with your [destination](../general-usage/glossary.md#destination) of choice:**
+**Initialize the source with an example pipeline by using the following command with your [destination](../general-usage/glossary.md#destination) of choice:**
 ```bash
 dlt init pipedrive [destination]
 ```
@@ -35,7 +35,7 @@ pipedrive_pipeline
 │   └── custom_fields_munger.py
 │   └── README.md
 ├── .gitignore
-├── pipedrive_pipeline.py
+├── demo_pipedrive_pipeline.py
 └── requirements.txt
 ```
 
@@ -78,7 +78,7 @@ pip install -r requirements.txt
 
 2. Run the pipeline with the following command:
 ```bash
-python3 pipedrive_pipeline.py
+python3 demo_pipedrive_pipeline.py
 ```
 
 3. Use `dlt pipeline pipedrive_pipeline show` to make sure that everything loaded as expected.

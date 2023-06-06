@@ -1,3 +1,5 @@
+"""Salesforce source helpers"""
+
 import pendulum
 
 from typing import Optional, Iterable

@@ -1,3 +1,5 @@
+"""Github source helpers"""
+
 from .queries import ISSUES_QUERY, RATE_LIMIT, COMMENT_REACTIONS_QUERY
 from typing import Any, Iterator, List, Sequence, Tuple
 from dlt.common.typing import StrAny, DictStrAny, TDataItems

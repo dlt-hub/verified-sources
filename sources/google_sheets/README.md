@@ -1,6 +1,6 @@
 # Google sheets
 
-Here you will find a setup guide for the [Google sheets](https://www.google.com/sheets/about/) pipeline.
+Here you will find a setup guide for the [Google sheets](https://www.google.com/sheets/about/) source with an example pipeline.
 
 ## Set up account
 1.  Set up a Google account
@@ -22,7 +22,7 @@ Here you will find a setup guide for the [Google sheets](https://www.google.com/
 ### Merged Cells
 1. For merged cells, `dlt` loads all the information in the merged cell into the table and treats others as NULL.
 
-## Initialize the pipeline
+## Initialize the source with an example pipeline
 
 **Initialize the pipeline by using the following command with your [destination](/destinations.md) of choice:**
 ```bash
@@ -42,7 +42,7 @@ directory
     │   ├── api_calls.py
     │   └── data_processing.py
     ├── .gitignore
-    ├── google_sheets_pipelines.py
+    ├── demo_google_sheets_pipelines.py.py
     └── requirements.txt
 ```
 
@@ -91,9 +91,9 @@ project_id = "set me up" # GCP Destination project ID!
 
 3. Copy the sharing link by clicking on the **copy link** button.
 
-## Configure the pipeline
+## Configure the source
 
-1. The following two constants are needed to be configured, in **google_sheets_pipelines.py**
+1. The following two constants are needed to be configured, in **demo_google_sheets_pipelines.py.py**
 
 ```python
 # constants
@@ -127,7 +127,7 @@ pip install -r requirements.txt
 2. Run the pipeline by using the following command
 
 ```python
-python3 google_sheets_pipelines.py
+python3 demo_google_sheets_pipelines.py.py
 ```
 
 3. Use `dlt pipeline pipedrive_pipeline show` to make sure that everything loaded as expected.

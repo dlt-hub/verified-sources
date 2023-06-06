@@ -1,5 +1,6 @@
 """
-This pipeline provides data extraction from an example source as a starting point for new pipelines.
+This source provides data extraction from an example source as a starting point for new pipelines.
+Available resources: [berries, pokemon]
 """
 
 import typing as t

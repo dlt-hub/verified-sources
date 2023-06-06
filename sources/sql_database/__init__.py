@@ -1,4 +1,4 @@
-"""Loads tables form any SQLAlchemy supported database, supports batching requests and incremental loads."""
+"""Source that loads tables form any SQLAlchemy supported database, supports batching requests and incremental loads."""
 
 from typing import List, Optional, Union, Iterable, Any
 from sqlalchemy import MetaData, Table

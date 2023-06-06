@@ -1,3 +1,5 @@
+"""SQL database source helpers"""
+
 from typing import (
     cast,
     Any,

@@ -1,4 +1,4 @@
-"""A pipeline that extracts data from Notion API"""
+"""A source that extracts data from Notion API"""
 
 from typing import List, Dict, Optional, Iterator
 

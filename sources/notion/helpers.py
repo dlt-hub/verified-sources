@@ -1,3 +1,5 @@
+"""Notion source helpers"""
+
 from typing import Any, Dict, Iterable, Iterator, List, Optional
 
 from dlt.common.typing import TDataItem
