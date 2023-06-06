@@ -1,3 +1,5 @@
+"""Asana source settings and constants"""
+
 # Default start date for Asana API requests, only tasks started after this date will be collected
 DEFAULT_START_DATE = "2010-01-01T00:00:00.000Z"
 

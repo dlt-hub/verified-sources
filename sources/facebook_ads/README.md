@@ -49,9 +49,9 @@ debug_access_token()
 ```
 
 # Rate limits
-This pipeline detects facebook rate limits and retries with exponential back-off. Often it takes several minutes or longer for the pipeline to make more requests. Retries based on facebook `error` documents are logged on warning level.
+This source detects facebook rate limits and retries with exponential back-off. Often it takes several minutes or longer for the source to make more requests. Retries based on facebook `error` documents are logged on warning level.
 
-# Hacking the pipeline
+# Hacking the source
 
 in `settings.py`
 - change the default fields for all objects

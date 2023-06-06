@@ -1,4 +1,4 @@
-"""A pipeline loading player profiles and games from chess.com api"""
+"""A source loading player profiles and games from chess.com api"""
 
 from typing import Callable, Iterator, List, Sequence, Dict, Any
 

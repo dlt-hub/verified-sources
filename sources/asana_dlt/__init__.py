@@ -1,5 +1,5 @@
 """
-This pipeline provides data extraction from the Asana platform via their API.
+This source provides data extraction from the Asana platform via their API.
 
 It defines several functions to fetch data from different parts of Asana including
 workspaces, projects, sections, tags, tasks, stories, teams, and users. These

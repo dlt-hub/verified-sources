@@ -1,16 +1,16 @@
 ---
 title: Chess.com
-description: dlt pipeline for Chess.com API
-keywords: [chess.com api, chess.com pipeline, chess.com]
+description: dlt source for Chess.com API
+keywords: [chess.com api, chess.com source, chess.com]
 ---
 
 # Chess.com
 
-This pipeline can be used to load player data from the [Chess.com API](https://www.chess.com/news/view/published-data-api) into a [destination](../general-usage/glossary.md#destination) of your choice.
+This source can be used to load player data from the [Chess.com API](https://www.chess.com/news/view/published-data-api) into a [destination](../general-usage/glossary.md#destination) of your choice.
 
-## Initialize the pipeline
+## Initialize the source with a demo pipeline
 
-Initialize the pipeline with the following command:
+Initialize the source with the following command:
 ```
 dlt init chess bigquery
 ```
@@ -51,7 +51,7 @@ dlt pipeline chess_pipeline show
 
 ## Customize parameters
 
-Without any modifications, the chess pipeline will load data for a default list of players over a default period of time. You can change these values in the `chess_pipeline.py` script.
+Without any modifications, the chess source will load data for a default list of players over a default period of time. You can change these values in the `demo_chess_pipeline.py` script.
 
 For example, if you wish to load player games for a specific set of players, add the player list to the function `load_player_games_example` as below.
 ```python

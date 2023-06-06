@@ -1,3 +1,5 @@
+"""Facebook ads source helpers"""
+
 import functools
 import itertools
 import time
@@ -205,7 +207,7 @@ def get_ads_account(
             )
             if should_retry:
                 logger.warning(
-                    "facebook_ads pipeline will retry due to %s with error code %i"
+                    "facebook_ads source will retry due to %s with error code %i"
                     % (message, code)
                 )
             return should_retry

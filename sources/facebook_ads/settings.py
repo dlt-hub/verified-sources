@@ -1,3 +1,5 @@
+"""Facebook ads source settings and constants"""
+
 from typing import Any, Callable, Dict, Iterator, Literal
 
 from facebook_business.adobjects.abstractobject import AbstractObject

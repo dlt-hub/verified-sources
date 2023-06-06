@@ -1,4 +1,4 @@
-"""Chess pipeline helpers"""
+"""Chess source helpers"""
 
 from dlt.common.typing import StrAny
 from dlt.sources.helpers import requests
