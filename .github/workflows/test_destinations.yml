@@ -16,13 +16,13 @@ env:
   RUNTIME__LOG_LEVEL: ERROR
 
 jobs:
-  get_changed_pipelines:
-    uses: ./.github/workflows/get_changed_pipelines.yml
+  get_changed_sources:
+    uses: ./.github/workflows/get_changed_sources.yml
 
   run_loader:
     name: test destinations redshift, postgres and duckdb
-    needs: get_changed_pipelines
-    if: needs.get_changed_pipelines.outputs.pipelines_list != ''
+    needs: get_changed_sources
+    if: needs.get_changed_sources.outputs.sources_list != ''
     strategy:
       max-parallel: 2
       fail-fast: false
@@ -67,13 +67,13 @@ jobs:
       # - name: Setup upterm session
       #   uses: lhotari/action-upterm@v1
       - run: |
-          pipelines_list="${{ needs.get_changed_pipelines.outputs.pipelines_list }}"
-          test_paths=$(echo "$pipelines_list" | awk '{for(i=1;i<=NF;i++) printf "tests/%s ", $i}')
+          sources_list="${{ needs.get_changed_sources.outputs.sources_list }}"
+          test_paths=$(echo "$sources_list" | awk '{for(i=1;i<=NF;i++) printf "tests/%s ", $i}')
           poetry run pytest $test_paths
         if: runner.os != 'Windows'
         name: Run tests on Linux/macOS
       - run: |
-          FOR %%i IN (${{ needs.get_changed_pipelines.outputs.pipelines_list }}) DO (
+          FOR %%i IN (${{ needs.get_changed_sources.outputs.sources_list }}) DO (
             echo Running tests for: %%i
             poetry run pytest tests/%%i
           )

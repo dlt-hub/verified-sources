@@ -1,45 +1,45 @@
 
-name: get changed pipelines
+name: get changed sources
 
 on:
   workflow_call:
     outputs:
-      pipelines_list:
-        description: "List of changed pipelines"
-        value: ${{ jobs.get_changed_pipelines.outputs.pipelines_list }}
+      sources_list:
+        description: "List of changed sources"
+        value: ${{ jobs.get_changed_sources.outputs.sources_list }}
 
 jobs:
-  get_changed_pipelines:
+  get_changed_sources:
     runs-on: ubuntu-latest
     outputs:
-      pipelines_list: ${{ steps.get_changed_pipelines.outputs.pipelines_list }}
+      sources_list: ${{ steps.get_changed_sources.outputs.sources_list }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v3
         with:
           fetch-depth: 0
 
-      - name: Get changed pipelines
-        id: get_changed_pipelines
+      - name: Get changed sources
+        id: get_changed_sources
         run: |
           echo "base.sha: ${{ github.event.pull_request.base.sha }}"
           echo "head.sha: ${{ github.event.pull_request.head.sha }}"
 
-          raw_changed_pipelines=$(
+          raw_changed_sources=$(
             git diff --name-only ${{ github.event.pull_request.base.sha }} ${{ github.event.pull_request.head.sha }} \
               | grep '^sources/[^._]' || true
           )
 
-          echo $raw_changed_pipelines
+          echo $raw_changed_sources
 
-          if [ -z "$raw_changed_pipelines" ]; then
-            echo "No changed pipelines. Skipping tests."
+          if [ -z "$raw_changed_sources" ]; then
+            echo "No changed sources. Skipping tests."
           else
-            changed_pipelines=$(echo "$raw_changed_pipelines" \
-              | sed -nE 's/^pipelines\/([^/]+)\/.*$/\1/p; s/^pipelines\/(.*)_pipeline\.py$/\1/p' \
+            changed_sources=$(echo "$raw_changed_sources" \
+              | sed -nE 's/^sources\/([^/]+)\/.*$/\1/p; s/^sources\/(.*)_pipeline\.py$/\1/p' \
               | sort -u \
               | tr '\n' ' '
             )
-            echo "Changed pipelines: $changed_pipelines"
+            echo "Changed sources: $changed_sources"
           fi
-          echo "pipelines_list=$changed_pipelines" >> $GITHUB_OUTPUT
+          echo "sources_list=$changed_sources" >> $GITHUB_OUTPUT
