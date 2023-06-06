@@ -4,7 +4,7 @@ import argparse
 SOURCE_SOURCE = "chess"
 
 SOURCE_FOLDER = "sources/{}"
-SOURCE_EXAMPLE_FILE = "sources/demo_{}_pipeline.py"
+SOURCE_EXAMPLE_FILE = "sources/{}_pipeline.py"
 SOURCE_TEST_FOLDER = "tests/{}"
 
 parser = argparse.ArgumentParser("new_source.py")

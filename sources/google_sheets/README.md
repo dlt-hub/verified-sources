@@ -42,7 +42,7 @@ directory
     │   ├── api_calls.py
     │   └── data_processing.py
     ├── .gitignore
-    ├── demo_google_sheets_pipelines.py.py
+    ├── google_sheets_pipelines.py.py
     └── requirements.txt
 ```
 
@@ -93,7 +93,7 @@ project_id = "set me up" # GCP Destination project ID!
 
 ## Configure the source
 
-1. The following two constants are needed to be configured, in **demo_google_sheets_pipelines.py.py**
+1. The following two constants are needed to be configured, in **google_sheets_pipelines.py.py**
 
 ```python
 # constants
@@ -127,7 +127,7 @@ pip install -r requirements.txt
 2. Run the pipeline by using the following command
 
 ```python
-python3 demo_google_sheets_pipelines.py.py
+python3 google_sheets_pipelines.py.py
 ```
 
 3. Use `dlt pipeline pipedrive_pipeline show` to make sure that everything loaded as expected.

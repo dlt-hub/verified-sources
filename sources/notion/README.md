@@ -36,7 +36,7 @@ notion_pipeline
 │   └── database.py
 │   └── README.md
 ├── .gitignore
-├── demo_notion_pipeline.py
+├── notion_pipeline.py
 └── requirements.txt
 ```
 
@@ -73,7 +73,7 @@ To authenticate with the Notion API, you'll need to provide the integration toke
 2. Run the pipeline with this command:
 
     ```bash
-    python3 demo_notion_pipeline.py
+    python3 notion_pipeline.py
     ```
 
 3. To verify successful execution, use the `dlt pipeline notion_pipeline show` command.

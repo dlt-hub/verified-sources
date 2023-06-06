@@ -42,7 +42,7 @@ strapi_pipeline
 │   └── readme.md
 │   └── strapi.py
 ├── .gitignore
-├── demo_strapi_pipeline.py.py
+├── strapi_pipeline.py.py
 └── requirements.txt
 ```
 
@@ -68,9 +68,9 @@ location = "set me up" # Project location (e.g. “US”)
 3. When you run the Strapi project and a new tab opens in the browser, the URL in the address bar of that tab is the domain). For example, `[my-strapi.up.railway.app](http://my-strapi.up.railway.app)`
 4. Follow the instructions in [Destinations](https://dlthub.com/docs/destinations) to add credentials for your chosen destination
 
-## Add your endpoint and run  **`demo_strapi_pipeline.py.py`**
+## Add your endpoint and run  **`strapi_pipeline.py.py`**
 
-After initializing the pipeline a file named `demo_strapi_pipeline.py.py` is created.
+After initializing the pipeline a file named `strapi_pipeline.py.py` is created.
 
 ```python
 import dlt
@@ -101,7 +101,7 @@ In the sample script above, we have one list with one endpoint called “athlete
 
 2. Now the pipeline can be run by using the command:
 
-`python3 demo_strapi_pipeline.py.py`
+`python3 strapi_pipeline.py.py`
 
 3. To make sure that everything is loaded as expected, use the command:
 

@@ -180,7 +180,7 @@ zendesk_pipeline
 │   └── __init__.py
 │   └── running_guide
 ├── .gitignore
-├── demo_zendesk_pipeline.py
+├── zendesk_pipeline.py
 └── requirements.txt`
 ```
 
@@ -221,9 +221,9 @@ location = "set me up" # Project location for ex. “US”
 2. Only add credentials for the APIs from which you wish to request data and remove the rest.
 3. Add credentials as required by your destination. See [here](https://dlthub.com/docs/destinations) for steps on how to do this.
 
-## Specify source methods in `demo_zendesk_pipeline.py`
+## Specify source methods in `zendesk_pipeline.py`
 
-1. You can easily specify which APIs the source will load the data from by modifying the data loading function `incremental_load_all_default` in the script `demo_zendesk_pipeline.py`.
+1. You can easily specify which APIs the source will load the data from by modifying the data loading function `incremental_load_all_default` in the script `zendesk_pipeline.py`.
 2. By default, the function calls all three source methods, `zendesk_support()`, `zendesk_chat()`, and `zendesk_talk()`.
 3. To adjust this, simply remove the lines that correspond to the APIs from which you do not wish to request data.
 4. Also make the corresponding change in the line `info = pipeline.run(data=[data_support, data_chat, data_talk])`.
@@ -255,7 +255,7 @@ def incremental_load_all_default():
 
 2. Run the pipeline with the following command:
 
-`python3 demo_zendesk_pipeline.py`
+`python3 zendesk_pipeline.py`
 
 3. To make sure everything is loaded as expected, use the command:
 
@@ -271,7 +271,7 @@ The Zendesk pipeline has some default customizations that make it more useful:
 data_support = zendesk_support(pivot_ticket_fields=False)
 ```
 
-  Alternatively, this can be explicitly done by using the function `load_support_with_pivoting` in the script `demo_zendesk_pipeline.py`.
+  Alternatively, this can be explicitly done by using the function `load_support_with_pivoting` in the script `zendesk_pipeline.py`.
   ```python
   def load_support_with_pivoting():
     """

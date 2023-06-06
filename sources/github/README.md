@@ -57,7 +57,7 @@ github_pipeline
 │   └── __init__.py
 │   └── queries.py
 ├── .gitignore
-├── demo_github_pipeline.py
+├── github_pipeline.py
 └── requirements.txt
 ```
 
@@ -81,9 +81,9 @@ location = "set me up" # Project location (e.g. “US”)
 2. Replace `"GITHUB_API_TOKEN"` with the API token you [copied above](#grab-the-api-auth-token) or leave it blank if not specified.
 3. Follow the instructions in the [Destinations](https://dlthub.com/docs/destinations) document to add credentials for your chosen destination. 
 
-## Modify the script `demo_github_pipeline.py`
+## Modify the script `github_pipeline.py`
 
-To load the data from the desired repository onto the desired destination, a source method needs to be specified in `demo_github_pipeline.py`. For this, you can either write your own method, or modify one of the three example templates:  
+To load the data from the desired repository onto the desired destination, a source method needs to be specified in `github_pipeline.py`. For this, you can either write your own method, or modify one of the three example templates:  
 
 |Function name| Description |
 | --- | --- |
@@ -116,7 +116,7 @@ dlt pipeline github_pipeline show
 ```
 ## Customize source methods
 
-You can customize the existing templates in `demo_github_pipeline.py` to load from any repository of your choice.
+You can customize the existing templates in `github_pipeline.py` to load from any repository of your choice.
 
 ### a. Load GitHub events from any repository
 

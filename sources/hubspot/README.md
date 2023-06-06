@@ -65,7 +65,7 @@ hubspot_pipeline
 │   └── client.py
 │   └── endpoints.py
 ├── .gitignore
-├── demo_hubspot_pipeline.py
+├── hubspot_pipeline.py
 └── requirements.txt
 ```
 ## Add credentials
@@ -80,7 +80,7 @@ api_key = "api_key" # please set me up!
 3. Enter credentials for your chosen destination as per the [docs](https://dlthub.com/docs/destinations#google-bigquery)
 ## Define the data loading function
 
-1. There are two data loading functions inside the script `demo_hubspot_pipeline.py`:
+1. There are two data loading functions inside the script `hubspot_pipeline.py`:
     1. `load_without_events()`: This function loads data from HubSpot to the destination without enabling company events.
     2. `load_with_company_events()`: This function loads data from HubSpot to the destination with company and contacts events selected.
     
@@ -104,7 +104,7 @@ pip install -r requirements.txt
 2. Run the pipeline with the following command:
 
 ```
-python3 demo_hubspot_pipeline.py
+python3 hubspot_pipeline.py
 
 ```
 

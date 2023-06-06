@@ -51,7 +51,7 @@ dlt pipeline chess_pipeline show
 
 ## Customize parameters
 
-Without any modifications, the chess source will load data for a default list of players over a default period of time. You can change these values in the `demo_chess_pipeline.py` script.
+Without any modifications, the chess source will load data for a default list of players over a default period of time. You can change these values in the `chess_pipeline.py` script.
 
 For example, if you wish to load player games for a specific set of players, add the player list to the function `load_player_games_example` as below.
 ```python

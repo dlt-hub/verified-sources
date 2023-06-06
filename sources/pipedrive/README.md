@@ -35,7 +35,7 @@ pipedrive_pipeline
 │   └── custom_fields_munger.py
 │   └── README.md
 ├── .gitignore
-├── demo_pipedrive_pipeline.py
+├── pipedrive_pipeline.py
 └── requirements.txt
 ```
 
@@ -78,7 +78,7 @@ pip install -r requirements.txt
 
 2. Run the pipeline with the following command:
 ```bash
-python3 demo_pipedrive_pipeline.py
+python3 pipedrive_pipeline.py
 ```
 
 3. Use `dlt pipeline pipedrive_pipeline show` to make sure that everything loaded as expected.
