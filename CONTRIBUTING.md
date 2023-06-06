@@ -29,7 +29,7 @@ In this section you will learn how to contribute changes to an existing pipeline
 
 1. Ensure you have followed all steps in the coding prerequisites section and the `format-lint` command works.
 2. Start changing the code of an existing source. The typical development workflow will look something like this (the code examples assume you are changing the `chess` source):
-	1. Make changes to your source code, for example adding new resources or fixing bugs.
+	1. Make changes to the code of your source, for example adding new resources or fixing bugs.
 	2. Execute the source example pipeline script, for example `python chess_pipeline.py` (from `sources` folder!) and see if there are any errors and wether the expected data ends up in your destination.
 	3. Adjust your tests to test for the new features you have added or changes you have made in `./tests/chess/test_chess_source.py` and run the tests again duckdb locally with this command: `pytest tests/chess`
 	4. Run the linter and formatter to check for any problems: `make lint-code`
@@ -57,7 +57,7 @@ To start development in the verified sources repository, there are a few steps y
 
 ### 1. Prepare the repository
 
-1. Fork the [verified-sources]() repository on github, alternative check out this repository if you have the right to create Pull Requests directly.
+1. Fork the [verified-sources](https://github.com/dlt-hub/verified-sources) repository on github, alternative check out this repository if you have the right to create Pull Requests directly.
 2. Clone the forked repository
 ```sh
 git clone git@github.com:rudolfix/verified-sources.git
@@ -69,7 +69,7 @@ git checkout -b <your-branch-name>
 ```
 
 ### 2. Prepare the development environment
-Development on the verified pipelines repository depends on python 3.8 or higher and poetry being available as well as the needed dependencies being installed. Make is used to automate tasks
+Development on the verified sources repository depends on python 3.8 or higher and poetry being available as well as the needed dependencies being installed. Make is used to automate tasks
 
 1. Install poetry:
 ```sh
