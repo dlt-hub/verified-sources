@@ -1,7 +1,7 @@
 from tests.utils import ALL_DESTINATIONS, assert_load_info, load_table_counts
 import pytest
 import dlt
-from pipelines.salesforce import salesforce_source
+from sources.salesforce import salesforce_source
 
 
 @pytest.mark.parametrize("destination_name", ALL_DESTINATIONS)

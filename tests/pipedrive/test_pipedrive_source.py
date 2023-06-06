@@ -11,9 +11,9 @@ from dlt.common.pipeline import TSourceState
 from dlt.common.schema import Schema
 from dlt.sources.helpers import requests
 
-from pipelines.pipedrive import pipedrive_source
+from sources.pipedrive import pipedrive_source
 from tests.utils import ALL_DESTINATIONS, assert_load_info, assert_query_data
-from pipelines.pipedrive.helpers.custom_fields_munger import (
+from sources.pipedrive.helpers.custom_fields_munger import (
     update_fields_mapping,
     rename_fields,
 )

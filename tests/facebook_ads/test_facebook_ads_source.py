@@ -2,7 +2,7 @@ import pytest
 
 import dlt
 
-from pipelines.facebook_ads import (
+from sources.facebook_ads import (
     facebook_ads_source,
     facebook_insights_source,
     enrich_ad_objects,

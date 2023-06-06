@@ -7,7 +7,7 @@ from dlt.common.utils import uniq_id
 from dlt.extract.source import DltResource
 from dlt.sources.credentials import ConnectionStringCredentials
 
-from pipelines.sql_database import sql_database, sql_table
+from sources.sql_database import sql_database, sql_table
 
 from tests.utils import ALL_DESTINATIONS, assert_load_info, load_table_counts
 from tests.sql_database.sql_source import SQLAlchemySourceDB

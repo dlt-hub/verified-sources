@@ -3,7 +3,7 @@ import logging
 import pytest
 import dlt
 from dlt.common.pipeline import LoadInfo
-from pipelines.google_sheets import google_spreadsheet
+from sources.google_sheets import google_spreadsheet
 from tests.utils import ALL_DESTINATIONS, assert_load_info
 
 

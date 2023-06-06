@@ -2,7 +2,7 @@ import dlt
 import pytest
 from pendulum import datetime
 
-from pipelines.stripe_analytics import (
+from sources.stripe_analytics import (
     metrics_resource,
     incremental_stripe_source,
     stripe_source,

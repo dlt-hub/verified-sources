@@ -2,8 +2,8 @@ import pytest
 from typing import List, Dict, Any
 import dlt
 from dlt.pipeline.pipeline import Pipeline
-from pipelines.zendesk import zendesk_chat, zendesk_support, zendesk_talk
-from pipelines.zendesk.helpers.api_helpers import (
+from sources.zendesk import zendesk_chat, zendesk_support, zendesk_talk
+from sources.zendesk.helpers.api_helpers import (
     _make_json_serializable,
     process_ticket,
     process_ticket_field,

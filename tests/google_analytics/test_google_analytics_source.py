@@ -5,7 +5,7 @@ import dlt
 from dlt.common.pendulum import pendulum
 from dlt.common.typing import DictStrAny
 from dlt.pipeline.pipeline import Pipeline
-from pipelines.google_analytics import google_analytics
+from sources.google_analytics import google_analytics
 from tests.utils import (
     ALL_DESTINATIONS,
     assert_load_info,

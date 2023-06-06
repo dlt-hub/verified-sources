@@ -2,7 +2,7 @@ import pytest
 
 import dlt
 
-from pipelines.chess import source, chess_dlt_config_example
+from sources.chess import source, chess_dlt_config_example
 
 from tests.utils import ALL_DESTINATIONS, assert_load_info
 

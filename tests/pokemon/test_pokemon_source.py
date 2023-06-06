@@ -1,7 +1,7 @@
 from tests.utils import ALL_DESTINATIONS, assert_load_info, load_table_counts
 import pytest
 import dlt
-from pipelines.pokemon import source
+from sources.pokemon import source
 
 
 @pytest.mark.parametrize("destination_name", ALL_DESTINATIONS)

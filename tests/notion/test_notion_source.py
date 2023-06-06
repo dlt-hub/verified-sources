@@ -1,6 +1,6 @@
 import pytest
 
-from pipelines.notion import notion_databases
+from sources.notion import notion_databases
 
 import dlt
 

@@ -4,8 +4,8 @@ import dlt
 from dlt.common.pendulum import pendulum
 from dlt.common.typing import DictStrAny
 from dlt.pipeline.pipeline import Pipeline
-from pipelines.matomo import matomo_visits, matomo_reports
-from pipelines.matomo.helpers.data_processing import remove_active_visits
+from sources.matomo import matomo_visits, matomo_reports
+from sources.matomo.helpers.data_processing import remove_active_visits
 from tests.utils import ALL_DESTINATIONS, assert_load_info, load_table_counts
 
 

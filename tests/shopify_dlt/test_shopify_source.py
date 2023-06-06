@@ -1,7 +1,7 @@
 from tests.utils import ALL_DESTINATIONS, assert_load_info, load_table_counts
 import pytest
 import dlt
-from pipelines.shopify_dlt import shopify_source
+from sources.shopify_dlt import shopify_source
 
 
 @pytest.mark.parametrize("destination_name", ALL_DESTINATIONS)

@@ -2,7 +2,7 @@ import pytest
 
 import dlt
 
-from pipelines.github import github_reactions, github_repo_events
+from sources.github import github_reactions, github_repo_events
 
 from tests.utils import (
     ALL_DESTINATIONS,

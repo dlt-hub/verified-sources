@@ -4,9 +4,9 @@ import dlt
 import pytest
 
 from dlt.sources.helpers import requests
-from pipelines.hubspot import hubspot, hubspot_events_for_objects
-from pipelines.hubspot.helpers import fetch_data
-from pipelines.hubspot.settings import (
+from sources.hubspot import hubspot, hubspot_events_for_objects
+from sources.hubspot.helpers import fetch_data
+from sources.hubspot.settings import (
     CRM_CONTACTS_ENDPOINT,
     CRM_COMPANIES_ENDPOINT,
     CRM_DEALS_ENDPOINT,

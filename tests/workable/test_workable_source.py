@@ -2,7 +2,7 @@ import dlt
 import pytest
 from pendulum import datetime
 
-from pipelines.workable import workable_source
+from sources.workable import workable_source
 
 from tests.utils import ALL_DESTINATIONS, assert_load_info
 

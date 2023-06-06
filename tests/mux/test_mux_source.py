@@ -1,6 +1,6 @@
 import pytest
 
-from pipelines.mux import mux_source
+from sources.mux import mux_source
 
 import dlt
 
