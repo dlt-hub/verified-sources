@@ -1,17 +1,17 @@
 ---
 name: Bug report
-about: I want to report a problem with a pipeline
+about: I want to report a problem with a source
 title: ''
 labels: bug
 assignees: ''
 
 ---
 
-**Pipeline name**
-Name of the affected pipeline as displayed by `dlt init` or present in `pipelines` folder of this repo.
+**Source name**
+Name of the affected source as displayed by `dlt init` or present in `sources` folder of this repo.
 
 **Make sure that**
-* [] I checked the README in the pipeline folder
+* [] I checked the README in the source folder
 * [] If I have problems with the credentials I checked the [credentials docs](https://dlthub.com/docs/general-usage/credentials) and [troubleshooting](https://dlthub.com/docs/walkthroughs/run-a-pipeline#4-detect-and-handle-problems)
 
 **Describe the bug**

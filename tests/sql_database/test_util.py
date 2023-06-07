@@ -2,7 +2,7 @@ import pytest
 
 import dlt
 
-from pipelines.sql_database.helpers import TableLoader
+from sources.sql_database.helpers import TableLoader
 from tests.sql_database.sql_source import SQLAlchemySourceDB
 
 

@@ -1,5 +1,5 @@
 import pytest
-from pipelines.google_sheets.helpers import data_processing
+from sources.google_sheets.helpers import data_processing
 from typing import Union, List
 
 from dlt.common.typing import DictStrAny

@@ -40,7 +40,7 @@ def drop_pipeline() -> Iterator[None]:
 @pytest.fixture(autouse=True, scope="session")
 def test_config_providers() -> Iterator[ConfigProvidersContext]:
     """Creates set of config providers where tomls are loaded from tests/.dlt"""
-    config_root = "./pipelines/.dlt"
+    config_root = "./sources/.dlt"
     ctx = ConfigProvidersContext()
     ctx.providers.clear()
     ctx.add_provider(EnvironProvider())

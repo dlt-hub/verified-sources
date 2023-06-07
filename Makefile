@@ -8,7 +8,7 @@ help:
 	@echo "		dev"
 	@echo "			prepares development env"
 	@echo "		lint"
-	@echo "			runs flake and mypy on pipelines that are typed"
+	@echo "			runs flake and mypy on all sources"
 	@echo "		test"
 	@echo "			tests all the components including destinations"
 
@@ -29,9 +29,9 @@ lint-dlt-init:
 
 lint-code:
 	./check-package.sh
-	poetry run mypy --config-file mypy.ini ./pipelines
+	poetry run mypy --config-file mypy.ini ./sources
 	poetry run mypy --config-file mypy.ini ./tools
-	poetry run flake8 --max-line-length=200 --extend-ignore=W503 pipelines init --show-source
+	poetry run flake8 --max-line-length=200 --extend-ignore=W503 sources init --show-source
 	poetry run flake8 --max-line-length=200 --extend-ignore=W503 tests --show-source
 	poetry run black ./ --check
 
