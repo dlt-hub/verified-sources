@@ -1,6 +1,5 @@
-import pytest
-
 import dlt
+import pytest
 
 from sources.jira import jira, jira_search
 
@@ -54,7 +53,8 @@ def test_load_users(destination_name: str) -> None:
         # you can use unqualified table names
         with c.execute_query(
             "SELECT display_name, account_type FROM users WHERE display_name IN (%s, %s) ORDER BY display_name ASC",
-            "Trello", "Adrian Brudaru"
+            "Trello",
+            "Adrian Brudaru",
         ) as cur:
             rows = list(cur.fetchall())
 
@@ -67,8 +67,8 @@ def test_load_users(destination_name: str) -> None:
 def test_load_query_issues(destination_name: str) -> None:
     # test queries
     queries = [
-        'created >= -30d order by created DESC',
-        'created >= -30d AND assignee in (619652abc510bc006b40d007) AND project = DEV AND issuetype = Epic AND status = "In Progress" order by created DESC'
+        "created >= -30d order by created DESC",
+        'created >= -30d AND assignee in (619652abc510bc006b40d007) AND project = DEV AND issuetype = Epic AND status = "In Progress" order by created DESC',
     ]
 
     # mind the full_refresh flag - it makes sure that data is loaded to unique dataset. this allows you to run the tests on the same database in parallel
@@ -102,6 +102,3 @@ def test_load_query_issues(destination_name: str) -> None:
 
             assert len(rows) == 2
             assert rows[0][1] == 50
-
-
-
