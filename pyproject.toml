@@ -10,7 +10,7 @@ packages = [{include = "sources"}]
 [tool.poetry.dependencies]
 python = "^3.8.1"
 black = "^23.3.0"
-dlt = {version = "^0.2.10a2", allow-prereleases = true, extras = ["redshift", "bigquery", "postgres", "duckdb"]}
+dlt = {version = "^0.3.0", allow-prereleases = true, extras = ["redshift", "bigquery", "postgres", "duckdb"]}
 
 [tool.poetry.group.dev.dependencies]
 mypy = "^0.991"
@@ -25,7 +25,7 @@ types-requests = "^2.28.11.7"
 mimesis = "^7.0.0"
 requests-mock = "^1.10.0"
 
-[tool.black] 
+[tool.black]
 include = '.*py$'
 
 
