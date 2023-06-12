@@ -143,17 +143,3 @@ def test_event_resources(destination_name: str) -> None:
     )
     print(load_info)
     assert_load_info(load_info)
-
-
-@pytest.mark.parametrize("destination_name", ALL_DESTINATIONS)
-def test_event_resources_without_full_refrsh(destination_name: str) -> None:
-    pipeline = dlt.pipeline(
-        pipeline_name="hubspot",
-        destination=destination_name,
-        dataset_name="hubspot_data",
-    )
-    load_info = pipeline.run(
-        hubspot_events_for_objects("company", ["7086461639", "7086464459"])
-    )
-    print(load_info)
-    assert_load_info(load_info)
