@@ -144,6 +144,7 @@ def test_event_resources(destination_name: str) -> None:
     print(load_info)
     assert_load_info(load_info)
 
+
 @pytest.mark.parametrize("destination_name", ALL_DESTINATIONS)
 def test_event_resources_without_full_refrsh(destination_name: str) -> None:
     pipeline = dlt.pipeline(
@@ -156,4 +157,3 @@ def test_event_resources_without_full_refrsh(destination_name: str) -> None:
     )
     print(load_info)
     assert_load_info(load_info)
-    
