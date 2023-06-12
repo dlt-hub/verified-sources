@@ -13,11 +13,11 @@ def load_crm_data() -> None:
     """
 
     # Create a DLT pipeline object with the pipeline name, dataset name, and destination database type
+    # Add full_refresh=(True or False) if you need your pipeline to create the dataset in your destination
     p = dlt.pipeline(
         pipeline_name="hubspot_pipeline",
         dataset_name="hubspot",
         destination="redshift",
-        full_refresh=True,
     )
 
     # Run the pipeline with the HubSpot source connector
