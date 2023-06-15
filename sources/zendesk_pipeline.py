@@ -1,10 +1,11 @@
 import time
+from typing import Any
+
 import dlt
 from zendesk import pendulum, zendesk_chat, zendesk_talk, zendesk_support
-from dlt.common.telemetry import TRunMetrics
 
 
-def incremental_load_all_default() -> TRunMetrics:
+def incremental_load_all_default() -> Any:
     """
     Loads all possible tables for Zendesk Support, Chat, Talk
     """
@@ -27,7 +28,7 @@ def incremental_load_all_default() -> TRunMetrics:
     return info
 
 
-def load_support_with_pivoting() -> TRunMetrics:
+def load_support_with_pivoting() -> Any:
     """
     Loads Zendesk Support data with pivoting. Simply done by setting the pivot_ticket_fields to true - default option. Loads only the base tables.
     """
@@ -41,7 +42,7 @@ def load_support_with_pivoting() -> TRunMetrics:
     return info
 
 
-def incremental_load_all_start_time() -> TRunMetrics:
+def incremental_load_all_start_time() -> Any:
     """
     Implements incremental load when possible to Support, Chat and Talk Endpoints. The default behaviour gets data since the last load time saved in dlt state or
     1st Jan 2000 if there has been no previous loading of the resource. With this setting, the sources will load data since the given data for all incremental endpoints.
