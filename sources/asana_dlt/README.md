@@ -15,8 +15,6 @@ Resources that can be loaded using this verified source are:
 | 7 | users | individuals who have access to the Asana platform |
 
 ## Initialize the pipeline with Asana source
-
-To get started with your data pipeline, follow these steps:
 ```bash
 dlt init asana_dlt bigquery
 ```
