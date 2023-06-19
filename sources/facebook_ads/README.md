@@ -1,4 +1,4 @@
-# Facebook Ads README.md
+# Facebook Ads
 
 This Facebook dlt verified source and pipeline example loads data to a preferred destination using the Facebook Marketing API. It supports loading data from multiple endpoints, providing flexibility in the data you can retrieve. The following endpoints are available for loading data with this verified source:
 | Endpoint | Description |
@@ -32,10 +32,7 @@ To read about grabbing the Facebook Ads credentials and configuring the verified
     ```
     
 3. Enter credentials for your chosen destination as per the [docs](https://dlthub.com/docs/dlt-ecosystem/destinations/).
-4. Inside the `.dlt` folder, you'll find a file called `config.toml`, where you can securely store your pipeline configuration details.
-    
-    Here's what the `config.toml` looks like:
-    
+4.  Open `.dlt/config.toml`.
     ```toml
     [sources.facebook_ads]
     account_id = "1430280281077689"
@@ -66,7 +63,5 @@ To read about grabbing the Facebook Ads credentials and configuring the verified
     For example, the pipeline_name for the above pipeline example is `facebook_ads`, you may also use any custom name instead
     
 
-<aside>
-💡 To explore additional customizations for this pipeline, We recommend referring to the official `dlt` Facebook Ads documentation. It provides comprehensive information and guidance on how to further customize and tailor the pipeline to suit your specific needs. You can find the Facebook Ads verified source documentation in [Setup Guide: Facebook Ads](https://dlthub.com/docs/dlt-ecosystem/verified-sources/facebook_ads)
 
-</aside>
+💡 To explore additional customizations for this pipeline, We recommend referring to the official `dlt` Facebook Ads documentation. It provides comprehensive information and guidance on how to further customize and tailor the pipeline to suit your specific needs. You can find the Facebook Ads verified source documentation in [Setup Guide: Facebook Ads](https://dlthub.com/docs/dlt-ecosystem/verified-sources/facebook_ads)
