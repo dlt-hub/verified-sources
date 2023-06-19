@@ -1,6 +1,6 @@
 # Asana
 
-This verified source enables data loading from the Asana API to your preferred destination. It supports loading data from various endpoints, providing flexibility in the data you can retrieve. The following endpoints are available for data loading with this verified source.
+This verified source enables data loading from the Asana API to your preferred destination. It supports loading data from various endpoints, providing flexibility in the data you can retrieve.
 
 Resources that can be loaded using this verified source are:
 
@@ -17,12 +17,8 @@ Resources that can be loaded using this verified source are:
 ## Initialize the pipeline with Asana source
 
 To get started with your data pipeline, follow these steps:
-
-1. Initialize the pipeline with the following command:
-
-```
+```bash
 dlt init asana_dlt bigquery
-
 ```
 
 Here, we chose BigQuery as the destination. Alternatively, you can also choose redshift, duckdb, or any of the other [destinations](https://dlthub.com/docs/dlt-ecosystem/destinations/).
