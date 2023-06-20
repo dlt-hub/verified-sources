@@ -9,7 +9,7 @@ This Facebook dlt verified source and pipeline example loads data to a preferred
 | creatives | visual and textual elements that make up an advertisement |
 | ad_leads | information collected from users who have interacted with lead-generation ads |
 
-## Initialize the Facebook Ads verified source and pipeline example[](https://dlthub.com/docs/dlt-ecosystem/verified-sources/facebook_ads#initialize-the-facebook-ads-verified-source-and-pipeline-example)
+## Initialize the Facebook Ads verified source and pipeline example
 ```bash
 dlt init facebook_ads bigquery
 ```
@@ -18,7 +18,7 @@ Here, we chose BigQuery as the destination. Alternatively, you can also choose `
 
 ## Grab Facebook Ads credentials
 
-To read about grabbing the Facebook Ads credentials and configuring the verified source, please refer to the [full documentation here.](https://dlthub.com/docs/dlt-ecosystem/verified-sources/facebook_ads#grab-credentials)
+To read about grabbing the Facebook Ads credentials and configuring the verified source, please refer to the [full documentation here.](https://dlthub.com/docs/dlt-ecosystem/verified-sources/facebook_ads#grab-credentials).
 
 ## **Add credential**
 
@@ -64,4 +64,4 @@ To read about grabbing the Facebook Ads credentials and configuring the verified
     
 
 
-💡 To explore additional customizations for this pipeline, We recommend referring to the official `dlt` Facebook Ads documentation. It provides comprehensive information and guidance on how to further customize and tailor the pipeline to suit your specific needs. You can find the Facebook Ads verified source documentation in [Setup Guide: Facebook Ads](https://dlthub.com/docs/dlt-ecosystem/verified-sources/facebook_ads)
+💡 To explore additional customizations for this pipeline, we recommend referring to the official `dlt` Facebook Ads documentation. It provides comprehensive information and guidance on how to further customize and tailor the pipeline to suit your specific needs. You can find the Facebook Ads verified source documentation in [Setup Guide: Facebook Ads](https://dlthub.com/docs/dlt-ecosystem/verified-sources/facebook_ads).
