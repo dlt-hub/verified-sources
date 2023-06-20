@@ -5,8 +5,8 @@ This verified source can be used to load data from a [Google Sheets](https://www
 | Endpoints | Description |
 | --- | --- |
 | Tables | tables of the spreadsheet, tables have same name as individual sheets |
-| Named ranges | loaded as a separate column with an automatically generated header. |
-| Merged cells | retains only the cell value that was taken during the merge (e.g., top-leftmost), and every other cell in the merge is given a null value. |
+| Named ranges | loaded as a separate column with an automatically generated header |
+| Merged cells | retains only the cell value that was taken during the merge (e.g., top-leftmost), and every other cell in the merge is given a null value |
 
 
 Initialize a `dlt` project with the following command:
