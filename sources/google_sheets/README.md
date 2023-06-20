@@ -38,19 +38,19 @@ To read about grabbing the Google Sheets credentials and configuring the verifie
 
 ## Run the pipeline
 
-1. Install the requirements by using the following command
+1. Install the requirements by using the following command:
     
     ```bash
     pip install -r requirements.txt
     ```
     
-2. Run the pipeline by using the following command
+2. Run the pipeline by using the following command:
     
     ```bash
     python3 google_sheets_pipelines.py
     ```
     
-3. Use the following command to make sure that everything loaded as expected.
+3. Use the following command to make sure that everything loaded as expected:
     
     ```bash
     dlt pipeline google_sheets_pipeline show
