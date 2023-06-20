@@ -7,13 +7,13 @@ This `dlt` Github verified source, accesses the GitHub API from two `dlt` endpoi
 | github_reactions | loads the issues and pullRequests from the repository |
 | github_repo_events | loads the various repo_events from the repository like emoticons etc. |
 
-## Initialize the pipeline[](https://dlthub.com/docs/dlt-ecosystem/verified-sources/github#initialize-the-pipeline)
+## Initialize the pipeline
 
 ```bash
 dlt init github bigquery
 ```
 
-Here, we chose BigQuery as the destination. To choose a different destination, replace `bigquery` with your choice of destination.
+Here, we chose BigQuery as the destination. To choose a different destination, replace `bigquery` with your choice of [destination](https://dlthub.com/docs/dlt-ecosystem/destinations).
 
 ## Grab GitHub credentials & configure the verified source
 
@@ -56,5 +56,5 @@ To learn about grabbing the GitHub credentials and configuring the verified sour
     
 
 
-💡 To explore additional customizations for this pipeline, We recommend referring to the official `dlt` GitHub documentation. It provides comprehensive information and guidance on how to further customize and tailor the pipeline to suit your specific needs. You can find the `dlt` GitHub documentation in [Setup Guide: GitHub](https://dlthub.com/docs/dlt-ecosystem/verified-sources/github)
+💡 To explore additional customizations for this pipeline, we recommend referring to the official `dlt` GitHub documentation. It provides comprehensive information and guidance on how to further customize and tailor the pipeline to suit your specific needs. You can find the `dlt` GitHub documentation in [Setup Guide: GitHub](https://dlthub.com/docs/dlt-ecosystem/verified-sources/github).
 
