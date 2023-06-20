@@ -1,62 +1,67 @@
-# How to create credentials
+# Facebook Ads
 
-1. You must have Ads Manager active for your facebook account
-2. Find your account id. It is a long number against Account Overview dropdown or in the link ie. https://adsmanager.facebook.com/adsmanager/manage/accounts?act=10150974068878324
-3. Create new facebook app. For that you need developers account. The app must be a Business app.
-4. To get short lived access token use https://developers.facebook.com/tools/explorer/
-5. Select app you just created
-6. Select get user access token
-7. Add permissions: `ads_read`, `leads_retrieval` (to retrieve the leads)
-8. Generate token
-9. Exchange the token for the long lived access token.
+This Facebook dlt verified source and pipeline example loads data to a preferred destination using the Facebook Marketing API. It supports loading data from multiple endpoints, providing flexibility in the data you can retrieve. The following endpoints are available for loading data with this verified source:
+| Endpoint | Description |
+| --- | --- |
+| campaigns | a structured marketing initiative that focuses on a specific objective or goal |
+| ad_sets | a subset or group of ads within a campaign |
+| ads | an individual advertisement that is created and displayed within an ad set |
+| creatives | visual and textual elements that make up an advertisement |
+| ad_leads | information collected from users who have interacted with lead-generation ads |
 
-## Access token rotation
-The long lived token is valid for 60 days. The replacement process, to our best knowledge, is manual and exactly as the one above. We provide you a few help functions and an expiration notifications to make it slightly less painful.
-
-## Credentials layout
-
-You can place all the config values in `secrets.toml`:
-```toml
-[sources.facebook_ads]
-access_token="set me up!"
-account_id="set me up"
+## Initialize the Facebook Ads verified source and pipeline example
+```bash
+dlt init facebook_ads bigquery
 ```
 
-We strongly advice you to add the token expiration timestamp to get notified a week before token expiration that you need to rotate it. Right now the notifications are sent to logger with `error` level. (slack and mail support are coming soon!). In `config.toml` / `secrets.toml`
-```toml
-[sources.facebook_ads]
-access_token_expires_at=1688821881
-```
+Here, we chose BigQuery as the destination. Alternatively, you can also choose `redshift`, `duckdb`, or any of the other [destinations](https://dlthub.com/docs/dlt-ecosystem/destinations/).
 
-## Helper functions for long lived tokens and to get token expiration time
-In `fb.py` we provide two functions that make your life easier. To use the functions you should add `app_id` and `app_secret` of the Facebook app that you use to generate credentials to your `secrets.toml`.
-```toml
-[sources.facebook_ads]
-client_id="app_id"
-client_secret="app_secret"
-```
+## Grab Facebook Ads credentials
 
-and then ie from Python interactive command prompt you can get the long lived access token
-```python
-from facebook_ads import get_long_lived_token
-print(get_long_lived_token("your short lived token"))
-```
+To read about grabbing the Facebook Ads credentials and configuring the verified source, please refer to the [full documentation here](https://dlthub.com/docs/dlt-ecosystem/verified-sources/facebook_ads#grab-credentials).
 
-or get the expiration date, scopes etc. of the token you use
-```python
-from facebook_ads.fb import debug_access_token
-debug_access_token()
-```
+## **Add credential**
 
-# Rate limits
-This source detects facebook rate limits and retries with exponential back-off. Often it takes several minutes or longer for the source to make more requests. Retries based on facebook `error` documents are logged on warning level.
+1. Open `.dlt/secrets.toml`.
+2. Enter the `access_token` :
+    
+    ```toml
+    # put your secret values and credentials here. do not share this file and do not push it to github
+    [sources.facebook_ads]
+    access_token="set me up!"
+    ```
+    
+3. Enter credentials for your chosen destination as per the [docs](https://dlthub.com/docs/dlt-ecosystem/destinations/).
+4.  Open `.dlt/config.toml`.
+    ```toml
+    [sources.facebook_ads]
+    account_id = "1430280281077689"
+    ```
+    
+5. Replace the value of the account id.
 
-# Hacking the source
+## Run the pipeline example
 
-in `settings.py`
-- change the default fields for all objects
-- add new insights breakdown presets
+1. Install the necessary dependencies by running the following command:
+    
+    ```bash
+    pip install -r requirements.txt
+    ```
+    
+2. Now the pipeline can be run by using the command:
+    
+    ```bash
+    python3 facebook_ads_pipeline.py
+    ```
+    
+3. To make sure that everything is loaded as expected, use the command:
+    
+    ```bash
+    dlt pipeline <pipeline_name> show
+    ```
+    
+    For example, the pipeline_name for the above pipeline example is `facebook_ads`, you may also use any custom name instead.
+    
 
-in `fb.py`:
-- change the retry settings and add new retry conditions
-- change the timeouts when executing jobs
+
+💡 To explore additional customizations for this pipeline, we recommend referring to the official `dlt` Facebook Ads documentation. It provides comprehensive information and guidance on how to further customize and tailor the pipeline to suit your specific needs. You can find the Facebook Ads verified source documentation in [Setup Guide: Facebook Ads](https://dlthub.com/docs/dlt-ecosystem/verified-sources/facebook_ads).
