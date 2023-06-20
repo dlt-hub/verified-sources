@@ -1,8 +1,8 @@
 # Matomo
 
-Matomo is a free and open-source web analytics platform that allows website owners and businesses to gain detailed insights into their website and application performance. With this verified source, you can easily extract and seamlessly load data from Matomo to your preferred destination. This verifies source supports the following endpoints:
+Matomo is a free and open-source web analytics platform that allows website owners and businesses to gain detailed insights into their website and application performance. With this verified source, you can easily extract and seamlessly load data from Matomo to your preferred destination. This verifies source supports the following sources::
 
-| Endpoint | Description |
+| Source | Description |
 | --- | --- |
 | visits | the visits in the given site ID for the given period |
 | matomo_reports | the data is retrieved according to the given queries. For example, in the pipeline example |
