@@ -18,7 +18,7 @@ Here, we chose BigQuery as the destination. Alternatively, you can also choose `
 
 ## Grab Facebook Ads credentials
 
-To read about grabbing the Facebook Ads credentials and configuring the verified source, please refer to the [full documentation here.](https://dlthub.com/docs/dlt-ecosystem/verified-sources/facebook_ads#grab-credentials).
+To read about grabbing the Facebook Ads credentials and configuring the verified source, please refer to the [full documentation here](https://dlthub.com/docs/dlt-ecosystem/verified-sources/facebook_ads#grab-credentials).
 
 ## **Add credential**
 
@@ -60,7 +60,7 @@ To read about grabbing the Facebook Ads credentials and configuring the verified
     dlt pipeline <pipeline_name> show
     ```
     
-    For example, the pipeline_name for the above pipeline example is `facebook_ads`, you may also use any custom name instead
+    For example, the pipeline_name for the above pipeline example is `facebook_ads`, you may also use any custom name instead.
     
 
 
