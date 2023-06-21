@@ -28,9 +28,9 @@ Salesforce is a cloud-based platform that helps businesses manage customer relat
 | Event | merge | used to track and manage calendar-based events, such as meetings, appointments calls, or any other time-specific activities |
 
 To learn more about the write depositions i.e. merge, append and replace please refer to our official [documentation.](https://dlthub.com/docs/general-usage/incremental-loading)
-## Initialize the pipeline with Hubspot verified source
+## Initialize the pipeline with Salesforce verified source
 ```bash
-dlt init hubspot bigquery
+dlt init salesforce bigquery
 ```
 
 Here, we chose BigQuery as the destination. Alternatively, you can also choose redshift, duckdb, or any of the other [destinations.](https://dlthub.com/docs/dlt-ecosystem/destinations/)
@@ -71,7 +71,6 @@ To grab credentials and initialize the verified source, please refer to the [ful
     ```
     
     For example, the pipeline_name for the above pipeline is `salesforce`, you may also use any custom name instead.
-    
 
-    💡 To explore additional customizations for this pipeline, we recommend referring to the official dlt Salesforce verified documentation. It provides comprehensive information and guidance on how to further customize and tailor the pipeline to suit your specific needs. You can find the dlt Salesforce documentation in [Setup Guide: Salesforce.](https://dlthub.com/docs/dlt-ecosystem/verified-sources/salesforce)
+💡 To explore additional customizations for this pipeline, we recommend referring to the official dlt Salesforce verified documentation. It provides comprehensive information and guidance on how to further customize and tailor the pipeline to suit your specific needs. You can find the dlt Salesforce documentation in [Setup Guide: Salesforce.](https://dlthub.com/docs/dlt-ecosystem/verified-sources/salesforce)
     
