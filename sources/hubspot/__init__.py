@@ -31,8 +31,8 @@ import dlt
 from dlt.common import pendulum
 from dlt.common.typing import TDataItems
 from dlt.extract.source import DltResource
+from .helpers import fetch_data, _get_property_names
 
-from .helpers import fetch_data
 
 from .settings import (
     STARTDATE,
@@ -91,7 +91,9 @@ def contacts(api_key: str = dlt.secrets.value) -> Iterator[TDataItems]:
 @dlt.resource(name="deals", write_disposition="replace")
 def deals(api_key: str = dlt.secrets.value) -> Iterator[TDataItems]:
     """Hubspot deals resource"""
-    yield from fetch_data(CRM_DEALS_ENDPOINT, api_key=api_key)
+    props = _get_property_names(api_key=api_key, entity='deals')
+    params = {"properties": ",".join(props)}
+    yield from fetch_data(CRM_DEALS_ENDPOINT, api_key=api_key, **params)
 
 
 @dlt.resource(name="tickets", write_disposition="replace")
