@@ -12,12 +12,12 @@ To grab the Notion credentials, and initialize the pipeline, please refer to the
 
 ## Initialize the verified source and pipeline example
 ```bash
-dlt init notionbigquery
+dlt init notion bigquery
 ```
 
 Here, we chose BigQuery as the destination. Alternatively, you can also choose redshift, duckdb, or any of the other [destinations.](https://dlthub.com/docs/dlt-ecosystem/destinations/)
 
-## **Add credential**
+## **Add credentials**
 
 1. Open `.dlt/secrets.toml`.
 2. Enter the API key:
