@@ -54,7 +54,6 @@ def _parse_response(
     """
     # Parse the response JSON data
     _data = r.json()
-
     # Yield the properties of each result in the API response
     if "results" in _data:
         _objects: List[Dict[str, Any]] = []
@@ -121,6 +120,50 @@ def fetch_data(
 
     # Make the API request
     r = requests.get(url, headers=headers)
-
     # Parse the API response and yield the properties of each result
     return _parse_response(r, api_key=api_key, **kwargs)
+
+
+def _get_property_names(api_key: str, entity: str) -> List[str]:
+    """
+    Retrieve property names for a given entity from the HubSpot API.
+
+    Args:
+        entity: The entity name for which to retrieve property names.
+
+    Returns:
+        A list of property names.
+
+    Raises:
+        Exception: If an error occurs during the API request.
+    """
+    properties = []
+    endpoint = f"/crm/v3/properties/{entity}"
+    url = get_url(endpoint)
+    headers = _get_headers(api_key)
+
+    def fetch_data(url: str) -> None:
+        """
+        Fetch data from the specified URL and recursively fetches data from subsequent pages if available.
+
+        Args:
+            url: The URL to fetch data from.
+
+        Returns:
+            None
+        """
+        # Make the API request
+        r = requests.get(url, headers=headers)
+        if "results" in r.json():
+            properties.extend([prop["name"] for prop in r.json()['results']])
+
+        if "paging" in r.json():
+            next_link = r.json()["paging"].get("next", None)
+            if next_link:
+                # Replace the base URL with an empty string to get the relative URL for the next page
+                next_url = next_link["link"].replace(BASE_URL, "")
+                # Recursively call the `fetch_data` function to get the next page of results
+                fetch_data(next_url)
+
+    fetch_data(url)
+    return properties
