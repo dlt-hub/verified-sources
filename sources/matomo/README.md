@@ -1,14 +1,15 @@
 # Matomo
 
-Matomo is a free and open-source web analytics platform that allows website owners and businesses to gain detailed insights into their website and application performance. With this verified source, you can easily extract and seamlessly load data from Matomo to your preferred destination. This verifies source supports the following sources::
+Matomo is a free and open source web analytics platform that allows website owners and businesses to gain detailed insights into the performance of their websites and applications. With this verified source you can easily extract data from Matomo and seamlessly load it into your preferred destination. This verified source supports the following endpoints:
 
-| Source | Description |
+| Endpoint | Description |
 | --- | --- |
-| visits | the visits in the given site ID for the given period |
-| matomo_reports | the data is retrieved according to the given queries. For example, in the pipeline example |
+| matomo_visits | Loads a list of visits. Initially loads the current day's visits and any visits in initial_past_days. |
+| matomo_reports | The data is retrieved according to the specified queries. For example, in the pipeline example. |
+| get_last_visits | Retrieves the visits to the given site ID for the given time period. |
+| get_unique_visitors | Retrieves the information about the visitors from get_last_visits. |
 
-## Initialize the pipeline with Matomo verified source[](https://dlthub.com/docs/dlt-ecosystem/verified-sources/matomo#initialize-the-pipeline-with-matomo-verified-source)
-
+## Initialize the pipeline with Matomo verified source
 To get started with your data pipeline, follow these steps:
 ```bash
 dlt init matomo bigquery
@@ -45,7 +46,7 @@ To obtain the Matomo credentials, please refer to the [full documentation here.]
     ```
     
 5. Replace the value of `url` and `site_id` with the one that you copied above. This will ensure that your data pipeline can access the required Matomo resources.
-6. In order to track live events for a website, the **`live_event_site_id`** parameter must be set to the same value as the **`site_id`** parameter for that website.
+6. In order to track live events for a website, the `live_event_site_id` parameter must be set to the same value as the `site_id` parameter for that website.
 
 ## Run the pipeline
 
