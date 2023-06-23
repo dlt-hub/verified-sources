@@ -8,7 +8,7 @@ Shopify is an easy-to-use e-commerce solution that allows anyone to create and m
 | orders  | transactions made by customers on an online store |
 | products | the individual items or goods that are available for sale |
 
-## Initialize the pipeline with Hubspot verified source[](https://dlthub.com/docs/dlt-ecosystem/verified-sources/hubspot#initialize-the-pipeline-with-hubspot-verified-source)
+## Initialize the pipeline with Hubspot verified source
 
 ```bash
 dlt init shopify_dlt bigquery
@@ -16,7 +16,7 @@ dlt init shopify_dlt bigquery
 
 Here, we chose BigQuery as the destination. Alternatively, you can also choose redshift, duckdb, or any of the other [destinations](https://dlthub.com/docs/dlt-ecosystem/destinations/).
 
-## Grab credentials and setup Shopify verified source
+## Grab credentials
 
 To grab your Shopify credentials and initialise your verified source, see the [full documentation here](https://dlthub.com/docs/dlt-ecosystem/verified-sources/shopify).
 
