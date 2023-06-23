@@ -20,7 +20,7 @@ Here, we chose BigQuery as the destination. Alternatively, you can also choose r
 
 To grab your Shopify credentials and initialise your verified source, see the [full documentation here](https://dlthub.com/docs/dlt-ecosystem/verified-sources/shopify).
 
-## Add the credentials
+## Add credentials
 
 1. Open `.dlt/secrets.toml`.
 2. Enter the API access token:
