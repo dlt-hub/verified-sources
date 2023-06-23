@@ -31,7 +31,7 @@ To grab your Shopify credentials and initialise your verified source, see the [f
     ```
     
 3. Enter credentials for your chosen destination as per the [docs.](https://dlthub.com/docs/dlt-ecosystem/destinations/)
-4. Inside the **`.dlt`** folder, you'll find another file called **`config.toml`**, where you can store your Shopify URL. The `config.toml` looks like this:
+4. Inside the `.dlt` folder, you'll find another file called `config.toml`, where you can store your Shopify URL. The `config.toml` looks like this:
     ```toml
     [sources.shopify_dlt]
     shop_url = "Please set me up! 
@@ -41,7 +41,7 @@ To grab your Shopify credentials and initialise your verified source, see the [f
 
 ## Running the pipeline
 
-1. Before running the pipeline, ensure that you have installed all the necessary dependencies by running the command
+1. Before running the pipeline, ensure that you have installed all the necessary dependencies by running the command:
     ```bash
     pip install -r requirements.txt
     ```
