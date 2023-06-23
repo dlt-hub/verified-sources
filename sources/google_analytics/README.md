@@ -1,4 +1,4 @@
-# Google Analytics README.md
+# Google Analytics
 
 Google Analytics is a web analytics service that tracks and provides data about user engagement with your website or application. Using this `dlt` Google Analytics verified source and pipeline example, you can load the following resources from Google Analytics to your preferred destination.
 
@@ -10,13 +10,13 @@ Google Analytics is a web analytics service that tracks and provides data about 
 
 To read about authentication for the Google Analytics API, you can refer to our [full documentation here.](https://dlthub.com/docs/dlt-ecosystem/verified-sources/google_analytics#google-analytics-api-authentication)
 
-## Initialize the pipeline with Google Analytics verified source
+## Initialize the pipeline
 ```bash
 dlt init google_analytics bigquery
 ```
 Here, we chose BigQuery as the destination. Alternatively, you can also choose redshift, duckdb, or any of the other [destinations.](https://dlthub.com/docs/dlt-ecosystem/destinations/)
 
-## Grab Google Analytics credentials & configure verified source
+## Grab Google Analytics credentials
 To learn about grabbing the Google Analytics credentials and configuring the verified source, please refer to the [full documentation here.](https://dlthub.com/docs/dlt-ecosystem/verified-sources/google_analytics#google-analytics-api-authentication)
 
 ## Add credentials
