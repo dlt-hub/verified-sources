@@ -32,9 +32,9 @@ def process_ticket(
     Helper function that processes a ticket object and returns a dictionary of ticket data.
 
     Args:
-        ticket (Ticket): The ticket object returned by a Zenpy API call.
-        custom_fields (Dict[str, TCustomFieldInfo]): A dictionary containing all the custom fields available for tickets.
-        pivot_custom_fields (bool, optional): A boolean indicating whether to pivot all custom fields or not.
+        ticket: The ticket dict object returned by a Zendesk API call.
+        custom_fields: A dictionary containing all the custom fields available for tickets.
+        pivot_custom_fields: A boolean indicating whether to pivot all custom fields or not.
             Defaults to True.
 
     Returns:

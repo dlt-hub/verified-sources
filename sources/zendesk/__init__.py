@@ -87,7 +87,7 @@ def talk_resource(
         TDataItem: Dictionary containing the data from the endpoint.
     """
     # send query and process it
-    yield from zendesk_client.make_request(
+    yield from zendesk_client.get_pages(
         endpoint=talk_endpoint, data_point_name=talk_endpoint_name
     )
 
@@ -111,10 +111,10 @@ def talk_incremental_resource(
         TDataItem: Dictionary containing the data from the endpoint.
     """
     # send the request and process it
-    yield from zendesk_client.make_request_incremental(
+    yield from zendesk_client.get_pages_incremental(
         endpoint=talk_endpoint,
         data_point_name=talk_endpoint_name,
-        start_date=parse_iso_like_datetime(updated_at.last_value).int_timestamp,
+        start_time=parse_iso_like_datetime(updated_at.last_value).int_timestamp,
     )
 
 
@@ -158,10 +158,10 @@ def chats_table_resource(
     Yields:
         dict: A dictionary representing each row of data.
     """
-    chat_pages = zendesk_client.make_request_incremental(
+    chat_pages = zendesk_client.get_pages_incremental(
         "/api/v2/incremental/chats",
         "chats",
-        start_date=parse_iso_like_datetime(update_timestamp.last_value).int_timestamp,
+        start_time=parse_iso_like_datetime(update_timestamp.last_value).int_timestamp,
         params={"fields": "chats(*)"},
     )
     yield from chat_pages
@@ -199,7 +199,7 @@ def zendesk_support(
     ) -> Iterator[TDataItem]:
         # URL For ticket events
         # 'https://d3v-dlthub.zendesk.com/api/v2/incremental/ticket_events.json?start_time=946684800'
-        event_pages = zendesk_client.make_request_incremental(
+        event_pages = zendesk_client.get_pages_incremental(
             "/api/v2/incremental/ticket_events.json",
             "ticket_events",
             timestamp.last_value,
@@ -224,9 +224,7 @@ def zendesk_support(
         # get all custom fields and update state if needed, otherwise just load dicts into tables
         all_fields = list(
             chain.from_iterable(
-                zendesk_client.make_request(
-                    "/api/v2/ticket_fields.json", "ticket_fields"
-                )
+                zendesk_client.get_pages("/api/v2/ticket_fields.json", "ticket_fields")
             )
         )
         # all_fields = zendesk_client.ticket_fields()
@@ -268,7 +266,7 @@ def zendesk_support(
         # grab the custom fields from dlt state if any
         fields_dict = dlt.current.source_state().setdefault(CUSTOM_FIELDS_STATE_KEY, {})
         include_objects = ["users", "groups", "organisation", "brands"]
-        ticket_pages = zendesk_client.make_request_incremental(
+        ticket_pages = zendesk_client.get_pages_incremental(
             "/api/v2/incremental/tickets",
             "tickets",
             updated_at.last_value.int_timestamp,
@@ -306,7 +304,7 @@ def zendesk_support(
         # all_metric_events = zendesk_client.ticket_metric_events(
         #     start_time=parse_iso_like_datetime(time.last_value).int_timestamp
         # )
-        metric_event_pages = zendesk_client.make_request_incremental(
+        metric_event_pages = zendesk_client.get_pages_incremental(
             "/api/v2/incremental/ticket_metric_events",
             "ticket_metric_events",
             parse_iso_like_datetime(time.last_value).int_timestamp,
@@ -369,5 +367,5 @@ def basic_resource(
     """
 
     params = {"per_page": per_page}
-    pages = zendesk_client.make_request(endpoint_url, data_key, params)
+    pages = zendesk_client.get_pages(endpoint_url, data_key, params)
     yield from pages
