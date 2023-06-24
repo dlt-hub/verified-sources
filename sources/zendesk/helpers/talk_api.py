@@ -3,7 +3,7 @@ This module contains everything related to the API client class made to make req
 """
 
 from time import sleep
-from typing import Dict, Iterator, Optional, Tuple, Union
+from typing import Dict, Iterator, Optional, Tuple, Union, Any
 from dlt.common import logger
 from dlt.common.typing import DictStrStr, TDataItems, TSecretValue
 from dlt.sources.helpers.requests import client
@@ -26,8 +26,7 @@ class ZendeskAPIClient:
     auth: Optional[Tuple[str, TSecretValue]]
 
     def __init__(
-        self,
-        credentials: TZendeskCredentials,
+        self, credentials: TZendeskCredentials, url_prefix: Optional[str] = None
     ) -> None:
         """
         Initializer for the API client which is then used to make API calls to the ZendeskAPI
@@ -50,15 +49,18 @@ class ZendeskAPIClient:
                 "Wrong credentials type provided to ZendeskAPIClient. The credentials need to be of type: ZendeskCredentialsOAuth, ZendeskCredentialsToken or ZendeskCredentialsEmailPass"
             )
 
-        # set subdomain, this is always needed to configure endpoints
-        self.subdomain = credentials.subdomain
-        self.url = f"https://{self.subdomain}.zendesk.com"
+        # If url_prefix is set it overrides the default API URL (e.g. chat api uses zopim.com domain)
+        if url_prefix:
+            self.url = url_prefix
+        else:
+            self.subdomain = credentials.subdomain
+            self.url = f"https://{self.subdomain}.zendesk.com"
 
     def make_request(
         self,
         endpoint: str,
         data_point_name: str,
-        params: Optional[Dict[str, int]] = None,
+        params: Optional[Dict[str, Any]] = None,
     ) -> Iterator[TDataItems]:
         """
         Makes a get request on a given endpoint.
@@ -68,17 +70,30 @@ class ZendeskAPIClient:
         """
         # make request and keep looping until there is no next page
         get_url = f"{self.url}{endpoint}"
-        while get_url:
+        has_more_pages = True
+        while has_more_pages:
             response = client.get(
                 get_url, headers=self.headers, auth=self.auth, params=params
             )
             response.raise_for_status()
             response_json = response.json()
+            result = response_json[data_point_name]
+            yield result
             get_url = response_json.get("next_page", None)
-            yield response_json[data_point_name]
+            # Get URL includes params
+            params = {}
+            # Ticket API always returns next page URL resulting in infinite loop
+            # `end_of_stream` property signals there are no more pages.
+            # See https://developer.zendesk.com/api-reference/ticketing/ticket-management/incremental_exports/#json-format
+            end_of_stream = response_json.get("end_of_stream", False)
+            has_more_pages = bool(get_url and result) and not end_of_stream
 
     def make_request_incremental(
-        self, endpoint: str, data_point_name: str, start_date: int
+        self,
+        endpoint: str,
+        data_point_name: str,
+        start_date: int,
+        params: Optional[Dict[str, Any]] = None,
     ) -> Iterator[TDataItems]:
         """
         Makes a request to an incremental API endpoint
@@ -88,7 +103,8 @@ class ZendeskAPIClient:
         @:returns: A generator of json responses
         """
         # start date comes as unix epoch float, need to convert to an integer to make the call to the API
-        params = {"start_time": start_date}
+        params = params or {}
+        params["start_time"] = str(start_date)
         yield from self.make_request(
             endpoint=endpoint, data_point_name=data_point_name, params=params
         )
