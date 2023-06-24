@@ -8,7 +8,7 @@ Shopify is an easy-to-use e-commerce solution that allows anyone to create and m
 | orders  | transactions made by customers on an online store |
 | products | the individual items or goods that are available for sale |
 
-## Initialize the pipeline with Hubspot verified source
+## Initialize the pipeline
 
 ```bash
 dlt init shopify_dlt bigquery
