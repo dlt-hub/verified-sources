@@ -79,13 +79,17 @@ def hubspot() -> Sequence[DltResource]:
 @dlt.resource(name="companies", write_disposition="replace")
 def companies(api_key: str = dlt.secrets.value) -> Iterator[TDataItems]:
     """Hubspot companies resource"""
-    yield from fetch_data(CRM_COMPANIES_ENDPOINT, api_key=api_key)
+    props = _get_property_names(api_key=api_key, entity='companies')
+    params = {"properties": ",".join(props)}
+    yield from fetch_data(CRM_COMPANIES_ENDPOINT, api_key=api_key, **params)
 
 
 @dlt.resource(name="contacts", write_disposition="replace")
 def contacts(api_key: str = dlt.secrets.value) -> Iterator[TDataItems]:
     """Hubspot contacts resource"""
-    yield from fetch_data(CRM_CONTACTS_ENDPOINT, api_key=api_key)
+    props = _get_property_names(api_key=api_key, entity='contacts')
+    params = {"properties": ",".join(props)}
+    yield from fetch_data(CRM_CONTACTS_ENDPOINT, api_key=api_key, **params)
 
 
 @dlt.resource(name="deals", write_disposition="replace")
@@ -99,7 +103,9 @@ def deals(api_key: str = dlt.secrets.value) -> Iterator[TDataItems]:
 @dlt.resource(name="tickets", write_disposition="replace")
 def tickets(api_key: str = dlt.secrets.value) -> Iterator[TDataItems]:
     """Hubspot tickets resource"""
-    yield from fetch_data(CRM_TICKETS_ENDPOINT, api_key=api_key)
+    props = _get_property_names(api_key=api_key, entity='tickets')
+    params = {"properties": ",".join(props)}
+    yield from fetch_data(CRM_TICKETS_ENDPOINT, api_key=api_key, **params)
 
 
 @dlt.resource(name="products", write_disposition="replace")
