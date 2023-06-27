@@ -4,12 +4,12 @@ Zendesk is a cloud-based customer service and support platform. It offers a rang
 
 This guide will allow you to set up a pipeline that can automatically load data from three possible Zendesk API clients *(Zendesk Support, Zendesk Chat, Zendesk Talk)* to a destination of your choice. For a complete list of the endpoints supported by these API clients, see *[settings.py](https://github.com/dlt-hub/verified-sources/blob/master/sources/zendesk/settings.py)* in the Zendesk-verified source in the GitHub repository.
 
-## Initialize the pipeline[](https://dlthub.com/docs/dlt-ecosystem/verified-sources/hubspot#initialize-the-pipeline-with-hubspot-verified-source)
+## Initialize the pipeline
 
 ```bash
 dlt init zendesk bigquery
 ```
-Here, we chose BigQuery as the destination. Alternatively, you can also choose Redshift, duckdb, or any of the other [destinations](https://dlthub.com/docs/dlt-ecosystem/destinations/).
+Here, we chose bigquery as the destination. Alternatively, you can also choose redshift, duckdb, or any of the other [destinations.](https://dlthub.com/docs/dlt-ecosystem/destinations/)
 
 ## Setup verified source
 
@@ -58,8 +58,9 @@ To grab the Zendesk credentials and initialise the verified source and pipeline,
     
 3. To make sure everything loads as expected, use the command:
     ```bash
-    dlt pipeline zendesk_pipeline show
+    dlt pipeline <pipeline_name> show
     ```
+    For example, the pipeline_name for the above pipeline example is zendesk_pipeline, you may also use any custom name instead.
     
 
 
