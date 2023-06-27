@@ -2,7 +2,7 @@
 
 Zendesk is a cloud-based customer service and support platform. It offers a range of features including ticket management, self-service options, knowledgebase management, live chat, customer analytics, and conversations.
 
-This guide will allow you to set up a pipeline that can automatically load data from three possible Zendesk API clients *(Zendesk Support, Zendesk Chat, Zendesk Talk)* to a destination of your choice. For a complete list of the endpoints supported by these API clients, see *[settings.py](https://github.com/dlt-hub/verified-sources/blob/master/sources/zendesk/settings.py)* in the Zendesk-verified source in the GitHub repository.
+This guide will allow you to set up a pipeline that can automatically load data from three possible Zendesk API clients *(Zendesk Support, Zendesk Chat, Zendesk Talk)* to a destination of your choice. For a complete list of the endpoints supported by these API clients, see *[settings.py](https://github.com/dlt-hub/verified-sources/blob/master/sources/zendesk/settings.py)* in the Zendesk verified source in the GitHub repository.
 
 ## Initialize the pipeline
 
@@ -50,18 +50,18 @@ To grab the Zendesk credentials and initialise the verified source and pipeline,
     ```bash
     pip install -r requirements.txt
     ```
-    
+
 2. Run the pipeline using the following command:
     ```bash
     python3 zendesk_pipeline.py
     ```
-    
+
 3. To make sure everything loads as expected, use the command:
     ```bash
     dlt pipeline <pipeline_name> show
     ```
-    For example, the pipeline_name for the above pipeline example is zendesk_pipeline, you may also use any custom name instead.
-    
+    For example, the pipeline_name for the above pipeline example is `zendesk_pipeline`, you may also use any custom name instead.
 
 
-💡 To explore additional customizations for this pipeline, we recommend referring to the official dlt Zendesk verified source documentation. It provides comprehensive information and guidance on how to further customize and tailor the pipeline to suit your specific needs. You can find the dlt Zendesk documentation in [Setup Guide: Zendesk](https://dlthub.com/docs/dlt-ecosystem/verified-sources/zendesk)
+
+💡 To explore additional customizations for this pipeline, we recommend referring to the official dlt Zendesk verified source documentation. It provides comprehensive information and guidance on how to further customize and tailor the pipeline to suit your specific needs. You can find the dlt Zendesk documentation in [Setup Guide: Zendesk.](https://dlthub.com/docs/dlt-ecosystem/verified-sources/zendesk)
