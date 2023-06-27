@@ -2,6 +2,7 @@ import time
 from typing import Any
 
 import dlt
+from dlt.common.time import timedelta
 from zendesk import pendulum, zendesk_chat, zendesk_talk, zendesk_support
 
 
@@ -64,6 +65,27 @@ def incremental_load_all_start_time() -> Any:
     data_chat = zendesk_chat(incremental_start_time=start_time)
     data_talk = zendesk_talk(incremental_start_time=start_time)
     info = pipeline.run(data=[data, data_chat, data_talk])
+    return info
+
+
+def partioned_backloading() -> Any:
+    """
+    Load a fragment of historic data for one day only
+    """
+    start_time = pendulum.DateTime(year=2023, month=1, day=1, tzinfo=pendulum.UTC)
+
+    end_time = start_time + timedelta(days=1)
+
+    pipeline = dlt.pipeline(
+        pipeline_name="dlt_zendesk_pipeline",
+        destination="postgres",
+        full_refresh=False,
+        dataset_name="sample_zendesk_data",
+    )
+    data_support = zendesk_support(backload_range=(start_time, end_time))
+    data_chat = zendesk_chat(backload_range=(start_time, end_time))
+    data_talk = zendesk_talk(backload_range=(start_time, end_time))
+    info = pipeline.run([data_chat, data_support, data_talk])
     return info
 
 

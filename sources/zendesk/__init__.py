@@ -2,7 +2,7 @@
 Defines all the sources and resources needed for ZendeskSupport, ZendeskChat and ZendeskTalk
 """
 
-from typing import Iterator, Optional, Iterable, Tuple, List
+from typing import Iterator, Optional, Iterable, Tuple, List, Union, Dict, Any
 from itertools import chain
 
 import dlt
@@ -22,12 +22,17 @@ from .settings import (
     INCREMENTAL_ENDPOINTS,
     SUPPORT_EXTRA_ENDPOINTS,
 )
+from .helpers.backloading import SliceConfig
+
+
+TSlice = Tuple[pendulum.DateTime, pendulum.DateTime]
 
 
 @dlt.source(max_table_nesting=2)
 def zendesk_talk(
     credentials: TZendeskCredentials = dlt.secrets.value,
     incremental_start_time: Optional[pendulum.DateTime] = DEFAULT_START_DATE,
+    backload_range: Optional[TSlice] = None,
 ) -> Iterable[DltResource]:
     """
     Retrieves data from Zendesk Talk for phone calls and voicemails.
@@ -35,6 +40,7 @@ def zendesk_talk(
     Args:
         credentials (TZendeskCredentials): The credentials for authentication. Defaults to the value in the `dlt.secrets` object.
         incremental_start_time (Optional[pendulum.DateTime]): The start time for incremental loading. Defaults to DEFAULT_START_DATE.
+        backload_range: Optional tuple of start/end timestamps to load any results from a given time range.
 
     Yields:
         DltResource: Data resources from Zendesk Talk.
@@ -56,6 +62,20 @@ def zendesk_talk(
         )
 
     # adding incremental endpoints
+    kwargs: Dict[str, Any]
+    if backload_range:
+        kwargs = {
+            "backload_range": SliceConfig(
+                start=backload_range[0], end=backload_range[1], cursor_path="updated_at"
+            )
+        }
+    else:
+        kwargs = {
+            "updated_at": dlt.sources.incremental(
+                "updated_at", initial_value=incremental_start_time.isoformat()
+            ),
+        }
+
     for key, talk_incremental_endpoint in INCREMENTAL_ENDPOINTS.items():
         yield dlt.resource(
             talk_incremental_resource,
@@ -66,9 +86,7 @@ def zendesk_talk(
             zendesk_client=zendesk_client,
             talk_endpoint_name=key,
             talk_endpoint=talk_incremental_endpoint,
-            updated_at=dlt.sources.incremental(
-                "updated_at", initial_value=incremental_start_time.isoformat()
-            ),
+            **kwargs,
         )
 
 
@@ -96,7 +114,8 @@ def talk_incremental_resource(
     zendesk_client: ZendeskAPIClient,
     talk_endpoint_name: str,
     talk_endpoint: str,
-    updated_at: dlt.sources.incremental[str],
+    updated_at: Optional[dlt.sources.incremental[str]] = None,
+    backload_range: Optional[SliceConfig] = None,
 ) -> Iterator[TDataItem]:
     """
     Loads data from a Zendesk Talk endpoint with incremental loading.
@@ -110,11 +129,15 @@ def talk_incremental_resource(
     Yields:
         TDataItem: Dictionary containing the data from the endpoint.
     """
+    kwargs: Dict[str, Any] = {}
+    if backload_range:
+        kwargs = backload_range.to_endpoint_kwargs()
+    elif updated_at:
+        kwargs["start_time"] = parse_iso_like_datetime(updated_at.last_value)
+
     # send the request and process it
     yield from zendesk_client.get_pages_incremental(
-        endpoint=talk_endpoint,
-        data_point_name=talk_endpoint_name,
-        start_time=parse_iso_like_datetime(updated_at.last_value).int_timestamp,
+        endpoint=talk_endpoint, data_point_name=talk_endpoint_name, **kwargs
     )
 
 
@@ -122,6 +145,7 @@ def talk_incremental_resource(
 def zendesk_chat(
     credentials: ZendeskCredentialsOAuth = dlt.secrets.value,
     incremental_start_time: Optional[pendulum.DateTime] = DEFAULT_START_DATE,
+    backload_range: Optional[TSlice] = None,
 ) -> Iterable[DltResource]:
     """
     Retrieves data from Zendesk Chat for chat interactions.
@@ -134,19 +158,33 @@ def zendesk_chat(
         DltResource: Data resources from Zendesk Chat.
     """
 
+    if backload_range:
+        kwargs: Dict[str, Any] = {
+            "backload_range": SliceConfig(
+                start=backload_range[0],
+                end=backload_range[1],
+                cursor_path="update_timestamp",
+            )
+        }
+    else:
+        kwargs = {
+            "update_timestamp": dlt.sources.incremental(
+                "update_timestamp",
+                initial_value=incremental_start_time.isoformat(),
+            ),
+        }
+
     # Authenticate
     zendesk_client = ZendeskAPIClient(credentials, url_prefix="https://www.zopim.com")
     yield dlt.resource(chats_table_resource, name="chats", write_disposition="append")(
-        zendesk_client,
-        dlt.sources.incremental(
-            "update_timestamp|updated_timestamp",
-            initial_value=incremental_start_time.isoformat(),
-        ),
+        zendesk_client, **kwargs
     )
 
 
 def chats_table_resource(
-    zendesk_client: ZendeskAPIClient, update_timestamp: dlt.sources.incremental[str]
+    zendesk_client: ZendeskAPIClient,
+    update_timestamp: Optional[dlt.sources.incremental[str]] = None,
+    backload_range: Optional[SliceConfig] = None,
 ) -> Iterator[TDataItems]:
     """
     Resource for Chats
@@ -158,11 +196,14 @@ def chats_table_resource(
     Yields:
         dict: A dictionary representing each row of data.
     """
+    kwargs: Dict[str, Any] = {}
+    if backload_range:
+        kwargs = backload_range.to_endpoint_kwargs()
+    elif update_timestamp:
+        kwargs = dict(start_time=parse_iso_like_datetime(update_timestamp.last_value))
+
     chat_pages = zendesk_client.get_pages_incremental(
-        "/api/v2/incremental/chats",
-        "chats",
-        start_time=parse_iso_like_datetime(update_timestamp.last_value).int_timestamp,
-        params={"fields": "chats(*)"},
+        "/api/v2/incremental/chats", "chats", params={"fields": "chats(*)"}, **kwargs
     )
     yield from chat_pages
 
@@ -173,6 +214,7 @@ def zendesk_support(
     load_all: bool = True,
     pivot_ticket_fields: bool = True,
     incremental_start_time: Optional[pendulum.DateTime] = DEFAULT_START_DATE,
+    backload_range: Optional[TSlice] = None,
 ) -> Iterable[DltResource]:
     """
     Retrieves data from Zendesk Support for tickets, users, brands, organizations, and groups.
@@ -193,16 +235,19 @@ def zendesk_support(
     @dlt.resource(primary_key="id", write_disposition="append")
     def ticket_events(
         zendesk_client: ZendeskAPIClient,
-        timestamp: dlt.sources.incremental[int] = dlt.sources.incremental(
-            "timestamp", initial_value=incremental_start_time_ts
-        ),
+        timestamp: Optional[dlt.sources.incremental[int]] = None,
+        backload_range: Optional[SliceConfig] = None,
     ) -> Iterator[TDataItem]:
-        # URL For ticket events
-        # 'https://d3v-dlthub.zendesk.com/api/v2/incremental/ticket_events.json?start_time=946684800'
+        kwargs: Dict[str, Any] = {}
+        if backload_range:
+            kwargs = backload_range.to_endpoint_kwargs()
+        elif timestamp:
+            kwargs = {
+                "start_time": pendulum.from_timestamp(timestamp.last_value),
+            }
+
         event_pages = zendesk_client.get_pages_incremental(
-            "/api/v2/incremental/ticket_events.json",
-            "ticket_events",
-            timestamp.last_value,
+            "/api/v2/incremental/ticket_events.json", "ticket_events", **kwargs
         )
         yield from event_pages
 
@@ -244,9 +289,8 @@ def zendesk_support(
         zendesk_client: ZendeskAPIClient,
         pivot_fields: bool = True,
         per_page: int = 1000,
-        updated_at: dlt.sources.incremental[
-            pendulum.DateTime
-        ] = dlt.sources.incremental("updated_at", initial_value=incremental_start_time),
+        updated_at: Optional[dlt.sources.incremental[pendulum.DateTime]] = None,
+        backload_range: Optional[SliceConfig] = None,
     ) -> Iterator[TDataItem]:
         """
         Resource for tickets table. Uses DLT state to handle column renaming of custom fields to prevent changing the names of said columns.
@@ -262,6 +306,11 @@ def zendesk_support(
         Yields:
             TDataItem: Dictionary containing the ticket data.
         """
+        kwargs: Dict[str, Any] = {}
+        if backload_range:
+            kwargs = backload_range.to_endpoint_kwargs()
+        elif updated_at:
+            kwargs = {"start_time": updated_at.last_value}
 
         # grab the custom fields from dlt state if any
         fields_dict = dlt.current.source_state().setdefault(CUSTOM_FIELDS_STATE_KEY, {})
@@ -269,8 +318,8 @@ def zendesk_support(
         ticket_pages = zendesk_client.get_pages_incremental(
             "/api/v2/incremental/tickets",
             "tickets",
-            updated_at.last_value.int_timestamp,
-            params={"include": ",".join(include_objects)},
+            params={"include": ",".join(include_objects), "per_page": str(per_page)},
+            **kwargs,
         )
         for page in ticket_pages:
             yield [
@@ -283,9 +332,8 @@ def zendesk_support(
     )
     def ticket_metric_table(
         zendesk_client: ZendeskAPIClient,
-        time: dlt.sources.incremental[str] = dlt.sources.incremental(
-            "time", initial_value=incremental_start_time_iso_str
-        ),
+        time: Optional[dlt.sources.incremental[str]] = None,
+        backload_range: Optional[SliceConfig] = None,
     ) -> Iterator[TDataItem]:
         """
         Resource for ticket metric events table. Returns all the ticket metric events from the starting date,
@@ -300,26 +348,63 @@ def zendesk_support(
         Yields:
             TDataItem: Dictionary containing the ticket metric event data.
         """
-        # "https://example.zendesk.com/api/v2/incremental/ticket_metric_events?start_time=1332034771"
-        # all_metric_events = zendesk_client.ticket_metric_events(
-        #     start_time=parse_iso_like_datetime(time.last_value).int_timestamp
-        # )
+        kwargs: Dict[str, Any] = {}
+        if backload_range:
+            kwargs = backload_range.to_endpoint_kwargs()
+        elif time:
+            kwargs = {"start_time": parse_iso_like_datetime(time.last_value)}
+
         metric_event_pages = zendesk_client.get_pages_incremental(
-            "/api/v2/incremental/ticket_metric_events",
-            "ticket_metric_events",
-            parse_iso_like_datetime(time.last_value).int_timestamp,
+            "/api/v2/incremental/ticket_metric_events", "ticket_metric_events", **kwargs
         )
         yield from metric_event_pages
 
     # Authenticate
     zendesk_client = ZendeskAPIClient(credentials)
 
+    if backload_range:
+        ticket_kwargs: Dict[str, Any] = {
+            "backload_range": SliceConfig(
+                start=backload_range[0], end=backload_range[1], cursor_path="updated_at"
+            )
+        }
+        ticket_event_kwargs: Dict[str, Any] = {
+            "backload_range": SliceConfig(
+                start=backload_range[0], end=backload_range[1], cursor_path="timestamp"
+            )
+        }
+        ticket_metric_kwargs: Dict[str, Any] = {
+            "backload_range": SliceConfig(
+                start=backload_range[0], end=backload_range[1], cursor_path="time"
+            )
+        }
+    else:
+        ticket_kwargs = {
+            "updated_at": dlt.sources.incremental(
+                "updated_at", initial_value=incremental_start_time
+            ),
+        }
+        ticket_event_kwargs = {
+            "timestamp": dlt.sources.incremental(
+                "timestamp", initial_value=incremental_start_time_ts
+            )
+        }
+        ticket_metric_kwargs = {
+            "time": dlt.sources.incremental(
+                "time", initial_value=incremental_start_time_iso_str
+            )
+        }
+
     # loading base tables
     resource_list = [
         ticket_fields_table(zendesk_client=zendesk_client),
-        ticket_events(zendesk_client=zendesk_client),
-        ticket_table(zendesk_client=zendesk_client, pivot_fields=pivot_ticket_fields),
-        ticket_metric_table(zendesk_client=zendesk_client),
+        ticket_events(zendesk_client=zendesk_client, **ticket_event_kwargs),
+        ticket_table(
+            zendesk_client=zendesk_client,
+            pivot_fields=pivot_ticket_fields,
+            **ticket_kwargs,
+        ),
+        ticket_metric_table(zendesk_client=zendesk_client, **ticket_metric_kwargs),
     ]
 
     # other tables to be loaded
