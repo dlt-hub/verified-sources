@@ -9,7 +9,7 @@ Since the endpoints available in Strapi depend on your API setup created, you ne
 dlt init strapi bigquery
 ```
 
-Here, we chose BigQuery as the destination. Alternatively, you can also choose redshift, duckdb, or any of the other [destinations.](https://dlthub.com/docs/dlt-ecosystem/destinations/).
+Here, we chose BigQuery as the destination. Alternatively, you can also choose redshift, duckdb, or any of the other [destinations.](https://dlthub.com/docs/dlt-ecosystem/destinations/)
 
 ## Setup verified source
 
