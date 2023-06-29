@@ -1,5 +1,5 @@
 import dlt
-from .unstructured import unstructured_source, unstructured_resource
+from .unstructured import unstructured_source, filesystem_source
 
 
 if __name__ == "__main__":
@@ -8,15 +8,10 @@ if __name__ == "__main__":
         pipeline_name='unstructured', destination='duckdb', dataset_name='unstructured_data'
     )
 
-    # print credentials by running the resource
-    data = list(unstructured_resource())
-
-    # print the data yielded from resource
-    print(data)
-    exit()
-
+    data = filesystem_source().with_resources("local_folder")
+    data_extractor = unstructured_source(data)
     # run the pipeline with your parameters
-    load_info = pipeline.run(unstructured_source())
+    load_info = pipeline.run(data_extractor)
 
     # pretty print the information on data that was loaded
     print(load_info)
