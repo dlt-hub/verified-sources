@@ -9,6 +9,7 @@ ENTITY_MAPPINGS = [
     ("pipeline", None, None),
     ("stage", None, None),
     ("user", None, None),
+    ("lead", None, None),
 ]
 
 RECENTS_ENTITIES = {
@@ -24,4 +25,5 @@ RECENTS_ENTITIES = {
     "product": "products",
     "stage": "stages",
     "user": "users",
+    "lead": "leads",
 }
