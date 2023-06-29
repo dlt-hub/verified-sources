@@ -4,7 +4,6 @@ This module contains everything related to the API client class made to make req
 
 from time import sleep
 from typing import Dict, Iterator, Optional, Tuple, Union, Any
-from dlt.common import pendulum
 from dlt.common import logger
 from dlt.common.typing import DictStrStr, TDataItems, TSecretValue
 from dlt.sources.helpers.requests import client
@@ -14,7 +13,6 @@ from .credentials import (
     ZendeskCredentialsToken,
     TZendeskCredentials,
 )
-from .api_helpers import parse_iso_or_timestamp
 
 
 class ZendeskAPIClient:
@@ -100,9 +98,7 @@ class ZendeskAPIClient:
         self,
         endpoint: str,
         data_point_name: str,
-        start_time: pendulum.DateTime,
-        until: Optional[pendulum.DateTime] = None,
-        timestamp_field: Optional[str] = None,
+        start_time: int,
         params: Optional[Dict[str, Any]] = None,
     ) -> Iterator[TDataItems]:
         """
@@ -117,46 +113,9 @@ class ZendeskAPIClient:
         Returns:
             Generator of pages, each page is a list of dict data items
         """
-        if until and timestamp_field:
-            yield from self._get_pages_until(
-                endpoint,
-                data_point_name,
-                timestamp_field,
-                until,
-                start_time,
-                params=params,
-            )
-            return
         # start date comes as unix epoch float, need to convert to an integer to make the call to the API
         params = params or {}
-        params["start_time"] = str(start_time.int_timestamp)
+        params["start_time"] = str(start_time)
         yield from self.get_pages(
             endpoint=endpoint, data_point_name=data_point_name, params=params
         )
-
-    def _get_pages_until(
-        self,
-        endpoint: str,
-        data_point_name: str,
-        timestamp_field: str,
-        until: pendulum.DateTime,
-        start_time: Optional[pendulum.DateTime],
-        params: Optional[Dict[str, Any]] = None,
-    ) -> Iterator[TDataItems]:
-        params = params or {}
-        params["start_time"] = str(start_time.int_timestamp)
-
-        def _page_filtered(page: TDataItems) -> TDataItems:
-            for item in page:
-                ts = parse_iso_or_timestamp(item[timestamp_field])
-                if ts >= until:
-                    return
-                yield item
-
-        for page in self.get_pages(
-            endpoint=endpoint, data_point_name=data_point_name, params=params
-        ):
-            page = list(_page_filtered(page))
-            if not page:
-                return
-            yield page

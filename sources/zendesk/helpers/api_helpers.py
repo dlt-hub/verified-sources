@@ -1,4 +1,4 @@
-from typing import Optional, TypedDict, Dict, Union
+from typing import Optional, TypedDict, Dict
 from dlt.common import pendulum
 from dlt.common.typing import DictStrAny, DictStrStr, TDataItem
 from dlt.common.time import parse_iso_like_datetime
@@ -20,12 +20,6 @@ class TCustomFieldInfo(TypedDict):
 def _parse_date_or_none(value: Optional[str]) -> Optional[pendulum.DateTime]:
     if not value:
         return None
-    return parse_iso_like_datetime(value)
-
-
-def parse_iso_or_timestamp(value: Union[str, int, float]) -> pendulum.DateTime:
-    if isinstance(value, (int, float)):
-        return pendulum.from_timestamp(value)
     return parse_iso_like_datetime(value)
 
 
