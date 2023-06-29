@@ -45,7 +45,7 @@ In this section you will learn how to contribute changes to an existing pipeline
       `sources` folder!) and see if there are any errors and wether the expected data ends up in
       your destination.
    3. Adjust your tests to test for the new features you have added or changes you have made in
-      `./tests/chess/test_chess_source.py` and run the tests again duckdb locally with this command:
+      `./tests/chess/test_chess_source.py` and run the tests against duckdb locally with this command:
       `pytest tests/chess`.
    4. Run the linter and formatter to check for any problems: `make lint-code`.
 3. Proceed to the pull request section to create a pull request to the main repo.
@@ -91,12 +91,12 @@ your source will be distributed to other users once it is accepted into our repo
 ## Coding Prerequisites
 
 To start development in the verified sources repository, there are a few steps you need to do to
-ensure you have the setup.
+ensure you have a working setup.
 
 ### 1. Prepare the repository
 
 1. Fork the [verified-sources](https://github.com/dlt-hub/verified-sources) repository on GitHub,
-   alternative check out this repository if you have the right to create Pull Requests directly.
+   alternatively check out this repository if you have the right to create Pull Requests directly.
 2. Clone the forked repository:
     ```sh
     git clone https://github.com/dlt-hub/verified-sources.git
@@ -171,7 +171,7 @@ If this command fails, something is not set up correctly yet.
 If your source requires additional dependencies that are not available in `dlt` they may be added as
 follows:
 
-1. Use `poetry` to add it to the group with the same name as the source. Example: chess source uses
+1. Use `poetry` to add it to the group with the same name as the source. Example: the chess source uses
    `python-chess` to decode game moves. The dependency was added with
    `poetry add -G chess python-chess`.
 2. Add a `requirements.txt` file in **source folder** and add the dependency there.
@@ -228,7 +228,7 @@ Look at `tests/chess/test_chess_source.py` for an example. The line
 @pytest.mark.parametrize('destination_name', ALL_DESTINATIONS)
 ```
 
-makes sure that each test runs against all destinations (as defined in `ALL_DESTINATIONS` global
+makes sure that each test runs against all destinations (as defined in the `ALL_DESTINATIONS` global
 variables).
 
 The simplest possible test just creates a pipeline with your source and then issues a run on a
@@ -244,7 +244,7 @@ Your tests will be run both locally and on CI. It means that a few instances of 
 executed in parallel, and they will be sharing resources. A few simple rules make that possible.
 
 1. Always use `full_refresh` when creating pipelines in test. This will make sure that data is
-   loaded into new schema/dataset. Fixtures in `conftest.py` will drop datasets created during load.
+   loaded into a new schema/dataset. Fixtures in `conftest.py` will drop datasets created during load.
 2. When creating any fixtures for your tests, make sure that fixture is unique for your test
    instance.
 
@@ -310,7 +310,7 @@ from .helpers import api_calls
 
 ### Source config and credentials
 
-If you add a new source that require a secret value, please add the secrets to
+If you add a new source that requires a secret value, please add the secrets to
 `sources/.dlt/secrets.toml`, this file will not be committed into the git repository. When adding
 the source config and secrets please follow the
 [section layout for sources](https://github.com/dlt-hub/dlt/blob/devel/docs/technical/secrets_and_config.md#default-layout-and-default-key-lookup-during-injection).
