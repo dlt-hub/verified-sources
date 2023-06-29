@@ -53,8 +53,13 @@ asana = "^3.2.1"
 [tool.poetry.group.facebook_ads.dependencies]
 facebook-business = "^17.0.2"
 
+
 [tool.poetry.group.salesforce.dependencies]
 simple-salesforce = "^1.12.4"
+
+
+[tool.poetry.group.unstructured_data.dependencies]
+langchain = "^0.0.219"
 
 [build-system]
 requires = ["poetry-core"]
