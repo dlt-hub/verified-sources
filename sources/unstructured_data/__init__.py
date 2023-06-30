@@ -1,8 +1,8 @@
 import dlt
 import os
-from typing import Dict, List, Sequence
+from typing import Dict, List, Sequence, Iterable
 from pathlib import Path
-from dlt.extract.source import DltResource, DltSource
+from dlt.extract.source import DltResource, DltSource, TDataItem
 from .helpers import process_file_to_structured, filetype_mapper
 
 
@@ -13,7 +13,7 @@ def filesystem_source(data_dir=dlt.secrets.value, extensions: Sequence = (".txt"
     def local_folder():
         files = (p.resolve() for p in Path(data_dir).glob("**/*") if p.suffix in set(extensions))
         for file in files:
-           yield file
+            yield file
 
     return local_folder
 
@@ -25,7 +25,7 @@ def unstructured_source(data_resource: DltResource, queries: Dict[str, str]) -> 
         data_from=data_resource,
         name=f"unstructured_data_from_{data_resource.name}"
     )
-    def unstructured_resource(file_path):
+    def unstructured_resource(file_path) -> Iterable[TDataItem]:
         extension = file_path.suffix
         loader = filetype_mapper[extension](file_path)
         yield process_file_to_structured(loader, queries)
