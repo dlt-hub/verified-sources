@@ -53,6 +53,7 @@ def pipedrive_source(
         products
         stages
         users
+        leads
 
     For custom fields rename the `custom_fields_mapping` resource must be selected or loaded before other resources.
 
