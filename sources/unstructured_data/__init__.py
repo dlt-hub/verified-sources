@@ -19,7 +19,8 @@ def filesystem_source(data_dir=dlt.secrets.value, extensions: Sequence = (".txt"
 
 
 @dlt.source(name="unstructured")
-def unstructured_source(data_resource: DltResource, queries: Dict[str, str]) -> DltResource:
+def unstructured_source(data_resource: DltResource, queries: Dict[str, str], openai_api_key: str = dlt.secrets.value,) -> DltResource:
+    os.environ['OPENAI_API_KEY'] = openai_api_key
 
     @dlt.transformer(
         data_from=data_resource,
