@@ -1,5 +1,6 @@
 import dlt
 from unstructured_data import unstructured_source
+from filesystem import local_folder
 
 
 if __name__ == "__main__":
@@ -15,7 +16,9 @@ if __name__ == "__main__":
         "invoice_number": "What is the invoice number? Just return the number",
         "service_description": "What is the description of the service that this invoice is for? Just return the description",
     }
-    data_extractor = unstructured_source(queries)
+
+    data_resource = local_folder(extensions=(".txt",))
+    data_extractor = unstructured_source(data_resource, queries)
     # run the pipeline with your parameters
     load_info = pipeline.run(data_extractor)
 
