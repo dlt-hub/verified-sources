@@ -17,7 +17,7 @@ filetype_mapper = {
     }
 
 
-def process_file_to_structured(loader, queries: Dict[str: str]) -> Dict:
+def process_file_to_structured(loader, queries: Dict[str, str]) -> Dict:
     index = VectorstoreIndexCreator().from_loaders([loader])
     response = {"file_name": loader.file_path}
     for k, query in queries.items():
