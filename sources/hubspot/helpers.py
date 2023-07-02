@@ -1,9 +1,10 @@
 """Hubspot source helpers"""
 
 import urllib.parse
-from typing import Iterator, Dict, Any, List, Optional
+from typing import Iterator, Dict, Any, List, Optional, Iterable, Tuple
 
 from dlt.sources.helpers import requests
+from .settings import OBJECT_TYPE_PLURAL
 
 BASE_URL = "https://api.hubapi.com/"
 
@@ -29,12 +30,37 @@ def _get_headers(api_key: str) -> Dict[str, str]:
     return dict(authorization=f"Bearer {api_key}")
 
 
-def fetch_data(
+def extract_property_history(objects: List[Dict[str, Any]]) -> Iterator[Dict[str, Any]]:
+    for item in objects:
+        history = item.get("propertiesWithHistory")
+        if not history:
+            return
+        # Yield a flat list of property history entries
+        for key, changes in history.items():
+            if not changes:
+                continue
+            for entry in changes:
+                yield {"object_id": item["id"], "property_name": key, **entry}
+
+
+def fetch_object(
     endpoint: str, api_key: str, params: Optional[Dict[str, Any]] = None
-) -> Iterator[List[Dict[str, Any]]]:
+) -> Dict[str, Any]:
+    """Fetch a single data object from the API. From e.g. `.../contacts/{id}` endpoint"""
+    url = get_url(endpoint)
+    headers = _get_headers(api_key)
+    r = requests.get(url, headers=headers, params=params)
+    return r.json()  # type: ignore
+
+
+def fetch_data_with_history(
+    endpoint: str, api_key: str, params: Optional[Dict[str, Any]] = None
+) -> Iterator[Tuple[List[Dict[str, Any]], List[Dict[str, Any]]]]:
     """
     Fetch data from HUBSPOT endpoint using a specified API key and yield the properties of each result.
     For paginated endpoint this function yields item from all pages.
+    For objects that support it and When params includes `propertiesWithHistory`
+    a flattened list of history entries is included in the return tuple.
 
     Args:
         endpoint (str): The endpoint to fetch data from, as a string.
@@ -42,7 +68,7 @@ def fetch_data(
         params: Optional dict of query params to include in the request
 
     Yields:
-        List[dict]: The properties of each result in the API response.
+        A tuple consisting of 1. List of CRM object dicts and 2. List of property history entries
 
     Raises:
         requests.exceptions.HTTPError: If the API returns an HTTP error status code.
@@ -57,7 +83,6 @@ def fetch_data(
 
         This function also includes a retry decorator that will automatically retry the API call up to
         3 times with a 5-second delay between retries, using an exponential backoff strategy.
-
     """
     # Construct the URL and headers for the API request
     url = get_url(endpoint)
@@ -75,6 +100,9 @@ def fetch_data(
             _objects: List[Dict[str, Any]] = []
             for _result in _data["results"]:
                 _obj = _result.get("properties", _result)
+                if "id" not in _obj and "id" in _result:
+                    # Move id from properties to top level
+                    _obj["id"] = _result["id"]
                 if "associations" in _result:
                     for association in _result["associations"]:
                         __values = [
@@ -92,8 +120,7 @@ def fetch_data(
 
                         _obj[association] = __values
                 _objects.append(_obj)
-            if _objects:
-                yield _objects
+            yield _objects, list(extract_property_history(_data["results"]))
 
         # Follow pagination links if they exist
         _next = _data.get("paging", {}).get("next", None)
@@ -106,7 +133,17 @@ def fetch_data(
             _data = None
 
 
-def _get_property_names(api_key: str, entity: str) -> List[str]:
+def fetch_data(
+    endpoint: str, api_key: str, params: Optional[Dict[str, Any]] = None
+) -> Iterator[List[Dict[str, Any]]]:
+    """Fetch data objects from the hubspot API.
+    Same as `fetch_data_with_history` but does not include history entries.
+    """
+    for page, _ in fetch_data_with_history(endpoint, api_key, params=params):
+        yield page
+
+
+def _get_property_names(api_key: str, object_type: str) -> List[str]:
     """
     Retrieve property names for a given entity from the HubSpot API.
 
@@ -120,7 +157,7 @@ def _get_property_names(api_key: str, entity: str) -> List[str]:
         Exception: If an error occurs during the API request.
     """
     properties = []
-    endpoint = f"/crm/v3/properties/{entity}"
+    endpoint = f"/crm/v3/properties/{OBJECT_TYPE_PLURAL[object_type]}"
 
     for page in fetch_data(endpoint, api_key):
         properties.extend([prop["name"] for prop in page])
