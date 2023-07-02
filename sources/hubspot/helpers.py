@@ -43,16 +43,6 @@ def extract_property_history(objects: List[Dict[str, Any]]) -> Iterator[Dict[str
                 yield {"object_id": item["id"], "property_name": key, **entry}
 
 
-def fetch_object(
-    endpoint: str, api_key: str, params: Optional[Dict[str, Any]] = None
-) -> Dict[str, Any]:
-    """Fetch a single data object from the API. From e.g. `.../contacts/{id}` endpoint"""
-    url = get_url(endpoint)
-    headers = _get_headers(api_key)
-    r = requests.get(url, headers=headers, params=params)
-    return r.json()  # type: ignore
-
-
 def fetch_data_with_history(
     endpoint: str, api_key: str, params: Optional[Dict[str, Any]] = None
 ) -> Iterator[Tuple[List[Dict[str, Any]], List[Dict[str, Any]]]]:
