@@ -2,9 +2,11 @@ from unittest.mock import patch
 
 import dlt
 import pytest
+from itertools import chain
+from typing import Any
 
 from dlt.sources.helpers import requests
-from sources.hubspot import hubspot, hubspot_events_for_objects
+from sources.hubspot import hubspot, hubspot_events_for_objects, contacts
 from sources.hubspot.helpers import fetch_data
 from sources.hubspot.settings import (
     CRM_CONTACTS_ENDPOINT,
@@ -21,6 +23,8 @@ from tests.hubspot.mock_data import (
     mock_products_data,
     mock_tickets_data,
     mock_quotes_data,
+    mock_contacts_with_history,
+    mock_contacts_properties,
 )
 from tests.utils import (
     ALL_DESTINATIONS,
@@ -108,6 +112,33 @@ def test_fetch_data_quotes(mock_response):
         data = list(fetch_data(CRM_QUOTES_ENDPOINT, "12345"))[0]
         assert len(data) == len(expected_data)
         assert data == expected_data
+
+
+@pytest.mark.parametrize("destination_name", ALL_DESTINATIONS)
+def test_resource_contacts_with_history(destination_name: str, mock_response) -> None:
+    def fake_get(url: str, *args, **kwargs) -> Any:  # type: ignore[no-untyped-def]
+        if "/properties" in url:
+            return mock_response(json_data=mock_contacts_properties)
+        return mock_response(json_data=mock_contacts_with_history)
+
+    expected_rows = []
+    for contact in mock_contacts_with_history["results"]:
+        for items in contact["propertiesWithHistory"].values():  # type: ignore[attr-defined]
+            expected_rows.extend(items)
+
+    with patch("dlt.sources.helpers.requests.get", side_effect=fake_get):
+        pipeline = dlt.pipeline(
+            pipeline_name="hubspot",
+            destination=destination_name,
+            dataset_name="hubspot_data",
+            full_refresh=True,
+        )
+        load_info = pipeline.run(contacts(api_key="fake_key", include_history=True))
+    assert_load_info(load_info)
+
+    assert load_table_counts(pipeline, "contacts_property_history") == {
+        "contacts_property_history": len(expected_rows)
+    }
 
 
 @pytest.mark.parametrize("destination_name", ALL_DESTINATIONS)
