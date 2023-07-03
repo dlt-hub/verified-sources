@@ -1,7 +1,7 @@
 import dlt
 
 from filesystem import google_drive, local_folder
-from unstructured_data import unstructured_source
+from unstructured_data import unstructured_to_structured_source
 
 if __name__ == "__main__":
     # configure the pipeline with your destination details
@@ -25,7 +25,7 @@ if __name__ == "__main__":
     data_resource = local_folder(extensions=(".txt", ".pdf"))
     data_resource = google_drive(download=True, extensions=(".txt", ".pdf", ".jpg"))
 
-    data_extractor = unstructured_source(data_resource, queries)
+    data_extractor = unstructured_to_structured_source(data_resource, queries)
     # run the pipeline with your parameters
     load_info = pipeline.run(data_extractor)
     # pretty print the information on data that was loaded
