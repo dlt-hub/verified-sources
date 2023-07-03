@@ -11,8 +11,13 @@ from dlt.common.pipeline import TSourceState
 from dlt.common.schema import Schema
 from dlt.sources.helpers import requests
 
-from sources.pipedrive import pipedrive_source
-from tests.utils import ALL_DESTINATIONS, assert_load_info, assert_query_data
+from sources.pipedrive import pipedrive_source, leads
+from tests.utils import (
+    ALL_DESTINATIONS,
+    assert_load_info,
+    assert_query_data,
+    load_table_counts,
+)
 from sources.pipedrive.helpers.custom_fields_munger import (
     update_fields_mapping,
     rename_fields,
@@ -47,7 +52,6 @@ TESTED_RESOURCES = (
         "files",
         "activityTypes",
         "notes",
-        "leads",
     }
 )
 
@@ -71,6 +75,30 @@ def test_all_resources(destination_name: str) -> None:
     assert schema_tables > TESTED_RESOURCES - {"deals_flow"}
     assert "deals_flow_activity" in schema_tables
     assert "deals_flow_deal_change" in schema_tables
+
+
+@pytest.mark.parametrize("destination_name", ALL_DESTINATIONS)
+def test_leads_resource_incremental(destination_name: str) -> None:
+    pipeline = dlt.pipeline(
+        pipeline_name="pipedrive",
+        destination=destination_name,
+        dataset_name="pipedrive_data",
+        full_refresh=True,
+    )
+    # Load all leads from beginning
+    data = leads()
+    info = pipeline.run(data, write_disposition="append")
+    assert_load_info(info)
+
+    counts = load_table_counts(pipeline, "leads")
+    assert counts["leads"] > 1
+
+    # Run again and assert no new data is added
+    data = leads()
+    info = pipeline.run(data, write_disposition="append")
+    assert_load_info(info, expected_load_packages=0)
+
+    assert load_table_counts(pipeline, "leads") == counts
 
 
 @pytest.mark.parametrize("destination_name", ALL_DESTINATIONS)

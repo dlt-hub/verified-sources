@@ -11,7 +11,6 @@ To get an api key: https://pipedrive.readme.io/docs/how-to-find-the-api-token
 
 from typing import Any, Dict, Iterator, List, Optional, Union, Iterable, Iterator, Tuple
 
-
 import dlt
 
 from .helpers.custom_fields_munger import update_fields_mapping, rename_fields
@@ -92,6 +91,8 @@ def pipedrive_source(
         name="deals_flow", write_disposition="merge", primary_key="id"
     )(_get_deals_flow)(pipedrive_api_key)
 
+    yield leads(pipedrive_api_key, update_time=since_timestamp)
+
 
 def _get_deals_flow(
     deals_page: TDataPage, pipedrive_api_key: str
@@ -167,3 +168,33 @@ def parsed_mapping(
             }
             for hash_string, names in data_item_mapping.items()
         ]
+
+
+@dlt.resource(primary_key="id", write_disposition="merge")
+def leads(
+    pipedrive_api_key: str = dlt.secrets.value,
+    update_time: Optional[dlt.sources.incremental[str]] = dlt.sources.incremental(
+        "update_time", "1970-01-01 00:00:00"
+    ),
+) -> Iterator[TDataPage]:
+    """Resource to incrementally load pipedrive leads by update_time"""
+    # Leads inherit custom fields from deals
+    fields_mapping = (
+        dlt.current.source_state().get("custom_fields_mapping", {}).get("deals", {})
+    )
+    # Load leads pages sorted from newest to oldest and stop loading when
+    # last incremental value is reached
+    last_value = update_time.last_value
+    pages = get_pages(
+        "leads",
+        pipedrive_api_key,
+        extra_params={"sort": "update_time DESC"},
+    )
+    for page in pages:
+        if last_value:
+            # Just check whether first item is lower, worst case we load 1 redundant page before break
+            first_item = page[0] if page else None
+            if first_item and first_item["update_time"] < last_value:
+                return
+        yield rename_fields(page, fields_mapping)
+        return
