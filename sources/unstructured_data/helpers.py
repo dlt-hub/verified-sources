@@ -1,6 +1,7 @@
-from typing import Dict, Optional
 import logging
-from langchain.document_loaders import UnstructuredPDFLoader, UnstructuredFileLoader
+from typing import Dict, Optional
+
+from langchain.document_loaders import UnstructuredFileLoader, UnstructuredPDFLoader
 from langchain.indexes import VectorstoreIndexCreator
 
 logging.basicConfig(format="%(asctime)s WARNING: %(message)s", level=logging.WARNING)
@@ -8,13 +9,12 @@ logging.basicConfig(format="%(asctime)s WARNING: %(message)s", level=logging.WAR
 filetype_mapper = {
     ".txt": UnstructuredFileLoader,
     ".pdf": UnstructuredPDFLoader,
-    }
+}
 
 
 def safely_query_index(index, query: str) -> Optional[str]:
     try:
         answer = index.query(query).strip()
-        print(answer)
         return answer
     except Exception as e:
         logging.warning(e)

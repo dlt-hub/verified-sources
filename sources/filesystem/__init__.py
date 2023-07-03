@@ -1,47 +1,54 @@
-import dlt
-import os
-import logging
-
-from typing import Dict, List, Sequence, Iterable
 from pathlib import Path
-from dlt.extract.source import DltResource, DltSource, TDataItem
-from .helpers import build_service, get_pdf_uris, download_pdf_from_google_drive, check_extensions, ExtensionIsNotImplemented
+from typing import Optional, Sequence
 
+import dlt
+from dlt.extract.source import TDataItem
 
-logging.basicConfig(format="%(asctime)s WARNING: %(message)s", level=logging.WARNING)
+from .helpers import build_service, download_pdf_from_google_drive, get_files_uris
 
 
 @dlt.resource(write_disposition="replace")
 def local_folder(
-    extensions: Sequence = (".txt", ".pdf"), data_dir: str = dlt.secrets.value,
+    extensions: Optional[Sequence[str]] = None,
+    data_dir: str = dlt.secrets.value,
 ) -> TDataItem:
+    if extensions:
+        files = (
+            p.resolve()
+            for p in Path(data_dir).glob("**/*")
+            if p.suffix in set(extensions)
+        )
+    else:
+        files = (p.resolve() for p in Path(data_dir).glob("**/*"))
 
-    try:
-        check_extensions(extensions)
-    except ExtensionIsNotImplemented as e:
-        logging.warning(f"{e}")
-
-    files = (p.resolve() for p in Path(data_dir).glob("**/*") if p.suffix in set(extensions))
     for file in files:
         if file.is_file():
-            yield {"file_path": str(file)}
+            yield {"file_path": file.as_posix()}
 
 
 @dlt.resource(write_disposition="replace")
 def google_drive(
-    credentials: str = dlt.secrets.value,
+    extensions: Sequence[str] = (".txt", ".pdf"),
+    credentials_path: str = dlt.secrets.value,
+    token_path: str = dlt.secrets.value,
     folder_id: str = dlt.secrets.value,
     storage_folder_path: str = dlt.secrets.value,
-    download: bool = False
+    download: bool = False,
 ) -> TDataItem:
+    service = build_service(credentials_path, token_path)
+    uris = get_files_uris(service, folder_id, extensions=extensions)
+    storage_folder_path = Path(storage_folder_path)
 
-    service = build_service(credentials)
-    uris = get_pdf_uris(service, folder_id)
+    if download:
+        storage_folder_path.mkdir(exist_ok=True, parents=True)
 
     for file_name, file_id in uris.items():
         if download:
-            download_pdf_from_google_drive(file_id, file_name, storage_folder_path)
-            yield {"file_path": os.path.join(storage_folder_path, file_name), "file_name": file_name}
+            file_path = storage_folder_path / file_name
+
+            download_pdf_from_google_drive(service, file_id, file_path.as_posix())
+
+            if file_path.is_file():
+                yield {"file_path": file_path.as_posix(), "file_name": file_name}
         else:
             yield {"file_name": file_name, "file_id": file_id}
-
