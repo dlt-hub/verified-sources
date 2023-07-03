@@ -1,15 +1,9 @@
-from typing import Dict, List
-
+from typing import Dict, Optional
+import logging
 from langchain.document_loaders import UnstructuredPDFLoader, UnstructuredFileLoader
 from langchain.indexes import VectorstoreIndexCreator
 
-
-def safely_query_index(index, query):
-    try:
-        return index.query(query).strip()
-    except Exception:
-        return []
-
+logging.basicConfig(format="%(asctime)s WARNING: %(message)s", level=logging.WARNING)
 
 filetype_mapper = {
     ".txt": UnstructuredFileLoader,
@@ -17,10 +11,19 @@ filetype_mapper = {
     }
 
 
+def safely_query_index(index, query: str) -> Optional[str]:
+    try:
+        answer = index.query(query).strip()
+        print(answer)
+        return answer
+    except Exception as e:
+        logging.warning(e)
+        return None
+
+
 def process_file_to_structured(loader, queries: Dict[str, str]) -> Dict:
     index = VectorstoreIndexCreator().from_loaders([loader])
     response = {"file_name": loader.file_path}
     for k, query in queries.items():
         response[k] = safely_query_index(index, query)
-
     return response
