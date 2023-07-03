@@ -35,6 +35,7 @@ ALL_RESOURCES = {
     "products",
     "stages",
     "users",
+    "leads",
 }
 
 TESTED_RESOURCES = (
@@ -46,6 +47,7 @@ TESTED_RESOURCES = (
         "files",
         "activityTypes",
         "notes",
+        "leads",
     }
 )
 
@@ -212,7 +214,7 @@ def test_custom_fields_munger(destination_name: str) -> None:
 def test_since_timestamp() -> None:
     """since_timestamp is coerced correctly to UTC implicit ISO timestamp and passed to endpoint function"""
     with mock.patch(
-        "pipelines.pipedrive.helpers.pages.get_pages",
+        "sources.pipedrive.helpers.pages.get_pages",
         autospec=True,
         return_value=iter([]),
     ) as m:
@@ -227,7 +229,7 @@ def test_since_timestamp() -> None:
     )
 
     with mock.patch(
-        "pipelines.pipedrive.helpers.pages.get_pages",
+        "sources.pipedrive.helpers.pages.get_pages",
         autospec=True,
         return_value=iter([]),
     ) as m:
@@ -239,7 +241,7 @@ def test_since_timestamp() -> None:
     )
 
     with mock.patch(
-        "pipelines.pipedrive.helpers.pages.get_pages",
+        "sources.pipedrive.helpers.pages.get_pages",
         autospec=True,
         return_value=iter([]),
     ) as m:
