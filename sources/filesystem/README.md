@@ -40,6 +40,7 @@ print(load_info)
 
 
 ## Google Drive API
+This resource retrieves files from a specified Google Drive folder.
 ### Set credentials
 
 [Read Quick Start with Google Drive:](https://developers.google.com/drive/api/quickstart/python?hl=en)
