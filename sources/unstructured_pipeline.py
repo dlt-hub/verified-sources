@@ -1,6 +1,6 @@
 import dlt
 from unstructured_data import unstructured_source
-from filesystem import local_folder
+from filesystem import local_folder, google_drive
 
 
 if __name__ == "__main__":
@@ -10,17 +10,19 @@ if __name__ == "__main__":
     )
 
     queries = {
-        "recipient_company_name": "Who is the recipient of the invoice? Just return the name",
-        "invoice_amount": "What is the total amount of the invoice? Just return the amount as decimal number, no currency or text",
-        "invoice_date": "What is the date of the invoice? Just return the date",
-        "invoice_number": "What is the invoice number? Just return the number",
-        "service_description": "What is the description of the service that this invoice is for? Just return the description",
+        "recipient_company_name": "Who is the recipient of the invoice? Just return the name. If you don't know, then return None",
+        "invoice_amount": "What is the total amount of the invoice? Just return the amount as decimal number, no currency or text. If you don't know, then return None",
+        "invoice_date": "What is the date of the invoice? Just return the date. If you don't know, then return None",
+        "invoice_number": "What is the invoice number? Just return the number. If you don't know, then return None",
+        "service_description": "What is the description of the service that this invoice is for? Just return the description. If you don't know, then return None",
+        "phone_number": "What is the company phone number? Just return the phone number. If you don't know, then return None"
     }
 
     data_resource = local_folder(extensions=(".txt",))
+    # data_resource = google_drive(download=True)
+
     data_extractor = unstructured_source(data_resource, queries)
     # run the pipeline with your parameters
     load_info = pipeline.run(data_extractor)
-
     # pretty print the information on data that was loaded
     print(load_info)
