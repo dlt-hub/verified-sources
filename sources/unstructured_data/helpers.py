@@ -1,5 +1,5 @@
 import logging
-from typing import Dict, Optional
+from typing import Dict, Optional, Any
 
 from langchain.document_loaders import UnstructuredFileLoader, UnstructuredPDFLoader
 from langchain.indexes import VectorstoreIndexCreator
@@ -21,7 +21,20 @@ def safely_query_index(index, query: str) -> Optional[str]:
         return None
 
 
-def process_file_to_structured(loader, queries: Dict[str, str]) -> Dict:
+def process_file_to_structured(loader: Any, queries: Dict[str, str]) -> Dict[str, str]:
+    """
+    Processes a file loaded by the specified loader and generates structured data based on provided queries.
+
+    Args:
+        loader: (Any) The loader that uses unstructured to load files. E.g. UnstructuredFileLoader, UnstructuredPDFLoader.
+        queries (Dict[str, str]): A dictionary of queries to be applied to the loaded file.
+            Each query maps a field name to a query string that specifies how to process the field.
+
+    Returns:
+        Dict[str, str]: A dictionary containing the processed structured data from the loaded file.
+            The dictionary includes a "file_name" key with the name of the loaded file and
+            additional keys corresponding to the queried fields and their processed values.
+    """
     index = VectorstoreIndexCreator().from_loaders([loader])
     response = {"file_name": loader.file_path}
     for k, query in queries.items():
