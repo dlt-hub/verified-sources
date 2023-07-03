@@ -197,4 +197,3 @@ def leads(
             if first_item and first_item["update_time"] < last_value:
                 return
         yield rename_fields(page, fields_mapping)
-        return
