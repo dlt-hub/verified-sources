@@ -1,72 +1,82 @@
-import os
 import io
-import pickle
-from typing import Optional, Sequence
-from enum import Enum
+import logging
+import os
+from typing import Any, Dict, Optional, Sequence
 
-from googleapiclient.discovery import build
-from google_auth_oauthlib.flow import InstalledAppFlow
 from google.auth.transport.requests import Request
+from google.oauth2.credentials import Credentials
+from google_auth_oauthlib.flow import InstalledAppFlow
+from googleapiclient.discovery import build
+from googleapiclient.errors import HttpError
 from googleapiclient.http import MediaIoBaseDownload
 
-SCOPES = ['https://www.googleapis.com/auth/drive.readonly']
+logging.basicConfig(format="%(asctime)s WARNING: %(message)s", level=logging.WARNING)
+
+SCOPES = ["https://www.googleapis.com/auth/drive.readonly"]
 
 
-class Extensions(Enum):
-    txt = ".txt"
-    pdf = ".pdf"
+mime_type_mapper = {".txt": "text/plain", ".pdf": "application/pdf"}
 
 
-def build_service(creds: Optional = None):
-    if os.path.exists('token.pickle'):
-        with open('token.pickle', 'rb') as token:
-            creds = pickle.load(token)
-    elif isinstance(creds, str):
-        flow = InstalledAppFlow.from_client_secrets_file(
-            creds, SCOPES
-        )
-        creds = flow.run_local_server(port=0)
+def build_service(
+    credentials_path: str, token_path: str = "./token.json"
+) -> Optional[Any]:
+    credentials = None
 
-    if not creds or not creds.valid:
-        if creds and creds.expired and creds.refresh_token:
-            creds.refresh(Request())
-    with open('token.pickle', 'wb') as token:
-        pickle.dump(creds, token)
+    if os.path.exists(token_path):
+        credentials = Credentials.from_authorized_user_file(token_path, SCOPES)
 
-    return build('drive', 'v3', credentials=creds)
+    if not credentials or not credentials.valid:
+        if credentials and credentials.expired and credentials.refresh_token:
+            credentials.refresh(Request())
+        else:
+            flow = InstalledAppFlow.from_client_secrets_file(credentials_path, SCOPES)
+            credentials = flow.run_local_server(port=0)
 
+        # Save the credentials for the next run
+        with open(token_path, "w") as token:
+            token.write(credentials.to_json())
 
-def get_pdf_uris(service, folder_id):
-    results = service.files().list(
-        q=f"'{folder_id}' in parents and mimeType='application/pdf'",
-        fields="nextPageToken, files(id, name, mimeType)").execute()
-    items = results.get('files', [])
-    yield {item['name']: item['id'] for item in items}
+    return build("drive", "v3", credentials=credentials)
 
 
-def download_pdf_from_google_drive(
-    file_id, file_name, storage_folder_path: str = './data/invoices'
-):
-    service = build_service()
-    request = service.files().get_media(fileId=file_id)
-    fh = io.BytesIO()
-    downloader = MediaIoBaseDownload(fh, request)
-    done = False
-    while not done:
-        _, done = downloader.next_chunk()
-    print(f"Downloaded {file_name}.")
-    with open(os.path.join(storage_folder_path, file_name), 'wb') as f:
-        f.write(fh.getvalue())
-
-
-class ExtensionIsNotImplemented(NotImplementedError):
-    pass
-
-
-def check_extensions(extensions: Sequence[str]) -> None:
-    available_exts = [ext.value for ext in Extensions]
+def get_files_uris(
+    service: Any, folder_id: str, extensions: Sequence[str]
+) -> Dict[str, str]:
+    files_uris = {}
     for extension in extensions:
-        if extension not in available_exts:
-            raise ExtensionIsNotImplemented(
-                f"Extension {extension} is not implemented, only ({', '.join(available_exts)}) are available."
+        if extension not in mime_type_mapper:
+            logging.warning(
+                f"Extension {extension} is not implemented, only ({', '.join(mime_type_mapper.keys())}) are available."
             )
+            continue
+
+        results = (
+            service.files()
+            .list(
+                q=f"'{folder_id}' in parents and mimeType='{mime_type_mapper[extension]}'",
+                fields="nextPageToken, files(id, name, mimeType)",
+            )
+            .execute()
+        )
+
+        items = results.get("files", [])
+        files_uris.update({item["name"]: item["id"] for item in items})
+
+    return files_uris
+
+
+def download_pdf_from_google_drive(service: Any, file_id: str, file_path: str) -> None:
+    try:
+        request = service.files().get_media(fileId=file_id)
+        fh = io.BytesIO()
+        downloader = MediaIoBaseDownload(fh, request)
+        done = False
+        while not done:
+            _, done = downloader.next_chunk()
+
+        with open(file_path, "wb") as f:
+            f.write(fh.getvalue())
+
+    except HttpError as error:
+        print(f"An error occurred: {error}")

@@ -1,9 +1,14 @@
-import dlt
+import logging
 import os
-from typing import Dict, List, Sequence, Iterable
 from pathlib import Path
-from dlt.extract.source import DltResource, DltSource, TDataItem
-from .helpers import process_file_to_structured, filetype_mapper
+from typing import Dict, Iterable
+
+import dlt
+from dlt.extract.source import DltResource, TDataItem
+
+from .helpers import filetype_mapper
+
+logging.basicConfig(format="%(asctime)s WARNING: %(message)s", level=logging.WARNING)
 
 
 @dlt.source(name="unstructured")
@@ -12,9 +17,8 @@ def unstructured_source(
     queries: Dict[str, str],
     openai_api_key: str = dlt.secrets.value,
 ) -> Iterable[DltResource]:
-
     if openai_api_key:
-        os.environ['OPENAI_API_KEY'] = openai_api_key
+        os.environ["OPENAI_API_KEY"] = openai_api_key
 
     @dlt.transformer(
         data_from=data_resource,
@@ -23,8 +27,13 @@ def unstructured_source(
     def unstructured_resource(item: TDataItem) -> Iterable[TDataItem]:
         file_path = item["file_path"]
         extension = Path(file_path).suffix
-        loader = filetype_mapper[extension](file_path)
-        yield process_file_to_structured(loader, queries)
+        if extension in filetype_mapper:
+            loader = filetype_mapper[extension](file_path)
+            yield process_file_to_structured_mock(loader, queries)
+        else:
+            logging.warning(
+                f"Extension {extension} is not implemented, only ({', '.join(filetype_mapper.keys())}) are available."
+            )
 
     return data_resource, unstructured_resource
 
