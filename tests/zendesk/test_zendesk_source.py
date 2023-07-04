@@ -1,14 +1,9 @@
 import pytest
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Iterable
 import dlt
 from dlt.pipeline.pipeline import Pipeline
 from sources.zendesk import zendesk_chat, zendesk_support, zendesk_talk
-from sources.zendesk.helpers.api_helpers import (
-    _make_json_serializable,
-    process_ticket,
-    process_ticket_field,
-)
-from zenpy.lib.api_objects import Ticket, TicketField, CustomFieldOption
+from sources.zendesk.helpers.api_helpers import process_ticket, process_ticket_field
 from tests.utils import (
     ALL_DESTINATIONS,
     assert_load_info,
@@ -33,7 +28,6 @@ SUPPORT_TABLES = {
     "custom_agent_roles",
     "dynamic_content",
     "group_memberships",
-    "job_status",
     "macros",
     "organization_fields",
     "organization_memberships",
@@ -221,12 +215,6 @@ def test_zendesk_talk(destination_name: str) -> None:
     _check_pipeline_has_tables(pipeline=pipeline, tables=TALK_TABLES)
 
 
-def test_unserializable_dicts() -> None:
-    sample_dict = {"ticket_sample": Ticket()}
-    sample_dict = _make_json_serializable(sample_dict)
-    assert sample_dict
-
-
 def _create_pipeline(
     destination_name: str,
     dataset_name: str,
@@ -234,7 +222,7 @@ def _create_pipeline(
     include_support: bool = False,
     include_chat: bool = False,
     include_talk: bool = False,
-):
+) -> dlt.Pipeline:
     """
     Helper, creates the pipelines and asserts the data is loaded correctly
     @:param: destination_name - redshift/bigquery/postgres
@@ -263,7 +251,7 @@ def _create_pipeline(
     return pipeline
 
 
-def _check_pipeline_has_tables(pipeline: Pipeline, tables: List[str]):
+def _check_pipeline_has_tables(pipeline: Pipeline, tables: Iterable[str]) -> None:
     """
     Helper that checks if a pipeline has all tables in the list and has the same number of proper tables as the list (child tables and dlt tables not included in this count)
     @:param pipeline: DLT pipeline
@@ -289,15 +277,29 @@ def test_process_ticket_custom_fields() -> None:
         "55": {"title": "Another field", "options": {}},
     }
     # Test single choice dropdown
-    ticket = Ticket(id=123, custom_fields=[{"id": 42, "value": "test_value_2"}])
+    ticket = dict(
+        id=123,
+        custom_fields=[{"id": 42, "value": "test_value_2"}],
+        fields=[],
+        updated_at="2022-01-01T00:00:00Z",
+        created_at="2022-01-01T00:00:00Z",
+        due_at="2022-01-01T00:00:00Z",
+    )
 
     result = process_ticket(ticket, fields_state, pivot_custom_fields=True)
 
     assert result["Dummy field"] == "Test Value 2"
 
     # Test multiple choice field
-    ticket = Ticket(
-        id=123, custom_fields=[{"id": 42, "value": ["test_value_2", "test_value_1"]}]
+    ticket = dict(
+        id=123,
+        custom_fields=[
+            {"id": 42, "value": ["test_value_2", "test_value_1"]},
+        ],
+        fields=[],
+        updated_at="2022-01-01T00:00:00Z",
+        created_at="2022-01-01T00:00:00Z",
+        due_at="2022-01-01T00:00:00Z",
     )
 
     result = process_ticket(ticket, fields_state, pivot_custom_fields=True)
@@ -306,7 +308,14 @@ def test_process_ticket_custom_fields() -> None:
 
     # Test non dropdown
 
-    ticket = Ticket(id=123, custom_fields=[{"id": 55, "value": "Some value"}])
+    ticket = dict(
+        id=123,
+        custom_fields=[{"id": 55, "value": "Some value"}],
+        fields=[],
+        updated_at="2022-01-01T00:00:00Z",
+        created_at="2022-01-01T00:00:00Z",
+        due_at="2022-01-01T00:00:00Z",
+    )
 
     result = process_ticket(ticket, fields_state, pivot_custom_fields=True)
 
@@ -316,12 +325,12 @@ def test_process_ticket_custom_fields() -> None:
 def test_process_ticket_field() -> None:
     fields_state: Dict[str, Any] = {"55": {"title": "Another field", "options": {}}}
 
-    field = TicketField(
+    field = dict(
         id=42,
         title="Dummy dropdown",
         custom_field_options=[
-            CustomFieldOption(value="test_1", name="Test 1"),
-            CustomFieldOption(value="test_2", name="Test 2"),
+            dict(value="test_1", name="Test 1"),
+            dict(value="test_2", name="Test 2"),
         ],
     )
 
@@ -334,13 +343,13 @@ def test_process_ticket_field() -> None:
     }
 
     # Add new option to field
-    field = TicketField(
+    field = dict(
         id=42,
         title="Dummy dropdown",
         custom_field_options=[
-            CustomFieldOption(value="test_1", name="Test 1"),
-            CustomFieldOption(value="test_2", name="Test 2"),
-            CustomFieldOption(value="test_3", name="Test 3"),
+            dict(value="test_1", name="Test 1"),
+            dict(value="test_2", name="Test 2"),
+            dict(value="test_3", name="Test 3"),
         ],
     )
 
@@ -355,13 +364,13 @@ def test_process_ticket_field() -> None:
     # Rename option in field
     process_ticket_field(field, fields_state)
 
-    field = TicketField(
+    field = dict(
         id=42,
         title="Dummy dropdown",
         custom_field_options=[
-            CustomFieldOption(value="test_1", name="Test 1"),
-            CustomFieldOption(value="test_2", name="Test 2 updated"),
-            CustomFieldOption(value="test_3", name="Test 3"),
+            dict(value="test_1", name="Test 1"),
+            dict(value="test_2", name="Test 2 updated"),
+            dict(value="test_3", name="Test 3"),
         ],
     )
 

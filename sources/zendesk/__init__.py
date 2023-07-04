@@ -2,30 +2,25 @@
 Defines all the sources and resources needed for ZendeskSupport, ZendeskChat and ZendeskTalk
 """
 
-from typing import Iterator, Optional, Sequence, Iterable
+from typing import Iterator, Optional, Iterable, Tuple, List
+from itertools import chain
 
 import dlt
 from dlt.common import pendulum
 from dlt.common.time import parse_iso_like_datetime
-from dlt.common.typing import TDataItem
+from dlt.common.typing import TDataItem, TDataItems
 from dlt.extract.source import DltResource
 
-from .helpers.api_helpers import (
-    auth_zenpy,
-    basic_load,
-    process_ticket,
-    Zenpy,
-    process_ticket_field,
-)
+from .helpers.api_helpers import process_ticket, process_ticket_field
 from .helpers.talk_api import ZendeskAPIClient
 from .helpers.credentials import TZendeskCredentials, ZendeskCredentialsOAuth
 
 from .settings import (
     DEFAULT_START_DATE,
-    EXTRA_RESOURCES_SUPPORT,
     CUSTOM_FIELDS_STATE_KEY,
     TALK_ENDPOINTS,
     INCREMENTAL_ENDPOINTS,
+    SUPPORT_EXTRA_ENDPOINTS,
 )
 
 
@@ -92,7 +87,7 @@ def talk_resource(
         TDataItem: Dictionary containing the data from the endpoint.
     """
     # send query and process it
-    yield from zendesk_client.make_request(
+    yield from zendesk_client.get_pages(
         endpoint=talk_endpoint, data_point_name=talk_endpoint_name
     )
 
@@ -116,10 +111,10 @@ def talk_incremental_resource(
         TDataItem: Dictionary containing the data from the endpoint.
     """
     # send the request and process it
-    yield from zendesk_client.make_request_incremental(
+    yield from zendesk_client.get_pages_incremental(
         endpoint=talk_endpoint,
         data_point_name=talk_endpoint_name,
-        start_date=parse_iso_like_datetime(updated_at.last_value).int_timestamp,
+        start_time=parse_iso_like_datetime(updated_at.last_value).int_timestamp,
     )
 
 
@@ -140,7 +135,7 @@ def zendesk_chat(
     """
 
     # Authenticate
-    zendesk_client = auth_zenpy(credentials=credentials)
+    zendesk_client = ZendeskAPIClient(credentials, url_prefix="https://www.zopim.com")
     yield dlt.resource(chats_table_resource, name="chats", write_disposition="append")(
         zendesk_client,
         dlt.sources.incremental(
@@ -151,8 +146,8 @@ def zendesk_chat(
 
 
 def chats_table_resource(
-    zendesk_client: Zenpy, update_timestamp: dlt.sources.incremental[str]
-) -> Iterator[TDataItem]:
+    zendesk_client: ZendeskAPIClient, update_timestamp: dlt.sources.incremental[str]
+) -> Iterator[TDataItems]:
     """
     Resource for Chats
 
@@ -163,11 +158,13 @@ def chats_table_resource(
     Yields:
         dict: A dictionary representing each row of data.
     """
-    # Send query and process it
-    all_chats = zendesk_client.chats.incremental(
-        start_time=parse_iso_like_datetime(update_timestamp.last_value).int_timestamp
+    chat_pages = zendesk_client.get_pages_incremental(
+        "/api/v2/incremental/chats",
+        "chats",
+        start_time=parse_iso_like_datetime(update_timestamp.last_value).int_timestamp,
+        params={"fields": "chats(*)"},
     )
-    yield [chat.to_dict() for chat in all_chats]
+    yield from chat_pages
 
 
 @dlt.source(max_table_nesting=2)
@@ -190,23 +187,27 @@ def zendesk_support(
         Sequence[DltResource]: Multiple dlt resources.
     """
 
-    incremental_start_time_ts = incremental_start_time.timestamp()
+    incremental_start_time_ts = incremental_start_time.int_timestamp
     incremental_start_time_iso_str = incremental_start_time.isoformat()
 
     @dlt.resource(primary_key="id", write_disposition="append")
     def ticket_events(
-        zendesk_client: Zenpy,
+        zendesk_client: ZendeskAPIClient,
         timestamp: dlt.sources.incremental[int] = dlt.sources.incremental(
             "timestamp", initial_value=incremental_start_time_ts
         ),
     ) -> Iterator[TDataItem]:
-        result_generator = zendesk_client.tickets.events(
-            start_time=int(timestamp.last_value)
+        # URL For ticket events
+        # 'https://d3v-dlthub.zendesk.com/api/v2/incremental/ticket_events.json?start_time=946684800'
+        event_pages = zendesk_client.get_pages_incremental(
+            "/api/v2/incremental/ticket_events.json",
+            "ticket_events",
+            timestamp.last_value,
         )
-        yield [ticket.to_dict() for ticket in result_generator]
+        yield from event_pages
 
     @dlt.resource(name="ticket_fields", write_disposition="replace")
-    def ticket_fields_table(zendesk_client: Zenpy) -> Iterator[TDataItem]:
+    def ticket_fields_table(zendesk_client: ZendeskAPIClient) -> Iterator[TDataItem]:
         """
         Loads ticket fields data from Zendesk API.
 
@@ -221,7 +222,12 @@ def zendesk_support(
             CUSTOM_FIELDS_STATE_KEY, {}
         )
         # get all custom fields and update state if needed, otherwise just load dicts into tables
-        all_fields = zendesk_client.ticket_fields()
+        all_fields = list(
+            chain.from_iterable(
+                zendesk_client.get_pages("/api/v2/ticket_fields.json", "ticket_fields")
+            )
+        )
+        # all_fields = zendesk_client.ticket_fields()
         for field in all_fields:
             yield process_ticket_field(field, ticket_custom_fields)
 
@@ -235,7 +241,7 @@ def zendesk_support(
         },
     )
     def ticket_table(
-        zendesk_client: Zenpy,
+        zendesk_client: ZendeskAPIClient,
         pivot_fields: bool = True,
         per_page: int = 1000,
         updated_at: dlt.sources.incremental[
@@ -259,26 +265,24 @@ def zendesk_support(
 
         # grab the custom fields from dlt state if any
         fields_dict = dlt.current.source_state().setdefault(CUSTOM_FIELDS_STATE_KEY, {})
-        all_tickets = zendesk_client.tickets.incremental(
-            paginate_by_time=False,
-            per_page=per_page,
-            start_time=int(updated_at.last_value.timestamp()),
-            include=["users", "groups", "organisation", "brands"],
+        include_objects = ["users", "groups", "organisation", "brands"]
+        ticket_pages = zendesk_client.get_pages_incremental(
+            "/api/v2/incremental/tickets",
+            "tickets",
+            updated_at.last_value.int_timestamp,
+            params={"include": ",".join(include_objects)},
         )
-        yield [
-            process_ticket(
-                ticket=ticket,
-                custom_fields=fields_dict,
-                pivot_custom_fields=pivot_fields,
-            )
-            for ticket in all_tickets
-        ]
+        for page in ticket_pages:
+            yield [
+                process_ticket(ticket, fields_dict, pivot_custom_fields=pivot_fields)
+                for ticket in page
+            ]
 
     @dlt.resource(
         name="ticket_metric_events", primary_key="id", write_disposition="append"
     )
     def ticket_metric_table(
-        zendesk_client: Zenpy,
+        zendesk_client: ZendeskAPIClient,
         time: dlt.sources.incremental[str] = dlt.sources.incremental(
             "time", initial_value=incremental_start_time_iso_str
         ),
@@ -296,13 +300,19 @@ def zendesk_support(
         Yields:
             TDataItem: Dictionary containing the ticket metric event data.
         """
-        all_metric_events = zendesk_client.ticket_metric_events(
-            start_time=parse_iso_like_datetime(time.last_value).int_timestamp
+        # "https://example.zendesk.com/api/v2/incremental/ticket_metric_events?start_time=1332034771"
+        # all_metric_events = zendesk_client.ticket_metric_events(
+        #     start_time=parse_iso_like_datetime(time.last_value).int_timestamp
+        # )
+        metric_event_pages = zendesk_client.get_pages_incremental(
+            "/api/v2/incremental/ticket_metric_events",
+            "ticket_metric_events",
+            parse_iso_like_datetime(time.last_value).int_timestamp,
         )
-        yield [metric_event.to_dict() for metric_event in all_metric_events]
+        yield from metric_event_pages
 
     # Authenticate
-    zendesk_client = auth_zenpy(credentials=credentials)
+    zendesk_client = ZendeskAPIClient(credentials)
 
     # loading base tables
     resource_list = [
@@ -313,19 +323,24 @@ def zendesk_support(
     ]
 
     # other tables to be loaded
-    resources_to_be_loaded = [
-        "users",
-        "sla_policies",
-        "groups",
-        "organizations",
-        "brands",
+    # Tuple of resource_name, endpoint url, Optional[data_key]
+    resources_to_be_loaded: List[Tuple[str, str, Optional[str]]] = [
+        ("users", "/api/v2/users.json", None),
+        ("sla_policies", "/api/v2/slas/policies.json", None),
+        ("groups", "/api/v2/groups.json", None),
+        ("organizations", "/api/v2/organizations.json", None),
+        ("brands", "/api/v2/brands.json", None),
     ]
     if load_all:
-        resources_to_be_loaded.extend(EXTRA_RESOURCES_SUPPORT)
-    for resource in resources_to_be_loaded:
+        resources_to_be_loaded.extend(SUPPORT_EXTRA_ENDPOINTS)
+    for resource, endpoint_url, data_key in resources_to_be_loaded:
         resource_list.append(
             dlt.resource(
-                basic_resource(zendesk_client=zendesk_client, resource=resource),
+                basic_resource(
+                    zendesk_client=zendesk_client,
+                    endpoint_url=endpoint_url,
+                    data_key=data_key or resource,
+                ),
                 name=resource,
                 write_disposition="replace",
             )
@@ -334,7 +349,10 @@ def zendesk_support(
 
 
 def basic_resource(
-    zendesk_client: Zenpy, resource: str, per_page: int = 1000
+    zendesk_client: ZendeskAPIClient,
+    endpoint_url: str,
+    data_key: str,
+    per_page: int = 1000,
 ) -> Iterator[TDataItem]:
     """
     Basic loader for most endpoints offered by Zenpy. Supports pagination. Expects to be called as a DLT Resource.
@@ -347,12 +365,7 @@ def basic_resource(
     Yields:
         TDataItem: Dictionary containing the resource data.
     """
-    try:
-        # use the zenpy endpoint with methods to yield the data
-        resource_api_method = getattr(zendesk_client, f"{resource}")
-        resource_api = resource_api_method()[::per_page]
-    except TypeError:
-        # this resource doesn't support slicing for pagination
-        resource_api_method = getattr(zendesk_client, f"{resource}")
-        resource_api = resource_api_method()
-    yield [d for d in basic_load(resource_api)]
+
+    params = {"per_page": per_page}
+    pages = zendesk_client.get_pages(endpoint_url, data_key, params)
+    yield from pages
