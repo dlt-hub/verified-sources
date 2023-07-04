@@ -1,3 +1,5 @@
+"""Those resources collect filepaths from local folder or Google Drive folder to destinations"""
+
 from pathlib import Path
 from typing import Optional, Sequence
 
@@ -82,14 +84,14 @@ def google_drive(
     # create drive api client
     service = build_service(credentials_path, token_path)
     uris = get_files_uris(service, folder_id, extensions=extensions)
-    storage_folder_path = Path(storage_folder_path)
+    storage_folder_path_ = Path(storage_folder_path)
 
     if download:
-        storage_folder_path.mkdir(exist_ok=True, parents=True)
+        storage_folder_path_.mkdir(exist_ok=True, parents=True)
 
     for file_name, file_id in uris.items():
         if download:
-            file_path = storage_folder_path / file_name
+            file_path = storage_folder_path_ / file_name
 
             download_file_from_google_drive(service, file_id, file_path.as_posix())
 

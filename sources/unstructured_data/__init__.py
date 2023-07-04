@@ -1,3 +1,5 @@
+"""This source converts unstructured data from a specified data resource to structured data using provided queries."""
+
 import logging
 import os
 from pathlib import Path
@@ -49,4 +51,4 @@ def unstructured_to_structured_source(
                 f"Extension {extension} is not implemented, only ({', '.join(filetype_mapper.keys())}) are available."
             )
 
-    return unstructured_resource, structured_resource
+    return unstructured_resource, structured_resource # type: ignore
