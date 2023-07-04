@@ -32,11 +32,11 @@ def process_file_to_structured(loader: Any, queries: Dict[str, str]) -> Dict[str
 
     Returns:
         Dict[str, str]: A dictionary containing the processed structured data from the loaded file.
-            The dictionary includes a "file_name" key with the name of the loaded file and
+            The dictionary includes a "file_path" key with the path of the loaded file and
             additional keys corresponding to the queried fields and their processed values.
     """
     index = VectorstoreIndexCreator().from_loaders([loader])
-    response = {"file_name": loader.file_path}
+    response = {"file_path": loader.file_path}
     for k, query in queries.items():
         response[k] = safely_query_index(index, query)
     return response
