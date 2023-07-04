@@ -12,7 +12,7 @@ filetype_mapper = {
 }
 
 
-def safely_query_index(index, query: str) -> Optional[str]:
+def safely_query_index(index: Any, query: str) -> Any:
     try:
         answer = index.query(query).strip()
         return answer
@@ -21,7 +21,7 @@ def safely_query_index(index, query: str) -> Optional[str]:
         return None
 
 
-def process_file_to_structured(loader: Any, queries: Dict[str, str]) -> Dict[str, str]:
+def process_file_to_structured(loader: Any, queries: Dict[str, str]) -> Dict[str, Any]:
     """
     Processes a file loaded by the specified loader and generates structured data based on provided queries.
 

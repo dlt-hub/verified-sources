@@ -1,10 +1,12 @@
+from typing import Dict
+
 import dlt
 
 from filesystem import google_drive, local_folder
 from unstructured_data import unstructured_to_structured_source
 
 
-def from_local_folder_to_structured(queries):
+def from_local_folder_to_structured(queries: Dict[str, str]) -> None:
     # configure the pipeline with your destination details
     pipeline = dlt.pipeline(
         pipeline_name="unstructured_local_folder",
@@ -22,7 +24,7 @@ def from_local_folder_to_structured(queries):
     print(load_info)
 
 
-def from_google_drive_to_structured(queries):
+def from_google_drive_to_structured(queries: Dict[str, str]) -> None:
     # configure the pipeline with your destination details
     pipeline = dlt.pipeline(
         pipeline_name="unstructured_google_drive",
