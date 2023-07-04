@@ -39,5 +39,4 @@ def process_file_to_structured(loader: Any, queries: Dict[str, str]) -> Dict[str
     response = {"file_name": loader.file_path}
     for k, query in queries.items():
         response[k] = safely_query_index(index, query)
-    print(response)
     return response
