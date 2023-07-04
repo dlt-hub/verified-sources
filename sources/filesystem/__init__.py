@@ -71,9 +71,13 @@ def google_drive(
     Yields:
         TDataItem: A dictionary representing a file. If download is True, the dictionary contains the following keys:
                 - "file_path" (str): The local path of the downloaded file.
+                - "file_name" (str): The name of the file.
+                - "file_id" (str): The ID of the file in Google Drive.
+                - "folder_id" (str): The ID of the Google Drive folder.
             If download is False, the dictionary contains the following keys:
                 - "file_name" (str): The name of the file.
                 - "file_id" (str): The ID of the file in Google Drive.
+                - "folder_id" (str): The ID of the Google Drive folder.
     """
     # create drive api client
     service = build_service(credentials_path, token_path)
@@ -90,6 +94,11 @@ def google_drive(
             download_file_from_google_drive(service, file_id, file_path.as_posix())
 
             if file_path.is_file():
-                yield {"file_path": file_path.as_posix()}
+                yield {
+                    "file_path": file_path.absolute().as_posix(),
+                    "file_name": file_name,
+                    "file_id": file_id,
+                    "folder_id": folder_id
+                }
         else:
-            yield {"file_name": file_name, "file_id": file_id}
+            yield {"file_name": file_name, "file_id": file_id, "folder_id": folder_id}
