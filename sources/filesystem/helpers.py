@@ -36,7 +36,7 @@ def build_service(
             credentials = flow.run_local_server(port=0)
 
         # Save the credentials for the next run
-        with open(token_path, "w") as token:
+        with open(token_path, "w", encoding="utf-8") as token:
             token.write(credentials.to_json())
 
     return build("drive", "v3", credentials=credentials)

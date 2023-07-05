@@ -100,7 +100,7 @@ def google_drive(
                     "file_path": file_path.absolute().as_posix(),
                     "file_name": file_name,
                     "file_id": file_id,
-                    "folder_id": folder_id
+                    "folder_id": folder_id,
                 }
         else:
             yield {"file_name": file_name, "file_id": file_id, "folder_id": folder_id}
