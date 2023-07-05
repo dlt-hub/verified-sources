@@ -1,5 +1,5 @@
 import logging
-from typing import Dict, Optional, Any
+from typing import Any, Dict
 
 from langchain.document_loaders import UnstructuredFileLoader, UnstructuredPDFLoader
 from langchain.indexes import VectorstoreIndexCreator

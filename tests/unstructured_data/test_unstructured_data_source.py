@@ -27,12 +27,13 @@ def run_pipeline(destination_name: str, queries: dict, data_dir: str, resource):
 
 @pytest.mark.parametrize("destination_name", ALL_DESTINATIONS)
 class TestLoadFromLocalFolder:
-
     @pytest.fixture
     def data_dir(self) -> str:
         return "../test_data"
 
-    def test_load_info(self, destination_name: str, queries: dict, data_dir: str) -> None:
+    def test_load_info(
+        self, destination_name: str, queries: dict, data_dir: str
+    ) -> None:
         _, load_info = run_pipeline(destination_name, queries, data_dir, local_folder)
         # make sure all jobs were loaded
         assert_load_info(load_info)
@@ -51,7 +52,9 @@ class TestLoadFromLocalFolder:
         assert filepaths_table["name"] == "local_folder"
         assert structured_data_table["name"] == "structured_data_from_local_folder"
 
-    def test_local_folder_content(self, destination_name: str, queries: dict, data_dir: str) -> None:
+    def test_local_folder_content(
+        self, destination_name: str, queries: dict, data_dir: str
+    ) -> None:
         pipeline, _ = run_pipeline(destination_name, queries, data_dir, local_folder)
         with pipeline.sql_client() as c:
             # you can use parametrized queries as well, see python dbapi
@@ -60,11 +63,15 @@ class TestLoadFromLocalFolder:
                 rows = list(cur.fetchall())
                 assert len(rows) == 3  # 3 files in local folder
 
-    def test_structured_data_content(self, destination_name: str, queries: dict, data_dir: str) -> None:
+    def test_structured_data_content(
+        self, destination_name: str, queries: dict, data_dir: str
+    ) -> None:
         pipeline, _ = run_pipeline(destination_name, queries, data_dir, local_folder)
         with pipeline.sql_client() as c:
             # you can use parametrized queries as well, see python dbapi
             # you can use unqualified table names
-            with c.execute_query("SELECT file_path FROM structured_data_from_local_folder") as cur:
+            with c.execute_query(
+                "SELECT file_path FROM structured_data_from_local_folder"
+            ) as cur:
                 rows = list(cur.fetchall())
                 assert len(rows) == 2  # 2 files were processed, .jpg was skipped
