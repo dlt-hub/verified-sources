@@ -37,7 +37,7 @@ class TestLoadFromLocalFolder:
     def test_tables(self, destination_name: str, data_dir: str) -> None:
         pipeline, _ = run_pipeline(destination_name, data_dir, local_folder)
         # now let's inspect the generated schema. it should contain just
-        # two tables with filepaths and structured data
+        # one table with filepaths
         schema = pipeline.default_schema
         tables = schema.data_tables()
         assert len(tables) == 1
