@@ -1,5 +1,6 @@
 import dlt
 import pytest
+from pathlib import Path
 
 from sources.filesystem import local_folder
 
@@ -27,7 +28,7 @@ def run_pipeline(destination_name: str, data_dir: str, resource):
 class TestLoadFromLocalFolder:
     @pytest.fixture
     def data_dir(self) -> str:
-        return "./test_data"
+        return Path("./test_data").absolute().as_posix()
 
     def test_load_info(self, destination_name: str, data_dir: str) -> None:
         _, load_info = run_pipeline(destination_name, data_dir, local_folder)
