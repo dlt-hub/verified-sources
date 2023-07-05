@@ -29,7 +29,7 @@ def run_pipeline(destination_name: str, queries: dict, data_dir: str, resource):
 class TestLoadFromLocalFolder:
     @pytest.fixture
     def data_dir(self) -> str:
-        return "../test_data"
+        return "./test_data"
 
     def test_load_info(
         self, destination_name: str, queries: dict, data_dir: str
