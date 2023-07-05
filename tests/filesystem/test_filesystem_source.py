@@ -28,7 +28,7 @@ def run_pipeline(destination_name: str, data_dir: str, resource):
 class TestLoadFromLocalFolder:
     @pytest.fixture
     def data_dir(self) -> str:
-        return "../test_data"
+        return "./test_data"
 
     def test_load_info(
         self, destination_name: str, data_dir: str
@@ -45,7 +45,7 @@ class TestLoadFromLocalFolder:
         tables = schema.data_tables()
         assert len(tables) == 1
         # tables are typed dicts
-        filepaths_table = tables[1]
+        filepaths_table = tables[0]
 
         assert filepaths_table["name"] == "local_folder"
 
