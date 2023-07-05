@@ -1,5 +1,6 @@
 import dlt
 import pytest
+from pathlib import Path
 
 from sources.filesystem import local_folder
 from sources.unstructured_data import unstructured_to_structured_source
