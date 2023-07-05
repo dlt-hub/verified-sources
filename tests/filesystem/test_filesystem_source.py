@@ -2,7 +2,6 @@ import dlt
 import pytest
 
 from sources.filesystem import local_folder
-from sources.unstructured_data import unstructured_to_structured_source
 
 from tests.utils import ALL_DESTINATIONS, assert_load_info
 
@@ -30,9 +29,7 @@ class TestLoadFromLocalFolder:
     def data_dir(self) -> str:
         return "./test_data"
 
-    def test_load_info(
-        self, destination_name: str, data_dir: str
-    ) -> None:
+    def test_load_info(self, destination_name: str, data_dir: str) -> None:
         _, load_info = run_pipeline(destination_name, data_dir, local_folder)
         # make sure all data were loaded
         assert_load_info(load_info)
@@ -49,9 +46,7 @@ class TestLoadFromLocalFolder:
 
         assert filepaths_table["name"] == "local_folder"
 
-    def test_local_folder_content(
-        self, destination_name: str, data_dir: str
-    ) -> None:
+    def test_local_folder_content(self, destination_name: str, data_dir: str) -> None:
         pipeline, _ = run_pipeline(destination_name, data_dir, local_folder)
         with pipeline.sql_client() as c:
             # you can use parametrized queries as well, see python dbapi
