@@ -27,6 +27,12 @@ def local_folder(
     Yields:
         TDataItem: A dictionary representing a file, containing the file path.
     """
+    if not Path(data_dir).is_dir():
+        if not Path(data_dir).exists():
+            raise ValueError(f"Local folder doesn't exist: {data_dir}")
+        else:
+            raise ValueError(f"Local folder is not a directory: {data_dir}")
+
     if extensions:
         files = (
             p.resolve()
