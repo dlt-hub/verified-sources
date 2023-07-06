@@ -18,7 +18,7 @@ logging.basicConfig(format="%(asctime)s WARNING: %(message)s", level=logging.WAR
 def build_service(
     client_secret_path: Optional[str] = None,
     token_path: Optional[str] = "./token.json",
-    user_info: Optional[dict] = None,
+    user_info: Optional[Dict[str, Any]] = None,
 ) -> Optional[Any]:
     """
     Builds a Google Drive API service object for interacting with Google Drive.
@@ -26,7 +26,7 @@ def build_service(
     Args:
         client_secret_path (Optional[str]): The path to the client secret JSON file for authentication. Defaults to None.
         token_path (Optional[str]): The path to the token JSON file for storing and reusing authentication tokens. Defaults to "./token.json".
-        user_info (Optional[dict]): User information dictionary containing access and refresh tokens. Defaults to None.
+        user_info (Optional[Dict[str, Any]]): User information dictionary containing access and refresh tokens. Defaults to None.
 
     Returns:
         Optional[Any]: A service object for interacting with the Google Drive API.

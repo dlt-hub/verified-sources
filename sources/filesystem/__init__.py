@@ -1,7 +1,7 @@
 """Those resources collect filepaths from local folder or Google Drive folder to destinations"""
 import logging
 from pathlib import Path
-from typing import Optional, Sequence
+from typing import Optional, Sequence, Dict, Any
 
 import dlt
 from dlt.extract.source import TDataItem
@@ -59,7 +59,7 @@ def google_drive(
     extensions: Sequence[str] = (".txt", ".pdf"),
     client_secret_path: str = ClIENT_SECRET_PATH,
     token_path: str = AUTHORIZED_USER_PATH,
-    credentials: dict = dlt.secrets.value,
+    credentials: Dict[str, Any] = dlt.secrets.value,
     folder_ids: Sequence[str] = FOLDER_IDS,
     storage_folder_path: str = STORAGE_FOLDER_PATH,
     download: bool = False,
@@ -74,7 +74,7 @@ def google_drive(
             Defaults to ClIENT_SECRET_PATH (see settings.py).
         token_path (str): The path to the token JSON file for storing and reusing the authentication token.
             Defaults to AUTHORIZED_USER_PATH (see settings.py).
-        credentials (dict): The authorized user info in Google format for authenticating with Google Drive API.
+        credentials (Dict[str, Any]): The authorized user info in Google format for authenticating with Google Drive API.
             Defaults to dlt.secrets.value.
         folder_ids (Sequence[str]): A sequence of folder IDs from which to retrieve the files.
             Defaults to FOLDER_IDS (see settings.py).
