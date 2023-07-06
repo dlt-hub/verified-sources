@@ -34,7 +34,7 @@
       ```
       or you can use the authorized user info from this json directly, copy info from json to `.dlt/secrets.toml`:
       ```toml
-      [sources.filesystem.google_drive.credentials]
+      [sources.unstructured_data.google_drive.credentials]
       token = "<token>"
       refresh_token = "<refresh_token>"
       token_uri = "<token_uri>"
