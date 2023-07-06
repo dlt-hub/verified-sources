@@ -10,18 +10,47 @@
     dlt init filesystem duckdb
     ```
 3. Set credentials for **filesystem**.
-   1. If you plan to load files from a *local folder*, then set the path to the local folder in `.dlt/secrets.toml`:
-       ```toml
-       [sources.unstructured_data.local_folder]
-       data_dir = "/path/to/your/local/data/folder"
+   1. If you plan to load files from a *local folder*, then set the path to the local data folder in `filesystem/settings.py`:
+       ```python
+       # Local folder
+       DATA_DIR = "/path/to/your/local/data/folder"
        ```
    2. In case of *Google Drive* folder:
+
+      [Read Quick Start with Google Drive:](https://developers.google.com/drive/api/quickstart/python?hl=en)
+
+      1. Enable Google Drive API.
+      2. Configure the OAuth consent screen.
+      3. Create credentials json.
+
+      Save the path to this json in `filesystem/settings.py`:
+      ```python
+      ClIENT_SECRET_PATH = "client_secret.json"
+      ```
+
+      If you already have the **authorized** user json file "token.json", then put it in a `filesystem/settings.py` file:
+      ```python
+      AUTHORIZED_USER_PATH = "/path/to/token.json"
+      ```
+      or you can use the authorized user info from this json directly, copy info from json to `.dlt/secrets.toml`:
       ```toml
-      [sources.unstructured_data.google_drive]
-      credentials_path = '/path/to/your/credentials.json' # path to your google drive credentials
-      folder_id = 'folder_id' # the google drive folder id
-      storage_folder_path = './temp' # the folder where you want to store your downloaded files
-      token_path = "./token.json" # the filepath where you want to store you token
+      [sources.filesystem.google_drive.credentials]
+      token = "<token>"
+      refresh_token = "<refresh_token>"
+      token_uri = "<token_uri>"
+      client_id = "<client_id>"
+      client_secret = "<client_secret>"
+      scopes = ["<scopes>"]
+      expiry = "<expiry>"
+      ```
+
+      Set in `filesystem/settings.py` the storage folder path, it is the local folder where the downloaded files will be stored:
+      ```python
+      STORAGE_FOLDER_PATH = "temp"
+      ```
+      List all Google Drive folders you want to extract files from:
+      ```python
+      FOLDER_IDS = ["1-yiloGjyl9g40VguIE1QnY5tcRPaF0Nm"]
       ```
 4. Set credentials for **unstructured_data**.
     ```toml
