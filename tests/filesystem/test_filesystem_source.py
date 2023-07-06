@@ -1,5 +1,6 @@
 import tempfile
 from pathlib import Path
+from typing import List
 
 import dlt
 import pytest
@@ -64,20 +65,17 @@ class TestLoadFromLocalFolder:
 
 @pytest.mark.parametrize("destination_name", ALL_DESTINATIONS)
 class TestLoadFromGoogleDrive:
-    @pytest.fixture
-    def folder_ids(self):
-        return ["1-yiloGjyl9g40VguIE1QnY5tcRPaF0Nm"]
+    FOLDER_IDS: List[str] = ["1-yiloGjyl9g40VguIE1QnY5tcRPaF0Nm"]
 
     @pytest.mark.parametrize("download", [False, True])
-    def test_load_info(
-        self, destination_name: str, download: bool, folder_ids: list
-    ) -> None:
+    def test_load_info(self, destination_name: str, download: bool) -> None:
         with tempfile.TemporaryDirectory() as tmp_dir_path:
             # use extensions to filter files as 'extensions=(".txt", ".pdf", ...)'
             data_resource = google_drive(
                 download=download,
                 extensions=(".txt", ".pdf", ".jpg"),
                 storage_folder_path=tmp_dir_path,
+                folder_ids=self.FOLDER_IDS,
             )
             _, load_info = run_pipeline(destination_name, data_resource)
             # make sure all data were loaded
@@ -87,7 +85,9 @@ class TestLoadFromGoogleDrive:
         with tempfile.TemporaryDirectory() as tmp_dir_path:
             # use extensions to filter files as 'extensions=(".txt", ".pdf", ...)'
             data_resource = google_drive(
-                download=True, storage_folder_path=tmp_dir_path
+                download=True,
+                storage_folder_path=tmp_dir_path,
+                folder_ids=self.FOLDER_IDS,
             )
             pipeline, _ = run_pipeline(destination_name, data_resource)
             # now let's inspect the generated schema. it should contain just
@@ -103,7 +103,9 @@ class TestLoadFromGoogleDrive:
         with tempfile.TemporaryDirectory() as tmp_dir_path:
             # use extensions to filter files as 'extensions=(".txt", ".pdf", ...)'
             data_resource = google_drive(
-                download=True, storage_folder_path=tmp_dir_path
+                download=True,
+                storage_folder_path=tmp_dir_path,
+                folder_ids=self.FOLDER_IDS,
             )
             pipeline, _ = run_pipeline(destination_name, data_resource)
             with pipeline.sql_client() as c:
