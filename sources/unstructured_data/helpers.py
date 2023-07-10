@@ -13,12 +13,7 @@ filetype_mapper = {
 
 
 def safely_query_index(index: Any, query: str) -> Any:
-    try:
-        answer = index.query(query).strip()
-        return answer
-    except Exception as e:
-        logging.warning(e)
-        return None
+    return index.query(query).strip()
 
 
 def process_file_to_structured(loader: Any, queries: Dict[str, str]) -> Dict[str, Any]:
