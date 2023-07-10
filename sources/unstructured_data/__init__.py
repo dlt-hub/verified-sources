@@ -39,12 +39,12 @@ def unstructured_to_structured_resource(
     return dlt.transformer(convert_data, name=table_name)(queries)
 
 
-def convert_data(item: TDataItem, queries: Dict[str, str]) -> TDataItem:
+def convert_data(unstructured_item: TDataItem, queries: Dict[str, str]) -> TDataItem:
     """
     Converts unstructured data item to structured data item using provided queries.
 
     Args:
-        item (TDataItem): The data item containing unstructured data to be converted.
+        unstructured_item (TDataItem): The data item containing unstructured data to be converted.
         queries (Dict[str, str]): A dictionary of queries to be applied to the unstructured data during processing.
             Each query maps a field name to a query string that specifies how to process the field.
 
@@ -52,11 +52,13 @@ def convert_data(item: TDataItem, queries: Dict[str, str]) -> TDataItem:
         TDataItem: The structured data item resulting from the conversion.
 
     """
-    file_path = item["file_path"]
+    file_path = unstructured_item["file_path"]
     extension = Path(file_path).suffix
     if extension in filetype_mapper:
         loader = filetype_mapper[extension](file_path)
-        yield process_file_to_structured(loader, queries)
+        response = process_file_to_structured(loader, queries)
+        response["metadata"] = unstructured_item
+        yield response
     else:
         logging.warning(
             f"Extension {extension} is not implemented, only ({', '.join(filetype_mapper.keys())}) are available."
