@@ -1,4 +1,3 @@
-import logging
 from typing import Any, Dict, List, Type, Union
 
 from langchain.document_loaders import UnstructuredFileLoader
@@ -7,8 +6,6 @@ from langchain.vectorstores.base import VectorStore
 from langchain.vectorstores.chroma import Chroma
 from langchain.vectorstores.elastic_vector_search import ElasticVectorSearch
 from langchain.vectorstores.weaviate import Weaviate
-
-logging.basicConfig(format="%(asctime)s WARNING: %(message)s", level=logging.WARNING)
 
 
 vectorstore_mapping = {
