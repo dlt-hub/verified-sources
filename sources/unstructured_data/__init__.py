@@ -1,6 +1,5 @@
 """This source converts unstructured data from a specified data resource to structured data using provided queries."""
 
-import logging
 import os
 from typing import Dict
 
@@ -8,8 +7,6 @@ import dlt
 from dlt.extract.source import DltResource, TDataItem
 
 from .helpers import process_file_to_structured, vectorstore_mapping
-
-logging.basicConfig(format="%(asctime)s WARNING: %(message)s", level=logging.WARNING)
 
 
 @dlt.resource
