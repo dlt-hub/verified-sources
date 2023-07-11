@@ -36,7 +36,7 @@ def from_google_drive_to_structured(queries: Dict[str, str]) -> None:
     )
 
     # use extensions to filter files as 'extensions=(".txt", ".pdf", ...)'
-    data_resource = google_drive(download=True, extensions=(".txt", ".pdf", ".jpg"))
+    data_resource = google_drive(download=True, extensions=(".txt", ".pdf"))
     # run the pipeline with your parameters
     load_info = pipeline.run(
         data_resource | unstructured_to_structured_resource(
