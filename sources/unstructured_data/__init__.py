@@ -82,5 +82,7 @@ def convert_data(
             queries,
             vectorstore_mapping[vectorstore],
         )
+
+    response["file_path"] = unstructured_item.pop("file_path")
     response["metadata"] = unstructured_item
     yield response

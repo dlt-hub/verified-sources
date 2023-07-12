@@ -1,4 +1,4 @@
-from typing import Any, Dict, List, Type, Union
+from typing import Any, Dict, List, Type, Union, Mapping
 
 from langchain.document_loaders import UnstructuredFileLoader
 from langchain.indexes import VectorstoreIndexCreator
@@ -9,7 +9,7 @@ from langchain.vectorstores.weaviate import Weaviate
 
 from .async_index import AVectorstoreIndexCreator
 
-vectorstore_mapping = {
+vectorstore_mapping: Mapping[str, Type[VectorStore]] = {
     "chroma": Chroma,
     "elastic_search": ElasticVectorSearch,
     "weaviate": Weaviate,
