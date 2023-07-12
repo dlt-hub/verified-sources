@@ -1,6 +1,7 @@
 from typing import Dict
 
 import dlt
+
 from filesystem import google_drive, local_folder
 from unstructured_data import unstructured_to_structured_resource
 
@@ -18,8 +19,11 @@ def from_local_folder_to_structured(queries: Dict[str, str]) -> None:
     data_resource = local_folder(extensions=(".txt", ".pdf"))
     # run the pipeline with your parameters
     load_info = pipeline.run(
-        data_resource | unstructured_to_structured_resource(
-            queries, table_name=f"unstructured_from_{data_resource.name}"
+        data_resource
+        | unstructured_to_structured_resource(
+            queries,
+            table_name=f"unstructured_from_{data_resource.name}",
+            run_async=True,
         )
     )
     # pretty print the information on data that was loaded
@@ -39,7 +43,8 @@ def from_google_drive_to_structured(queries: Dict[str, str]) -> None:
     data_resource = google_drive(download=True, extensions=(".txt", ".pdf"))
     # run the pipeline with your parameters
     load_info = pipeline.run(
-        data_resource | unstructured_to_structured_resource(
+        data_resource
+        | unstructured_to_structured_resource(
             queries, table_name=f"unstructured_from_{data_resource.name}"
         )
     )
