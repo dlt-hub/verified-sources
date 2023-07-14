@@ -3,6 +3,7 @@ import logging
 import os
 from typing import Any, Dict, Optional, Sequence
 
+from google.auth.exceptions import RefreshError
 from google.auth.transport.requests import Request
 from google.oauth2.credentials import Credentials
 from google_auth_oauthlib.flow import InstalledAppFlow
@@ -45,11 +46,15 @@ def build_service(
         credentials = Credentials.from_authorized_user_file(token_path, SCOPES)
     # If there are no (valid) credentials available, let the user log in.
     if not credentials or not credentials.valid:
-        if credentials and credentials.expired and credentials.refresh_token:
-            credentials.refresh(Request())
-        elif os.path.exists(client_secret_path):
-            flow = InstalledAppFlow.from_client_secrets_file(client_secret_path, SCOPES)
-            credentials = flow.run_local_server(port=0)
+        try:
+            if credentials and credentials.expired and credentials.refresh_token:
+                credentials.refresh(Request())
+        except RefreshError as error:
+            if os.path.exists(client_secret_path):
+                flow = InstalledAppFlow.from_client_secrets_file(client_secret_path, SCOPES)
+                credentials = flow.run_local_server(port=0)
+            else:
+                raise error
 
         if token_path:
             # Save the credentials for the next run
