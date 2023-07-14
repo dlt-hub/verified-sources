@@ -8,7 +8,7 @@ This may look a little bit weird from software engineering perspective but we wa
 
 ## Use `dlt init` to add a source and its demo pipeline to your project
 
-We'll use the [dlt init](https://dlthub.com/docs/walkthroughs/add-a-pipeline) command to distribute the source.
+We'll use the [dlt init](https://dlthub.com/docs/walkthroughs/create-a-pipeline) command to distribute the source.
 
 
 1. Sources are distributed by `dlt init` command that can be issued several times.
