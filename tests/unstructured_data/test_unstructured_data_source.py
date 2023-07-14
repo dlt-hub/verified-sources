@@ -1,17 +1,18 @@
-from pathlib import Path
-from typing import List
+from typing import Sequence
 
 import dlt
 import pytest
 from dlt.extract.source import DltResource
 
-from sources.filesystem import google_drive, local_folder
 from sources.unstructured_data import unstructured_to_structured_resource
+from sources.unstructured_data.filesystem import google_drive, local_folder
 
 from tests.utils import ALL_DESTINATIONS, assert_load_info
 
 
-def run_pipeline(destination_name: str, queries: dict, resource: DltResource, run_async: bool):
+def run_pipeline(
+    destination_name: str, queries: dict, resource: DltResource, run_async: bool
+):
     # Mind the full_refresh flag - it makes sure that data is loaded to unique dataset.
     # This allows you to run the tests on the same database in parallel
     pipeline = dlt.pipeline(
@@ -21,10 +22,10 @@ def run_pipeline(destination_name: str, queries: dict, resource: DltResource, ru
         full_refresh=True,
     )
     data_extractor = resource | unstructured_to_structured_resource(
-            queries,
-            table_name=f"unstructured_from_{resource.name}",
-            run_async=run_async,
-        )
+        queries,
+        table_name=f"unstructured_from_{resource.name}",
+        run_async=run_async,
+    )
     # run the pipeline with your parameters
     load_info = pipeline.run(data_extractor)
     return pipeline, load_info
@@ -34,24 +35,29 @@ def run_pipeline(destination_name: str, queries: dict, resource: DltResource, ru
 @pytest.mark.parametrize("run_async", (False, True))
 class TestUnstructuredFromLocalFolder:
     @pytest.fixture
-    def data_dir(self) -> str:
-        current_dir = Path(__file__).parent.resolve()
-        return (current_dir / "test_data").as_posix()
-
-    @pytest.fixture
     def data_resource(self, data_dir: str) -> DltResource:
         # use extensions to filter files as 'extensions=(".txt", ".pdf", ...)'
         resource = local_folder(data_dir=data_dir, extensions=(".txt", ".pdf"))
         return resource
 
     def test_load_info(
-        self, destination_name: str, queries: dict,  data_resource: DltResource, run_async: bool
+        self,
+        destination_name: str,
+        queries: dict,
+        data_resource: DltResource,
+        run_async: bool,
     ) -> None:
         _, load_info = run_pipeline(destination_name, queries, data_resource, run_async)
         # make sure all jobs were loaded
         assert_load_info(load_info)
 
-    def test_tables(self, destination_name: str, queries: dict, data_resource: DltResource, run_async: bool) -> None:
+    def test_tables(
+        self,
+        destination_name: str,
+        queries: dict,
+        data_resource: DltResource,
+        run_async: bool,
+    ) -> None:
         pipeline, _ = run_pipeline(destination_name, queries, data_resource, run_async)
         # now let's inspect the generated schema. it should contain just
         # two tables with filepaths and structured data
@@ -60,11 +66,14 @@ class TestUnstructuredFromLocalFolder:
         assert len(tables) == 1
         # tables are typed dicts
         structured_data_table = tables[0]
-
         assert structured_data_table["name"] == "unstructured_from_local_folder"
 
     def test_structured_data_content(
-        self, destination_name: str, queries: dict, data_resource: DltResource, run_async: bool
+        self,
+        destination_name: str,
+        queries: dict,
+        data_resource: DltResource,
+        run_async: bool,
     ) -> None:
         pipeline, _ = run_pipeline(destination_name, queries, data_resource, run_async)
         with pipeline.sql_client() as c:
@@ -80,17 +89,15 @@ class TestUnstructuredFromLocalFolder:
 @pytest.mark.parametrize("destination_name", ALL_DESTINATIONS)
 @pytest.mark.parametrize("run_async", (False, True))
 class TestUnstructuredFromGoogleDrive:
-    FOLDER_IDS: List[str] = ["1-yiloGjyl9g40VguIE1QnY5tcRPaF0Nm"]
-
     @pytest.fixture(scope="session")
-    def data_resource(self, tmpdir_factory) -> DltResource:
+    def data_resource(self, tmpdir_factory, gd_folders: Sequence[str]) -> DltResource:
         tmp_path = tmpdir_factory.mktemp("temp_data")
         # use extensions to filter files as 'extensions=(".txt", ".pdf", ...)'
         resource = google_drive(
             download=True,
             extensions=(".txt", ".pdf"),
             storage_folder_path=tmp_path,
-            folder_ids=self.FOLDER_IDS,
+            folder_ids=gd_folders,
         )
         return resource
 
@@ -99,7 +106,7 @@ class TestUnstructuredFromGoogleDrive:
         destination_name: str,
         queries: dict,
         data_resource: DltResource,
-        run_async: bool
+        run_async: bool,
     ) -> None:
         _, load_info = run_pipeline(destination_name, queries, data_resource, run_async)
         # make sure all data were loaded
@@ -110,9 +117,8 @@ class TestUnstructuredFromGoogleDrive:
         destination_name: str,
         queries: dict,
         data_resource: DltResource,
-        run_async: bool
+        run_async: bool,
     ) -> None:
-
         pipeline, _ = run_pipeline(destination_name, queries, data_resource, run_async)
         # now let's inspect the generated schema. it should contain just
         # one table with filepaths
@@ -121,7 +127,6 @@ class TestUnstructuredFromGoogleDrive:
         assert len(tables) == 1
         # tables are typed dicts
         structured_data_table = tables[0]
-
         assert structured_data_table["name"] == "unstructured_from_google_drive"
 
     def test_google_drive_content(
@@ -129,7 +134,7 @@ class TestUnstructuredFromGoogleDrive:
         destination_name: str,
         queries: dict,
         data_resource: DltResource,
-        run_async: bool
+        run_async: bool,
     ) -> None:
         pipeline, _ = run_pipeline(destination_name, queries, data_resource, run_async)
         with pipeline.sql_client() as c:
