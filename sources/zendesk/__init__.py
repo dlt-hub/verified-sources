@@ -14,6 +14,7 @@ from dlt.extract.source import DltResource
 from .helpers.api_helpers import process_ticket, process_ticket_field
 from .helpers.talk_api import ZendeskAPIClient
 from .helpers.credentials import TZendeskCredentials, ZendeskCredentialsOAuth
+from .helpers import make_date_ranges
 
 from .settings import (
     DEFAULT_START_DATE,
@@ -28,6 +29,7 @@ from .settings import (
 def zendesk_talk(
     credentials: TZendeskCredentials = dlt.secrets.value,
     incremental_start_time: Optional[pendulum.DateTime] = DEFAULT_START_DATE,
+    incremental_end_time: Optional[pendulum.DateTime] = None,
 ) -> Iterable[DltResource]:
     """
     Retrieves data from Zendesk Talk for phone calls and voicemails.
@@ -35,6 +37,8 @@ def zendesk_talk(
     Args:
         credentials (TZendeskCredentials): The credentials for authentication. Defaults to the value in the `dlt.secrets` object.
         incremental_start_time (Optional[pendulum.DateTime]): The start time for incremental loading. Defaults to DEFAULT_START_DATE.
+        incremental_end_time: Optionally load records only until this date/time.
+            Can be used in conjunction with `incremental_start_time` to load limited ranges.
 
     Yields:
         DltResource: Data resources from Zendesk Talk.
@@ -67,7 +71,11 @@ def zendesk_talk(
             talk_endpoint_name=key,
             talk_endpoint=talk_incremental_endpoint,
             updated_at=dlt.sources.incremental(
-                "updated_at", initial_value=incremental_start_time.isoformat()
+                "updated_at",
+                initial_value=incremental_start_time.isoformat(),
+                end_value=incremental_end_time.isoformat()
+                if incremental_end_time
+                else None,
             ),
         )
 
@@ -122,6 +130,7 @@ def talk_incremental_resource(
 def zendesk_chat(
     credentials: ZendeskCredentialsOAuth = dlt.secrets.value,
     incremental_start_time: Optional[pendulum.DateTime] = DEFAULT_START_DATE,
+    incremental_end_time: Optional[pendulum.DateTime] = None,
 ) -> Iterable[DltResource]:
     """
     Retrieves data from Zendesk Chat for chat interactions.
@@ -129,6 +138,8 @@ def zendesk_chat(
     Args:
         credentials (ZendeskCredentialsOAuth): The credentials for authentication. Defaults to the value in the `dlt.secrets` object.
         incremental_start_time (Optional[pendulum.DateTime]): The start time for incremental loading. Defaults to DEFAULT_START_DATE.
+        incremental_end_time: Optionally load records only until this date/time.
+            Can be used in conjunction with `incremental_start_time` to load limited ranges.
 
     Yields:
         DltResource: Data resources from Zendesk Chat.
@@ -141,6 +152,9 @@ def zendesk_chat(
         dlt.sources.incremental(
             "update_timestamp|updated_timestamp",
             initial_value=incremental_start_time.isoformat(),
+            end_value=incremental_end_time.isoformat()
+            if incremental_end_time
+            else None,
         ),
     )
 
@@ -173,6 +187,7 @@ def zendesk_support(
     load_all: bool = True,
     pivot_ticket_fields: bool = True,
     incremental_start_time: Optional[pendulum.DateTime] = DEFAULT_START_DATE,
+    incremental_end_time: Optional[pendulum.DateTime] = None,
 ) -> Iterable[DltResource]:
     """
     Retrieves data from Zendesk Support for tickets, users, brands, organizations, and groups.
@@ -182,6 +197,8 @@ def zendesk_support(
         load_all (bool): Whether to load extra resources for the API. Defaults to True.
         pivot_ticket_fields (bool): Whether to pivot the custom fields in tickets. Defaults to True.
         incremental_start_time (Optional[pendulum.DateTime]): The start time for incremental loading. Defaults to DEFAULT_START_DATE.
+        incremental_end_time: Optionally load records only until this date/time.
+            Can be used in conjunction with `incremental_start_time` to load limited ranges.
 
     Returns:
         Sequence[DltResource]: Multiple dlt resources.
@@ -189,12 +206,19 @@ def zendesk_support(
 
     incremental_start_time_ts = incremental_start_time.int_timestamp
     incremental_start_time_iso_str = incremental_start_time.isoformat()
+    incremental_end_time_ts: Optional[int] = None
+    incremental_end_time_iso_str: Optional[str] = None
+    if incremental_end_time:
+        incremental_end_time_ts = incremental_end_time.int_timestamp
+        incremental_end_time_iso_str = incremental_end_time.isoformat()
 
     @dlt.resource(primary_key="id", write_disposition="append")
     def ticket_events(
         zendesk_client: ZendeskAPIClient,
         timestamp: dlt.sources.incremental[int] = dlt.sources.incremental(
-            "timestamp", initial_value=incremental_start_time_ts
+            "timestamp",
+            initial_value=incremental_start_time_ts,
+            end_value=incremental_end_time_ts,
         ),
     ) -> Iterator[TDataItem]:
         # URL For ticket events
@@ -221,7 +245,11 @@ def zendesk_support(
         per_page: int = 1000,
         updated_at: dlt.sources.incremental[
             pendulum.DateTime
-        ] = dlt.sources.incremental("updated_at", initial_value=incremental_start_time),
+        ] = dlt.sources.incremental(
+            "updated_at",
+            initial_value=incremental_start_time,
+            end_value=incremental_end_time,
+        ),
     ) -> Iterator[TDataItem]:
         """
         Resource for tickets table. Uses DLT state to handle column renaming of custom fields to prevent changing the names of said columns.
@@ -237,7 +265,6 @@ def zendesk_support(
         Yields:
             TDataItem: Dictionary containing the ticket data.
         """
-
         # grab the custom fields from dlt state if any
         if pivot_fields:
             load_ticket_fields_state(zendesk_client)
@@ -261,7 +288,9 @@ def zendesk_support(
     def ticket_metric_table(
         zendesk_client: ZendeskAPIClient,
         time: dlt.sources.incremental[str] = dlt.sources.incremental(
-            "time", initial_value=incremental_start_time_iso_str
+            "time",
+            initial_value=incremental_start_time_iso_str,
+            end_value=incremental_end_time_iso_str,
         ),
     ) -> Iterator[TDataItem]:
         """

@@ -2,6 +2,7 @@ import pytest
 from typing import List, Dict, Any, Iterable
 import dlt
 from dlt.pipeline.pipeline import Pipeline
+from dlt.common import pendulum
 from sources.zendesk import zendesk_chat, zendesk_support, zendesk_talk
 from sources.zendesk.helpers.api_helpers import process_ticket, process_ticket_field
 from tests.utils import (
@@ -103,10 +104,10 @@ def test_pivoting_tickets(destination_name: str) -> None:
         dataset_name="test_unpivot_tickets_support",
     )
     data = zendesk_support(load_all=False, pivot_ticket_fields=False)
-    info = pipeline_pivoting_1.run(data.with_resources("ticket_fields", "tickets"))
+    info = pipeline_pivoting_1.run(data.with_resources("tickets"))
     assert_load_info(info)
     schema = pipeline_pivoting_1.default_schema
-    unpivoted_tickets = schema.data_tables()[1]["columns"].keys()
+    unpivoted_tickets = schema.data_tables()[0]["columns"].keys()
     assert "custom_fields" in unpivoted_tickets
     assert "test_field" not in unpivoted_tickets
     # drop the pipeline explicitly. fixture drops only one active pipeline
@@ -120,10 +121,10 @@ def test_pivoting_tickets(destination_name: str) -> None:
         dataset_name="test_pivot_tickets_support",
     )
     data2 = zendesk_support(load_all=False, pivot_ticket_fields=True)
-    info2 = pipeline_pivoting_2.run(data2.with_resources("ticket_fields", "tickets"))
+    info2 = pipeline_pivoting_2.run(data2.with_resources("tickets"))
     assert_load_info(info2)
     schema2 = pipeline_pivoting_2.default_schema
-    pivoted_tickets = schema2.data_tables()[1]["columns"].keys()
+    pivoted_tickets = schema2.data_tables()[0]["columns"].keys()
     assert "test_field" in pivoted_tickets
     assert "custom_field" not in pivoted_tickets
     assert "dummy_dropdown" in pivoted_tickets
@@ -164,6 +165,32 @@ def test_incrementing(destination_name: str) -> None:
     # there are no more chats to load
     assert_load_info(info, expected_load_packages=2)
     assert load_table_counts(pipeline_incremental, *INCREMENTAL_TABLES) == counts
+
+
+@pytest.mark.parametrize("destination_name", ALL_DESTINATIONS)
+def test_incremental_end_time(destination_name: str) -> None:
+    """Test chunk loading tickets with incremental end_value"""
+    pipeline = dlt.pipeline(
+        destination=destination_name,
+        full_refresh=True,
+    )
+
+    incremental_end_time = pendulum.DateTime(2023, 2, 7).in_tz("UTC")
+    data = zendesk_support(
+        incremental_start_time=pendulum.DateTime(2023, 2, 6).in_tz("UTC"),
+        incremental_end_time=incremental_end_time,
+    ).with_resources("tickets")
+
+    info = pipeline.run(data, write_disposition="replace")
+    assert_load_info(info)
+
+    with pipeline.sql_client() as client:
+        rows = [
+            pendulum.instance(row[0])
+            for row in client.execute_sql("SELECT updated_at FROM tickets")
+        ]
+
+    assert all(value < incremental_end_time for value in rows)
 
 
 @pytest.mark.parametrize("destination_name", ALL_DESTINATIONS)
