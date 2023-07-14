@@ -2,7 +2,7 @@ from typing import Dict
 
 import dlt
 
-from filesystem import google_drive, local_folder
+from unstructured_data.filesystem import google_drive, local_folder
 from unstructured_data import unstructured_to_structured_resource
 
 

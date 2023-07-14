@@ -12,6 +12,7 @@ from langchain.schema import Document
 
 class AVectorStoreIndexWrapper(VectorStoreIndexWrapper):
     """Async wrapper around a vectorstore for easy access."""
+
     def __init__(
         self,
         **kwargs: Any,
@@ -31,6 +32,7 @@ class AVectorStoreIndexWrapper(VectorStoreIndexWrapper):
 
 class AVectorstoreIndexCreator(VectorstoreIndexCreator):
     """Async logic for creating indexes."""
+
     def from_documents(self, documents: List[Document]) -> AVectorStoreIndexWrapper:
         """Create a vectorstore index from documents."""
         sub_docs = self.text_splitter.split_documents(documents)

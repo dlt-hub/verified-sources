@@ -1,4 +1,4 @@
-from typing import Any, Dict, List, Type, Union, Mapping
+from typing import Any, Dict, List, Mapping, Type, Union
 
 from langchain.document_loaders import UnstructuredFileLoader
 from langchain.indexes import VectorstoreIndexCreator
