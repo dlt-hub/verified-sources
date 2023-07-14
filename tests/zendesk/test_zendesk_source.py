@@ -348,6 +348,27 @@ def test_process_ticket_custom_fields() -> None:
 
     assert result["Another field"] == "Some value"
 
+    # Test field doesn't exist
+    ticket = dict(
+        id=123,
+        custom_fields=[
+            {"id": 99, "value": "test_value_5"},
+            {"id": 55, "value": "test_value_2"},
+        ],
+        fields=[],
+        updated_at="2022-01-01T00:00:00Z",
+        created_at="2022-01-01T00:00:00Z",
+        due_at="2022-01-01T00:00:00Z",
+    )
+
+    result = process_ticket(ticket, fields_state, pivot_custom_fields=True)
+
+    # Non existing field remains in the custom fields list
+    assert result["custom_fields"] == [
+        {"id": 99, "ticket_id": 123, "value": "test_value_5"}
+    ]
+    assert result["Another field"] == "test_value_2"
+
 
 def test_process_ticket_field() -> None:
     fields_state: Dict[str, Any] = {"55": {"title": "Another field", "options": {}}}
