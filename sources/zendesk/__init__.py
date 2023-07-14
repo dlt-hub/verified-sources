@@ -206,31 +206,6 @@ def zendesk_support(
         )
         yield from event_pages
 
-    @dlt.resource(name="ticket_fields", write_disposition="replace")
-    def ticket_fields_table(zendesk_client: ZendeskAPIClient) -> Iterator[TDataItem]:
-        """
-        Loads ticket fields data from Zendesk API.
-
-        Args:
-            zendesk_client (Zenpy): An instance of Zenpy object used to make API calls to Zendesk.
-
-        Yields:
-            TDataItem: Dictionary containing the ticket fields data.
-        """
-        # get dlt state
-        ticket_custom_fields = dlt.current.source_state().setdefault(
-            CUSTOM_FIELDS_STATE_KEY, {}
-        )
-        # get all custom fields and update state if needed, otherwise just load dicts into tables
-        all_fields = list(
-            chain.from_iterable(
-                zendesk_client.get_pages("/api/v2/ticket_fields.json", "ticket_fields")
-            )
-        )
-        # all_fields = zendesk_client.ticket_fields()
-        for field in all_fields:
-            yield process_ticket_field(field, ticket_custom_fields)
-
     @dlt.resource(
         name="tickets",
         primary_key="id",
@@ -264,6 +239,8 @@ def zendesk_support(
         """
 
         # grab the custom fields from dlt state if any
+        if pivot_fields:
+            load_ticket_fields_state(zendesk_client)
         fields_dict = dlt.current.source_state().setdefault(CUSTOM_FIELDS_STATE_KEY, {})
         include_objects = ["users", "groups", "organisation", "brands"]
         ticket_pages = zendesk_client.get_pages_incremental(
@@ -311,12 +288,46 @@ def zendesk_support(
         )
         yield from metric_event_pages
 
+    def ticket_fields_table(zendesk_client: ZendeskAPIClient) -> Iterator[TDataItem]:
+        """
+        Loads ticket fields data from Zendesk API.
+
+        Args:
+            zendesk_client (Zenpy): An instance of Zenpy object used to make API calls to Zendesk.
+
+        Yields:
+            TDataItem: Dictionary containing the ticket fields data.
+        """
+        # get dlt state
+        ticket_custom_fields = dlt.current.source_state().setdefault(
+            CUSTOM_FIELDS_STATE_KEY, {}
+        )
+        # get all custom fields and update state if needed, otherwise just load dicts into tables
+        all_fields = list(
+            chain.from_iterable(
+                zendesk_client.get_pages("/api/v2/ticket_fields.json", "ticket_fields")
+            )
+        )
+        # all_fields = zendesk_client.ticket_fields()
+        for field in all_fields:
+            yield process_ticket_field(field, ticket_custom_fields)
+
+    def load_ticket_fields_state(
+        zendesk_client: ZendeskAPIClient,
+    ) -> None:
+        for _ in ticket_fields_table(zendesk_client):
+            pass
+
+    ticket_fields_resource = dlt.resource(
+        name="ticket_fields", write_disposition="replace"
+    )(ticket_fields_table)
+
     # Authenticate
     zendesk_client = ZendeskAPIClient(credentials)
 
     # loading base tables
     resource_list = [
-        ticket_fields_table(zendesk_client=zendesk_client),
+        ticket_fields_resource(zendesk_client=zendesk_client),
         ticket_events(zendesk_client=zendesk_client),
         ticket_table(zendesk_client=zendesk_client, pivot_fields=pivot_ticket_fields),
         ticket_metric_table(zendesk_client=zendesk_client),
