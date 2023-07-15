@@ -33,7 +33,11 @@ from dlt.common import pendulum
 from dlt.common.typing import TDataItems, TDataItem
 from dlt.extract.source import DltResource
 
-from .helpers import fetch_data, _get_property_names, fetch_data_with_history
+from .helpers import (
+    fetch_data,
+    _get_property_names,
+    fetch_property_history,
+)
 from .settings import (
     STARTDATE,
     WEB_ANALYTICS_EVENTS_ENDPOINT,
@@ -84,17 +88,19 @@ def crm_objects(
     """Building blocks for CRM resources."""
     props = ",".join(_get_property_names(api_key, object_type))
     params = {"properties": props, "limit": 100}
+
+    yield from fetch_data(CRM_OBJECT_ENDPOINTS[object_type], api_key, params=params)
     if include_history:
-        params["propertiesWithHistory"] = props
-        # API allows max 50 items per call with property history
-        params["limit"] = 50
-    for objects, history_entries in fetch_data_with_history(
-        CRM_OBJECT_ENDPOINTS[object_type], api_key, params=params
-    ):
-        yield objects
-        yield dlt.mark.with_table_name(
-            history_entries, OBJECT_TYPE_PLURAL[object_type] + "_property_history"
-        )
+        # Get history separately, as requesting both all properties and history together
+        # is likely to hit hubspot's URL length limit
+        for history_entries in fetch_property_history(
+            CRM_OBJECT_ENDPOINTS[object_type],
+            api_key,
+            props,
+        ):
+            yield dlt.mark.with_table_name(
+                history_entries, OBJECT_TYPE_PLURAL[object_type] + "_property_history"
+            )
 
 
 @dlt.resource(name="companies", write_disposition="replace")

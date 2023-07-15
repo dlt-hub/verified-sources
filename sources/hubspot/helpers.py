@@ -43,14 +43,54 @@ def extract_property_history(objects: List[Dict[str, Any]]) -> Iterator[Dict[str
                 yield {"object_id": item["id"], "property_name": key, **entry}
 
 
-def fetch_data_with_history(
+def fetch_property_history(
+    endpoint: str, api_key: str, props: str, params: Optional[Dict[str, Any]] = None
+) -> Iterator[List[Dict[str, Any]]]:
+    """Fetch property history from the given CRM endpoint.
+
+    Args:
+        endpoint: The endpoint to fetch data from, as a string.
+        api_key: The API key to use for authentication, as a string.
+        props: A comma separated list of properties to retrieve the history for
+        params: Optional dict of query params to include in the request
+
+    Yields:
+         List of property history entries (dicts)
+    """
+    # Construct the URL and headers for the API request
+    url = get_url(endpoint)
+    headers = _get_headers(api_key)
+
+    params = dict(params or {})
+    params["propertiesWithHistory"] = props
+    params["limit"] = 50
+    # Make the API request
+    r = requests.get(url, headers=headers, params=params)
+    # Parse the API response and yield the properties of each result
+
+    # Parse the response JSON data
+    _data = r.json()
+    while _data is not None:
+        if "results" in _data:
+            yield list(extract_property_history(_data["results"]))
+
+        # Follow pagination links if they exist
+        _next = _data.get("paging", {}).get("next", None)
+        if _next:
+            next_url = _next["link"]
+            # Get the next page response
+            r = requests.get(next_url, headers=headers)
+            _data = r.json()
+        else:
+            _data = None
+
+
+def fetch_data(
     endpoint: str, api_key: str, params: Optional[Dict[str, Any]] = None
-) -> Iterator[Tuple[List[Dict[str, Any]], List[Dict[str, Any]]]]:
+) -> Iterator[List[Dict[str, Any]]]:
     """
     Fetch data from HUBSPOT endpoint using a specified API key and yield the properties of each result.
     For paginated endpoint this function yields item from all pages.
-    For objects that support it and When params includes `propertiesWithHistory`
-    a flattened list of history entries is included in the return tuple.
 
     Args:
         endpoint (str): The endpoint to fetch data from, as a string.
@@ -58,7 +98,7 @@ def fetch_data_with_history(
         params: Optional dict of query params to include in the request
 
     Yields:
-        A tuple consisting of 1. List of CRM object dicts and 2. List of property history entries
+        A List of CRM object dicts
 
     Raises:
         requests.exceptions.HTTPError: If the API returns an HTTP error status code.
@@ -81,7 +121,6 @@ def fetch_data_with_history(
     # Make the API request
     r = requests.get(url, headers=headers, params=params)
     # Parse the API response and yield the properties of each result
-
     # Parse the response JSON data
     _data = r.json()
     # Yield the properties of each result in the API response
@@ -110,7 +149,7 @@ def fetch_data_with_history(
 
                         _obj[association] = __values
                 _objects.append(_obj)
-            yield _objects, list(extract_property_history(_data["results"]))
+            yield _objects
 
         # Follow pagination links if they exist
         _next = _data.get("paging", {}).get("next", None)
@@ -121,16 +160,6 @@ def fetch_data_with_history(
             _data = r.json()
         else:
             _data = None
-
-
-def fetch_data(
-    endpoint: str, api_key: str, params: Optional[Dict[str, Any]] = None
-) -> Iterator[List[Dict[str, Any]]]:
-    """Fetch data objects from the hubspot API.
-    Same as `fetch_data_with_history` but does not include history entries.
-    """
-    for page, _ in fetch_data_with_history(endpoint, api_key, params=params):
-        yield page
 
 
 def _get_property_names(api_key: str, object_type: str) -> List[str]:

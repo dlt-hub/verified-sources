@@ -149,16 +149,39 @@ def test_all_resources(destination_name: str) -> None:
         dataset_name="hubspot_data",
         full_refresh=True,
     )
-    load_info = pipeline.run(hubspot())
+    load_info = pipeline.run(hubspot(include_history=True))
     print(load_info)
     assert_load_info(load_info)
-    table_names = [t["name"] for t in pipeline.default_schema.data_tables()]
+    table_names = [
+        t["name"]
+        for t in pipeline.default_schema.data_tables()
+        if not t["name"].endswith("_property_history") and not t.get("parent")
+    ]
+
     # make sure no duplicates (ie. pages wrongly overlap)
     assert (
         load_table_counts(pipeline, *table_names)
         == load_table_distinct_counts(pipeline, "hs_object_id", *table_names)
         == {"companies": 200, "deals": 500, "contacts": 402}
     )
+
+    history_table_names = [
+        t["name"]
+        for t in pipeline.default_schema.data_tables()
+        if t["name"].endswith("_property_history")
+    ]
+    # Check history tables
+    history_counts = load_table_counts(pipeline, *history_table_names)
+    # Only check there are some records for now
+    assert history_counts["contacts_property_history"] >= 1
+    assert history_counts["deals_property_history"] >= 1
+
+    # Check common columns
+    with pipeline.sql_client() as client:
+        row = client.execute_sql(
+            "SELECT object_id, value, property_name FROM deals_property_history LIMIT 1"
+        )[0]
+        assert all(bool(val) and isinstance(val, str) for val in row)
 
 
 @pytest.mark.parametrize("destination_name", ALL_DESTINATIONS)
