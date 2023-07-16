@@ -171,17 +171,37 @@ def test_all_resources(destination_name: str) -> None:
         if t["name"].endswith("_property_history")
     ]
     # Check history tables
-    history_counts = load_table_counts(pipeline, *history_table_names)
-    # Only check there are some records for now
-    assert history_counts["contacts_property_history"] >= 1
-    assert history_counts["deals_property_history"] >= 1
+    assert load_table_counts(pipeline, *history_table_names) == {
+        "contacts_property_history": 16826,
+        "deals_property_history": 13849,
+    }
 
-    # Check common columns
+    # Check property from couple of contacts against known data
     with pipeline.sql_client() as client:
-        row = client.execute_sql(
-            "SELECT object_id, value, property_name FROM deals_property_history LIMIT 1"
-        )[0]
-        assert all(bool(val) and isinstance(val, str) for val in row)
+        rows = set(
+            tuple(row)
+            for row in client.execute_sql(
+                """
+            SELECT ch.property_name, ch.value, ch.source_type, ch.source_type, CAST(ch.timestamp AS VARCHAR)
+                FROM contacts
+            JOIN
+                contacts_property_history AS ch ON contacts.id = ch.object_id
+            WHERE contacts.id IN ('51', '1') AND property_name = 'email';
+            """
+            )
+        )
+    assert set(rows) == set(
+        [
+            (
+                "email",
+                "emailmaria@hubspot.com",
+                "API",
+                "API",
+                "2022-06-15 08:51:51.399+00",
+            ),
+            ("email", "bh@hubspot.com", "API", "API", "2022-06-15 08:51:51.399+00"),
+        ]
+    )
 
 
 @pytest.mark.parametrize("destination_name", ALL_DESTINATIONS)
