@@ -51,7 +51,9 @@ def build_service(
                 credentials.refresh(Request())
         except RefreshError as error:
             if os.path.exists(client_secret_path):
-                flow = InstalledAppFlow.from_client_secrets_file(client_secret_path, SCOPES)
+                flow = InstalledAppFlow.from_client_secrets_file(
+                    client_secret_path, SCOPES
+                )
                 credentials = flow.run_local_server(port=0)
             else:
                 raise error
