@@ -1,9 +1,8 @@
 from typing import Dict
 
 import dlt
-
-from unstructured_data.filesystem import google_drive, local_folder
 from unstructured_data import unstructured_to_structured_resource
+from unstructured_data.filesystem import google_drive, local_folder
 
 
 def from_local_folder_to_structured(queries: Dict[str, str]) -> None:
