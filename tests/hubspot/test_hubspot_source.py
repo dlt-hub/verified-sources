@@ -1,11 +1,15 @@
-from unittest.mock import patch
+from unittest.mock import patch, ANY, call
 
 import dlt
 import pytest
+from itertools import chain
+from typing import Any
+from urllib.parse import urljoin
 
+from dlt.common import pendulum
 from dlt.sources.helpers import requests
-from sources.hubspot import hubspot, hubspot_events_for_objects
-from sources.hubspot.helpers import fetch_data
+from sources.hubspot import hubspot, hubspot_events_for_objects, contacts
+from sources.hubspot.helpers import fetch_data, BASE_URL
 from sources.hubspot.settings import (
     CRM_CONTACTS_ENDPOINT,
     CRM_COMPANIES_ENDPOINT,
@@ -21,6 +25,8 @@ from tests.hubspot.mock_data import (
     mock_products_data,
     mock_tickets_data,
     mock_quotes_data,
+    mock_contacts_with_history,
+    mock_contacts_properties,
 )
 from tests.utils import (
     ALL_DESTINATIONS,
@@ -111,6 +117,59 @@ def test_fetch_data_quotes(mock_response):
 
 
 @pytest.mark.parametrize("destination_name", ALL_DESTINATIONS)
+def test_resource_contacts_with_history(destination_name: str, mock_response) -> None:
+    prop_names = [p["name"] for p in mock_contacts_properties["results"]]
+    prop_string = ",".join(prop_names)
+
+    def fake_get(url: str, *args, **kwargs) -> Any:  # type: ignore[no-untyped-def]
+        if "/properties" in url:
+            return mock_response(json_data=mock_contacts_properties)
+        return mock_response(json_data=mock_contacts_with_history)
+
+    expected_rows = []
+    for contact in mock_contacts_with_history["results"]:
+        for items in contact["propertiesWithHistory"].values():  # type: ignore[attr-defined]
+            expected_rows.extend(items)
+
+    with patch("dlt.sources.helpers.requests.get", side_effect=fake_get) as m:
+        pipeline = dlt.pipeline(
+            pipeline_name="hubspot",
+            destination=destination_name,
+            dataset_name="hubspot_data",
+            full_refresh=True,
+        )
+        load_info = pipeline.run(contacts(api_key="fake_key", include_history=True))
+    assert_load_info(load_info)
+
+    assert m.call_count == 3
+
+    # Check that API is called with all properties listed
+    m.assert_has_calls(
+        [
+            call(
+                urljoin(BASE_URL, "/crm/v3/properties/contacts"),
+                headers=ANY,
+                params=None,
+            ),
+            call(
+                urljoin(BASE_URL, CRM_CONTACTS_ENDPOINT),
+                headers=ANY,
+                params={"properties": prop_string, "limit": 100},
+            ),
+            call(
+                urljoin(BASE_URL, CRM_CONTACTS_ENDPOINT),
+                headers=ANY,
+                params={"propertiesWithHistory": prop_string, "limit": 50},
+            ),
+        ]
+    )
+
+    assert load_table_counts(pipeline, "contacts_property_history") == {
+        "contacts_property_history": len(expected_rows)
+    }
+
+
+@pytest.mark.parametrize("destination_name", ALL_DESTINATIONS)
 def test_all_resources(destination_name: str) -> None:
     pipeline = dlt.pipeline(
         pipeline_name="hubspot",
@@ -118,15 +177,67 @@ def test_all_resources(destination_name: str) -> None:
         dataset_name="hubspot_data",
         full_refresh=True,
     )
-    load_info = pipeline.run(hubspot())
+    load_info = pipeline.run(hubspot(include_history=True))
     print(load_info)
     assert_load_info(load_info)
-    table_names = [t["name"] for t in pipeline.default_schema.data_tables()]
+    table_names = [
+        t["name"]
+        for t in pipeline.default_schema.data_tables()
+        if not t["name"].endswith("_property_history") and not t.get("parent")
+    ]
+
     # make sure no duplicates (ie. pages wrongly overlap)
     assert (
         load_table_counts(pipeline, *table_names)
         == load_table_distinct_counts(pipeline, "hs_object_id", *table_names)
         == {"companies": 200, "deals": 500, "contacts": 402}
+    )
+
+    history_table_names = [
+        t["name"]
+        for t in pipeline.default_schema.data_tables()
+        if t["name"].endswith("_property_history")
+    ]
+    # Check history tables
+    assert load_table_counts(pipeline, *history_table_names) == {
+        "contacts_property_history": 16826,
+        "deals_property_history": 13849,
+    }
+
+    # Check property from couple of contacts against known data
+    with pipeline.sql_client() as client:
+        rows = [
+            list(row)
+            for row in client.execute_sql(
+                """
+                SELECT ch.property_name, ch.value, ch.source_type, ch.source_type, ch.timestamp
+                FROM contacts
+                JOIN
+                contacts_property_history AS ch ON contacts.id = ch.object_id
+                WHERE contacts.id IN ('51', '1') AND property_name = 'email';
+                """
+            )
+        ]
+    for row in rows:
+        row[-1] = pendulum.instance(row[-1])
+
+    assert set((tuple(row) for row in rows)) == set(
+        [
+            (
+                "email",
+                "emailmaria@hubspot.com",
+                "API",
+                "API",
+                pendulum.parse("2022-06-15 08:51:51.399+00"),
+            ),
+            (
+                "email",
+                "bh@hubspot.com",
+                "API",
+                "API",
+                pendulum.parse("2022-06-15 08:51:51.399+00"),
+            ),
+        ]
     )
 
 

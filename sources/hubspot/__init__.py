@@ -26,30 +26,33 @@ python
 
 from typing import Any, Dict, List, Literal, Sequence, Iterator
 from urllib.parse import quote
+from itertools import chain
 
 import dlt
 from dlt.common import pendulum
-from dlt.common.typing import TDataItems
+from dlt.common.typing import TDataItems, TDataItem
 from dlt.extract.source import DltResource
 
-from .helpers import fetch_data
-
+from .helpers import (
+    fetch_data,
+    _get_property_names,
+    fetch_property_history,
+)
 from .settings import (
     STARTDATE,
-    CRM_CONTACTS_ENDPOINT,
-    CRM_COMPANIES_ENDPOINT,
-    CRM_DEALS_ENDPOINT,
-    CRM_TICKETS_ENDPOINT,
-    CRM_PRODUCTS_ENDPOINT,
     WEB_ANALYTICS_EVENTS_ENDPOINT,
-    CRM_QUOTES_ENDPOINT,
+    OBJECT_TYPE_SINGULAR,
+    CRM_OBJECT_ENDPOINTS,
+    OBJECT_TYPE_PLURAL,
 )
 
 THubspotObjectType = Literal["company", "contact", "deal", "ticket", "product", "quote"]
 
 
 @dlt.source(name="hubspot")
-def hubspot() -> Sequence[DltResource]:
+def hubspot(
+    api_key: str = dlt.secrets.value, include_history: bool = False
+) -> Sequence[DltResource]:
     """
     A DLT source that retrieves data from the HubSpot API using the specified API key.
 
@@ -58,6 +61,7 @@ def hubspot() -> Sequence[DltResource]:
 
     Args:
         api_key (str, optional): The API key used to authenticate with the HubSpot API. Defaults to dlt.secrets.value.
+        include_history: Whether to load history of property changes along with entities. The history entries are loaded to separate tables.
 
     Returns:
         tuple: A tuple of Dlt resources, one for each HubSpot API endpoint.
@@ -67,49 +71,84 @@ def hubspot() -> Sequence[DltResource]:
         is passed to `fetch_data` as the `api_key` argument.
     """
     return [
-        companies(),
-        contacts(),
-        deals(),
-        tickets(),
-        products(),
-        quotes(),
+        companies(include_history=include_history),
+        contacts(include_history=include_history),
+        deals(include_history=include_history),
+        tickets(include_history=include_history),
+        products(include_history=include_history),
+        quotes(include_history=include_history),
     ]
 
 
+def crm_objects(
+    object_type: str,
+    api_key: str = dlt.secrets.value,
+    include_history: bool = False,
+) -> Iterator[TDataItems]:
+    """Building blocks for CRM resources."""
+    props = ",".join(_get_property_names(api_key, object_type))
+    params = {"properties": props, "limit": 100}
+
+    yield from fetch_data(CRM_OBJECT_ENDPOINTS[object_type], api_key, params=params)
+    if include_history:
+        # Get history separately, as requesting both all properties and history together
+        # is likely to hit hubspot's URL length limit
+        for history_entries in fetch_property_history(
+            CRM_OBJECT_ENDPOINTS[object_type],
+            api_key,
+            props,
+        ):
+            yield dlt.mark.with_table_name(
+                history_entries, OBJECT_TYPE_PLURAL[object_type] + "_property_history"
+            )
+
+
 @dlt.resource(name="companies", write_disposition="replace")
-def companies(api_key: str = dlt.secrets.value) -> Iterator[TDataItems]:
+def companies(
+    api_key: str = dlt.secrets.value, include_history: bool = False
+) -> Iterator[TDataItems]:
     """Hubspot companies resource"""
-    yield from fetch_data(CRM_COMPANIES_ENDPOINT, api_key=api_key)
+    yield from crm_objects("company", api_key, include_history=False)
 
 
 @dlt.resource(name="contacts", write_disposition="replace")
-def contacts(api_key: str = dlt.secrets.value) -> Iterator[TDataItems]:
+def contacts(
+    api_key: str = dlt.secrets.value, include_history: bool = False
+) -> Iterator[TDataItems]:
     """Hubspot contacts resource"""
-    yield from fetch_data(CRM_CONTACTS_ENDPOINT, api_key=api_key)
+    yield from crm_objects("contact", api_key, include_history)
 
 
 @dlt.resource(name="deals", write_disposition="replace")
-def deals(api_key: str = dlt.secrets.value) -> Iterator[TDataItems]:
+def deals(
+    api_key: str = dlt.secrets.value, include_history: bool = False
+) -> Iterator[TDataItems]:
     """Hubspot deals resource"""
-    yield from fetch_data(CRM_DEALS_ENDPOINT, api_key=api_key)
+    yield from crm_objects("deal", api_key, include_history)
 
 
 @dlt.resource(name="tickets", write_disposition="replace")
-def tickets(api_key: str = dlt.secrets.value) -> Iterator[TDataItems]:
+def tickets(
+    api_key: str = dlt.secrets.value, include_history: bool = False
+) -> Iterator[TDataItems]:
     """Hubspot tickets resource"""
-    yield from fetch_data(CRM_TICKETS_ENDPOINT, api_key=api_key)
+    yield from crm_objects("ticket", api_key, include_history)
 
 
 @dlt.resource(name="products", write_disposition="replace")
-def products(api_key: str = dlt.secrets.value) -> Iterator[TDataItems]:
+def products(
+    api_key: str = dlt.secrets.value, include_history: bool = False
+) -> Iterator[TDataItems]:
     """Hubspot products resource"""
-    yield from fetch_data(CRM_PRODUCTS_ENDPOINT, api_key=api_key)
+    yield from crm_objects("product", api_key, include_history)
 
 
 @dlt.resource(name="quotes", write_disposition="replace")
-def quotes(api_key: str = dlt.secrets.value) -> Iterator[TDataItems]:
+def quotes(
+    api_key: str = dlt.secrets.value, include_history: bool = False
+) -> Iterator[TDataItems]:
     """Hubspot quotes resource"""
-    yield from fetch_data(CRM_QUOTES_ENDPOINT, api_key=api_key)
+    yield from crm_objects("quote", api_key, include_history)
 
 
 @dlt.resource

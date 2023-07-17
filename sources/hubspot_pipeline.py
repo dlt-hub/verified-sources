@@ -27,6 +27,33 @@ def load_crm_data() -> None:
     print(info)
 
 
+def load_crm_data_with_history() -> None:
+    """
+    Loads all HubSpot CRM resources and property change history for each entity.
+    The history entries are loaded to a tables per resource `{resource_name}_property_history`, e.g. `contacts_property_history`
+
+    Returns:
+        None
+    """
+
+    # Create a DLT pipeline object with the pipeline name, dataset name, and destination database type
+    # Add full_refresh=(True or False) if you need your pipeline to create the dataset in your destination
+    p = dlt.pipeline(
+        pipeline_name="hubspot_pipeline",
+        dataset_name="hubspot",
+        destination="postgres",
+    )
+
+    # Configure the source with `include_history` to enable property history load, history is disabled by default
+    data = hubspot(include_history=True)
+
+    # Run the pipeline with the HubSpot source connector
+    info = p.run(data)
+
+    # Print information about the pipeline run
+    print(info)
+
+
 def load_web_analytics_events(
     object_type: THubspotObjectType, object_ids: List[str]
 ) -> None:
@@ -57,4 +84,5 @@ def load_web_analytics_events(
 if __name__ == "__main__":
     # Call the functions to load HubSpot data into the database with and without company events enabled
     load_crm_data()
+    # load_crm_data_with_history()
     # load_web_analytics_events("company", ["7086461639", "7086464459"])
