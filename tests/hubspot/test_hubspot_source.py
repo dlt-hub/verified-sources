@@ -1,13 +1,14 @@
-from unittest.mock import patch
+from unittest.mock import patch, ANY, call
 
 import dlt
 import pytest
 from itertools import chain
 from typing import Any
+from urllib.parse import urljoin
 
 from dlt.sources.helpers import requests
 from sources.hubspot import hubspot, hubspot_events_for_objects, contacts
-from sources.hubspot.helpers import fetch_data
+from sources.hubspot.helpers import fetch_data, BASE_URL
 from sources.hubspot.settings import (
     CRM_CONTACTS_ENDPOINT,
     CRM_COMPANIES_ENDPOINT,
@@ -116,6 +117,9 @@ def test_fetch_data_quotes(mock_response):
 
 @pytest.mark.parametrize("destination_name", ALL_DESTINATIONS)
 def test_resource_contacts_with_history(destination_name: str, mock_response) -> None:
+    prop_names = [p["name"] for p in mock_contacts_properties["results"]]
+    prop_string = ",".join(prop_names)
+
     def fake_get(url: str, *args, **kwargs) -> Any:  # type: ignore[no-untyped-def]
         if "/properties" in url:
             return mock_response(json_data=mock_contacts_properties)
@@ -126,7 +130,7 @@ def test_resource_contacts_with_history(destination_name: str, mock_response) ->
         for items in contact["propertiesWithHistory"].values():  # type: ignore[attr-defined]
             expected_rows.extend(items)
 
-    with patch("dlt.sources.helpers.requests.get", side_effect=fake_get):
+    with patch("dlt.sources.helpers.requests.get", side_effect=fake_get) as m:
         pipeline = dlt.pipeline(
             pipeline_name="hubspot",
             destination=destination_name,
@@ -135,6 +139,29 @@ def test_resource_contacts_with_history(destination_name: str, mock_response) ->
         )
         load_info = pipeline.run(contacts(api_key="fake_key", include_history=True))
     assert_load_info(load_info)
+
+    assert m.call_count == 3
+
+    # Check that API is called with all properties listed
+    m.assert_has_calls(
+        [
+            call(
+                urljoin(BASE_URL, "/crm/v3/properties/contacts"),
+                headers=ANY,
+                params=None,
+            ),
+            call(
+                urljoin(BASE_URL, CRM_CONTACTS_ENDPOINT),
+                headers=ANY,
+                params={"properties": prop_string, "limit": 100},
+            ),
+            call(
+                urljoin(BASE_URL, CRM_CONTACTS_ENDPOINT),
+                headers=ANY,
+                params={"propertiesWithHistory": prop_string, "limit": 50},
+            ),
+        ]
+    )
 
     assert load_table_counts(pipeline, "contacts_property_history") == {
         "contacts_property_history": len(expected_rows)
