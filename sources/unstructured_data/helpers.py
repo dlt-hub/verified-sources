@@ -1,4 +1,5 @@
-from typing import Any, Dict, List, Mapping, Type, Union
+from typing import Any, Dict, List, Mapping, Type, Union, Tuple
+import asyncio
 
 from langchain.document_loaders import UnstructuredFileLoader
 from langchain.indexes import VectorstoreIndexCreator
@@ -49,8 +50,15 @@ async def aprocess_file_to_structured(
     index = AVectorstoreIndexCreator(vectorstore_cls=vectorstore).from_loaders([loader])
     response = {}
 
-    for k, query in queries.items():
-        response[k] = await asafely_query_index(index, query)
+    async def mark(key: str, question: str) -> Tuple[str, str]:
+        return key, await asafely_query_index(index, question)
+       
+    response = {
+        key: result
+        for key, result in await asyncio.gather(
+            *(mark(key, question) for key, question in queries.items())
+        )
+    }
 
     return response
 
