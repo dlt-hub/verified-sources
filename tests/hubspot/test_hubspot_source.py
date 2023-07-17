@@ -6,6 +6,7 @@ from itertools import chain
 from typing import Any
 from urllib.parse import urljoin
 
+from dlt.common import pendulum
 from dlt.sources.helpers import requests
 from sources.hubspot import hubspot, hubspot_events_for_objects, contacts
 from sources.hubspot.helpers import fetch_data, BASE_URL
@@ -205,28 +206,37 @@ def test_all_resources(destination_name: str) -> None:
 
     # Check property from couple of contacts against known data
     with pipeline.sql_client() as client:
-        rows = set(
-            tuple(row)
+        rows = [
+            list(row)
             for row in client.execute_sql(
                 """
-            SELECT ch.property_name, ch.value, ch.source_type, ch.source_type, CAST(ch.timestamp AS VARCHAR)
+                SELECT ch.property_name, ch.value, ch.source_type, ch.source_type, ch.timestamp
                 FROM contacts
-            JOIN
+                JOIN
                 contacts_property_history AS ch ON contacts.id = ch.object_id
-            WHERE contacts.id IN ('51', '1') AND property_name = 'email';
-            """
+                WHERE contacts.id IN ('51', '1') AND property_name = 'email';
+                """
             )
-        )
-    assert set(rows) == set(
+        ]
+    for row in rows:
+        row[-1] = pendulum.instance(row[-1])
+
+    assert set((tuple(row) for row in rows)) == set(
         [
             (
                 "email",
                 "emailmaria@hubspot.com",
                 "API",
                 "API",
-                "2022-06-15 08:51:51.399+00",
+                pendulum.parse("2022-06-15 08:51:51.399+00"),
             ),
-            ("email", "bh@hubspot.com", "API", "API", "2022-06-15 08:51:51.399+00"),
+            (
+                "email",
+                "bh@hubspot.com",
+                "API",
+                "API",
+                pendulum.parse("2022-06-15 08:51:51.399+00"),
+            ),
         ]
     )
 
