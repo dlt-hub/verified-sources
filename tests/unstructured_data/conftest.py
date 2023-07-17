@@ -18,6 +18,6 @@ def data_dir() -> str:
     return (current_dir / "test_data").as_posix()
 
 
-@pytest.fixture
+@pytest.fixture(scope="session")
 def gd_folders() -> Sequence[str]:
     return ["1-yiloGjyl9g40VguIE1QnY5tcRPaF0Nm"]
