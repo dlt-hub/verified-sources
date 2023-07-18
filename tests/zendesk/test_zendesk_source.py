@@ -168,17 +168,17 @@ def test_incrementing(destination_name: str) -> None:
 
 
 @pytest.mark.parametrize("destination_name", ALL_DESTINATIONS)
-def test_incremental_end_time(destination_name: str) -> None:
+def test_end_time(destination_name: str) -> None:
     """Test chunk loading tickets with incremental end_value"""
     pipeline = dlt.pipeline(
         destination=destination_name,
         full_refresh=True,
     )
 
-    incremental_end_time = pendulum.DateTime(2023, 2, 7).in_tz("UTC")
+    end_time = pendulum.DateTime(2023, 2, 7).in_tz("UTC")
     data = zendesk_support(
-        incremental_start_time=pendulum.DateTime(2023, 2, 6).in_tz("UTC"),
-        incremental_end_time=incremental_end_time,
+        start_time=pendulum.DateTime(2023, 2, 6).in_tz("UTC"),
+        end_time=end_time,
     ).with_resources("tickets")
 
     info = pipeline.run(data, write_disposition="replace")
@@ -190,7 +190,22 @@ def test_incremental_end_time(destination_name: str) -> None:
             for row in client.execute_sql("SELECT updated_at FROM tickets")
         ]
 
-    assert all(value < incremental_end_time for value in rows)
+    assert all(value < end_time for value in rows)
+
+    # Load again incremental from end_time
+    data = zendesk_support(start_time=end_time)
+    info = pipeline.run(data, write_disposition="append")
+    assert_load_info(info)
+    with pipeline.sql_client() as client:
+        rows2 = [
+            pendulum.instance(row[0])
+            for row in client.execute_sql(
+                "SELECT updated_at FROM tickets ORDER BY updated_at"
+            )
+        ]
+
+    assert len(rows2) > len(rows)
+    assert all(value >= end_time for value in rows[1:])
 
 
 @pytest.mark.parametrize("destination_name", ALL_DESTINATIONS)

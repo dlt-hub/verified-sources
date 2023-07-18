@@ -28,17 +28,17 @@ from .settings import (
 @dlt.source(max_table_nesting=2)
 def zendesk_talk(
     credentials: TZendeskCredentials = dlt.secrets.value,
-    incremental_start_time: Optional[pendulum.DateTime] = DEFAULT_START_DATE,
-    incremental_end_time: Optional[pendulum.DateTime] = None,
+    start_time: Optional[pendulum.DateTime] = DEFAULT_START_DATE,
+    end_time: Optional[pendulum.DateTime] = None,
 ) -> Iterable[DltResource]:
     """
     Retrieves data from Zendesk Talk for phone calls and voicemails.
 
     Args:
         credentials (TZendeskCredentials): The credentials for authentication. Defaults to the value in the `dlt.secrets` object.
-        incremental_start_time (Optional[pendulum.DateTime]): The start time for incremental loading. Defaults to DEFAULT_START_DATE.
-        incremental_end_time: Optionally load records only until this date/time.
-            Can be used in conjunction with `incremental_start_time` to load limited ranges.
+        start_time (Optional[pendulum.DateTime]): The start time for incremental loading. Defaults to DEFAULT_START_DATE.
+        end_time: Optionally load records only until this date/time.
+            Can be used in conjunction with `start_time` to load limited ranges.
 
     Yields:
         DltResource: Data resources from Zendesk Talk.
@@ -72,10 +72,8 @@ def zendesk_talk(
             talk_endpoint=talk_incremental_endpoint,
             updated_at=dlt.sources.incremental(
                 "updated_at",
-                initial_value=incremental_start_time.isoformat(),
-                end_value=incremental_end_time.isoformat()
-                if incremental_end_time
-                else None,
+                initial_value=start_time.isoformat(),
+                end_value=end_time.isoformat() if end_time else None,
             ),
         )
 
@@ -119,27 +117,30 @@ def talk_incremental_resource(
         TDataItem: Dictionary containing the data from the endpoint.
     """
     # send the request and process it
-    yield from zendesk_client.get_pages_incremental(
+    for page in zendesk_client.get_pages_incremental(
         endpoint=talk_endpoint,
         data_point_name=talk_endpoint_name,
         start_time=parse_iso_like_datetime(updated_at.last_value).int_timestamp,
-    )
+    ):
+        yield page
+        if updated_at.end_out_of_range:
+            return
 
 
 @dlt.source(max_table_nesting=2)
 def zendesk_chat(
     credentials: ZendeskCredentialsOAuth = dlt.secrets.value,
-    incremental_start_time: Optional[pendulum.DateTime] = DEFAULT_START_DATE,
-    incremental_end_time: Optional[pendulum.DateTime] = None,
+    start_time: Optional[pendulum.DateTime] = DEFAULT_START_DATE,
+    end_time: Optional[pendulum.DateTime] = None,
 ) -> Iterable[DltResource]:
     """
     Retrieves data from Zendesk Chat for chat interactions.
 
     Args:
         credentials (ZendeskCredentialsOAuth): The credentials for authentication. Defaults to the value in the `dlt.secrets` object.
-        incremental_start_time (Optional[pendulum.DateTime]): The start time for incremental loading. Defaults to DEFAULT_START_DATE.
-        incremental_end_time: Optionally load records only until this date/time.
-            Can be used in conjunction with `incremental_start_time` to load limited ranges.
+        start_time (Optional[pendulum.DateTime]): The start time for incremental loading. Defaults to DEFAULT_START_DATE.
+        end_time: Optionally load records only until this date/time.
+            Can be used in conjunction with `start_time` to load limited ranges.
 
     Yields:
         DltResource: Data resources from Zendesk Chat.
@@ -151,10 +152,8 @@ def zendesk_chat(
         zendesk_client,
         dlt.sources.incremental(
             "update_timestamp|updated_timestamp",
-            initial_value=incremental_start_time.isoformat(),
-            end_value=incremental_end_time.isoformat()
-            if incremental_end_time
-            else None,
+            initial_value=start_time.isoformat(),
+            end_value=end_time.isoformat() if end_time else None,
         ),
     )
 
@@ -178,7 +177,11 @@ def chats_table_resource(
         start_time=parse_iso_like_datetime(update_timestamp.last_value).int_timestamp,
         params={"fields": "chats(*)"},
     )
-    yield from chat_pages
+    for page in chat_pages:
+        yield page
+
+        if update_timestamp.end_out_of_range:
+            return
 
 
 @dlt.source(max_table_nesting=2)
@@ -186,8 +189,8 @@ def zendesk_support(
     credentials: TZendeskCredentials = dlt.secrets.value,
     load_all: bool = True,
     pivot_ticket_fields: bool = True,
-    incremental_start_time: Optional[pendulum.DateTime] = DEFAULT_START_DATE,
-    incremental_end_time: Optional[pendulum.DateTime] = None,
+    start_time: Optional[pendulum.DateTime] = DEFAULT_START_DATE,
+    end_time: Optional[pendulum.DateTime] = None,
 ) -> Iterable[DltResource]:
     """
     Retrieves data from Zendesk Support for tickets, users, brands, organizations, and groups.
@@ -196,29 +199,29 @@ def zendesk_support(
         credentials (TZendeskCredentials): The credentials for authentication. Defaults to the value in the `dlt.secrets` object.
         load_all (bool): Whether to load extra resources for the API. Defaults to True.
         pivot_ticket_fields (bool): Whether to pivot the custom fields in tickets. Defaults to True.
-        incremental_start_time (Optional[pendulum.DateTime]): The start time for incremental loading. Defaults to DEFAULT_START_DATE.
-        incremental_end_time: Optionally load records only until this date/time.
-            Can be used in conjunction with `incremental_start_time` to load limited ranges.
+        start_time (Optional[pendulum.DateTime]): The start time for incremental loading. Defaults to DEFAULT_START_DATE.
+        end_time: Optionally load records only until this date/time.
+            Can be used in conjunction with `start_time` to load limited ranges.
 
     Returns:
         Sequence[DltResource]: Multiple dlt resources.
     """
 
-    incremental_start_time_ts = incremental_start_time.int_timestamp
-    incremental_start_time_iso_str = incremental_start_time.isoformat()
-    incremental_end_time_ts: Optional[int] = None
-    incremental_end_time_iso_str: Optional[str] = None
-    if incremental_end_time:
-        incremental_end_time_ts = incremental_end_time.int_timestamp
-        incremental_end_time_iso_str = incremental_end_time.isoformat()
+    start_time_ts = start_time.int_timestamp
+    start_time_iso_str = start_time.isoformat()
+    end_time_ts: Optional[int] = None
+    end_time_iso_str: Optional[str] = None
+    if end_time:
+        end_time_ts = end_time.int_timestamp
+        end_time_iso_str = end_time.isoformat()
 
     @dlt.resource(primary_key="id", write_disposition="append")
     def ticket_events(
         zendesk_client: ZendeskAPIClient,
         timestamp: dlt.sources.incremental[int] = dlt.sources.incremental(
             "timestamp",
-            initial_value=incremental_start_time_ts,
-            end_value=incremental_end_time_ts,
+            initial_value=start_time_ts,
+            end_value=end_time_ts,
         ),
     ) -> Iterator[TDataItem]:
         # URL For ticket events
@@ -228,7 +231,10 @@ def zendesk_support(
             "ticket_events",
             timestamp.last_value,
         )
-        yield from event_pages
+        for page in event_pages:
+            yield page
+            if timestamp.end_out_of_range:
+                return
 
     @dlt.resource(
         name="tickets",
@@ -247,8 +253,8 @@ def zendesk_support(
             pendulum.DateTime
         ] = dlt.sources.incremental(
             "updated_at",
-            initial_value=incremental_start_time,
-            end_value=incremental_end_time,
+            initial_value=start_time,
+            end_value=end_time,
         ),
     ) -> Iterator[TDataItem]:
         """
@@ -260,7 +266,7 @@ def zendesk_support(
             pivot_fields (bool): Indicates whether to pivot the custom fields in tickets. Defaults to True.
             per_page (int): The number of Ticket objects to load per page. Defaults to 1000.
             updated_at (dlt.sources.incremental[pendulum.DateTime]): Incremental source for the 'updated_at' column.
-                Defaults to dlt.sources.incremental("updated_at", initial_value=incremental_start_time).
+                Defaults to dlt.sources.incremental("updated_at", initial_value=start_time).
 
         Yields:
             TDataItem: Dictionary containing the ticket data.
@@ -281,6 +287,9 @@ def zendesk_support(
                 process_ticket(ticket, fields_dict, pivot_custom_fields=pivot_fields)
                 for ticket in page
             ]
+            # stop loading when using end_value and end is reached
+            if updated_at.end_out_of_range:
+                return
 
     @dlt.resource(
         name="ticket_metric_events", primary_key="id", write_disposition="append"
@@ -289,8 +298,8 @@ def zendesk_support(
         zendesk_client: ZendeskAPIClient,
         time: dlt.sources.incremental[str] = dlt.sources.incremental(
             "time",
-            initial_value=incremental_start_time_iso_str,
-            end_value=incremental_end_time_iso_str,
+            initial_value=start_time_iso_str,
+            end_value=end_time_iso_str,
         ),
     ) -> Iterator[TDataItem]:
         """
@@ -301,7 +310,7 @@ def zendesk_support(
             zendesk_client (Zenpy): An instance of Zenpy object used to make API calls to Zendesk.
             time (dlt.sources.incremental[str]): Incremental source for the 'time' column,
                 indicating the starting date for retrieving ticket metric events.
-                Defaults to dlt.sources.incremental("time", initial_value=incremental_start_time_iso_str).
+                Defaults to dlt.sources.incremental("time", initial_value=start_time_iso_str).
 
         Yields:
             TDataItem: Dictionary containing the ticket metric event data.
@@ -315,7 +324,11 @@ def zendesk_support(
             "ticket_metric_events",
             parse_iso_like_datetime(time.last_value).int_timestamp,
         )
-        yield from metric_event_pages
+        for page in metric_event_pages:
+            yield page
+
+            if time.end_out_of_range:
+                return
 
     def ticket_fields_table(zendesk_client: ZendeskAPIClient) -> Iterator[TDataItem]:
         """
