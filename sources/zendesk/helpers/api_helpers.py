@@ -1,7 +1,7 @@
 import logging
 from typing import Optional, TypedDict, Dict
 
-from dlt.common import pendulum
+from dlt.common import pendulum, logger
 from dlt.common.typing import DictStrAny, DictStrStr, TDataItem
 from dlt.common.time import parse_iso_like_datetime
 
@@ -12,9 +12,6 @@ from .credentials import (
     ZendeskCredentialsOAuth,
     TZendeskCredentials,
 )
-
-
-log = logging.getLogger(__name__)
 
 
 class TCustomFieldInfo(TypedDict):
@@ -53,7 +50,7 @@ def process_ticket(
             cus_field_id = str(custom_field["id"])
             field = custom_fields.get(cus_field_id, None)
             if field is None:
-                log.warning(
+                logger.warning(
                     "Custom field with ID %s does not exist in fields state. It may have been created after the pipeline run started.",
                     cus_field_id,
                 )
