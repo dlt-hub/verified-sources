@@ -215,11 +215,11 @@ def get_ads_account(
             return False
 
     retry_session = Client(
-        timeout=request_timeout,
+        request_timeout=request_timeout,
         raise_for_status=False,
-        condition=retry_on_limit,
-        max_attempts=12,
-        backoff_factor=2,
+        retry_condition=retry_on_limit,
+        request_max_attempts=12,
+        request_backoff_factor=2,
     ).session
     retry_session.params.update({"access_token": access_token})  # type: ignore
     # patch dlt requests session with retries

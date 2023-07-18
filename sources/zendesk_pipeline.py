@@ -2,7 +2,14 @@ import time
 from typing import Any
 
 import dlt
-from zendesk import pendulum, zendesk_chat, zendesk_talk, zendesk_support
+from dlt.common.time import timedelta
+from zendesk import (
+    pendulum,
+    zendesk_chat,
+    zendesk_talk,
+    zendesk_support,
+    make_date_ranges,
+)
 
 
 def incremental_load_all_default() -> Any:
@@ -52,7 +59,7 @@ def incremental_load_all_start_time() -> Any:
     # Choosing starting point for incremental load - optional, the default is the last load time. If no last load time
     # the start time will be the 1st day of the millennium
     # start time needs to be a pendulum datetime object
-    start_time = pendulum.DateTime(year=2023, month=1, day=1)
+    start_time = pendulum.DateTime(year=2023, month=1, day=1).in_timezone("UTC")
 
     pipeline = dlt.pipeline(
         pipeline_name="dlt_zendesk_pipeline",
@@ -65,6 +72,41 @@ def incremental_load_all_start_time() -> Any:
     data_talk = zendesk_talk(incremental_start_time=start_time)
     info = pipeline.run(data=[data, data_chat, data_talk])
     return info
+
+
+def incremental_load_with_backloading() -> Any:
+    """Backload historic data in ranges. In this method we load all tickets so far created since Jan 1st 2023 but one week at a time
+    and then switch to incrementally loading new tickets.
+    This can useful to reduce the potiential failure window when loading large amounts of historic data.
+    This approach can be used with all incremental Zendesk sources.
+    """
+    pipeline = dlt.pipeline(
+        pipeline_name="dlt_zendesk_pipeline",
+        destination="postgres",
+        full_refresh=False,
+        dataset_name="sample_zendesk_data",
+    )
+
+    # Load ranges of dates to load between January 1st 2023 and today
+    min_start_time = pendulum.DateTime(year=2023, month=1, day=1).in_timezone("UTC")
+    max_end_time = pendulum.today()
+    # Generate tuples of date ranges, each with 1 week in between.
+    ranges = make_date_ranges(min_start_time, max_end_time, timedelta(weeks=1))
+
+    # Run the pipeline in a loop for each 1 week range
+    for start, end in ranges:
+        print(f"Loading tickets between {start} and {end}")
+        data = zendesk_support(
+            incremental_start_time=start, incremental_end_time=end
+        ).with_resources("tickets")
+        info = pipeline.run(data=data)
+        print(info)
+
+    # Backloading is done, now we continue loading with incremental state, starting where the backloading left off
+    print(f"Loading with incremental state, starting at {end}")
+    data = zendesk_support(incremental_start_time=end).with_resources("tickets")
+    info = pipeline.run(data)
+    print(info)
 
 
 if __name__ == "__main__":

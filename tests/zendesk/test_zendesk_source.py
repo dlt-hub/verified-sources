@@ -2,6 +2,8 @@ import pytest
 from typing import List, Dict, Any, Iterable
 import dlt
 from dlt.pipeline.pipeline import Pipeline
+from dlt.common import pendulum
+from dlt.common.time import parse_iso_like_datetime
 from sources.zendesk import zendesk_chat, zendesk_support, zendesk_talk
 from sources.zendesk.helpers.api_helpers import process_ticket, process_ticket_field
 from tests.utils import (
@@ -103,10 +105,10 @@ def test_pivoting_tickets(destination_name: str) -> None:
         dataset_name="test_unpivot_tickets_support",
     )
     data = zendesk_support(load_all=False, pivot_ticket_fields=False)
-    info = pipeline_pivoting_1.run(data.with_resources("ticket_fields", "tickets"))
+    info = pipeline_pivoting_1.run(data.with_resources("tickets"))
     assert_load_info(info)
     schema = pipeline_pivoting_1.default_schema
-    unpivoted_tickets = schema.data_tables()[1]["columns"].keys()
+    unpivoted_tickets = schema.data_tables()[0]["columns"].keys()
     assert "custom_fields" in unpivoted_tickets
     assert "test_field" not in unpivoted_tickets
     # drop the pipeline explicitly. fixture drops only one active pipeline
@@ -120,10 +122,10 @@ def test_pivoting_tickets(destination_name: str) -> None:
         dataset_name="test_pivot_tickets_support",
     )
     data2 = zendesk_support(load_all=False, pivot_ticket_fields=True)
-    info2 = pipeline_pivoting_2.run(data2.with_resources("ticket_fields", "tickets"))
+    info2 = pipeline_pivoting_2.run(data2.with_resources("tickets"))
     assert_load_info(info2)
     schema2 = pipeline_pivoting_2.default_schema
-    pivoted_tickets = schema2.data_tables()[1]["columns"].keys()
+    pivoted_tickets = schema2.data_tables()[0]["columns"].keys()
     assert "test_field" in pivoted_tickets
     assert "custom_field" not in pivoted_tickets
     assert "dummy_dropdown" in pivoted_tickets
@@ -164,6 +166,71 @@ def test_incrementing(destination_name: str) -> None:
     # there are no more chats to load
     assert_load_info(info, expected_load_packages=2)
     assert load_table_counts(pipeline_incremental, *INCREMENTAL_TABLES) == counts
+
+
+@pytest.mark.parametrize("destination_name", ALL_DESTINATIONS)
+def test_tickets_end_time_incremental(destination_name: str) -> None:
+    """Test time range loading tickets with end_value and incremental"""
+    pipeline = dlt.pipeline(
+        destination=destination_name,
+        full_refresh=True,
+    )
+
+    # Run with start time matching exactly the timestamp of the first ticket
+    # This ticket should be included in results
+    first_ticket_time = parse_iso_like_datetime("2023-02-06T09:52:18Z")
+    # End is exact ts of a ticket in the middle
+    end_time = parse_iso_like_datetime("2023-07-18T17:14:39Z")
+    data = zendesk_support(
+        start_time=first_ticket_time,
+        end_time=end_time,
+    ).with_resources("tickets")
+
+    info = pipeline.run(data, write_disposition="append")
+    assert_load_info(info)
+
+    with pipeline.sql_client() as client:
+        rows = [
+            pendulum.instance(row[0])
+            for row in client.execute_sql(
+                "SELECT updated_at FROM tickets ORDER BY updated_at"
+            )
+        ]
+
+    assert first_ticket_time in rows
+    assert all(value < end_time for value in rows)
+
+    # Load again incremental from end_time
+    data = zendesk_support(start_time=end_time)
+    info = pipeline.run(data, write_disposition="append")
+    assert_load_info(info)
+    with pipeline.sql_client() as client:
+        rows2 = [
+            pendulum.instance(row[0])
+            for row in client.execute_sql(
+                "SELECT updated_at FROM tickets ORDER BY updated_at"
+            )
+        ]
+
+    assert len(rows2) > len(rows)
+    assert end_time in rows2
+    # Some rows are after the start time
+    assert [value for value in rows2 if value > end_time]
+
+    # Run incremental again, no new data should be added
+    data = zendesk_support()
+    info = pipeline.run(data, write_disposition="append")
+    assert_load_info(info)
+
+    with pipeline.sql_client() as client:
+        rows3 = [
+            pendulum.instance(row[0])
+            for row in client.execute_sql(
+                "SELECT updated_at FROM tickets ORDER BY updated_at"
+            )
+        ]
+
+    assert rows3 == rows2
 
 
 @pytest.mark.parametrize("destination_name", ALL_DESTINATIONS)
@@ -320,6 +387,27 @@ def test_process_ticket_custom_fields() -> None:
     result = process_ticket(ticket, fields_state, pivot_custom_fields=True)
 
     assert result["Another field"] == "Some value"
+
+    # Test field doesn't exist
+    ticket = dict(
+        id=123,
+        custom_fields=[
+            {"id": 99, "value": "test_value_5"},
+            {"id": 55, "value": "test_value_2"},
+        ],
+        fields=[],
+        updated_at="2022-01-01T00:00:00Z",
+        created_at="2022-01-01T00:00:00Z",
+        due_at="2022-01-01T00:00:00Z",
+    )
+
+    result = process_ticket(ticket, fields_state, pivot_custom_fields=True)
+
+    # Non existing field remains in the custom fields list
+    assert result["custom_fields"] == [
+        {"id": 99, "ticket_id": 123, "value": "test_value_5"}
+    ]
+    assert result["Another field"] == "test_value_2"
 
 
 def test_process_ticket_field() -> None:

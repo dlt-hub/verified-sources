@@ -104,8 +104,7 @@ def github_repo_events(owner: str, name: str, access_token: str = None) -> DltRe
 
             # stop requesting pages if the last element was already older than initial value
             # note: incremental will skip those items anyway, we just do not want to use the api limits
-            if page and page[-1]["created_at"] < last_created_at.initial_value:
-                # do not get more pages, we overlap with previous run
+            if last_created_at.start_out_of_range:
                 print(
                     f"Overlap with previous run created at {last_created_at.initial_value}"
                 )

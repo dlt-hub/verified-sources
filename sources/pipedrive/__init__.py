@@ -191,6 +191,7 @@ def leads(
         extra_params={"sort": "update_time DESC"},
     )
     for page in pages:
+        # TODO: This check can be replaced with `update_time.start_out_of_range` in dlt 0.3.5
         if last_value:
             # Just check whether first item is lower, worst case we load 1 redundant page before break
             first_item = page[0] if page else None

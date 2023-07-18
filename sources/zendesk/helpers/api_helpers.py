@@ -1,5 +1,7 @@
+import logging
 from typing import Optional, TypedDict, Dict
-from dlt.common import pendulum
+
+from dlt.common import pendulum, logger
 from dlt.common.typing import DictStrAny, DictStrStr, TDataItem
 from dlt.common.time import parse_iso_like_datetime
 
@@ -42,10 +44,20 @@ def process_ticket(
     """
     # pivot custom field if indicated as such
     # get custom fields
+    pivoted_fields = set()
     for custom_field in ticket["custom_fields"]:
         if pivot_custom_fields:
             cus_field_id = str(custom_field["id"])
-            field = custom_fields[cus_field_id]
+            field = custom_fields.get(cus_field_id, None)
+            if field is None:
+                logger.warning(
+                    "Custom field with ID %s does not exist in fields state. It may have been created after the pipeline run started.",
+                    cus_field_id,
+                )
+                custom_field["ticket_id"] = ticket["id"]
+                continue
+
+            pivoted_fields.add(cus_field_id)
             field_name = field["title"]
             current_value = custom_field["value"]
             options = field["options"]
@@ -62,7 +74,11 @@ def process_ticket(
             custom_field["ticket_id"] = ticket["id"]
     # delete fields that are not needed for pivoting
     if pivot_custom_fields:
-        del ticket["custom_fields"]
+        ticket["custom_fields"] = [
+            f for f in ticket["custom_fields"] if str(f["id"]) not in pivoted_fields
+        ]
+        if not ticket["custom_fields"]:
+            del ticket["custom_fields"]
     del ticket["fields"]
     # modify dates to return datetime objects instead
     ticket["updated_at"] = _parse_date_or_none(ticket["updated_at"])
