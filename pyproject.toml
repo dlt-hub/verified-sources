@@ -10,7 +10,7 @@ packages = [{include = "sources"}]
 [tool.poetry.dependencies]
 python = "^3.8.1"
 black = "^23.3.0"
-dlt = {version = "^0.3.0", allow-prereleases = true, extras = ["redshift", "bigquery", "postgres", "duckdb"]}
+dlt = {git = "https://github.com/dlt-hub/dlt.git", branch="fix/incremental-end-value-with-batches", allow-prereleases = true, extras = ["redshift", "bigquery", "postgres", "duckdb"]}
 
 [tool.poetry.group.dev.dependencies]
 mypy = "^0.991"

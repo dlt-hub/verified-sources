@@ -589,39 +589,37 @@ dev = ["PyTest", "PyTest (<5)", "PyTest-Cov", "PyTest-Cov (<2.6)", "bump2version
 
 [[package]]
 name = "dlt"
-version = "0.3.3"
+version = "0.3.4"
 description = "DLT is an open-source python-native scalable data loading framework that does not require any devops efforts to run."
 optional = false
 python-versions = ">=3.8,<4.0"
-files = [
-    {file = "dlt-0.3.3-py3-none-any.whl", hash = "sha256:ec12f2e492558a0712d61e097991f4b9af1bb8d7f577fdb3e35fa636b97c309b"},
-    {file = "dlt-0.3.3.tar.gz", hash = "sha256:2f7cd0c4f3f1d13ea6bbe5fb7bc8152c2c27b3e073876f3bbeb88a799e7057a9"},
-]
+files = []
+develop = false
 
 [package.dependencies]
 astunparse = ">=1.6.3"
 click = ">=7.1"
 cron-descriptor = ">=1.2.32"
-deprecated = ">=1.2.13,<2.0.0"
-duckdb = {version = ">=0.6.1,<0.9.0", optional = true, markers = "extra == \"duckdb\" or extra == \"motherduck\""}
-fsspec = ">=2023.5.0,<2024.0.0"
-gcsfs = {version = ">=2023.5.0,<2024.0.0", optional = true, markers = "extra == \"gcp\" or extra == \"bigquery\" or extra == \"gs\""}
+deprecated = "^1.2.13"
+duckdb = {version = ">=0.6.1,<0.9.0", optional = true}
+fsspec = "^2023.5.0"
+gcsfs = {version = "^2023.5.0", optional = true}
 gitpython = ">=3.1.29"
 giturlparse = ">=0.10.0"
-google-cloud-bigquery = {version = ">=2.26.0", optional = true, markers = "extra == \"gcp\" or extra == \"bigquery\""}
-grpcio = {version = ">=1.50.0", optional = true, markers = "extra == \"gcp\" or extra == \"bigquery\""}
+google-cloud-bigquery = {version = ">=2.26.0", optional = true}
+grpcio = {version = ">=1.50.0", optional = true}
 hexbytes = ">=0.2.2"
 humanize = ">=4.4.0"
 json-logging = "1.4.1rc0"
-jsonpath-ng = ">=1.5.3,<2.0.0"
+jsonpath-ng = "^1.5.3"
 makefun = ">=1.15.0"
-orjson = {version = ">=3.8.6,<4.0.0", markers = "platform_python_implementation != \"PyPy\""}
+orjson = {version = "^3.8.6", markers = "platform_python_implementation != \"PyPy\""}
 pathvalidate = ">=2.5.2"
 pendulum = ">=2.1.2"
 pipdeptree = ">=2.9.3"
-psycopg2-binary = {version = ">=2.9.1", optional = true, markers = "extra == \"postgres\" or extra == \"redshift\""}
-psycopg2cffi = {version = ">=2.9.0", optional = true, markers = "platform_python_implementation == \"PyPy\" and (extra == \"postgres\" or extra == \"redshift\")"}
-pyarrow = {version = ">=8.0.0", optional = true, markers = "extra == \"bigquery\" or extra == \"pyarrow\" or extra == \"motherduck\""}
+psycopg2-binary = {version = ">=2.9.1", optional = true}
+psycopg2cffi = {version = ">=2.9.0", optional = true, markers = "platform_python_implementation == \"PyPy\""}
+pyarrow = {version = ">=8.0.0", optional = true}
 pytz = ">=2022.6"
 PyYAML = ">=5.4.1"
 requests = ">=2.26.0"
@@ -631,7 +629,7 @@ sentry-sdk = ">=1.4.3"
 setuptools = ">=65.6.0"
 simplejson = ">=3.17.5"
 SQLAlchemy = ">=1.4.0"
-tenacity = ">=8.2.2,<9.0.0"
+tenacity = "^8.2.2"
 tomlkit = ">=0.11.3"
 typing-extensions = ">=4.0.0"
 tzdata = ">=2022.1"
@@ -649,6 +647,12 @@ pyarrow = ["pyarrow (>=8.0.0)"]
 redshift = ["psycopg2-binary (>=2.9.1)", "psycopg2cffi (>=2.9.0)"]
 s3 = ["boto3 (>=1.26)", "s3fs (>=2023.5.0,<2024.0.0)"]
 snowflake = ["snowflake-connector-python[pandas] (>=3.0.4,<4.0.0)"]
+
+[package.source]
+type = "git"
+url = "https://github.com/dlt-hub/dlt.git"
+reference = "fix/incremental-end-value-with-batches"
+resolved_reference = "eb159188fea692c23fe5ee4bc77e2d75650166a9"
 
 [[package]]
 name = "domdf-python-tools"
@@ -3479,4 +3483,4 @@ testing = ["big-O", "flake8 (<5)", "jaraco.functools", "jaraco.itertools", "more
 [metadata]
 lock-version = "2.0"
 python-versions = "^3.8.1"
-content-hash = "9496b9081c2f49233470fb7509362adc44b65ad4f5302bf2e619ef51eb3824fd"
+content-hash = "9ea8370847d6ca1fd05f99e34e69fc12ae561b7acb3fff43fcd51840f76dd98d"
