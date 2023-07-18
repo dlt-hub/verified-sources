@@ -34,6 +34,10 @@ def zendesk_talk(
     """
     Retrieves data from Zendesk Talk for phone calls and voicemails.
 
+    `start_time` argument can be used on its own or together with `end_time`. When both are provided
+    data is limited to items updated in that time range.
+    The range is "half-open", meaning elements equal and higher than `start_time` and elements lower than `end_time` are included.
+
     Args:
         credentials: The credentials for authentication. Defaults to the value in the `dlt.secrets` object.
         start_time: The start time of the range for which to load. Defaults to January 1st 2000.
@@ -135,6 +139,10 @@ def zendesk_chat(
     """
     Retrieves data from Zendesk Chat for chat interactions.
 
+    `start_time` argument can be used on its own or together with `end_time`. When both are provided
+    data is limited to items updated in that time range.
+    The range is "half-open", meaning elements equal and higher than `start_time` and elements lower than `end_time` are included.
+
     Args:
         credentials: The credentials for authentication. Defaults to the value in the `dlt.secrets` object.
         start_time: The start time of the range for which to load. Defaults to January 1st 2000.
@@ -193,6 +201,10 @@ def zendesk_support(
 ) -> Iterable[DltResource]:
     """
     Retrieves data from Zendesk Support for tickets, users, brands, organizations, and groups.
+
+    `start_time` argument can be used on its own or together with `end_time`. When both are provided
+    data is limited to items updated in that time range.
+    The range is "half-open", meaning elements equal and higher than `start_time` and elements lower than `end_time` are included.
 
     Args:
         credentials: The credentials for authentication. Defaults to the value in the `dlt.secrets` object.
