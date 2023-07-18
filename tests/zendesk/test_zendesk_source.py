@@ -3,6 +3,7 @@ from typing import List, Dict, Any, Iterable
 import dlt
 from dlt.pipeline.pipeline import Pipeline
 from dlt.common import pendulum
+from dlt.common.time import parse_iso_like_datetime
 from sources.zendesk import zendesk_chat, zendesk_support, zendesk_talk
 from sources.zendesk.helpers.api_helpers import process_ticket, process_ticket_field
 from tests.utils import (
@@ -168,28 +169,35 @@ def test_incrementing(destination_name: str) -> None:
 
 
 @pytest.mark.parametrize("destination_name", ALL_DESTINATIONS)
-def test_end_time(destination_name: str) -> None:
-    """Test chunk loading tickets with incremental end_value"""
+def test_tickets_end_time_incremental(destination_name: str) -> None:
+    """Test time range loading tickets with end_value and incremental"""
     pipeline = dlt.pipeline(
         destination=destination_name,
         full_refresh=True,
     )
 
-    end_time = pendulum.DateTime(2023, 2, 7).in_tz("UTC")
+    # Run with start time matching exactly the timestamp of the first ticket
+    # This ticket should be included in results
+    first_ticket_time = parse_iso_like_datetime("2023-02-06T09:52:18Z")
+    # End is exact ts of a ticket in the middle
+    end_time = parse_iso_like_datetime("2023-07-18T17:14:39Z")
     data = zendesk_support(
-        start_time=pendulum.DateTime(2023, 2, 6).in_tz("UTC"),
+        start_time=first_ticket_time,
         end_time=end_time,
     ).with_resources("tickets")
 
-    info = pipeline.run(data, write_disposition="replace")
+    info = pipeline.run(data, write_disposition="append")
     assert_load_info(info)
 
     with pipeline.sql_client() as client:
         rows = [
             pendulum.instance(row[0])
-            for row in client.execute_sql("SELECT updated_at FROM tickets")
+            for row in client.execute_sql(
+                "SELECT updated_at FROM tickets ORDER BY updated_at"
+            )
         ]
 
+    assert first_ticket_time in rows
     assert all(value < end_time for value in rows)
 
     # Load again incremental from end_time
@@ -205,7 +213,24 @@ def test_end_time(destination_name: str) -> None:
         ]
 
     assert len(rows2) > len(rows)
-    assert all(value >= end_time for value in rows[1:])
+    assert end_time in rows2
+    # Some rows are after the start time
+    assert [value for value in rows2 if value > end_time]
+
+    # Run incremental again, no new data should be added
+    data = zendesk_support()
+    info = pipeline.run(data, write_disposition="append")
+    assert_load_info(info)
+
+    with pipeline.sql_client() as client:
+        rows3 = [
+            pendulum.instance(row[0])
+            for row in client.execute_sql(
+                "SELECT updated_at FROM tickets ORDER BY updated_at"
+            )
+        ]
+
+    assert rows3 == rows2
 
 
 @pytest.mark.parametrize("destination_name", ALL_DESTINATIONS)
