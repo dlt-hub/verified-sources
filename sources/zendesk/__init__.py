@@ -35,11 +35,10 @@ def zendesk_talk(
     Retrieves data from Zendesk Talk for phone calls and voicemails.
 
     Args:
-        credentials (TZendeskCredentials): The credentials for authentication. Defaults to the value in the `dlt.secrets` object.
-        start_time (Optional[pendulum.DateTime]): The start time for incremental loading. Defaults to DEFAULT_START_DATE.
-        end_time: Optionally load records only until this date/time.
-            Can be used in conjunction with `start_time` to load limited ranges.
-
+        credentials: The credentials for authentication. Defaults to the value in the `dlt.secrets` object.
+        start_time: The start time of the range for which to load. Defaults to January 1st 2000.
+        end_time: The end time of the range for which to load data.
+            If end time is not provided, the incremental loading will be enabled and after initial run, only new data will be retrieved
     Yields:
         DltResource: Data resources from Zendesk Talk.
     """
@@ -85,9 +84,9 @@ def talk_resource(
     Loads data from a Zendesk Talk endpoint.
 
     Args:
-        zendesk_client (ZendeskAPIClient): An instance of ZendeskAPIClient for making API calls to Zendesk Talk.
-        talk_endpoint_name (str): The name of the talk_endpoint.
-        talk_endpoint (str): The actual URL ending of the endpoint.
+        zendesk_client: An instance of ZendeskAPIClient for making API calls to Zendesk Talk.
+        talk_endpoint_name: The name of the talk_endpoint.
+        talk_endpoint: The actual URL ending of the endpoint.
 
     Yields:
         TDataItem: Dictionary containing the data from the endpoint.
@@ -108,10 +107,10 @@ def talk_incremental_resource(
     Loads data from a Zendesk Talk endpoint with incremental loading.
 
     Args:
-        zendesk_client (ZendeskAPIClient): An instance of ZendeskAPIClient for making API calls to Zendesk Talk.
-        talk_endpoint_name (str): The name of the talk_endpoint.
-        talk_endpoint (str): The actual URL ending of the endpoint.
-        updated_at (dlt.sources.incremental[str]): Source for the last updated timestamp.
+        zendesk_client: An instance of ZendeskAPIClient for making API calls to Zendesk Talk.
+        talk_endpoint_name: The name of the talk_endpoint.
+        talk_endpoint: The actual URL ending of the endpoint.
+        updated_at: Source for the last updated timestamp.
 
     Yields:
         TDataItem: Dictionary containing the data from the endpoint.
@@ -137,10 +136,10 @@ def zendesk_chat(
     Retrieves data from Zendesk Chat for chat interactions.
 
     Args:
-        credentials (ZendeskCredentialsOAuth): The credentials for authentication. Defaults to the value in the `dlt.secrets` object.
-        start_time (Optional[pendulum.DateTime]): The start time for incremental loading. Defaults to DEFAULT_START_DATE.
-        end_time: Optionally load records only until this date/time.
-            Can be used in conjunction with `start_time` to load limited ranges.
+        credentials: The credentials for authentication. Defaults to the value in the `dlt.secrets` object.
+        start_time: The start time of the range for which to load. Defaults to January 1st 2000.
+        end_time: The end time of the range for which to load data.
+            If end time is not provided, the incremental loading will be enabled and after initial run, only new data will be retrieved
 
     Yields:
         DltResource: Data resources from Zendesk Chat.
@@ -165,8 +164,8 @@ def chats_table_resource(
     Resource for Chats
 
     Args:
-        zendesk_client (Zenpy): Zenpy type object, used to make calls to Zendesk API through the Zenpy module.
-        update_timestamp (dlt.sources.incremental[str]): Incremental source specifying the timestamp for incremental loading.
+        zendesk_client: The Zendesk API client instance, used to make calls to Zendesk API.
+        update_timestamp: Incremental source specifying the timestamp for incremental loading.
 
     Yields:
         dict: A dictionary representing each row of data.
@@ -196,12 +195,12 @@ def zendesk_support(
     Retrieves data from Zendesk Support for tickets, users, brands, organizations, and groups.
 
     Args:
-        credentials (TZendeskCredentials): The credentials for authentication. Defaults to the value in the `dlt.secrets` object.
-        load_all (bool): Whether to load extra resources for the API. Defaults to True.
-        pivot_ticket_fields (bool): Whether to pivot the custom fields in tickets. Defaults to True.
-        start_time (Optional[pendulum.DateTime]): The start time for incremental loading. Defaults to DEFAULT_START_DATE.
-        end_time: Optionally load records only until this date/time.
-            Can be used in conjunction with `start_time` to load limited ranges.
+        credentials: The credentials for authentication. Defaults to the value in the `dlt.secrets` object.
+        load_all: Whether to load extra resources for the API. Defaults to True.
+        pivot_ticket_fields: Whether to pivot the custom fields in tickets. Defaults to True.
+        start_time: The start time of the range for which to load. Defaults to January 1st 2000.
+        end_time: The end time of the range for which to load data.
+            If end time is not provided, the incremental loading will be enabled and after initial run, only new data will be retrieved
 
     Returns:
         Sequence[DltResource]: Multiple dlt resources.
@@ -262,10 +261,10 @@ def zendesk_support(
         This resource uses pagination, loading and side loading to make API calls more efficient.
 
         Args:
-            zendesk_client (Zenpy): An instance of Zenpy object used to make API calls to Zendesk.
-            pivot_fields (bool): Indicates whether to pivot the custom fields in tickets. Defaults to True.
-            per_page (int): The number of Ticket objects to load per page. Defaults to 1000.
-            updated_at (dlt.sources.incremental[pendulum.DateTime]): Incremental source for the 'updated_at' column.
+            zendesk_client: The Zendesk API client instance, used to make calls to Zendesk API.
+            pivot_fields: Indicates whether to pivot the custom fields in tickets. Defaults to True.
+            per_page: The number of Ticket objects to load per page. Defaults to 1000.
+            updated_at: Incremental source for the 'updated_at' column.
                 Defaults to dlt.sources.incremental("updated_at", initial_value=start_time).
 
         Yields:
@@ -307,8 +306,8 @@ def zendesk_support(
         with the default starting date being January 1st of the current year.
 
         Args:
-            zendesk_client (Zenpy): An instance of Zenpy object used to make API calls to Zendesk.
-            time (dlt.sources.incremental[str]): Incremental source for the 'time' column,
+            zendesk_client: The Zendesk API client instance, used to make calls to Zendesk API.
+            time: Incremental source for the 'time' column,
                 indicating the starting date for retrieving ticket metric events.
                 Defaults to dlt.sources.incremental("time", initial_value=start_time_iso_str).
 
@@ -335,7 +334,7 @@ def zendesk_support(
         Loads ticket fields data from Zendesk API.
 
         Args:
-            zendesk_client (Zenpy): An instance of Zenpy object used to make API calls to Zendesk.
+            zendesk_client: The Zendesk API client instance, used to make calls to Zendesk API.
 
         Yields:
             TDataItem: Dictionary containing the ticket fields data.
@@ -411,9 +410,9 @@ def basic_resource(
     Basic loader for most endpoints offered by Zenpy. Supports pagination. Expects to be called as a DLT Resource.
 
     Args:
-        zendesk_client (Zenpy): An instance of Zenpy object used to make API calls to Zendesk.
-        resource (str): The Zenpy endpoint to retrieve data from, usually directly linked to a Zendesk API endpoint.
-        per_page (int, optional): The number of resources to retrieve per page. Defaults to 1000.
+        zendesk_client: The Zendesk API client instance, used to make calls to Zendesk API.
+        resource: The Zenpy endpoint to retrieve data from, usually directly linked to a Zendesk API endpoint.
+        per_page: The number of resources to retrieve per page. Defaults to 1000.
 
     Yields:
         TDataItem: Dictionary containing the resource data.
