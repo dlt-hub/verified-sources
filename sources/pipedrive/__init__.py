@@ -184,13 +184,17 @@ def leads(
     )
     # Load leads pages sorted from newest to oldest and stop loading when
     # last incremental value is reached
+    last_value = update_time.last_value
     pages = get_pages(
         "leads",
         pipedrive_api_key,
         extra_params={"sort": "update_time DESC"},
     )
     for page in pages:
+        # TODO: This check can be replaced with `update_time.start_out_of_range` in dlt 0.3.5
+        if last_value:
+            # Just check whether first item is lower, worst case we load 1 redundant page before break
+            first_item = page[0] if page else None
+            if first_item and first_item["update_time"] < last_value:
+                return
         yield rename_fields(page, fields_mapping)
-        # flag is set when first lower than start time is hits, no need to request more data
-        if update_time.start_out_of_range:
-            return
