@@ -2,15 +2,13 @@
 
 from typing import Any, Dict, Iterator, Iterator, Optional, Iterable
 
-import shopify
-
 import dlt
 
 from dlt.extract.source import DltResource
 from dlt.common.typing import TDataItem
 
-from .settings import DEFAULT_API_VERSION, FIRST_DAY_OF_MILLENNIUM
-from .helpers import iterate_page
+from .settings import DEFAULT_API_VERSION, FIRST_DAY_OF_MILLENNIUM, DEFAULT_PER_PAGE
+from .helpers import ShopifyApi
 
 
 @dlt.source(name="shopify")
@@ -19,6 +17,7 @@ def shopify_source(
     api_version: str = DEFAULT_API_VERSION,
     shop_url: str = dlt.config.value,
     start_date: Optional[str] = FIRST_DAY_OF_MILLENNIUM,
+    per_page: int = DEFAULT_PER_PAGE,
 ) -> Iterable[DltResource]:
     """
     The source for the Shopify pipeline. Available resources are products, orders, and customers.
@@ -34,15 +33,15 @@ def shopify_source(
     """
 
     # build client
-    session = shopify.Session(shop_url, api_version, private_app_password)
-    shopify.ShopifyResource.activate_session(session)
+    client = ShopifyApi(shop_url, private_app_password, api_version)
 
     # define resources
     @dlt.resource(primary_key="id", write_disposition="merge")
     def products(
         updated_at: dlt.sources.incremental[str] = dlt.sources.incremental(
             "updated_at", initial_value=FIRST_DAY_OF_MILLENNIUM
-        )
+        ),
+        per_page: int = DEFAULT_PER_PAGE,
     ) -> Iterable[TDataItem]:
         """
         The resource for products on your shop, supports incremental loading and pagination.
@@ -53,16 +52,22 @@ def shopify_source(
         Returns:
             Iterable[TDataItem]: A generator of products.
         """
-        page = shopify.Product.find(
-            updated_at_min=updated_at.last_value, created_at_min=start_date
-        )
-        yield iterate_page(page)
+        for page in client.get_pages(
+            "products",
+            dict(
+                updated_at_min=updated_at.last_value,
+                created_at_min=start_date,
+                limit=per_page,
+            ),
+        ):
+            yield page
 
     @dlt.resource(primary_key="id", write_disposition="merge")
     def orders(
         updated_at: dlt.sources.incremental[str] = dlt.sources.incremental(
             "updated_at", initial_value=FIRST_DAY_OF_MILLENNIUM
-        )
+        ),
+        per_page: int = DEFAULT_PER_PAGE,
     ) -> Iterable[TDataItem]:
         """
         The resource for orders on your shop, supports incremental loading and pagination.
@@ -73,16 +78,22 @@ def shopify_source(
         Returns:
             Iterable[TDataItem]: A generator of orders.
         """
-        page = shopify.Order.find(
-            updated_at_min=updated_at.last_value, created_at_min=start_date
-        )
-        yield iterate_page(page)
+        for page in client.get_pages(
+            "orders",
+            dict(
+                updated_at_min=updated_at.last_value,
+                created_at_min=start_date,
+                limit=per_page,
+            ),
+        ):
+            yield page
 
     @dlt.resource(primary_key="id", write_disposition="merge")
     def customers(
         updated_at: dlt.sources.incremental[str] = dlt.sources.incremental(
             "updated_at", initial_value=FIRST_DAY_OF_MILLENNIUM
-        )
+        ),
+        per_page: int = DEFAULT_PER_PAGE,
     ) -> Iterable[TDataItem]:
         """
         The resource for customers on your shop, supports incremental loading and pagination.
@@ -93,9 +104,18 @@ def shopify_source(
         Returns:
             Iterable[TDataItem]: A generator of customers.
         """
-        page = shopify.Customer.find(
-            updated_at_min=updated_at.last_value, created_at_min=start_date
-        )
-        yield iterate_page(page)
+        for page in client.get_pages(
+            "customers",
+            dict(
+                updated_at_min=updated_at.last_value,
+                created_at_min=start_date,
+                limit=per_page,
+            ),
+        ):
+            yield page
 
-    return (products, orders, customers)
+    return [
+        products(per_page=per_page),
+        orders(per_page=per_page),
+        customers(per_page=per_page),
+    ]
