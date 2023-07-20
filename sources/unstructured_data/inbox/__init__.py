@@ -1,13 +1,13 @@
 """This resource collects attachments from Gmail inboxes to destinations"""
 import os
-from typing import Union
+from typing import Optional, Sequence, Union
 
 import dlt
 from dlt.extract.source import TDataItem
 from dlt.sources.credentials import GcpOAuthCredentials, GcpServiceAccountCredentials
 
 from .helpers import GmailClient, Message
-from .settings import HEADERS_DEFAULT, STORAGE_FOLDER_PATH
+from .settings import FILTER_EMAILS, HEADERS_DEFAULT, STORAGE_FOLDER_PATH
 
 
 @dlt.resource(write_disposition="replace")
@@ -16,6 +16,7 @@ def gmail(
         GcpOAuthCredentials, GcpServiceAccountCredentials
     ] = dlt.secrets.value,
     storage_folder_path: str = STORAGE_FOLDER_PATH,
+    fiter_emails: Sequence[str] = FILTER_EMAILS,
     download: bool = False,
 ) -> TDataItem:
     client = GmailClient(credentials)
@@ -29,8 +30,11 @@ def gmail(
         else:
             for message_id in messages_ids:
                 message = client.get_one_message(user_id="me", message_id=message_id)
-                response = parse_message(message, download, storage_folder_path)
-                yield response
+                response = parse_message(
+                    message, download, storage_folder_path, fiter_emails
+                )
+                if response:
+                    yield response
 
         if not messages_info.get("nextPageToken"):
             break
@@ -40,7 +44,8 @@ def parse_message(
     message: Message,
     download: bool = False,
     storage_folder_path: str = STORAGE_FOLDER_PATH,
-) -> TDataItem:
+    fiter_emails: Sequence[str] = FILTER_EMAILS,
+) -> Optional[TDataItem]:
     content = message.content()
 
     response = {
@@ -66,7 +71,12 @@ def parse_message(
             if name and name in HEADERS_DEFAULT:
                 response[name] = header.get("value")
 
+        if fiter_emails and "From" in response:
+            if not any(email in response["From"] for email in fiter_emails):
+                return None
+
         body = part.get("body")
+
         if part.get("filename"):
             response["file_name"] = part["filename"]
             if "data" in body:
