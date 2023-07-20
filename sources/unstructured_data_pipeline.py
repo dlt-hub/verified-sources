@@ -61,11 +61,13 @@ def from_gmail(queries: Dict[str, str]) -> None:
         full_refresh=True,
     )
 
-    # use extensions to filter files as 'extensions=(".txt", ".pdf", ...)'
     data_resource = gmail(download=True)
     # run the pipeline with your parameters
     load_info = pipeline.run(
         data_resource
+        | unstructured_to_structured_resource(
+            queries, table_name=f"unstructured_from_{data_resource.name}"
+        )
     )
     # pretty print the information on data that was loaded
     print(load_info)

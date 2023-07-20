@@ -67,6 +67,9 @@ def convert_data(
         TDataItem: The structured data item resulting from the conversion.
 
     """
+    if unstructured_item["file_path"] is None:
+        return None
+
     if run_async:
         logger.info("Run conversion asynchronously.")
         response = asyncio.run(
