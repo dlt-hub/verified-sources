@@ -66,6 +66,8 @@ class ShopifyApi:
         """
         if link_header:
             for link in link_header.split(","):
-                if "next" in link:
-                    return link.split(";")[0].strip("<>")
+                parts = link.split(";")
+                if len(parts) == 2 and parts[1].strip() == 'rel="next"':
+                    url = parts[0].strip(" <>")
+                    return url
         return None

@@ -12,7 +12,8 @@ def test_all_resources(destination_name: str) -> None:
         dataset_name="shopify_data",
         full_refresh=True,
     )
-    load_info = pipeline.run(shopify_source())
+    # Set per page limit to ensure we use pagination
+    load_info = pipeline.run(shopify_source(per_page=5))
     print(load_info)
     assert_load_info(load_info)
     table_names = [t["name"] for t in pipeline.default_schema.data_tables()]
@@ -26,7 +27,7 @@ def test_all_resources(destination_name: str) -> None:
     assert table_counts["customers"] == 3
 
     # load again to check there are no dupicates
-    load_info = pipeline.run(shopify_source())
+    load_info = pipeline.run(shopify_source(per_page=5))
     table_names = [t["name"] for t in pipeline.default_schema.data_tables()]
     table_counts = load_table_counts(pipeline, *table_names)
     assert set(table_counts.keys()) > set(expected_tables)
