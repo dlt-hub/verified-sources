@@ -2,9 +2,12 @@
 
 from dlt.sources.helpers import requests
 from dlt.common.typing import TDataItem, TDataItems, Dict
-from typing import Any, Iterable, Optional
+from typing import Any, Iterable, Optional, Literal
 
 from .settings import DEFAULT_API_VERSION
+from .date_helper import ensure_pendulum_datetime
+
+TOrderStatus = Literal["open", "closed", "cancelled", "any"]
 
 
 class ShopifyApi:
@@ -48,7 +51,7 @@ class ShopifyApi:
             response.raise_for_status()
             json = response.json()
             # Get item list from the page
-            yield json[resource]
+            yield [self._convert_datetime_fields(item) for item in json[resource]]
             link = response.headers.get("Link")
             url = self._get_next_page_url(link)
             # Query params are included in subsequent page URLs
@@ -71,3 +74,20 @@ class ShopifyApi:
                     url = parts[0].strip(" <>")
                     return url
         return None
+
+    def _convert_datetime_fields(self, item: Dict[str, Any]) -> Dict[str, Any]:
+        """Convert timestamp fields in the item to pendulum datetime objects
+
+        The item is modified in place.
+
+        Args:
+            item: The item to convert
+
+        Returns:
+            The same data item (for convenience)
+        """
+        fields = ["created_at", "updated_at"]
+        for field in fields:
+            if field in item:
+                item[field] = ensure_pendulum_datetime(item[field])
+        return item
