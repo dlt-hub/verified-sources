@@ -73,7 +73,7 @@ def shopify_source(
         yield from client.get_pages(
             "products",
             dict(
-                updated_at_min=updated_at.last_value,
+                updated_at_min=updated_at.last_value.isoformat(),
                 limit=per_page,
             ),
         )
@@ -100,7 +100,7 @@ def shopify_source(
         yield from client.get_pages(
             "orders",
             dict(
-                updated_at_min=updated_at.last_value,
+                updated_at_min=updated_at.last_value.isoformat(),
                 limit=per_page,
                 status=status,
             ),
@@ -127,7 +127,7 @@ def shopify_source(
         yield from client.get_pages(
             "customers",
             dict(
-                updated_at_min=updated_at.last_value,
+                updated_at_min=updated_at.last_value.isoformat(),
                 limit=per_page,
             ),
         )
