@@ -70,13 +70,13 @@ def shopify_source(
         Returns:
             Iterable[TDataItem]: A generator of products.
         """
-        yield from client.get_pages(
-            "products",
-            dict(
-                updated_at_min=updated_at.last_value.isoformat(),
-                limit=per_page,
-            ),
+        params = dict(
+            updated_at_min=updated_at.last_value.isoformat(),
+            limit=per_page,
         )
+        if updated_at.end_value is not None:
+            params["updated_at_max"] = updated_at.end_value.isoformat()
+        yield from client.get_pages("products", params)
 
     @dlt.resource(primary_key="id", write_disposition="merge")
     def orders(
@@ -97,14 +97,14 @@ def shopify_source(
         Returns:
             Iterable[TDataItem]: A generator of orders.
         """
-        yield from client.get_pages(
-            "orders",
-            dict(
-                updated_at_min=updated_at.last_value.isoformat(),
-                limit=per_page,
-                status=status,
-            ),
+        params = dict(
+            updated_at_min=updated_at.last_value.isoformat(),
+            limit=per_page,
+            status=status,
         )
+        if updated_at.end_value is not None:
+            params["updated_at_max"] = updated_at.end_value.isoformat()
+        yield from client.get_pages("orders", params)
 
     @dlt.resource(primary_key="id", write_disposition="merge")
     def customers(
@@ -124,12 +124,12 @@ def shopify_source(
         Returns:
             Iterable[TDataItem]: A generator of customers.
         """
-        yield from client.get_pages(
-            "customers",
-            dict(
-                updated_at_min=updated_at.last_value.isoformat(),
-                limit=per_page,
-            ),
+        params = dict(
+            updated_at_min=updated_at.last_value.isoformat(),
+            limit=per_page,
         )
+        if updated_at.end_value is not None:
+            params["updated_at_max"] = updated_at.end_value.isoformat()
+        yield from client.get_pages("customers", params)
 
     return (products, orders, customers)
