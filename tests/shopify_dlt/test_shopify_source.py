@@ -1,7 +1,13 @@
-from tests.utils import ALL_DESTINATIONS, assert_load_info, load_table_counts
+import re
+from urllib.parse import parse_qs, urlparse
+
 import pytest
+from requests_mock import Mocker
 import dlt
 from dlt.common import pendulum
+from dlt.sources.helpers import requests
+
+from tests.utils import ALL_DESTINATIONS, assert_load_info, load_table_counts
 from sources.shopify_dlt import shopify_source
 from sources.shopify_dlt.date_helper import ensure_pendulum_datetime
 
@@ -139,3 +145,41 @@ def test_order_status(destination_name: str) -> None:
         rows = [row[0] for row in client.execute_sql("SELECT closed_at FROM orders")]
 
     assert all(rows)
+
+
+@pytest.mark.parametrize("resource_name", ["orders", "customers", "products"])
+def test_request_params(resource_name: str) -> None:
+    """Test source arguments are passed to the request query params"""
+    pipeline = dlt.pipeline(
+        pipeline_name="shopify",
+        dataset_name="shopify_data",
+        full_refresh=True,
+    )
+
+    data = shopify_source(
+        order_status="closed",
+        start_date="2023-05-05",
+        end_date="2023-05-06",
+        per_page=100,
+    ).with_resources(resource_name)
+
+    with Mocker(session=requests.client.session) as m:
+        m.get(
+            re.compile(r"/{}.json".format(resource_name)),
+            json={resource_name: []},
+        )
+
+        pipeline.extract(data)
+
+    # verify the last request query params
+    params = parse_qs(urlparse(m.last_request.url).query)
+
+    assert ensure_pendulum_datetime(
+        params["updated_at_min"][0]
+    ) == ensure_pendulum_datetime("2023-05-05")
+    assert ensure_pendulum_datetime(
+        params["updated_at_max"][0]
+    ) == ensure_pendulum_datetime("2023-05-06")
+    assert params["limit"] == ["100"]
+    if resource_name == "orders":
+        assert params["status"] == ["closed"]
