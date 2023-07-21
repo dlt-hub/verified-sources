@@ -25,7 +25,7 @@ def ensure_pendulum_datetime(value: TAnyDateTime) -> pendulum.DateTime:
             return ret.in_tz("UTC")
         return ret
     elif isinstance(value, date):
-        return pendulum.DateTime(value.year, value.month, value.day)
+        return pendulum.datetime(value.year, value.month, value.day)
     elif isinstance(value, str):
         return pendulum.parse(value)  # type: ignore[return-value]
     raise TypeError(f"Cannot coerce {value} to a pendulum.DateTime object.")

@@ -25,7 +25,7 @@ def test_all_resources(destination_name: str) -> None:
     expected_tables = ["products", "orders", "customers"]
     assert set(table_counts.keys()) > set(expected_tables)
     assert table_counts["products"] == 17
-    assert table_counts["orders"] == 11
+    assert table_counts["orders"] == 13
     assert table_counts["customers"] == 3
 
     # load again to check there are no dupicates
@@ -34,7 +34,7 @@ def test_all_resources(destination_name: str) -> None:
     table_counts = load_table_counts(pipeline, *table_names)
     assert set(table_counts.keys()) > set(expected_tables)
     assert table_counts["products"] == 17
-    assert table_counts["orders"] == 11
+    assert table_counts["orders"] == 13
     assert table_counts["customers"] == 3
 
 
@@ -51,7 +51,7 @@ def test_start_date() -> None:
     assert_load_info(load_info)
     table_names = [t["name"] for t in pipeline.default_schema.data_tables()]
     table_counts = load_table_counts(pipeline, *table_names)
-    assert table_counts["orders"] == 1
+    assert table_counts["orders"] == 3
 
 
 @pytest.mark.parametrize("destination_name", ALL_DESTINATIONS)
@@ -116,3 +116,26 @@ def test_end_date_incremental(destination_name: str) -> None:
 
     # No duplicates
     assert len(rows2) == len(set(rows2))
+
+
+@pytest.mark.parametrize("destination_name", ALL_DESTINATIONS)
+def test_order_status(destination_name: str) -> None:
+    pipeline = dlt.pipeline(
+        pipeline_name="shopify",
+        destination=destination_name,
+        dataset_name="shopify_data",
+        full_refresh=True,
+    )
+
+    data = shopify_source(
+        order_status="closed",
+    ).with_resources("orders")
+
+    info = pipeline.run(data)
+    assert_load_info(info)
+
+    # Check that all loaded orders are closed
+    with pipeline.sql_client() as client:
+        rows = [row[0] for row in client.execute_sql("SELECT closed_at FROM orders")]
+
+    assert all(rows)
