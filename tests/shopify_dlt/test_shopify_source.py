@@ -21,7 +21,7 @@ def test_all_resources(destination_name: str) -> None:
         full_refresh=True,
     )
     # Set per page limit to ensure we use pagination
-    load_info = pipeline.run(shopify_source(per_page=5))
+    load_info = pipeline.run(shopify_source(items_per_page=5))
     print(load_info)
     assert_load_info(load_info)
     table_names = [t["name"] for t in pipeline.default_schema.data_tables()]
@@ -35,7 +35,7 @@ def test_all_resources(destination_name: str) -> None:
     assert table_counts["customers"] == 3
 
     # load again to check there are no dupicates
-    load_info = pipeline.run(shopify_source(per_page=5))
+    load_info = pipeline.run(shopify_source(items_per_page=5))
     table_names = [t["name"] for t in pipeline.default_schema.data_tables()]
     table_counts = load_table_counts(pipeline, *table_names)
     assert set(table_counts.keys()) > set(expected_tables)
@@ -80,7 +80,7 @@ def test_end_date_incremental(destination_name: str) -> None:
     data = shopify_source(
         start_date=start_date,
         end_date=end_date.in_timezone("EST").isoformat(),
-        per_page=5,
+        items_per_page=5,
     ).with_resources("orders")
 
     info = pipeline.run(data, write_disposition="append")
@@ -102,7 +102,9 @@ def test_end_date_incremental(destination_name: str) -> None:
     assert start_date_utc < max(dest_dates) < end_date
 
     # Load again with incremental, starting at end_date
-    data = shopify_source(start_date=end_date, per_page=5).with_resources("orders")
+    data = shopify_source(start_date=end_date, items_per_page=5).with_resources(
+        "orders"
+    )
 
     info = pipeline.run(data, write_disposition="append")
     assert_load_info(info)
@@ -160,7 +162,7 @@ def test_request_params(resource_name: str) -> None:
         order_status="closed",
         start_date="2023-05-05",
         end_date="2023-05-06",
-        per_page=100,
+        items_per_page=100,
     ).with_resources(resource_name)
 
     with Mocker(session=requests.client.session) as m:

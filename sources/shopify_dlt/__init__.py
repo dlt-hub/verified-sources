@@ -8,7 +8,11 @@ from dlt.extract.source import DltResource
 from dlt.common.typing import TDataItem
 from dlt.common import pendulum
 
-from .settings import DEFAULT_API_VERSION, FIRST_DAY_OF_MILLENNIUM, DEFAULT_PER_PAGE
+from .settings import (
+    DEFAULT_API_VERSION,
+    FIRST_DAY_OF_MILLENNIUM,
+    DEFAULT_ITEMS_PER_PAGE,
+)
 from .helpers import ShopifyApi, TOrderStatus
 from .date_helper import TAnyDateTime, ensure_pendulum_datetime
 
@@ -20,7 +24,7 @@ def shopify_source(
     shop_url: str = dlt.config.value,
     start_date: TAnyDateTime = FIRST_DAY_OF_MILLENNIUM,
     end_date: Optional[TAnyDateTime] = None,
-    per_page: int = DEFAULT_PER_PAGE,
+    items_per_page: int = DEFAULT_ITEMS_PER_PAGE,
     order_status: TOrderStatus = "any",
 ) -> Iterable[DltResource]:
     """
@@ -34,7 +38,7 @@ def shopify_source(
         private_app_password: The app password to the app on your shop.
         api_version: The API version to use (e.g. 2023-01).
         shop_url: The URL of your shop (e.g. https://my-shop.myshopify.com).
-        per_page: The max number of items to fetch per page. Defaults to 250.
+        items_per_page: The max number of items to fetch per page. Defaults to 250.
         start_date: The date from which to import items. It will import items initially created on or after this date.
             Can be a date/datetime object, an ISO date/datetime string or a pendulum instance. Date/time without timezone is assumed to be UTC.
         end_time: The end time of the range for which to load data.
@@ -59,7 +63,7 @@ def shopify_source(
         ] = dlt.sources.incremental(
             "updated_at", initial_value=start_date_obj, end_value=end_date_obj
         ),
-        per_page: int = per_page,
+        items_per_page: int = items_per_page,
     ) -> Iterable[TDataItem]:
         """
         The resource for products on your shop, supports incremental loading and pagination.
@@ -72,7 +76,7 @@ def shopify_source(
         """
         params = dict(
             updated_at_min=updated_at.last_value.isoformat(),
-            limit=per_page,
+            limit=items_per_page,
         )
         if updated_at.end_value is not None:
             params["updated_at_max"] = updated_at.end_value.isoformat()
@@ -85,7 +89,7 @@ def shopify_source(
         ] = dlt.sources.incremental(
             "updated_at", initial_value=start_date_obj, end_value=end_date_obj
         ),
-        per_page: int = per_page,
+        items_per_page: int = items_per_page,
         status: TOrderStatus = order_status,
     ) -> Iterable[TDataItem]:
         """
@@ -99,7 +103,7 @@ def shopify_source(
         """
         params = dict(
             updated_at_min=updated_at.last_value.isoformat(),
-            limit=per_page,
+            limit=items_per_page,
             status=status,
         )
         if updated_at.end_value is not None:
@@ -113,7 +117,7 @@ def shopify_source(
         ] = dlt.sources.incremental(
             "updated_at", initial_value=start_date_obj, end_value=end_date_obj
         ),
-        per_page: int = per_page,
+        items_per_page: int = items_per_page,
     ) -> Iterable[TDataItem]:
         """
         The resource for customers on your shop, supports incremental loading and pagination.
@@ -126,7 +130,7 @@ def shopify_source(
         """
         params = dict(
             updated_at_min=updated_at.last_value.isoformat(),
-            limit=per_page,
+            limit=items_per_page,
         )
         if updated_at.end_value is not None:
             params["updated_at_max"] = updated_at.end_value.isoformat()
