@@ -6,6 +6,7 @@ from dlt.extract.source import DltResource
 
 from sources.unstructured_data import unstructured_to_structured_resource
 from sources.unstructured_data.filesystem import google_drive, local_folder
+from sources.unstructured_data.inbox import gmail
 
 from tests.utils import ALL_DESTINATIONS, assert_load_info
 
@@ -98,6 +99,64 @@ class TestUnstructuredFromGoogleDrive:
             extensions=(".txt", ".pdf"),
             storage_folder_path=tmp_path,
             folder_ids=gd_folders,
+        )
+        return resource
+
+    def test_load_info(
+        self,
+        destination_name: str,
+        queries: dict,
+        data_resource: DltResource,
+        run_async: bool,
+    ) -> None:
+        _, load_info = run_pipeline(destination_name, queries, data_resource, run_async)
+        # make sure all data were loaded
+        assert_load_info(load_info)
+
+    def test_tables(
+        self,
+        destination_name: str,
+        queries: dict,
+        data_resource: DltResource,
+        run_async: bool,
+    ) -> None:
+        pipeline, _ = run_pipeline(destination_name, queries, data_resource, run_async)
+        # now let's inspect the generated schema. it should contain just
+        # one table with filepaths
+        schema = pipeline.default_schema
+        tables = schema.data_tables()
+        assert len(tables) == 1
+        # tables are typed dicts
+        structured_data_table = tables[0]
+        assert structured_data_table["name"] == "unstructured_from_google_drive"
+
+    def test_google_drive_content(
+        self,
+        destination_name: str,
+        queries: dict,
+        data_resource: DltResource,
+        run_async: bool,
+    ) -> None:
+        pipeline, _ = run_pipeline(destination_name, queries, data_resource, run_async)
+        with pipeline.sql_client() as c:
+            # you can use parametrized queries as well, see python dbapi
+            # you can use unqualified table names
+            with c.execute_query(
+                "SELECT file_path FROM unstructured_from_google_drive"
+            ) as cur:
+                rows = list(cur.fetchall())
+                assert len(rows) == 2  # 2 files were processed, .jpg was skipped
+
+
+@pytest.mark.parametrize("destination_name", ALL_DESTINATIONS)
+@pytest.mark.parametrize("run_async", (False, True))
+class TestUnstructuredFromGmail:
+    @pytest.fixture(scope="session")
+    def data_resource(self, tmpdir_factory) -> DltResource:
+        tmp_path = tmpdir_factory.mktemp("temp_data")
+        resource = gmail(
+            download=True,
+            storage_folder_path=tmp_path,
         )
         return resource
 
