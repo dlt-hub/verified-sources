@@ -67,7 +67,7 @@ def convert_data(
         TDataItem: The structured data item resulting from the conversion.
 
     """
-    if unstructured_item["file_path"] is None:
+    if unstructured_item.get("file_path") is None:
         return None
 
     if run_async:

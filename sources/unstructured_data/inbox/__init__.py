@@ -30,11 +30,9 @@ def gmail(
         else:
             for message_id in messages_ids:
                 message = client.get_one_message(user_id="me", message_id=message_id)
-                response = parse_message(
+                yield parse_message(
                     message, download, storage_folder_path, fiter_emails
                 )
-                if response:
-                    yield response
 
         if not messages_info.get("nextPageToken"):
             break
@@ -89,11 +87,11 @@ def parse_message(
                 file_data = None
 
             if file_data and download:
-                save_path = os.path.join(storage_folder_path, part["filename"])
+                save_path = os.path.join(storage_folder_path, message.message_id + "_" + part["filename"])
                 os.makedirs(os.path.dirname(save_path), exist_ok=True)
                 with open(save_path, "wb") as f:
                     f.write(file_data)
 
                 response["file_path"] = os.path.abspath(save_path)
 
-    return response
+        yield response
