@@ -24,6 +24,7 @@ def shopify_source(
     shop_url: str = dlt.config.value,
     start_date: TAnyDateTime = FIRST_DAY_OF_MILLENNIUM,
     end_date: Optional[TAnyDateTime] = None,
+    created_at_min: TAnyDateTime = FIRST_DAY_OF_MILLENNIUM,
     items_per_page: int = DEFAULT_ITEMS_PER_PAGE,
     order_status: TOrderStatus = "any",
 ) -> Iterable[DltResource]:
@@ -39,10 +40,13 @@ def shopify_source(
         api_version: The API version to use (e.g. 2023-01).
         shop_url: The URL of your shop (e.g. https://my-shop.myshopify.com).
         items_per_page: The max number of items to fetch per page. Defaults to 250.
-        start_date: The date from which to import items. It will import items initially created on or after this date.
-            Can be a date/datetime object, an ISO date/datetime string or a pendulum instance. Date/time without timezone is assumed to be UTC.
+        start_date: Items updated on or after this date are imported. Defaults to 2000-01-01.
+            If end date is not provided, this is used as the initial value for incremental loading and after the initial run, only new data will be retrieved.
+            Accepts any `date`/`datetime` object or a date/datetime string in ISO 8601 format.
         end_time: The end time of the range for which to load data.
+            Should be used together with `start_date` to limit the data to items updated in that time range.
             If end time is not provided, the incremental loading will be enabled and after initial run, only new data will be retrieved
+        created_at_min: The minimum creation date of items to import. Items created on or after this date are loaded. Defaults to 2000-01-01.
         order_status: The order status to filter by. Can be 'open', 'closed', 'cancelled', or 'any'. Defaults to 'any'.
 
     Returns:
@@ -54,6 +58,7 @@ def shopify_source(
 
     start_date_obj = ensure_pendulum_datetime(start_date)
     end_date_obj = ensure_pendulum_datetime(end_date) if end_date else None
+    created_at_min_obj = ensure_pendulum_datetime(created_at_min)
 
     # define resources
     @dlt.resource(primary_key="id", write_disposition="merge")
@@ -63,6 +68,7 @@ def shopify_source(
         ] = dlt.sources.incremental(
             "updated_at", initial_value=start_date_obj, end_value=end_date_obj
         ),
+        created_at_min: pendulum.DateTime = created_at_min_obj,
         items_per_page: int = items_per_page,
     ) -> Iterable[TDataItem]:
         """
@@ -77,6 +83,8 @@ def shopify_source(
         params = dict(
             updated_at_min=updated_at.last_value.isoformat(),
             limit=items_per_page,
+            order="updated_at asc",
+            created_at_min=created_at_min.isoformat(),
         )
         if updated_at.end_value is not None:
             params["updated_at_max"] = updated_at.end_value.isoformat()
@@ -89,6 +97,7 @@ def shopify_source(
         ] = dlt.sources.incremental(
             "updated_at", initial_value=start_date_obj, end_value=end_date_obj
         ),
+        created_at_min: pendulum.DateTime = created_at_min_obj,
         items_per_page: int = items_per_page,
         status: TOrderStatus = order_status,
     ) -> Iterable[TDataItem]:
@@ -105,6 +114,8 @@ def shopify_source(
             updated_at_min=updated_at.last_value.isoformat(),
             limit=items_per_page,
             status=status,
+            order="updated_at asc",
+            created_at_min=created_at_min.isoformat(),
         )
         if updated_at.end_value is not None:
             params["updated_at_max"] = updated_at.end_value.isoformat()
@@ -117,6 +128,7 @@ def shopify_source(
         ] = dlt.sources.incremental(
             "updated_at", initial_value=start_date_obj, end_value=end_date_obj
         ),
+        created_at_min: pendulum.DateTime = created_at_min_obj,
         items_per_page: int = items_per_page,
     ) -> Iterable[TDataItem]:
         """
@@ -131,6 +143,8 @@ def shopify_source(
         params = dict(
             updated_at_min=updated_at.last_value.isoformat(),
             limit=items_per_page,
+            order="updated_at asc",
+            created_at_min=created_at_min.isoformat(),
         )
         if updated_at.end_value is not None:
             params["updated_at_max"] = updated_at.end_value.isoformat()

@@ -52,12 +52,12 @@ def test_start_date() -> None:
         full_refresh=True,
     )
 
-    # we only load objects created on 05.05. or after which is only one at this point
+    # we only load objects updated on 05.05. or after
     load_info = pipeline.run(shopify_source(start_date="2023-05-05"))
     assert_load_info(load_info)
     table_names = [t["name"] for t in pipeline.default_schema.data_tables()]
     table_counts = load_table_counts(pipeline, *table_names)
-    assert table_counts["orders"] == 3
+    assert table_counts["orders"] == 4
 
 
 @pytest.mark.parametrize("destination_name", ALL_DESTINATIONS)
@@ -149,6 +149,45 @@ def test_order_status(destination_name: str) -> None:
     assert all(rows)
 
 
+@pytest.mark.parametrize("destination_name", ALL_DESTINATIONS)
+def test_min_created_at(destination_name: str) -> None:
+    pipeline = dlt.pipeline(
+        pipeline_name="shopify",
+        destination=destination_name,
+        dataset_name="shopify_data",
+        full_refresh=True,
+    )
+
+    # Order create before created_at_min, but updated after
+    # our start date should not be included. E.g.
+    # 3 | 2023-05-04 13:39:36+00 | 2023-07-24 18:20:09+00
+
+    # Set the min to 1s after the test order was created
+    created_at_min = ensure_pendulum_datetime("2023-05-04T13:39:37Z")
+
+    data = shopify_source(
+        start_date="2020-01-01",
+        created_at_min=created_at_min,
+    ).with_resources("orders")
+
+    info = pipeline.run(data)
+
+    assert_load_info(info)
+
+    with pipeline.sql_client() as client:
+        rows = [
+            (ensure_pendulum_datetime(row[0]), ensure_pendulum_datetime(row[1]))
+            for row in client.execute_sql(
+                "SELECT updated_at, created_at FROM orders ORDER BY updated_at"
+            )
+        ]
+    update_dates, create_dates = list(zip(*rows))
+
+    # All loaded create/update dates are higher than created_at_min
+    assert min(create_dates) >= created_at_min
+    assert min(update_dates) >= created_at_min
+
+
 @pytest.mark.parametrize("resource_name", ["orders", "customers", "products"])
 def test_request_params(resource_name: str) -> None:
     """Test source arguments are passed to the request query params"""
@@ -163,6 +202,7 @@ def test_request_params(resource_name: str) -> None:
         start_date="2023-05-05",
         end_date="2023-05-06",
         items_per_page=100,
+        created_at_min="2020-01-01",
     ).with_resources(resource_name)
 
     with Mocker(session=requests.client.session) as m:
@@ -182,6 +222,9 @@ def test_request_params(resource_name: str) -> None:
     assert ensure_pendulum_datetime(
         params["updated_at_max"][0]
     ) == ensure_pendulum_datetime("2023-05-06")
+    assert ensure_pendulum_datetime(
+        params["created_at_min"][0]
+    ) == ensure_pendulum_datetime("2020-01-01")
     assert params["limit"] == ["100"]
     if resource_name == "orders":
         assert params["status"] == ["closed"]
