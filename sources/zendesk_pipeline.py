@@ -67,9 +67,9 @@ def incremental_load_all_start_time() -> Any:
         full_refresh=False,
         dataset_name="sample_zendesk_data",
     )
-    data = zendesk_support(load_all=True, incremental_start_time=start_time)
-    data_chat = zendesk_chat(incremental_start_time=start_time)
-    data_talk = zendesk_talk(incremental_start_time=start_time)
+    data = zendesk_support(load_all=True, start_time=start_time)
+    data_chat = zendesk_chat(start_time=start_time)
+    data_talk = zendesk_talk(start_time=start_time)
     info = pipeline.run(data=[data, data_chat, data_talk])
     return info
 
@@ -96,15 +96,13 @@ def incremental_load_with_backloading() -> Any:
     # Run the pipeline in a loop for each 1 week range
     for start, end in ranges:
         print(f"Loading tickets between {start} and {end}")
-        data = zendesk_support(
-            incremental_start_time=start, incremental_end_time=end
-        ).with_resources("tickets")
+        data = zendesk_support(start_time=start, end_time=end).with_resources("tickets")
         info = pipeline.run(data=data)
         print(info)
 
     # Backloading is done, now we continue loading with incremental state, starting where the backloading left off
     print(f"Loading with incremental state, starting at {end}")
-    data = zendesk_support(incremental_start_time=end).with_resources("tickets")
+    data = zendesk_support(start_time=end).with_resources("tickets")
     info = pipeline.run(data)
     print(info)
 
