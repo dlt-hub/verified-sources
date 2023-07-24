@@ -16,7 +16,7 @@ def load_all_resources(resources: List[str], start_date: TAnyDateTime) -> None:
         pipeline_name="shopify", destination="duckdb", dataset_name="shopify_data"
     )
     load_info = pipeline.run(
-        shopify_source(start_date=start_date).with_resources(*resources)
+        shopify_source(start_date=start_date).with_resources(*resources),
     )
     print(load_info)
 
@@ -32,29 +32,35 @@ def incremental_load_with_backloading() -> None:
     )
 
     # Load all orders from 2023-01-01 to now
-    current_start_date = pendulum.datetime(2023, 1, 1)
+    min_start_date = current_start_date = pendulum.datetime(2023, 1, 1)
     max_end_date = pendulum.now()
 
-    # Create a list of time ranges of 1 week each
+    # Create a list of time ranges of 1 week each, we'll use this to load the data in chunks
     ranges: List[Tuple[pendulum.DateTime, pendulum.DateTime]] = []
     while current_start_date < max_end_date:
         end_date = min(current_start_date.add(weeks=1), max_end_date)
         ranges.append((current_start_date, end_date))
         current_start_date = end_date
 
-    # Run the pipeline for each time range
+    # Run the pipeline for each time range created above
     for start_date, end_date in ranges:
         print(f"Load orders between {start_date} and {end_date}")
-        load_info = pipeline.run(
-            shopify_source(start_date=start_date, end_date=end_date).with_resources(
-                "orders"
-            )
-        )
+        # Create the source with start and end date set according to the current time range to filter
+        # created_at_min lets us set a cutoff to exclude orders created before the initial date of (2023-01-01)
+        # even if they were updated after that date
+        data = shopify_source(
+            start_date=start_date, end_date=end_date, created_at_min=min_start_date
+        ).with_resources("orders")
+
+        load_info = pipeline.run(data)
         print(load_info)
 
-    # Continue loading new data incrementally
+    # Continue loading new data incrementally starting at the end of the last range
+    # created_at_min still filters out items created before 2023-01-01
     load_info = pipeline.run(
-        shopify_source(start_date=max_end_date).with_resources("orders")
+        shopify_source(
+            start_date=max_end_date, created_at_min=min_start_date
+        ).with_resources("orders")
     )
     print(load_info)
 
