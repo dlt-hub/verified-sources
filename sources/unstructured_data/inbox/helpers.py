@@ -1,5 +1,5 @@
 import base64
-from typing import Any, Union
+from typing import Any, Optional, Union
 
 from dlt.extract.source import TDataItem
 from dlt.sources.credentials import GcpOAuthCredentials, GcpServiceAccountCredentials
@@ -20,10 +20,14 @@ class GmailClient:
         self.messages = self.service.users().messages()
 
     def messages_info(
-        self, user_id: str, message_type: str = "inbox", max_results: int = 100
+        self,
+        user_id: str,
+        query: str = f"is:inbox",
+        page_token: Optional[str] = None,
+        max_results: int = 100,
     ) -> TDataItem:
         return self.messages.list(
-            userId=user_id, maxResults=max_results, q=f"is:{message_type}"
+            userId=user_id, maxResults=max_results, q=query, pageToken=page_token
         ).execute()
 
     def get_one_message(self, user_id: str, message_id: str) -> Any:

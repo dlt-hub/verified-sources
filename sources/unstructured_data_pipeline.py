@@ -57,8 +57,8 @@ def from_gmail(queries: Dict[str, str]) -> None:
     pipeline = dlt.pipeline(
         pipeline_name="unstructured_gmail",
         destination="duckdb",
-        dataset_name="unstructured_gmail",
-        full_refresh=True,
+        dataset_name="unstructured_gmail_data",
+        full_refresh=False,
     )
 
     data_resource = gmail(download=True)
