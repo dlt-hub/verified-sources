@@ -25,6 +25,7 @@ dev: has-poetry
 	poetry install
 
 lint-dlt-init:
+	poetry run ./check-requirements.py
 	poetry run pytest tests/test_dlt_init.py --no-header
 
 lint-code:

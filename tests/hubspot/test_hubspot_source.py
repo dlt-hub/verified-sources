@@ -199,9 +199,10 @@ def test_all_resources(destination_name: str) -> None:
         if t["name"].endswith("_property_history")
     ]
     # Check history tables
+    # NOTE: this value is increasing... maybe we should start testing ranges
     assert load_table_counts(pipeline, *history_table_names) == {
-        "contacts_property_history": 16826,
-        "deals_property_history": 13849,
+        "contacts_property_history": 17226,
+        "deals_property_history": 14349,
     }
 
     # Check property from couple of contacts against known data
