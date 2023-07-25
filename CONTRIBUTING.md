@@ -165,8 +165,21 @@ If this command fails, something is not set up correctly yet.
 3. Your code needs to be typed. Consult the section about typing for more information.
 4. If you create a new source or make significant changes to an existing source, please add or
    update tests accordingly.
+5. The source folder must contain a `requirements.txt` file including `dlt` as a dependency and
+   additional dependencies needed to run the source (if any).
 
-## Source specific dependencies
+## Source specific dependencies (requirements file)
+
+A `requirements.txt` file must be added to the **source folder**
+including a versioned dependency on `dlt` itself.
+This is to specify which version of dlt the source is developed against, and ensures that users
+are notified to update `dlt` if the source depends on new features or backwards incompatible changes.
+
+The `dlt` dependency should be added in `requirements.txt` with a version range and without extras, example:
+
+```
+dlt>=0.3.5,<0.4.0
+```
 
 If your source requires additional dependencies that are not available in `dlt` they may be added as
 follows:
@@ -174,7 +187,7 @@ follows:
 1. Use `poetry` to add it to the group with the same name as the source. Example: the chess source uses
    `python-chess` to decode game moves. The dependency was added with
    `poetry add -G chess python-chess`.
-2. Add a `requirements.txt` file in **source folder** and add the dependency there.
+2. Add the dependency to the `requirements.txt` file in the **source folder**.
 
 ## Secrets and settings
 
