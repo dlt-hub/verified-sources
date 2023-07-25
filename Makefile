@@ -29,6 +29,7 @@ lint-dlt-init:
 
 lint-code:
 	./check-package.sh
+	./check-requirements.py
 	poetry run mypy --config-file mypy.ini ./sources
 	poetry run mypy --config-file mypy.ini ./tools
 	poetry run flake8 --max-line-length=200 --extend-ignore=W503 sources init --show-source
