@@ -25,11 +25,11 @@ dev: has-poetry
 	poetry install
 
 lint-dlt-init:
+	poetry run ./check-requirements.py
 	poetry run pytest tests/test_dlt_init.py --no-header
 
 lint-code:
 	./check-package.sh
-	./check-requirements.py
 	poetry run mypy --config-file mypy.ini ./sources
 	poetry run mypy --config-file mypy.ini ./tools
 	poetry run flake8 --max-line-length=200 --extend-ignore=W503 sources init --show-source
