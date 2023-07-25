@@ -2,10 +2,11 @@
 
 """Script to verify that all sources have a requirements.txt
 file containing a versioned dlt requirement"""
+from typing import Dict
 
 from sys import exit
 from pathlib import Path
-from packaging.requirements import Requirement
+from packaging.requirements import Requirement, InvalidRequirement
 
 sources_path = Path("sources")
 
@@ -32,9 +33,16 @@ for source in source_dirs:
         continue
     req_text = req_path.read_text(encoding="utf-8")
     req_lines = req_text.splitlines()
-    parsed_reqs = {
-        req.name: req for req in (Requirement(req_str) for req_str in req_lines)
-    }
+    parsed_reqs: Dict[str, Requirement] = {}
+    for req_str in req_lines:
+        try:
+            req = Requirement(req_str)
+        except InvalidRequirement:
+            print(f"ERROR: Source {source.name} has invalid requirement '{req_str}'")
+            raise
+        else:
+            parsed_reqs[req.name] = req
+
     if "dlt" not in parsed_reqs:
         print(f"ERROR: Source {source.name} has no dlt requirement. {error_msg_suffix}")
         error = True
@@ -43,6 +51,12 @@ for source in source_dirs:
     if dlt_req.extras:
         print(
             f"ERROR: Source {source.name} dlt requirement '{dlt_req}' contains extras. {error_msg_suffix}"
+        )
+        error = True
+        continue
+    if not dlt_req.specifier:
+        print(
+            f"ERROR: Source {source.name} dlt requirement '{dlt_req}' has no version constraint. {error_msg_suffix}"
         )
         error = True
         continue
