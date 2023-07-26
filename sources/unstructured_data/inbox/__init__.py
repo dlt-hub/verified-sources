@@ -1,8 +1,7 @@
-"""This resource collects attachments from Gmail inboxes to destinations"""
+"""This source collects inbox emails, downloads attachments to local folder and stores all info in destination"""
 import os
 from typing import Any, Optional, Sequence, Dict
 import email
-from imapclient import IMAPClient
 import imaplib
 
 
@@ -37,20 +36,21 @@ def inbox_messages(
     ),
 ) -> TDataItem:
 
-    last_date_string = initial_date.last_value
+    last_date = initial_date.last_value.strftime("%d-%b-%Y")
 
-    def read_messages(client_: IMAPClient, criteria_: Sequence[Any]):
-        messages = client_.search(criteria_)
+    def read_messages(client_: imaplib.IMAP4_SSL, criteria_: Sequence[Any]):
+        _, messages = client_.search(None, *criteria_)
+        message_ids = messages[0].split()
 
-        fetched_messages = client_.fetch(messages, [b'RFC822'])
+        if not message_ids:
+            logger.warning("No emails found.")
 
-        if not fetched_messages:
-            logger.warning(f"No emails found.")
-
-        for msg_uid, data in fetched_messages.items():
-            msg = email.message_from_bytes(data[b'RFC822'])
+        for message_id in message_ids:
+            _, data = client_.fetch(message_id, "(RFC822)")
+            raw_email = data[0][1]
+            msg = email.message_from_bytes(raw_email)
             email_data = {
-                'message_uid': msg_uid,
+                'message_uid': message_id,
                 'message_id': msg['Message-ID'],
                 'from': msg['From'],
                 'subject': msg['Subject'],
@@ -60,16 +60,16 @@ def inbox_messages(
             }
             yield email_data
 
-    with IMAPClient(credentials["host"]) as client:
+    with imaplib.IMAP4_SSL(credentials["host"]) as client:
         client.login(credentials["username"], credentials["password"])
-        client.select_folder(folder, readonly=True)
-        criteria = [['SINCE', last_date_string]]
+        client.select(folder, readonly=True)
+        criteria = [f'(SENTSINCE {last_date})']
 
         if filter_emails:
             logger.info(f"Load emails only from: {filter_emails}")
 
             for email_ in filter_emails:
-                criteria.append(["FROM", email_])
+                criteria.extend([f'(FROM {email_})'])
                 yield from read_messages(client, criteria)
         else:
             yield from read_messages(client, criteria)
@@ -81,31 +81,34 @@ def get_attachments_by_uid(
     storage_folder_path: str,
     credentials: Dict[str, str] = dlt.secrets.value
 ) -> TDataItem:
-    message_id = item["message_uid"]
+    message_uid = item["message_uid"]
     with imaplib.IMAP4_SSL(credentials["host"]) as client:
         client.login(credentials["username"], credentials["password"])
         client.select()
-        response, data = client.uid('fetch', str(message_id), '(RFC822)')
+
+        response, data = client.uid('fetch', message_uid, '(RFC822)')
 
         if response == 'OK':
-            raw_email = data[0][1]
-            msg = email.message_from_bytes(raw_email)
+            raw_email = data[0]
+            if raw_email:
+                raw_email = data[0][1]
+                msg = email.message_from_bytes(raw_email)
 
-            for part in msg.walk():
-                content_disposition = part.get("Content-Disposition", "")
-                if "attachment" in content_disposition:
-                    filename = part.get_filename()
-                    if filename:
-                        attachment_data = part.get_payload(decode=True)
-                        attachment_path = os.path.join(storage_folder_path, str(message_id) + filename)
-                        os.makedirs(os.path.dirname(attachment_path), exist_ok=True)
+                for part in msg.walk():
+                    content_disposition = part.get("Content-Disposition", "")
+                    if "attachment" in content_disposition:
+                        filename = part.get_filename()
+                        if filename:
+                            attachment_data = part.get_payload(decode=True)
+                            attachment_path = os.path.join(storage_folder_path, message_uid.decode("utf-8")  + filename)
+                            os.makedirs(os.path.dirname(attachment_path), exist_ok=True)
 
-                        with open(attachment_path, 'wb') as f:
-                            f.write(attachment_data)
+                            with open(attachment_path, 'wb') as f:
+                                f.write(attachment_data)
 
-                        item.update({"file_name": filename, "file_path": os.path.abspath(attachment_path)})
+                            item.update({"file_name": filename, "file_path": os.path.abspath(attachment_path)})
 
-                        yield item
+                            yield item
 
 
 def get_email_body(msg: email.message.Message) -> str:
