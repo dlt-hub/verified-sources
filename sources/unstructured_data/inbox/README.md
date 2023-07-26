@@ -1,0 +1,114 @@
+# Inbox Source
+
+This source provides functionalities to collect inbox emails, download
+attachments to a local folder, and store all relevant email information in a destination. It
+utilizes the `imaplib` library to interact with the IMAP server, and `dlt` library to handle data
+processing and transformation.
+
+## Prerequisites
+- Python 3.x
+- `dlt` library (you can install it using `pip install dlt`)
+- destination dependencies, e.g. `duckdb` (`pip install duckdb`)
+
+## Installation
+Make sure you have Python 3.x installed on your system.
+
+Install the required library by running the following command:
+```shell
+pip install dlt[duckdb]
+```
+
+## Initialize the source
+
+Initialize the source with dlt command:
+```shell
+dlt init inbox duckdb
+```
+
+## Set email account credentials
+
+1. Open `.dlt/secrets.toml`.
+2. Enter the email account secrets:
+    ```toml
+    [sources.inbox.credentials]
+    host = 'imap.example.com'
+    username = "example@example.com"
+    password = 'set me up!'
+    ```
+
+
+## Usage
+1. Ensure that the email account you want to access allows access by less secure apps (or use an
+[app password](#getting-gmail-app-password)).
+2. Replace the placeholders in `.dlt/secrets.toml` with your IMAP server hostname, email account
+credentials.
+3. Customize the FILTER_EMAILS list in the
+`inbox/settings.py` file if you want to fetch emails only from specific senders.
+4. Set the STORAGE_FOLDER_PATH in the
+`inbox/settings.py` file to the folder where you want to save attachments (if required).
+
+## Functionality
+### inbox_source
+This is a dlt source that collects inbox emails and, if attachments=True, downloads attachments to a local
+folder based on the specified parameters.
+
+### inbox_messages
+This function connects to the IMAP server, logs in to the email account, and fetches
+email messages from the specified folder ('INBOX' by default). It yields a dictionary containing email metadata such as
+message UID, message ID, sender, subject, date, content type, and email body.
+
+### get_attachments_by_uid
+This transformer function takes an email message item from another resource (e.g. `inbox_messages`) and extracts
+attachments from the email message using its UID. It connects to the IMAP server, fetches the email
+message by its UID, and saves attachments to the specified STORAGE_FOLDER_PATH. It yields the
+email item with the attachment file name and local file path.
+
+## Example
+Here's an example of how to use the `inbox_source` to fetch inbox emails and save attachments
+to a local folder:
+
+```python
+import dlt
+
+from inbox import inbox_source
+
+
+# configure the pipeline with your destination details
+pipeline = dlt.pipeline(
+    pipeline_name="inbox",
+    destination="duckdb",
+    dataset_name="inbox_data",
+    full_refresh=False,
+)
+
+data_source = inbox_source(attachments=True)
+# run the pipeline with your parameters
+load_info = pipeline.run(data_source)
+# pretty print the information on data that was loaded
+print(load_info)
+```
+
+## Accessing Gmail Inbox
+To connect to the Gmail server, we need the below information.
+
+- SMTP server DNS. Its value will be 'imap.gmail.com' in our case.
+- SMTP server port. The value will be 993. This port is used for Internet message access protocol over TLS/SSL.
+
+### Getting Gmail App Password
+An app password is a 16-digit passcode that gives a less secure app or device permission
+to access your Google Account. App passwords can only be used with accounts that have
+2-Step Verification turned on.
+
+1. Go to your Google Account.
+2. Select Security.
+3. Under "How you sign in to Google", select **2-Step Verification** -> Turn it on.
+4. Select again **2-Step Verification**.
+5. At the bottom of the page, select App passwords.
+6. Enter a name of device that helps you remember where you’ll use the app password.
+7. Select Generate.
+8. To enter the app password, follow the instructions on your screen. The app password is the 16-character code that generates on your device.
+9. Select Done.
+
+
+Read more in [this article](https://pythoncircle.com/post/727/accessing-gmail-inbox-using-python-imaplib-module/)
+or [Google official document](https://support.google.com/mail/answer/185833#zippy=%2Cwhy-you-may-need-an-app-password)
