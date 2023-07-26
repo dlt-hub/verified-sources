@@ -1,124 +1,130 @@
 """This resource collects attachments from Gmail inboxes to destinations"""
 import os
-from typing import Any, Optional, Sequence, Union
+from typing import Any, Optional, Sequence, Dict
+import email
+from imapclient import IMAPClient
+import imaplib
+
 
 import dlt
 from dlt.common import logger, pendulum
-from dlt.extract.source import TDataItem
-from dlt.sources.credentials import GcpOAuthCredentials, GcpServiceAccountCredentials
+from dlt.extract.source import TDataItem, DltResource
 
-from .helpers import GmailClient, Message
-from .settings import FILTER_EMAILS, HEADERS_DEFAULT, STORAGE_FOLDER_PATH
+from .settings import FILTER_EMAILS, STORAGE_FOLDER_PATH
+
+
+@dlt.source
+def inbox_source(
+    storage_folder_path: str = STORAGE_FOLDER_PATH,
+    filter_emails: Sequence[str] = FILTER_EMAILS,
+    attachments: bool = False,
+
+) -> DltResource:
+    if attachments:
+        return inbox_messages(filter_emails=filter_emails) | get_attachments_by_uid(storage_folder_path=storage_folder_path)
+
+    else:
+        return inbox_messages(filter_emails=filter_emails)
 
 
 @dlt.resource(write_disposition="replace")
-def gmail(
-    credentials: Union[
-        GcpOAuthCredentials, GcpServiceAccountCredentials
-    ] = dlt.secrets.value,
-    storage_folder_path: str = STORAGE_FOLDER_PATH,
+def inbox_messages(
+    credentials: Dict[str, str] = dlt.secrets.value,
     filter_emails: Sequence[str] = FILTER_EMAILS,
-    download: bool = False,
-    internal_date: Optional[Any] = dlt.sources.incremental(
-        "internal_date", initial_value=0
+    folder: str = "INBOX",
+    initial_date: Optional[Any] = dlt.sources.incremental(
+        "date", initial_value=pendulum.datetime(2000, 1, 1)
     ),
 ) -> TDataItem:
-    last_date_string = pendulum.from_timestamp(
-        internal_date.last_value
-    ).to_date_string()
-    client = GmailClient(credentials)
 
-    emails = filter_emails or [" "]
-    for email in emails:
-        yield from pagination(
-            client,
-            f"is:inbox after:{last_date_string} from:{email}",
-            download,
-            storage_folder_path,
-        )
+    last_date_string = initial_date.last_value
 
+    def read_messages(client_: IMAPClient, criteria_: Sequence[Any]):
+        messages = client_.search(criteria_)
 
-def pagination(
-    client: GmailClient,
-    query: str = "is:inbox",
-    download: bool = False,
-    storage_folder_path: str = STORAGE_FOLDER_PATH,
-):
-    page_token = None
-    while True:
-        messages_info = client.messages_info(
-            user_id="me", page_token=page_token, query=query
-        )
-        messages_ids = [message["id"] for message in messages_info.get("messages", [])]
+        fetched_messages = client_.fetch(messages, [b'RFC822'])
 
-        if not messages_ids:
-            logger.warning("No messages found in the inbox.")
+        if not fetched_messages:
+            logger.warning(f"No emails found.")
+
+        for msg_uid, data in fetched_messages.items():
+            msg = email.message_from_bytes(data[b'RFC822'])
+            email_data = {
+                'message_uid': msg_uid,
+                'message_id': msg['Message-ID'],
+                'from': msg['From'],
+                'subject': msg['Subject'],
+                'date': pendulum.parse(msg['Date'], strict=False),
+                'content_type': msg.get_content_type(),
+                'body': get_email_body(msg),
+            }
+            yield email_data
+
+    with IMAPClient(credentials["host"]) as client:
+        client.login(credentials["username"], credentials["password"])
+        client.select_folder(folder, readonly=True)
+        criteria = [['SINCE', last_date_string]]
+
+        if filter_emails:
+            logger.info(f"Load emails only from: {filter_emails}")
+
+            for email_ in filter_emails:
+                criteria.append(["FROM", email_])
+                yield from read_messages(client, criteria)
         else:
-            for message_id in messages_ids:
-                message = client.get_one_message(user_id="me", message_id=message_id)
-                res = parse_message(message, download, storage_folder_path)
-                yield from res
-
-        page_token = messages_info.get("nextPageToken")
-
-        if not page_token:
-            break
+            yield from read_messages(client, criteria)
 
 
-def parse_message(
-    message: Message,
-    download: bool = False,
-    storage_folder_path: str = STORAGE_FOLDER_PATH,
-) -> Optional[TDataItem]:
-    content = message.content()
+@dlt.transformer(name="attachments", write_disposition="replace")
+def get_attachments_by_uid(
+    item: TDataItem,
+    storage_folder_path: str,
+    credentials: Dict[str, str] = dlt.secrets.value
+) -> TDataItem:
+    message_id = item["message_uid"]
+    with imaplib.IMAP4_SSL(credentials["host"]) as client:
+        client.login(credentials["username"], credentials["password"])
+        client.select()
+        response, data = client.uid('fetch', str(message_id), '(RFC822)')
 
-    payload = content.get("payload")
+        if response == 'OK':
+            raw_email = data[0][1]
+            msg = email.message_from_bytes(raw_email)
 
-    parts = [payload]
-    while parts:
-        response = {
-            "message_id": message.message_id,
-            "internal_date": int(content.get("internalDate")) / 1000,
-            "message_body": content.get("snippet"),
-            "size_estimate": content.get("sizeEstimate"),
-            "file_path": None,
-        }
-        part = parts.pop()
-        if part.get("parts"):
-            parts.extend(part["parts"])
+            for part in msg.walk():
+                content_disposition = part.get("Content-Disposition", "")
+                if "attachment" in content_disposition:
+                    filename = part.get_filename()
+                    if filename:
+                        attachment_data = part.get_payload(decode=True)
+                        attachment_path = os.path.join(storage_folder_path, str(message_id) + filename)
+                        os.makedirs(os.path.dirname(attachment_path), exist_ok=True)
 
-        headers = part.get("headers")
+                        with open(attachment_path, 'wb') as f:
+                            f.write(attachment_data)
 
-        for header in headers:
-            name = header.get("name")
-            if name and name in HEADERS_DEFAULT:
-                response[name] = header.get("value")
-                if name == "Date":
-                    response[name] = pendulum.parse(header.get("value"), strict=False)
+                        item.update({"file_name": filename, "file_path": os.path.abspath(attachment_path)})
 
-        body = part.get("body")
+                        yield item
 
-        if part.get("filename"):
-            if "data" in body:
-                file_data = message.encode_attachment_data(body["data"])
-            elif "attachmentId" in body:
-                response["attachment_id"] = body["attachmentId"]
-                attachment = message.attachments(attachment_id=body["attachmentId"])
-                file_data = message.encode_attachment_data(attachment["data"])
-            else:
-                file_data = None
 
-            if file_data is not None:
-                response["file_name"] = part["filename"]
+def get_email_body(msg: email.message.Message) -> str:
+    """
+    Get the body of the email message.
 
-                if download:
-                    save_path = os.path.join(
-                        storage_folder_path, message.message_id + "_" + part["filename"]
-                    )
-                    os.makedirs(os.path.dirname(save_path), exist_ok=True)
-                    with open(save_path, "wb") as f:
-                        f.write(file_data)
+    Parameters:
+        msg (email.message.Message): The email message object.
 
-                    response["file_path"] = os.path.abspath(save_path)
+    Returns:
+        str: The email body as a string.
+    """
+    body = ""
+    if msg.is_multipart():
+        for part in msg.walk():
+            content_type = part.get_content_type()
+            if content_type == "text/plain":
+                body += part.get_payload(decode=True).decode(errors='ignore')
+    else:
+        body = msg.get_payload(decode=True).decode(errors='ignore')
 
-        yield response
+    return body
