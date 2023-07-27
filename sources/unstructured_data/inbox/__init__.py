@@ -18,17 +18,19 @@ def inbox_source(
     storage_folder_path: str = STORAGE_FOLDER_PATH,
     filter_emails: Sequence[str] = FILTER_EMAILS,
     attachments: bool = False,
-
+    start_date: pendulum.DateTime = pendulum.datetime(2000, 1, 1),
 ) -> DltResource:
+    uids = messages_uids(filter_emails=filter_emails, folder="INBOX", start_date=start_date)
+    messages = uids | read_messages
+
     if attachments:
-        return inbox_messages(filter_emails=filter_emails) | get_attachments_by_uid(storage_folder_path=storage_folder_path)
-
+        return messages | get_attachments_by_uid(storage_folder_path=storage_folder_path)
     else:
-        return inbox_messages(filter_emails=filter_emails)
+        return messages
 
 
-@dlt.resource(write_disposition="replace")
-def inbox_messages(
+@dlt.resource
+def messages_uids(
     host: str = dlt.secrets.value,
     email_account: str = dlt.secrets.value,
     password: str = dlt.secrets.value,
@@ -39,27 +41,7 @@ def inbox_messages(
         "message_uid", initial_value=1
     ),
 ) -> TDataItem:
-
     last_message_num = initial_message_num.last_value
-
-    def read_messages(client_: imaplib.IMAP4_SSL, criteria_: Sequence[Any]):
-        status, messages = client_.uid('search', 'UID ' + str(int(last_message_num)) + ':*', *criteria_)
-        message_ids = messages[0].split()
-
-        if not message_ids:
-            logger.warning("No emails found.")
-
-        for message_id in message_ids:
-            _, data = client_.fetch(message_id, "(RFC822)")
-            raw_email = data[0]
-            if raw_email:
-                msg = email.message_from_bytes(data[0][1])
-                email_data = dict(msg)
-                email_data['message_uid'] = int(message_id)
-                email_data["date"] = pendulum.parse(msg['Date'], strict=False)
-                email_data['content_type'] = msg.get_content_type()
-                email_data['body'] = get_email_body(msg)
-                yield email_data
 
     with imaplib.IMAP4_SSL(host) as client:
         client.login(email_account, password)
@@ -68,12 +50,45 @@ def inbox_messages(
 
         if filter_emails:
             logger.info(f"Load emails only from: {filter_emails}")
-
             for email_ in filter_emails:
                 criteria.extend([f'(FROM {email_})'])
-                yield from read_messages(client, criteria)
+
+        status, messages = client.uid('search', 'UID ' + str(int(last_message_num)) + ':*', *criteria)
+        message_uids = messages[0].split()
+
+        if not message_uids:
+            logger.warning("No emails found.")
         else:
-            yield from read_messages(client, criteria)
+            yield from [{"message_uid": int(message_uid)} for message_uid in message_uids]
+
+
+@dlt.transformer(name="messages", write_disposition="replace")
+def read_messages(
+    item: TDataItem,
+    host: str = dlt.secrets.value,
+    email_account: str = dlt.secrets.value,
+    password: str = dlt.secrets.value,
+) -> TDataItem:
+    message_uid = str(item["message_uid"])
+
+    with imaplib.IMAP4_SSL(host) as client:
+        client.login(email_account, password)
+        client.select()
+
+        status, data = client.uid('fetch', message_uid, '(RFC822)')
+
+        if status == 'OK':
+            raw_email = data[0]
+            if raw_email:
+                raw_email = data[0][1]
+                msg = email.message_from_bytes(raw_email)
+
+                email_data = dict(msg)
+                email_data['message_uid'] = int(message_uid)
+                email_data["date"] = pendulum.parse(msg['Date'], strict=False)
+                email_data['content_type'] = msg.get_content_type()
+                email_data['body'] = get_email_body(msg)
+                yield email_data
 
 
 @dlt.transformer(name="attachments", write_disposition="replace")
@@ -85,6 +100,7 @@ def get_attachments_by_uid(
     password: str = dlt.secrets.value,
 ) -> TDataItem:
     message_uid = str(item["message_uid"])
+
     with imaplib.IMAP4_SSL(host) as client:
         client.login(email_account, password)
         client.select()
