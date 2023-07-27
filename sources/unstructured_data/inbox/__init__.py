@@ -64,7 +64,7 @@ def inbox_messages(
     with imaplib.IMAP4_SSL(host) as client:
         client.login(email_account, password)
         client.select(folder, readonly=True)
-        criteria = [f'(SENTSINCE {start_date.strftime("%d-%b-%Y")})']
+        criteria = [f'(SINCE {start_date.strftime("%d-%b-%Y")})']
 
         if filter_emails:
             logger.info(f"Load emails only from: {filter_emails}")
