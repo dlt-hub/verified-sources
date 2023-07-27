@@ -1,7 +1,7 @@
 """This source collects inbox emails, downloads attachments to local folder and stores all info in destination"""
 import os
 from copy import deepcopy
-from typing import Any, Optional, Sequence, Dict
+from typing import Any, Optional, Sequence
 import email
 import imaplib
 
@@ -21,12 +21,11 @@ def inbox_source(
     start_date: pendulum.DateTime = pendulum.datetime(2000, 1, 1),
 ) -> DltResource:
     uids = messages_uids(filter_emails=filter_emails, folder="INBOX", start_date=start_date)
-    messages = uids | read_messages
 
     if attachments:
-        return messages | get_attachments_by_uid(storage_folder_path=storage_folder_path)
+        return uids | get_attachments_by_uid(storage_folder_path=storage_folder_path)
     else:
-        return messages
+        return uids | read_messages
 
 
 @dlt.resource
