@@ -1,5 +1,6 @@
 """This source collects inbox emails, downloads attachments to local folder and stores all info in destination"""
 import os
+from copy import deepcopy
 from typing import Any, Optional, Sequence, Dict
 import email
 import imaplib
@@ -28,7 +29,9 @@ def inbox_source(
 
 @dlt.resource(write_disposition="replace")
 def inbox_messages(
-    credentials: Dict[str, str] = dlt.secrets.value,
+    host: str = dlt.secrets.value,
+    email_account: str = dlt.secrets.value,
+    password: str = dlt.secrets.value,
     filter_emails: Sequence[str] = FILTER_EMAILS,
     folder: str = "INBOX",
     initial_date: Optional[Any] = dlt.sources.incremental(
@@ -36,7 +39,7 @@ def inbox_messages(
     ),
 ) -> TDataItem:
 
-    last_date = initial_date.last_value.strftime("%d-%b-%Y")
+    last_date = initial_date.last_value
 
     def read_messages(client_: imaplib.IMAP4_SSL, criteria_: Sequence[Any]):
         _, messages = client_.search(None, *criteria_)
@@ -47,23 +50,20 @@ def inbox_messages(
 
         for message_id in message_ids:
             _, data = client_.fetch(message_id, "(RFC822)")
-            raw_email = data[0][1]
-            msg = email.message_from_bytes(raw_email)
-            email_data = {
-                'message_uid': message_id,
-                'message_id': msg['Message-ID'],
-                'from': msg['From'],
-                'subject': msg['Subject'],
-                'date': pendulum.parse(msg['Date'], strict=False),
-                'content_type': msg.get_content_type(),
-                'body': get_email_body(msg),
-            }
-            yield email_data
+            raw_email = data[0]
+            if raw_email:
+                msg = email.message_from_bytes(data[0][1])
+                email_data = dict(msg)
+                email_data['message_uid'] = int(message_id)
+                email_data["date"] = pendulum.parse(msg['Date'], strict=False)
+                email_data['content_type'] = msg.get_content_type()
+                email_data['body'] = get_email_body(msg)
+                yield email_data
 
-    with imaplib.IMAP4_SSL(credentials["host"]) as client:
-        client.login(credentials["username"], credentials["password"])
+    with imaplib.IMAP4_SSL(host) as client:
+        client.login(email_account, password)
         client.select(folder, readonly=True)
-        criteria = [f'(SENTSINCE {last_date})']
+        criteria = [f'(SENTSINCE {last_date.strftime("%d-%b-%Y")})']
 
         if filter_emails:
             logger.info(f"Load emails only from: {filter_emails}")
@@ -79,11 +79,13 @@ def inbox_messages(
 def get_attachments_by_uid(
     item: TDataItem,
     storage_folder_path: str,
-    credentials: Dict[str, str] = dlt.secrets.value
+    host: str = dlt.secrets.value,
+    email_account: str = dlt.secrets.value,
+    password: str = dlt.secrets.value,
 ) -> TDataItem:
-    message_uid = item["message_uid"]
-    with imaplib.IMAP4_SSL(credentials["host"]) as client:
-        client.login(credentials["username"], credentials["password"])
+    message_uid = str(item["message_uid"])
+    with imaplib.IMAP4_SSL(host) as client:
+        client.login(email_account, password)
         client.select()
 
         response, data = client.uid('fetch', message_uid, '(RFC822)')
@@ -100,15 +102,22 @@ def get_attachments_by_uid(
                         filename = part.get_filename()
                         if filename:
                             attachment_data = part.get_payload(decode=True)
-                            attachment_path = os.path.join(storage_folder_path, message_uid.decode("utf-8")  + filename)
+                            attachment_path = os.path.join(storage_folder_path, message_uid + filename)
                             os.makedirs(os.path.dirname(attachment_path), exist_ok=True)
 
                             with open(attachment_path, 'wb') as f:
                                 f.write(attachment_data)
 
-                            item.update({"file_name": filename, "file_path": os.path.abspath(attachment_path)})
+                            result = deepcopy(item)
+                            result.update(
+                                {
+                                    "file_name": filename,
+                                    "file_path": os.path.abspath(attachment_path),
+                                    'content_type': part.get_content_type(),
+                                }
+                            )
 
-                            yield item
+                            yield result
 
 
 def get_email_body(msg: email.message.Message) -> str:
