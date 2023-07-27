@@ -34,15 +34,16 @@ def inbox_messages(
     password: str = dlt.secrets.value,
     filter_emails: Sequence[str] = FILTER_EMAILS,
     folder: str = "INBOX",
-    initial_date: Optional[Any] = dlt.sources.incremental(
-        "date", initial_value=pendulum.datetime(2000, 1, 1)
+    start_date: pendulum.DateTime = pendulum.datetime(2000, 1, 1),
+    initial_message_num: Optional[Any] = dlt.sources.incremental(
+        "message_uid", initial_value=1
     ),
 ) -> TDataItem:
 
-    last_date = initial_date.last_value
+    last_message_num = initial_message_num.last_value
 
     def read_messages(client_: imaplib.IMAP4_SSL, criteria_: Sequence[Any]):
-        _, messages = client_.search(None, *criteria_)
+        status, messages = client_.uid('search', 'UID ' + str(int(last_message_num)) + ':*', *criteria_)
         message_ids = messages[0].split()
 
         if not message_ids:
@@ -63,7 +64,7 @@ def inbox_messages(
     with imaplib.IMAP4_SSL(host) as client:
         client.login(email_account, password)
         client.select(folder, readonly=True)
-        criteria = [f'(SENTSINCE {last_date.strftime("%d-%b-%Y")})']
+        criteria = [f'(SENTSINCE {start_date.strftime("%d-%b-%Y")})']
 
         if filter_emails:
             logger.info(f"Load emails only from: {filter_emails}")
@@ -88,9 +89,9 @@ def get_attachments_by_uid(
         client.login(email_account, password)
         client.select()
 
-        response, data = client.uid('fetch', message_uid, '(RFC822)')
+        status, data = client.uid('fetch', message_uid, '(RFC822)')
 
-        if response == 'OK':
+        if status == 'OK':
             raw_email = data[0]
             if raw_email:
                 raw_email = data[0][1]
