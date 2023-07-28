@@ -57,18 +57,23 @@ dlt init inbox duckdb
 This is a dlt source that collects inbox emails and, if `attachments=True`, downloads attachments to a
 local folder based on the specified parameters.
 
-### inbox_messages
+### messages_uids
 
-This function connects to the IMAP server, logs in to the email account, and fetches email messages
-from the specified folder ('INBOX' by default). It yields a dictionary containing email metadata
+This is a dlt resource that connects to the IMAP server, logs in to the email account, and fetches email messages
+from the specified folder ('INBOX' by default). It yields a dictionary containing only message UID.
+
+### read_messages
+
+This dlt transformer resource takes an email message item from another resource (e.g. `messages_uids`)
+and fetches email messages using its UID. It yields a dictionary containing email metadata
 such as message UID, message ID, sender, subject, date, content type, and email body.
 
 ### get_attachments_by_uid
 
-This transformer function takes an email message item from another resource (e.g. `inbox_messages`)
+This dlt transformer resource takes an email message item from another resource (e.g. `messages_uids`)
 and extracts attachments from the email message using its UID. It connects to the IMAP server,
 fetches the email message by its UID, and saves attachments to the specified STORAGE_FOLDER_PATH. It
-yields the email item with the attachment file name and local file path.
+yields the email item with the attachment content type, file name, and local file path.
 
 ## Example
 
