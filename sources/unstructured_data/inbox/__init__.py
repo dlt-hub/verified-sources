@@ -1,15 +1,14 @@
 """This source collects inbox emails, downloads attachments to local folder and stores all info in destination"""
-import os
-from copy import deepcopy
-from typing import Any, Optional, Sequence
 import email
 import imaplib
+import os
+from copy import deepcopy
 from email.message import Message
-
+from typing import Any, Optional, Sequence
 
 import dlt
 from dlt.common import logger, pendulum
-from dlt.extract.source import TDataItem, DltResource
+from dlt.extract.source import DltResource, TDataItem
 
 from .settings import FILTER_EMAILS, STORAGE_FOLDER_PATH
 
@@ -21,7 +20,9 @@ def inbox_source(
     attachments: bool = False,
     start_date: pendulum.DateTime = pendulum.datetime(2000, 1, 1),
 ) -> DltResource:
-    uids = messages_uids(filter_emails=filter_emails, folder="INBOX", start_date=start_date)
+    uids = messages_uids(
+        filter_emails=filter_emails, folder="INBOX", start_date=start_date
+    )
 
     if attachments:
         return uids | get_attachments_by_uid(storage_folder_path=storage_folder_path)
@@ -51,15 +52,19 @@ def messages_uids(
         if filter_emails:
             logger.info(f"Load emails only from: {filter_emails}")
             for email_ in filter_emails:
-                criteria.extend([f'(FROM {email_})'])
+                criteria.extend([f"(FROM {email_})"])
 
-        status, messages = client.uid('search', 'UID ' + str(int(last_message_num)) + ':*', *criteria)
+        status, messages = client.uid(
+            "search", "UID " + str(int(last_message_num)) + ":*", *criteria
+        )
         message_uids = messages[0].split()
 
         if not message_uids:
             logger.warning("No emails found.")
         else:
-            yield from [{"message_uid": int(message_uid)} for message_uid in message_uids]
+            yield from [
+                {"message_uid": int(message_uid)} for message_uid in message_uids
+            ]
 
 
 @dlt.transformer(name="messages", write_disposition="replace")
@@ -76,11 +81,11 @@ def read_messages(
         msg = get_message_obj(client, message_uid)
         if msg:
             email_data = dict(msg)
-            email_data['message_uid'] = int(message_uid)
-            email_data["date"] = pendulum.parse(msg['Date'], strict=False)
-            email_data['content_type'] = msg.get_content_type()
-            email_data['body'] = get_email_body(msg)
-            
+            email_data["message_uid"] = int(message_uid)
+            email_data["date"] = pendulum.parse(msg["Date"], strict=False)
+            email_data["content_type"] = msg.get_content_type()
+            email_data["body"] = get_email_body(msg)
+
             yield email_data
 
 
@@ -104,10 +109,12 @@ def get_attachments_by_uid(
                     filename = part.get_filename()
                     if filename:
                         attachment_data = part.get_payload(decode=True)
-                        attachment_path = os.path.join(storage_folder_path, message_uid + filename)
+                        attachment_path = os.path.join(
+                            storage_folder_path, message_uid + filename
+                        )
                         os.makedirs(os.path.dirname(attachment_path), exist_ok=True)
 
-                        with open(attachment_path, 'wb') as f:
+                        with open(attachment_path, "wb") as f:
                             f.write(attachment_data)
 
                         result = deepcopy(item)
@@ -115,7 +122,7 @@ def get_attachments_by_uid(
                             {
                                 "file_name": filename,
                                 "file_path": os.path.abspath(attachment_path),
-                                'content_type': part.get_content_type(),
+                                "content_type": part.get_content_type(),
                             }
                         )
 
@@ -125,10 +132,10 @@ def get_attachments_by_uid(
 def get_message_obj(client: imaplib.IMAP4_SSL, message_uid: str) -> Optional[Message]:
     client.select()
 
-    status, data = client.uid('fetch', message_uid, '(RFC822)')
+    status, data = client.uid("fetch", message_uid, "(RFC822)")
 
     msg = None
-    if status == 'OK':
+    if status == "OK":
         raw_email = data[0]
         if raw_email:
             raw_email = data[0][1]
@@ -152,8 +159,8 @@ def get_email_body(msg: Message) -> str:
         for part in msg.walk():
             content_type = part.get_content_type()
             if content_type == "text/plain":
-                body += part.get_payload(decode=True).decode(errors='ignore')
+                body += part.get_payload(decode=True).decode(errors="ignore")
     else:
-        body = msg.get_payload(decode=True).decode(errors='ignore')
+        body = msg.get_payload(decode=True).decode(errors="ignore")
 
     return body

@@ -149,7 +149,7 @@ class TestUnstructuredFromGoogleDrive:
 
 
 @pytest.mark.parametrize("destination_name", ALL_DESTINATIONS)
-@pytest.mark.parametrize("run_async", (False, ))
+@pytest.mark.parametrize("run_async", (False, True))
 class TestUnstructuredFromInbox:
     @pytest.fixture(scope="session")
     def data_resource(self, tmpdir_factory) -> DltResource:
@@ -212,7 +212,9 @@ class TestUnstructuredFromInbox:
         data_resource: DltResource,
         run_async: bool,
     ) -> None:
-        pipeline, load_info = run_pipeline(destination_name, queries, data_resource, run_async)
+        pipeline, load_info = run_pipeline(
+            destination_name, queries, data_resource, run_async
+        )
         # make sure all data were loaded
         assert_load_info(load_info)
         print(load_info)
