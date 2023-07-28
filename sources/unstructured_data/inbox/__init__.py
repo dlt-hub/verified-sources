@@ -4,6 +4,7 @@ from copy import deepcopy
 from typing import Any, Optional, Sequence
 import email
 import imaplib
+from email.message import Message
 
 
 import dlt
@@ -72,22 +73,15 @@ def read_messages(
 
     with imaplib.IMAP4_SSL(host) as client:
         client.login(email_account, password)
-        client.select()
-
-        status, data = client.uid('fetch', message_uid, '(RFC822)')
-
-        if status == 'OK':
-            raw_email = data[0]
-            if raw_email:
-                raw_email = data[0][1]
-                msg = email.message_from_bytes(raw_email)
-
-                email_data = dict(msg)
-                email_data['message_uid'] = int(message_uid)
-                email_data["date"] = pendulum.parse(msg['Date'], strict=False)
-                email_data['content_type'] = msg.get_content_type()
-                email_data['body'] = get_email_body(msg)
-                yield email_data
+        msg = get_message_obj(client, message_uid)
+        if msg:
+            email_data = dict(msg)
+            email_data['message_uid'] = int(message_uid)
+            email_data["date"] = pendulum.parse(msg['Date'], strict=False)
+            email_data['content_type'] = msg.get_content_type()
+            email_data['body'] = get_email_body(msg)
+            
+            yield email_data
 
 
 @dlt.transformer(name="attachments", write_disposition="replace")
@@ -102,46 +96,53 @@ def get_attachments_by_uid(
 
     with imaplib.IMAP4_SSL(host) as client:
         client.login(email_account, password)
-        client.select()
+        msg = get_message_obj(client, message_uid)
+        if msg:
+            for part in msg.walk():
+                content_disposition = part.get("Content-Disposition", "")
+                if "attachment" in content_disposition:
+                    filename = part.get_filename()
+                    if filename:
+                        attachment_data = part.get_payload(decode=True)
+                        attachment_path = os.path.join(storage_folder_path, message_uid + filename)
+                        os.makedirs(os.path.dirname(attachment_path), exist_ok=True)
 
-        status, data = client.uid('fetch', message_uid, '(RFC822)')
+                        with open(attachment_path, 'wb') as f:
+                            f.write(attachment_data)
 
-        if status == 'OK':
-            raw_email = data[0]
-            if raw_email:
-                raw_email = data[0][1]
-                msg = email.message_from_bytes(raw_email)
+                        result = deepcopy(item)
+                        result.update(
+                            {
+                                "file_name": filename,
+                                "file_path": os.path.abspath(attachment_path),
+                                'content_type': part.get_content_type(),
+                            }
+                        )
 
-                for part in msg.walk():
-                    content_disposition = part.get("Content-Disposition", "")
-                    if "attachment" in content_disposition:
-                        filename = part.get_filename()
-                        if filename:
-                            attachment_data = part.get_payload(decode=True)
-                            attachment_path = os.path.join(storage_folder_path, message_uid + filename)
-                            os.makedirs(os.path.dirname(attachment_path), exist_ok=True)
-
-                            with open(attachment_path, 'wb') as f:
-                                f.write(attachment_data)
-
-                            result = deepcopy(item)
-                            result.update(
-                                {
-                                    "file_name": filename,
-                                    "file_path": os.path.abspath(attachment_path),
-                                    'content_type': part.get_content_type(),
-                                }
-                            )
-
-                            yield result
+                        yield result
 
 
-def get_email_body(msg: email.message.Message) -> str:
+def get_message_obj(client: imaplib.IMAP4_SSL, message_uid: str) -> Optional[Message]:
+    client.select()
+
+    status, data = client.uid('fetch', message_uid, '(RFC822)')
+
+    msg = None
+    if status == 'OK':
+        raw_email = data[0]
+        if raw_email:
+            raw_email = data[0][1]
+            msg = email.message_from_bytes(raw_email)
+
+    return msg
+
+
+def get_email_body(msg: Message) -> str:
     """
     Get the body of the email message.
 
     Parameters:
-        msg (email.message.Message): The email message object.
+        msg (Message): The email message object.
 
     Returns:
         str: The email body as a string.
