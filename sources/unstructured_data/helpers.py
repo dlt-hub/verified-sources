@@ -52,7 +52,7 @@ async def aprocess_file_to_structured(
 
     async def mark(key: str, question: str) -> Tuple[str, str]:
         return key, await asafely_query_index(index, question)
-       
+
     response = {
         key: result
         for key, result in await asyncio.gather(

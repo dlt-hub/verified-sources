@@ -10,7 +10,7 @@ import dlt
 from dlt.common import logger, pendulum
 from dlt.extract.source import DltResource, TDataItem
 
-from .settings import FILTER_EMAILS, STORAGE_FOLDER_PATH
+from .settings import DEFAULT_START_DATE, FILTER_EMAILS, STORAGE_FOLDER_PATH
 
 
 @dlt.source
@@ -18,7 +18,7 @@ def inbox_source(
     storage_folder_path: str = STORAGE_FOLDER_PATH,
     filter_emails: Sequence[str] = FILTER_EMAILS,
     attachments: bool = False,
-    start_date: pendulum.DateTime = pendulum.datetime(2000, 1, 1),
+    start_date: pendulum.DateTime = DEFAULT_START_DATE,
 ) -> DltResource:
     uids = messages_uids(
         filter_emails=filter_emails, folder="INBOX", start_date=start_date
@@ -37,7 +37,7 @@ def messages_uids(
     password: str = dlt.secrets.value,
     filter_emails: Sequence[str] = FILTER_EMAILS,
     folder: str = "INBOX",
-    start_date: pendulum.DateTime = pendulum.datetime(2000, 1, 1),
+    start_date: pendulum.DateTime = DEFAULT_START_DATE,
     initial_message_num: Optional[Any] = dlt.sources.incremental(
         "message_uid", initial_value=1
     ),
