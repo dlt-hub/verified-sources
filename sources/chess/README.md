@@ -22,10 +22,10 @@ Resources that can be loaded using this verified source are:
 ## Initialize the pipeline
 
 ```bash
-dlt init chess bigquery
+dlt init chess duckdb
 ```
 
-Here, we chose BigQuery as the destination. Alternatively, you can also choose redshift, duckdb, or
+Here, we chose duckdb as the destination. Alternatively, you can also choose redshift, bigquery, or
 any of the other [destinations](https://dlthub.com/docs/dlt-ecosystem/destinations/).
 
 ## Add credentials
