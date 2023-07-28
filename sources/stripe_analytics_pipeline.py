@@ -12,7 +12,7 @@ from stripe_analytics import (
 
 
 def load_data(
-    endpoints: Tuple[str] = ENDPOINTS + INCREMENTAL_ENDPOINTS,
+    endpoints: Tuple[str, ...] = ENDPOINTS + INCREMENTAL_ENDPOINTS,
     start_date: Optional[DateTime] = None,
     end_date: Optional[DateTime] = None,
 ) -> None:
@@ -38,7 +38,7 @@ def load_data(
 
 
 def load_incremental_endpoints(
-    endpoints: Tuple[str] = INCREMENTAL_ENDPOINTS,
+    endpoints: Tuple[str, ...] = INCREMENTAL_ENDPOINTS,
     initial_start_date: Optional[DateTime] = None,
     end_date: Optional[DateTime] = None,
 ) -> None:
