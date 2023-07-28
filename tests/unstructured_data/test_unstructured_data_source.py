@@ -6,7 +6,7 @@ from dlt.extract.source import DltResource
 
 from sources.unstructured_data import unstructured_to_structured_resource
 from sources.unstructured_data.filesystem import google_drive, local_folder
-from sources.unstructured_data.inbox import gmail
+from sources.unstructured_data.inbox import inbox_source
 
 from tests.utils import ALL_DESTINATIONS, assert_load_info
 
@@ -150,15 +150,15 @@ class TestUnstructuredFromGoogleDrive:
 
 @pytest.mark.parametrize("destination_name", ALL_DESTINATIONS)
 @pytest.mark.parametrize("run_async", (False, ))
-class TestUnstructuredFromGmail:
+class TestUnstructuredFromInbox:
     @pytest.fixture(scope="session")
     def data_resource(self, tmpdir_factory) -> DltResource:
         tmp_path = tmpdir_factory.mktemp("temp_data")
-        resource = gmail(
-            download=True,
+        resource = inbox_source(
+            attachments=True,
             storage_folder_path=tmp_path,
         )
-        return resource
+        return resource.resources["attachments"]
 
     def test_load_info(
         self,
@@ -186,7 +186,7 @@ class TestUnstructuredFromGmail:
         assert len(tables) == 1
         # tables are typed dicts
         structured_data_table = tables[0]
-        assert structured_data_table["name"] == "unstructured_from_gmail"
+        assert structured_data_table["name"] == "unstructured_from_attachments"
 
     def test_content(
         self,
@@ -200,7 +200,7 @@ class TestUnstructuredFromGmail:
             # you can use parametrized queries as well, see python dbapi
             # you can use unqualified table names
             with c.execute_query(
-                "SELECT file_path FROM unstructured_from_gmail"
+                "SELECT file_path FROM unstructured_from_attachments"
             ) as cur:
                 rows = list(cur.fetchall())
                 assert len(rows) == 5  # 2 files were processed, .jpg was skipped
