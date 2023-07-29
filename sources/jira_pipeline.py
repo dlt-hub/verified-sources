@@ -12,7 +12,7 @@ def load(endpoints: Optional[List[str]] = None) -> None:
         endpoints: A list of Jira endpoints. If not provided, defaults to all resources.
     """
     if not endpoints:
-        endpoints = jira().resources.keys()
+        endpoints = list(jira().resources.keys())
 
     pipeline = dlt.pipeline(
         pipeline_name="jira_pipeline", destination="duckdb", dataset_name="jira"
