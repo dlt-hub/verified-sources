@@ -1,15 +1,14 @@
-"""This source collects inbox emails, downloads attachments to local folder and stores all info in destination"""
-import email
+"""This source collects inbox emails and downloads attachments to local folder"""
 import imaplib
 import os
 from copy import deepcopy
-from email.message import Message
-from typing import Any, Optional, Sequence
+from typing import Optional, Sequence
 
 import dlt
 from dlt.common import logger, pendulum
 from dlt.extract.source import DltResource, TDataItem
 
+from .helpers import extract_email_info, get_internal_data, get_message_obj
 from .settings import DEFAULT_START_DATE, FILTER_EMAILS, STORAGE_FOLDER_PATH
 
 
@@ -38,25 +37,26 @@ def messages_uids(
     filter_emails: Sequence[str] = FILTER_EMAILS,
     folder: str = "INBOX",
     start_date: pendulum.DateTime = DEFAULT_START_DATE,
-    initial_message_num: Optional[Any] = dlt.sources.incremental(
-        "message_uid", initial_value=1
-    ),
+    initial_message_num: Optional[
+        dlt.sources.incremental[int]
+    ] = dlt.sources.incremental("message_uid", initial_value=1),
 ) -> TDataItem:
     last_message_num = initial_message_num.last_value
 
     with imaplib.IMAP4_SSL(host) as client:
         client.login(email_account, password)
         client.select(folder, readonly=True)
-        criteria = [f'(SINCE {start_date.strftime("%d-%b-%Y")})']
+        criteria = [
+            f"(SINCE {start_date.strftime('%d-%b-%Y')})",
+            f"(UID {str(int(last_message_num))}:*)",
+        ]
 
         if filter_emails:
             logger.info(f"Load emails only from: {filter_emails}")
             for email_ in filter_emails:
                 criteria.extend([f"(FROM {email_})"])
 
-        status, messages = client.uid(
-            "search", "UID " + str(int(last_message_num)) + ":*", *criteria
-        )
+        status, messages = client.uid("search", *criteria)
         message_uids = messages[0].split()
 
         if not message_uids:
@@ -73,6 +73,7 @@ def read_messages(
     host: str = dlt.secrets.value,
     email_account: str = dlt.secrets.value,
     password: str = dlt.secrets.value,
+    body: bool = False,
 ) -> TDataItem:
     message_uid = str(item["message_uid"])
 
@@ -80,13 +81,9 @@ def read_messages(
         client.login(email_account, password)
         msg = get_message_obj(client, message_uid)
         if msg:
-            email_data = dict(msg)
-            email_data["message_uid"] = int(message_uid)
-            email_data["date"] = pendulum.parse(msg["Date"], strict=False)
-            email_data["content_type"] = msg.get_content_type()
-            email_data["body"] = get_email_body(msg)
-
-            yield email_data
+            result = deepcopy(item)
+            result.update(extract_email_info(msg, body=body))
+            yield result
 
 
 @dlt.transformer(name="attachments", write_disposition="replace")
@@ -96,6 +93,7 @@ def get_attachments_by_uid(
     host: str = dlt.secrets.value,
     email_account: str = dlt.secrets.value,
     password: str = dlt.secrets.value,
+    body: bool = False,
 ) -> TDataItem:
     message_uid = str(item["message_uid"])
 
@@ -103,6 +101,9 @@ def get_attachments_by_uid(
         client.login(email_account, password)
         msg = get_message_obj(client, message_uid)
         if msg:
+            email_info = extract_email_info(msg, body=body)
+            internal_date = get_internal_data(client, message_uid)
+
             for part in msg.walk():
                 content_disposition = part.get("Content-Disposition", "")
                 if "attachment" in content_disposition:
@@ -118,49 +119,14 @@ def get_attachments_by_uid(
                             f.write(attachment_data)
 
                         result = deepcopy(item)
+                        result.update(email_info)
                         result.update(
                             {
                                 "file_name": filename,
                                 "file_path": os.path.abspath(attachment_path),
                                 "content_type": part.get_content_type(),
+                                "internal_date": internal_date,
                             }
                         )
 
                         yield result
-
-
-def get_message_obj(client: imaplib.IMAP4_SSL, message_uid: str) -> Optional[Message]:
-    client.select()
-
-    status, data = client.uid("fetch", message_uid, "(RFC822)")
-
-    msg = None
-    if status == "OK":
-        raw_email = data[0]
-        if raw_email:
-            raw_email = data[0][1]
-            msg = email.message_from_bytes(raw_email)
-
-    return msg
-
-
-def get_email_body(msg: Message) -> str:
-    """
-    Get the body of the email message.
-
-    Parameters:
-        msg (Message): The email message object.
-
-    Returns:
-        str: The email body as a string.
-    """
-    body = ""
-    if msg.is_multipart():
-        for part in msg.walk():
-            content_type = part.get_content_type()
-            if content_type == "text/plain":
-                body += part.get_payload(decode=True).decode(errors="ignore")
-    else:
-        body = msg.get_payload(decode=True).decode(errors="ignore")
-
-    return body
