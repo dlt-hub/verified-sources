@@ -9,18 +9,19 @@ from dlt.common import logger, pendulum
 from dlt.extract.source import DltResource, TDataItem
 
 from .helpers import extract_email_info, get_internal_data, get_message_obj
-from .settings import DEFAULT_START_DATE, FILTER_EMAILS, STORAGE_FOLDER_PATH
+from .settings import DEFAULT_START_DATE, FILTER_EMAILS, STORAGE_FOLDER_PATH, GMAIL_GROUP
 
 
 @dlt.source
 def inbox_source(
     storage_folder_path: str = STORAGE_FOLDER_PATH,
     filter_emails: Sequence[str] = FILTER_EMAILS,
+    gmail_group: Optional[str] = GMAIL_GROUP,
     attachments: bool = False,
     start_date: pendulum.DateTime = DEFAULT_START_DATE,
 ) -> DltResource:
     uids = messages_uids(
-        filter_emails=filter_emails, folder="INBOX", start_date=start_date
+        filter_emails=filter_emails, gmail_group=gmail_group, folder="INBOX", start_date=start_date
     )
 
     if attachments:
@@ -35,6 +36,7 @@ def messages_uids(
     email_account: str = dlt.secrets.value,
     password: str = dlt.secrets.value,
     filter_emails: Sequence[str] = FILTER_EMAILS,
+    gmail_group: Optional[str] = GMAIL_GROUP,
     folder: str = "INBOX",
     start_date: pendulum.DateTime = DEFAULT_START_DATE,
     initial_message_num: Optional[
@@ -55,6 +57,10 @@ def messages_uids(
             logger.info(f"Load emails only from: {filter_emails}")
             for email_ in filter_emails:
                 criteria.extend([f"(FROM {email_})"])
+
+        if gmail_group:
+            logger.info(f"Load all emails for Group: {gmail_group}")
+            criteria.extend([f"(TO {gmail_group})"])
 
         status, messages = client.uid("search", *criteria)
         message_uids = messages[0].split()
