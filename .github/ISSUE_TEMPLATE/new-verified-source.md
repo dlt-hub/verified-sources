@@ -2,7 +2,7 @@
 name: New verified source
 about: I want to create a new verified source
 title: "[source name] verified source"
-labels: ''
+labels: 'verified source'
 assignees: ''
 
 ---

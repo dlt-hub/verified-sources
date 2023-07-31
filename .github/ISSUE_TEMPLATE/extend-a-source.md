@@ -2,7 +2,7 @@
 name: Extend a source
 about: I need more data added from an existing source
 title: ''
-labels: ''
+labels: 'source new feature'
 assignees: ''
 
 ---
