@@ -109,12 +109,13 @@ To connect to the Gmail server, we need the below information.
 - SMTP server port. The value will be 993. This port is used for Internet message access protocol
   over TLS/SSL.
 
-### Getting Gmail App Password
+### Set up Gmail with a third-party email client
 
 An app password is a 16-digit passcode that gives a less secure app or device permission to access
 your Google Account. App passwords can only be used with accounts that have 2-Step Verification
 turned on.
 
+Step 1: Create and use App Passwords
 1. Go to your Google Account.
 1. Select Security.
 1. Under "How you sign in to Google", select **2-Step Verification** -> Turn it on.
@@ -129,4 +130,12 @@ turned on.
 Read more in
 [this article](https://pythoncircle.com/post/727/accessing-gmail-inbox-using-python-imaplib-module/)
 or
-[Google official document](https://support.google.com/mail/answer/185833#zippy=%2Cwhy-you-may-need-an-app-password)
+[Google official documentation.](https://support.google.com/mail/answer/185833#zippy=%2Cwhy-you-may-need-an-app-password)
+
+Step 2: Turn on IMAP in Gmail
+1. In Gmail, in the top right, click Settings -> See all settings.
+1. At the top, click the Forwarding and POP/IMAP tab.
+1. In the IMAP Access section, select Enable IMAP.
+1. At the bottom, click Save Changes.
+
+Read more in [official Google documentation.](https://support.google.com/a/answer/9003945#zippy=%2Cstep-turn-on-imap-in-gmail)
