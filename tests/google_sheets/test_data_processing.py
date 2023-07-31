@@ -359,7 +359,7 @@ def test_process_url(url: str, expected: str):
     :param: expected: expected output str
     """
     try:
-        assert data_processing.process_url(url) == expected
+        assert data_processing.extract_spreadsheet_id_from_url(url) == expected
     except ValueError as e:
         assert str(e) == str(expected)
 

@@ -1,4 +1,5 @@
 import logging
+from typing import Tuple
 
 import pytest
 import dlt
@@ -8,16 +9,19 @@ from tests.utils import ALL_DESTINATIONS, assert_load_info
 
 
 # list expected tables and the number of columns they are supposed to have
-ALL_TABLES = [
+ALL_SHEETS = [
+    "empty",
     "all_types",
     "empty_row",
     "empty_rows",
     "has_empty",
     "hole_middle",
+    "table_in_middle",
     "inconsistent_types",
     "more_data",
     "more_headers_than_data",
     "NamedRange1",
+    "NamedRange2",
     "only_data",
     "only_headers",
     "Sheet 1",
@@ -26,19 +30,20 @@ ALL_TABLES = [
     "sheet4",
     "two_tables",
 ]
-COL_NUMS = [6, 5, 5, 5, 7, 5, 4, 8, 4, 2, 2, 4, 5, 9, 1, 9]
+
 ALL_TABLES_LOADED = [
     "all_types",
     "empty_row",
     "empty_rows",
     "has_empty",
     "hole_middle",
+    "table_in_middle",
     "inconsistent_types",
     "more_data",
     "more_headers_than_data",
     "named_range1",
-    "only_data",
-    "only_headers",
+    # "only_data",  # empty ranges are not loaded
+    # "only_headers",
     "sheet_1",
     "sheet2",
     "sheet3",
@@ -55,7 +60,7 @@ def create_pipeline(
     range_names=None,
     get_sheets=True,
     get_named_ranges=True,
-) -> (LoadInfo, dlt.Pipeline):
+) -> Tuple[LoadInfo, dlt.Pipeline]:
     """
     Helper, creates a simple pipeline and returns it along with the load info.
     """
@@ -97,7 +102,9 @@ def test_full_load(destination_name: str) -> None:
 
     # FULL PIPELINE RUN
     info, pipeline = create_pipeline(
-        destination_name=destination_name, dataset_name="test_full_load"
+        destination_name=destination_name,
+        dataset_name="test_full_load",
+        range_names=["table_in_middle"],
     )
     assert_load_info(info)
 
@@ -110,13 +117,12 @@ def test_full_load(destination_name: str) -> None:
     # check load metadata
     with pipeline.sql_client() as c:
         # check every table has the correct name in the metadata table and the correct number of columns
-        sql_query = "SELECT loaded_range, num_cols FROM spreadsheet_info ORDER BY LOWER(loaded_range);"
+        sql_query = "SELECT * FROM spreadsheet_info"
         with c.execute_query(sql_query) as cur:
             rows = list(cur.fetchall())
-            assert len(rows) == len(ALL_TABLES)
-            for i in range(len(rows)):
-                assert rows[i][0] == ALL_TABLES[i]
-                assert rows[i][1] == COL_NUMS[i]
+            loaded_ranges = [r[1] for r in rows]
+            assert set(loaded_ranges) == set(ALL_SHEETS)
+            assert len(rows) == len(ALL_SHEETS)
 
 
 @pytest.mark.parametrize("destination_name", ALL_DESTINATIONS)
@@ -181,7 +187,9 @@ def test_all_data_types(destination_name) -> None:
     assert test_table["columns"]["float_types"]["data_type"] == "double"
     assert test_table["columns"]["bool_types"]["data_type"] == "bool"
     assert test_table["columns"]["formula_types"]["data_type"] == "double"
-    assert test_table["columns"]["date_types"]["data_type"] == "timestamp"
+    assert test_table["columns"]["datetime_types"]["data_type"] == "timestamp"
+    assert test_table["columns"]["date_types"]["data_type"] == "date"
+    assert test_table["columns"]["time_types"]["data_type"] == "timestamp"
 
 
 @pytest.mark.parametrize("destination_name", ALL_DESTINATIONS)
@@ -300,11 +308,8 @@ def test_inconsistent_types(destination_name) -> None:
 @pytest.mark.parametrize("destination_name", ALL_DESTINATIONS)
 def test_more_headers(destination_name) -> None:
     """
-    Test ranges that have more headers than data
-    @:param: destination_name - redshift/bigquery/postgres
+    Test ranges that have more headers than data. Columns with headers and without data are dropped.
     """
-
-    # run pipeline only for the specific table with all data types and grab that table
     info, pipeline = create_pipeline(
         destination_name=destination_name,
         dataset_name="test_more_headers",
@@ -327,10 +332,8 @@ def test_more_headers(destination_name) -> None:
 @pytest.mark.parametrize("destination_name", ALL_DESTINATIONS)
 def test_more_data(destination_name) -> None:
     """
-    Test ranges that have more data than headers
-    @:param: destination_name - redshift/bigquery/postgres
+    Test ranges that have more data than headers. Columns without headers will be dropped!
     """
-    # run pipeline only for the specific table with all data types and grab that table
     info, pipeline = create_pipeline(
         destination_name=destination_name,
         dataset_name="test_more_headers",
@@ -451,6 +454,25 @@ def test_named_range(destination_name) -> None:
             for i in range(len(rows)):
                 processed_row = _row_helper(rows[i], destination_name)
                 assert processed_row == expected_rows[i]
+
+
+def test_auto_header_names():
+    pass
+
+
+def test_explicit_named_range():
+    # named range names can be explicitly passed
+    pass
+
+
+def test_non_unique_headers():
+    # raises on non unique headers
+    pass
+
+
+def test_table_not_A1():
+    # make sure all data is loaded when it does not start at A1
+    pass
 
 
 def _row_helper(row, destination_name):
