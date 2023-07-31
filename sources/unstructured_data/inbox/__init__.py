@@ -9,7 +9,12 @@ from dlt.common import logger, pendulum
 from dlt.extract.source import DltResource, TDataItem
 
 from .helpers import extract_email_info, get_internal_data, get_message_obj
-from .settings import DEFAULT_START_DATE, FILTER_EMAILS, STORAGE_FOLDER_PATH, GMAIL_GROUP
+from .settings import (
+    DEFAULT_START_DATE,
+    FILTER_EMAILS,
+    GMAIL_GROUP,
+    STORAGE_FOLDER_PATH,
+)
 
 
 @dlt.source
@@ -21,7 +26,10 @@ def inbox_source(
     start_date: pendulum.DateTime = DEFAULT_START_DATE,
 ) -> DltResource:
     uids = messages_uids(
-        filter_emails=filter_emails, gmail_group=gmail_group, folder="INBOX", start_date=start_date
+        filter_emails=filter_emails,
+        gmail_group=gmail_group,
+        folder="INBOX",
+        start_date=start_date,
     )
 
     if attachments:
@@ -89,6 +97,7 @@ def read_messages(
         if msg:
             result = deepcopy(item)
             result.update(extract_email_info(msg, body=body))
+            result.update({"internal_date": get_internal_data(client, message_uid)})
             yield result
 
 
