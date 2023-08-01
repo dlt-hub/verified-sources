@@ -1,73 +1,43 @@
 # Unstructured data to structured
  Converts unstructured data from a specified data resource to structured data using provided queries.
+
+## Prerequisites
+
+- Python 3.x
+- `dlt` library (you can install it using `pip install dlt`)
+- destination dependencies, e.g. `duckdb` (`pip install duckdb`)
+
+## Installation
+
+Make sure you have Python 3.x installed on your system.
+
+Install the required library by running the following command:
+
+```shell
+pip install dlt[duckdb]
+```
+
 ## Init the pipeline
-1. Init the main source:
-    ```sh
-    dlt init unstructured_data duckdb
-    ```
-2. Init dependent sources with the original unstructured data:
-    ```sh
-    dlt init google_drive duckdb
-    ```
-3. Set credentials for **filesystem**.
-   1. If you plan to load files from a *local folder*, then set the path to the local data folder in `filesystem/settings.py`:
-       ```python
-       # Local folder
-       DATA_DIR = "/path/to/your/local/data/folder"
-       ```
-   2. In case of *Google Drive* folder:
+```sh
+dlt init unstructured_data duckdb --branch features/ustructured-source
+```
 
-      [Read Quick Start with Google Drive:](https://developers.google.com/drive/api/quickstart/python?hl=en)
+## Install requirements
 
-      1. Enable Google Drive API.
-      2. Configure the OAuth consent screen.
-      3. Create credentials json.
+```shell
+pip install -r requirements.txt
+```
 
-      Save the path to this json in `filesystem/settings.py`:
-      ```python
-      ClIENT_SECRET_PATH = "client_secret.json"
-      ```
+## Set credentials
+1. Open `.dlt/secrets.toml`.
+2. Enter the OpenAI secrets:
 
-      If you already have the **authorized** user json file "token.json", then put it in a `filesystem/settings.py` file:
-      ```python
-      AUTHORIZED_USER_PATH = "/path/to/token.json"
-      ```
-      or you can use the authorized user info from this json directly, copy info from json to `.dlt/secrets.toml`:
-      ```toml
-      [sources.unstructured_data.google_drive.credentials]
-      token = "<token>"
-      refresh_token = "<refresh_token>"
-      token_uri = "<token_uri>"
-      client_id = "<client_id>"
-      client_secret = "<client_secret>"
-      scopes = ["<scopes>"]
-      expiry = "<expiry>"
-      ```
-
-      Set in `filesystem/settings.py` the storage folder path, it is the local folder where the downloaded files will be stored:
-      ```python
-      STORAGE_FOLDER_PATH = "temp"
-      ```
-      List all Google Drive folders you want to extract files from:
-      ```python
-      FOLDER_IDS = ["1-yiloGjyl9g40VguIE1QnY5tcRPaF0Nm"]
-      ```
-4. Set credentials for **unstructured_data**.
     ```toml
     [sources.unstructured_data]
     openai_api_key = "openai_api_key"
     ```
 
-## Run the pipeline
-### Choose the function you want to run:
-1. The function `from_local_folder_to_structured` iterates through all the files
-in the specified local folder and saves their filepaths to the destination
-(e.g., a database). It then processes each filepath individually.
-
-2. The function `from_google_drive_to_structured` downloads data from a folder
-in Google Drive to the local folder and saves the filepaths to the destination (e.g., a database).
-It then processes each filepath individually.
-
+## Configure unstructured source
 ### Define queries
 You must provide a dictionary of queries to be applied to the unstructured
 data during processing. Each query maps a field name to a query string
@@ -84,6 +54,34 @@ queries = {
     "phone_number": "What is the company phone number? Just return the phone number. If you don't know, then return None",
 }
 ```
+
+Customize the INVOICE_QUERIES dict in the `unstructured_data/settings.py` file if you want to extract
+other information, or if your invoices have different structure.
+
+## Configure data sources
+
+### Local Folder
+Read how to configure Local Folder Source in [README.md](local_folder/README.md)
+### Google Drive
+Read how to configure Google Drive Source in [README.md](google_drive/README.md)
+### Inbox
+Read how to configure Inbox Source in [README.md](inbox/README.md)
+
+
+## Run the pipeline
+### Choose the function you want to run:
+1. The function `from_local_folder_to_structured` iterates through all the files
+in the specified local folder and saves their filepaths to the destination
+(e.g., a database). It then processes each filepath individually.
+
+2. The function `from_google_drive_to_structured` downloads data from a folder
+in Google Drive to the local folder and saves the filepaths to the destination (e.g., a database).
+It then processes each filepath individually.
+
+3. The function `from_inbox_to_structured` provides functionalities to collect inbox emails, download attachments to a local
+folder, and store all relevant email information in a destination.
+It then processes each filepath individually.
+
 ### Run the command
 ```python
 python unstructured_data_pipeline.py
@@ -110,4 +108,9 @@ To ensure that everything loads as expected, use the command:
 ```bash
 dlt pipeline <pipeline_name> show
 ```
-For example, the pipeline_name for the above pipeline example is `unstructured_local_folder`, you can use any custom name instead.
+For example, the pipeline_name for the above pipeline example is `unstructured_local_folder`,
+you can use any custom name instead. So your command would look like:
+
+```bash
+dlt pipeline unstructured_local_folder show
+```

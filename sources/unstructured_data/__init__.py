@@ -13,11 +13,12 @@ from .helpers import (
     process_file_to_structured,
     vectorstore_mapping,
 )
+from .settings import INVOICE_QUERIES
 
 
 @dlt.resource
 def unstructured_to_structured_resource(
-    queries: Dict[str, str],
+    queries: Dict[str, str] = INVOICE_QUERIES,
     openai_api_key: str = dlt.secrets.value,
     vectorstore: str = dlt.config.value,
     table_name: str = "unstructured_to_structured_resource",
