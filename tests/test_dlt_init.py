@@ -28,14 +28,14 @@ def echo_default_choice() -> None:
     echo.ALWAYS_CHOOSE_DEFAULT = False
 
 
-@pytest.fixture(autouse=True)
-def unload_modules() -> None:
-    """Unload all modules inspected in this tests"""
-    prev_modules = dict(sys.modules)
-    yield
-    mod_diff = set(sys.modules.keys()) - set(prev_modules.keys())
-    for mod in mod_diff:
-        del sys.modules[mod]
+# @pytest.fixture(autouse=True)
+# def unload_modules() -> None:
+#     """Unload all modules inspected in this tests"""
+#     prev_modules = dict(sys.modules)
+#     yield
+#     mod_diff = set(sys.modules.keys()) - set(prev_modules.keys())
+#     for mod in mod_diff:
+#         del sys.modules[mod]
 
 
 def get_pipeline_candidates() -> List[str]:
