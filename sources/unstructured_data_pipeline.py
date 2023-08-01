@@ -3,6 +3,7 @@ from typing import Dict
 import dlt
 from unstructured_data import unstructured_to_structured_resource
 from unstructured_data.filesystem import google_drive, local_folder
+from unstructured_data.inbox import inbox_source
 
 
 def from_local_folder_to_structured(queries: Dict[str, str]) -> None:
@@ -22,7 +23,7 @@ def from_local_folder_to_structured(queries: Dict[str, str]) -> None:
         | unstructured_to_structured_resource(
             queries,
             table_name=f"unstructured_from_{data_resource.name}",
-            run_async=True,
+            run_async=False,
         )
     )
     # pretty print the information on data that was loaded
@@ -51,6 +52,28 @@ def from_google_drive_to_structured(queries: Dict[str, str]) -> None:
     print(load_info)
 
 
+def from_inbox(queries: Dict[str, str]) -> None:
+    # configure the pipeline with your destination details
+    pipeline = dlt.pipeline(
+        pipeline_name="unstructured_inbox",
+        destination="duckdb",
+        dataset_name="unstructured_inbox_data",
+        full_refresh=True,
+    )
+
+    data_source = inbox_source(attachments=True)
+    data_resource = data_source.resources["attachments"]
+    # run the pipeline with your parameters
+    load_info = pipeline.run(
+        data_resource
+        | unstructured_to_structured_resource(
+            queries, table_name=f"unstructured_from_{data_resource.name}"
+        )
+    )
+    # pretty print the information on data that was loaded
+    print(load_info)
+
+
 if __name__ == "__main__":
     queries = {
         "recipient_company_name": "Who is the recipient of the invoice? Just return the name. If you don't know, then return None",
@@ -60,5 +83,6 @@ if __name__ == "__main__":
         "service_description": "What is the description of the service that this invoice is for? Just return the description. If you don't know, then return None",
         "phone_number": "What is the company phone number? Just return the phone number. If you don't know, then return None",
     }
-    from_local_folder_to_structured(queries)
+    # from_local_folder_to_structured(queries)
     # from_google_drive_to_structured(queries)
+    from_inbox(queries)
