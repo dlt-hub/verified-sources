@@ -1,16 +1,17 @@
 import email
 import imaplib
 from email.message import Message
+from time import mktime
 from typing import Any, Dict, Optional
 
 from dlt.common import pendulum
 
 
-def extract_email_info(msg: Message, body: bool = False) -> Dict[str, Any]:
+def extract_email_info(msg: Message, include_body: bool = False) -> Dict[str, Any]:
     email_data = dict(msg)
     email_data["Date"] = pendulum.parse(msg["Date"], strict=False)
     email_data["content_type"] = msg.get_content_type()
-    if body:
+    if include_body:
         email_data["body"] = get_email_body(msg)
 
     return {
@@ -32,14 +33,13 @@ def get_message_obj(client: imaplib.IMAP4_SSL, message_uid: str) -> Optional[Mes
     return msg
 
 
-def get_internal_data(client: imaplib.IMAP4_SSL, message_uid: str) -> Optional[Any]:
+def get_internal_date(client: imaplib.IMAP4_SSL, message_uid: str) -> Optional[Any]:
     client.select()
     status, data = client.uid("fetch", message_uid, "(INTERNALDATE)")
     date = None
     if status == "OK":
-        str_datetime = data[0].decode().split('"')[1]
-        date = pendulum.parse(str_datetime, strict=False)
-
+        timestruct = imaplib.Internaldate2tuple(data[0])
+        date = pendulum.from_timestamp(mktime(timestruct))
     return date
 
 

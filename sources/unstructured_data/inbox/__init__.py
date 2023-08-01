@@ -8,7 +8,7 @@ import dlt
 from dlt.common import logger, pendulum
 from dlt.extract.source import DltResource, TDataItem
 
-from .helpers import extract_email_info, get_internal_data, get_message_obj
+from .helpers import extract_email_info, get_internal_date, get_message_obj
 from .settings import (
     DEFAULT_START_DATE,
     FILTER_EMAILS,
@@ -87,7 +87,7 @@ def read_messages(
     host: str = dlt.secrets.value,
     email_account: str = dlt.secrets.value,
     password: str = dlt.secrets.value,
-    body: bool = False,
+    include_body: bool = False,
 ) -> TDataItem:
     message_uid = str(item["message_uid"])
 
@@ -96,8 +96,9 @@ def read_messages(
         msg = get_message_obj(client, message_uid)
         if msg:
             result = deepcopy(item)
-            result.update(extract_email_info(msg, body=body))
-            result.update({"internal_date": get_internal_data(client, message_uid)})
+            result["modification_date"] = get_internal_date(client, message_uid)
+            result.update(extract_email_info(msg, include_body=include_body))
+
             yield result
 
 
@@ -108,7 +109,7 @@ def get_attachments_by_uid(
     host: str = dlt.secrets.value,
     email_account: str = dlt.secrets.value,
     password: str = dlt.secrets.value,
-    body: bool = False,
+    include_body: bool = False,
 ) -> TDataItem:
     message_uid = str(item["message_uid"])
 
@@ -116,8 +117,8 @@ def get_attachments_by_uid(
         client.login(email_account, password)
         msg = get_message_obj(client, message_uid)
         if msg:
-            email_info = extract_email_info(msg, body=body)
-            internal_date = get_internal_data(client, message_uid)
+            email_info = extract_email_info(msg, include_body=include_body)
+            internal_date = get_internal_date(client, message_uid)
 
             for part in msg.walk():
                 content_disposition = part.get("Content-Disposition", "")
@@ -135,13 +136,11 @@ def get_attachments_by_uid(
 
                         result = deepcopy(item)
                         result.update(email_info)
-                        result.update(
-                            {
-                                "file_name": filename,
-                                "file_path": os.path.abspath(attachment_path),
-                                "content_type": part.get_content_type(),
-                                "internal_date": internal_date,
-                            }
-                        )
+                        result["envelope"] = {
+                            "file_name": filename,
+                            "file_path": os.path.abspath(attachment_path),
+                            "content_type": part.get_content_type(),
+                            "modification_time": internal_date,
+                        }
 
                         yield result
