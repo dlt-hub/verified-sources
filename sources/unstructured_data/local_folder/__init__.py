@@ -1,35 +1,24 @@
-"""Those resources collect filepaths from local folder or Google Drive folder to destinations"""
-import logging
+"""Those resources collect filepaths from local folder to destinations"""
 from pathlib import Path
-from typing import Optional, Sequence, Dict, Any
+from typing import Optional, Sequence
 
 import dlt
 from dlt.extract.source import TDataItem
 
-from .helpers import build_service, download_file_from_google_drive, get_files_uris
-from .settings import (
-    AUTHORIZED_USER_PATH,
-    DATA_DIR,
-    FOLDER_IDS,
-    STORAGE_FOLDER_PATH,
-    ClIENT_SECRET_PATH,
-)
-
 
 @dlt.resource(write_disposition="replace")
-def local_folder(
+def local_folder_source(
+    data_dir: str,
     extensions: Optional[Sequence[str]] = None,
-    data_dir: str = DATA_DIR,
 ) -> TDataItem:
     """
     Retrieves a list of files from a local folder.
 
     Args:
+        data_dir (str): The path to the local folder from which to retrieve the files.
         extensions (Optional[Sequence[str]]): A list of file extensions to filter the files.
             Only files with these extensions will be returned. If None, all files will be returned.
             Defaults to None.
-        data_dir (str): The path to the local folder from which to retrieve the files.
-            Defaults to DATA_DIR (see settings.py).
 
     Yields:
         TDataItem: A dictionary representing a file, containing the file path.
@@ -51,4 +40,4 @@ def local_folder(
 
     for file in files:
         if file.is_file():
-            yield {"file_path": file.as_posix()}
+            yield {"file_path": file.as_posix(), "file_name": file.name}

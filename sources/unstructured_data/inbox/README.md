@@ -47,15 +47,18 @@ dlt init inbox duckdb
    credentials.
 1. Customize the FILTER_EMAILS list in the `inbox/settings.py` file if you want to fetch emails only
    from specific senders.
+1. Customize the GMAIL_GROUP in the `inbox/settings.py` file if you want to fetch emails
+   for specific Google Group.
 1. Set the STORAGE_FOLDER_PATH in the `inbox/settings.py` file to the folder where you want to save
    attachments (if required).
+1. Set the DEFAULT_START_DATE in the `inbox/settings.py` file to the date you want to fetch emails from.
 
 ## Functionality
 
 ### inbox_source
 
 This is a dlt source that collects inbox emails and, if `attachments=True`, downloads attachments to a
-local folder based on the specified parameters.
+local folder (STORAGE_FOLDER_PATH) based on the specified parameters.
 
 ### messages_uids
 
@@ -66,14 +69,16 @@ from the specified folder ('INBOX' by default). It yields a dictionary containin
 
 This dlt transformer resource takes an email message item from another resource (e.g. `messages_uids`)
 and fetches email messages using its UID. It yields a dictionary containing email metadata
-such as message UID, message ID, sender, subject, date, content type, and email body.
+such as message UID, message ID, sender, subject, date, modification date, content type, and email body.
 
 ### get_attachments_by_uid
 
 This dlt transformer resource takes an email message item from another resource (e.g. `messages_uids`)
 and extracts attachments from the email message using its UID. It connects to the IMAP server,
-fetches the email message by its UID, and saves attachments to the specified STORAGE_FOLDER_PATH. It
-yields the email item with the attachment content type, file name, and local file path.
+fetches the email message by its UID, and saves attachments to the specified STORAGE_FOLDER_PATH.
+It yields a dictionary containing email metadata such as message UID, sender,
+date, content type, etc., and under the key "envelope" it returns dict with
+the attachment content type, file name, and local file path.
 
 ## Example
 

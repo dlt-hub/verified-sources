@@ -5,7 +5,7 @@ import pytest
 from dlt.extract.source import DltResource
 
 from sources.unstructured_data import unstructured_to_structured_resource
-from sources.unstructured_data.filesystem import google_drive, local_folder
+from sources.unstructured_data.google_drive import google_drive, local_folder
 from sources.unstructured_data.inbox import inbox_source
 
 from tests.utils import ALL_DESTINATIONS, assert_load_info

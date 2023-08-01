@@ -31,7 +31,6 @@ def inbox_source(
         folder="INBOX",
         start_date=start_date,
     )
-
     if attachments:
         return uids | get_attachments_by_uid(storage_folder_path=storage_folder_path)
     else:
@@ -112,7 +111,6 @@ def get_attachments_by_uid(
     include_body: bool = False,
 ) -> TDataItem:
     message_uid = str(item["message_uid"])
-
     with imaplib.IMAP4_SSL(host) as client:
         client.login(email_account, password)
         msg = get_message_obj(client, message_uid)
@@ -136,11 +134,12 @@ def get_attachments_by_uid(
 
                         result = deepcopy(item)
                         result.update(email_info)
-                        result["envelope"] = {
-                            "file_name": filename,
-                            "file_path": os.path.abspath(attachment_path),
-                            "content_type": part.get_content_type(),
-                            "modification_time": internal_date,
-                        }
-
+                        result.update(
+                            {
+                                "file_name": filename,
+                                "file_path": os.path.abspath(attachment_path),
+                                "content_type": part.get_content_type(),
+                                "modification_date": internal_date,
+                            }
+                        )
                         yield result

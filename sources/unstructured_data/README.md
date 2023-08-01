@@ -7,7 +7,7 @@
     ```
 2. Init dependent sources with the original unstructured data:
     ```sh
-    dlt init filesystem duckdb
+    dlt init google_drive duckdb
     ```
 3. Set credentials for **filesystem**.
    1. If you plan to load files from a *local folder*, then set the path to the local data folder in `filesystem/settings.py`:

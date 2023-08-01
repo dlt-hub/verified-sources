@@ -1,4 +1,4 @@
-"""Those resources collect filepaths from local folder or Google Drive folder to destinations"""
+"""This resource downloads files and collects filepaths from Google Drive folder to destinations"""
 import logging
 from pathlib import Path
 from typing import Sequence, Dict, Any
@@ -15,8 +15,8 @@ from .settings import (
 )
 
 
-@dlt.resource(write_disposition="replace")
-def google_drive(
+@dlt.resource(write_disposition="replace", name="google_drive")
+def google_drive_source(
     extensions: Sequence[str] = (".txt", ".pdf"),
     client_secret_path: str = ClIENT_SECRET_PATH,
     token_path: str = AUTHORIZED_USER_PATH,
