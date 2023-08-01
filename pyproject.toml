@@ -51,7 +51,7 @@ types-stripe = "^3.5.2.14"
 asana = "^3.2.1"
 
 [tool.poetry.group.facebook_ads.dependencies]
-facebook-business = "^16.0.2"
+facebook-business = "^17.0.2"
 
 [tool.poetry.group.salesforce.dependencies]
 simple-salesforce = "^1.12.4"

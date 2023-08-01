@@ -19,7 +19,6 @@ from dlt.sources.helpers.requests import Client
 
 from facebook_business import FacebookAdsApi
 from facebook_business.adobjects.adaccount import AdAccount
-from facebook_business.adobjects.jobsjob import JobsJob
 from facebook_business.adobjects.user import User
 from facebook_business.api import FacebookResponse
 
@@ -134,11 +133,11 @@ You should remove the fields in `fields` argument that are not necessary, as tha
 
 
 def execute_job(
-    job: JobsJob,
+    job: AbstractCrudObject,
     insights_max_wait_to_start_seconds: int = 5 * 60,
     insights_max_wait_to_finish_seconds: int = 30 * 60,
     insights_max_async_sleep_seconds: int = 5 * 60,
-) -> JobsJob:
+) -> AbstractCrudObject:
     status: str = None
     time_start = time.time()
     sleep_time = 10
