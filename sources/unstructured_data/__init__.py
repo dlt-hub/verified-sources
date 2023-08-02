@@ -20,7 +20,7 @@ from .settings import INVOICE_QUERIES
 def unstructured_to_structured_resource(
     queries: Dict[str, str] = INVOICE_QUERIES,
     openai_api_key: str = dlt.secrets.value,
-    vectorstore: str = dlt.config.value,
+    vectorstore: str = "chroma",
     table_name: str = "unstructured_to_structured_resource",
     run_async: bool = False,
 ) -> DltResource:
@@ -32,8 +32,8 @@ def unstructured_to_structured_resource(
             Each query maps a field name to a query string that specifies how to process the field.
         openai_api_key (str): The API key for the OpenAI API. If provided, it sets the `OPENAI_API_KEY` environment variable.
             Defaults to the value of `dlt.secrets.value`.
-        vectorstore (str): Vector database type, e.g. "chroma", "weaviate" or "elastic_search".
-            Defaults to the value of `dlt.config.value`.
+        vectorstore (str): Vector database type, e.g. "chroma", "weaviate" (expects environment variable `WEAVIATE_URL`)
+            or "elastic_search" (expects environment variable `ELASTICSEARCH_URL`). Defaults to "chroma".
         table_name (str): The name of the table associated with the resource. Defaults to "unstructured_to_structured_resource".
         run_async (bool): Whether to run the conversion asynchronously. Defaults to False.
 

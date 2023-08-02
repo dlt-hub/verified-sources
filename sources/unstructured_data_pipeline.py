@@ -63,7 +63,9 @@ def from_inbox_to_structured() -> None:
     )
 
     data_source = inbox_source(attachments=True)
-    data_resource = data_source.resources["attachments"].add_filter(lambda item: item["content_type"] == "application/pdf")
+    data_resource = data_source.resources["attachments"].add_filter(
+        lambda item: item["content_type"] == "application/pdf"
+    )
     # run the pipeline with your parameters
     load_info = pipeline.run(
         data_resource
