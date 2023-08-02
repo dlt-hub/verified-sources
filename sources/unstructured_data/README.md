@@ -112,5 +112,5 @@ For example, the pipeline_name for the above pipeline example is `unstructured_l
 you can use any custom name instead. So your command would look like:
 
 ```bash
-dlt pipeline unstructured_local_folder show
+dlt pipeline unstructured_inbox show
 ```

@@ -48,7 +48,6 @@ async def aprocess_file_to_structured(
     """
     loader = UnstructuredFileLoader(file_path)
     index = AVectorstoreIndexCreator(vectorstore_cls=vectorstore).from_loaders([loader])
-    response = {}
 
     async def mark(key: str, question: str) -> Tuple[str, str]:
         return key, await asafely_query_index(index, question)

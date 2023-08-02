@@ -86,7 +86,7 @@ def read_messages(
     host: str = dlt.secrets.value,
     email_account: str = dlt.secrets.value,
     password: str = dlt.secrets.value,
-    include_body: bool = False,
+    include_body: bool = True,
 ) -> TDataItem:
     message_uid = str(item["message_uid"])
 

@@ -52,7 +52,7 @@ def from_google_drive_to_structured(queries: Dict[str, str]) -> None:
     print(load_info)
 
 
-def from_inbox_to_structured(queries: Dict[str, str]) -> None:
+def from_inbox_to_structured() -> None:
     from unstructured_data.inbox import inbox_source
     # configure the pipeline with your destination details
     pipeline = dlt.pipeline(
@@ -68,7 +68,7 @@ def from_inbox_to_structured(queries: Dict[str, str]) -> None:
     load_info = pipeline.run(
         data_resource
         | unstructured_to_structured_resource(
-            queries, table_name=f"unstructured_from_{data_resource.name}"
+            table_name=f"unstructured_from_{data_resource.name}"
         )
     )
     # pretty print the information on data that was loaded
