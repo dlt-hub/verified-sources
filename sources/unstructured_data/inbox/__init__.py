@@ -6,7 +6,7 @@ from typing import Optional, Sequence
 
 import dlt
 from dlt.common import logger, pendulum
-from dlt.extract.source import DltResource, TDataItem
+from dlt.extract.source import DltResource, TDataItem, TDataItems
 
 from .helpers import extract_email_info, get_internal_date, get_message_obj
 from .settings import (
@@ -55,29 +55,35 @@ def messages_uids(
     with imaplib.IMAP4_SSL(host) as client:
         client.login(email_account, password)
         client.select(folder, readonly=True)
-        criteria = [
+        base_criteria = [
             f"(SINCE {start_date.strftime('%d-%b-%Y')})",
             f"(UID {str(int(last_message_num))}:*)",
         ]
 
+        # TODO: fix it for all groups
+        if gmail_group:
+            logger.info(f"Load all emails for Group: {gmail_group}")
+            base_criteria.extend([f"(TO {gmail_group})"])
+
+        def get_message_uids(criterias: Sequence[str]) -> Optional[TDataItems]:
+            status, messages = client.uid("search", *criterias)
+            message_uids = messages[0].split()
+
+            if not message_uids:
+                logger.warning("No emails found.")
+            else:
+                return [
+                    {"message_uid": int(message_uid)} for message_uid in message_uids
+                ]
+
         if filter_emails:
             logger.info(f"Load emails only from: {filter_emails}")
             for email_ in filter_emails:
+                criteria = base_criteria.copy()
                 criteria.extend([f"(FROM {email_})"])
-
-        if gmail_group:
-            logger.info(f"Load all emails for Group: {gmail_group}")
-            criteria.extend([f"(TO {gmail_group})"])
-
-        status, messages = client.uid("search", *criteria)
-        message_uids = messages[0].split()
-
-        if not message_uids:
-            logger.warning("No emails found.")
+                yield get_message_uids(criteria)
         else:
-            yield from [
-                {"message_uid": int(message_uid)} for message_uid in message_uids
-            ]
+            yield get_message_uids(base_criteria)
 
 
 @dlt.transformer(name="messages", write_disposition="replace")
@@ -103,43 +109,44 @@ def read_messages(
 
 @dlt.transformer(name="attachments", write_disposition="replace")
 def get_attachments_by_uid(
-    item: TDataItem,
+    items: TDataItems,
     storage_folder_path: str,
     host: str = dlt.secrets.value,
     email_account: str = dlt.secrets.value,
     password: str = dlt.secrets.value,
     include_body: bool = False,
 ) -> TDataItem:
-    message_uid = str(item["message_uid"])
-    with imaplib.IMAP4_SSL(host) as client:
-        client.login(email_account, password)
-        msg = get_message_obj(client, message_uid)
-        if msg:
-            email_info = extract_email_info(msg, include_body=include_body)
-            internal_date = get_internal_date(client, message_uid)
+    for item in items:
+        message_uid = str(item["message_uid"])
+        with imaplib.IMAP4_SSL(host) as client:
+            client.login(email_account, password)
+            msg = get_message_obj(client, message_uid)
+            if msg:
+                email_info = extract_email_info(msg, include_body=include_body)
+                internal_date = get_internal_date(client, message_uid)
 
-            for part in msg.walk():
-                content_disposition = part.get("Content-Disposition", "")
-                if "attachment" in content_disposition:
-                    filename = part.get_filename()
-                    if filename:
-                        attachment_data = part.get_payload(decode=True)
-                        attachment_path = os.path.join(
-                            storage_folder_path, message_uid + filename
-                        )
-                        os.makedirs(os.path.dirname(attachment_path), exist_ok=True)
+                for part in msg.walk():
+                    content_disposition = part.get("Content-Disposition", "")
+                    if "attachment" in content_disposition:
+                        filename = part.get_filename()
+                        if filename:
+                            attachment_data = part.get_payload(decode=True)
+                            attachment_path = os.path.join(
+                                storage_folder_path, message_uid + filename
+                            )
+                            os.makedirs(os.path.dirname(attachment_path), exist_ok=True)
 
-                        with open(attachment_path, "wb") as f:
-                            f.write(attachment_data)
+                            with open(attachment_path, "wb") as f:
+                                f.write(attachment_data)
 
-                        result = deepcopy(item)
-                        result.update(email_info)
-                        result.update(
-                            {
-                                "file_name": filename,
-                                "file_path": os.path.abspath(attachment_path),
-                                "content_type": part.get_content_type(),
-                                "modification_date": internal_date,
-                            }
-                        )
-                        yield result
+                            result = deepcopy(item)
+                            result.update(email_info)
+                            result.update(
+                                {
+                                    "file_name": filename,
+                                    "file_path": os.path.abspath(attachment_path),
+                                    "content_type": part.get_content_type(),
+                                    "modification_date": internal_date,
+                                }
+                            )
+                            yield result
