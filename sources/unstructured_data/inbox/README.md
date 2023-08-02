@@ -39,6 +39,8 @@ dlt init inbox duckdb
    password = 'set me up!'
    ```
 
+Use [App password](#getting-gmail-app-password) to set the password for a Gmail account.
+
 ## Usage
 
 1. Ensure that the email account you want to access allows access by less secure apps (or use an
