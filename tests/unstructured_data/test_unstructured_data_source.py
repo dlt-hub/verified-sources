@@ -5,14 +5,15 @@ import pytest
 from dlt.extract.source import DltResource
 
 from sources.unstructured_data import unstructured_to_structured_resource
-from sources.unstructured_data.google_drive import google_drive, local_folder
+from sources.unstructured_data.local_folder import local_folder_resource
+from sources.unstructured_data.google_drive import google_drive_source
 from sources.unstructured_data.inbox import inbox_source
 
 from tests.utils import ALL_DESTINATIONS, assert_load_info
 
 
 def run_pipeline(
-    destination_name: str, queries: dict, resource: DltResource, run_async: bool
+    destination_name: str, queries: dict, resource: DltResource, run_async: bool = False
 ):
     # Mind the full_refresh flag - it makes sure that data is loaded to unique dataset.
     # This allows you to run the tests on the same database in parallel
@@ -33,14 +34,14 @@ def run_pipeline(
 
 
 @pytest.mark.parametrize("destination_name", ALL_DESTINATIONS)
-@pytest.mark.parametrize("run_async", (False, True))
 class TestUnstructuredFromLocalFolder:
     @pytest.fixture
     def data_resource(self, data_dir: str) -> DltResource:
-        # use extensions to filter files as 'extensions=(".txt", ".pdf", ...)'
-        resource = local_folder(data_dir=data_dir, extensions=(".txt", ".pdf"))
-        return resource
+        resource = local_folder_resource(data_dir=data_dir)
+        filtered_data_resource = resource.add_filter(lambda item: item["content_type"] == "application/pdf")
+        return filtered_data_resource
 
+    @pytest.mark.parametrize("run_async", (False, True))
     def test_load_info(
         self,
         destination_name: str,
@@ -57,9 +58,8 @@ class TestUnstructuredFromLocalFolder:
         destination_name: str,
         queries: dict,
         data_resource: DltResource,
-        run_async: bool,
     ) -> None:
-        pipeline, _ = run_pipeline(destination_name, queries, data_resource, run_async)
+        pipeline, _ = run_pipeline(destination_name, queries, data_resource)
         # now let's inspect the generated schema. it should contain just
         # two tables with filepaths and structured data
         schema = pipeline.default_schema
@@ -69,14 +69,14 @@ class TestUnstructuredFromLocalFolder:
         structured_data_table = tables[0]
         assert structured_data_table["name"] == "unstructured_from_local_folder"
 
-    def test_structured_data_content(
+    def test_content(
         self,
         destination_name: str,
         queries: dict,
         data_resource: DltResource,
-        run_async: bool,
     ) -> None:
-        pipeline, _ = run_pipeline(destination_name, queries, data_resource, run_async)
+        filtered_data_resource = data_resource.add_filter(lambda item: item["content_type"] == "application/pdf")
+        pipeline, _ = run_pipeline(destination_name, queries, filtered_data_resource)
         with pipeline.sql_client() as c:
             # you can use parametrized queries as well, see python dbapi
             # you can use unqualified table names
@@ -84,24 +84,25 @@ class TestUnstructuredFromLocalFolder:
                 "SELECT file_path FROM unstructured_from_local_folder"
             ) as cur:
                 rows = list(cur.fetchall())
-                assert len(rows) == 2  # 2 files were processed, .jpg was skipped
+                assert len(rows) == 1  # 1 file was processed, .jpg and .txt was skipped
 
 
 @pytest.mark.parametrize("destination_name", ALL_DESTINATIONS)
-@pytest.mark.parametrize("run_async", (False, True))
 class TestUnstructuredFromGoogleDrive:
     @pytest.fixture(scope="session")
-    def data_resource(self, tmpdir_factory, gd_folders: Sequence[str]) -> DltResource:
+    def data_resource(self, tmpdir_factory, gd_folders: Sequence[str], filter_by_mime_type: Sequence[str] = ()) -> DltResource:
         tmp_path = tmpdir_factory.mktemp("temp_data")
-        # use extensions to filter files as 'extensions=(".txt", ".pdf", ...)'
-        resource = google_drive(
+        source = google_drive_source(
             download=True,
-            extensions=(".txt", ".pdf"),
             storage_folder_path=tmp_path,
             folder_ids=gd_folders,
+            filter_by_mime_type=filter_by_mime_type,
         )
-        return resource
+        resource = source.resources["attachments"]
+        filtered_data_resource = resource.add_filter(lambda item: item["content_type"] == "application/pdf")
+        return filtered_data_resource
 
+    @pytest.mark.parametrize("run_async", (False, True))
     def test_load_info(
         self,
         destination_name: str,
@@ -118,48 +119,48 @@ class TestUnstructuredFromGoogleDrive:
         destination_name: str,
         queries: dict,
         data_resource: DltResource,
-        run_async: bool,
     ) -> None:
-        pipeline, _ = run_pipeline(destination_name, queries, data_resource, run_async)
+        pipeline, _ = run_pipeline(destination_name, queries, data_resource)
         # now let's inspect the generated schema. it should contain just
         # one table with filepaths
         schema = pipeline.default_schema
         tables = schema.data_tables()
-        assert len(tables) == 1
+        assert len(tables) == 2
         # tables are typed dicts
         structured_data_table = tables[0]
-        assert structured_data_table["name"] == "unstructured_from_google_drive"
+        assert structured_data_table["name"] == "unstructured_from_attachments"
 
-    def test_google_drive_content(
+    def test_content(
         self,
         destination_name: str,
         queries: dict,
         data_resource: DltResource,
-        run_async: bool,
     ) -> None:
-        pipeline, _ = run_pipeline(destination_name, queries, data_resource, run_async)
+        pipeline, _ = run_pipeline(destination_name, queries, data_resource)
         with pipeline.sql_client() as c:
             # you can use parametrized queries as well, see python dbapi
             # you can use unqualified table names
             with c.execute_query(
-                "SELECT file_path FROM unstructured_from_google_drive"
+                "SELECT file_path FROM unstructured_from_attachments"
             ) as cur:
                 rows = list(cur.fetchall())
-                assert len(rows) == 2  # 2 files were processed, .jpg was skipped
+                assert len(rows) == 1  # 1 file was processed, .jpg and .txt was skipped
 
 
 @pytest.mark.parametrize("destination_name", ALL_DESTINATIONS)
-@pytest.mark.parametrize("run_async", (False, True))
 class TestUnstructuredFromInbox:
     @pytest.fixture(scope="session")
     def data_resource(self, tmpdir_factory) -> DltResource:
         tmp_path = tmpdir_factory.mktemp("temp_data")
-        resource = inbox_source(
+        source = inbox_source(
             attachments=True,
             storage_folder_path=tmp_path,
         )
-        return resource.resources["attachments"]
+        resource = source.resources["attachments"]
+        filtered_data_resource = resource.add_filter(lambda item: item["content_type"] == "application/pdf")
+        return filtered_data_resource
 
+    @pytest.mark.parametrize("run_async", (False, True))
     def test_load_info(
         self,
         destination_name: str,
@@ -176,9 +177,8 @@ class TestUnstructuredFromInbox:
         destination_name: str,
         queries: dict,
         data_resource: DltResource,
-        run_async: bool,
     ) -> None:
-        pipeline, _ = run_pipeline(destination_name, queries, data_resource, run_async)
+        pipeline, _ = run_pipeline(destination_name, queries, data_resource)
         # now let's inspect the generated schema. it should contain just
         # one table with filepaths
         schema = pipeline.default_schema
@@ -193,9 +193,8 @@ class TestUnstructuredFromInbox:
         destination_name: str,
         queries: dict,
         data_resource: DltResource,
-        run_async: bool,
     ) -> None:
-        pipeline, _ = run_pipeline(destination_name, queries, data_resource, run_async)
+        pipeline, _ = run_pipeline(destination_name, queries, data_resource)
         with pipeline.sql_client() as c:
             # you can use parametrized queries as well, see python dbapi
             # you can use unqualified table names
@@ -203,17 +202,16 @@ class TestUnstructuredFromInbox:
                 "SELECT file_path FROM unstructured_from_attachments"
             ) as cur:
                 rows = list(cur.fetchall())
-                assert len(rows) == 5  # 2 files were processed, .jpg was skipped
+                assert len(rows) == 4  # 4 files were processed, other content types were skipped except pdf
 
     def test_incremental_loading(
         self,
         destination_name: str,
         queries: dict,
         data_resource: DltResource,
-        run_async: bool,
     ) -> None:
         pipeline, load_info = run_pipeline(
-            destination_name, queries, data_resource, run_async
+            destination_name, queries, data_resource
         )
         # make sure all data were loaded
         assert_load_info(load_info)
@@ -222,7 +220,6 @@ class TestUnstructuredFromInbox:
         data_extractor = data_resource | unstructured_to_structured_resource(
             queries,
             table_name=f"unstructured_from_{data_resource.name}",
-            run_async=run_async,
         )
         # run the pipeline with your parameters
         load_info = pipeline.run(data_extractor)
