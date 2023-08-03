@@ -44,9 +44,13 @@ def unstructured_to_structured_resource(
     if openai_api_key:
         os.environ["OPENAI_API_KEY"] = openai_api_key
 
-    return dlt.transformer(convert_data, name=table_name)(
-        queries, vectorstore, run_async
-    )
+    return dlt.transformer(
+        convert_data,
+        name=table_name,
+        write_disposition="merge",
+        merge_key="metadata__invoice_hash",
+        primary_key="metadata__invoice_hash",
+    )(queries, vectorstore, run_async)
 
 
 def convert_data(

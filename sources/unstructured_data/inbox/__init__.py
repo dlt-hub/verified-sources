@@ -122,7 +122,7 @@ def messages_uids(
             yield get_message_uids(base_criteria)
 
 
-@dlt.transformer(name="messages", write_disposition="replace")
+@dlt.transformer(name="messages")
 def read_messages(
     items: TDataItems,
     host: str = dlt.secrets.value,
@@ -158,7 +158,12 @@ def read_messages(
                 yield result
 
 
-@dlt.transformer(name="attachments", write_disposition="merge", primary_key="invoice_hash")
+@dlt.transformer(
+    name="attachments",
+    write_disposition="merge",
+    merge_key="invoice_hash",
+    primary_key="invoice_hash",
+)
 def get_attachments_by_uid(
     items: TDataItems,
     storage_folder_path: str,

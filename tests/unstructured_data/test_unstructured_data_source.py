@@ -216,8 +216,8 @@ class TestUnstructuredFromInbox:
             ) as cur:
                 rows = list(cur.fetchall())
                 assert (
-                    len(rows) == 4
-                )  # 4 files were processed, other content types were skipped except pdf
+                    len(rows) == 3
+                )  # 3 pdfs were processed, txt were skipped, and one duplicate was skipped
 
     def test_incremental_loading(
         self,
