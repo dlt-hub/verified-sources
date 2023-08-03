@@ -23,6 +23,7 @@ def google_drive_source(
     folder_ids: Sequence[str] = FOLDER_IDS,
     storage_folder_path: str = STORAGE_FOLDER_PATH,
     download: bool = False,
+    filter_by_mime_type: Sequence[str] = (),
 ) -> TDataItem:
     """
     Retrieves files from specified Google Drive folders.
@@ -37,6 +38,7 @@ def google_drive_source(
         download (bool): Indicates whether to download the files or not. If True, the files will be downloaded and stored locally.
             If False, only the file names and IDs will be yielded without downloading.
             Defaults to False.
+        filter_by_mime_type (Sequence[str], optional): A sequence of MIME types used to filter attachments based on their content type. Default is an empty sequence.
 
     Yields:
         TDataItem: A dictionary representing a file.
@@ -53,7 +55,7 @@ def google_drive_source(
         storage_folder_path_.mkdir(exist_ok=True, parents=True)
 
         yield get_files_uris(service, folder_ids) | download_files(
-            service, storage_folder_path_
+            service, storage_folder_path_, filter_by_mime_type
         )
     else:
         yield get_files_uris(service, folder_ids)
@@ -93,9 +95,15 @@ def convert_response_to_standard(response: TDataItem) -> TDataItem:
 
 @dlt.transformer(name="attachments")
 def download_files(
-    items: TDataItems, service: Any, storage_folder_path: Path
+    items: TDataItems,
+    service: Any,
+    storage_folder_path: Path,
+    filter_by_mime_type: Sequence[str] = (),
 ) -> TDataItem:
     for item in items:
+        if filter_by_mime_type and item["content_type"] not in filter_by_mime_type:
+            continue
+
         file_name, file_id = item["file_name"], item["file_id"]
         result = deepcopy(item)
 

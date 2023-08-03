@@ -40,17 +40,12 @@ def from_google_drive_to_structured() -> None:
         full_refresh=True,
     )
 
-    # use extensions to filter files as 'extensions=(".txt", ".pdf", ...)'
-    data_source = google_drive_source(download=True)
-
+    data_source = google_drive_source(download=True, filter_by_mime_type=("application/pdf", ))
     data_resource = data_source.resources["attachments"]
-    filtered_data_resource = data_resource.add_filter(
-        lambda item: item["content_type"] == "application/pdf"
-    )
 
     # run the pipeline with your parameters
     load_info = pipeline.run(
-        filtered_data_resource
+        data_resource
         | unstructured_to_structured_resource(
             table_name=f"unstructured_from_{data_source.name}"
         )
@@ -85,5 +80,5 @@ def from_inbox_to_structured() -> None:
 
 if __name__ == "__main__":
     # from_local_folder_to_structured(data_dir=".")
-    # from_google_drive_to_structured()
-    from_inbox_to_structured()
+    from_google_drive_to_structured()
+    # from_inbox_to_structured()
