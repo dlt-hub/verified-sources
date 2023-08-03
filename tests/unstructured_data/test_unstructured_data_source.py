@@ -5,9 +5,9 @@ import pytest
 from dlt.extract.source import DltResource
 
 from sources.unstructured_data import unstructured_to_structured_resource
-from sources.unstructured_data.local_folder import local_folder_resource
 from sources.unstructured_data.google_drive import google_drive_source
 from sources.unstructured_data.inbox import inbox_source
+from sources.unstructured_data.local_folder import local_folder_resource
 
 from tests.utils import ALL_DESTINATIONS, assert_load_info
 
@@ -38,7 +38,9 @@ class TestUnstructuredFromLocalFolder:
     @pytest.fixture
     def data_resource(self, data_dir: str) -> DltResource:
         resource = local_folder_resource(data_dir=data_dir)
-        filtered_data_resource = resource.add_filter(lambda item: item["content_type"] == "application/pdf")
+        filtered_data_resource = resource.add_filter(
+            lambda item: item["content_type"] == "application/pdf"
+        )
         return filtered_data_resource
 
     @pytest.mark.parametrize("run_async", (False, True))
@@ -75,7 +77,9 @@ class TestUnstructuredFromLocalFolder:
         queries: dict,
         data_resource: DltResource,
     ) -> None:
-        filtered_data_resource = data_resource.add_filter(lambda item: item["content_type"] == "application/pdf")
+        filtered_data_resource = data_resource.add_filter(
+            lambda item: item["content_type"] == "application/pdf"
+        )
         pipeline, _ = run_pipeline(destination_name, queries, filtered_data_resource)
         with pipeline.sql_client() as c:
             # you can use parametrized queries as well, see python dbapi
@@ -90,7 +94,12 @@ class TestUnstructuredFromLocalFolder:
 @pytest.mark.parametrize("destination_name", ALL_DESTINATIONS)
 class TestUnstructuredFromGoogleDrive:
     @pytest.fixture(scope="session")
-    def data_resource(self, tmpdir_factory, gd_folders: Sequence[str], filter_by_mime_type: Sequence[str] = ()) -> DltResource:
+    def data_resource(
+        self,
+        tmpdir_factory,
+        gd_folders: Sequence[str],
+        filter_by_mime_type: Sequence[str] = (),
+    ) -> DltResource:
         tmp_path = tmpdir_factory.mktemp("temp_data")
         source = google_drive_source(
             download=True,
@@ -99,7 +108,9 @@ class TestUnstructuredFromGoogleDrive:
             filter_by_mime_type=filter_by_mime_type,
         )
         resource = source.resources["attachments"]
-        filtered_data_resource = resource.add_filter(lambda item: item["content_type"] == "application/pdf")
+        filtered_data_resource = resource.add_filter(
+            lambda item: item["content_type"] == "application/pdf"
+        )
         return filtered_data_resource
 
     @pytest.mark.parametrize("run_async", (False, True))
@@ -157,7 +168,9 @@ class TestUnstructuredFromInbox:
             storage_folder_path=tmp_path,
         )
         resource = source.resources["attachments"]
-        filtered_data_resource = resource.add_filter(lambda item: item["content_type"] == "application/pdf")
+        filtered_data_resource = resource.add_filter(
+            lambda item: item["content_type"] == "application/pdf"
+        )
         return filtered_data_resource
 
     @pytest.mark.parametrize("run_async", (False, True))
@@ -202,7 +215,9 @@ class TestUnstructuredFromInbox:
                 "SELECT file_path FROM unstructured_from_attachments"
             ) as cur:
                 rows = list(cur.fetchall())
-                assert len(rows) == 4  # 4 files were processed, other content types were skipped except pdf
+                assert (
+                    len(rows) == 4
+                )  # 4 files were processed, other content types were skipped except pdf
 
     def test_incremental_loading(
         self,
@@ -210,9 +225,7 @@ class TestUnstructuredFromInbox:
         queries: dict,
         data_resource: DltResource,
     ) -> None:
-        pipeline, load_info = run_pipeline(
-            destination_name, queries, data_resource
-        )
+        pipeline, load_info = run_pipeline(destination_name, queries, data_resource)
         # make sure all data were loaded
         assert_load_info(load_info)
         print(load_info)

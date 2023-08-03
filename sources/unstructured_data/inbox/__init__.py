@@ -47,7 +47,10 @@ def inbox_source(
         start_date=start_date,
     )
     if attachments:
-        return uids | get_attachments_by_uid(storage_folder_path=storage_folder_path, filter_by_mime_type=filter_by_mime_type)
+        return uids | get_attachments_by_uid(
+            storage_folder_path=storage_folder_path,
+            filter_by_mime_type=filter_by_mime_type,
+        )
     else:
         return uids | read_messages
 
@@ -163,7 +166,7 @@ def get_attachments_by_uid(
     email_account: str = dlt.secrets.value,
     password: str = dlt.secrets.value,
     include_body: bool = False,
-    filter_by_mime_type: Sequence[str] = ()
+    filter_by_mime_type: Sequence[str] = (),
 ) -> TDataItem:
     """Downloads attachments from email messages based on the provided message UIDs.
 
