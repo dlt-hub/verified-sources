@@ -1,11 +1,8 @@
 import io
-import logging
 from typing import Any
 
 from googleapiclient.errors import HttpError
 from googleapiclient.http import MediaIoBaseDownload
-
-logging.basicConfig(format="%(asctime)s WARNING: %(message)s", level=logging.WARNING)
 
 
 def download_file_from_google_drive(service: Any, file_id: str, file_path: str) -> None:

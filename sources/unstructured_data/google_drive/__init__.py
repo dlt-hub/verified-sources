@@ -1,10 +1,10 @@
 """This resource downloads files and collects filepaths from Google Drive folder to destinations"""
-import logging
 from copy import deepcopy
 from pathlib import Path
 from typing import Any, Sequence, Union
 
 import dlt
+from dlt.common import logger
 from dlt.extract.source import TDataItem, TDataItems
 from dlt.sources.credentials import GcpOAuthCredentials, GcpServiceAccountCredentials
 from googleapiclient.discovery import build
@@ -77,7 +77,7 @@ def get_files_uris(service: Any, folder_ids: Sequence[str]) -> TDataItems:
         items = results.get("files", [])
 
         if not items:
-            logging.warning(f"No files found in directory {folder_id}!")
+            logger.warning(f"No files found in directory {folder_id}!")
         else:
             yield [convert_response_to_standard(item) for item in items]
 
