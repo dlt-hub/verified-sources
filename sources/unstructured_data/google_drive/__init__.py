@@ -7,7 +7,7 @@ import dlt
 from dlt.common import logger
 from dlt.extract.source import TDataItem, TDataItems
 from dlt.sources.credentials import GcpOAuthCredentials, GcpServiceAccountCredentials
-from googleapiclient.discovery import build
+from googleapiclient.discovery import build  # type: ignore
 
 from .helpers import download_file_from_google_drive
 from .settings import FOLDER_IDS, STORAGE_FOLDER_PATH

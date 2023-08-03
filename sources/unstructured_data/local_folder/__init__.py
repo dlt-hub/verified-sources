@@ -12,8 +12,8 @@ MIME_TYPE_MAPPER = {
 }
 
 
-@dlt.resource(write_disposition="replace")
-def local_folder_source(
+@dlt.resource(write_disposition="replace", name="local_folder")
+def local_folder_resource(
     data_dir: Union[str, Sequence[str]],
 ) -> TDataItem:
     """

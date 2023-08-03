@@ -3,7 +3,7 @@ from unstructured_data import unstructured_to_structured_resource
 
 
 def from_local_folder_to_structured(data_dir: str) -> None:
-    from unstructured_data.local_folder import local_folder_source
+    from unstructured_data.local_folder import local_folder_resource
 
     # configure the pipeline with your destination details
     pipeline = dlt.pipeline(
@@ -13,7 +13,7 @@ def from_local_folder_to_structured(data_dir: str) -> None:
         full_refresh=True,
     )
 
-    data_resource = local_folder_source(data_dir)
+    data_resource = local_folder_resource(data_dir)
     filtered_data_resource = data_resource.add_filter(
         lambda item: item["content_type"] == "application/pdf"
     )

@@ -1,8 +1,8 @@
 import io
 from typing import Any
 
-from googleapiclient.errors import HttpError
-from googleapiclient.http import MediaIoBaseDownload
+from googleapiclient.errors import HttpError   # type: ignore
+from googleapiclient.http import MediaIoBaseDownload   # type: ignore
 
 
 def download_file_from_google_drive(service: Any, file_id: str, file_path: str) -> None:

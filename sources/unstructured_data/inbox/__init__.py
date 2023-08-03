@@ -103,6 +103,7 @@ def messages_uids(
 
             if not message_uids:
                 logger.warning("No emails found.")
+                return None
             else:
                 return [
                     {"message_uid": int(message_uid)} for message_uid in message_uids
