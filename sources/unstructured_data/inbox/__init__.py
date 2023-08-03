@@ -158,7 +158,7 @@ def read_messages(
                 yield result
 
 
-@dlt.transformer(name="attachments", write_disposition="replace")
+@dlt.transformer(name="attachments", write_disposition="merge", primary_key="invoice_hash")
 def get_attachments_by_uid(
     items: TDataItems,
     storage_folder_path: str,
@@ -204,6 +204,8 @@ def get_attachments_by_uid(
                         filename = part.get_filename()
                         if filename:
                             attachment_data = part.get_payload(decode=True)
+                            invoice_hash = hash(attachment_data)
+
                             attachment_path = os.path.join(
                                 storage_folder_path, message_uid + filename
                             )
@@ -220,6 +222,7 @@ def get_attachments_by_uid(
                                     "file_path": os.path.abspath(attachment_path),
                                     "content_type": content_type,
                                     "modification_date": internal_date,
+                                    "invoice_hash": str(invoice_hash),
                                 }
                             )
                             yield result
