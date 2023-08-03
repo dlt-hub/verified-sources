@@ -57,26 +57,27 @@ Use [App password](#getting-gmail-app-password) to set the password for a Gmail 
 
 ## Functionality
 
-### inbox_source
+### inbox_source source
 
 This is a dlt source that collects inbox emails and, if `attachments=True`, downloads attachments to a
 local folder (STORAGE_FOLDER_PATH) based on the specified parameters.
 
-### messages_uids
+### messages_uids resource
 
 This is a dlt resource that connects to the IMAP server, logs in to the email account, and fetches email messages
 from the specified folder ('INBOX' by default). It yields a dictionary containing only message UID.
 
-### read_messages
+### read_messages resource
 
-This dlt transformer resource takes an email message item from another resource (e.g. `messages_uids`)
-and fetches email messages using its UID. It yields a dictionary containing email metadata
+This dlt transformer resource takes an email message items from another resource (e.g. `messages_uids`)
+and fetches the corresponding email messages using their UID. It yields a dictionary containing email metadata
 such as message UID, message ID, sender, subject, date, modification date, content type, and email body.
 
-### get_attachments_by_uid
+### get_attachments_by_uid resource
 
-This dlt transformer resource takes an email message item from another resource (e.g. `messages_uids`)
-and extracts attachments from the email message using its UID. It connects to the IMAP server,
+This dlt transformer resource takes an email message items from another resource (e.g. `messages_uids`)
+and extracts attachments from the email message using their UID.
+It connects to the IMAP server,
 fetches the email message by its UID, and saves attachments to the specified STORAGE_FOLDER_PATH.
 It yields a dictionary containing email metadata such as message UID, sender,
 date, content type, etc., and under the key "envelope" it returns dict with
@@ -101,7 +102,7 @@ pipeline = dlt.pipeline(
     full_refresh=False,
 )
 
-data_source = inbox_source(attachments=True)
+data_source = inbox_source(attachments=True, filter_by_mime_type=("application/pdf",))
 # run the pipeline with your parameters
 load_info = pipeline.run(data_source)
 # pretty print the information on data that was loaded

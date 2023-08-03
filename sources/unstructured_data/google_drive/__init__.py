@@ -25,7 +25,7 @@ def google_drive_source(
     download: bool = False,
 ) -> TDataItem:
     """
-    Retrieves files from a specified Google Drive folder.
+    Retrieves files from specified Google Drive folders.
 
     Args:
         credentials (Dict[str, Any]): The authorized user info in Google format for authenticating with Google Drive API.

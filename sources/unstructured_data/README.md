@@ -99,6 +99,7 @@ The processing results are retrieved as a dictionary, which has a structure simi
     'invoice_number': 'INV-549283',
     'service_description': 'Premium widget delivery and installation services',
     'phone_number': 'None'
+    'metadata': {...},
 }
 ```
 Then `dlt` saves all processed structured data to the database (e.g. duckdb).
@@ -108,7 +109,7 @@ To ensure that everything loads as expected, use the command:
 ```bash
 dlt pipeline <pipeline_name> show
 ```
-For example, the pipeline_name for the above pipeline example is `unstructured_local_folder`,
+For example, the pipeline_name for the above pipeline example is `unstructured_inbox`,
 you can use any custom name instead. So your command would look like:
 
 ```bash
