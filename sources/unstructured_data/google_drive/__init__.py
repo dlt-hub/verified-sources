@@ -1,26 +1,25 @@
 """This resource downloads files and collects filepaths from Google Drive folder to destinations"""
 import logging
+from copy import deepcopy
 from pathlib import Path
-from typing import Sequence, Dict, Any
+from typing import Any, Sequence, Union
 
 import dlt
-from dlt.extract.source import TDataItem
+from dlt.extract.source import TDataItem, TDataItems
+from dlt.sources.credentials import GcpOAuthCredentials, GcpServiceAccountCredentials
+from googleapiclient.discovery import build
 
-from .helpers import build_service, download_file_from_google_drive, get_files_uris
-from .settings import (
-    AUTHORIZED_USER_PATH,
-    FOLDER_IDS,
-    STORAGE_FOLDER_PATH,
-    ClIENT_SECRET_PATH,
-)
+from .helpers import download_file_from_google_drive
+from .settings import FOLDER_IDS, STORAGE_FOLDER_PATH
+
+SCOPE = "https://www.googleapis.com/auth/drive.readonly"
 
 
-@dlt.resource(write_disposition="replace", name="google_drive")
+@dlt.source(name="google_drive")
 def google_drive_source(
-    extensions: Sequence[str] = (".txt", ".pdf"),
-    client_secret_path: str = ClIENT_SECRET_PATH,
-    token_path: str = AUTHORIZED_USER_PATH,
-    credentials: Dict[str, Any] = dlt.secrets.value,
+    credentials: Union[
+        GcpOAuthCredentials, GcpServiceAccountCredentials
+    ] = dlt.secrets.value,
     folder_ids: Sequence[str] = FOLDER_IDS,
     storage_folder_path: str = STORAGE_FOLDER_PATH,
     download: bool = False,
@@ -29,12 +28,6 @@ def google_drive_source(
     Retrieves files from a specified Google Drive folder.
 
     Args:
-        extensions (Sequence[str]): A sequence of file extensions to filter the files. Only files with these extensions will be retrieved.
-            Defaults to (".txt", ".pdf").
-        client_secret_path (str): The path to the client secret JSON file for authenticating with Google Drive API.
-            Defaults to ClIENT_SECRET_PATH (see settings.py).
-        token_path (str): The path to the token JSON file for storing and reusing the authentication token.
-            Defaults to AUTHORIZED_USER_PATH (see settings.py).
         credentials (Dict[str, Any]): The authorized user info in Google format for authenticating with Google Drive API.
             Defaults to dlt.secrets.value.
         folder_ids (Sequence[str]): A sequence of folder IDs from which to retrieve the files.
@@ -46,54 +39,69 @@ def google_drive_source(
             Defaults to False.
 
     Yields:
-        TDataItem: A dictionary representing a file. If download is True, the dictionary contains the following keys:
-            - "file_path" (str): The local path of the downloaded file.
-            - "file_name" (str): The name of the file.
-            - "file_id" (str): The ID of the file in Google Drive.
-            - "folder_id" (str): The ID of the Google Drive folder.
-        If download is False, the dictionary contains the following keys:
-            - "file_name" (str): The name of the file.
-            - "file_id" (str): The ID of the file in Google Drive.
-            - "folder_id" (str): The ID of the Google Drive folder.
-    Raises:
-        ValueError: If no valid credentials are provided. Please provide either credentials, client secret path, or token path.
+        TDataItem: A dictionary representing a file.
+
     """
     # check if credentials are provided
-    if not credentials and not client_secret_path and not token_path:
-        raise ValueError(
-            "Missing credentials: Please provide either credentials, client secret path, or token path."
+    if isinstance(credentials, GcpOAuthCredentials):
+        credentials.auth(SCOPE)
+
+    service = build("drive", "v3", credentials=credentials.to_native_credentials())
+
+    if download:
+        storage_folder_path_ = Path(storage_folder_path)
+        storage_folder_path_.mkdir(exist_ok=True, parents=True)
+
+        yield get_files_uris(service, folder_ids) | download_files(
+            service, storage_folder_path_
+        )
+    else:
+        yield get_files_uris(service, folder_ids)
+
+
+@dlt.resource(name="files_ids")
+def get_files_uris(service: Any, folder_ids: Sequence[str]) -> TDataItems:
+    # Query the Google Drive API to get the files with the specified folder ID and extension
+    for folder_id in folder_ids:
+        results = (
+            service.files()
+            .list(
+                q=f"'{folder_id}' in parents",
+                fields="nextPageToken, files",
+            )
+            .execute()
         )
 
-    # create drive api client
-    service = build_service(client_secret_path, token_path, credentials)
+        items = results.get("files", [])
 
-    for folder_id in folder_ids:
-        uris = get_files_uris(service, folder_id, extensions=extensions)
-
-        if not uris:
+        if not items:
             logging.warning(f"No files found in directory {folder_id}!")
+        else:
+            yield [convert_response_to_standard(item) for item in items]
 
-        storage_folder_path_ = Path(storage_folder_path)
 
-        if download:
-            storage_folder_path_.mkdir(exist_ok=True, parents=True)
+def convert_response_to_standard(response: TDataItem) -> TDataItem:
+    return {
+        "content_type": response["mimeType"],
+        "parents": response["parents"],
+        "file_id": response["id"],
+        "file_name": response["name"],
+        "modification_date": response["modifiedTime"],
+        "date": response["createdTime"],
+    }
 
-        for file_name, file_id in uris.items():
-            if download:
-                file_path = storage_folder_path_ / file_name
 
-                download_file_from_google_drive(service, file_id, file_path.as_posix())
+@dlt.transformer(name="attachments")
+def download_files(
+    items: TDataItems, service: Any, storage_folder_path: Path
+) -> TDataItem:
+    for item in items:
+        file_name, file_id = item["file_name"], item["file_id"]
+        result = deepcopy(item)
 
-                if file_path.is_file():
-                    yield {
-                        "file_path": file_path.absolute().as_posix(),
-                        "file_name": file_name,
-                        "file_id": file_id,
-                        "folder_id": folder_id,
-                    }
-            else:
-                yield {
-                    "file_name": file_name,
-                    "file_id": file_id,
-                    "folder_id": folder_id,
-                }
+        file_path = storage_folder_path / file_name
+        download_file_from_google_drive(service, file_id, file_path.as_posix())
+        if file_path.is_file():
+            result["file_path"] = file_path.absolute().as_posix()
+
+        yield result

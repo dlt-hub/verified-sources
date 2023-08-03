@@ -1,11 +1,10 @@
-from typing import Dict
-
 import dlt
 from unstructured_data import unstructured_to_structured_resource
 
 
-def from_local_folder_to_structured(data_dir: str, queries: Dict[str, str]) -> None:
+def from_local_folder_to_structured(data_dir: str) -> None:
     from unstructured_data.local_folder import local_folder_source
+
     # configure the pipeline with your destination details
     pipeline = dlt.pipeline(
         pipeline_name="unstructured_local_folder",
@@ -14,13 +13,14 @@ def from_local_folder_to_structured(data_dir: str, queries: Dict[str, str]) -> N
         full_refresh=True,
     )
 
-    # use extensions to filter files as 'extensions=(".txt", ".pdf", ...)'
-    data_resource = local_folder_source(data_dir, extensions=(".txt", ".pdf"))
+    data_resource = local_folder_source(data_dir)
+    filtered_data_resource = data_resource.add_filter(
+        lambda item: item["content_type"] == "application/pdf"
+    )
     # run the pipeline with your parameters
     load_info = pipeline.run(
-        data_resource
+        filtered_data_resource
         | unstructured_to_structured_resource(
-            queries,
             table_name=f"unstructured_from_{data_resource.name}",
             run_async=False,
         )
@@ -29,8 +29,9 @@ def from_local_folder_to_structured(data_dir: str, queries: Dict[str, str]) -> N
     print(load_info)
 
 
-def from_google_drive_to_structured(queries: Dict[str, str]) -> None:
+def from_google_drive_to_structured() -> None:
     from unstructured_data.google_drive import google_drive_source
+
     # configure the pipeline with your destination details
     pipeline = dlt.pipeline(
         pipeline_name="unstructured_google_drive",
@@ -40,12 +41,18 @@ def from_google_drive_to_structured(queries: Dict[str, str]) -> None:
     )
 
     # use extensions to filter files as 'extensions=(".txt", ".pdf", ...)'
-    data_resource = google_drive_source(download=True, extensions=(".txt", ".pdf"))
+    data_source = google_drive_source(download=True)
+
+    data_resource = data_source.resources["attachments"]
+    filtered_data_resource = data_resource.add_filter(
+        lambda item: item["content_type"] == "application/pdf"
+    )
+
     # run the pipeline with your parameters
     load_info = pipeline.run(
-        data_resource
+        filtered_data_resource
         | unstructured_to_structured_resource(
-            queries, table_name=f"unstructured_from_{data_resource.name}"
+            table_name=f"unstructured_from_{data_source.name}"
         )
     )
     # pretty print the information on data that was loaded
@@ -54,6 +61,7 @@ def from_google_drive_to_structured(queries: Dict[str, str]) -> None:
 
 def from_inbox_to_structured() -> None:
     from unstructured_data.inbox import inbox_source
+
     # configure the pipeline with your destination details
     pipeline = dlt.pipeline(
         pipeline_name="unstructured_inbox",
@@ -70,7 +78,7 @@ def from_inbox_to_structured() -> None:
     load_info = pipeline.run(
         data_resource
         | unstructured_to_structured_resource(
-            table_name=f"unstructured_from_{data_resource.name}"
+            table_name=f"unstructured_from_{data_source.name}"
         )
     )
     # pretty print the information on data that was loaded
@@ -78,6 +86,6 @@ def from_inbox_to_structured() -> None:
 
 
 if __name__ == "__main__":
-    # from_local_folder_to_structured(data_dir=".", queries=queries)
-    # from_google_drive_to_structured(queries)
+    # from_local_folder_to_structured(data_dir=".")
+    # from_google_drive_to_structured()
     from_inbox_to_structured()

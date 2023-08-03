@@ -1,5 +1,5 @@
-from typing import Any, Dict, List, Mapping, Type, Union, Tuple
 import asyncio
+from typing import Any, Dict, List, Mapping, Tuple, Type, Union
 
 from langchain.document_loaders import UnstructuredFileLoader
 from langchain.indexes import VectorstoreIndexCreator
