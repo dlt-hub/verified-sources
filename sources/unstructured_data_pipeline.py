@@ -80,5 +80,5 @@ def from_inbox_to_structured() -> None:
 
 if __name__ == "__main__":
     # from_local_folder_to_structured(data_dir=".")
-    from_google_drive_to_structured()
-    # from_inbox_to_structured()
+    # from_google_drive_to_structured()
+    from_inbox_to_structured()
