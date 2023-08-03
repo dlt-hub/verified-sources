@@ -60,6 +60,3 @@ access_token_expires_at=1688821881
 
 [sources.workable]
 subdomain="dlthub-test"
-
-[sources.unstructured_data]
-vectorstore = "chroma"
