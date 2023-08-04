@@ -226,7 +226,7 @@ def get_attachments_by_uid(
                                     "file_path": os.path.abspath(attachment_path),
                                     "content_type": content_type,
                                     "modification_date": internal_date,
-                                    "invoice_hash": str(data_hash),
+                                    "data_hash": str(data_hash),
                                 }
                             )
                             yield result
