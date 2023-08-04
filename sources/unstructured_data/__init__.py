@@ -48,8 +48,8 @@ def unstructured_to_structured_resource(
         convert_data,
         name=table_name,
         write_disposition="merge",
-        merge_key="metadata__invoice_hash",
-        primary_key="metadata__invoice_hash",
+        merge_key="metadata__data_hash",
+        primary_key="metadata__data_hash",
     )(queries, vectorstore, run_async)
 
 

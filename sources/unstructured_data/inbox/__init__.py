@@ -95,7 +95,6 @@ def messages_uids(
             f"(UID {str(int(last_message_num))}:*)",
         ]
 
-        # TODO: fix it for all groups
         if gmail_group:
             logger.info(f"Load all emails for Group: {gmail_group}")
             base_criteria.extend([f"(TO {gmail_group})"])
@@ -161,8 +160,8 @@ def read_messages(
 @dlt.transformer(
     name="attachments",
     write_disposition="merge",
-    merge_key="invoice_hash",
-    primary_key="invoice_hash",
+    merge_key="data_hash",
+    primary_key="data_hash",
 )
 def get_attachments_by_uid(
     items: TDataItems,
@@ -209,7 +208,7 @@ def get_attachments_by_uid(
                         filename = part.get_filename()
                         if filename:
                             attachment_data = part.get_payload(decode=True)
-                            invoice_hash = hash(attachment_data)
+                            data_hash = hash(attachment_data)
 
                             attachment_path = os.path.join(
                                 storage_folder_path, message_uid + filename
@@ -227,7 +226,7 @@ def get_attachments_by_uid(
                                     "file_path": os.path.abspath(attachment_path),
                                     "content_type": content_type,
                                     "modification_date": internal_date,
-                                    "invoice_hash": str(invoice_hash),
+                                    "invoice_hash": str(data_hash),
                                 }
                             )
                             yield result
