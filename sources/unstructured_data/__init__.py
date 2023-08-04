@@ -74,23 +74,25 @@ def convert_data(
     """
     if unstructured_item.get("file_path") is None:
         return None
-
-    if run_async:
-        logger.info("Run conversion asynchronously.")
-        response = asyncio.run(
-            aprocess_file_to_structured(
+    try:
+        if run_async:
+            logger.info("Run conversion asynchronously.")
+            response = asyncio.run(
+                aprocess_file_to_structured(
+                    unstructured_item["file_path"],
+                    queries,
+                    vectorstore_mapping[vectorstore],
+                )
+            )
+        else:
+            response = process_file_to_structured(
                 unstructured_item["file_path"],
                 queries,
                 vectorstore_mapping[vectorstore],
             )
-        )
-    else:
-        response = process_file_to_structured(
-            unstructured_item["file_path"],
-            queries,
-            vectorstore_mapping[vectorstore],
-        )
+        response["file_path"] = unstructured_item.pop("file_path")
+        response["metadata"] = unstructured_item
+        yield response
 
-    response["file_path"] = unstructured_item.pop("file_path")
-    response["metadata"] = unstructured_item
-    yield response
+    except ValueError as error:
+        logger.warning(f"File {unstructured_item['file_path']} has unsupported format: {error}")
