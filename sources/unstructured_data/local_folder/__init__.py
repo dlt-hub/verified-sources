@@ -1,15 +1,10 @@
 """Those resources collect filepaths from local folder to destinations"""
+import mimetypes
 from pathlib import Path
 from typing import Sequence, Union
 
 import dlt
 from dlt.extract.source import TDataItem
-
-MIME_TYPE_MAPPER = {
-    ".txt": "text/plain",
-    ".pdf": "application/pdf",
-    ".ics": "application/ics",
-}
 
 
 @dlt.resource(write_disposition="replace", name="local_folder")
@@ -46,5 +41,5 @@ def get_files(data_dir: str) -> TDataItem:
             yield {
                 "file_path": file.as_posix(),
                 "file_name": file.name,
-                "content_type": MIME_TYPE_MAPPER.get(file.suffix, "other"),
+                "content_type": mimetypes.guess_type(file.name)[0],
             }
