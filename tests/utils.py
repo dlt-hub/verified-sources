@@ -1,4 +1,5 @@
 import os
+import platform
 import pytest
 from typing import Any, Iterator, List
 from os import environ
@@ -28,6 +29,10 @@ ALL_DESTINATIONS = dlt.config.get("ALL_DESTINATIONS", list) or [
 ]
 # ALL_DESTINATIONS = ["duckdb"]
 # ALL_DESTINATIONS = ["bigquery"]
+
+skipifwindows = pytest.mark.skipif(
+    platform.system() == "Windows", reason="does not runs on windows"
+)
 
 
 @pytest.fixture(autouse=True)

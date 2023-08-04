@@ -9,7 +9,7 @@ from sources.unstructured_data.google_drive import google_drive_source
 from sources.unstructured_data.inbox import inbox_source
 from sources.unstructured_data.local_folder import local_folder_resource
 
-from tests.utils import ALL_DESTINATIONS, assert_load_info
+from tests.utils import ALL_DESTINATIONS, assert_load_info, skipifwindows
 
 
 def run_pipeline(
@@ -33,6 +33,7 @@ def run_pipeline(
     return pipeline, load_info
 
 
+@skipifwindows
 @pytest.mark.parametrize("destination_name", ALL_DESTINATIONS)
 class TestUnstructuredFromLocalFolder:
     @pytest.fixture
@@ -91,6 +92,7 @@ class TestUnstructuredFromLocalFolder:
                 assert len(rows) == 1  # 1 file was processed, .jpg and .txt was skipped
 
 
+@skipifwindows
 @pytest.mark.parametrize("destination_name", ALL_DESTINATIONS)
 class TestUnstructuredFromGoogleDrive:
     @pytest.fixture(scope="session")
@@ -158,6 +160,7 @@ class TestUnstructuredFromGoogleDrive:
                 assert len(rows) == 1  # 1 file was processed, .jpg and .txt was skipped
 
 
+@skipifwindows
 @pytest.mark.parametrize("destination_name", ALL_DESTINATIONS)
 class TestUnstructuredFromInbox:
     @pytest.fixture(scope="session")

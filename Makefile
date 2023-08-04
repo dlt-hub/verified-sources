@@ -22,7 +22,7 @@ has-poetry:
 	poetry --version
 
 dev: has-poetry
-	poetry install
+	poetry install --without unstructured_data
 
 lint-dlt-init:
 	poetry run ./check-requirements.py
@@ -41,7 +41,7 @@ lint: lint-code lint-dlt-init
 format:
 	poetry run black ./
 
-format-lint: format lint 
+format-lint: format lint
 
 test:
 	poetry run pytest tests
