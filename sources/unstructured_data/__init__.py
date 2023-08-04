@@ -95,4 +95,6 @@ def convert_data(
         yield response
 
     except ValueError as error:
-        logger.warning(f"File {unstructured_item['file_path']} has unsupported format: {error}")
+        logger.warning(
+            f"File {unstructured_item['file_path']} has unsupported format: {error}"
+        )
