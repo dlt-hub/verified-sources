@@ -1,17 +1,9 @@
-import logging
 from typing import Optional, TypedDict, Dict
 
 from dlt.common import pendulum, logger
+from dlt.common.time import ensure_pendulum_datetime
 from dlt.common.typing import DictStrAny, DictStrStr, TDataItem
 from dlt.common.time import parse_iso_like_datetime
-
-
-from .credentials import (
-    ZendeskCredentialsToken,
-    ZendeskCredentialsEmailPass,
-    ZendeskCredentialsOAuth,
-    TZendeskCredentials,
-)
 
 
 class TCustomFieldInfo(TypedDict):
@@ -22,7 +14,7 @@ class TCustomFieldInfo(TypedDict):
 def _parse_date_or_none(value: Optional[str]) -> Optional[pendulum.DateTime]:
     if not value:
         return None
-    return parse_iso_like_datetime(value)
+    return ensure_pendulum_datetime(value)
 
 
 def process_ticket(
