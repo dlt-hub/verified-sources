@@ -125,71 +125,67 @@ def extract_spreadsheet_id_from_url(url: str) -> str:
     raise ValueError(f"Invalid URL. Cannot find spreadsheet ID in url: {url}")
 
 
-def get_range_headers(range_metadata: List[DictStrAny], range_name: str) -> List[str]:
+def get_range_headers(headers_metadata: List[DictStrAny], range_name: str) -> List[str]:
     """
     Retrieves the headers for columns from the metadata of a range.
 
     Args:
-        range_metadata (List[DictStrAny]): Metadata for the first 2 rows of a range.
+        headers_metadata (List[DictStrAny]): Metadata for the first 2 rows of a range.
         range_name (str): The name of the range as appears in the metadata.
 
     Returns:
         List[str]: A list of headers.
     """
     headers = []
-    for idx, header in enumerate(range_metadata[0]["values"]):
+    for idx, header in enumerate(headers_metadata):
         header_val: str = None
-        automatic_val = f"col_{idx+1}"
         if header:
             if "stringValue" in header["effectiveValue"]:
                 header_val = header["formattedValue"]
             else:
                 logger.warning(
-                    f"In range {range_name}, header value: {header['formattedValue']} is not a string! Automatic header name {automatic_val} was used"
+                    f"In range {range_name}, header value: {header['formattedValue']} is not a string!"
                 )
+                return None
         else:
             logger.warning(
-                f"In range {range_name}, header at position {idx+1} is not missing! Automatic header name {automatic_val} was used"
+                f"In range {range_name}, header at position {idx+1} is not missing!"
             )
-
-        if not header_val:
-            header_val = automatic_val
+            return None
         headers.append(header_val)
 
     # make sure that headers are unique, first normalize the headers
     header_mappings = {
         h: dlt.current.source_schema().naming.normalize_identifier(h) for h in headers
     }
-    print(header_mappings)
     if len(set(header_mappings.values())) != len(headers):
-        logger.error(
+        logger.warning(
             "Header names must be unique otherwise you risk that data in columns with duplicate header names to be lost. Note that several destinations require "
             + "that column names are normalized ie. must be lower or upper case and without special characters. dlt normalizes those names for you but it may "
             + f"result in duplicate column names. Headers in range {range_name} are mapped as follows: "
             + ", ".join([f"{k}->{v}" for k, v in header_mappings.items()])
             + ". Please use make your header names unique."
         )
-        raise ValueError(header_mappings)
+        return None
 
     return headers
 
 
-def get_data_types(range_metadata: List[DictStrAny]) -> List[TDataType]:
+def get_data_types(data_row_metadata: List[DictStrAny]) -> List[TDataType]:
     """
     Determines if each column in the first line of a range contains datetime objects.
 
     Args:
-        range_metadata (List[DictStrAny]): Metadata for the first 2 rows in a range.
+        data_row_metadata (List[DictStrAny]): Metadata of the first row of data
 
     Returns:
-        List[bool]: A list of boolean values indicating whether each column in the first line contains datetime objects.
+        List[TDataType]: "timestamp" or "data" indicating the date/time type for a column, otherwise None
     """
 
     # get data for 1st column and process them, if empty just return an empty list
     try:
-        sample_values = range_metadata[1]["values"]
-        data_types: List[TDataType] = [None] * len(sample_values)
-        for idx, val_dict in enumerate(sample_values):
+        data_types: List[TDataType] = [None] * len(data_row_metadata)
+        for idx, val_dict in enumerate(data_row_metadata):
             try:
                 data_type = val_dict["effectiveFormat"]["numberFormat"]["type"]
                 if data_type in ["DATE_TIME", "TIME"]:
@@ -240,7 +236,7 @@ def process_range(
     Args:
         sheet_val (List[List[Any]]): range values without the header row
         headers (List[str]): names of the headers
-        datetime_flags: List[bool]: flags the columns containing datetimes
+        data_types: List[TDataType]: "timestamp" and "date" or None for each column
 
     Yields:
         DictStrAny: A dictionary version of the table. It generates a dictionary of the type {header: value} for every row.
@@ -259,7 +255,7 @@ def process_range(
                 fill_val = None
             elif data_type in ["timestamp", "date"]:
                 # the datetimes are inferred from first row of data. if next rows have inconsistent data types - pass the values to dlt to deal with them
-                if not isinstance(val, (int, float)):
+                if not isinstance(val, (int, float)) or isinstance(val, bool):
                     fill_val = val
                 else:
                     fill_val = serial_date_to_datetime(val, data_type)
@@ -298,5 +294,4 @@ def trim_range_top_left(
         start_row=parsed_range.start_row + shift_x,
         start_col=ParsedRange.shift_column(parsed_range.start_col, shift_y),
     )
-    print(range_values)
     return parsed_range, range_values

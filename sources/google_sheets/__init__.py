@@ -1,12 +1,14 @@
 """Loads Google Sheets data from tabs, named and explicit ranges. Contains the main source functions."""
 
-from typing import List, Sequence, Union, Iterable
+from typing import Any, List, Sequence, Union, Iterable
 
 import dlt
+from dlt.common import logger
 from dlt.sources.credentials import GcpServiceAccountCredentials, GcpOAuthCredentials
 from dlt.extract.source import DltResource
 
 from .helpers.data_processing import (
+    ParsedRange,
     get_data_types,
     get_range_headers,
     get_spreadsheet_id,
@@ -18,12 +20,12 @@ from .helpers import api_calls
 
 @dlt.source
 def google_spreadsheet(
-    spreadsheet_identifier: str = dlt.config.value,
+    spreadsheet_url_or_id: str = dlt.config.value,
     range_names: Sequence[str] = dlt.config.value,
     credentials: Union[
         GcpOAuthCredentials, GcpServiceAccountCredentials
     ] = dlt.secrets.value,
-    get_sheets: bool = True,
+    get_sheets: bool = False,
     get_named_ranges: bool = True,
 ) -> Iterable[DltResource]:
     """
@@ -32,13 +34,13 @@ def google_spreadsheet(
     - Optionally, dlt resources for all sheets inside the spreadsheet and all named ranges inside the spreadsheet.
 
     Args:
-        spreadsheet_identifier (str): The ID or URL of the spreadsheet.
-        range_names (Sequence[str]): A list of ranges in the spreadsheet of the format "sheet_name!range_name".
+        spreadsheet_url_or_id (str): The ID or URL of the spreadsheet.
+        range_names (Sequence[str]): A list of ranges in the spreadsheet in the format used by Google Sheets. Accepts Named Ranges and Sheets (tabs) names.
             These are the ranges to be converted into tables.
         credentials (Union[GcpServiceAccountCredentials, GcpOAuthCredentials]): GCP credentials to the account
             with Google Sheets API access, defined in dlt.secrets.
         get_sheets (bool, optional): If True, load all the sheets inside the spreadsheet into the database.
-            Defaults to True.
+            Defaults to False.
         get_named_ranges (bool, optional): If True, load all the named ranges inside the spreadsheet into the database.
             Defaults to True.
 
@@ -48,7 +50,7 @@ def google_spreadsheet(
     # authenticate to the service using the helper function
     service = api_auth(credentials)
     # get spreadsheet id from url or id
-    spreadsheet_id = get_spreadsheet_id(spreadsheet_identifier)
+    spreadsheet_id = get_spreadsheet_id(spreadsheet_url_or_id)
     all_range_names = set(range_names or [])
     # if no explicit ranges, get sheets and named ranges from metadata
     if not range_names:
@@ -61,82 +63,90 @@ def google_spreadsheet(
         if get_named_ranges:
             all_range_names.update(named_ranges)
 
-    # TODO: raise on empty list of ranges with a user friendly exception
-
-    print(all_range_names)
-
     # first we get all data for all the ranges (explicit or named)
-    range_values = api_calls.get_data_for_ranges(
+    all_range_data = api_calls.get_data_for_ranges(
         service=service,
         spreadsheet_id=spreadsheet_id,
         range_names=list(all_range_names),
     )
     assert len(all_range_names) == len(
-        range_values
+        all_range_data
     ), "Google Sheets API must return values for all requested ranges"
 
     # get metadata for two first rows of each range
-    # first row MUST contain headers
+    # first should contain headers
     # second row contains data which we'll use to sample data types.
     # google sheets return datetime and date types as lotus notes serial number. which is just a float so we cannot infer the correct types just from the data
-    meta_ranges: List[str] = []
-    for name, range_value in zip(all_range_names, range_values):
-        parsed_range = range_value[0]
-        # create a new range to get first two rows
-        meta_range = parsed_range._replace(end_row=parsed_range.start_row + 1)
-        print(f"{name}:{parsed_range}:{meta_range}")
-        meta_ranges.append(str(meta_range))
 
-    # print(meta_values)
-    # with open("meta_values_2.json", "wb") as f:
-    #     json.dump(meta_values, f, pretty=True)
-
+    # warn and remove empty ranges
+    range_data = []
     metadata_table = []
-    meta_values = (
-        service.spreadsheets()
-        .get(spreadsheetId=spreadsheet_id, ranges=meta_ranges, includeGridData=True)
-        .execute()
-    )
-    for name, range_value in zip(all_range_names, range_values):
-        parsed_range = range_value[0]
-        # here is a tricky part due to how Google Sheets API returns the metadata. We are not able to directly pair the input range names with returned metadata objects
-        # instead metadata objects are grouped by sheet names, still each group order preserves the order of input ranges
-        # so for each range we get a sheet name, we look for the metadata group for that sheet and then we consume first object on that list with pop
-        print(
-            next(
-                sheet
-                for sheet in meta_values["sheets"]
-                if sheet["properties"]["title"] == parsed_range.sheet_name
-            )
-        )
-        metadata = next(
-            sheet
-            for sheet in meta_values["sheets"]
-            if sheet["properties"]["title"] == parsed_range.sheet_name
-        )["data"].pop(0)
-
-        if "rowData" not in metadata:
-            # metadata may be empty, in that case there's no data at all to be returned so we skip this
-            pass
-            # print(f"skipping {name}")
-        else:
-            headers = get_range_headers(metadata["rowData"], name)
-            data_types = get_data_types(metadata["rowData"])
-
-            yield dlt.resource(
-                process_range(
-                    range_value[1][1:], headers=headers, data_types=data_types
-                ),
-                name=name,
-                write_disposition="replace",
-            )
+    for name, parsed_range, meta_range, values in all_range_data:
+        # pass all ranges to spreadsheet info - including empty
         metadata_table.append(
             {
                 "spreadsheet_id": spreadsheet_id,
                 "range_name": name,
                 "range": str(parsed_range),
                 "range_parsed": parsed_range._asdict(),
+                "skipped": True,
             }
+        )
+        if values is None or len(values) == 0:
+            logger.warning(f"Range {name} does not contain any data. Skipping.")
+            continue
+        if len(values) == 1:
+            logger.warning(f"Range {name} contain only 1 row of data. Skipping.")
+            continue
+        if len(values[0]) == 0:
+            logger.warning(
+                f"First row of range {name} does not contain data. Skipping."
+            )
+            continue
+        metadata_table[-1]["skipped"] = False
+        range_data.append((name, parsed_range, meta_range, values))
+
+    meta_values = (
+        service.spreadsheets()
+        .get(
+            spreadsheetId=spreadsheet_id,
+            ranges=[str(data[2]) for data in range_data],
+            includeGridData=True,
+        )
+        .execute()
+    )
+    for name, parsed_range, _, values in range_data:
+        logger.info(f"Processing range {parsed_range} with name {name}")
+        # here is a tricky part due to how Google Sheets API returns the metadata. We are not able to directly pair the input range names with returned metadata objects
+        # instead metadata objects are grouped by sheet names, still each group order preserves the order of input ranges
+        # so for each range we get a sheet name, we look for the metadata group for that sheet and then we consume first object on that list with pop
+        metadata = next(
+            sheet
+            for sheet in meta_values["sheets"]
+            if sheet["properties"]["title"] == parsed_range.sheet_name
+        )["data"].pop(0)
+
+        headers_metadata = metadata["rowData"][0]["values"]
+        headers = get_range_headers(headers_metadata, name)
+        if headers is None:
+            # generate automatic headers and treat the first row as data
+            headers = [f"col_{idx+1}" for idx in range(len(headers_metadata))]
+            data_row_metadata = headers_metadata
+            rows_data = values[0:]
+            logger.warning(
+                f"Using automatic headers. WARNING: first row of the range {name} will be used as data!"
+            )
+        else:
+            # first row contains headers and is skipped
+            data_row_metadata = metadata["rowData"][1]["values"]
+            rows_data = values[1:]
+
+        data_types = get_data_types(data_row_metadata)
+
+        yield dlt.resource(
+            process_range(rows_data, headers=headers, data_types=data_types),
+            name=name,
+            write_disposition="replace",
         )
     yield dlt.resource(
         metadata_table, write_disposition="replace", name="spreadsheet_info"

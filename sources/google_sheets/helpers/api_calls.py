@@ -46,7 +46,6 @@ def get_known_range_names(
         Tuple[List[str], List[str]]
     """
     metadata = service.spreadsheets().get(spreadsheetId=spreadsheet_id).execute()
-    print(metadata)
     sheet_names: List[str] = [s["properties"]["title"] for s in metadata["sheets"]]
     named_ranges: List[str] = [r["name"] for r in metadata.get("namedRanges", {})]
     return sheet_names, named_ranges
@@ -54,7 +53,7 @@ def get_known_range_names(
 
 def get_data_for_ranges(
     service: Resource, spreadsheet_id: str, range_names: List[str]
-) -> List[Tuple[ParsedRange, List[List[Any]]]]:
+) -> List[Tuple[str, ParsedRange, ParsedRange, List[List[Any]]]]:
     """
     Calls Google Sheets API to get data in a batch. This is the most efficient way to get data for multiple ranges inside a spreadsheet.
 
@@ -66,7 +65,7 @@ def get_data_for_ranges(
     Returns:
         List[DictStrAny]: A list of ranges with data in the same order as `range_names`
     """
-    range_batch: List[DictStrAny] = (
+    range_batch_resp = (
         service.spreadsheets()
         .values()
         .batchGet(
@@ -77,15 +76,19 @@ def get_data_for_ranges(
             # will return formatted dates as a serial number
             dateTimeRenderOption="SERIAL_NUMBER",
         )
-        .execute()["valueRanges"]
+        .execute()
     )
+    # if there are not ranges to be loaded, there's no "valueRanges"
+    range_batch: List[DictStrAny] = range_batch_resp.get("valueRanges", [])
     # trim the empty top rows and columns from the left
-    rv: List[Tuple[ParsedRange, List[List[Any]]]] = []
-    for range_ in range_batch:
+    rv = []
+    for name, range_ in zip(range_names, range_batch):
         parsed_range = ParsedRange.parse_range(range_["range"])
         values: List[List[Any]] = range_.get("values", None)
-        if not values:
-            rv.append((parsed_range, values))
-        else:
-            rv.append(trim_range_top_left(parsed_range, values))
+        if values:
+            parsed_range, values = trim_range_top_left(parsed_range, values)
+        # create a new range to get first two rows
+        meta_range = parsed_range._replace(end_row=parsed_range.start_row + 1)
+        # print(f"{name}:{parsed_range}:{meta_range}")
+        rv.append((name, parsed_range, meta_range, values))
     return rv

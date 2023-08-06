@@ -12,7 +12,11 @@ def load_pipeline_with_ranges() -> None:
         full_refresh=False,
         dataset_name="test",
     )
-    data = google_spreadsheet(get_sheets=False, get_named_ranges=False)
+    data = google_spreadsheet(
+        "https://docs.google.com/spreadsheets/d/1HhWHjqouQnnCIZAFa2rL6vT91YRN8aIhts22SUUR580/edit#gid=0",
+        get_sheets=False,
+        get_named_ranges=False,
+    )
     info = pipeline.run(data)
     print(info)
 
@@ -57,13 +61,17 @@ def load_pipeline_with_sheets_and_ranges() -> None:
     pipeline = dlt.pipeline(
         pipeline_name="google_sheets_pipeline",
         destination="postgres",
-        full_refresh=False,
+        full_refresh=True,
         dataset_name="sample_google_sheet_data",
     )
-    data = google_spreadsheet(get_sheets=True, get_named_ranges=True)
+    data = google_spreadsheet(
+        "1HhWHjqouQnnCIZAFa2rL6vT91YRN8aIhts22SUUR580",
+        get_sheets=True,
+        get_named_ranges=True,
+    )
     info = pipeline.run(data)
     print(info)
 
 
 if __name__ == "__main__":
-    load_pipeline_with_ranges()
+    load_pipeline_with_sheets_and_ranges()
