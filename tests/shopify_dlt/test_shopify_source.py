@@ -5,11 +5,11 @@ import pytest
 from requests_mock import Mocker
 import dlt
 from dlt.common import pendulum
+from dlt.common.time import ensure_pendulum_datetime
 from dlt.sources.helpers import requests
 
 from tests.utils import ALL_DESTINATIONS, assert_load_info, load_table_counts
 from sources.shopify_dlt import shopify_source
-from sources.shopify_dlt.date_helper import ensure_pendulum_datetime
 
 
 @pytest.mark.parametrize("destination_name", ALL_DESTINATIONS)
