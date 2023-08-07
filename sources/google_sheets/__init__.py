@@ -1,33 +1,31 @@
 """Loads Google Sheets data from tabs, named and explicit ranges. Contains the main source functions."""
 
-from typing import Iterator, List, Sequence, Union, Iterable
+from typing import Sequence, Union, Iterable
 
 import dlt
 from dlt.common import logger
-from dlt.common.typing import DictStrAny, Dict, TDataItem, StrAny
-from dlt.common.exceptions import MissingDependencyException
 from dlt.sources.credentials import GcpServiceAccountCredentials, GcpOAuthCredentials
 from dlt.extract.source import DltResource
 
 from .helpers.data_processing import (
-    convert_named_range_to_a1,
+    ParsedRange,
+    get_data_types,
+    get_range_headers,
     get_spreadsheet_id,
     process_range,
 )
 from .helpers.api_calls import api_auth
 from .helpers import api_calls
 
-from apiclient.discovery import Resource
-
 
 @dlt.source
 def google_spreadsheet(
-    spreadsheet_identifier: str = dlt.config.value,
+    spreadsheet_url_or_id: str = dlt.config.value,
     range_names: Sequence[str] = dlt.config.value,
     credentials: Union[
-        GcpServiceAccountCredentials, GcpOAuthCredentials
+        GcpOAuthCredentials, GcpServiceAccountCredentials
     ] = dlt.secrets.value,
-    get_sheets: bool = True,
+    get_sheets: bool = False,
     get_named_ranges: bool = True,
 ) -> Iterable[DltResource]:
     """
@@ -36,13 +34,13 @@ def google_spreadsheet(
     - Optionally, dlt resources for all sheets inside the spreadsheet and all named ranges inside the spreadsheet.
 
     Args:
-        spreadsheet_identifier (str): The ID or URL of the spreadsheet.
-        range_names (Sequence[str]): A list of ranges in the spreadsheet of the format "sheet_name!range_name".
+        spreadsheet_url_or_id (str): The ID or URL of the spreadsheet.
+        range_names (Sequence[str]): A list of ranges in the spreadsheet in the format used by Google Sheets. Accepts Named Ranges and Sheets (tabs) names.
             These are the ranges to be converted into tables.
         credentials (Union[GcpServiceAccountCredentials, GcpOAuthCredentials]): GCP credentials to the account
             with Google Sheets API access, defined in dlt.secrets.
         get_sheets (bool, optional): If True, load all the sheets inside the spreadsheet into the database.
-            Defaults to True.
+            Defaults to False.
         get_named_ranges (bool, optional): If True, load all the named ranges inside the spreadsheet into the database.
             Defaults to True.
 
@@ -52,135 +50,107 @@ def google_spreadsheet(
     # authenticate to the service using the helper function
     service = api_auth(credentials)
     # get spreadsheet id from url or id
-    spreadsheet_id = get_spreadsheet_id(spreadsheet_identifier)
-    # Initialize a list with the values in range_names (can be an array if declared in config.toml). This needs to be converted to a list because it will be used as input by google-api-python-client
-    # type needs to be checked instead of isinstance since toml Arrays have lists as a superclass
-    if type(range_names) is not list:
-        ranges_list = [range_name for range_name in range_names]
-    else:
-        ranges_list = range_names
-    # if sheet names or named_ranges are to be added as tables, an extra api call is made.
-    named_ranges = None
-    if get_sheets or get_named_ranges:
-        # get metadata and append to list of ranges as needed
-        simple_metadata = api_calls.get_metadata_simple(
+    spreadsheet_id = get_spreadsheet_id(spreadsheet_url_or_id)
+    all_range_names = set(range_names or [])
+    # if no explicit ranges, get sheets and named ranges from metadata
+    if not range_names:
+        # get metadata with list of sheets and named ranges in the spreadsheet
+        sheet_names, named_ranges = api_calls.get_known_range_names(
             spreadsheet_id=spreadsheet_id, service=service
         )
         if get_sheets:
-            ranges_list += list(simple_metadata["sheets"].values())
+            all_range_names.update(sheet_names)
         if get_named_ranges:
-            named_ranges = {
-                convert_named_range_to_a1(
-                    named_range_dict=named_range,
-                    sheet_names_dict=simple_metadata["sheets"],
-                ): named_range["name"]
-                for named_range in simple_metadata["named_ranges"]
+            all_range_names.update(named_ranges)
+
+    # first we get all data for all the ranges (explicit or named)
+    all_range_data = api_calls.get_data_for_ranges(
+        service=service,
+        spreadsheet_id=spreadsheet_id,
+        range_names=list(all_range_names),
+    )
+    assert len(all_range_names) == len(
+        all_range_data
+    ), "Google Sheets API must return values for all requested ranges"
+
+    # get metadata for two first rows of each range
+    # first should contain headers
+    # second row contains data which we'll use to sample data types.
+    # google sheets return datetime and date types as lotus notes serial number. which is just a float so we cannot infer the correct types just from the data
+
+    # warn and remove empty ranges
+    range_data = []
+    metadata_table = []
+    for name, parsed_range, meta_range, values in all_range_data:
+        # pass all ranges to spreadsheet info - including empty
+        metadata_table.append(
+            {
+                "spreadsheet_id": spreadsheet_id,
+                "range_name": name,
+                "range": str(parsed_range),
+                "range_parsed": parsed_range._asdict(),
+                "skipped": True,
             }
-            ranges_list += list(named_ranges.keys())
-    # get data and metadata
-    metadata_ranges_all = api_calls.get_metadata(
-        spreadsheet_id=spreadsheet_id,
-        service=service,
-        ranges=ranges_list,
-        named_ranges=named_ranges,
+        )
+        if values is None or len(values) == 0:
+            logger.warning(f"Range {name} does not contain any data. Skipping.")
+            continue
+        if len(values) == 1:
+            logger.warning(f"Range {name} contain only 1 row of data. Skipping.")
+            continue
+        if len(values[0]) == 0:
+            logger.warning(
+                f"First row of range {name} does not contain data. Skipping."
+            )
+            continue
+        metadata_table[-1]["skipped"] = False
+        range_data.append((name, parsed_range, meta_range, values))
+
+    meta_values = (
+        service.spreadsheets()
+        .get(
+            spreadsheetId=spreadsheet_id,
+            ranges=[str(data[2]) for data in range_data],
+            includeGridData=True,
+        )
+        .execute()
     )
+    for name, parsed_range, _, values in range_data:
+        logger.info(f"Processing range {parsed_range} with name {name}")
+        # here is a tricky part due to how Google Sheets API returns the metadata. We are not able to directly pair the input range names with returned metadata objects
+        # instead metadata objects are grouped by sheet names, still each group order preserves the order of input ranges
+        # so for each range we get a sheet name, we look for the metadata group for that sheet and then we consume first object on that list with pop
+        metadata = next(
+            sheet
+            for sheet in meta_values["sheets"]
+            if sheet["properties"]["title"] == parsed_range.sheet_name
+        )["data"].pop(0)
 
-    # create a list of dlt resources from the data and metadata
-    yield from get_data(
-        service=service,
-        spreadsheet_id=spreadsheet_id,
-        range_names=ranges_list,
-        metadata_dict=metadata_ranges_all,
-    )
+        headers_metadata = metadata["rowData"][0]["values"]
+        headers = get_range_headers(headers_metadata, name)
+        if headers is None:
+            # generate automatic headers and treat the first row as data
+            headers = [f"col_{idx+1}" for idx in range(len(headers_metadata))]
+            data_row_metadata = headers_metadata
+            rows_data = values[0:]
+            logger.warning(
+                f"Using automatic headers. WARNING: first row of the range {name} will be used as data!"
+            )
+        else:
+            # first row contains headers and is skipped
+            data_row_metadata = metadata["rowData"][1]["values"]
+            rows_data = values[1:]
 
-    # create metadata resource
-    yield metadata_table(
-        spreadsheet_info=metadata_ranges_all, spreadsheet_id=spreadsheet_id
-    )
+        data_types = get_data_types(data_row_metadata)
 
-
-@dlt.resource(write_disposition="replace", name="spreadsheet_info")
-def metadata_table(
-    spreadsheet_info: StrAny, spreadsheet_id: str
-) -> Iterator[TDataItem]:
-    """
-    Creates the metadata_table resource. It adds a table with all loaded ranges into a table.
-
-    Args:
-        spreadsheet_info (StrAny): This is a dict where all loaded ranges are keys.
-            Inside the dict there is another dict with keys: "headers", "sheet_name", "index" and "values".
-        spreadsheet_id (str): The ID of the spreadsheet is included for extra info.
-
-    Yields:
-        Iterator[TDataItem]: Generator of dicts with info on ranges that were loaded into the database.
-    """
-
-    # get keys for metadata dict and iterate through them
-    # the keys for this dict are the ranges where the data is gathered from
-    loaded_ranges = spreadsheet_info.keys()
-    for loaded_range in loaded_ranges:
-        # get needed info from dict
-        loaded_range_meta = spreadsheet_info[loaded_range]
-        range_num_headers = len(loaded_range_meta["headers"])
-        range_sheet_name = loaded_range_meta["range"].split("!")[0]
-        # table structure
-        table_dict = {
-            "spreadsheet_id": spreadsheet_id,
-            "loaded_range": loaded_range,
-            "sheet_name": range_sheet_name,
-            "num_cols": range_num_headers,
-        }
-        # change name of loaded range name if it is a ranged name
-        if loaded_range_meta["name"]:
-            table_dict["loaded_range"] = loaded_range_meta["name"]
-        yield table_dict
-
-
-def get_data(
-    service: Resource,
-    spreadsheet_id: str,
-    range_names: List[str],
-    metadata_dict: Dict[str, DictStrAny],
-) -> Iterable[DltResource]:
-    """
-    Makes an API call to Google Sheets and retrieves all the ranges listed in range_names.
-    Processes them into dlt resources.
-
-    Args:
-        service (Resource): Object to make API calls to Google Sheets.
-        spreadsheet_id (str): The ID of the spreadsheet.
-        range_names (List[str]): List of range names.
-        metadata_dict (Dict[str, DictStrAny]): The dictionary with metadata.
-
-    Yields:
-        Iterable[DltResource]: List of dlt resources, each containing a table of a specific range.
-    """
-
-    # get data from Google Sheets and iterate through them to process each range into a separate dlt resource
-    values = api_calls.get_data_batch(
-        service=service, spreadsheet_id=spreadsheet_id, range_names=range_names
-    )
-    for value in values:
-        # get range name and metadata for sheet. Extra quotation marks returned by the API call are removed.
-        range_part1, range_part2 = value["range"].split("!")
-        range_part1 = range_part1.strip("'")
-        sheet_range_name = f"{range_part1}!{range_part2}"
-        named_range_name = None
-        try:
-            sheet_meta_batch = metadata_dict[sheet_range_name]
-            named_range_name = sheet_meta_batch["name"]
-        except KeyError:
-            try:
-                sheet_range_name = sheet_range_name.split("!")[0]
-                sheet_meta_batch = metadata_dict[sheet_range_name]
-            except KeyError:
-                logger.warning(f"Skipping data for empty range: {sheet_range_name}")
-                continue
-        # get range values
-        sheet_range = value["values"]
-        # create a resource from processing both sheet/range values
         yield dlt.resource(
-            process_range(sheet_val=sheet_range, sheet_meta=sheet_meta_batch),
-            name=named_range_name or sheet_range_name,
+            process_range(rows_data, headers=headers, data_types=data_types),
+            name=name,
             write_disposition="replace",
         )
+    yield dlt.resource(
+        metadata_table,
+        write_disposition="merge",
+        name="spreadsheet_info",
+        merge_key="spreadsheet_id",
+    )
