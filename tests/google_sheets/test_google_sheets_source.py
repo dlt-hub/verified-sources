@@ -372,8 +372,8 @@ def test_two_overlapping_tables(destination_name) -> None:
     # assert first column
     assert_query_data(
         pipeline,
-        "SELECT col_1 FROM two_tables ORDER BY col_1 ASC",
-        list(range(10, 21)) + [None] * 11,
+        "SELECT col_1 FROM two_tables ORDER BY col_1 NULLS FIRST",
+        [None] * 11 + list(range(10, 21)),
     )
     # assert first overlapped column
     assert_query_data(
@@ -446,8 +446,10 @@ def test_explicit_named_range(destination_name) -> None:
         ("test5", 5, 1.05, True),
         ("test6", 6, 1.06, True),
     ]
+
     # perform queries to check data inside
     with pipeline.sql_client() as c:
+        quoted_range = c.capabilities.escape_identifier("range")
         # columns are auto named - we hit a middle of a table with this range
         sql_query = f"SELECT col_1, col_2, col_3, col_4 FROM {table_name_db};"
         with c.execute_query(sql_query) as cur:
@@ -456,10 +458,11 @@ def test_explicit_named_range(destination_name) -> None:
             for i in range(len(rows)):
                 processed_row = _row_helper(rows[i], destination_name)
                 assert processed_row == expected_rows[i]
+
     # check spreadsheet info
     assert_query_data(
         pipeline,
-        "SELECT range FROM spreadsheet_info ORDER BY range ASC",
+        f"SELECT {quoted_range} FROM spreadsheet_info ORDER BY {quoted_range} ASC",
         ["empty!ZY1:AAA4", "more_data!A4:D7"],
     )
 

@@ -1,6 +1,6 @@
 """Loads Google Sheets data from tabs, named and explicit ranges. Contains the main source functions."""
 
-from typing import Any, List, Sequence, Union, Iterable
+from typing import Sequence, Union, Iterable
 
 import dlt
 from dlt.common import logger
@@ -149,5 +149,8 @@ def google_spreadsheet(
             write_disposition="replace",
         )
     yield dlt.resource(
-        metadata_table, write_disposition="replace", name="spreadsheet_info"
+        metadata_table,
+        write_disposition="merge",
+        name="spreadsheet_info",
+        merge_key="spreadsheet_id",
     )

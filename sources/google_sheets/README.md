@@ -32,11 +32,61 @@ When source detects any problems with headers or table layout **it will issue a 
 **date time** and **date** types are also recognized and this happens via additional metadata that is retrieved for the first row.
 
 ## Passing the spreadsheet id/url and explicit range names
+You can use both url of your spreadsheet that you can copy from the browser ie.
+```
+https://docs.google.com/spreadsheets/d/1VTtCiYgxjAwcIw7UM1_BSaxC3rzIpr0HwXZwd2OlPD4/edit?usp=sharing
+```
+or spreadsheet id (which is a part of the url)
+```
+1VTtCiYgxjAwcIw7UM1_BSaxC3rzIpr0HwXZwd2OlPD4
+```
+typically you pass it directly to the `google_spreadsheet` function
+
+**passing ranges**
+
+You can pass explicit ranges to the `google_spreadsheet`:
+1. sheet names
+2. named ranges
+3. any range in Google Sheet format ie. **sheet 1!A1:B7**
 
 
 ## The `spreadsheet_info` table
+This table is repopulated after every load and keeps the information on loaded ranges:
+* id of the spreadsheet
+* name of the range as passed to the source
+* string representation of the loaded range
+* range above in parsed representation
 
+## Running on Airflow (and some under the hood information)
+Internally, the source loads all the data immediately in the `google_spreadsheet` before execution of the pipeline in `run`. No matter how many ranges you request, we make just two calls to the API to retrieve data. This works very well with typical scripts that create a dlt source with `google_spreadsheet` and then run it with `pipeline.run`.
 
+In case of Airflow, the source is created and executed separately. In typical configuration where runner is a separate machine, **this will load data twice**.
+
+**Moreover, you should not use `scc` decomposition in our Airflow helper**. It will create an instance of the source for each requested range in order to run a task that corresponds to it! Following our [Airflow deployment guide](https://dlthub.com/docs/walkthroughs/deploy-a-pipeline/deploy-with-airflow-composer#2-modify-dag-file), this is how you should use `tasks.add_run` on `PipelineTasksGroup`:
+```python
+@dag(
+    schedule_interval='@daily',
+    start_date=pendulum.datetime(2023, 2, 1),
+    catchup=False,
+    max_active_runs=1,
+    default_args=default_task_args
+)
+def get_named_ranges():
+    tasks = PipelineTasksGroup("get_named_ranges", use_data_folder=False, wipe_local_data=True)
+
+    # import your source from pipeline script
+    from google_sheets import google_spreadsheet
+
+    pipeline = dlt.pipeline(
+        pipeline_name="get_named_ranges",
+        dataset_name="named_ranges_data",
+        destination='bigquery',
+    )
+
+    # do not use decompose to run `google_spreadsheet` in single task
+    tasks.add_run(pipeline, google_spreadsheet("1HhWHjqouQnnCIZAFa2rL6vT91YRN8aIhts22SUUR580"), decompose="none", trigger_rule="all_done", retries=0, provide_context=True)
+```
 
 ## Setup credentials
-We recommend to use service account for any production deployments.
+[We recommend to use service account for any production deployments](https://dlthub.com/docs/dlt-ecosystem/verified-sources/google_sheets#google-sheets-api-authentication)
+
