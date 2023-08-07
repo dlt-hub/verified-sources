@@ -372,12 +372,12 @@ def test_two_overlapping_tables(destination_name) -> None:
     # assert first column
     assert_query_data(
         pipeline,
-        "SELECT col_1 FROM two_tables ORDER BY 1 ASC",
+        "SELECT col_1 FROM two_tables ORDER BY col_1 ASC",
         list(range(10, 21)) + [None] * 11,
     )
     # assert first overlapped column
     assert_query_data(
-        pipeline, "SELECT col_7 FROM two_tables ORDER BY 1 ASC", list(range(1, 23))
+        pipeline, "SELECT col_7 FROM two_tables ORDER BY col_7 ASC", list(range(1, 23))
     )
 
 
@@ -459,7 +459,7 @@ def test_explicit_named_range(destination_name) -> None:
     # check spreadsheet info
     assert_query_data(
         pipeline,
-        "SELECT range FROM spreadsheet_info ORDER BY 1",
+        "SELECT range FROM spreadsheet_info ORDER BY range ASC",
         ["empty!ZY1:AAA4", "more_data!A4:D7"],
     )
 
@@ -516,18 +516,18 @@ def test_table_not_A1():
     # check range
     assert_query_data(
         pipeline,
-        "SELECT range FROM spreadsheet_info ORDER BY 1",
+        "SELECT range FROM spreadsheet_info ORDER BY range ASC",
         ["table_in_middle!AB9:AJ1000"],
     )
     # check first column
     assert_query_data(
         pipeline,
-        "SELECT col_1 FROM table_in_middle ORDER BY 1 ASC",
+        "SELECT col_1 FROM table_in_middle ORDER BY col_1 ASC",
         list(map(str, range(11, 21))) + ["AB9_head"],
     )
     # check last column
     assert_query_data(
-        pipeline, "SELECT col_9 FROM table_in_middle ORDER BY 1 ASC", range(90, 101)
+        pipeline, "SELECT col_9 FROM table_in_middle ORDER BY col_9 ASC", range(90, 101)
     )
 
 

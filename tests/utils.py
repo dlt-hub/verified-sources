@@ -196,10 +196,13 @@ def assert_load_info(info: LoadInfo, expected_load_packages: int = 1) -> None:
 
 def load_table_counts(p: dlt.Pipeline, *table_names: str) -> DictStrAny:
     """Returns row counts for `table_names` as dict"""
-    query = "\nUNION ALL\n".join(
-        [f"SELECT '{name}' as name, COUNT(1) as c FROM {name}" for name in table_names]
-    )
     with p.sql_client() as c:
+        query = "\nUNION ALL\n".join(
+            [
+                f"SELECT '{name}' as name, COUNT(1) as c FROM {c.make_qualified_table_name(name)}"
+                for name in table_names
+            ]
+        )
         with c.execute_query(query) as cur:
             rows = list(cur.fetchall())
             return {r[0]: r[1] for r in rows}
@@ -209,13 +212,14 @@ def load_table_distinct_counts(
     p: dlt.Pipeline, distinct_column: str, *table_names: str
 ) -> DictStrAny:
     """Returns counts of distinct values for column `distinct_column` for `table_names` as dict"""
-    query = "\nUNION ALL\n".join(
-        [
-            f"SELECT '{name}' as name, COUNT(DISTINCT {distinct_column}) as c FROM {name}"
-            for name in table_names
-        ]
-    )
     with p.sql_client() as c:
+        query = "\nUNION ALL\n".join(
+            [
+                f"SELECT '{name}' as name, COUNT(DISTINCT {distinct_column}) as c FROM {c.make_qualified_table_name(name)}"
+                for name in table_names
+            ]
+        )
+
         with c.execute_query(query) as cur:
             rows = list(cur.fetchall())
             return {r[0]: r[1] for r in rows}
