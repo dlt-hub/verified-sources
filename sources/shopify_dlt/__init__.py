@@ -5,7 +5,8 @@ from typing import Any, Dict, Iterator, Iterator, Optional, Iterable
 import dlt
 
 from dlt.extract.source import DltResource
-from dlt.common.typing import TDataItem
+from dlt.common.typing import TDataItem, TAnyDateTime
+from dlt.common.time import ensure_pendulum_datetime
 from dlt.common import pendulum
 
 from .settings import (
@@ -14,7 +15,6 @@ from .settings import (
     DEFAULT_ITEMS_PER_PAGE,
 )
 from .helpers import ShopifyApi, TOrderStatus
-from .date_helper import TAnyDateTime, ensure_pendulum_datetime
 
 
 @dlt.source(name="shopify")
@@ -34,6 +34,7 @@ def shopify_source(
     `start_time` argument can be used on its own or together with `end_time`. When both are provided
     data is limited to items updated in that time range.
     The range is "half-open", meaning elements equal and newer than `start_time` and elements older than `end_time` are included.
+    All resources opt-in to use Airflow scheduler if run as Airflow task
 
     Args:
         private_app_password: The app password to the app on your shop.
@@ -66,7 +67,10 @@ def shopify_source(
         updated_at: dlt.sources.incremental[
             pendulum.DateTime
         ] = dlt.sources.incremental(
-            "updated_at", initial_value=start_date_obj, end_value=end_date_obj
+            "updated_at",
+            initial_value=start_date_obj,
+            end_value=end_date_obj,
+            allow_external_schedulers=True,
         ),
         created_at_min: pendulum.DateTime = created_at_min_obj,
         items_per_page: int = items_per_page,
@@ -95,7 +99,10 @@ def shopify_source(
         updated_at: dlt.sources.incremental[
             pendulum.DateTime
         ] = dlt.sources.incremental(
-            "updated_at", initial_value=start_date_obj, end_value=end_date_obj
+            "updated_at",
+            initial_value=start_date_obj,
+            end_value=end_date_obj,
+            allow_external_schedulers=True,
         ),
         created_at_min: pendulum.DateTime = created_at_min_obj,
         items_per_page: int = items_per_page,
@@ -126,7 +133,10 @@ def shopify_source(
         updated_at: dlt.sources.incremental[
             pendulum.DateTime
         ] = dlt.sources.incremental(
-            "updated_at", initial_value=start_date_obj, end_value=end_date_obj
+            "updated_at",
+            initial_value=start_date_obj,
+            end_value=end_date_obj,
+            allow_external_schedulers=True,
         ),
         created_at_min: pendulum.DateTime = created_at_min_obj,
         items_per_page: int = items_per_page,

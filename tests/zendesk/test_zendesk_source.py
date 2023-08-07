@@ -1,3 +1,4 @@
+from unittest.mock import patch
 import pytest
 from typing import List, Dict, Any, Iterable
 import dlt
@@ -19,6 +20,7 @@ from tests.utils import (
 SUPPORT_TABLES = {
     "ticket_fields",
     "tickets",
+    "ticket_events",
     "ticket_metric_events",
     "users",
     "sla_policies",
@@ -88,6 +90,7 @@ TALK_TABLES = {
 INCREMENTAL_TABLES = [
     "tickets",
     "ticket_metric_events",
+    "ticket_events",
     "chats",
 ]  # calls_incremental and legs_incremental have no data so not added here yet
 
@@ -148,16 +151,23 @@ def test_incrementing(destination_name: str) -> None:
     @:param: destination_name - redshift/bigquery/postgres
     """
 
-    # run pipeline
-    pipeline_incremental = _create_pipeline(
-        destination_name=destination_name,
-        full_refresh=True,
-        dataset_name="test_incremental",
-        include_chat=True,
-        include_support=True,
-        include_talk=True,
-    )
+    with patch("sources.zendesk.helpers.talk_api.settings.INCREMENTAL_PAGE_SIZE", 2):
+        # run pipeline
+        pipeline_incremental = _create_pipeline(
+            destination_name=destination_name,
+            full_refresh=True,
+            dataset_name="test_incremental",
+            include_chat=True,
+            include_support=True,
+            include_talk=True,
+        )
     counts = load_table_counts(pipeline_incremental, *INCREMENTAL_TABLES)
+    assert counts == {
+        "tickets": 5,
+        "chats": 3,
+        "ticket_events": 10,
+        "ticket_metric_events": 65,
+    }
 
     # run pipeline again and check that the number of distinct data points hasn't changed
     info = pipeline_incremental.run(
@@ -169,7 +179,7 @@ def test_incrementing(destination_name: str) -> None:
 
 
 @pytest.mark.parametrize("destination_name", ALL_DESTINATIONS)
-def test_tickets_end_time_incremental(destination_name: str) -> None:
+def test_tickets_end_date_incremental(destination_name: str) -> None:
     """Test time range loading tickets with end_value and incremental"""
     pipeline = dlt.pipeline(
         destination=destination_name,
@@ -180,10 +190,10 @@ def test_tickets_end_time_incremental(destination_name: str) -> None:
     # This ticket should be included in results
     first_ticket_time = parse_iso_like_datetime("2023-02-06T09:52:18Z")
     # End is exact ts of a ticket in the middle
-    end_time = parse_iso_like_datetime("2023-07-18T17:14:39Z")
+    end_date = parse_iso_like_datetime("2023-07-18T17:14:39Z")
     data = zendesk_support(
-        start_time=first_ticket_time,
-        end_time=end_time,
+        start_date=first_ticket_time,
+        end_date=end_date,
     ).with_resources("tickets")
 
     info = pipeline.run(data, write_disposition="append")
@@ -198,10 +208,10 @@ def test_tickets_end_time_incremental(destination_name: str) -> None:
         ]
 
     assert first_ticket_time in rows
-    assert all(value < end_time for value in rows)
+    assert all(value < end_date for value in rows)
 
-    # Load again incremental from end_time
-    data = zendesk_support(start_time=end_time)
+    # Load again incremental from end_date
+    data = zendesk_support(start_date=end_date)
     info = pipeline.run(data, write_disposition="append")
     assert_load_info(info)
     with pipeline.sql_client() as client:
@@ -213,9 +223,9 @@ def test_tickets_end_time_incremental(destination_name: str) -> None:
         ]
 
     assert len(rows2) > len(rows)
-    assert end_time in rows2
+    assert end_date in rows2
     # Some rows are after the start time
-    assert [value for value in rows2 if value > end_time]
+    assert [value for value in rows2 if value > end_date]
 
     # Run incremental again, no new data should be added
     data = zendesk_support()
@@ -241,12 +251,35 @@ def test_full_load_support(destination_name: str) -> None:
     """
 
     # FULL PIPELINE RUN
-    pipeline = _create_pipeline(
-        destination_name=destination_name,
-        dataset_name="test_full_load",
-        include_support=True,
-    )
+    with patch("sources.zendesk.helpers.talk_api.settings.PAGE_SIZE", 2):
+        pipeline = _create_pipeline(
+            destination_name=destination_name,
+            dataset_name="test_full_load",
+            include_support=True,
+        )
     _check_pipeline_has_tables(pipeline=pipeline, tables=SUPPORT_TABLES)
+    counts = load_table_counts(pipeline, *SUPPORT_TABLES)
+    assert counts == {
+        "ticket_forms": 2,
+        "ticket_fields": 12,
+        "users": 3,
+        "views": 8,
+        "custom_agent_roles": 7,
+        "organization_memberships": 1,
+        "tickets": 5,
+        "macros": 2,
+        "brands": 1,
+        "tags": 3,
+        "ticket_metrics": 5,
+        "triggers": 7,
+        "ticket_events": 10,
+        "organizations": 1,
+        "ticket_metric_events": 65,
+        "automations": 3,
+        "recipient_addresses": 1,
+        "group_memberships": 1,
+        "groups": 1,
+    }
 
 
 @pytest.mark.parametrize("destination_name", ALL_DESTINATIONS)
@@ -256,7 +289,6 @@ def test_zendesk_chat(destination_name: str) -> None:
     @:param: destination_name - redshift/bigquery/postgres
     """
 
-    # FULL PIPELINE RUN
     pipeline = _create_pipeline(
         destination_name=destination_name,
         dataset_name="test_full_load",

@@ -1,12 +1,12 @@
 """Shopify source helpers"""
 from urllib.parse import urljoin
 
+from dlt.common.time import ensure_pendulum_datetime
 from dlt.sources.helpers import requests
 from dlt.common.typing import TDataItem, TDataItems, Dict
 from typing import Any, Iterable, Optional, Literal
 
 from .settings import DEFAULT_API_VERSION
-from .date_helper import ensure_pendulum_datetime
 
 TOrderStatus = Literal["open", "closed", "cancelled", "any"]
 

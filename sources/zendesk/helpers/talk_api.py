@@ -1,18 +1,21 @@
-"""
-This module contains everything related to the API client class made to make requests specifically to ZendeskTalk
-"""
-
-from time import sleep
-from typing import Dict, Iterator, Optional, Tuple, Union, Any
-from dlt.common import logger
+from enum import Enum
+from typing import Dict, Iterator, Optional, Tuple, Any
 from dlt.common.typing import DictStrStr, TDataItems, TSecretValue
 from dlt.sources.helpers.requests import client
+from .. import settings
 from .credentials import (
     ZendeskCredentialsEmailPass,
     ZendeskCredentialsOAuth,
     ZendeskCredentialsToken,
     TZendeskCredentials,
 )
+
+
+class PaginationType(Enum):
+    OFFSET = 0
+    CURSOR = 1
+    STREAM = 2
+    START_TIME = 3
 
 
 class ZendeskAPIClient:
@@ -61,6 +64,7 @@ class ZendeskAPIClient:
         self,
         endpoint: str,
         data_point_name: str,
+        pagination: PaginationType,
         params: Optional[Dict[str, Any]] = None,
     ) -> Iterator[TDataItems]:
         """
@@ -70,14 +74,23 @@ class ZendeskAPIClient:
             endpoint: The url to the endpoint, e.g. /api/v2/calls
             data_point_name: The key which data items are nested under in the response object (e.g. calls)
             params: Optional dict of query params to include in the request
+            pagination: Type of pagination type used by endpoint
 
         Returns:
             Generator of pages, each page is a list of dict data items
         """
+        # update the page size to enable cursor pagination
+        params = params or {}
+        if pagination == PaginationType.CURSOR:
+            params["page[size]"] = settings.PAGE_SIZE
+        elif pagination == PaginationType.STREAM:
+            params["per_page"] = settings.INCREMENTAL_PAGE_SIZE
+        elif pagination == PaginationType.START_TIME:
+            params["limit"] = settings.INCREMENTAL_PAGE_SIZE
+
         # make request and keep looping until there is no next page
         get_url = f"{self.url}{endpoint}"
-        has_more_pages = True
-        while has_more_pages:
+        while get_url:
             response = client.get(
                 get_url, headers=self.headers, auth=self.auth, params=params
             )
@@ -85,37 +98,19 @@ class ZendeskAPIClient:
             response_json = response.json()
             result = response_json[data_point_name]
             yield result
-            get_url = response_json.get("next_page", None)
-            # Get URL includes params
+
+            get_url = None
+            if pagination == PaginationType.CURSOR:
+                if response_json["meta"]["has_more"]:
+                    get_url = response_json["links"]["next"]
+            elif pagination == PaginationType.OFFSET:
+                get_url = response_json.get("next_page", None)
+            elif pagination == PaginationType.STREAM:
+                # See https://developer.zendesk.com/api-reference/ticketing/ticket-management/incremental_exports/#json-format
+                if not response_json["end_of_stream"]:
+                    get_url = response_json["next_page"]
+            elif pagination == PaginationType.START_TIME:
+                if response_json["count"] > 0:
+                    get_url = response_json["next_page"]
+
             params = {}
-            # Ticket API always returns next page URL resulting in infinite loop
-            # `end_of_stream` property signals there are no more pages.
-            # See https://developer.zendesk.com/api-reference/ticketing/ticket-management/incremental_exports/#json-format
-            end_of_stream = response_json.get("end_of_stream", False)
-            has_more_pages = bool(get_url and result) and not end_of_stream
-
-    def get_pages_incremental(
-        self,
-        endpoint: str,
-        data_point_name: str,
-        start_time: int,
-        params: Optional[Dict[str, Any]] = None,
-    ) -> Iterator[TDataItems]:
-        """
-        Makes a request to an incremental API endpoint
-
-        Args:
-            endpoint: The url to the endpoint, e.g. /api/v2/calls
-            data_point_name: The key which data items are nested under in the response object (e.g. calls)
-            start_time: a timestamp of the starting date, i.e. a date in unix epoch time (the number of seconds since January 1, 1970, 00:00:00 UTC)
-            params: Optional dict of query params to include in the request
-
-        Returns:
-            Generator of pages, each page is a list of dict data items
-        """
-        # start date comes as unix epoch float, need to convert to an integer to make the call to the API
-        params = params or {}
-        params["start_time"] = str(start_time)
-        yield from self.get_pages(
-            endpoint=endpoint, data_point_name=data_point_name, params=params
-        )
