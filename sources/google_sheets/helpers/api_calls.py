@@ -34,7 +34,7 @@ def api_auth(credentials: GcpCredentials) -> Resource:
 
 def get_known_range_names(
     spreadsheet_id: str, service: Resource
-) -> Tuple[List[str], List[str]]:
+) -> Tuple[List[str], List[str], str]:
     """
     Retrieves spreadsheet metadata and extracts a list of sheet names and named ranges
 
@@ -43,12 +43,13 @@ def get_known_range_names(
         service (Resource): Resource object used to make API calls to Google Sheets API.
 
     Returns:
-        Tuple[List[str], List[str]]
+        Tuple[List[str], List[str], str] sheet names, named ranges, spreadheet title
     """
     metadata = service.spreadsheets().get(spreadsheetId=spreadsheet_id).execute()
     sheet_names: List[str] = [s["properties"]["title"] for s in metadata["sheets"]]
     named_ranges: List[str] = [r["name"] for r in metadata.get("namedRanges", {})]
-    return sheet_names, named_ranges
+    title: str = metadata["properties"]["title"]
+    return sheet_names, named_ranges, title
 
 
 def get_data_for_ranges(

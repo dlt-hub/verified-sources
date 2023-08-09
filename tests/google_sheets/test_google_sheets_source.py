@@ -14,7 +14,7 @@ from tests.utils import (
 
 
 # list expected tables and the number of columns they are supposed to have
-ALL_RANGES = [
+ALL_RANGES = {
     "empty",
     "all_types",
     "empty_row",
@@ -34,16 +34,25 @@ ALL_RANGES = [
     "sheet3",
     "sheet4",
     "two_tables",
-]
+    "hidden_columns_merged_cells",
+    "Blank Columns",
+}
 
-SKIPPED_RANGES = [
+SKIPPED_RANGES = {
     "empty",
     "only_data",
     "only_headers",
     "NamedRange2",
-]
+}
 
-ALL_TABLES_LOADED = [
+NAMED_RANGES = {
+    "NamedRange1",
+    "NamedRange2",
+}
+
+SHEETS = ALL_RANGES - NAMED_RANGES
+
+ALL_TABLES_LOADED = {
     "all_types",
     "empty_row",
     "empty_rows",
@@ -60,7 +69,9 @@ ALL_TABLES_LOADED = [
     "sheet4",
     "spreadsheet_info",
     "two_tables",
-]
+    "hidden_columns_merged_cells",
+    "blank_columns",
+}
 
 
 def test_single_explicit_range_load() -> None:
@@ -95,7 +106,7 @@ def test_full_load(destination_name: str) -> None:
     # ALL_TABLES is missing spreadsheet info table - table being tested here
     schema = pipeline.default_schema
     user_tables = schema.data_tables()
-    assert set([t["name"] for t in user_tables]) == set(ALL_TABLES_LOADED)
+    assert set([t["name"] for t in user_tables]) == ALL_TABLES_LOADED
 
     # check load metadata
     with pipeline.sql_client() as c:
@@ -104,9 +115,90 @@ def test_full_load(destination_name: str) -> None:
         with c.execute_query(sql_query) as cur:
             rows = list(cur.fetchall())
             loaded_ranges = [r[0] for r in rows]
-            assert set(loaded_ranges) == set(ALL_RANGES)
+            assert set(loaded_ranges) == ALL_RANGES
             skipped_ranges = [r[0] for r in rows if r[1]]
-            assert set(skipped_ranges) == set(SKIPPED_RANGES)
+            assert set(skipped_ranges) == SKIPPED_RANGES
+
+
+def test_get_named_ranges() -> None:
+    # take data from spreadsheet 1
+    data = google_spreadsheet(
+        "1HhWHjqouQnnCIZAFa2rL6vT91YRN8aIhts22SUUR580",
+        get_named_ranges=True,
+        get_sheets=False,
+    )
+    assert set(data.resources.keys()) == {"NamedRange1", "spreadsheet_info"}
+
+
+def test_get_sheets() -> None:
+    # take data from spreadsheet 1
+    data = google_spreadsheet(
+        "1HhWHjqouQnnCIZAFa2rL6vT91YRN8aIhts22SUUR580",
+        get_named_ranges=False,
+        get_sheets=True,
+    )
+    assert set(data.resources.keys()) - {"spreadsheet_info"} == SHEETS - SKIPPED_RANGES
+
+
+def test_get_fancy_sheets() -> None:
+    # take data from spreadsheet 1
+    data = google_spreadsheet(
+        "1HhWHjqouQnnCIZAFa2rL6vT91YRN8aIhts22SUUR580",
+        get_named_ranges=False,
+        get_sheets=True,
+    )
+    assert set(data.resources.keys()) - {"spreadsheet_info"} == SHEETS - SKIPPED_RANGES
+
+
+def test_blank_columns() -> None:
+    data = google_spreadsheet(
+        "1HhWHjqouQnnCIZAFa2rL6vT91YRN8aIhts22SUUR580",
+        get_named_ranges=False,
+        get_sheets=False,
+        range_names=["Blank Columns"],
+    )
+    pipeline = dlt.pipeline(
+        destination="duckdb",
+        full_refresh=True,
+        dataset_name="test_blank_columns_data",
+    )
+    pipeline.extract(data)
+    pipeline.normalize()
+    # there were two blank columns that got automatic col_n name but contained no data so dlt eliminated them
+    assert set(pipeline.default_schema.get_table_columns("blank_columns").keys()) == {
+        "vergleich",
+        "anbieter",
+        "art",
+        "grundpreis_mtl",
+        "verbrauch",
+        "jahreskosten",
+        "netto_mtl_kosten",
+        "brutto_mtl_kosten",
+        "_dlt_id",
+        "_dlt_load_id",
+    }
+
+
+@pytest.mark.parametrize("destination_name", ALL_DESTINATIONS)
+def test_hidden_columns_merged_cells(destination_name) -> None:
+    info, pipeline = _run_pipeline(
+        destination_name=destination_name,
+        dataset_name="test_hidden_columns_merged_cells",
+        range_names=["hidden_columns_merged_cells"],
+        get_named_ranges=False,
+        get_sheets=False,
+    )
+    assert_load_info(info)
+
+    # merged cells produce empty values but number of rows stays the same
+    assert load_table_counts(pipeline, "hidden_columns_merged_cells") == {
+        "hidden_columns_merged_cells": 7
+    }
+
+    # hidden columns are returned
+    assert "art" in pipeline.default_schema.get_table_columns(
+        "hidden_columns_merged_cells"
+    )
 
 
 @pytest.mark.parametrize("destination_name", ALL_DESTINATIONS)
@@ -481,6 +573,61 @@ def test_invalid_range():
 
 def test_auto_header_names():
     pass
+
+
+def test_table_rename() -> None:
+    pipeline = dlt.pipeline(
+        destination="duckdb",
+        full_refresh=True,
+        dataset_name="test_table_rename_data",
+    )
+    data = google_spreadsheet(
+        "1HhWHjqouQnnCIZAFa2rL6vT91YRN8aIhts22SUUR580",
+        range_names=["Sheet 1!A1:B10"],
+        get_named_ranges=False,
+    )
+    # apply the table name to the existing resource: the resource name is the name of the range
+    data.resources["Sheet 1!A1:B10"].apply_hints(table_name="my_a1_data")
+    info = pipeline.run(data)
+    assert_load_info(info)
+    user_tables = pipeline.default_schema.data_tables()
+    # check if table is there
+    assert set([t["name"] for t in user_tables]) == {"my_a1_data", "spreadsheet_info"}
+
+
+def test_table_rename_and_multiple_spreadsheets() -> None:
+    pipeline = dlt.pipeline(
+        destination="duckdb",
+        full_refresh=True,
+        dataset_name="test_table_rename_data",
+    )
+    # take data from spreadsheet 1
+    data = google_spreadsheet(
+        "1HhWHjqouQnnCIZAFa2rL6vT91YRN8aIhts22SUUR580",
+        range_names=["Sheet 1!A1:B10"],
+        get_named_ranges=False,
+    )
+
+    # take data from spreadsheet 2
+    data_2 = google_spreadsheet(
+        "1HhWHjqouQnnCIZAFa2rL6vT91YRN8aIhts22SUUR580",
+        range_names=["Sheet 1!B1:C10"],
+        get_named_ranges=False,
+    )
+    # apply the table name to the existing resource: the resource name is the name of the range
+    data.resources["Sheet 1!A1:B10"].apply_hints(table_name="my_a1_data")
+    data_2.resources["Sheet 1!B1:C10"].apply_hints(table_name="second_sheet_data")
+
+    # load two spreadsheets
+    info = pipeline.run([data, data_2])
+    assert_load_info(info)
+    user_tables = pipeline.default_schema.data_tables()
+    # check if table is there
+    assert set([t["name"] for t in user_tables]) == {
+        "my_a1_data",
+        "second_sheet_data",
+        "spreadsheet_info",
+    }
 
 
 def test_no_ranges():

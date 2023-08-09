@@ -14,6 +14,10 @@ If you are not happy with the workflow above, you can:
 * Enable retrieving all sheets/tabs with `get_sheets` option set to True
 * Pass a list of ranges as supported by Google Sheets in `range_names`
 
+Note that hidden columns will be extracted.
+
+> 💡 You can load data from many spreadsheets and also rename the tables to which data is loaded. This is standard part of `dlt`, see `load_with_table_rename_and_multiple_spreadsheets` demo in `google_sheets_pipeline.py`
+
 ### Make sure your data has headers and is a proper table
 **First row of any extracted range should contain headers**. Please make sure:
 1. The header names are strings and are unique.
@@ -52,7 +56,7 @@ You can pass explicit ranges to the `google_spreadsheet`:
 
 ## The `spreadsheet_info` table
 This table is repopulated after every load and keeps the information on loaded ranges:
-* id of the spreadsheet
+* id and title of the spreadsheet
 * name of the range as passed to the source
 * string representation of the loaded range
 * range above in parsed representation

@@ -140,13 +140,18 @@ def get_range_headers(headers_metadata: List[DictStrAny], range_name: str) -> Li
     for idx, header in enumerate(headers_metadata):
         header_val: str = None
         if header:
-            if "stringValue" in header["effectiveValue"]:
+            if "stringValue" in header.get("effectiveValue", {}):
                 header_val = header["formattedValue"]
             else:
-                logger.warning(
-                    f"In range {range_name}, header value: {header['formattedValue']} is not a string!"
-                )
-                return None
+                header_val = header.get("formattedValue", None)
+                # if there's no formatted value then the cell is empty (no empty string as well!) in that case add auto name and move on
+                if header_val is None:
+                    header_val = str(f"col_{idx + 1}")
+                else:
+                    logger.warning(
+                        f"In range {range_name}, header value: {header_val} at position {idx+1} is not a string!"
+                    )
+                    return None
         else:
             logger.warning(
                 f"In range {range_name}, header at position {idx+1} is not missing!"
