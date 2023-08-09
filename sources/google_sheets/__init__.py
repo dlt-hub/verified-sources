@@ -53,11 +53,11 @@ def google_spreadsheet(
     spreadsheet_id = get_spreadsheet_id(spreadsheet_url_or_id)
     all_range_names = set(range_names or [])
     # if no explicit ranges, get sheets and named ranges from metadata
+    # get metadata with list of sheets and named ranges in the spreadsheet
+    sheet_names, named_ranges, spreadsheet_title = api_calls.get_known_range_names(
+        spreadsheet_id=spreadsheet_id, service=service
+    )
     if not range_names:
-        # get metadata with list of sheets and named ranges in the spreadsheet
-        sheet_names, named_ranges = api_calls.get_known_range_names(
-            spreadsheet_id=spreadsheet_id, service=service
-        )
         if get_sheets:
             all_range_names.update(sheet_names)
         if get_named_ranges:
@@ -86,6 +86,7 @@ def google_spreadsheet(
         metadata_table.append(
             {
                 "spreadsheet_id": spreadsheet_id,
+                "title": spreadsheet_title,
                 "range_name": name,
                 "range": str(parsed_range),
                 "range_parsed": parsed_range._asdict(),
