@@ -4,72 +4,61 @@ description: dlt source for Chess.com API
 keywords: [chess.com api, chess.com source, chess.com]
 ---
 
+
 # Chess.com
 
-This source can be used to load player data from the [Chess.com API](https://www.chess.com/news/view/published-data-api) into a [destination](../general-usage/glossary.md#destination) of your choice.
+[Chess.com](https://www.chess.com/) is an online platform that offers services for chess
+enthusiasts. It includes online chess games tournaments, lessons, and more.
 
-## Initialize the source with a demo pipeline
+Resources that can be loaded using this verified source are:
 
-Initialize the source with the following command:
-```
-dlt init chess bigquery
-```
-Here, we chose BigQuery as the destination. To choose a different destination, replace `bigquery` with your choice of destination. 
+| Name             | Description                                                            |
+| ---------------- | ---------------------------------------------------------------------- |
+| players_profiles | retrives player profiles for a list of player usernames                |
+| players_archives | retrives url to game archives for specified players                    |
+| players_games    | retrives players games that happened between start_month and end_month |
 
-Running this command will create a directory with the following structure:
+
+## Initialize the pipeline
+
 ```bash
-├── .dlt
-│   ├── .pipelines
-│   ├── config.toml
-│   └── secrets.toml
-├── chess
-│   └── __pycache__
-│   └── __init__.py
-├── .gitignore
-├── chess_pipeline.py
-└── requirements.txt
+dlt init chess duckdb
 ```
+
+Here, we chose duckdb as the destination. Alternatively, you can also choose redshift, bigquery, or
+any of the other [destinations](https://dlthub.com/docs/dlt-ecosystem/destinations/).
 
 ## Add credentials
 
-Before running the pipeline you may need to add credentials in the `.dlt/secrets.toml` file for your chosen destination. For instructions on how to do this, follow the steps detailed under the desired destination in the [destinations](https://dlthub.com/docs/destinations) page.
+1. [Chess.com API](https://www.chess.com/news/view/published-data-api) is a public API that does not
+   require authentication or including secrets in `secrets.toml`.
+
+2. Follow the instructions in the
+   [destinations](https://dlthub.com/docs/dlt-ecosystem/destinations/) document to add credentials
+   for your chosen destination.
 
 ## Run the pipeline
 
 1. Install the necessary dependencies by running the following command:
-```
-pip install -r requirements.txt
-```
+
+   ```bash
+   pip install -r requirements.txt
+   ```
+
 2. Now the pipeline can be run by using the command:
-```
-python3 chess_pipeline.py
-```
+
+   ```bash
+   python3 chess_pipeline.py
+   ```
+
 3. To make sure that everything is loaded as expected, use the command:
-```
-dlt pipeline chess_pipeline show
-```
 
-## Customize parameters
+   ```bash
+   dlt pipeline chess_pipeline show
+   ```
 
-Without any modifications, the chess source will load data for a default list of players over a default period of time. You can change these values in the `chess_pipeline.py` script.
-
-For example, if you wish to load player games for a specific set of players, add the player list to the function `load_player_games_example` as below.
-```python
-def load_players_games_example(start_month: str, end_month: str):
-
-    pipeline = dlt.pipeline(pipeline_name="chess_pipeline", destination='bigquery', dataset_name="chess_players_games_data")
-
-    data = chess(
-        [], # Specify your list of players here
-        start_month=start_month,
-        end_month=end_month
-    )
-
-    info = pipeline.run(data.with_resources("players_games", "players_profiles"))
-    print(info)
-```
-To specify the time period, pass the starting and ending months as parameters when calling the function in the `__main__` block:
-```python
-if __name__ == "__main__" :
-    load_players_games_example("2022/11", "2022/12") # Replace the strings "2022/11" and "2022/12" with different months in the "YYYY/MM" format
-```
+💡 To explore additional customizations for this pipeline, we recommend referring to the official
+`dlt` Chess documentation. It provides comprehensive information and guidance on how to further
+customize and tailor the pipeline to suit your specific needs. You can find the `dlt` Chess
+documentation in
+[Setup Guide: Chess.com.](https://dlthub.com/docs/dlt-ecosystem/verified-sources/chess)
