@@ -11,7 +11,7 @@ import pendulum
 
 from dlt.common import logger
 from dlt.common.configuration.inject import with_config
-from dlt.common.time import parse_iso_like_datetime
+from dlt.common.time import ensure_pendulum_datetime
 from dlt.common.typing import DictStrAny, TDataItem, TDataItems
 from dlt.extract.typing import ItemTransformFunctionWithMeta
 from dlt.sources.helpers import requests
@@ -38,7 +38,7 @@ def get_start_date(
     """
     Get the start date for incremental loading of Facebook Insights data.
     """
-    start_date: pendulum.DateTime = parse_iso_like_datetime(
+    start_date: pendulum.DateTime = ensure_pendulum_datetime(
         incremental_start_date.start_value
     ).subtract(days=attribution_window_days_lag)
 
