@@ -285,6 +285,11 @@ ALL_DESTINATIONS='["postgres"]' pytest tests/chess
 
 There's also `make test-local` command that will run all the tests on `duckdb` and `postgres`.
 
+## Running tests on CI
+
+
+
+
 ## Advanced topics
 
 ### Ensuring the correct Python version

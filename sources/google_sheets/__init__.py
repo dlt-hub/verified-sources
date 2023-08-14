@@ -27,6 +27,7 @@ def google_spreadsheet(
     ] = dlt.secrets.value,
     get_sheets: bool = False,
     get_named_ranges: bool = True,
+    max_api_retries: int = 5,
 ) -> Iterable[DltResource]:
     """
     The source for the dlt pipeline. It returns the following resources:
@@ -43,12 +44,13 @@ def google_spreadsheet(
             Defaults to False.
         get_named_ranges (bool, optional): If True, load all the named ranges inside the spreadsheet into the database.
             Defaults to True.
+        max_api_retries (int, optional): Max number of retires to google sheets API. Actual behavior is internal to google client.
 
     Yields:
         Iterable[DltResource]: List of dlt resources.
     """
     # authenticate to the service using the helper function
-    service = api_auth(credentials)
+    service = api_auth(credentials, max_api_retries=max_api_retries)
     # get spreadsheet id from url or id
     spreadsheet_id = get_spreadsheet_id(spreadsheet_url_or_id)
     all_range_names = set(range_names or [])
@@ -107,14 +109,8 @@ def google_spreadsheet(
         metadata_table[-1]["skipped"] = False
         range_data.append((name, parsed_range, meta_range, values))
 
-    meta_values = (
-        service.spreadsheets()
-        .get(
-            spreadsheetId=spreadsheet_id,
-            ranges=[str(data[2]) for data in range_data],
-            includeGridData=True,
-        )
-        .execute()
+    meta_values = api_calls.get_meta_for_ranges(
+        service, spreadsheet_id, [str(data[2]) for data in range_data]
     )
     for name, parsed_range, _, values in range_data:
         logger.info(f"Processing range {parsed_range} with name {name}")

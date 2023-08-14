@@ -20,7 +20,7 @@ jobs:
     # if: ${{ github.event.pull_request.head.repo.fork }}
 
   run_loader:
-    name: test on local postgres and duckdb
+    name: test on local postgres and duckdb on forks
     needs: get_changed_sources
     if: needs.get_changed_sources.outputs.sources_list != ''
     strategy:
@@ -30,6 +30,26 @@ jobs:
       run:
         shell: bash
     runs-on: "ubuntu-latest"
+
+    # Service containers to run with `container-job`
+    services:
+      # Label used to access the service container
+      postgres:
+        # Docker Hub image
+        image: postgres
+        # Provide the password for postgres
+        env:
+          POSTGRES_DB: dlt_data
+          POSTGRES_USER: loader
+          POSTGRES_PASSWORD: loader
+        ports:
+          - 5432:5432
+        # Set health checks to wait until postgres has started
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
 
     steps:
       - name: Check out
@@ -61,9 +81,7 @@ jobs:
 
       - name: create secrets.toml
         run: pwd && echo "$DLT_SECRETS_TOML" > sources/.dlt/secrets.toml
-      #   run: pwd && echo "$DESTINATIONS_SECRETS" > sources/.dlt/secrets.toml && echo "$SOURCES_SECRETS" >> sources/.dlt/secrets.toml
-      # - name: Setup upterm session
-      #   uses: lhotari/action-upterm@v1
+
       - run: |
           sources_list="${{ needs.get_changed_sources.outputs.sources_list }}"
           test_paths=$(echo "$sources_list" | awk '{for(i=1;i<=NF;i++) printf "tests/%s ", $i}')

@@ -1,11 +1,13 @@
 """Contains helper functions to extract data from spreadsheet API"""
 
 from typing import Any, List, Tuple
+from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception
 
 from dlt.common.exceptions import MissingDependencyException
 from dlt.common.typing import DictStrAny
 
 from dlt.sources.credentials import GcpCredentials, GcpOAuthCredentials
+from dlt.sources.helpers.requests.retry import DEFAULT_RETRY_STATUS
 
 from .data_processing import ParsedRange, trim_range_top_left
 
@@ -15,12 +17,39 @@ except ImportError:
     raise MissingDependencyException("Google API Client", ["google-api-python-client"])
 
 
-def api_auth(credentials: GcpCredentials) -> Resource:
+def is_retry_status_code(exception: BaseException) -> bool:
+    """Retry condition on HttpError"""
+    from googleapiclient.errors import HttpError  # type: ignore
+
+    # print(f"RETRY ON {str(HttpError)} = {isinstance(exception, HttpError) and exception.resp.status in DEFAULT_RETRY_STATUS}")
+    # if isinstance(exception, HttpError):
+    #     print(exception.resp.status)
+    #     print(DEFAULT_RETRY_STATUS)
+    return (
+        isinstance(exception, HttpError)
+        and exception.resp.status in DEFAULT_RETRY_STATUS
+    )
+
+
+retry_deco = retry(
+    # Retry if it's a rate limit error (HTTP 429)
+    retry=retry_if_exception(is_retry_status_code),
+    # Use exponential backoff for the waiting time between retries, starting with 5 seconds
+    wait=wait_exponential(multiplier=1.5, min=5, max=120),
+    # Stop retrying after 10 attempts
+    stop=stop_after_attempt(10),
+    # Print out the retrying details
+    reraise=True,
+)
+
+
+def api_auth(credentials: GcpCredentials, max_api_retries: int) -> Resource:
     """
     Uses GCP credentials to authenticate with Google Sheets API.
 
     Args:
         credentials (GcpCredentials): Credentials needed to log in to GCP.
+        max_api_retries (int): Max number of retires to google sheets API. Actual behavior is internal to google client.
 
     Returns:
         Resource: Object needed to make API calls to Google Sheets API.
@@ -28,10 +57,32 @@ def api_auth(credentials: GcpCredentials) -> Resource:
     if isinstance(credentials, GcpOAuthCredentials):
         credentials.auth("https://www.googleapis.com/auth/spreadsheets.readonly")
     # Build the service object for Google sheets api.
-    service = build("sheets", "v4", credentials=credentials.to_native_credentials())
+    service = build(
+        "sheets",
+        "v4",
+        credentials=credentials.to_native_credentials(),
+        num_retries=max_api_retries,
+    )
     return service
 
 
+@retry_deco
+def get_meta_for_ranges(
+    service: Resource, spreadsheet_id: str, range_names: List[str]
+) -> Any:
+    """Retrieves `spreadsheet_id` cell metadata for `range_names`"""
+    return (
+        service.spreadsheets()
+        .get(
+            spreadsheetId=spreadsheet_id,
+            ranges=range_names,
+            includeGridData=True,
+        )
+        .execute()
+    )
+
+
+@retry_deco
 def get_known_range_names(
     spreadsheet_id: str, service: Resource
 ) -> Tuple[List[str], List[str], str]:
@@ -52,6 +103,7 @@ def get_known_range_names(
     return sheet_names, named_ranges, title
 
 
+@retry_deco
 def get_data_for_ranges(
     service: Resource, spreadsheet_id: str, range_names: List[str]
 ) -> List[Tuple[str, ParsedRange, ParsedRange, List[List[Any]]]]:
