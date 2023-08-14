@@ -1,10 +1,12 @@
 import pytest
 
 import dlt
+import pendulum
 
 from sources.facebook_ads import (
     facebook_ads_source,
     facebook_insights_source,
+    get_start_date,
     enrich_ad_objects,
     Campaign,
     DEFAULT_CAMPAIGN_FIELDS,
@@ -88,3 +90,35 @@ def test_load_insights() -> None:
 def test_load_insights_weekly() -> None:
     i_weekly = facebook_insights_source(initial_load_past_days=1, time_increment_days=7)
     assert len(list(i_weekly)) == 0
+
+
+def test_get_start_date() -> pendulum.DateTime:
+    # Test with an ISO datetime string
+    input_value = "2023-08-09T12:30:00"
+    result = get_start_date(
+        incremental_start_date=dlt.sources.incremental("start_date", input_value),
+        attribution_window_days_lag=7,
+    )
+    assert isinstance(result, pendulum.DateTime)
+    assert result.year == 2023
+    assert result.month == 8
+    assert result.day == 2
+    assert result.hour == 12
+    assert result.minute == 30
+    assert result.second == 0
+    assert result.timezone_name == "UTC"
+
+    # Test with an ISO date string
+    input_value = "2023-08-09"
+    result = get_start_date(
+        incremental_start_date=dlt.sources.incremental("start_date", input_value),
+        attribution_window_days_lag=7,
+    )
+    assert isinstance(result, pendulum.DateTime)
+    assert result.year == 2023
+    assert result.month == 8
+    assert result.day == 2
+    assert result.hour == 00
+    assert result.minute == 00
+    assert result.second == 00
+    assert result.timezone_name == "UTC"
