@@ -93,4 +93,3 @@ def get_named_ranges():
 
 ## Setup credentials
 [We recommend to use service account for any production deployments](https://dlthub.com/docs/dlt-ecosystem/verified-sources/google_sheets#google-sheets-api-authentication)
-

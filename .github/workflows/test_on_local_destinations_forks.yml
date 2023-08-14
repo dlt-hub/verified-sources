@@ -1,5 +1,5 @@
 
-name: test postgres and duckdb
+name: test sources on postgres and duckdb on forks
 
 on:
   pull_request:
@@ -11,27 +11,25 @@ on:
 env:
   ALL_DESTINATIONS: '["postgres", "duckdb"]'
   DLT_SECRETS_TOML: ${{ secrets.DLT_SECRETS_TOML }}
-  # DESTINATIONS_SECRETS: ${{ secrets.DESTINATIONS_SECRETS }}
-  # SOURCES_SECRETS: ${{ secrets.SOURCES_SECRETS }}
   RUNTIME__LOG_LEVEL: ERROR
 
 jobs:
   get_changed_sources:
     uses: ./.github/workflows/get_changed_sources.yml
+    # run only on fork
+    # if: ${{ github.event.pull_request.head.repo.fork }}
 
   run_loader:
-    name: test destinations redshift, postgres and duckdb
+    name: test on local postgres and duckdb
     needs: get_changed_sources
     if: needs.get_changed_sources.outputs.sources_list != ''
     strategy:
-      max-parallel: 2
+      max-parallel: 1
       fail-fast: false
-      matrix:
-        os: ["ubuntu-latest", "macos-latest", "windows-latest"]
     defaults:
       run:
         shell: bash
-    runs-on: ${{ matrix.os }}
+    runs-on: "ubuntu-latest"
 
     steps:
       - name: Check out
@@ -55,7 +53,7 @@ jobs:
         with:
           # path: ${{ steps.pip-cache.outputs.dir }}
           path: .venv
-          key: venv-${{ runner.os }}-${{ steps.setup-python.outputs.python-version }}-${{ hashFiles('**/poetry.lock') }}-destinations
+          key: venv-${{ runner.os }}-${{ steps.setup-python.outputs.python-version }}-${{ hashFiles('**/poetry.lock') }}-destinations-forks
 
       - name: Install dependencies
         # if: steps.cached-poetry-dependencies.outputs.cache-hit != 'true'
@@ -70,13 +68,6 @@ jobs:
           sources_list="${{ needs.get_changed_sources.outputs.sources_list }}"
           test_paths=$(echo "$sources_list" | awk '{for(i=1;i<=NF;i++) printf "tests/%s ", $i}')
           poetry run pytest $test_paths
-        if: runner.os != 'Windows'
         name: Run tests on Linux/macOS
-      - run: |
-          FOR %%i IN (${{ needs.get_changed_sources.outputs.sources_list }}) DO (
-            echo Running tests for: %%i
-            poetry run pytest tests/%%i
-          )
-        if: runner.os == 'Windows'
-        name: Run tests on Windows
-        shell: cmd
+        env:
+          DESTINATION__POSTGRES__CREDENTIALS: postgresql://loader:loader@localhost:5432/dlt_data
