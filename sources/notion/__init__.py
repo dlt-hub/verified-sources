@@ -44,8 +44,7 @@ def notion_databases(
             details = notion_client.get_database(database["id"])
 
             # Extract the name/title from the details
-            # This depends on the structure of the response from Notion. 
-            # Here, I'm assuming the title is stored similarly to your earlier logic.
+            
             database["use_name"] = details["title"][0]["plain_text"]
 
         notion_database = NotionDatabase(database["id"], notion_client)
