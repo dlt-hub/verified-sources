@@ -151,3 +151,14 @@ class NotionClient:
             next_cursor = response.get("next_cursor")
             has_more = next_cursor is not None
             start_cursor = next_cursor
+
+    def get_database(self, database_id: str) -> Any:
+        """Fetches the details of a specific database by its ID.
+
+        Args:
+            database_id (str): The ID of the database to fetch.
+
+        Returns:
+            Any: The details of the database.
+        """
+        return self.fetch_resource("databases", database_id)

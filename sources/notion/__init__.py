@@ -39,6 +39,13 @@ def notion_databases(
         ]
 
     for database in database_ids:
+        if "use_name" not in database:
+            # Fetch the database details from Notion
+            details = notion_client.get_database(database["id"])
+
+            # Extract the name/title from the details
+            database["use_name"] = details["title"][0]["plain_text"]
+
         notion_database = NotionDatabase(database["id"], notion_client)
         yield dlt.resource(  # type: ignore
             notion_database.query(),
