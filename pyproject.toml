@@ -1,3 +1,6 @@
+# do not add any other tools within the tables belonging to tool.poetry. add them at the end.
+# see blake at the bottom
+
 [tool.poetry]
 name = "dlt-verified-sources"
 version = "0.1.0"
@@ -9,8 +12,7 @@ packages = [{include = "sources"}]
 
 [tool.poetry.dependencies]
 python = "^3.8.1"
-black = "^23.3.0"
-dlt = {version = "^0.3.8", allow-prereleases = true, extras = ["redshift", "bigquery", "postgres", "duckdb"]}
+dlt = {version = "^0.3.11", allow-prereleases = true, extras = ["redshift", "bigquery", "postgres", "duckdb"]}
 
 [tool.poetry.group.dev.dependencies]
 mypy = "^0.991"
@@ -25,9 +27,7 @@ types-requests = "^2.28.11.7"
 mimesis = "^7.0.0"
 requests-mock = "^1.10.0"
 pandas-stubs = "^2.0.0"
-
-[tool.black]
-include = '.*py$'
+black = "^23.3.0"
 
 [tool.poetry.group.sql_database.dependencies]
 sqlalchemy = ">=1.4"
@@ -53,7 +53,6 @@ asana = "^3.2.1"
 [tool.poetry.group.facebook_ads.dependencies]
 facebook-business = "^17.0.2"
 
-
 [tool.poetry.group.salesforce.dependencies]
 simple-salesforce = "^1.12.4"
 
@@ -71,3 +70,6 @@ tiktoken = "^0.4.0"
 [build-system]
 requires = ["poetry-core"]
 build-backend = "poetry.core.masonry.api"
+
+[tool.black]
+include = '.*py$'

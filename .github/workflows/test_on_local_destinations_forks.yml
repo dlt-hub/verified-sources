@@ -1,5 +1,5 @@
 
-name: test destinations bigquery and redshift
+name: test sources on postgres and duckdb on forks
 
 on:
   pull_request:
@@ -9,39 +9,56 @@ on:
   workflow_dispatch:
 
 env:
-  ALL_DESTINATIONS: '["bigquery", "redshift"]'
+  ALL_DESTINATIONS: '["postgres", "duckdb"]'
   DLT_SECRETS_TOML: ${{ secrets.DLT_SECRETS_TOML }}
   RUNTIME__LOG_LEVEL: ERROR
 
 jobs:
   get_changed_sources:
     uses: ./.github/workflows/get_changed_sources.yml
-    # Tests that require credentials do not run in forks
-    if: ${{ !github.event.pull_request.head.repo.fork }}
+    # run only on fork
+    # if: ${{ github.event.pull_request.head.repo.fork }}
 
   run_loader:
-    name: test destinations bigquery and redshift
+    name: test on local postgres and duckdb on forks
     needs: get_changed_sources
     if: needs.get_changed_sources.outputs.sources_list != ''
-
-    # strategy:
-    #   fail-fast: false
-    #   matrix:
-    #     os: ["ubuntu-latest", "macos-latest", "windows-latest"]
+    strategy:
+      max-parallel: 1
+      fail-fast: false
     defaults:
       run:
         shell: bash
     runs-on: "ubuntu-latest"
 
-    steps:
+    # Service containers to run with `container-job`
+    services:
+      # Label used to access the service container
+      postgres:
+        # Docker Hub image
+        image: postgres
+        # Provide the password for postgres
+        env:
+          POSTGRES_DB: dlt_data
+          POSTGRES_USER: loader
+          POSTGRES_PASSWORD: loader
+        ports:
+          - 5432:5432
+        # Set health checks to wait until postgres has started
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
 
+    steps:
       - name: Check out
         uses: actions/checkout@master
 
       - name: Setup Python
         uses: actions/setup-python@v1
         with:
-          python-version: "3.8.x"
+          python-version: "3.9.x"
 
       - name: Install Poetry
         uses: snok/install-poetry@v1.3.2
@@ -56,7 +73,7 @@ jobs:
         with:
           # path: ${{ steps.pip-cache.outputs.dir }}
           path: .venv
-          key: venv-${{ runner.os }}-${{ steps.setup-python.outputs.python-version }}-${{ hashFiles('**/poetry.lock') }}-destinations
+          key: venv-${{ runner.os }}-${{ steps.setup-python.outputs.python-version }}-${{ hashFiles('**/poetry.lock') }}-destinations-forks
 
       - name: Install dependencies
         # if: steps.cached-poetry-dependencies.outputs.cache-hit != 'true'
@@ -64,19 +81,11 @@ jobs:
 
       - name: create secrets.toml
         run: pwd && echo "$DLT_SECRETS_TOML" > sources/.dlt/secrets.toml
-      # - name: Setup upterm session
-      #   uses: lhotari/action-upterm@v1
+
       - run: |
           sources_list="${{ needs.get_changed_sources.outputs.sources_list }}"
           test_paths=$(echo "$sources_list" | awk '{for(i=1;i<=NF;i++) printf "tests/%s ", $i}')
           poetry run pytest $test_paths
-        if: runner.os != 'Windows'
         name: Run tests on Linux/macOS
-      - run: |
-          FOR %%i IN (${{ needs.get_changed_sources.outputs.sources_list }}) DO (
-            echo Running tests for: %%i
-            poetry run pytest tests/%%i
-          )
-        if: runner.os == 'Windows'
-        name: Run tests on Windows
-        shell: cmd
+        env:
+          DESTINATION__POSTGRES__CREDENTIALS: postgresql://loader:loader@localhost:5432/dlt_data

@@ -48,7 +48,7 @@ In this section you will learn how to contribute changes to an existing pipeline
       `./tests/chess/test_chess_source.py` and run the tests against duckdb locally with this command:
       `pytest tests/chess`.
    4. Run the linter and formatter to check for any problems: `make lint-code`.
-3. Proceed to the pull request section to create a pull request to the main repo.
+3. Proceed to the pull request section to [create a pull request to the main repo](#making-a-pull-request-to-the-main-repo-from-fork).
 
 ## Walktrough: Create and contribute a new source
 
@@ -59,8 +59,8 @@ part of source development.
 1. Before starting development on a new source, please open a ticket
    [here](https://github.com/dlt-hub/verified-sources/issues/new?assignees=&labels=verified+source&projects=&template=new-verified-source.md&title=%25source+name%5D+verified+source)
    and let us know what you have planned.
-2. We will acknowledge your ticket and figure out how to proceed. This mostly has to do with
-   creating a test account for the desired source and providing you with the needed credentials. We
+2. We will acknowledge your ticket and figure out how to proceed. **This mostly has to do with
+   creating a test account for the desired source and providing you with the needed credentials**. We
    will also ensure that no parallel development is happening.
 
 Now you can get to coding. As a starting point we will copy the `chess` source. The `chess` example
@@ -74,7 +74,7 @@ your source will be distributed to other users once it is accepted into our repo
 
 2. We will copy the chess source as a starting point. There is a convenient script that creates a
    copy of the chess source to a new name. Run it with `python tools/new_source.py my_source`. This
-   will create a new example script and source folder in the `sources` directory and a new test
+   will create a new example script and **source folder** in the `sources` directory and a new test
    folder in the `tests` directory. You will have to update a few imports to make it work.
 
 3. You are now set to start development on your new source.
@@ -86,7 +86,7 @@ your source will be distributed to other users once it is accepted into our repo
 5. Read the rest of this document and [BUILDING-BLOCKS.md](docs/BUILDING-BLOCKS.md) for information
    on various topics.
 
-6. Proceed to the pull request section to create a pull request to the main repo.
+6. Proceed to the pull request section to [create a pull request to the main repo](#making-a-pull-request-to-the-main-repo-from-fork).
 
 ## Coding Prerequisites
 
@@ -135,7 +135,79 @@ available as well as the needed dependencies being installed. Make is used to au
 
 If this command fails, something is not set up correctly yet.
 
-## Making a pull request to the main repo
+## Things to remember before doing PR
+
+### 1. Specify dlt version and additional dependencies (requirements file)
+
+A `requirements.txt` file must be added to the **source folder**
+including a versioned dependency on `dlt` itself.
+This is to specify which version of dlt the source is developed against, and ensures that users
+are notified to update `dlt` if the source depends on new features or backwards incompatible changes.
+
+The `dlt` dependency should be added in `requirements.txt` with a version range and without extras, example:
+
+```
+dlt>=0.3.5,<0.4.0
+```
+
+If your source requires additional dependencies that are not available in `dlt` they may be added as
+follows:
+
+1. Use `poetry` to add it to the group with the same name as the source. Example: the chess source uses
+   `python-chess` to decode game moves. The dependency was added with
+   `poetry add -G chess python-chess`.
+2. Add the dependency to the `requirements.txt` file in the **source folder**.
+
+### 2. Make sure you use relative imports in your source module
+
+**Use relative imports**. Your code will be imported as source code and everything under **source
+folder** must be self-contained and isolated. Example (from `google_sheets`):
+
+```python
+from .helpers.data_processing import get_spreadsheet_id
+from .helpers.api_calls import api_auth
+from .helpers import api_calls
+```
+
+### 3. Write example script `<name>_pipeline.py`
+
+This script is distributed by `dlt init` with the other source `<name>` files. It will be a first
+touch point with your users. It will be used by them as a starting point or as a source of code
+snippets. The ideal content for the script:
+
+1. Shows a few usage examples with different source/resource arguments combinations that you think
+   are the most common cases for your user.
+2. If you provide any customizations/transformations then show how to use them.
+3. Any code snippet that will speed the user up.
+
+Examples:
+
+- [pokemon](sources/pokemon_pipeline.py)
+- [chess](sources/chess_pipeline.py)
+- [pipedrive](sources/pipedrive_pipeline.py)
+
+
+
+### 3. Add secrets and configs to run the local tests
+
+**All source tests and usage/example scripts share the same config and credential files** that are
+present in `sources/.dlt`.
+
+This makes running locally much easier and `dlt` configuration is flexible enough to apply to many
+sources in one folder.
+
+Please add your credentials/secrets using `sources.<source_name>` ie.
+```toml
+[sources.github]
+access_token="ghp_KZCEQl****"
+```
+
+this will become handy when [you'll use our github CI](#github-ci-setting-credentials-and-running-tests) or [run local tests](#testing).
+
+### 4. Make sure that tests are passing
+
+
+## Making a pull request to the main repo (from fork)
 
 1. Ensure the linter and formatter pass by running:
     ```sh
@@ -157,7 +229,7 @@ If this command fails, something is not set up correctly yet.
    reproduce the test data.
 7. Wait for our code review/merge.
 
-## Requirements for your PR to be accepted
+### Requirements for your PR to be accepted
 
 1. Your PR must pass the linting and testing stages on the GitHub pull request. For more information
    consult the sections about formatting, linting and testing.
@@ -168,51 +240,6 @@ If this command fails, something is not set up correctly yet.
 5. The source folder must contain a `requirements.txt` file including `dlt` as a dependency and
    additional dependencies needed to run the source (if any).
 
-## Source specific dependencies (requirements file)
-
-A `requirements.txt` file must be added to the **source folder**
-including a versioned dependency on `dlt` itself.
-This is to specify which version of dlt the source is developed against, and ensures that users
-are notified to update `dlt` if the source depends on new features or backwards incompatible changes.
-
-The `dlt` dependency should be added in `requirements.txt` with a version range and without extras, example:
-
-```
-dlt>=0.3.5,<0.4.0
-```
-
-If your source requires additional dependencies that are not available in `dlt` they may be added as
-follows:
-
-1. Use `poetry` to add it to the group with the same name as the source. Example: the chess source uses
-   `python-chess` to decode game moves. The dependency was added with
-   `poetry add -G chess python-chess`.
-2. Add the dependency to the `requirements.txt` file in the **source folder**.
-
-## Secrets and settings
-
-**All source tests and usage/example scripts share the same config and credential files** that are
-present in `sources/.dlt`.
-
-This makes running locally much easier and `dlt` configuration is flexible enough to apply to many
-sources in one folder.
-
-## The example script `<name>_pipeline.py`
-
-This script is distributed by `dlt init` with the other source `<name>` files. It will be a first
-touch point with your users. It will be used by them as a starting point or as a source of code
-snippets. The ideal content for the script:
-
-1. Shows a few usage examples with different source/resource arguments combinations that you think
-   are the most common cases for your user.
-2. If you provide any customizations/transformations then show how to use them.
-3. Any code snippet that will speed the user up.
-
-Examples:
-
-- [pokemon](sources/pokemon_pipeline.py)
-- [chess](sources/chess_pipeline.py)
-- [pipedrive](sources/pipedrive_pipeline.py)
 
 ## Typing, linting and formatting
 
@@ -285,6 +312,36 @@ ALL_DESTINATIONS='["postgres"]' pytest tests/chess
 
 There's also `make test-local` command that will run all the tests on `duckdb` and `postgres`.
 
+## Github CI: setting credentials and running tests
+If you do pull request from forks, you are not able to see the credentials we set up in the upstream repository. You'll have to do that in your own fork.
+
+1. Go to **settings of your fork** https://github.com/**account name**/**repo name**/settings/secrets/actions
+2. Add new Repository Secrets with a name **DLT_SECRETS_TOML**
+3. Paste the `toml` fragment with source credentials [that you added to your secrets.toml](#3-add-secrets-and-configs-to-run-the-local-tests) - remember to include section name:
+
+```toml
+[sources.github]
+access_token="ghp_KZCEQlC8***"
+```
+
+In essence **DLT_SECRETS_TOML** is just your `secrets.toml` file and will be used as such by the CI runner.
+
+Following checks must pass:
+* mypy and linter
+* `dlt init` test where we make sure you provided all information to your verified source module for the distribution to correctly happen
+* tests for your source must pass on **postgres** and **duckdb**
+
+### Sharing and obtaining source credentials, test accounts, destination access
+Typically we created a common test account for your source [before you started coding](#walktrough-create-and-contribute-a-new-source). This is an ideal situation - we can reuse your tests directly and can merge your work quickly.
+
+If you contributed a source and created own credentials, test accounts or test datasets please
+   include them in the tests or share them with `dlt` team so we can configure the CI job. If
+   sharing is not possible please help us to reproduce your test cases so CI job will pass.
+
+### Contributor access to upstream repository
+We are happy to add you as contributor to avoid the hurdles of setting up credentials. This also let's you run your tests on BigQuery/Redshift etc. Just *ping the dlt team on slack**.
+
+
 ## Advanced topics
 
 ### Ensuring the correct Python version
@@ -300,33 +357,6 @@ sudo apt install python3.8-venv
 
 You may also use `pyenv` as [poetry](https://python-poetry.org/docs/managing-environments/)
 suggests.
-
-### Python module import structure
-
-**Use relative imports**. Your code will be imported as source code and everything under **source
-folder** must be self-contained and isolated. Example (from `google_sheets`):
-
-```python
-from .helpers.data_processing import get_spreadsheet_id
-from .helpers.api_calls import api_auth
-from .helpers import api_calls
-```
-
-### Sharing and obtaining source credentials, test accounts, destination access
-
-1. If you are contributing and want to test against `redshift` and `bigquery`, **ping the dlt team
-   on slack**. You'll get a `toml` file fragment with the credentials that you can paste into your
-   `secrets.toml`.
-1. If you contributed a source and created any credentials, test accounts, test dataset please
-   include them in the tests or share them with `dlt` team so we can configure the CI job. If
-   sharing is not possible please help us to reproduce your test cases so CI job will pass.
-
-### Source config and credentials
-
-If you add a new source that requires a secret value, please add the secrets to
-`sources/.dlt/secrets.toml`, this file will not be committed into the git repository. When adding
-the source config and secrets please follow the
-[section layout for sources](https://github.com/dlt-hub/dlt/blob/devel/docs/technical/secrets_and_config.md#default-layout-and-default-key-lookup-during-injection).
 
 ### Destination credentials
 
