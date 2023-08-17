@@ -186,9 +186,6 @@ def facebook_insights_source(
             query = {
                 "level": level,
                 "action_breakdowns": list(action_breakdowns),
-                "breakdowns": list(
-                    INSIGHTS_BREAKDOWNS_OPTIONS[breakdowns]["breakdowns"]
-                ),
                 "limit": batch_size,
                 "fields": list(
                     set(fields)
