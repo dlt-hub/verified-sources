@@ -1,4 +1,4 @@
-"""Fetches Shopify Orders and Products."""
+"""Fetches Shopify Orders and Products. """
 
 from typing import Any, Dict, Iterator, Iterator, Optional, Iterable
 
