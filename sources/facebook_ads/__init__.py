@@ -10,7 +10,7 @@ from facebook_business.api import FacebookResponse
 import dlt
 from dlt.common import pendulum, logger
 from dlt.common.typing import TDataItems, TDataItem, DictStrAny
-from dlt.common.time import parse_iso_like_datetime
+from dlt.common.time import ensure_pendulum_datetime
 from dlt.extract.typing import ItemTransformFunctionWithMeta
 from dlt.extract.source import DltResource
 
@@ -186,9 +186,6 @@ def facebook_insights_source(
             query = {
                 "level": level,
                 "action_breakdowns": list(action_breakdowns),
-                "breakdowns": list(
-                    INSIGHTS_BREAKDOWNS_OPTIONS[breakdowns]["breakdowns"]
-                ),
                 "limit": batch_size,
                 "fields": list(
                     set(fields)
