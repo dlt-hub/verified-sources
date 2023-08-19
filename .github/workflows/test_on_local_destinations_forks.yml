@@ -9,6 +9,7 @@ on:
     types:
       - opened
       - synchronize
+      - labeled
   workflow_dispatch:
 
 env:
@@ -23,9 +24,8 @@ jobs:
     # if: ${{ github.event.pull_request.head.repo.fork }}
 
   authorize:
-    needs: get_changed_sources
-    if: needs.get_changed_sources.outputs.sources_list != ''
-
+    # run when label is assigned OR when we are in local repo
+    if: ${{ github.event.label.name == 'ci from fork' || github.event.pull_request.head.repo.full_name == github.repository}}
     # environment:
     #   ${{ github.event_name == 'pull_request_target' && github.event.pull_request.head.repo.full_name != github.repository && 'external' || 'internal' }}
     runs-on: ubuntu-latest
@@ -34,7 +34,10 @@ jobs:
 
   run_loader:
     name: test on local postgres and duckdb on forks
-    needs: authorize
+    needs:
+      - get_changed_sources
+      - authorize
+    if: needs.get_changed_sources.outputs.sources_list != ''
     strategy:
       max-parallel: 1
       fail-fast: false
