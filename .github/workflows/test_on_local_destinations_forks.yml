@@ -19,10 +19,9 @@ env:
 
 jobs:
   authorize:
-    # run when label is assigned OR when we are in loca
+    # run when label is assigned OR when we are not a fork
+    # see https://iterative.ai/blog/testing-external-contributions-using-github-actions-secrets for inspiration
     if: ${{ github.event.label.name == 'ci from fork' || (github.event.pull_request.head.repo.full_name == github.repository && (github.event.action == 'opened' || github.event.action == 'synchronize'))}}
-    # environment:
-    #   ${{ github.event_name == 'pull_request_target' && github.event.pull_request.head.repo.full_name != github.repository && 'external' || 'internal' }}
     runs-on: ubuntu-latest
     steps:
       - run: true
@@ -34,7 +33,7 @@ jobs:
     # if: ${{ github.event.pull_request.head.repo.fork }}
 
   run_loader:
-    name: test on local postgres and duckdb on forks
+    name: FORKS - test on local postgres and duckdb
     needs: get_changed_sources
     if: needs.get_changed_sources.outputs.sources_list != ''
     strategy:
