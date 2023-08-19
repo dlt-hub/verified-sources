@@ -129,7 +129,7 @@ def facebook_insights_source(
     fields: Sequence[str] = DEFAULT_INSIGHT_FIELDS,
     attribution_window_days_lag: int = 7,
     time_increment_days: int = 1,
-    breakdowns: TInsightsBreakdownOptions = "ads_insights",
+    breakdowns: TInsightsBreakdownOptions = "ads_insights_age_and_gender",
     action_breakdowns: Sequence[str] = ALL_ACTION_BREAKDOWNS,
     level: TInsightsLevels = "ad",
     action_attribution_windows: Sequence[str] = ALL_ACTION_ATTRIBUTION_WINDOWS,
