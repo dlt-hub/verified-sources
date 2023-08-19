@@ -18,13 +18,8 @@ env:
   RUNTIME__LOG_LEVEL: ERROR
 
 jobs:
-  get_changed_sources:
-    uses: ./.github/workflows/get_changed_sources.yml
-    # run only on fork
-    # if: ${{ github.event.pull_request.head.repo.fork }}
-
   authorize:
-    # run when label is assigned OR when we are in local repo
+    # run when label is assigned OR when we are in loca
     if: ${{ github.event.label.name == 'ci from fork' || github.event.pull_request.head.repo.full_name == github.repository}}
     # environment:
     #   ${{ github.event_name == 'pull_request_target' && github.event.pull_request.head.repo.full_name != github.repository && 'external' || 'internal' }}
@@ -32,11 +27,15 @@ jobs:
     steps:
       - run: true
 
+  get_changed_sources:
+    needs: authorize
+    uses: ./.github/workflows/get_changed_sources.yml
+    # run only on fork
+    # if: ${{ github.event.pull_request.head.repo.fork }}
+
   run_loader:
     name: test on local postgres and duckdb on forks
-    needs:
-      - get_changed_sources
-      - authorize
+    needs: get_changed_sources
     if: needs.get_changed_sources.outputs.sources_list != ''
     strategy:
       max-parallel: 1
