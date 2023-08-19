@@ -2,10 +2,14 @@
 name: test sources on postgres and duckdb on forks
 
 on:
-  pull_request:
+  pull_request_target:
     branches:
       - master
       - devel
+    types:
+      - opened
+      - synchronize
+      - labeled
   workflow_dispatch:
 
 env:
@@ -14,7 +18,17 @@ env:
   RUNTIME__LOG_LEVEL: ERROR
 
 jobs:
+  authorize:
+    # run when label is assigned OR when we are in loca
+    if: ${{ github.event.label.name == 'ci from fork' || github.event.pull_request.head.repo.full_name == github.repository}}
+    # environment:
+    #   ${{ github.event_name == 'pull_request_target' && github.event.pull_request.head.repo.full_name != github.repository && 'external' || 'internal' }}
+    runs-on: ubuntu-latest
+    steps:
+      - run: true
+
   get_changed_sources:
+    needs: authorize
     uses: ./.github/workflows/get_changed_sources.yml
     # run only on fork
     # if: ${{ github.event.pull_request.head.repo.fork }}
@@ -54,6 +68,8 @@ jobs:
     steps:
       - name: Check out
         uses: actions/checkout@master
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.ref }}
 
       - name: Setup Python
         uses: actions/setup-python@v1
