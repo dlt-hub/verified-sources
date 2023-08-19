@@ -9,6 +9,7 @@ on:
     types:
       - opened
       - synchronize
+      - assigned
   workflow_dispatch:
 
 env:
