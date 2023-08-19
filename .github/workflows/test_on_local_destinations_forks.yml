@@ -2,10 +2,14 @@
 name: test sources on postgres and duckdb on forks
 
 on:
-  pull_request:
+  pull_request_target:
     branches:
       - master
       - devel
+    types:
+      - opened
+      - synchronize
+      - assigned
   workflow_dispatch:
 
 env:
@@ -19,10 +23,19 @@ jobs:
     # run only on fork
     # if: ${{ github.event.pull_request.head.repo.fork }}
 
-  run_loader:
-    name: test on local postgres and duckdb on forks
+  authorize:
     needs: get_changed_sources
     if: needs.get_changed_sources.outputs.sources_list != ''
+
+    # environment:
+    #   ${{ github.event_name == 'pull_request_target' && github.event.pull_request.head.repo.full_name != github.repository && 'external' || 'internal' }}
+    runs-on: ubuntu-latest
+    steps:
+      - run: true
+
+  run_loader:
+    name: test on local postgres and duckdb on forks
+    needs: authorize
     strategy:
       max-parallel: 1
       fail-fast: false
@@ -54,6 +67,8 @@ jobs:
     steps:
       - name: Check out
         uses: actions/checkout@master
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.ref }}
 
       - name: Setup Python
         uses: actions/setup-python@v1
