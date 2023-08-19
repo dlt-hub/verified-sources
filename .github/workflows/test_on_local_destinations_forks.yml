@@ -20,7 +20,7 @@ env:
 jobs:
   authorize:
     # run when label is assigned OR when we are in loca
-    if: ${{ github.event.label.name == 'ci from fork' || github.event.pull_request.head.repo.full_name == github.repository}}
+    if: ${{ github.event.label.name == 'ci from fork' || (github.event.pull_request.head.repo.full_name == github.repository && (github.event.action == 'opened' || github.event.action == 'synchronize'))}}
     # environment:
     #   ${{ github.event_name == 'pull_request_target' && github.event.pull_request.head.repo.full_name != github.repository && 'external' || 'internal' }}
     runs-on: ubuntu-latest
