@@ -22,7 +22,7 @@ jobs:
     if: ${{ !github.event.pull_request.head.repo.fork }}
 
   run_loader:
-    name: test destinations redshift, postgres and duckdb
+    name: test destinations postgres and duckdb
     needs: get_changed_sources
     if: needs.get_changed_sources.outputs.sources_list != ''
     strategy:

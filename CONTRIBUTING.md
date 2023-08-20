@@ -313,8 +313,19 @@ ALL_DESTINATIONS='["postgres"]' pytest tests/chess
 There's also `make test-local` command that will run all the tests on `duckdb` and `postgres`.
 
 ## Github CI: setting credentials and running tests
-If you do pull request from forks, you are not able to see the credentials we set up in the upstream repository. You'll have to do that in your own fork.
+### If you do pull request from your fork to our master branch:
+- linter and init checks will run immediately
+- we will review your code
+- [we will setup secrets/credentials on our side (with your help)](#sharing-and-obtaining-source-credentials-test-accounts-destination-access)
+- we will assign a label **ci from fork** that will enable your verified sources tests against duckdb and postgres
 
+Overall following checks must pass:
+* mypy and linter
+* `dlt init` test where we make sure you provided all information to your verified source module for the distribution to correctly happen
+* tests for your source must pass on **postgres** and **duckdb**
+
+### If you do pull requests within your fork: to your forked master branch
+If you prefer to run your checks on your own CI, do the following:
 1. Go to **settings of your fork** https://github.com/**account name**/**repo name**/settings/secrets/actions
 2. Add new Repository Secrets with a name **DLT_SECRETS_TOML**
 3. Paste the `toml` fragment with source credentials [that you added to your secrets.toml](#3-add-secrets-and-configs-to-run-the-local-tests) - remember to include section name:
@@ -323,13 +334,8 @@ If you do pull request from forks, you are not able to see the credentials we se
 [sources.github]
 access_token="ghp_KZCEQlC8***"
 ```
-
 In essence **DLT_SECRETS_TOML** is just your `secrets.toml` file and will be used as such by the CI runner.
 
-Following checks must pass:
-* mypy and linter
-* `dlt init` test where we make sure you provided all information to your verified source module for the distribution to correctly happen
-* tests for your source must pass on **postgres** and **duckdb**
 
 ### Sharing and obtaining source credentials, test accounts, destination access
 Typically we created a common test account for your source [before you started coding](#walktrough-create-and-contribute-a-new-source). This is an ideal situation - we can reuse your tests directly and can merge your work quickly.
