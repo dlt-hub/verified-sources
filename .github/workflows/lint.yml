@@ -46,3 +46,14 @@ jobs:
 
       - name: Run lint
         run: make lint
+
+  matrix_job_required_check:
+    name: Runs mypy, flake and bandit
+    needs: run_lint
+    runs-on: ubuntu-latest
+    if: always()
+    steps:
+      - name: Check matrix job results
+        if: contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled')
+        run: |
+          echo "One or more matrix job tests failed or were cancelled. You may need to re-run them." && exit 1
