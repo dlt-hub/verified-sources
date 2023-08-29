@@ -11,15 +11,17 @@
 
 Make sure you have Python 3.x installed on your system.
 
+Please, use [virtual environment](https://dlthub.com/docs/reference/installation#once-python-is-installed-you-should-create-virtual-environment).
+
 Install the required library by running the following command:
 
 ```shell
-pip install dlt[duckdb]
+pip3 install "dlt[duckdb]"
 ```
 
 ## Init the pipeline
 ```sh
-dlt init unstructured_data duckdb --branch features/ustructured-source
+dlt init unstructured_data duckdb
 ```
 
 ## Install requirements
@@ -69,7 +71,7 @@ Read how to configure Inbox Source in [README.md](inbox/README.md)
 
 
 ## Run the pipeline
-### Choose the function you want to run:
+### Choose the function you want to run in `unstructured_data_pipeline.py`:
 1. The function `from_local_folder_to_structured` iterates through all the files
 in the specified local folder and saves their filepaths to the destination
 (e.g., a database). It then processes each filepath individually.
@@ -82,9 +84,11 @@ It then processes each filepath individually.
 folder, and store all relevant email information in a destination.
 It then processes each filepath individually.
 
+Uncomment the function you're planning to run. `from_inbox_to_structured` is by default.
+
 ### Run the command
 ```python
-python unstructured_data_pipeline.py
+python3 unstructured_data_pipeline.py
 ```
 
 The `unstructured_to_structured_source` function includes a transformer-type

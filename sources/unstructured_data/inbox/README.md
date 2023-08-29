@@ -4,36 +4,11 @@ This source provides functionalities to collect inbox emails, download attachmen
 folder, and store all relevant email information in a destination. It utilizes the `imaplib` library
 to interact with the IMAP server, and `dlt` library to handle data processing and transformation.
 
-## Prerequisites
-
-- Python 3.x
-- `dlt` library (you can install it using `pip install dlt`)
-- destination dependencies, e.g. `duckdb` (`pip install duckdb`)
-
-## Installation
-
-Make sure you have Python 3.x installed on your system.
-
-Install the required library by running the following command:
-
-```shell
-pip install dlt[duckdb]
-```
-
-## Initialize the source
-
-Initialize the source with dlt command:
-
-```shell
-dlt init inbox duckdb
-```
-
 ## Set email account credentials
 
 1. Open `.dlt/secrets.toml`.
 1. Enter the email account secrets:
    ```toml
-   [sources.inbox]
    host = 'imap.example.com'
    email_account = "example@example.com"
    password = 'set me up!'
