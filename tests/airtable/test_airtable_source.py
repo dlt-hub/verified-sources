@@ -22,7 +22,7 @@ def make_pipeline(destination_name: str) -> dlt.Pipeline:
 def test_load_table_by_id(destination_name: str) -> None:
     pipeline = make_pipeline(destination_name)
     questionnaire_table = airtable_source(
-        base_id="appcChDyP0pZeC76v", table_ids=["tbl1sN4CpPv8pBll4"]
+        base_id="appcChDyP0pZeC76v", table_names=["tbl1sN4CpPv8pBll4"]
     )
     run_single_table_assertions(pipeline, questionnaire_table)
 
@@ -59,7 +59,7 @@ def run_single_table_assertions(pipeline, questionnaire_table):
 
 @pytest.mark.parametrize("destination_name", ALL_DESTINATIONS)
 def test_load_all_tables_in_base(destination_name: str) -> None:
-    all_event_planning_tables = airtable_source(base_id="appctwIznRf5lqe62")
+    all_event_planning_tables = airtable_source(base_id="app7RlqvdoOmJm9XR")
     pipeline = make_pipeline(destination_name)
     load_info = pipeline.run(all_event_planning_tables, write_disposition="replace")
     assert_load_info(load_info)

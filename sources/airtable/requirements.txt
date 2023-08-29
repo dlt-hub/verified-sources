@@ -1,2 +1,2 @@
-pyairtable~=2.0
+pyairtable~=2.1
 dlt>=0.3.8
