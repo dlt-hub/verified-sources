@@ -70,6 +70,9 @@ tiktoken = "^0.4.0"
 [tool.poetry.group.mongodb.dependencies]
 pymongo = "^4.3.3"
 
+[tool.poetry.group.airtable.dependencies]
+pyairtable = "^2.1.0.post1"
+
 [build-system]
 requires = ["poetry-core"]
 build-backend = "poetry.core.masonry.api"
