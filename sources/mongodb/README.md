@@ -15,10 +15,10 @@ following source using this pipeline example:
 ## Initialize the pipeline
 
 ```bash
-dlt init mongodb bigquery
+dlt init mongodb duckdb
 ```
 
-Here, we chose bigquery as the destination. Alternatively, you can also choose redshift, duckdb, or
+Here, we chose duckdb as the destination. Alternatively, you can also choose redshift, bigquery, or
 any of the other [destinations](https://dlthub.com/docs/dlt-ecosystem/destinations/).
 
 ## Setup verified source
@@ -38,14 +38,15 @@ To setup MongoDB and grab credentials refer to the
    connection_url = "mongodb://dbuser:passwd@host.or.ip:27017" # Database connection URL.
    ```
 
-1. Update ".dlt/config.toml" with database and collection names::
+1. Update ".dlt/config.toml" with database and collection names:
+
    ```
    [your_pipeline_name]  # Set your pipeline name!
    database = "defaultDB"  # Database name (Optional), default database is loaded if not provided.
    collection_names = ["collection_1", "collection_2"] # Collection names (Optional), All collections are loaded if not provided.
    ```
 
-   > Optionally, you can set database and collection names in ".dlt/secrets.toml" without listing the pipeline name under [sources.mongodb].
+   > Optionally, you can set database and collection names in ".dlt/secrets.toml" under [sources.mongodb] without listing the pipeline name.
 
 1. Enter credentials for your chosen destination as per the
    [docs.](https://dlthub.com/docs/dlt-ecosystem/destinations/)
