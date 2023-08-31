@@ -1,0 +1,9 @@
+dlt>=0.3.5
+langchain>=0.0.219
+unstructured>=0.7.10
+openai>=0.27.8
+chromadb>=0.3.26
+tiktoken>=0.4.0
+google-api-python-client>=2.86.0
+google-auth-oauthlib>=1.0.0
+google-auth-httplib2>=0.1.0
