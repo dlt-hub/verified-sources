@@ -12,8 +12,12 @@ def from_standard_inbox() -> None:
         full_refresh=True,
     )
 
+    filter_emails = ("astra92293@gmail.com", "josue@sehnem.com")
+
     data_source = inbox_source(
-        attachments=True, filter_by_mime_type=("application/pdf",)
+        filter_by_emails=filter_emails,
+        chucksize=2,
+        filter_by_mime_type=("application/pdf",),
     )
     data_resource = data_source.resources["attachments"]
     # run the pipeline with your parameters

@@ -32,16 +32,11 @@ def get_message_obj(client: imaplib.IMAP4_SSL, message_uid: str) -> Optional[Mes
 
     return msg
 
-
-def get_internal_date(client: imaplib.IMAP4_SSL, message_uid: str) -> Optional[Any]:
-    client.select()
-    status, data = client.uid("fetch", message_uid, "(INTERNALDATE)")
-    date = None
-    if status == "OK":
-        timestruct = imaplib.Internaldate2tuple(data[0])
-        date = pendulum.from_timestamp(mktime(timestruct))
-    return date
-
+def extract_date(msg: Message) -> Optional[Any]:
+    date_format = "ddd, DD MMM YYYY HH:mm:ss ZZ"
+    date = next((hd[1] for hd in msg._headers if hd[0]=="Date"), None)
+    if date:
+        return pendulum.from_format(date, date_format).in_tz("UTC")
 
 def get_email_body(msg: Message) -> str:
     """
