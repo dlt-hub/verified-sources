@@ -12,10 +12,10 @@ def from_standard_inbox() -> None:
         full_refresh=True,
     )
 
-    filter_emails = ("astra92293@gmail.com", "josue@sehnem.com")
+    # filter_emails = ("astra92293@gmail.com", "josue@sehnem.com")
 
     data_source = inbox_source(
-        filter_by_emails=filter_emails,
+        # filter_by_emails=filter_emails,
         chucksize=2,
         filter_by_mime_type=("application/pdf",),
     )

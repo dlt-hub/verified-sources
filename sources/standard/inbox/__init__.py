@@ -8,7 +8,7 @@ import dlt
 from dlt.common import logger, pendulum
 from dlt.extract.source import DltResource, TDataItem, TDataItems
 
-from .helpers import extract_email_info, get_message_obj, extract_date
+from .helpers import extract_email_info, get_message_obj
 from .settings import (
     DEFAULT_CHUNK_SIZE,
     DEFAULT_START_DATE,
@@ -119,17 +119,17 @@ def messages_uids(
 
         if filter_emails:
             logger.info(f"Load emails only from: {filter_emails}")
-            if len(filter_emails)==1:
+            if len(filter_emails) == 1:
                 filter_emails = filter_emails[0]
             if isinstance(filter_emails, str):
                 criteria.append(f"(FROM {filter_emails})")
             else:
                 email_filter = " ".join([f"FROM {email}" for email in filter_emails])
                 criteria.append(f"(OR {email_filter})")
-        
+
         uids = get_message_uids(criteria)
         for i in range(0, len(uids), chucksize):
-            yield uids[i:i + chucksize]
+            yield uids[i : i + chucksize]
 
 
 @dlt.transformer(
@@ -169,39 +169,36 @@ def get_attachments_by_uid(
         for item in items:
             message_uid = str(item["message_uid"])
             msg = get_message_obj(client, message_uid)
-            if msg:
-                internal_date = extract_date(msg)
-                email_info = extract_email_info(msg, include_body=include_body)
+            if not msg:
+                continue
 
-                for part in msg.walk():
-                    content_disposition = part.get("Content-Disposition", "")
-                    content_type = part.get_content_type()
-                    if filter_by_mime_type and content_type not in filter_by_mime_type:
-                        continue
+            email_info = extract_email_info(msg, include_body=include_body)
+            for part in msg.walk():
+                content_type = part.get_content_type()
+                filename = part.get_filename()
+                if filter_by_mime_type and content_type not in filter_by_mime_type:
+                    continue
 
-                    if "attachment" in content_disposition:
-                        filename = part.get_filename()
-                        if filename:
-                            attachment_data = part.get_payload(decode=True)
-                            data_hash = hash(attachment_data)
+                attachment_data = part.get_payload(decode=True)
+                data_hash = hash(attachment_data)
 
-                            attachment_path = os.path.join(
-                                storage_folder_path, message_uid + filename
-                            )
-                            os.makedirs(os.path.dirname(attachment_path), exist_ok=True)
+                attachment_path = os.path.join(
+                    storage_folder_path, message_uid + filename
+                )
+                os.makedirs(os.path.dirname(attachment_path), exist_ok=True)
 
-                            with open(attachment_path, "wb") as f:
-                                f.write(attachment_data)
+                with open(attachment_path, "wb") as f:
+                    f.write(attachment_data)
 
-                            result = deepcopy(item)
-                            result.update(email_info)
-                            result.update(
-                                {
-                                    "file_name": filename,
-                                    "file_path": os.path.abspath(attachment_path),
-                                    "content_type": content_type,
-                                    "modification_date": internal_date,
-                                    "data_hash": str(data_hash),
-                                }
-                            )
-                            yield result
+                result = deepcopy(item)
+                result.update(email_info)
+                result.update(
+                    {
+                        "file_name": filename,
+                        "file_path": os.path.abspath(attachment_path),
+                        "content_type": content_type,
+                        "modification_date": result["Date"].in_tz("UTC"),
+                        "data_hash": str(data_hash),
+                    }
+                )
+                yield result
