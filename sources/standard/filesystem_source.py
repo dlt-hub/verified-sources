@@ -11,7 +11,7 @@ class FilesystemSource(metaclass=abc.ABCMeta):
         pass
 
     @abc.abstractmethod
-    def get_files(self, **kwargs) -> DltResource:
+    def get_files(self,  files: Iterable[Dict[str, Any]]) -> DltResource:
         """Get a dlt resource containing the files in the storage folder."""
         pass
 
