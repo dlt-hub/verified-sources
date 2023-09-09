@@ -31,12 +31,6 @@ def get_message_obj(client: imaplib.IMAP4_SSL, message_uid: str) -> Optional[Mes
 
     return msg
 
-# def extract_date(msg: Message) -> Optional[Any]:
-#     date_format = "ddd, DD MMM YYYY HH:mm:ss ZZ"
-#     date = next((hd[1] for hd in msg._headers if hd[0]=="Date"), None)
-#     if date:
-#         return pendulum.from_format(date, date_format).in_tz("UTC")
-
 def get_email_body(msg: Message) -> str:
     """
     Get the body of the email message.
