@@ -144,7 +144,6 @@ def get_attachments_by_uid(
     host: str = dlt.secrets.value,
     email_account: str = dlt.secrets.value,
     password: str = dlt.secrets.value,
-    include_body: bool = False,
     filter_by_mime_type: Sequence[str] = (),
 ) -> TDataItem:
     """Downloads attachments from email messages based on the provided message UIDs.
@@ -155,7 +154,6 @@ def get_attachments_by_uid(
         host (str, optional): The hostname of the IMAP server. Default is 'dlt.secrets.value'.
         email_account (str, optional): The email account used to log in to the IMAP server. Default is 'dlt.secrets.value'.
         password (str, optional): The password for the email account. Default is 'dlt.secrets.value'.
-        include_body (bool, optional): If True, includes the email body in the result. Default is False.
         filter_by_mime_type (Sequence[str], optional): A sequence of MIME types used to filter attachments based on their content type. Default is an empty sequence.
 
     Yields:
@@ -169,10 +167,8 @@ def get_attachments_by_uid(
         for item in items:
             message_uid = str(item["message_uid"])
             msg = get_message_obj(client, message_uid)
-            if not msg:
-                continue
 
-            email_info = extract_email_info(msg, include_body=include_body)
+            email_info = extract_email_info(msg)
             for part in msg.walk():
                 content_type = part.get_content_type()
                 filename = part.get_filename()
