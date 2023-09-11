@@ -2,6 +2,7 @@ import email
 import imaplib
 from email.message import Message
 from typing import Any, Dict, Optional
+import hashlib
 
 from dlt.common import pendulum
 
@@ -9,14 +10,13 @@ from dlt.common import pendulum
 def extract_email_info(msg: Message) -> Dict[str, Any]:
     email_data = dict(msg)
     email_data["Date"] = pendulum.parse(msg["Date"], strict=False)
-    email_data["content_type"] = msg.get_content_type()
 
     return {
         k: v for k, v in email_data.items() if not k.startswith(("X-", "ARC-", "DKIM-"))
     }
 
 
-def get_message_attachment(client: imaplib.IMAP4_SSL, message_uid: str, filter_by_mime_type: str) -> Optional[Message]:
+def get_message(client: imaplib.IMAP4_SSL, message_uid: str) -> Optional[Message]:
     client.select()
 
     status, data = client.uid("fetch", message_uid, "(RFC822)")
@@ -30,17 +30,28 @@ def get_message_attachment(client: imaplib.IMAP4_SSL, message_uid: str, filter_b
     
     msg = email.message_from_bytes(raw_email)
 
-    attachment_data = {}
+    return msg
 
-    for part in msg.walk():
 
+def extract_attachments(message: Message, filter_by_mime_type: str) -> Optional[Message]:
+
+    for part in message.walk():
         content_type = part.get_content_type()
-        filename = part.get_filename()
-        if filter_by_mime_type and content_type not in filter_by_mime_type:
+        content_disposition = part.get_content_disposition()
+
+        # Checks if the content is an attachment
+        if not content_disposition or content_disposition.lower() != "attachment":
             continue
 
-        attachment_data[filename] = part.get_payload(decode=True)
+        # Checks if the mime type is in the filter list
+        if filter_by_mime_type and content_type not in filter_by_mime_type:
+            continue
+        
+        attachment = {}
+        attachment["content_type"] = content_type
+        attachment["file_name"] = part.get_filename()
+        attachment["payload"] = part.get_payload(decode=True)
+        attachment["hash"] = hashlib.md5(attachment["payload"], usedforsecurity=False).hexdigest()
 
-
-    return msg
+        yield attachment
 

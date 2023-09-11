@@ -8,7 +8,7 @@ import dlt
 from dlt.common import logger, pendulum
 from dlt.extract.source import DltResource, TDataItem, TDataItems
 
-from .helpers import extract_email_info, get_message_obj
+from .helpers import extract_attachments, get_message, extract_email_info
 from .settings import (
     DEFAULT_CHUNK_SIZE,
     DEFAULT_START_DATE,
@@ -166,35 +166,28 @@ def get_attachments_by_uid(
 
         for item in items:
             message_uid = str(item["message_uid"])
-            msg = get_message_obj(client, message_uid)
-
+            msg = get_message(client, message_uid)
+            attachments = extract_attachments(msg, filter_by_mime_type)
             email_info = extract_email_info(msg)
-            for part in msg.walk():
-                content_type = part.get_content_type()
-                filename = part.get_filename()
-                if filter_by_mime_type and content_type not in filter_by_mime_type:
-                    continue
 
-                attachment_data = part.get_payload(decode=True)
-                data_hash = hash(attachment_data)
-
+            for attachment in attachments:
                 attachment_path = os.path.join(
-                    storage_folder_path, message_uid + filename
+                    storage_folder_path, message_uid + attachment["file_name"]
                 )
                 os.makedirs(os.path.dirname(attachment_path), exist_ok=True)
 
                 with open(attachment_path, "wb") as f:
-                    f.write(attachment_data)
+                    f.write(attachment["payload"])
 
                 result = deepcopy(item)
                 result.update(email_info)
                 result.update(
                     {
-                        "file_name": filename,
+                        "file_name": attachment["file_name"],
                         "file_path": os.path.abspath(attachment_path),
-                        "content_type": content_type,
+                        "content_type": attachment["content_type"],
                         "modification_date": result["Date"].in_tz("UTC"),
-                        "data_hash": str(data_hash),
+                        "data_hash": attachment["hash"],
                     }
                 )
                 yield result
