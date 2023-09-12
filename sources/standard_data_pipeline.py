@@ -3,7 +3,6 @@ from standard.inbox import inbox_source
 
 
 def from_standard_inbox() -> None:
-    
     # configure the pipeline with your destination details
     pipeline = dlt.pipeline(
         pipeline_name="standard_inbox",

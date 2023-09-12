@@ -1,15 +1,20 @@
 """This source collects inbox emails and downloads attachments to local folder"""
 import imaplib
-import os
 from copy import deepcopy
-from typing import Optional, Sequence
-import hashlib
+from itertools import chain
+from typing import Any, Dict, List, Optional, Sequence
 
 import dlt
 from dlt.common import logger, pendulum
 from dlt.extract.source import DltResource, TDataItem, TDataItems
 
-from .helpers import extract_attachments, get_message, extract_email_info, get_message_uids
+from ..filesystem_source import FilesystemSource
+from .helpers import (
+    extract_attachments,
+    extract_email_info,
+    get_message,
+    get_message_uids,
+)
 from .settings import (
     DEFAULT_CHUNK_SIZE,
     DEFAULT_START_DATE,
@@ -17,7 +22,6 @@ from .settings import (
     GMAIL_GROUP,
     STORAGE_PATH,
 )
-from ..filesystem_source import FilesystemSource
 
 
 @dlt.source
@@ -96,7 +100,7 @@ def messages_uids(
         criteria = [
             f"(SINCE {start_date.strftime('%d-%b-%Y')})",
             f"(UID {str(int(last_message_num))}:*)",
-            f"(X-GM-RAW has:attachment)",
+            "(X-GM-RAW has:attachment)",
         ]
 
         if gmail_group:
@@ -117,8 +121,10 @@ def messages_uids(
         for i in range(0, len(uids), chucksize):
             yield uids[i : i + chucksize]
 
+
 class ImapSource(FilesystemSource):
     pass
+
 
 @dlt.transformer(
     name="attachments",
@@ -155,7 +161,16 @@ def get_attachments_by_uid(
         for item in items:
             message_uid = str(item["message_uid"])
             msg = get_message(client, message_uid)
-            attachments = extract_attachments(msg, filter_by_mime_type)
+            if isinstance(filter_by_mime_type, str):
+                filter_by_mime_type = [filter_by_mime_type]
+            if filter_by_mime_type:
+                attachments = None
+                for mime_type in filter_by_mime_type:
+                    new_attachments = extract_attachments(msg, mime_type)
+                    if not attachments:
+                        attachments = new_attachments
+                    else:
+                        attachments = chain(attachments, new_attachments)
             email_info = extract_email_info(msg)
 
             for attachment in attachments:
@@ -172,4 +187,4 @@ def get_attachments_by_uid(
                 metadata.update(email_info)
                 file_data.metadata = metadata
 
-                yield file_data.dict()
+                yield file_data.as_dict()
