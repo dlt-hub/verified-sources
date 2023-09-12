@@ -2,7 +2,6 @@ import abc
 import hashlib
 import mimetypes
 import os
-from functools import cached_property
 from typing import Any, Dict, Optional
 
 from dlt.common import pendulum
