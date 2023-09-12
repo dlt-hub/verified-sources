@@ -29,9 +29,9 @@ def test_all_resources(destination_name: str) -> None:
     table_counts = load_table_counts(pipeline, *table_names)
 
     # for now only check main tables
-    expected_tables = ["channels", "dlt-github-ci_message", "_1-announcements_message"]
+    expected_tables = ["channels", "dlt_github_ci_message", "_1_announcements_message"]
     print(table_counts.keys())
     assert set(table_counts.keys()) >= set(expected_tables)
     assert table_counts["channels"] >= 15
-    assert table_counts["dlt-github-ci_message"] == 24
-    assert table_counts["_1-announcements_message"] == 2
+    assert table_counts["dlt_github_ci_message"] == 24
+    assert table_counts["_1_announcements_message"] == 2
