@@ -71,13 +71,12 @@ class TableLoader:
             Select[Any], query.where(filter_op(self.cursor_column, self.last_value))
         )
 
-    def load_rows(self) -> Iterator[TDataItem]:
+    def load_rows(self) -> Iterator[List[TDataItem]]:
         query = self.make_query()
         with self.engine.connect() as conn:
             result = conn.execution_options(yield_per=self.chunk_size).execute(query)
             for partition in result.partitions():
-                for row in partition:
-                    yield dict(row._mapping)
+                yield [dict(row._mapping) for row in partition]
 
 
 def table_rows(
