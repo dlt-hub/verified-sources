@@ -3,12 +3,13 @@ import imaplib
 import os
 from copy import deepcopy
 from typing import Optional, Sequence
+import hashlib
 
 import dlt
 from dlt.common import logger, pendulum
 from dlt.extract.source import DltResource, TDataItem, TDataItems
 
-from .helpers import extract_attachments, get_message, extract_email_info
+from .helpers import extract_attachments, get_message, extract_email_info, get_message_uids
 from .settings import (
     DEFAULT_CHUNK_SIZE,
     DEFAULT_START_DATE,
@@ -101,22 +102,6 @@ def messages_uids(
             logger.info(f"Load all emails for Group: {gmail_group}")
             criteria.extend([f"(TO {gmail_group})"])
 
-        def get_message_uids(criterias: Sequence[str]) -> Optional[TDataItems]:
-            status, messages = client.uid("search", *criterias)
-
-            if status != "OK":
-                raise Exception("Error searching for emails.")
-
-            message_uids = messages[0].split()
-
-            if not message_uids:
-                logger.warning("No emails found.")
-                return None
-            else:
-                return [
-                    {"message_uid": int(message_uid)} for message_uid in message_uids
-                ]
-
         if filter_emails:
             logger.info(f"Load emails only from: {filter_emails}")
             if len(filter_emails) == 1:
@@ -127,7 +112,7 @@ def messages_uids(
                 email_filter = " ".join([f"FROM {email}" for email in filter_emails])
                 criteria.append(f"(OR {email_filter})")
 
-        uids = get_message_uids(criteria)
+        uids = get_message_uids(client, criteria)
         for i in range(0, len(uids), chucksize):
             yield uids[i : i + chucksize]
 
@@ -179,6 +164,8 @@ def get_attachments_by_uid(
                 with open(attachment_path, "wb") as f:
                     f.write(attachment["payload"])
 
+                file_hash = hashlib.md5(attachment["payload"], usedforsecurity=False).hexdigest()
+
                 result = deepcopy(item)
                 result.update(email_info)
                 result.update(
@@ -187,7 +174,7 @@ def get_attachments_by_uid(
                         "file_path": os.path.abspath(attachment_path),
                         "content_type": attachment["content_type"],
                         "modification_date": result["Date"].in_tz("UTC"),
-                        "data_hash": attachment["hash"],
+                        "data_hash": file_hash,
                     }
                 )
                 yield result

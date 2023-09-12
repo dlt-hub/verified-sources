@@ -2,6 +2,7 @@ from typing import Iterable, Dict, Any
 
 import abc
 from dlt import DltResource
+import hashlib
 
 class FilesystemSource(metaclass=abc.ABCMeta):
     """Abstract base class for all filesystem sources."""

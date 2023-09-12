@@ -1,10 +1,25 @@
 import email
 import imaplib
 from email.message import Message
-from typing import Any, Dict, Optional
-import hashlib
+from typing import Any, Dict, Optional, Sequence
 
-from dlt.common import pendulum
+from dlt.common import logger, pendulum
+from dlt.extract.source import TDataItems
+
+
+def get_message_uids(client: imaplib.IMAP4_SSL, criterias: Sequence[str]) -> Optional[TDataItems]:
+    status, messages = client.uid("search", *criterias)
+
+    if status != "OK":
+        raise Exception("Error searching for emails.")
+
+    message_uids = messages[0].split()
+
+    if not message_uids:
+        logger.warning("No emails found.")
+        return None
+
+    return [{"message_uid": int(message_uid)} for message_uid in message_uids]
 
 
 def extract_email_info(msg: Message) -> Dict[str, Any]:
@@ -17,7 +32,6 @@ def extract_email_info(msg: Message) -> Dict[str, Any]:
 
 
 def get_message(client: imaplib.IMAP4_SSL, message_uid: str) -> Optional[Message]:
-    client.select()
 
     status, data = client.uid("fetch", message_uid, "(RFC822)")
     if status == "OK":
@@ -51,7 +65,6 @@ def extract_attachments(message: Message, filter_by_mime_type: str) -> Optional[
         attachment["content_type"] = content_type
         attachment["file_name"] = part.get_filename()
         attachment["payload"] = part.get_payload(decode=True)
-        attachment["hash"] = hashlib.md5(attachment["payload"], usedforsecurity=False).hexdigest()
 
         yield attachment
 
