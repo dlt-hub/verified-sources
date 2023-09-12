@@ -15,13 +15,14 @@ from .settings import (
     DEFAULT_START_DATE,
     FILTER_EMAILS,
     GMAIL_GROUP,
-    STORAGE_FOLDER_PATH,
+    STORAGE_PATH,
 )
+from ..filesystem_source import FilesystemSource
 
 
 @dlt.source
 def inbox_source(
-    storage_folder_path: str = STORAGE_FOLDER_PATH,
+    storage_path: str = STORAGE_PATH,
     gmail_group: Optional[str] = GMAIL_GROUP,
     start_date: pendulum.DateTime = DEFAULT_START_DATE,
     filter_by_emails: Sequence[str] = FILTER_EMAILS,
@@ -31,7 +32,7 @@ def inbox_source(
     """This source collects inbox emails and downloads attachments to the local folder.
 
     Args:
-        storage_folder_path (str, optional): The local folder path where attachments will be downloaded. Default is 'STORAGE_FOLDER_PATH' from settings.
+        storage_path (str, optional): The local folder path where attachments will be downloaded. Default is 'STORAGE_FOLDER_PATH' from settings.
         gmail_group (str, optional): The email address of the Google Group to filter emails sent to the group. Default is 'GMAIL_GROUP' from settings.
         start_date (pendulum.DateTime, optional): The start date from which to collect emails. Default is 'DEFAULT_START_DATE' from settings.
         filter_by_emails (Sequence[str], optional): A sequence of email addresses used to filter emails based on the 'FROM' field. Default is 'FILTER_EMAILS' from settings.
@@ -50,7 +51,7 @@ def inbox_source(
         chucksize=chucksize,
     )
     return uids | get_attachments_by_uid(
-        storage_folder_path=storage_folder_path,
+        storage_path=storage_path,
         filter_by_mime_type=filter_by_mime_type,
     )
 
@@ -116,6 +117,8 @@ def messages_uids(
         for i in range(0, len(uids), chucksize):
             yield uids[i : i + chucksize]
 
+class ImapSource(FilesystemSource):
+    pass
 
 @dlt.transformer(
     name="attachments",
@@ -125,7 +128,7 @@ def messages_uids(
 )
 def get_attachments_by_uid(
     items: TDataItems,
-    storage_folder_path: str,
+    storage_path: str,
     host: str = dlt.secrets.value,
     email_account: str = dlt.secrets.value,
     password: str = dlt.secrets.value,
@@ -135,7 +138,7 @@ def get_attachments_by_uid(
 
     Args:
         items (TDataItems): An iterable containing dictionaries with 'message_uid' representing the email message UIDs.
-        storage_folder_path (str): The local folder path where attachments will be downloaded.
+        storage_path (str): The local folder path where attachments will be downloaded.
         host (str, optional): The hostname of the IMAP server. Default is 'dlt.secrets.value'.
         email_account (str, optional): The email account used to log in to the IMAP server. Default is 'dlt.secrets.value'.
         password (str, optional): The password for the email account. Default is 'dlt.secrets.value'.
@@ -156,25 +159,17 @@ def get_attachments_by_uid(
             email_info = extract_email_info(msg)
 
             for attachment in attachments:
-                attachment_path = os.path.join(
-                    storage_folder_path, message_uid + attachment["file_name"]
+                file_data = ImapSource(
+                    file_name=attachment["file_name"],
+                    storage_path=storage_path,
+                    file=attachment["payload"],
+                    mod_date=email_info["Date"],
+                    mime_type=attachment["content_type"],
+                    remote_id=message_uid,
                 )
-                os.makedirs(os.path.dirname(attachment_path), exist_ok=True)
 
-                with open(attachment_path, "wb") as f:
-                    f.write(attachment["payload"])
+                metadata = deepcopy(item)
+                metadata.update(email_info)
+                file_data.metadata = metadata
 
-                file_hash = hashlib.md5(attachment["payload"], usedforsecurity=False).hexdigest()
-
-                result = deepcopy(item)
-                result.update(email_info)
-                result.update(
-                    {
-                        "file_name": attachment["file_name"],
-                        "file_path": os.path.abspath(attachment_path),
-                        "content_type": attachment["content_type"],
-                        "modification_date": result["Date"].in_tz("UTC"),
-                        "data_hash": file_hash,
-                    }
-                )
-                yield result
+                yield file_data.dict()
