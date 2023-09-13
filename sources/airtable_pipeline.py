@@ -73,7 +73,7 @@ def load_select_tables_from_base_by_name() -> None:
 
     airtables.resources["table_name"].apply_hints(
         primary_key="Field1",
-        columns={"Field1": {"name": "Field1", "data_type": "integer"}},
+        columns={"Field1": {"name": "Field1", "data_type": "date"}},
     )
     load_info = pipeline.run(airtables, write_disposition="replace")
     print(load_info)
