@@ -15,10 +15,22 @@ def from_standard_inbox() -> None:
 
     data_source = inbox_source(
         # filter_by_emails=filter_emails,
-        chucksize=2,
+        attachments=True,
+        chunksize=10,
         filter_by_mime_type=("application/pdf",),
     )
     data_resource = data_source.resources["attachments"]
+    # run the pipeline with your parameters
+    load_info = pipeline.run(data_resource)
+    # pretty print the information on data that was loaded
+    print(load_info)
+
+    data_source = inbox_source(
+        # filter_by_emails=filter_emails,
+        attachments=False,
+        chunksize=10,
+    )
+    data_resource = data_source.resources["messages"]
     # run the pipeline with your parameters
     load_info = pipeline.run(data_resource)
     # pretty print the information on data that was loaded
