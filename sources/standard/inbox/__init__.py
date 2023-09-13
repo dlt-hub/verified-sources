@@ -10,7 +10,6 @@ import dlt
 from dlt.common import logger, pendulum
 from dlt.extract.source import DltResource, TDataItem, TDataItems
 
-from ..filesystem_source import FilesystemSource
 from .helpers import (
     extract_attachments,
     extract_email_info,
