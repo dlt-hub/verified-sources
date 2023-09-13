@@ -2,77 +2,120 @@ import dlt
 from airtable import airtable_source
 
 
-def load_entire_base(pipeline: dlt.Pipeline) -> None:
-    # Loads all tables inside a given base.
-    # Find the base ID starting with "app". See https://support.airtable.com/docs/finding-airtable-ids
-    all_event_planning_tables = airtable_source(base_id="app7RlqvdoOmJm9XR")
+def load_entire_base() -> None:
+    """
+       Loads all tables from the specified Airtable base.
 
-    # typing columns to silence warnings
-    all_event_planning_tables.resources["📆 Schedule"].apply_hints(
-        columns={"Activity": {"name": "Activity", "data_type": "text"}}
-    )
-    all_event_planning_tables.resources["🎤 Speakers"].apply_hints(
-        columns={"Name": {"name": "Name", "data_type": "text"}}
-    )
-    all_event_planning_tables.resources["🪑 Attendees"].apply_hints(
-        columns={"Name": {"name": "Name", "data_type": "text"}}
-    )
-    all_event_planning_tables.resources["💰 Budget"].apply_hints(
-        columns={"Item": {"name": "Item", "data_type": "text"}}
+       Note:
+       - Locate the base ID starting with "app". For guidance, refer to https://support.airtable.com/docs/finding-airtable-ids.
+       - The base_id can either be passed directly or set up in ".dlt/config.toml".
+    """
+    # configure the pipeline with your destination details
+    pipeline = dlt.pipeline(
+        pipeline_name="airtable",
+        destination="duckdb",
+        dataset_name="airtable_data"
     )
 
-    load_info = pipeline.run(all_event_planning_tables, write_disposition="replace")
-    print(load_info)
+    # Retrieve data from Airtable using airtable_source.
+    airtables = airtable_source(base_id="Please set me up!")
 
-
-def load_select_tables_from_base_by_id(pipeline: dlt.Pipeline) -> None:
-    # Loads specific table IDs.
-    # Starts with "tbl". See https://support.airtable.com/docs/finding-airtable-ids
-    # See example: https://airtable.com/app7RlqvdoOmJm9XR/tblKHM5s3AujfSbAH
-    airtables = airtable_source(
-        base_id="app7RlqvdoOmJm9XR",
-        table_names=["tblKHM5s3AujfSbAH", "tbloBrS8PnoO63aMP"],
+    # Explicitly define data types for columns to prevent type inference warnings.
+    # Adjust as per your data.
+    airtables.resources["Table1"].apply_hints(
+        columns={
+            "Field1": {
+                "name": "Field1",
+                "data_type": "text"
+            }
+        }
     )
 
     load_info = pipeline.run(airtables, write_disposition="replace")
     print(load_info)
 
 
-def load_select_tables_from_base_by_name(pipeline: dlt.Pipeline) -> None:
-    # Loads specific table names.
-    # Filtering by names is less reliable than filtering on IDs because names can be changed by Airtable users.
-    # See example: https://airtable.com/app7RlqvdoOmJm9XR/tblJCTXfjwOETmvy2/
-    event_base = airtable_source(
-        base_id="app7RlqvdoOmJm9XR",
-        table_names=["💰 Budget"],
-    )
-    event_base.resources["💰 Budget"].apply_hints(
-        primary_key="Item", columns={"Item": {"name": "Item", "data_type": "text"}}
-    )
-    load_info = pipeline.run(event_base, write_disposition="replace")
-    print(load_info)
+def load_select_tables_from_base_by_id() -> None:
+    """
+        Load specific table IDs from Airtable to a data pipeline.
 
+        Notes:
+        - Table IDs should start with "tbl".
+        - Refer to Airtable documentation for finding IDs:
+          https://support.airtable.com/docs/finding-airtable-ids
+        - Example in this Airtable URL: https://airtable.com/app7RlqvdoOmJm9XR/tblKHM5s3AujfSbAH
+        - "tblKHM5s3AujfSbAH" is the table ID.
+    """
 
-def load_and_customize_write_disposition(pipeline: dlt.Pipeline) -> None:
-    questionnaire = airtable_source(
-        base_id="appcChDyP0pZeC76v", table_names=["tbl1sN4CpPv8pBll4"]
-    )
-    questionnaire.resources["Sheet1"].apply_hints(
-        primary_key="Name",
-        columns={"Name": {"name": "Name", "data_type": "text"}},
-        write_disposition="merge",
-    )
-    load_info = pipeline.run(questionnaire)
-    print(load_info)
-
-
-if __name__ == "__main__":
     # configure the pipeline with your destination details
+    pipeline = dlt.pipeline(
+        pipeline_name="airtable",
+        destination="duckdb",
+        dataset_name="airtable_data"
+    )
+
+    airtables = airtable_source(
+        base_id="Please set me up!",
+        table_names=["table1", "table2"],
+    )
+
+    load_info = pipeline.run(airtables, write_disposition="replace")
+    print(load_info)
+
+
+def load_select_tables_from_base_by_name() -> None:
+    """
+    Loads specific table names from an Airtable base.
+
+    Note:
+        Filtering by table names is less reliable than by IDs since names can be changed by Airtable users.
+        Example Airtable: https://airtable.com/app7RlqvdoOmJm9XR/tblJCTXfjwOETmvy2/
+    """
+    pipeline = dlt.pipeline(
+        pipeline_name="airtable",
+        destination="duckdb",
+        dataset_name="airtable_data"
+    )
+
+    airtables = airtable_source(
+        base_id="Please set me up!",
+        table_names=["table_name"],
+    )
+
+    airtables.resources["table_name"].apply_hints(
+        primary_key="Field1", columns={"Field1": {"name": "Field1", "data_type": "integer"}}
+    )
+    load_info = pipeline.run(airtables, write_disposition="replace")
+    print(load_info)
+
+
+def load_and_customize_write_disposition() -> None:
+    """
+        Loads data from a specific Airtable base's table with customized write disposition("merge") using Field1.
+
+        Note:
+            Ensure the 'base_id' value in 'airtable_source' is properly set up before execution.
+
+    """
     pipeline = dlt.pipeline(
         pipeline_name="airtable", destination="duckdb", dataset_name="airtable_data"
     )
 
-    load_entire_base(pipeline)
-    load_select_tables_from_base_by_id(pipeline)
-    load_select_tables_from_base_by_name(pipeline)
-    load_and_customize_write_disposition(pipeline)
+    airtables = airtable_source(
+        base_id="Please set me up!", table_names=["table_name"]
+    )
+    airtables.resources["Sheet1"].apply_hints(
+        primary_key="Field1",
+        columns={"Field1": {"name": "Field1", "data_type": "text"}},
+        write_disposition="merge",
+    )
+    load_info = pipeline.run(airtables)
+    print(load_info)
+
+
+if __name__ == "__main__":
+
+    load_entire_base()
+    # load_select_tables_from_base_by_id()
+    # load_select_tables_from_base_by_name()
+    # load_and_customize_write_disposition()
