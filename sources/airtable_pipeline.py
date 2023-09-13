@@ -94,7 +94,7 @@ def load_select_tables_from_base_by_name(base_id: str, table_names: List[str], f
     print(load_info)
 
 
-def load_and_customize_write_disposition(base_id, table_names, field_name) -> None:
+def load_and_customize_write_disposition(base_id: str, table_names: List[str], field_name: str) -> None:
     """
     Loads data from a specific Airtable base's table with customized write disposition("merge") using field_name.
 
