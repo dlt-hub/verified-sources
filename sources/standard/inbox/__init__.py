@@ -9,6 +9,7 @@ from typing import Any, Dict, List, Optional, Sequence
 import dlt
 from dlt.common import logger, pendulum
 from dlt.extract.source import DltResource, TDataItem, TDataItems
+from ..file_source import FileModel
 
 from .helpers import (
     extract_attachments,
@@ -222,16 +223,16 @@ def get_attachments_by_uid(
 
                 file_hash = hashlib.sha256(attachment["payload"]).hexdigest()
 
+                file_md = FileModel(
+                    file_name = filename,
+                    file_path = os.path.abspath(file_path),
+                    content_type = attachment["content_type"],
+                    modification_date = internal_date,
+                    data_hash = file_hash,
+                )
+
                 attachment_data = deepcopy(item)
                 attachment_data.update(email_info)
-                attachment_data.update(
-                    {
-                        "file_name": filename,
-                        "file_path": os.path.abspath(file_path),
-                        "content_type": attachment["content_type"],
-                        "modification_date": internal_date,
-                        "data_hash": file_hash,
-                    }
-                )
+                attachment_data.update(file_md.dict())
 
                 yield attachment_data
