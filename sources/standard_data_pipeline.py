@@ -53,9 +53,12 @@ def from_standard_filesystem() -> None:
     )
 
     data_source = filesystem_source(
+        filename_filter="mlb*.csv",
         chunksize=10,
+        extract_content=True,
     )
-    data_resource = data_source.resources["files"]
+    # data_resource = data_source.resources["files"]
+    data_resource = data_source.resources["content"]
     # run the pipeline with your parameters
     load_info = pipeline.run(data_resource)
     # pretty print the information on data that was loaded

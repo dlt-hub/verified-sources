@@ -1,5 +1,5 @@
 from dlt.common import pendulum
 
-STORAGE_PATH = "files/"
-DEFAULT_START_DATE = pendulum.datetime(2023, 7, 1)
+STORAGE_PATH = "standard/files/"
+DEFAULT_START_DATE = pendulum.from_timestamp(0)
 DEFAULT_CHUNK_SIZE = 100
