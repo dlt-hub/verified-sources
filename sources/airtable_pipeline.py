@@ -60,7 +60,7 @@ def load_select_tables_from_base_by_id(base_id: str, table_names: List[str]) -> 
 
 
 def load_select_tables_from_base_by_name(
-    base_id: str, table_names: List[str], field_name: str
+    base_id: str, table_names: List[str], resource_name: str, field_name: str
 ) -> None:
     """
     Loads specific table names from an Airtable base.
@@ -70,7 +70,7 @@ def load_select_tables_from_base_by_name(
             It starts with "app". See https://support.airtable.com/docs/finding-airtable-ids
         table_names (List[str]): A list of table IDs or table names to load. Unless specified otherwise,
             all tables in the schema are loaded.  Names are freely user-defined. IDs start with "tbl".
-            See https://support.airtable.com/docs/finding-airtable-ids
+            See https://support.airtable.com/docs/finding-airtable-idss
         field_name (str): The name of the table field for which we want to apply hints.
 
     Note:
@@ -88,7 +88,7 @@ def load_select_tables_from_base_by_name(
         table_names=table_names,
     )
 
-    airtables.resources[table_names[0]].apply_hints(
+    airtables.resources[resource_name].apply_hints(
         primary_key=field_name,
         columns={field_name: {"data_type": "text"}},
     )
@@ -97,7 +97,7 @@ def load_select_tables_from_base_by_name(
 
 
 def load_and_customize_write_disposition(
-    base_id: str, table_names: List[str], field_name: str
+    base_id: str, table_names: List[str], resource_name: str, field_name: str
 ) -> None:
     """
     Loads data from a specific Airtable base's table with customized write disposition("merge") using field_name.
@@ -125,25 +125,31 @@ def load_and_customize_write_disposition(
         base_id=base_id,
         table_names=table_names,
     )
-    airtables.resources[table_names[0]].apply_hints(
+    airtables.resources[resource_name].apply_hints(
         primary_key=field_name,
         columns={field_name: {"data_type": "text"}},
-        write_disposition="merge",
     )
     load_info = pipeline.run(airtables)
     print(load_info)
 
 
 if __name__ == "__main__":
-    base_id_example = "set me up"
-    table_names_example = ["set me up"]
-    field_name_example = "set me up"
+    base_id_example = "Please set me up!"
+    table_names_example = ["Please set me up!"]
+    resource_name_to_apply_hints = "Please set me up!"
+    field_name_example = "Please set me up!"
 
     load_entire_base(base_id_example)
     load_select_tables_from_base_by_id(base_id_example, table_names_example)
     load_select_tables_from_base_by_name(
-        base_id_example, table_names_example, field_name_example
+        base_id_example,
+        table_names_example,
+        resource_name_to_apply_hints,
+        field_name_example,
     )
     load_and_customize_write_disposition(
-        base_id_example, table_names_example, field_name_example
+        base_id_example,
+        table_names_example,
+        resource_name_to_apply_hints,
+        field_name_example,
     )
