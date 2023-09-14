@@ -71,7 +71,8 @@ def load_select_tables_from_base_by_name(
         table_names (List[str]): A list of table IDs or table names to load. Unless specified otherwise,
             all tables in the schema are loaded.  Names are freely user-defined. IDs start with "tbl".
             See https://support.airtable.com/docs/finding-airtable-idss
-        field_name (str): The name of the table field for which we want to apply hints.
+        resource_name (str): The table name we want to apply hints.
+        field_name (str): The table field name for which we want to apply hints.
 
     Note:
         - Filtering by names is less reliable than filtering on IDs because names can be changed by Airtable users.
@@ -108,7 +109,8 @@ def load_and_customize_write_disposition(
         table_names (List[str]): A list of table IDs or table names to load. Unless specified otherwise,
             all tables in the schema are loaded.  Names are freely user-defined. IDs start with "tbl".
             See https://support.airtable.com/docs/finding-airtable-ids
-        field_name (str): The name of the table field for which we want to apply hints.
+        resource_name (str): The table name we want to apply hints.
+        field_name (str): The table field name for which we want to apply hints.
 
     Note:
         - Filtering by names is less reliable than filtering on IDs because names can be changed by Airtable users.
