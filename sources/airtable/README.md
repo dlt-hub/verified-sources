@@ -4,55 +4,17 @@ description: dlt source for Airtable.com API
 keywords: [airtable api, airtable source, airtable, base]
 ---
 
-
 # Airtable
 
-[Airtable](https://airtable.com/) is a spreadsheet-database hybrid, with the features of a database but applied to a spreadsheet. It is also marketed as a low‒code platform to build next‒gen apps. Spreadsheets are called *airtables* and are grouped into *bases*. 
-Records can link to each other.
+[Airtable](https://airtable.com/) is a cloud-based platform that merges spreadsheet and database
+functionalities for easy data management and collaboration.
 
-This [dlt source](https://dlthub.com/docs/general-usage/source) creates a [dlt resource](https://dlthub.com/docs/general-usage/resource) for every airtable and loads it into the destination. 
+Sources and resources that can be loaded using this verified source are:
 
-
-## Supported methods to load airtables
-
-1. identify the *base* you want to load from. The ID starts with "app". See [how to find airtable IDs](https://support.airtable.com/docs/finding-airtable-ids)
-2. identify the *airtables* you want to load. You can identify in three ways:
-
-   1. retrieve *airtables* from a given *base* for a list of user-defined mutable names of tables
-   2. retrieve *airtables* from a given *base* for a list of immutable IDs defined by airtable.com at the creation time of the *airtable*. IDs start with "tbl". See [how to find airtable IDs](https://support.airtable.com/docs/finding-airtable-ids)
-   3. empty filter: retrieve all *airtables* from a given *base*
-
-
-## Supported write dispositions
-This connector supports the write disposition `replace`, i.e. it does a [full load](https://dlthub.com/docs/general-usage/full-loading) on every invocation.
-
-To use support `append`, i.e. [incremental loading](https://dlthub.com/docs/general-usage/incremental-loading) there are two possibilities:
-
-### Parametrize the `pipeline.run` method 
-
-```python
- event_base = airtable_source(
-     base_id="app7RlqvdoOmJm9XR",
-     table_names=["💰 Budget"],
- )
- load_info = pipeline.run(event_base, write_disposition="replace")
-```
-
-## Customize the resource using the `apply_hints` method
-
-This approach further allows to [adjust the schema](https://dlthub.com/docs/general-usage/resource#adjust-schema)
-```python
- event_base = airtable_source(
-     base_id="app7RlqvdoOmJm9XR",
-     table_names=["💰 Budget"],
- )
- event_base.resources["💰 Budget"].apply_hints(
-      write_disposition="merge",
-      columns={"Item": {"name": "Item", "data_type": "text"}},
- )
- load_info = pipeline.run(event_base)
-```
-
+| Name              | Description                                |
+| ----------------- | ------------------------------------------ |
+| airtable_source   | Retrieves tables from an airtable base     |
+| airtable_resource | Retrives data from a single airtable table |
 
 ## Initialize the pipeline
 
@@ -60,41 +22,66 @@ This approach further allows to [adjust the schema](https://dlthub.com/docs/gene
 dlt init airtable duckdb
 ```
 
-Here, we chose duckdb as the destination. Alternatively, you can also choose redshift, bigquery, or any of the other 
-[destinations](https://dlthub.com/docs/dlt-ecosystem/destinations/).
+Here, we chose duckdb as the destination. Alternatively, you can also choose redshift, bigquery, or
+any of the other [destinations.](https://dlthub.com/docs/dlt-ecosystem/destinations/)
 
+## Grab Airtable credentials
 
-## Add credentials
+To learn about grabbing the Airtable credentials and configuring the verified source, please refer
+to the
+[full documentation here.](https://dlthub.com/docs/dlt-ecosystem/verified-sources/airtable#grab-airtable-ids)
 
-1. [Obtain a Personal Access Token](https://support.airtable.com/docs/creating-and-using-api-keys-and-access-tokens).
-  If you're on an enterprise plan you can create an [Airtable Service Account](https://dlthub.com/docs/dlt-ecosystem/verified-sources/chess).
-  Place the key into your `secrets.toml` like this:
-```
-[sources.airtable]
-access_token = "pat***"
-```
-2. Follow the instructions in the [destinations](https://dlthub.com/docs/dlt-ecosystem/destinations/) 
-  document to add credentials for your chosen destination.
+### Add credentials
 
+1. In the `.dlt` folder, there's a file called `secrets.toml`. It's where you store sensitive
+   information securely, like access tokens. Keep this file safe. Here's its format for service
+   account authentication:
+
+   ```toml
+   [sources.airtable]
+   access_token = "Please set me up!" # please set me up!
+   ```
+
+1. Finally, enter credentials for your chosen destination as per the [docs](../destinations/).
+
+1. Next you need to configure ".dlt/config.toml", which looks like:
+
+   ```toml
+   [sources.airtable]
+   base_id = "Please set me up!"       # The id of the base.
+   table_names = ["Table1","Table2"]   # A list of table IDs or table names to load.
+   ```
+
+   > Optionally, you can also input "base_id" and "table_names" in the script, as in the pipeline
+   > example.
 
 ## Run the pipeline
 
-1. Install the necessary dependencies by running the following command:
+1. Before running the pipeline, ensure that you have installed all the necessary dependencies by
+   running the command:
 
    ```bash
    pip install -r requirements.txt
    ```
 
-2. Now the pipeline can be run by using the command:
+1. You're now ready to run the pipeline! To get started, run the following command:
 
    ```bash
-   python airtable_pipeline.py
+   python3 airtable_pipeline.py
    ```
 
-3. To make sure that everything is loaded as expected, use the command:
+1. Once the pipeline has finished running, you can verify that everything loaded correctly by using
+   the following command:
 
    ```bash
-   dlt pipeline airtable_pipeline show
+   dlt pipeline <pipeline_name> show
    ```
 
-💡 To explore additional customizations for this pipeline, we recommend referring to the example pipelines in `airtable_pipeline.py`.
+   For example, the `pipeline_name` for the above pipeline example is `airtable`, you may also use
+   any custom name instead.
+
+💡 To explore additional customizations for this pipeline, we recommend referring to the official DLT
+Airtable documentation. It provides comprehensive information and guidance on how to further
+customize and tailor the pipeline to suit your specific needs. You can find the DLT Airtable
+documentation in the
+[Setup Guide: Airtable.](https://dlthub.com/docs/dlt-ecosystem/verified-sources/airtable)
