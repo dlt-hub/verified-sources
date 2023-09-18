@@ -44,10 +44,11 @@ def filesystem_resource(
         if extract_content:
             file_dict["content"] = fs_client.read_bytes(file_dict["file_url"])
         # Need to check if passing an open file is ok, probably we will need to create a class
-        # to manage the context, closing the file after the process.
+        # to manage the context, closing the file after the process. 
         else:
             file_dict["file_instance"] = fs_client.open(file_dict["file_url"])
         files_chunk.append(file_dict)
         if len(file_dict) >= chunksize:
             yield files_chunk
+            files_chunk = []
 

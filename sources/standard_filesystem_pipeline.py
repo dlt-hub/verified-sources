@@ -21,11 +21,10 @@ def read_file(file_data: TDataItem) -> bytes:
     Returns:
         bytes: The file content
     """
-    content = b""
     if "content" in file_data:
         content = file_data.pop("content")
     elif "file_instance" in file_data:
-        content = file_data["file_instance"].read()
+        content = file_data.pop("file_instance").read()
     return content
 
 
@@ -45,12 +44,12 @@ def copy_files(
     """
     storage_path = os.path.abspath(storage_path)
     os.makedirs(storage_path, exist_ok=True)
-    for file in items:
-        file_dst = os.path.join(storage_path, file["file_name"])
-        file["path"] = file_dst
+    for file_md in items:
+        file_dst = os.path.join(storage_path, file_md["file_name"])
+        file_md["path"] = file_dst
         with open(file_dst, "wb") as f:
-            f.write(read_file(file))
-        yield file
+            f.write(read_file(file_md))
+        yield file_md
 
 
 @dlt.transformer(
@@ -66,14 +65,12 @@ def extract_csv(
     
     Args:
         items (TDataItems): The list of files to copy.
-        fs_client (AbstractFileSystem): The filesystem client.
-        copy_before_parse (bool, optional): Copy the files to local directory before parsing.
 
     Returns:
         TDataItem: The file content
     """
-    for file in items:
-        file_data = BytesIO(read_file(file))
+    for file_md in items:
+        file_data = BytesIO(read_file(file_md))
         for df in pd.read_csv(file_data, chunksize=100):
             yield df.to_dict(orient="records")
 
@@ -90,7 +87,7 @@ def from_standard_filesystem() -> None:
     file_source = filesystem_resource(
         filename_filter="mlb*.csv",
         chunksize=1,
-        extract_content=True,
+        extract_content=False,
     ) | copy_files(storage_path="standard/files")
 
     # run the pipeline with your parameters
@@ -100,7 +97,7 @@ def from_standard_filesystem() -> None:
 
     csv_source = filesystem_resource(
         filename_filter="mlb*.csv",
-        chunksize=1,
+        chunksize=10,
     ) | extract_csv
 
     # run the pipeline with your parameters
