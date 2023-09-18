@@ -1,10 +1,10 @@
+from typing import TypedDict
 from pendulum import DateTime
-from pydantic import BaseModel
 
-
-class FileModel(BaseModel):
+class FileModel(TypedDict):
     file_name: str
-    file_path: str
+    file_url: str
     content_type: str
     modification_date: DateTime
-    data_hash: str
+    size_in_bytes: int
+
