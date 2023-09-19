@@ -20,11 +20,28 @@ class FilesystemConfigurationResource(FilesystemConfiguration):
 
 
 def client_from_credentials(credentials: FilesystemConfiguration) -> AbstractFileSystem:
+    """Create a filesystem client from the credentials.
+    
+    Args:
+        credentials (FilesystemConfiguration): The credentials to the filesystem.
+
+    Returns:
+        AbstractFileSystem: The filesystem client.
+    """
     fs_client, _ = filesystem_from_config(credentials)
     return fs_client
 
 
 def get_files(fs_client: AbstractFileSystem, files_url: str) -> Iterable[FileModel]:
+    """Get the files from the filesystem client.
+
+    Args:
+        fs_client (AbstractFileSystem): The filesystem client.
+        files_url (str): The url to the files.
+
+    Returns:
+        Iterable[FileModel]: The list of files.
+    """
     files = fs_client.glob(files_url, detail=True)
 
     for file, md in files.items():

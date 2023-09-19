@@ -1,38 +1,28 @@
+---
+title: Filesystem
+description: dlt source for fsspec filesystems
+keywords: [filesystem, fsspec, s3]
+---
+
 # Filesystem Source
 
-This source provides functionalities get data from fsspec filesystem.
-
-## Prerequisites
-
-- Python 3.x
-- `dlt` library (you can install it using `pip install dlt`)
-- destination dependencies, e.g. `duckdb` (`pip install duckdb`)
-
-## Installation
-
-Make sure you have Python 3.x installed on your system.
-
-Install the required library by running the following command:
-
-```shell
-pip install dlt[duckdb]
-```
+This source provides functionalities get data from fsspec filesystem. It supports all the filesystems supported by fsspec. For more information about fsspec, please visit [fsspec documentation](https://filesystem-spec.readthedocs.io/en/latest/index.html).
 
 ## Initialize the source
 
 Initialize the source with dlt command:
 
 ```shell
-dlt init inbox duckdb
+dlt init filesystem duckdb
 ```
 
-## Set email account credentials
+## Set filesystem credentials
 
 1. Open `.dlt/secrets.toml`.
 1. Enter the email account secrets:
    ```toml
    [sources.filesystem.credentials]
-   bucket_url="/Users/josue/Documents/dlthub/verified-sources/sources/standard/csv_files/"
+   bucket_url="~/Documents/csv_files/"
    ```
 
 ## Usage

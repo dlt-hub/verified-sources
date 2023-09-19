@@ -26,10 +26,10 @@ def filesystem_resource(
 
     Args:
         credentials (FilesystemConfiguration): The credentials to the filesystem.
-        storage_path (str, optional): The path to store the files.
-        start_date (pendulum.DateTime, optional): The date to start collecting files.
         filename_filter (str, optional): The filter to apply to the files in glob format.
-        chunksize (int, optional): The number of files to process at once, defaults to 1.
+        chunksize (int, optional): The number of files to process at once, defaults to 10.
+        extract_content (bool, optional): If true, the content of the file will be extracted if
+            false it will return a fsspec file, defaults to False.
 
     Returns:
         TDataItems: The list of files.

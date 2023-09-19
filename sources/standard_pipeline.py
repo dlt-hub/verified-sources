@@ -16,6 +16,9 @@ from dlt.extract.source import TDataItem, TDataItems
 def read_file(file_data: TDataItem) -> Any:
     """Reads a file from filesystem resource and return the bytes.
 
+    This is a generic function that can be used to read files from any resource. It can be used as
+    reference for the implementation of the transformers by the user.
+
     Args:
         file_data (TDataItem): The file to read.
 
@@ -87,7 +90,7 @@ def from_standard_filesystem() -> None:
 
     file_source = filesystem_resource(
         filename_filter="mlb*.csv",
-        chunksize=1,
+        chunksize=10,
         extract_content=False,
     ) | copy_files(storage_path="standard/files")
 
