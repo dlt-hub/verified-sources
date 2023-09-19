@@ -9,16 +9,16 @@ def load_entire_base(pipeline: dlt.Pipeline) -> None:
 
     # typing columns to silence warnings
     all_event_planning_tables.resources["📆 Schedule"].apply_hints(
-        columns={"Activity": {"name": "Activity", "data_type": "text"}}
+        columns={"Activity": {"data_type": "text"}}
     )
     all_event_planning_tables.resources["🎤 Speakers"].apply_hints(
-        columns={"Name": {"name": "Name", "data_type": "text"}}
+        columns={"Name": {"data_type": "text"}}
     )
     all_event_planning_tables.resources["🪑 Attendees"].apply_hints(
-        columns={"Name": {"name": "Name", "data_type": "text"}}
+        columns={"Name": {"data_type": "text"}}
     )
     all_event_planning_tables.resources["💰 Budget"].apply_hints(
-        columns={"Item": {"name": "Item", "data_type": "text"}}
+        columns={"Item": {"data_type": "text"}}
     )
 
     load_info = pipeline.run(all_event_planning_tables, write_disposition="replace")
@@ -47,7 +47,7 @@ def load_select_tables_from_base_by_name(pipeline: dlt.Pipeline) -> None:
         table_names=["💰 Budget"],
     )
     event_base.resources["💰 Budget"].apply_hints(
-        primary_key="Item", columns={"Item": {"name": "Item", "data_type": "text"}}
+        primary_key="Item", columns={"Item": {"data_type": "text"}}
     )
     load_info = pipeline.run(event_base, write_disposition="replace")
     print(load_info)
@@ -59,7 +59,7 @@ def load_and_customize_write_disposition(pipeline: dlt.Pipeline) -> None:
     )
     questionnaire.resources["Sheet1"].apply_hints(
         primary_key="Name",
-        columns={"Name": {"name": "Name", "data_type": "text"}},
+        columns={"Name": {"data_type": "text"}},
         write_disposition="merge",
     )
     load_info = pipeline.run(questionnaire)
