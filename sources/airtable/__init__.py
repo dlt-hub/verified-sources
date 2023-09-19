@@ -1,6 +1,5 @@
 """Source that loads tables form Airtable.
 Supports whitelisting of tables or loading of all tables from a specified base.
-Supported write dispositions: replace
 """
 from typing import Optional, Iterable, Iterator, List, Dict, Any
 
