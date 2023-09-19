@@ -1,20 +1,21 @@
 import os
-import dlt
 from io import BytesIO
+from typing import Any
+
+import dlt
 
 try:
-    from .standard.filesystem import filesystem_resource
+    from .standard.filesystem import filesystem_resource  # type: ignore
 except ImportError:
     from standard.filesystem import filesystem_resource
 
-from fsspec import AbstractFileSystem
-from dlt.extract.source import TDataItem, TDataItems
 import pandas as pd
+from dlt.extract.source import TDataItem, TDataItems
 
 
-def read_file(file_data: TDataItem) -> bytes:
+def read_file(file_data: TDataItem) -> Any:
     """Reads a file from filesystem resource and return the bytes.
-    
+
     Args:
         file_data (TDataItem): The file to read.
 
@@ -34,7 +35,7 @@ def copy_files(
     storage_path: str,
 ) -> TDataItem:
     """Reads files and copy them to local directory.
-    
+
     Args:
         items (TDataItems): The list of files to copy.
         storage_path (str, optional): The path to store the files.
@@ -62,7 +63,7 @@ def extract_csv(
     items: TDataItems,
 ) -> TDataItem:
     """Reads files and copy them to local directory.
-    
+
     Args:
         items (TDataItems): The list of files to copy.
 
@@ -95,15 +96,19 @@ def from_standard_filesystem() -> None:
     # pretty print the information on data that was loaded
     print(load_info)
 
-    csv_source = filesystem_resource(
-        filename_filter="mlb*.csv",
-        chunksize=10,
-    ) | extract_csv
+    csv_source = (
+        filesystem_resource(
+            filename_filter="mlb*.csv",
+            chunksize=10,
+        )
+        | extract_csv
+    )
 
     # run the pipeline with your parameters
     load_info = pipeline.run(csv_source)
     # pretty print the information on data that was loaded
     print(load_info)
+
 
 if __name__ == "__main__":
     from_standard_filesystem()

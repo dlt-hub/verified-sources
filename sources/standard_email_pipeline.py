@@ -1,7 +1,7 @@
 import dlt
 
 try:
-    from .standard.inbox import inbox_source
+    from .standard.inbox import inbox_source  # type: ignore
 except ImportError:
     from standard.inbox import inbox_source
 

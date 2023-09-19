@@ -1,5 +1,7 @@
-from typing import TypedDict
+from typing import Optional, TypedDict
+
 from pendulum import DateTime
+
 
 class FileModel(TypedDict):
     file_name: str
@@ -7,4 +9,3 @@ class FileModel(TypedDict):
     content_type: str
     modification_date: DateTime
     size_in_bytes: int
-
