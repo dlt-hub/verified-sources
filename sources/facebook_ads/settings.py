@@ -1,7 +1,7 @@
 """Facebook ads source settings and constants"""
 
 from typing import Any, Callable, Dict, Iterator, Literal
-
+from dlt.common.schema.typing import TTableSchemaColumns
 from facebook_business.adobjects.abstractobject import AbstractObject
 
 TFbMethod = Callable[..., Iterator[AbstractObject]]
@@ -155,6 +155,25 @@ INSIGHTS_BREAKDOWNS_OPTIONS: Dict[TInsightsBreakdownOptions, Any] = {
         "breakdowns": ("hourly_stats_aggregated_by_advertiser_time_zone",),
         "fields": ("hourly_stats_aggregated_by_advertiser_time_zone",),
     },
+}
+
+INSIGHT_FIELDS_TYPES: TTableSchemaColumns = {
+    "campaign_id": {"data_type": "bigint"},
+    "adset_id": {"data_type": "bigint"},
+    "ad_id": {"data_type": "bigint"},
+    "date_start": {"data_type": "timestamp"},
+    "date_stop": {"data_type": "timestamp"},
+    "reach": {"data_type": "bigint"},
+    "impressions": {"data_type": "bigint"},
+    "frequency": {"data_type": "decimal"},
+    "clicks": {"data_type": "bigint"},
+    "unique_clicks": {"data_type": "bigint"},
+    "ctr": {"data_type": "decimal"},
+    "unique_ctr": {"data_type": "decimal"},
+    "cpc": {"data_type": "decimal"},
+    "cpm": {"data_type": "decimal"},
+    "cpp": {"data_type": "decimal"},
+    "spend": {"data_type": "decimal"},
 }
 
 INVALID_INSIGHTS_FIELDS = [
