@@ -2,37 +2,42 @@
 import mimetypes
 import os
 from typing import Iterable, Optional
+from urllib.parse import urlparse
 
-import pendulum
 from dlt.common.configuration.specs import configspec
-from dlt.common.storages import filesystem_from_config
-from dlt.common.storages.configuration import FilesystemConfiguration
-from dlt.common.time import ensure_pendulum_datetime
+from dlt.common.storages import filesystem
+from dlt.common.storages.configuration import (
+    FilesystemConfiguration,
+    FileSystemCredentials,
+)
+from dlt.common.storages.filesystem import MTIME_DISPATCH, FileItem
 from fsspec import AbstractFileSystem  # type: ignore
-
-from ..file_source import FileModel
+from pendulum import DateTime
 
 
 @configspec
 class FilesystemConfigurationResource(FilesystemConfiguration):
     storage_path: Optional[str]
-    start_date: str
+    start_date: Optional[DateTime]
 
 
-def client_from_credentials(credentials: FilesystemConfiguration) -> AbstractFileSystem:
+def client_from_credentials(
+    bucket_url: str, credentials: FileSystemCredentials
+) -> AbstractFileSystem:
     """Create a filesystem client from the credentials.
-    
+
     Args:
-        credentials (FilesystemConfiguration): The credentials to the filesystem.
+        bucket_url (str): The url to the bucket.
+        credentials (FileSystemCredentials): The credentials to the filesystem.
 
     Returns:
         AbstractFileSystem: The filesystem client.
     """
-    fs_client, _ = filesystem_from_config(credentials)
+    fs_client, _ = filesystem(bucket_url, credentials)
     return fs_client
 
 
-def get_files(fs_client: AbstractFileSystem, files_url: str) -> Iterable[FileModel]:
+def get_files(fs_client: AbstractFileSystem, files_url: str) -> Iterable[FileItem]:
     """Get the files from the filesystem client.
 
     Args:
@@ -40,17 +45,19 @@ def get_files(fs_client: AbstractFileSystem, files_url: str) -> Iterable[FileMod
         files_url (str): The url to the files.
 
     Returns:
-        Iterable[FileModel]: The list of files.
+        Iterable[FileItem]: The list of files.
     """
+
+    protocol = urlparse(files_url).scheme or "file"
     files = fs_client.glob(files_url, detail=True)
 
     for file, md in files.items():
-        for dt_field in ["created", "mtime"]:
-            md[dt_field] = ensure_pendulum_datetime(md[dt_field])
-        yield FileModel(
-            file_name=os.path.basename(file),
-            file_url=file,
-            content_type=mimetypes.guess_type(file)[0],
-            modification_date=md.get("mtime", md.get("created")) or pendulum.now(),
-            size_in_bytes=md["size"],
+        file_name = os.path.basename(file)
+        file_url = os.path.join(os.path.dirname(files_url), file_name)
+        yield FileItem(
+            file_name=file_name,
+            file_url=file_url,
+            mime_type=mimetypes.guess_type(file)[0],
+            modification_date=MTIME_DISPATCH[protocol](md),
+            file_content=None,
         )

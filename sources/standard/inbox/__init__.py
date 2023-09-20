@@ -10,7 +10,8 @@ import dlt
 from dlt.common import logger, pendulum
 from dlt.extract.source import DltResource, TDataItem, TDataItems
 
-from ..file_source import FileModel
+from dlt.common.storages.filesystem import FileItem
+
 from .helpers import (
     extract_attachments,
     extract_email_info,
@@ -165,7 +166,7 @@ def read_messages(
                 yield result
 
 
-class ImapFileModel(FileModel):
+class ImapFileModel(FileItem):
     """A DataItem representing an email attachment"""
 
     data_hash: str
@@ -232,10 +233,11 @@ def get_attachments_by_uid(
                 file_md = ImapFileModel(
                     file_name=filename,
                     file_url=os.path.abspath(file_path),
-                    content_type=attachment["content_type"],
+                    mime_type=attachment["content_type"],
                     modification_date=internal_date,
                     data_hash=file_hash,
-                    size_in_bytes=attachment["size"],
+                    file_content=None,
+                    # size_in_bytes=attachment["size"],
                 )
 
                 attachment_data = deepcopy(item)
