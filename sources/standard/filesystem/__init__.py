@@ -1,4 +1,5 @@
 """This source collects fsspec files."""
+import io
 import os
 from io import BytesIO, IOBase
 from typing import Any, Dict, Optional
@@ -35,8 +36,11 @@ class FileSystemDict(Dict[str, Any]):
         """
         return client_from_credentials(self["file_url"], self.credentials)
 
-    def open_fs(self) -> IOBase:
+    def open(self, **kwargs: Any) -> IOBase:  # noqa: A003
         """Open the file as a fsspec file.
+
+        Args:
+            **kwargs (Any): The arguments to pass to the fsspec open function.
 
         Returns:
             IOBase: The fsspec file.
@@ -45,9 +49,19 @@ class FileSystemDict(Dict[str, Any]):
         # if the user has already extracted the content, we use it so there will be no need to
         # download the file again.
         if self["file_content"] in self:
-            opened_file = BytesIO(self["file_content"])
+            bytes_io = BytesIO(self["file_content"])
+
+            text_kwargs = {
+                k: kwargs.pop(k)
+                for k in ["encoding", "errors", "newline"]
+                if k in kwargs
+            }
+            return io.TextIOWrapper(
+                bytes_io,
+                **text_kwargs,
+            )
         else:
-            opened_file = self.filesystem.open(self["file_url"])
+            opened_file = self.filesystem.open(self["file_url"], **kwargs)
         return opened_file
 
     def read(self) -> bytes:
@@ -57,7 +71,7 @@ class FileSystemDict(Dict[str, Any]):
             bytes: The file content.
         """
         content: bytes
-        # same as open_fs, if the user has already extracted the content, we use it.
+        # same as open, if the user has already extracted the content, we use it.
         if self["file_content"] in self:
             content = self["file_content"]
         else:

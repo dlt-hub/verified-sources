@@ -1,8 +1,9 @@
 import os
-from io import BytesIO
 from typing import Any
 
 import dlt
+from dlt.common.time import ensure_pendulum_datetime
+from pendulum.tz import UTC
 
 try:
     from .standard.filesystem import filesystem_resource  # type: ignore
@@ -37,25 +38,39 @@ def copy_files(
         yield file_obj
 
 
-@dlt.transformer(
-    name="filesystem",
+@dlt.transformer(  # type: ignore
+    table_name=lambda x: x["code"],
+    merge_key="date",
+    primary_key="date",
     write_disposition="merge",
-    merge_key=None,
-    primary_key=None,
 )
-def extract_parquet(
+def extract_met_csv(
     items: TDataItems,
+    incremental: dlt.sources.incremental[str] = dlt.sources.incremental(
+        "date",
+        primary_key="date",
+        initial_value="2023-01-01",
+        allow_external_schedulers=True,
+    ),
 ) -> TDataItem:
     """Reads files and copy them to local directory.
 
     Args:
-        items (TDataItems): The list of files to copy.
+        item (TDataItem): The list of files to copy.
+        incremental (dlt.sources.incremental[str], optional): The incremental source.
 
     Returns:
         TDataItem: The file content
     """
     for file_obj in items:
-        df = pd.read_parquet(file_obj.open_fs())
+        df = pd.read_csv(
+            file_obj.open(),
+            usecols=["code", "date", "temperature"],
+            parse_dates=["date"],
+        )
+        last_value = ensure_pendulum_datetime(incremental.last_value)
+        df["date"] = df["date"].apply(ensure_pendulum_datetime)
+        df = df[df["date"] > last_value]
         yield df.to_dict(orient="records")
 
 
@@ -78,34 +93,27 @@ def copy_files_resource() -> None:
     print(load_info)
 
 
-def read_parquet_resource() -> None:
+def read_csv_resource() -> None:
     pipeline = dlt.pipeline(
         pipeline_name="standard_filesystem",
         destination="duckdb",
-        dataset_name="standard_filesystem_data",
-        full_refresh=True,
+        dataset_name="met_data",
     )
 
-    parquet_source = (
+    csv_source = (
         filesystem_resource(
-            filename_filter="*e.parquet",
+            filename_filter="*.csv",
+            extract_content=True,
         )
-        | extract_parquet
+        | extract_met_csv
     )
 
     # run the pipeline with your parameters
-    load_info = pipeline.run(parquet_source)
+    load_info = pipeline.run(csv_source)
     # pretty print the information on data that was loaded
     print(load_info)
 
 
 if __name__ == "__main__":
-    pipeline = dlt.pipeline(
-        pipeline_name="standard_filesystem",
-        destination="duckdb",
-        dataset_name="standard_filesystem_data",
-        full_refresh=True,
-    )
-
-    copy_files_resource()
-    # read_parquet_resource()
+    # copy_files_resource()
+    read_csv_resource()

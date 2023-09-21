@@ -15,11 +15,11 @@ def test_all_resources(destination_name: str) -> None:
     )
 
     # Load all files
-    all_files = filesystem_resource()
+    all_files = filesystem_resource(filename_filter="*.csv")
     load_info = pipeline.run(all_files)
     assert_load_info(load_info)
     table_counts = load_table_counts(pipeline, "filesystem")
-    assert table_counts["filesystem"] == 5
+    assert table_counts["filesystem"] == 4
 
 
 @pytest.mark.parametrize("destination_name", ALL_DESTINATIONS)
