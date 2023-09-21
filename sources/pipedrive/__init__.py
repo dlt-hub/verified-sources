@@ -78,7 +78,7 @@ def pipedrive_source(
             name=resource_name,
             primary_key="id",
             write_disposition="merge",
-        )(entity, **resource_kwargs)
+        )(entity, pipedrive_api_key, **resource_kwargs)
 
     yield from endpoints_resources.values()
 
