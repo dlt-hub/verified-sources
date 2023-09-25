@@ -8,7 +8,7 @@ from dlt.common.typing import TAnyDateTime, TDataItem
 from dlt.extract.source import DltResource
 from pendulum import DateTime
 
-from .helpers import SlackAPI, ensure_dt_type, extract_jsonpath
+from .helpers import SlackAPI, ensure_dt_type
 from .settings import (
     DEFAULT_DATETIME_FIELDS,
     DEFAULT_START_DATE,
@@ -94,14 +94,12 @@ def slack_source(
             end_value=end_dt,
             allow_external_schedulers=True,
         ),
-        datetime_fields: List[str] = MSG_DATETIME_FIELDS,
     ) -> Iterable[TDataItem]:
         """Yield all messages for a given channel as a DLT resource.
 
         Args:
             channel_data (Dict[str, Any]): The channel data.
             created_at (dlt.sources.incremental[DateTime]): The incremental created_at field.
-            datetime_fields (List[str]): The list of datetime fields to parse.
 
         Yields:
             Iterable[TDataItem]: A list of messages.
@@ -118,7 +116,7 @@ def slack_source(
             resource="conversations.history",
             response_path="$.messages[*]",
             params=params,
-            datetime_fields=datetime_fields,
+            datetime_fields=MSG_DATETIME_FIELDS,
             context={"channel": channel_data["id"]},
         ):
             yield page_data
