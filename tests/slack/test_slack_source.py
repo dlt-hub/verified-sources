@@ -28,10 +28,51 @@ def test_all_resources(destination_name: str) -> None:
     table_names = [t["name"] for t in pipeline.default_schema.data_tables()]
     table_counts = load_table_counts(pipeline, *table_names)
 
-    # for now only check main tables
-    expected_tables = ["channels", "dlt_github_ci_message", "_1_announcements_message"]
-    print(table_counts.keys())
+    # different dlt versions have different table names
+    if "-" in "".join(table_counts.keys()):
+        expected_tables = [
+            "channels",
+            "dlt-github-ci_message",
+            "_1-announcements_message",
+        ]
+        ci_table = "dlt-github-ci_message"
+        announcements_table = "_1-announcements_message"
+    else:
+        expected_tables = [
+            "channels",
+            "dlt_github_ci_message",
+            "_1_announcements_message",
+        ]
+        ci_table = "dlt_github_ci_message"
+        announcements_table = "_1_announcements_message"
+
     assert set(table_counts.keys()) >= set(expected_tables)
     assert table_counts["channels"] >= 15
-    assert table_counts["dlt_github_ci_message"] == 24
-    assert table_counts["_1_announcements_message"] == 2
+    assert table_counts[ci_table] == 24
+    assert table_counts[announcements_table] == 2
+
+
+@pytest.mark.parametrize("destination_name", ALL_DESTINATIONS)
+def test_users(destination_name: str) -> None:
+    pipeline = dlt.pipeline(
+        pipeline_name="slack",
+        destination=destination_name,
+        dataset_name="slack_user_data",
+        full_refresh=True,
+    )
+
+    # Selected just one channel to avoid loading all channels
+    source = slack_source(
+        selected_channels=["1-announcements"],
+    )
+    load_info = pipeline.run(source)
+    assert_load_info(load_info)
+
+    table_names = [t["name"] for t in pipeline.default_schema.data_tables()]
+    table_counts = load_table_counts(pipeline, *table_names)
+
+    # check if the users table was loaded
+    expected_tables = ["users"]
+    print(table_counts.keys())
+    assert set(table_counts.keys()) >= set(expected_tables)
+    assert table_counts["users"] >= 300  # The number of users can increase over time
