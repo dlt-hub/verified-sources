@@ -8,8 +8,13 @@ from dlt.common.typing import TAnyDateTime, TDataItem
 from dlt.extract.source import DltResource
 from pendulum import DateTime
 
-from .helpers import SlackAPI, ensure_dt_type, extract_jsonpath
-from .settings import DEFAULT_START_DATE, MAX_PAGE_SIZE
+from .helpers import SlackAPI, ensure_dt_type
+from .settings import (
+    DEFAULT_DATETIME_FIELDS,
+    DEFAULT_START_DATE,
+    MAX_PAGE_SIZE,
+    MSG_DATETIME_FIELDS,
+)
 
 
 @dlt.source(name="slack", max_table_nesting=2)
@@ -47,7 +52,7 @@ def slack_source(
     for page_data in api.get_pages(
         resource="conversations.list",
         response_path="$.channels[*]",
-        datetime_fields=["updated", "created"],
+        datetime_fields=DEFAULT_DATETIME_FIELDS,
     ):
         channels.extend(page_data)
 
@@ -58,16 +63,23 @@ def slack_source(
 
     yield channels_resource
 
-    msg_dt_fields = [
-        "ts",
-        "thread_ts",
-        "latest_reply",
-        "blocks.thread_ts",
-        "blocks.latest_reply",
-        "attachment.thread_ts",
-        "attachment.latest_reply",
-        "edited.ts",
-    ]
+    @dlt.resource(name="users", primary_key="id", write_disposition="replace")
+    def users_resource() -> Iterable[TDataItem]:
+        """Yield all channels as a DLT resource.
+
+        Yields:
+            Iterable[TDataItem]: A list of users.
+        """
+
+        for page_data in api.get_pages(
+            resource="users.list",
+            response_path="$.members[*]",
+            params=dict(include_locale=True),
+            datetime_fields=DEFAULT_DATETIME_FIELDS,
+        ):
+            yield page_data
+
+    yield users_resource
 
     def get_messages_resource(
         channel_data: Dict[str, Any],
@@ -78,7 +90,15 @@ def slack_source(
             allow_external_schedulers=True,
         ),
     ) -> Iterable[TDataItem]:
-        """Yield all messages for a given channel as a DLT resource."""
+        """Yield all messages for a given channel as a DLT resource.
+
+        Args:
+            channel_data (Dict[str, Any]): The channel data.
+            created_at (dlt.sources.incremental[DateTime]): The incremental created_at field.
+
+        Yields:
+            Iterable[TDataItem]: A list of messages.
+        """
         start_date_ts = ensure_dt_type(created_at.last_value, to_ts=True)
         end_date_ts = ensure_dt_type(created_at.end_value, to_ts=True)
         params = {
@@ -91,7 +111,7 @@ def slack_source(
             resource="conversations.history",
             response_path="$.messages[*]",
             params=params,
-            datetime_fields=msg_dt_fields,
+            datetime_fields=MSG_DATETIME_FIELDS,
             context={"channel": channel_data["id"]},
         ):
             yield page_data
