@@ -77,11 +77,9 @@ such as message UID, message ID, sender, subject, date, modification date, conte
 
 This dlt transformer resource takes an email message items from another resource (e.g. `messages_uids`)
 and extracts attachments from the email message using their UID.
-It connects to the IMAP server,
-fetches the email message by its UID, and saves attachments to the specified STORAGE_FOLDER_PATH.
+It connects to the IMAP server, fetches the email message by its UID, and return a file objects as filesystem.
 It yields a dictionary containing email metadata such as message UID, sender,
-date, content type, etc., and under the key "envelope" it returns dict with
-the attachment content type, file name, and local file path.
+date, content type, etc. It can be used with the same transformers used for filesystem.
 
 ## Example
 

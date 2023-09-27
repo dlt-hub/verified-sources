@@ -7,8 +7,10 @@ from pendulum.tz import UTC
 
 try:
     from .standard.filesystem import filesystem_resource  # type: ignore
+    from .standard.inbox import inbox_source  # type: ignore
 except ImportError:
     from standard.filesystem import filesystem_resource
+    from standard.inbox import inbox_source
 
 import pandas as pd
 from dlt.extract.source import TDataItem, TDataItems
@@ -34,12 +36,12 @@ def copy_files(
         file_dst = os.path.join(storage_path, file_obj["file_name"])
         file_obj["path"] = file_dst
         with open(file_dst, "wb") as f:
-            f.write(file_obj.read())
+            f.write(file_obj.read_bytes())
         yield file_obj
 
 
-@dlt.transformer(  # type: ignore
-    table_name=lambda x: x["code"],
+@dlt.transformer(
+    table_name="met_data",
     merge_key="date",
     primary_key="date",
     write_disposition="merge",
@@ -63,15 +65,55 @@ def extract_met_csv(
         TDataItem: The file content
     """
     for file_obj in items:
-        df = pd.read_csv(
+        # Here we use pandas chunksize to read the file in chunks and avoid loading the whole file
+        # in memory.
+        for df in pd.read_csv(
             file_obj.open(),
             usecols=["code", "date", "temperature"],
             parse_dates=["date"],
-        )
-        last_value = ensure_pendulum_datetime(incremental.last_value)
-        df["date"] = df["date"].apply(ensure_pendulum_datetime)
-        df = df[df["date"] > last_value]
-        yield df.to_dict(orient="records")
+            chunksize=15,
+        ):
+            last_value = ensure_pendulum_datetime(incremental.last_value)
+            df["date"] = df["date"].apply(ensure_pendulum_datetime)
+            df = df[df["date"] > last_value]
+            yield df.to_dict(orient="records")
+
+
+def imap_inbox() -> None:
+    # configure the pipeline with your destination details
+    pipeline = dlt.pipeline(
+        pipeline_name="standard_inbox",
+        destination="duckdb",
+        dataset_name="standard_inbox_data",
+        full_refresh=True,
+    )
+
+    data_source = inbox_source(
+        attachments=True,
+        chunksize=10,
+        filter_by_mime_type=("application/pdf",),
+    )
+
+    data_resource = data_source.resources["attachments"] | copy_files(
+        storage_path="standard/files"
+    )
+    # run the pipeline with your parameters
+    load_info = pipeline.run(data_resource)
+    # pretty print the information on data that was loaded
+    print(load_info)
+
+    filter_emails = ("astra92293@gmail.com", "josue@sehnem.com")
+
+    data_source = inbox_source(
+        filter_by_emails=filter_emails,
+        attachments=False,
+        chunksize=10,
+    )
+    data_resource = data_source.resources["messages"]
+    # run the pipeline with your parameters
+    load_info = pipeline.run(data_resource)
+    # pretty print the information on data that was loaded
+    print(load_info)
 
 
 def copy_files_resource() -> None:
@@ -102,7 +144,7 @@ def read_csv_resource() -> None:
 
     csv_source = (
         filesystem_resource(
-            filename_filter="*.csv",
+            filename_filter="*/*.csv",
             extract_content=True,
         )
         | extract_met_csv
@@ -116,4 +158,5 @@ def read_csv_resource() -> None:
 
 if __name__ == "__main__":
     # copy_files_resource()
-    read_csv_resource()
+    # read_csv_resource()
+    imap_inbox()

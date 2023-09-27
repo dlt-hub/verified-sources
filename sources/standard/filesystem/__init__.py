@@ -1,13 +1,11 @@
 """This source collects fsspec files."""
 import io
-import os
 from io import BytesIO, IOBase
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Iterator, List, Optional
 
 import dlt
 from dlt.common.storages.configuration import FileSystemCredentials
 from dlt.common.storages.filesystem import FileItem
-from dlt.extract.source import TDataItems
 from fsspec import AbstractFileSystem  # type: ignore
 
 from .helpers import FilesystemConfigurationResource, client_from_credentials, get_files
@@ -17,7 +15,9 @@ from .settings import DEFAULT_CHUNK_SIZE
 class FileSystemDict(Dict[str, Any]):
     """A dictionary with the filesystem client."""
 
-    def __init__(self, mapping: FileItem, credentials: FileSystemCredentials):
+    def __init__(
+        self, mapping: FileItem, credentials: Optional[FileSystemCredentials] = None
+    ):
         """Create a dictionary with the filesystem client.
 
         Args:
@@ -34,6 +34,8 @@ class FileSystemDict(Dict[str, Any]):
         Returns:
             AbstractFileSystem: The filesystem client.
         """
+        if not self.credentials:
+            raise ValueError("No credentials provided for the filesystem.")
         return client_from_credentials(self["file_url"], self.credentials)
 
     def open(self, **kwargs: Any) -> IOBase:  # noqa: A003
@@ -64,7 +66,7 @@ class FileSystemDict(Dict[str, Any]):
             opened_file = self.filesystem.open(self["file_url"], **kwargs)
         return opened_file
 
-    def read(self) -> bytes:
+    def read_bytes(self) -> bytes:
         """Read the file content.
 
         Returns:
@@ -72,7 +74,7 @@ class FileSystemDict(Dict[str, Any]):
         """
         content: bytes
         # same as open, if the user has already extracted the content, we use it.
-        if self["file_content"] in self:
+        if "file_content" in self:
             content = self["file_content"]
         else:
             content = self.filesystem.read_bytes(self["file_url"])
@@ -91,7 +93,7 @@ def filesystem_resource(
     filename_filter: Optional[str] = None,
     chunksize: int = DEFAULT_CHUNK_SIZE,
     extract_content: bool = False,
-) -> TDataItems:
+) -> Iterator[List[FileSystemDict]]:
     """This source collect files and download or extract data from them.
 
     Args:
@@ -111,13 +113,12 @@ def filesystem_resource(
     # as it is a glob, we add a wildcard if no filter is given
     if not filename_filter:
         filename_filter = "*"
-    files_url = os.path.join(bucket_url, filename_filter)
 
-    files_chunk = []
-    for file_model in get_files(fs_client, files_url):
+    files_chunk: List[FileSystemDict] = []
+    for file_model in get_files(fs_client, bucket_url, filename_filter):
         file_dict = FileSystemDict(file_model, credentials)
         if extract_content:
-            file_dict["file_content"] = file_dict.read()
+            file_dict["file_content"] = file_dict.read_bytes()
         files_chunk.append(file_dict)
 
         # wait for the chunk to be full

@@ -1,17 +1,16 @@
 """This source collects inbox emails and downloads attachments to local folder"""
 import hashlib
 import imaplib
-import os
 from copy import deepcopy
 from itertools import chain
-from typing import Any, Dict, List, Optional, Sequence
+from typing import List, Optional, Sequence
 
 import dlt
 from dlt.common import logger, pendulum
 from dlt.extract.source import DltResource, TDataItem, TDataItems
 
-from dlt.common.storages.filesystem import FileItem
-
+from ..filesystem import FileSystemDict
+from ..filesystem.helpers import FilesystemFileItem
 from .helpers import (
     extract_attachments,
     extract_email_info,
@@ -19,18 +18,17 @@ from .helpers import (
     get_message,
     get_message_uids,
 )
-from .settings import (
-    DEFAULT_CHUNK_SIZE,
-    DEFAULT_START_DATE,
-    FILTER_EMAILS,
-    GMAIL_GROUP,
-    STORAGE_PATH,
-)
+from .settings import DEFAULT_CHUNK_SIZE, DEFAULT_START_DATE, FILTER_EMAILS, GMAIL_GROUP
+
+
+class ImapFileItem(FilesystemFileItem):
+    """A Imap file item."""
+
+    file_hash: str
 
 
 @dlt.source
 def inbox_source(
-    storage_path: str = STORAGE_PATH,
     gmail_group: Optional[str] = GMAIL_GROUP,
     attachments: bool = False,
     start_date: pendulum.DateTime = DEFAULT_START_DATE,
@@ -41,7 +39,6 @@ def inbox_source(
     """This source collects inbox emails and downloads attachments to the local folder.
 
     Args:
-        storage_path (str, optional): The local folder path where attachments will be downloaded. Default is 'STORAGE_FOLDER_PATH' from settings.
         gmail_group (str, optional): The email address of the Google Group to filter emails sent to the group. Default is 'GMAIL_GROUP' from settings.
         attachments (bool, optional): If True, downloads email attachments to the 'storage_folder_path'. Default is False.
         start_date (pendulum.DateTime, optional): The start date from which to collect emails. Default is 'DEFAULT_START_DATE' from settings.
@@ -62,7 +59,6 @@ def inbox_source(
     )
     if attachments:
         return uids | get_attachments_by_uid(
-            storage_path=storage_path,
             filter_by_mime_type=filter_by_mime_type,
         )
     else:
@@ -166,12 +162,6 @@ def read_messages(
                 yield result
 
 
-class ImapFileModel(FileItem):
-    """A DataItem representing an email attachment"""
-
-    data_hash: str
-
-
 @dlt.transformer(
     name="attachments",
     write_disposition="merge",
@@ -180,21 +170,21 @@ class ImapFileModel(FileItem):
 )
 def get_attachments_by_uid(
     items: TDataItems,
-    storage_path: str,
     host: str = dlt.secrets.value,
     email_account: str = dlt.secrets.value,
     password: str = dlt.secrets.value,
     filter_by_mime_type: Sequence[str] = (),
+    chunksize: int = DEFAULT_CHUNK_SIZE,
 ) -> TDataItem:
     """Downloads attachments from email messages based on the provided message UIDs.
 
     Args:
         items (TDataItems): An iterable containing dictionaries with 'message_uid' representing the email message UIDs.
-        storage_path (str): The local folder path where attachments will be downloaded.
         host (str, optional): The hostname of the IMAP server. Default is 'dlt.secrets.value'.
         email_account (str, optional): The email account used to log in to the IMAP server. Default is 'dlt.secrets.value'.
         password (str, optional): The password for the email account. Default is 'dlt.secrets.value'.
         filter_by_mime_type (Sequence[str], optional): A sequence of MIME types used to filter attachments based on their content type. Default is an empty sequence.
+        chunksize (int, optional): The number of message UIDs to collect at a time. Default is 'DEFAULT_CHUNK_SIZE' from settings.
 
     Yields:
         TDataItem: A dictionary containing the collected email information and attachment details.
@@ -220,28 +210,29 @@ def get_attachments_by_uid(
             email_info = extract_email_info(msg)
             internal_date = get_internal_date(client, message_uid)
 
+            files_dict: List[FileSystemDict] = []
             for attachment in attachments:
-                filename = f"{message_uid}_{attachment['file_name']}"
-                file_path = os.path.join(storage_path, filename)
-
-                os.makedirs(os.path.dirname(file_path), exist_ok=True)
-                with open(file_path, "wb") as f:
-                    f.write(attachment["payload"])
+                filename = attachment["file_name"]
 
                 file_hash = hashlib.sha256(attachment["payload"]).hexdigest()
 
-                file_md = ImapFileModel(
+                file_md = ImapFileItem(
                     file_name=filename,
-                    file_url=os.path.abspath(file_path),
+                    file_url=f"imap://{email_account}/{message_uid}/{filename}",
                     mime_type=attachment["content_type"],
                     modification_date=internal_date,
-                    data_hash=file_hash,
-                    file_content=None,
-                    # size_in_bytes=attachment["size"],
+                    file_content=attachment["payload"],
+                    file_hash=file_hash,
+                    size_in_bytes=len(attachment["payload"]),
                 )
 
-                attachment_data = deepcopy(item)
-                attachment_data.update(email_info)
-                attachment_data.update(file_md)
+                file_dict = FileSystemDict(file_md)
+                file_dict.update(email_info)
+                file_dict.update(item)
 
-                yield attachment_data
+                files_dict.append(file_dict)
+                if len(files_dict) >= chunksize:
+                    yield files_dict
+                    files_dict = []
+        if files_dict:
+            yield files_dict
