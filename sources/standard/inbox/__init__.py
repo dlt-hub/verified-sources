@@ -3,7 +3,7 @@ import hashlib
 import imaplib
 from copy import deepcopy
 from itertools import chain
-from typing import List, Optional, Sequence
+from typing import List, Optional, Sequence, Iterable
 
 import dlt
 from dlt.common import logger, pendulum
@@ -40,7 +40,7 @@ def inbox_source(
 
     Args:
         gmail_group (str, optional): The email address of the Google Group to filter emails sent to the group. Default is 'GMAIL_GROUP' from settings.
-        attachments (bool, optional): If True, downloads email attachments to the 'storage_folder_path'. Default is False.
+        attachments (bool, optional): If True, get email attachments and return as a ImapFileItem. Default is False.
         start_date (pendulum.DateTime, optional): The start date from which to collect emails. Default is 'DEFAULT_START_DATE' from settings.
         filter_by_emails (Sequence[str], optional): A sequence of email addresses used to filter emails based on the 'FROM' field. Default is 'FILTER_EMAILS' from settings.
         filter_by_mime_type (Sequence[str], optional): A sequence of MIME types used to filter attachments based on their content type. Default is an empty sequence.
@@ -175,7 +175,7 @@ def get_attachments_by_uid(
     password: str = dlt.secrets.value,
     filter_by_mime_type: Sequence[str] = (),
     chunksize: int = DEFAULT_CHUNK_SIZE,
-) -> TDataItem:
+) -> Iterable[List[FileSystemDict]]:
     """Downloads attachments from email messages based on the provided message UIDs.
 
     Args:
@@ -184,7 +184,7 @@ def get_attachments_by_uid(
         email_account (str, optional): The email account used to log in to the IMAP server. Default is 'dlt.secrets.value'.
         password (str, optional): The password for the email account. Default is 'dlt.secrets.value'.
         filter_by_mime_type (Sequence[str], optional): A sequence of MIME types used to filter attachments based on their content type. Default is an empty sequence.
-        chunksize (int, optional): The number of message UIDs to collect at a time. Default is 'DEFAULT_CHUNK_SIZE' from settings.
+        chunksize (Iterable[List[FileSystemDict]]): The number of message UIDs to collect at a time. Default is 'DEFAULT_CHUNK_SIZE' from settings.
 
     Yields:
         TDataItem: A dictionary containing the collected email information and attachment details.
@@ -207,6 +207,8 @@ def get_attachments_by_uid(
                         attachments = new_attachments
                     else:
                         attachments = chain(attachments, new_attachments)
+            else:
+                attachments = extract_attachments(msg)
             email_info = extract_email_info(msg)
             internal_date = get_internal_date(client, message_uid)
 

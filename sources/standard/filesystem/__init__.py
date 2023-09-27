@@ -13,7 +13,11 @@ from .settings import DEFAULT_CHUNK_SIZE
 
 
 class FileSystemDict(Dict[str, Any]):
-    """A dictionary with the filesystem client."""
+    """A dictionary with the filesystem client.
+
+    This class represents a dictionary that is backed by a filesystem. The keys and values
+    of the dictionary are stored in a file on the filesystem.
+    """
 
     def __init__(
         self, mapping: FileItem, credentials: Optional[FileSystemCredentials] = None
@@ -22,7 +26,8 @@ class FileSystemDict(Dict[str, Any]):
 
         Args:
             mapping (FileItem): The file item TypedDict.
-            credentials (FileSystemCredentials): The credentials to the filesystem.
+            credentials (Optional[FileSystemCredentials], optional): The credentials to the
+                filesystem. Defaults to None.
         """
         self.credentials = credentials
         super().__init__(**mapping)
@@ -40,6 +45,9 @@ class FileSystemDict(Dict[str, Any]):
 
     def open(self, **kwargs: Any) -> IOBase:  # noqa: A003
         """Open the file as a fsspec file.
+
+        This method opens the file represented by this dictionary as a file-like object using
+        the fsspec library.
 
         Args:
             **kwargs (Any): The arguments to pass to the fsspec open function.

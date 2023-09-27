@@ -89,9 +89,10 @@ def imap_inbox() -> None:
     )
 
     data_source = inbox_source(
+        filter_by_emails=("josue@sehnem.com",),
         attachments=True,
         chunksize=10,
-        filter_by_mime_type=("application/pdf",),
+        # filter_by_mime_type=("text/txt",),
     )
 
     data_resource = data_source.resources["attachments"] | copy_files(
@@ -142,6 +143,9 @@ def read_csv_resource() -> None:
         dataset_name="met_data",
     )
 
+    # When using the filesystem resource, you can specify a filter to select only the files you
+    # want to load including a glob pattern. If you use a recursive glob pattern, the filenames
+    # will include the path to the file inside the bucket_url.
     csv_source = (
         filesystem_resource(
             filename_filter="*/*.csv",

@@ -11,6 +11,15 @@ from dlt.extract.source import TDataItems
 def get_message_uids(
     client: imaplib.IMAP4_SSL, criterias: Sequence[str]
 ) -> Optional[TDataItems]:
+    """Get the message uids from the imap server.
+    
+    Args:
+        client (imaplib.IMAP4_SSL): The imap client.
+        criterias (Sequence[str]): The search criterias.
+
+    Returns:
+        Optional[TDataItems]: The list of message uids.
+    """
     status, messages = client.uid("search", *criterias)
 
     if status != "OK":
@@ -26,6 +35,15 @@ def get_message_uids(
 
 
 def get_internal_date(client: imaplib.IMAP4_SSL, message_uid: str) -> Optional[Any]:
+    """Get the internal date of the email message.
+
+    Parameters:
+        client (imaplib.IMAP4_SSL): The imap client.
+        message_uid (str): The uid of the message.
+
+    Returns:
+        Optional[Any]: The internal date of the email message.
+    """
     client.select()
     status, data = client.uid("fetch", message_uid, "(INTERNALDATE)")
     date = None
@@ -36,6 +54,15 @@ def get_internal_date(client: imaplib.IMAP4_SSL, message_uid: str) -> Optional[A
 
 
 def extract_email_info(msg: Message, include_body: bool = False) -> Dict[str, Any]:
+    """Extract the email information from the email message.
+
+    Parameters:
+        msg (Message): The email message object.
+        include_body (bool, optional): If true, the body of the email will be included.
+
+    Returns:
+        Dict[str, Any]: The email information.
+    """
     email_data = dict(msg)
     email_data["Date"] = pendulum.parse(msg["Date"], strict=False)
     email_data["content_type"] = msg.get_content_type()
@@ -48,6 +75,15 @@ def extract_email_info(msg: Message, include_body: bool = False) -> Dict[str, An
 
 
 def get_message(client: imaplib.IMAP4_SSL, message_uid: str) -> Optional[Message]:
+    """Get the email message from the imap server.
+
+    Parameters:
+        client (imaplib.IMAP4_SSL): The imap client.
+        message_uid (str): The uid of the message.
+
+    Returns:
+        Optional[Message]: The email message object.
+    """
     status, data = client.uid("fetch", message_uid, "(RFC822)")
 
     if status == "OK":
@@ -64,8 +100,17 @@ def get_message(client: imaplib.IMAP4_SSL, message_uid: str) -> Optional[Message
 
 
 def extract_attachments(
-    message: Message, filter_by_mime_type: str
+    message: Message, filter_by_mime_type: Optional[str] = None
 ) -> Iterable[Dict[str, Any]]:
+    """Extract the attachments from the email message.
+
+    Parameters:
+        message (Message): The email message object.
+        filter_by_mime_type (str): The mime type to filter the attachments.
+
+    Returns:
+        Iterable[Dict[str, Any]]: The attachments.
+    """
     for part in message.walk():
         content_type = part.get_content_type()
         content_disposition = part.get_content_disposition()

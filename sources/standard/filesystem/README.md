@@ -81,8 +81,8 @@ The filesystem resource provides the following parameters:
   you are using the `extract_content` parameter.
 
 The returned data item will also provide some methods to read the file:
-- `read`: Reads the file and returns the content as bytes.
+- `read_bytes`: Reads the file and returns the content as bytes.
 - `open`: Opens the file and returns a file object.
   
-When using the `extract_content` parameter, the `read` and `open` methods will not read the remote
+When using the `extract_content` parameter, the `read_bytes` and `open` methods will not read the remote
 filesystem, and get the content from the data item.
