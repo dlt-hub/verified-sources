@@ -28,23 +28,13 @@ def test_all_resources(destination_name: str) -> None:
     table_names = [t["name"] for t in pipeline.default_schema.data_tables()]
     table_counts = load_table_counts(pipeline, *table_names)
 
-    # different dlt versions have different table names
-    if "-" in "".join(table_counts.keys()):
-        expected_tables = [
-            "channels",
-            "dlt-github-ci_message",
-            "_1-announcements_message",
-        ]
-        ci_table = "dlt-github-ci_message"
-        announcements_table = "_1-announcements_message"
-    else:
-        expected_tables = [
-            "channels",
-            "dlt_github_ci_message",
-            "_1_announcements_message",
-        ]
-        ci_table = "dlt_github_ci_message"
-        announcements_table = "_1_announcements_message"
+    ci_table = "dlt-github-ci_message"
+    announcements_table = "_1-announcements_message"
+    # just duckdb supports "-" in table names
+    if destination_name != "duckdb":
+        ci_table = ci_table.replace("-", "_")
+        announcements_table = announcements_table.replace("-", "_")
+    expected_tables = ["channels", ci_table, announcements_table]
 
     assert set(table_counts.keys()) >= set(expected_tables)
     assert table_counts["channels"] >= 15
