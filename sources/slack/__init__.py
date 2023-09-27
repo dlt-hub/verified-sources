@@ -64,13 +64,8 @@ def slack_source(
     yield channels_resource
 
     @dlt.resource(name="users", primary_key="id", write_disposition="replace")
-    def users_resource(
-        datetime_fields: List[str] = DEFAULT_DATETIME_FIELDS,
-    ) -> Iterable[TDataItem]:
+    def users_resource() -> Iterable[TDataItem]:
         """Yield all channels as a DLT resource.
-
-        Args:
-            datetime_fields (List[str]): The list of datetime fields to parse.
 
         Yields:
             Iterable[TDataItem]: A list of users.
@@ -80,7 +75,7 @@ def slack_source(
             resource="users.list",
             response_path="$.members[*]",
             params=dict(include_locale=True),
-            datetime_fields=datetime_fields,
+            datetime_fields=DEFAULT_DATETIME_FIELDS,
         ):
             yield page_data
 
