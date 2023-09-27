@@ -12,7 +12,7 @@ def get_message_uids(
     client: imaplib.IMAP4_SSL, criterias: Sequence[str]
 ) -> Optional[TDataItems]:
     """Get the message uids from the imap server.
-    
+
     Args:
         client (imaplib.IMAP4_SSL): The imap client.
         criterias (Sequence[str]): The search criterias.
