@@ -1,24 +1,26 @@
 import os
-from typing import Any
+import json
+
+from typing import Iterable
 
 import dlt
 from dlt.common.time import ensure_pendulum_datetime
-from pendulum.tz import UTC
 
 try:
-    from .standard.filesystem import filesystem_resource  # type: ignore
+    from .standard.filesystem import filesystem_resource, FileSystemDict  # type: ignore
     from .standard.inbox import inbox_source  # type: ignore
 except ImportError:
-    from standard.filesystem import filesystem_resource
+    from standard.filesystem import filesystem_resource, FileSystemDict
     from standard.inbox import inbox_source
 
 import pandas as pd
+import pyarrow.parquet as pq  # type: ignore
 from dlt.extract.source import TDataItem, TDataItems
 
 
 @dlt.transformer(name="filesystem")
 def copy_files(
-    items: TDataItems,
+    items: Iterable[FileSystemDict],
     storage_path: str,
 ) -> TDataItem:
     """Reads files and copy them to local directory.
@@ -47,7 +49,7 @@ def copy_files(
     write_disposition="merge",
 )
 def extract_met_csv(
-    items: TDataItems,
+    items: Iterable[FileSystemDict],
     incremental: dlt.sources.incremental[str] = dlt.sources.incremental(
         "date",
         primary_key="date",
@@ -55,7 +57,7 @@ def extract_met_csv(
         allow_external_schedulers=True,
     ),
 ) -> TDataItem:
-    """Reads files and copy them to local directory.
+    """Reads file content and extract the data.
 
     Args:
         item (TDataItem): The list of files to copy.
@@ -79,6 +81,53 @@ def extract_met_csv(
             yield df.to_dict(orient="records")
 
 
+@dlt.transformer
+def read_jsonl(
+    items: Iterable[FileSystemDict],
+    chunksize: int = 10,
+) -> TDataItem:
+    """Reads jsonl file content and extract the data.
+
+    Args:
+        item (Iterable[FileSystemDict]): The list of files to copy.
+        chunksize (int, optional): The number of files to process at once, defaults to 10.
+
+    Returns:
+        TDataItem: The file content
+    """
+    for file_obj in items:
+        with file_obj.open() as f:
+            lines_chunk = []
+            for line in f:
+                lines_chunk.append(json.loads(line))
+                if len(lines_chunk) >= chunksize:
+                    yield lines_chunk
+                    lines_chunk = []
+        if lines_chunk:
+            yield lines_chunk
+
+
+@dlt.transformer
+def read_parquet(
+    items: Iterable[FileSystemDict],
+    chunksize: int = 10,
+) -> TDataItem:
+    """Reads parquet file content and extract the data.
+
+    Args:
+        item (Iterable[FileSystemDict]): The list of files to copy.
+        chunksize (int, optional): The number of files to process at once, defaults to 10.
+
+    Returns:
+        TDataItem: The file content
+    """
+    for file_obj in items:
+        with file_obj.open() as f:
+            parquet_file = pq.ParquetFile(f)
+            for rows in parquet_file.iter_batches(batch_size=chunksize):
+                yield rows.to_pylist()
+
+
 def imap_inbox() -> None:
     # configure the pipeline with your destination details
     pipeline = dlt.pipeline(
@@ -92,7 +141,6 @@ def imap_inbox() -> None:
         filter_by_emails=("josue@sehnem.com",),
         attachments=True,
         chunksize=10,
-        # filter_by_mime_type=("text/txt",),
     )
 
     data_resource = data_source.resources["attachments"] | copy_files(
@@ -136,7 +184,7 @@ def copy_files_resource() -> None:
     print(load_info)
 
 
-def read_csv_resource() -> None:
+def read_file_content_resource() -> None:
     pipeline = dlt.pipeline(
         pipeline_name="standard_filesystem",
         destination="duckdb",
@@ -159,8 +207,24 @@ def read_csv_resource() -> None:
     # pretty print the information on data that was loaded
     print(load_info)
 
+    # JSONL reading
+    jsonl_source = filesystem_resource(filename_filter="jsonl/*.jsonl") | read_jsonl
+    # run the pipeline with your parameters
+    load_info = pipeline.run(jsonl_source)
+    # pretty print the information on data that was loaded
+    print(load_info)
+
+    # PARQUET reading
+    parquet_source = (
+        filesystem_resource(filename_filter="parquet/*.parquet") | read_parquet
+    )
+    # run the pipeline with your parameters
+    load_info = pipeline.run(parquet_source)
+    # pretty print the information on data that was loaded
+    print(load_info)
+
 
 if __name__ == "__main__":
     # copy_files_resource()
-    # read_csv_resource()
-    imap_inbox()
+    read_file_content_resource()
+    # imap_inbox()

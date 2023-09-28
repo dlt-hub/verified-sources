@@ -16,9 +16,13 @@ def test_load_content_resources(destination_name: str) -> None:
 
     @dlt.transformer
     def ext_file(items) -> str:
-        content = items[0].read_bytes()
-        assert items[0]["file_name"] == "dlthub.txt"
-        assert "josue@sehnem.com" in items[0]["From"]
+        for item in items:
+            # Make sure just filtered emails are processed
+            assert "josue@sehnem.com" in item["From"]
+            if item["file_name"] == "dlthub.txt":
+                # Find the attachment with the file name and assert the loaded content
+                content = item.read_bytes()
+                assert item["file_name"] == "dlthub.txt"
         assert content == b"dlthub content"
 
     data_source = inbox_source(

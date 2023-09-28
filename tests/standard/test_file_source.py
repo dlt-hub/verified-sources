@@ -50,7 +50,7 @@ def test_load_content_resources(destination_name: str) -> None:
 
     @dlt.transformer
     def ext_file(items) -> str:
-        content = items[0].read()
+        content = items[0].read_bytes()
         assert content == b"dlthub content"
 
     # Load filter files

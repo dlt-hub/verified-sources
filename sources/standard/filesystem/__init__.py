@@ -82,7 +82,7 @@ class FileSystemDict(Dict[str, Any]):
         """
         content: bytes
         # same as open, if the user has already extracted the content, we use it.
-        if "file_content" in self:
+        if "file_content" in self and self["file_content"] is not None:
             content = self["file_content"]
         else:
             content = self.filesystem.read_bytes(self["file_url"])
