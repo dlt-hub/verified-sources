@@ -10,7 +10,7 @@ from dlt.common import logger, pendulum
 from dlt.extract.source import DltResource, TDataItem, TDataItems
 
 from ..filesystem import FileSystemDict
-from ..filesystem.helpers import FilesystemFileItem
+from ..filesystem.helpers import FileItem
 from .helpers import (
     extract_attachments,
     extract_email_info,
@@ -21,7 +21,7 @@ from .helpers import (
 from .settings import DEFAULT_CHUNK_SIZE, DEFAULT_START_DATE, FILTER_EMAILS, GMAIL_GROUP
 
 
-class ImapFileItem(FilesystemFileItem):
+class ImapFileItem(FileItem):
     """A Imap file item."""
 
     file_hash: str
@@ -165,7 +165,6 @@ def read_messages(
 @dlt.transformer(
     name="attachments",
     write_disposition="merge",
-    merge_key="data_hash",
     primary_key="data_hash",
 )
 def get_attachments_by_uid(
@@ -175,7 +174,7 @@ def get_attachments_by_uid(
     password: str = dlt.secrets.value,
     filter_by_mime_type: Sequence[str] = (),
     chunksize: int = DEFAULT_CHUNK_SIZE,
-) -> Iterable[List[FileSystemDict]]:
+) -> Iterable[List[FileItem]]:
     """Downloads attachments from email messages based on the provided message UIDs.
 
     Args:
@@ -187,7 +186,7 @@ def get_attachments_by_uid(
         chunksize (Iterable[List[FileSystemDict]]): The number of message UIDs to collect at a time. Default is 'DEFAULT_CHUNK_SIZE' from settings.
 
     Yields:
-        TDataItem: A dictionary containing the collected email information and attachment details.
+        Iterable[List[FileItem]]: A dictionary containing the attachment FileItem.
     """
 
     with imaplib.IMAP4_SSL(host) as client:

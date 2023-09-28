@@ -56,8 +56,13 @@ def extract_met_csv(
         initial_value="2023-01-01",
         allow_external_schedulers=True,
     ),
+    chunksize: int = 15,
 ) -> TDataItem:
     """Reads file content and extract the data.
+
+    This example shows how to use the incremental source to keep track of the last value, it can be
+    used to keep track of the last date or id when fetching files that are continuously updated and
+    have a date or id column, avoiding to process the same data twice.
 
     Args:
         item (TDataItem): The list of files to copy.
@@ -73,10 +78,12 @@ def extract_met_csv(
             file_obj.open(),
             usecols=["code", "date", "temperature"],
             parse_dates=["date"],
-            chunksize=15,
+            chunksize=chunksize,
         ):
+            # Ensure that the dates are pendulum datetime objects
             last_value = ensure_pendulum_datetime(incremental.last_value)
             df["date"] = df["date"].apply(ensure_pendulum_datetime)
+            # Filter the data by the last value avoiding processing twice the same data
             df = df[df["date"] > last_value]
             yield df.to_dict(orient="records")
 
@@ -196,7 +203,7 @@ def read_file_content_resource() -> None:
     # will include the path to the file inside the bucket_url.
     csv_source = (
         filesystem_resource(
-            filename_filter="*/*.csv",
+            file_glob="*/*.csv",
             extract_content=True,
         )
         | extract_met_csv
@@ -208,7 +215,7 @@ def read_file_content_resource() -> None:
     print(load_info)
 
     # JSONL reading
-    jsonl_source = filesystem_resource(filename_filter="jsonl/*.jsonl") | read_jsonl
+    jsonl_source = filesystem_resource(file_glob="jsonl/*.jsonl") | read_jsonl
     # run the pipeline with your parameters
     load_info = pipeline.run(jsonl_source)
     # pretty print the information on data that was loaded
@@ -216,7 +223,7 @@ def read_file_content_resource() -> None:
 
     # PARQUET reading
     parquet_source = (
-        filesystem_resource(filename_filter="parquet/*.parquet") | read_parquet
+        filesystem_resource(file_glob="parquet/*.parquet") | read_parquet
     )
     # run the pipeline with your parameters
     load_info = pipeline.run(parquet_source)

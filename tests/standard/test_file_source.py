@@ -15,7 +15,7 @@ def test_all_resources(destination_name: str) -> None:
     )
 
     # Load all files
-    all_files = filesystem_resource(filename_filter="*.csv")
+    all_files = filesystem_resource(file_glob="*.csv")
     load_info = pipeline.run(all_files)
     assert_load_info(load_info)
     table_counts = load_table_counts(pipeline, "filesystem")
@@ -32,7 +32,7 @@ def test_filtered_resources(destination_name: str) -> None:
     )
 
     # Load filter files
-    all_files = filesystem_resource(filename_filter="mlb*.csv")
+    all_files = filesystem_resource(file_glob="mlb*.csv")
     load_info = pipeline.run(all_files)
     assert_load_info(load_info)
     table_counts = load_table_counts(pipeline, "filesystem")
@@ -55,7 +55,7 @@ def test_load_content_resources(destination_name: str) -> None:
 
     # Load filter files
     all_files = (
-        filesystem_resource(filename_filter="sample.txt", extract_content=True)
+        filesystem_resource(file_glob="sample.txt", extract_content=True)
         | ext_file
     )
     load_info = pipeline.run(all_files)

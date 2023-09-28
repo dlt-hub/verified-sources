@@ -98,36 +98,32 @@ class FileSystemDict(Dict[str, Any]):
 def filesystem_resource(
     bucket_url: str = dlt.secrets.value,
     credentials: FileSystemCredentials = dlt.secrets.value,
-    filename_filter: Optional[str] = None,
+    file_glob: Optional[str] = "*",
     chunksize: int = DEFAULT_CHUNK_SIZE,
     extract_content: bool = False,
-) -> Iterator[List[FileSystemDict]]:
+) -> Iterator[List[FileItem]]:
     """This source collect files and download or extract data from them.
 
     Args:
         bucket_url (str): The url to the bucket.
         credentials (FileSystemCredentials): The credentials to the filesystem.
-        filename_filter (str, optional): The filter to apply to the files in glob format.
+        file_glob (str, optional): The filter to apply to the files in glob format.
         chunksize (int, optional): The number of files to process at once, defaults to 10.
         extract_content (bool, optional): If true, the content of the file will be extracted if
             false it will return a fsspec file, defaults to False.
 
     Returns:
-        TDataItems: The list of files.
+        Iterator[List[FileItem]]: The list of files.
     """
 
     fs_client = client_from_credentials(bucket_url, credentials)
 
-    # as it is a glob, we add a wildcard if no filter is given
-    if not filename_filter:
-        filename_filter = "*"
-
-    files_chunk: List[FileSystemDict] = []
-    for file_model in get_files(fs_client, bucket_url, filename_filter):
+    files_chunk: List[FileItem] = []
+    for file_model in get_files(fs_client, bucket_url, file_glob):
         file_dict = FileSystemDict(file_model, credentials)
         if extract_content:
             file_dict["file_content"] = file_dict.read_bytes()
-        files_chunk.append(file_dict)
+        files_chunk.append(file_dict)  # type: ignore
 
         # wait for the chunk to be full
         if len(file_dict) >= chunksize:
