@@ -33,6 +33,15 @@ GLOB_RESULTS = [
         ],
     },
     {
+        "glob": "*/*.csv",
+        "file_names": [
+            "csv/freshman_kgs.csv",
+            "csv/freshman_lbs.csv",
+            "csv/mlb_players.csv",
+            "csv/mlb_teams_2012.csv",
+        ],
+    },
+    {
         "glob": "csv/*",
         "file_names": [
             "csv/freshman_kgs.csv",

@@ -9,16 +9,8 @@ from tests.utils import ALL_DESTINATIONS, assert_load_info, load_table_counts
 from .settings import GLOB_RESULTS, TESTS_BUCKET_URL
 
 
-@pytest.mark.parametrize("destination_name", ALL_DESTINATIONS)
 @pytest.mark.parametrize("glob_params", GLOB_RESULTS)
-def test_file_list(destination_name: str, glob_params: Dict[str, Any]) -> None:
-    pipeline = dlt.pipeline(
-        pipeline_name="file_source",
-        destination=destination_name,
-        dataset_name="file_source_data",
-        full_refresh=True,
-    )
-
+def test_file_list(glob_params: Dict[str, Any]) -> None:
     @dlt.transformer
     def assert_files(items) -> str:
         file_count = len(items)
@@ -27,17 +19,13 @@ def test_file_list(destination_name: str, glob_params: Dict[str, Any]) -> None:
         assert file_names == glob_params["file_names"]
 
     # we just pass the glob parameter to the resource if it is not None
-    if not glob_params["glob"]:
-        all_files = filesystem_resource(bucket_url=TESTS_BUCKET_URL) | assert_files
-    else:
-        all_files = (
-            filesystem_resource(
-                bucket_url=TESTS_BUCKET_URL, file_glob=glob_params["glob"]
-            )
+    if file_glob := glob_params["glob"]:
+        list(
+            filesystem_resource(bucket_url=TESTS_BUCKET_URL, file_glob=file_glob)
             | assert_files
         )
-
-    pipeline.run(all_files)
+    else:
+        list(filesystem_resource(bucket_url=TESTS_BUCKET_URL) | assert_files)
 
 
 @pytest.mark.parametrize("extract_content", [True, False])
@@ -72,3 +60,20 @@ def test_load_content_resources(destination_name: str, extract_content: bool) ->
     )
     load_info = pipeline.run(all_files)
     assert_load_info(load_info)
+
+
+@pytest.mark.parametrize("destination_name", ALL_DESTINATIONS)
+def test_all_resources(destination_name: str) -> None:
+    pipeline = dlt.pipeline(
+        pipeline_name="file_source",
+        destination=destination_name,
+        dataset_name="file_source_data",
+        full_refresh=True,
+    )
+
+    # Load all files
+    all_files = filesystem_resource(file_glob="csv/*.csv")
+    load_info = pipeline.run(all_files)
+    assert_load_info(load_info)
+    table_counts = load_table_counts(pipeline, "filesystem")
+    assert table_counts["filesystem"] == 4
