@@ -3,7 +3,7 @@ import hashlib
 import imaplib
 from copy import deepcopy
 from itertools import chain
-from typing import List, Optional, Sequence, Iterable
+from typing import Iterable, List, Optional, Sequence
 
 import dlt
 from dlt.common import logger, pendulum
@@ -233,7 +233,7 @@ def get_attachments_by_uid(
 
                 files_dict.append(file_dict)
                 if len(files_dict) >= chunksize:
-                    yield files_dict
+                    yield files_dict  # type: ignore
                     files_dict = []
         if files_dict:
-            yield files_dict
+            yield files_dict  # type: ignore

@@ -1,8 +1,8 @@
 """Helpers for the filesystem resource."""
 import mimetypes
+import posixpath
 from typing import Iterable, Optional
 from urllib.parse import urlparse
-import posixpath
 
 from dlt.common.configuration.specs import configspec
 from dlt.common.storages import filesystem
@@ -10,8 +10,8 @@ from dlt.common.storages.configuration import (
     FilesystemConfiguration,
     FileSystemCredentials,
 )
-from dlt.common.storages.filesystem import FileItem as DltCoreFileItem
 from dlt.common.storages.filesystem import MTIME_DISPATCH
+from dlt.common.storages.filesystem import FileItem as DltCoreFileItem
 from fsspec import AbstractFileSystem  # type: ignore
 from pendulum import DateTime
 
@@ -45,7 +45,7 @@ def client_from_credentials(
 
 
 def get_files(
-    fs_client: AbstractFileSystem, bucket_url: str, file_glob: str
+    fs_client: AbstractFileSystem, bucket_url: str, file_glob: str = "**/*"
 ) -> Iterable[FileItem]:
     """Get the files from the filesystem client.
 
@@ -62,10 +62,12 @@ def get_files(
     bucket_url_str = posixpath.join(bucket_url_parsed.netloc, bucket_url_parsed.path)
     filter_url = posixpath.join(bucket_url_str, file_glob)
 
-    files = fs_client.glob(filter_url, detail=True)
+    glob_result = fs_client.glob(filter_url, detail=True, type="file")
 
-    for file, md in files.items():
-        file_name = file.replace(bucket_url_str, "")
+    for file, md in glob_result.items():
+        if md["type"] != "file":
+            continue
+        file_name = file.replace(bucket_url_str, "").lstrip("/")
         file_url = f"{protocol}://{file}"
         yield FileItem(
             file_name=file_name,

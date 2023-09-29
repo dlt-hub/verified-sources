@@ -1,13 +1,13 @@
-import os
 import json
-
+import os
+import posixpath
 from typing import Iterable
 
 import dlt
 from dlt.common.time import ensure_pendulum_datetime
 
 try:
-    from .standard.filesystem import filesystem_resource, FileSystemDict  # type: ignore
+    from .standard.filesystem import FileSystemDict, filesystem_resource  # type: ignore
     from .standard.inbox import inbox_source  # type: ignore
 except ImportError:
     from standard.filesystem import filesystem_resource, FileSystemDict
@@ -15,7 +15,9 @@ except ImportError:
 
 import pandas as pd
 import pyarrow.parquet as pq  # type: ignore
-from dlt.extract.source import TDataItem, TDataItems
+from dlt.extract.source import TDataItem
+
+TESTS_BUCKET_URL = posixpath.abspath("../tests/standard/samples/")
 
 
 @dlt.transformer(name="filesystem")
@@ -158,6 +160,15 @@ def imap_inbox() -> None:
     # pretty print the information on data that was loaded
     print(load_info)
 
+
+def imap_messages() -> None:
+    pipeline = dlt.pipeline(
+        pipeline_name="standard_inbox",
+        destination="duckdb",
+        dataset_name="standard_inbox_data",
+        full_refresh=True,
+    )
+
     filter_emails = ("astra92293@gmail.com", "josue@sehnem.com")
 
     data_source = inbox_source(
@@ -181,6 +192,7 @@ def copy_files_resource() -> None:
     )
 
     file_source = filesystem_resource(
+        bucket_url=TESTS_BUCKET_URL,
         chunksize=10,
         extract_content=True,
     ) | copy_files(storage_path="standard/files")
@@ -203,19 +215,26 @@ def read_file_content_resource() -> None:
     # will include the path to the file inside the bucket_url.
     csv_source = (
         filesystem_resource(
+            bucket_url=TESTS_BUCKET_URL,
             file_glob="*/*.csv",
             extract_content=True,
         )
         | extract_met_csv
     )
 
+    csv_source.table_name = "met_data"
     # run the pipeline with your parameters
     load_info = pipeline.run(csv_source)
     # pretty print the information on data that was loaded
     print(load_info)
 
     # JSONL reading
-    jsonl_source = filesystem_resource(file_glob="jsonl/*.jsonl") | read_jsonl
+    jsonl_source = (
+        filesystem_resource(bucket_url=TESTS_BUCKET_URL, file_glob="jsonl/*.jsonl")
+        | read_jsonl
+    )
+
+    jsonl_source.table_name = "jsonl_data"
     # run the pipeline with your parameters
     load_info = pipeline.run(jsonl_source)
     # pretty print the information on data that was loaded
@@ -223,8 +242,11 @@ def read_file_content_resource() -> None:
 
     # PARQUET reading
     parquet_source = (
-        filesystem_resource(file_glob="parquet/*.parquet") | read_parquet
+        filesystem_resource(bucket_url=TESTS_BUCKET_URL, file_glob="parquet/*.parquet")
+        | read_parquet
     )
+
+    parquet_source.table_name = "parquet_data"
     # run the pipeline with your parameters
     load_info = pipeline.run(parquet_source)
     # pretty print the information on data that was loaded
@@ -233,5 +255,6 @@ def read_file_content_resource() -> None:
 
 if __name__ == "__main__":
     # copy_files_resource()
-    read_file_content_resource()
+    # read_file_content_resource()
     # imap_inbox()
+    imap_messages()
