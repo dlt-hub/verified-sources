@@ -59,10 +59,16 @@ def get_files(
     """
     bucket_url_parsed = urlparse(bucket_url)
     protocol = bucket_url_parsed.scheme or "file"
-    bucket_url_str = posixpath.join(bucket_url_parsed.netloc, bucket_url_parsed.path)
+    # absolute paths are not joined, so we remove it from the bucket_url path
+    bucket_url_str = posixpath.join(
+        bucket_url_parsed.netloc, bucket_url_parsed.path.lstrip("/")
+    )
     filter_url = posixpath.join(bucket_url_str, file_glob)
 
-    glob_result = fs_client.glob(filter_url, detail=True, type="file")
+    if bucket_url.startswith("file:///"):
+        filter_url = posixpath.join("/", filter_url)
+
+    glob_result = fs_client.glob(filter_url, detail=True)
 
     for file, md in glob_result.items():
         if md["type"] != "file":

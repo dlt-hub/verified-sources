@@ -1,13 +1,14 @@
 import posixpath
 
-TESTS_BUCKET_URL = posixpath.abspath("samples/")
+TESTS_BUCKET_URLS = [
+    posixpath.abspath("tests/standard/samples"),
+    "s3://dlt-ci-test-bucket/standard_source/samples",
+]
 
 GLOB_RESULTS = [
     {
         "glob": None,
-        "file_names": [
-            "sample.txt",
-        ],
+        "file_names": ["sample.txt"],
     },
     {
         "glob": "*/*",
@@ -59,8 +60,6 @@ GLOB_RESULTS = [
     },
     {
         "glob": "*",
-        "file_names": [
-            "sample.txt",
-        ],
+        "file_names": ["sample.txt"],
     },
 ]
