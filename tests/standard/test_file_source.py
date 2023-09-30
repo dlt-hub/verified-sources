@@ -25,7 +25,7 @@ def test_file_list(bucket_url: str, glob_params: Dict[str, Any]) -> None:
         )
     else:
         all_files = list(filesystem_resource(bucket_url=bucket_url) | assert_files)
-    
+
     file_count = len(all_files)
     file_names = [item["file_name"] for item in all_files]
     assert file_count == len(glob_params["file_names"])
