@@ -15,19 +15,21 @@ from .settings import GLOB_RESULTS, TESTS_BUCKET_URLS
 def test_file_list(bucket_url: str, glob_params: Dict[str, Any]) -> None:
     @dlt.transformer
     def assert_files(items) -> str:
-        file_count = len(items)
-        file_names = [item["file_name"] for item in items]
-        assert file_count == len(glob_params["file_names"])
-        assert file_names == glob_params["file_names"]
+        return items
 
     # we just pass the glob parameter to the resource if it is not None
     if file_glob := glob_params["glob"]:
-        list(
+        all_files = list(
             filesystem_resource(bucket_url=bucket_url, file_glob=file_glob)
             | assert_files
         )
     else:
-        list(filesystem_resource(bucket_url=bucket_url) | assert_files)
+        all_files = list(filesystem_resource(bucket_url=bucket_url) | assert_files)
+    
+    file_count = len(all_files)
+    file_names = [item["file_name"] for item in all_files]
+    assert file_count == len(glob_params["file_names"])
+    assert file_names == glob_params["file_names"]
 
 
 @pytest.mark.parametrize("extract_content", [True, False])
