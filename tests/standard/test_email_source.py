@@ -1,38 +1,31 @@
-import dlt
-import pytest
-
-from sources.standard.inbox import inbox_source
-from tests.utils import ALL_DESTINATIONS, assert_load_info
+from sources.standard.inbox import get_attachments, get_message_content, messages_uids
 
 
-@pytest.mark.parametrize("destination_name", ALL_DESTINATIONS)
-def test_load_content_resources(destination_name: str) -> None:
-    pipeline = dlt.pipeline(
-        pipeline_name="file_source",
-        destination=destination_name,
-        dataset_name="file_source_data",
-        full_refresh=True,
-    )
+def test_load_attachments() -> None:
+    filter_emails = ("josue@sehnem.com",)
+    uids = messages_uids(filter_emails=filter_emails)
 
-    @dlt.transformer
-    def ext_file(items) -> str:
-        for item in items:
-            # Make sure just filtered emails are processed
-            assert "josue@sehnem.com" in item["From"]
-            if item["file_name"] == "dlthub.txt":
-                # Find the attachment with the file name and assert the loaded content
-                content = item.read_bytes()
-                assert item["file_name"] == "dlthub.txt"
-        assert content == b"dlthub content"
+    attachments = list(uids | get_attachments)
 
-    data_source = inbox_source(
-        filter_by_emails=("josue@sehnem.com",),
-        attachments=True,
-        chunksize=10,
-        filter_by_mime_type=("text/txt",),
-    )
+    for item in attachments:
+        # Make sure just filtered emails are processed
+        assert "josue@sehnem.com" in item["From"]
+        if item["file_name"] == "sample.txt":
+            # Find the attachment with the file name and assert the loaded content
+            content = item.read_bytes()
+            assert item["file_name"] == "sample.txt"
+            assert content == b"dlthub content"
 
-    attachments = data_source.resources["attachments"] | ext_file
 
-    load_info = pipeline.run(attachments)
-    assert_load_info(load_info)
+def test_load_messages() -> None:
+    filter_emails = ("josue@sehnem.com",)
+    uids = messages_uids(filter_emails=filter_emails)
+
+    messages = list(uids | get_message_content(include_body=True))
+
+    for item in messages:
+        # Make sure just filtered emails are processed
+        assert "josue@sehnem.com" in item["From"]
+        if item["message_uid"] == 22:
+            assert item["body"] == "test body\r\n"
+            assert item["Subject"] == "test subject"

@@ -7,7 +7,7 @@ from typing import Iterable, List, Optional, Sequence
 
 import dlt
 from dlt.common import logger, pendulum
-from dlt.extract.source import DltResource, TDataItem, TDataItems
+from dlt.extract.source import TDataItem, TDataItems
 
 from ..filesystem import FileSystemDict
 from ..filesystem.helpers import FileItem
@@ -27,45 +27,7 @@ class ImapFileItem(FileItem):
     file_hash: str
 
 
-@dlt.source
-def inbox_source(
-    gmail_group: Optional[str] = GMAIL_GROUP,
-    attachments: bool = False,
-    start_date: pendulum.DateTime = DEFAULT_START_DATE,
-    filter_by_emails: Sequence[str] = FILTER_EMAILS,
-    filter_by_mime_type: Sequence[str] = (),
-    chunksize: int = DEFAULT_CHUNK_SIZE,
-) -> DltResource:
-    """This source collects inbox emails and downloads attachments to the local folder.
-
-    Args:
-        gmail_group (str, optional): The email address of the Google Group to filter emails sent to the group. Default is 'GMAIL_GROUP' from settings.
-        attachments (bool, optional): If True, get email attachments and return as a ImapFileItem. Default is False.
-        start_date (pendulum.DateTime, optional): The start date from which to collect emails. Default is 'DEFAULT_START_DATE' from settings.
-        filter_by_emails (Sequence[str], optional): A sequence of email addresses used to filter emails based on the 'FROM' field. Default is 'FILTER_EMAILS' from settings.
-        filter_by_mime_type (Sequence[str], optional): A sequence of MIME types used to filter attachments based on their content type. Default is an empty sequence.
-        chunksize (int, optional): The number of message UIDs to collect at a time. Default is 'DEFAULT_CHUNK_SIZE' from settings.
-
-    Returns:
-        DltResource: A dlt resource containing the collected email information.
-    """
-
-    uids = messages_uids(
-        filter_emails=filter_by_emails,
-        gmail_group=gmail_group,
-        folder="INBOX",
-        start_date=start_date,
-        chunksize=chunksize,
-    )
-    if attachments:
-        return uids | get_attachments_by_uid(
-            filter_by_mime_type=filter_by_mime_type,
-        )
-    else:
-        return uids | read_messages
-
-
-@dlt.resource
+@dlt.resource(selected=False)
 def messages_uids(
     host: str = dlt.secrets.value,
     email_account: str = dlt.secrets.value,
@@ -127,7 +89,7 @@ def messages_uids(
 
 
 @dlt.transformer(name="messages")
-def read_messages(
+def get_message_content(
     items: TDataItems,
     host: str = dlt.secrets.value,
     email_account: str = dlt.secrets.value,
@@ -167,7 +129,7 @@ def read_messages(
     write_disposition="merge",
     primary_key="data_hash",
 )
-def get_attachments_by_uid(
+def get_attachments(
     items: TDataItems,
     host: str = dlt.secrets.value,
     email_account: str = dlt.secrets.value,

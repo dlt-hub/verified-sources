@@ -10,8 +10,7 @@ from dlt.common.storages.configuration import (
     FilesystemConfiguration,
     FileSystemCredentials,
 )
-from dlt.common.storages.filesystem import MTIME_DISPATCH
-from dlt.common.storages.filesystem import FileItem
+from dlt.common.storages.filesystem import MTIME_DISPATCH, FileItem
 from fsspec import AbstractFileSystem  # type: ignore
 from pendulum import DateTime
 

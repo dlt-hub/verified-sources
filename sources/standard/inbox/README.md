@@ -56,42 +56,36 @@ Use [App password](#getting-gmail-app-password) to set the password for a Gmail 
 
 ## Functionality
 
-### inbox_source source
-
-This is a dlt source that collects inbox emails and, if `attachments=True`, return the attachments
-as filesystem object to be used with file transformers.
-
 ### messages_uids resource
 
 This is a dlt resource that connects to the IMAP server, logs in to the email account, and fetches
 email messages from the specified folder ('INBOX' by default). It yields a dictionary containing
 only message UID.
 
-### read_messages resource
+### get_message_content transformer
+
+This dlt transformer takes an email message items from another resource (e.g. `messages_uids`) and
+fetches the corresponding email messages using their UID. It yields a dictionary containing email
+metadata such as message UID, message ID, sender, subject, date, modification date, content type,
+and email body.
+
+### get_attachments resource
 
 This dlt transformer resource takes an email message items from another resource (e.g.
-`messages_uids`) and fetches the corresponding email messages using their UID. It yields a
-dictionary containing email metadata such as message UID, message ID, sender, subject, date,
-modification date, content type, and email body.
+`messages_uids`) and extracts attachments from the email message using their UID. It connects to
+the IMAP server, fetches the email message by its UID, and return a file objects as filesystem. It
+yields a dictionary containing email metadata such as message UID, sender, date, content type, etc.
+It can be used with the same transformers used for filesystem.
 
-### get_attachments_by_uid resource
+## Examples
 
-This dlt transformer resource takes an email message items from another resource (e.g.
-`messages_uids`) and extracts attachments from the email message using their UID.
-It connects to the IMAP server, fetches the email message by its UID, and return a file objects as
-filesystem. It yields a dictionary containing email metadata such as message UID, sender, date,
-content type, etc. It can be used with the same transformers used for filesystem.
-
-## Example
-
-Here's an example of how to use the `inbox_source` to fetch inbox emails and save attachments to a
-local folder:
+Here is an example of how to use the `messages_uids` to fetch uids and two transformers
+`get_attachments` to get the attachments and `copy_files` to copy the attachments to a local
+folder.
 
 ```python
 import dlt
-
 from inbox import inbox_source
-
 
 # configure the pipeline with your destination details
 pipeline = dlt.pipeline(
@@ -101,9 +95,39 @@ pipeline = dlt.pipeline(
     full_refresh=False,
 )
 
-data_source = inbox_source(attachments=True, filter_by_mime_type=("application/pdf",))
+attachments = (
+   messages_uids |
+   get_attachments(filter_by_mime_type=("application/pdf",)) |
+   copy_files(storage_path="standard/files")
+)
+
 # run the pipeline with your parameters
-load_info = pipeline.run(data_source)
+load_info = pipeline.run(attachments)
+# pretty print the information on data that was loaded
+print(load_info)
+```
+
+You can also just fetch the content of the email message using the `get_message_content`
+transformer, in this example you can also see how to filter the emails by sender:
+
+```python
+import dlt
+from inbox import inbox_source
+
+# configure the pipeline with your destination details
+pipeline = dlt.pipeline(
+    pipeline_name="inbox",
+    destination="duckdb",
+    dataset_name="inbox_data",
+    full_refresh=False,
+)
+
+filter_emails = ("sender1@gmail.com", "sender2@gmail.com")
+uids = messages_uids(filter_emails=filter_emails)
+messages = uids | get_message_content(include_body=True)
+
+# run the pipeline with your parameters
+load_info = pipeline.run(attachments)
 # pretty print the information on data that was loaded
 print(load_info)
 ```

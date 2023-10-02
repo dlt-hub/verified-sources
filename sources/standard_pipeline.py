@@ -8,10 +8,10 @@ from dlt.common.time import ensure_pendulum_datetime
 
 try:
     from .standard.filesystem import FileSystemDict, filesystem_resource  # type: ignore
-    from .standard.inbox import inbox_source  # type: ignore
+    from .standard.inbox import get_attachments, get_message_content, messages_uids  # type: ignore
 except ImportError:
-    from standard.filesystem import filesystem_resource, FileSystemDict
-    from standard.inbox import inbox_source
+    from standard.filesystem import FileSystemDict, filesystem_resource
+    from standard.inbox import messages_uids, get_attachments, get_message_content
 
 import pandas as pd
 import pyarrow.parquet as pq  # type: ignore
@@ -137,52 +137,6 @@ def read_parquet(
                 yield rows.to_pylist()
 
 
-def imap_inbox() -> None:
-    # configure the pipeline with your destination details
-    pipeline = dlt.pipeline(
-        pipeline_name="standard_inbox",
-        destination="duckdb",
-        dataset_name="standard_inbox_data",
-        full_refresh=True,
-    )
-
-    data_source = inbox_source(
-        filter_by_emails=("josue@sehnem.com",),
-        attachments=True,
-        chunksize=10,
-    )
-
-    data_resource = data_source.resources["attachments"] | copy_files(
-        storage_path="standard/files"
-    )
-    # run the pipeline with your parameters
-    load_info = pipeline.run(data_resource)
-    # pretty print the information on data that was loaded
-    print(load_info)
-
-
-def imap_messages() -> None:
-    pipeline = dlt.pipeline(
-        pipeline_name="standard_inbox",
-        destination="duckdb",
-        dataset_name="standard_inbox_data",
-        full_refresh=True,
-    )
-
-    filter_emails = ("astra92293@gmail.com", "josue@sehnem.com")
-
-    data_source = inbox_source(
-        filter_by_emails=filter_emails,
-        attachments=False,
-        chunksize=10,
-    )
-    data_resource = data_source.resources["messages"]
-    # run the pipeline with your parameters
-    load_info = pipeline.run(data_resource)
-    # pretty print the information on data that was loaded
-    print(load_info)
-
-
 def copy_files_resource() -> None:
     pipeline = dlt.pipeline(
         pipeline_name="standard_filesystem",
@@ -253,8 +207,49 @@ def read_file_content_resource() -> None:
     print(load_info)
 
 
+# IMAP examples
+def imap_read_messages() -> None:
+    pipeline = dlt.pipeline(
+        pipeline_name="standard_inbox",
+        destination="duckdb",
+        dataset_name="standard_inbox_data",
+        full_refresh=True,
+    )
+
+    filter_emails = ("astra92293@gmail.com", "josue@sehnem.com")
+    data_source = messages_uids(filter_emails=filter_emails)
+
+    messages = data_source | get_message_content(include_body=True)
+
+    # run the pipeline with your parameters
+    load_info = pipeline.run(messages)
+    # pretty print the information on data that was loaded
+    print(load_info)
+
+
+def imap_get_attachments() -> None:
+    pipeline = dlt.pipeline(
+        pipeline_name="standard_inbox",
+        destination="duckdb",
+        dataset_name="standard_inbox_data",
+        full_refresh=True,
+    )
+
+    filter_emails = ("josue@sehnem.com",)
+    data_source = messages_uids(filter_emails=filter_emails)
+
+    attachments = (
+        data_source | get_attachments | copy_files(storage_path="standard/files")
+    )
+
+    # run the pipeline with your parameters
+    load_info = pipeline.run(attachments)
+    # pretty print the information on data that was loaded
+    print(load_info)
+
+
 if __name__ == "__main__":
     # copy_files_resource()
     # read_file_content_resource()
-    # imap_inbox()
-    imap_messages()
+    # imap_read_messages()
+    imap_get_attachments()
