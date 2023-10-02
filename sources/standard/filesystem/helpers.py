@@ -11,15 +11,9 @@ from dlt.common.storages.configuration import (
     FileSystemCredentials,
 )
 from dlt.common.storages.filesystem import MTIME_DISPATCH
-from dlt.common.storages.filesystem import FileItem as DltCoreFileItem
+from dlt.common.storages.filesystem import FileItem
 from fsspec import AbstractFileSystem  # type: ignore
 from pendulum import DateTime
-
-
-class FileItem(DltCoreFileItem):
-    """A file item with size in bytes."""
-
-    size_in_bytes: int
 
 
 @configspec

@@ -6,9 +6,14 @@ keywords: [filesystem, fsspec, s3]
 
 # Filesystem Source
 
-This source provides functionalities get data from fsspec filesystem. It supports all the
-filesystems supported by fsspec. For more information about fsspec, please visit
-[fsspec documentation](https://filesystem-spec.readthedocs.io/en/latest/index.html).
+This source provides functionalities get data from in s3, gcs and azure buckets and also supports
+local file system and other fsspec compatible filesystems. For more information about fsspec,
+please visit [fsspec documentation](https://filesystem-spec.readthedocs.io/en/latest/index.html)
+for more details.
+
+The filesystem source can list, open and read files that can be used with other transformers to
+build pipelines that can serve various porpouses. You can find examples of how to use this resource
+in the `standard_pipeline.py` file.
 
 ## Initialize the source
 
