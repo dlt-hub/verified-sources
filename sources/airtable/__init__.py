@@ -1,6 +1,5 @@
 """Source that loads tables form Airtable.
 Supports whitelisting of tables or loading of all tables from a specified base.
-Supported write dispositions: replace
 """
 from typing import Optional, Iterable, Iterator, List, Dict, Any
 
@@ -13,8 +12,8 @@ import pyairtable
 
 @dlt.source
 def airtable_source(
-    base_id: str,
-    table_names: Optional[List[str]] = None,
+    base_id: str = dlt.config.value,
+    table_names: Optional[List[str]] = dlt.config.value,
     access_token: str = dlt.secrets.value,
 ) -> Iterable[DltResource]:
     """

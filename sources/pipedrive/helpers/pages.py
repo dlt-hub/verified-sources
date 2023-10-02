@@ -42,7 +42,7 @@ def get_pages(
 
 def get_recent_items_incremental(
     entity: str,
-    pipedrive_api_key: str = dlt.secrets.value,
+    pipedrive_api_key: str,
     since_timestamp: Optional[dlt.sources.incremental[str]] = dlt.sources.incremental(
         "update_time|modified", "1970-01-01 00:00:00"
     ),

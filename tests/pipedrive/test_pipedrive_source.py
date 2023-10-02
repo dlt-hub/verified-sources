@@ -238,6 +238,8 @@ def test_custom_fields_munger(destination_name: str) -> None:
     table_data = ["TEST FIELD 1"]
     assert_query_data(pipeline, query_string, table_data)
 
+    print(pipeline.state)
+
 
 def test_since_timestamp() -> None:
     """since_timestamp is coerced correctly to UTC implicit ISO timestamp and passed to endpoint function"""

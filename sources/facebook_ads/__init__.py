@@ -46,6 +46,7 @@ from .settings import (
     ALL_ACTION_BREAKDOWNS,
     ALL_ACTION_ATTRIBUTION_WINDOWS,
     DEFAULT_INSIGHT_FIELDS,
+    INSIGHT_FIELDS_TYPES,
     INSIGHTS_PRIMARY_KEY,
     INSIGHTS_BREAKDOWNS_OPTIONS,
     INVALID_INSIGHTS_FIELDS,
@@ -129,7 +130,7 @@ def facebook_insights_source(
     fields: Sequence[str] = DEFAULT_INSIGHT_FIELDS,
     attribution_window_days_lag: int = 7,
     time_increment_days: int = 1,
-    breakdowns: TInsightsBreakdownOptions = "ads_insights_age_and_gender",
+    breakdowns: TInsightsBreakdownOptions = "ads_insights",
     action_breakdowns: Sequence[str] = ALL_ACTION_BREAKDOWNS,
     level: TInsightsLevels = "ad",
     action_attribution_windows: Sequence[str] = ALL_ACTION_ATTRIBUTION_WINDOWS,
@@ -172,7 +173,11 @@ def facebook_insights_source(
     initial_load_start_date = pendulum.today().subtract(days=initial_load_past_days)
     initial_load_start_date_str = initial_load_start_date.isoformat()
 
-    @dlt.resource(primary_key=INSIGHTS_PRIMARY_KEY, write_disposition="merge")
+    @dlt.resource(
+        primary_key=INSIGHTS_PRIMARY_KEY,
+        write_disposition="merge",
+        columns=INSIGHT_FIELDS_TYPES,
+    )
     def facebook_insights(
         date_start: dlt.sources.incremental[str] = dlt.sources.incremental(
             "date_start", initial_value=initial_load_start_date_str
@@ -186,6 +191,9 @@ def facebook_insights_source(
             query = {
                 "level": level,
                 "action_breakdowns": list(action_breakdowns),
+                "breakdowns": list(
+                    INSIGHTS_BREAKDOWNS_OPTIONS[breakdowns]["breakdowns"]
+                ),
                 "limit": batch_size,
                 "fields": list(
                     set(fields)
