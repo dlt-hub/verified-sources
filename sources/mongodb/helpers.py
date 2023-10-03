@@ -87,7 +87,7 @@ def collection_documents(
         yield docs_slice
 
 
-def convert_mongo_objs(value):
+def convert_mongo_objs(value: Any) -> Any:
     if isinstance(value, (ObjectId, Decimal128)):
         return str(value)
     if isinstance(value, _datetime.datetime):
