@@ -2,7 +2,7 @@ import json
 
 import dlt
 import pytest
-from dlt.common.typing import TAnyDateTime
+from pendulum import DateTime
 
 from sources.mongodb import mongodb_collection
 from sources.mongodb_pipeline import (
@@ -55,7 +55,7 @@ def test_nested_documents():
     movies = mongodb_collection(collection="movieGroups")
     document = list(movies)[0]
     # Check the date type
-    assert isinstance(document["date"], TAnyDateTime)
+    assert isinstance(document["date"], DateTime)
     # All other fields must be json serializable
     del document["date"]
     doc_str = json.dumps(document)
