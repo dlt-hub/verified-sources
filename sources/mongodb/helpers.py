@@ -1,7 +1,7 @@
 """Mongo database source helpers"""
 
 from itertools import islice
-from typing import Any, Dict, Iterator, Optional
+from typing import TYPE_CHECKING, Any, Dict, Iterator, Optional
 
 import dlt
 from bson.decimal128 import Decimal128
@@ -11,8 +11,6 @@ from dlt.common.typing import TDataItem
 from pymongo import MongoClient
 from pymongo.collection import Collection
 from pymongo.cursor import Cursor
-
-from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     TMongoClient = MongoClient[Any]
@@ -59,9 +57,24 @@ class CollectionLoader:
 
     def clean_document(self, document: Dict[str, Any]) -> Any:
         """Clean document to be json serializable"""
-        output = {}
+        # Convert lists to json serializable
+        if isinstance(document, list):
+            output = []
+            for item in document:
+                if isinstance(item, (ObjectId, Decimal128)):
+                    output.append(str(item))
+                else:
+                    output.append(item)
+            return output
+
+        # Convert single objects to json serializable
         if not isinstance(document, dict):
+            if isinstance(document, (ObjectId, Decimal128)):
+                return str(document)
             return document
+
+        # Convert dicts to json serializable
+        output = {}
         for key, value in document.items():
             if not isinstance(value, (dict, list, Decimal128, ObjectId)):
                 output[key] = value
@@ -69,9 +82,7 @@ class CollectionLoader:
                 output[key] = self.clean_document(value)
             elif isinstance(value, list):
                 output[key] = [self.clean_document(item) for item in value]
-            elif isinstance(value, Decimal128):
-                output[key] = value.to_decimal()
-            elif isinstance(value, ObjectId):
+            elif isinstance(value, (ObjectId, Decimal128)):
                 output[key] = str(value)
         return output
 

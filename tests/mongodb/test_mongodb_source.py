@@ -1,11 +1,16 @@
-from tests.utils import ALL_DESTINATIONS, assert_load_info, load_table_counts
-import pytest
+import json
+
 import dlt
+import pytest
+from dlt.common.typing import TAnyDateTime
+
+from sources.mongodb import mongodb_collection
 from sources.mongodb_pipeline import (
+    load_entire_database,
     load_select_collection_db,
     load_select_collection_db_filtered,
-    load_entire_database,
 )
+from tests.utils import ALL_DESTINATIONS, assert_load_info, load_table_counts
 
 
 @pytest.mark.parametrize("destination_name", ALL_DESTINATIONS)
@@ -44,3 +49,15 @@ def test_all_resources(destination_name: str) -> None:
     expected_tables = ["movies"]
     assert set(table_counts.keys()) >= set(expected_tables)
     assert table_counts["movies"] == 23539
+
+
+def test_nested_documents():
+    movies = mongodb_collection(collection="movieGroups")
+    document = list(movies)[0]
+    # Check the date type
+    assert isinstance(document["date"], TAnyDateTime)
+    # All other fields must be json serializable
+    del document["date"]
+    doc_str = json.dumps(document)
+    # Confirm that we are using the right object with nested fields
+    assert json.loads(doc_str)["_id"] == "651c075367e4e330ec801dac"
