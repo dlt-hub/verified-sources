@@ -62,7 +62,7 @@ To setup MongoDB and grab credentials refer to the
 1. Now the pipeline can be run by using the command:
 
    ```bash
-   python3 mongodb_pipeline.py
+   python mongodb_pipeline.py
    ```
 
 1. To make sure that everything is loaded as expected, use the command:
@@ -74,8 +74,8 @@ To setup MongoDB and grab credentials refer to the
    For example, the pipeline_name for the above pipeline example is `local_mongo`, you may also use
    any custom name instead.
 
-💡 To explore additional customizations for this pipeline, we recommend referring to the official DLT
+💡 To explore additional customizations for this pipeline, we recommend referring to the official dlt
 MongoDB verified documentation. It provides comprehensive information and guidance on how to further
-customize and tailor the pipeline to suit your specific needs. You can find the DLT MongoDB
+customize and tailor the pipeline to suit your specific needs. You can find the dlt MongoDB
 documentation in
-[Setup Guide: Mongo Database.](https://dlthub.com/docs/dlt-ecosystem/verified-sources/mongodb)
+[Setup Guide: MongoDB.](https://dlthub.com/docs/dlt-ecosystem/verified-sources/mongodb)
