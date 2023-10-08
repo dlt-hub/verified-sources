@@ -1,16 +1,14 @@
-"""List files in buckets using fsspec."""
+"""Reads files in s3, gs or azure buckets using fsspec."""
 
 from typing import Iterator, List, Optional, Union
 
 import dlt
-from dlt.sources import FileItem
+from dlt.sources.filesystem import FileItem, FileItemDict, fsspec_filesystem
 from dlt.sources.credentials import FileSystemCredentials
 
 from .helpers import (
     AbstractFileSystem,
     FilesystemConfigurationResource,
-    FileSystemDict,
-    fsspec_from_credentials,
     fsspec_from_resource,
     get_files,
 )
@@ -18,9 +16,7 @@ from .settings import DEFAULT_CHUNK_SIZE
 
 
 @dlt.resource(
-    primary_key="file_url",
-    spec=FilesystemConfigurationResource,
-    standalone=True
+    primary_key="file_url", spec=FilesystemConfigurationResource, standalone=True
 )
 def filesystem(
     bucket_url: str = dlt.secrets.value,
@@ -45,11 +41,11 @@ def filesystem(
     if isinstance(credentials, AbstractFileSystem):
         fs_client = credentials
     else:
-        fs_client = fsspec_from_credentials(bucket_url, credentials)
+        fs_client = fsspec_filesystem(bucket_url, credentials)[0]
 
     files_chunk: List[FileItem] = []
     for file_model in get_files(fs_client, bucket_url, file_glob):
-        file_dict = FileSystemDict(file_model, credentials)
+        file_dict = FileItemDict(file_model, credentials)
         if extract_content:
             file_dict["file_content"] = file_dict.read_bytes()
         files_chunk.append(file_dict)  # type: ignore

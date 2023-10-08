@@ -5,9 +5,13 @@ import dlt
 import pytest
 from dlt.common import pendulum
 
-from sources.standard import filesystem, fsspec_from_resource, FileItem, FileSystemDict
-
-from tests.utils import assert_load_info, load_table_counts, assert_query_data, TEST_STORAGE_ROOT
+from sources.filesystem import filesystem, fsspec_from_resource, FileItem, FileItemDict
+from tests.utils import (
+    assert_load_info,
+    load_table_counts,
+    assert_query_data,
+    TEST_STORAGE_ROOT,
+)
 
 from .settings import GLOB_RESULTS, TESTS_BUCKET_URLS
 
@@ -21,9 +25,7 @@ def test_file_list(bucket_url: str, glob_params: Dict[str, Any]) -> None:
 
     # we just pass the glob parameter to the resource if it is not None
     if file_glob := glob_params["glob"]:
-        filesystem_res = (
-            filesystem(bucket_url=bucket_url, file_glob=file_glob) | bypass
-        )
+        filesystem_res = filesystem(bucket_url=bucket_url, file_glob=file_glob) | bypass
     else:
         filesystem_res = filesystem(bucket_url=bucket_url) | bypass
 
@@ -37,7 +39,6 @@ def test_file_list(bucket_url: str, glob_params: Dict[str, Any]) -> None:
 @pytest.mark.parametrize("extract_content", [True, False])
 @pytest.mark.parametrize("bucket_url", TESTS_BUCKET_URLS)
 def test_load_content_resources(bucket_url: str, extract_content: bool) -> None:
-
     @dlt.transformer
     def assert_sample_content(items: List[FileItem]):
         # expect just one file
@@ -87,13 +88,15 @@ def test_fsspec_as_credentials():
     fs_client = fsspec_from_resource(gs_resource)
     print(fs_client.ls("ci-test-bucket/standard_source/samples"))
     # use to create resource instead of credentials
-    gs_resource = filesystem("gs://ci-test-bucket/standard_source/samples", credentials=fs_client)
+    gs_resource = filesystem(
+        "gs://ci-test-bucket/standard_source/samples", credentials=fs_client
+    )
     print(list(gs_resource))
 
 
 @pytest.mark.parametrize("bucket_url", TESTS_BUCKET_URLS)
 def test_csv_transformers(bucket_url: str) -> None:
-    from sources.standard_pipeline import read_csv
+    from sources.filesystem_pipeline import read_csv
 
     pipeline = dlt.pipeline(
         pipeline_name="file_data",
@@ -103,7 +106,9 @@ def test_csv_transformers(bucket_url: str) -> None:
     )
 
     # load all csvs merging data on a date column
-    met_files = filesystem(bucket_url=bucket_url, file_glob="met_csv/A801/*.csv") | read_csv()
+    met_files = (
+        filesystem(bucket_url=bucket_url, file_glob="met_csv/A801/*.csv") | read_csv()
+    )
     met_files.apply_hints(write_disposition="merge", merge_key="date")
     load_info = pipeline.run(met_files.with_name("met_csv"))
     assert_load_info(load_info)
@@ -113,7 +118,9 @@ def test_csv_transformers(bucket_url: str) -> None:
 
     # load the other folder that contains data for the same day + one other day
     # the previous data will be replaced
-    met_files = filesystem(bucket_url=bucket_url, file_glob="met_csv/A803/*.csv") | read_csv()
+    met_files = (
+        filesystem(bucket_url=bucket_url, file_glob="met_csv/A803/*.csv") | read_csv()
+    )
     met_files.apply_hints(write_disposition="merge", merge_key="date")
     load_info = pipeline.run(met_files.with_name("met_csv"))
     assert_load_info(load_info)
@@ -127,20 +134,20 @@ def test_csv_transformers(bucket_url: str) -> None:
 
 @pytest.mark.parametrize("bucket_url", TESTS_BUCKET_URLS)
 def test_standard_transformers(bucket_url: str) -> None:
-    from sources.standard_pipeline import read_jsonl, read_parquet
+    from sources.filesystem_pipeline import read_jsonl, read_parquet
 
     # extract pipes to read jsonl and parquet
     jsonl_reader = filesystem(bucket_url, file_glob="**/*.jsonl") | read_jsonl()
     parquet_reader = filesystem(bucket_url, file_glob="**/*.parquet") | read_parquet()
 
     # a step that copies files into test storage
-    def _copy(item: FileSystemDict):
+    def _copy(item: FileItemDict):
         # instantiate fsspec and copy file
         dest_file = os.path.join(TEST_STORAGE_ROOT, item["file_name"])
         # create dest folder
         os.makedirs(os.path.dirname(dest_file), exist_ok=True)
         # download file
-        item.filesystem.download(item["file_url"], dest_file)
+        item.fsspec.download(item["file_url"], dest_file)
         # return file item unchanged
         return item
 
@@ -153,13 +160,17 @@ def test_standard_transformers(bucket_url: str) -> None:
         dataset_name="all_files",
         full_refresh=True,
     )
-    load_info = pipeline.run([
-        jsonl_reader.with_name("jsonl_example"),
-        parquet_reader.with_name("parquet_example"),
-        downloader.with_name("listing")]
+    load_info = pipeline.run(
+        [
+            jsonl_reader.with_name("jsonl_example"),
+            parquet_reader.with_name("parquet_example"),
+            downloader.with_name("listing"),
+        ]
     )
     assert_load_info(load_info)
-    assert load_table_counts(pipeline, "jsonl_example", "parquet_example", "listing") == {"jsonl_example": 1034, "parquet_example": 1034, "listing": 10}
+    assert load_table_counts(
+        pipeline, "jsonl_example", "parquet_example", "listing"
+    ) == {"jsonl_example": 1034, "parquet_example": 1034, "listing": 10}
     # print(pipeline.last_trace.last_normalize_info)
     # print(pipeline.default_schema.to_pretty_yaml())
 

@@ -1,30 +1,27 @@
 import json
 import os
 import posixpath
-from typing import Any, Iterable
+from typing import Iterable, Iterator
 import pandas as pd
 import pyarrow.parquet as pq  # type: ignore
 
 import dlt
+from dlt.sources import TDataItem, TDataItems
 
 try:
-    from .standard.filesystem import FileSystemDict, filesystem  # type: ignore
-    from .standard.inbox import get_attachments, get_message_content, messages_uids  # type: ignore
+    from .filesystem import FileItemDict, filesystem  # type: ignore
 except ImportError:
-    from standard.filesystem import FileSystemDict, filesystem
-    from standard.inbox import messages_uids, get_attachments, get_message_content
+    from filesystem import FileItemDict, filesystem
 
 
-from dlt.extract.source import TDataItem
-
-TESTS_BUCKET_URL = posixpath.abspath("../tests/standard/samples/")
+TESTS_BUCKET_URL = posixpath.abspath("../tests/filesystem/samples/")
 
 
 @dlt.transformer(standalone=True)
 def read_csv(
-    items: Iterable[FileSystemDict],
+    items: Iterable[FileItemDict],
     chunksize: int = 15,
-):
+) -> Iterator[TDataItems]:
     """Reads csv file with Pandas chunk by chunk.
 
     Args:
@@ -47,13 +44,13 @@ def read_csv(
 
 @dlt.transformer(standalone=True)
 def read_jsonl(
-    items: Iterable[FileSystemDict],
+    items: Iterable[FileItemDict],
     chunksize: int = 10,
-) -> TDataItem:
+) -> Iterator[TDataItems]:
     """Reads jsonl file content and extract the data.
 
     Args:
-        item (Iterable[FileSystemDict]): The list of files to copy.
+        item (Iterable[FileItemDict]): The list of files to copy.
         chunksize (int, optional): The number of files to process at once, defaults to 10.
 
     Returns:
@@ -73,13 +70,13 @@ def read_jsonl(
 
 @dlt.transformer(standalone=True)
 def read_parquet(
-    items: Iterable[FileSystemDict],
+    items: Iterable[FileItemDict],
     chunksize: int = 10,
-) -> TDataItem:
+) -> Iterator[TDataItems]:
     """Reads parquet file content and extract the data.
 
     Args:
-        item (Iterable[FileSystemDict]): The list of files to copy.
+        item (Iterable[FileItemDict]): The list of files to copy.
         chunksize (int, optional): The number of files to process at once, defaults to 10.
 
     Returns:
@@ -101,13 +98,13 @@ def copy_files_resource(local_folder: str) -> None:
     )
 
     # a step that copies files into test storage
-    def _copy(item: FileSystemDict):
+    def _copy(item: FileItemDict) -> FileItemDict:
         # instantiate fsspec and copy file
         dest_file = os.path.join(local_folder, item["file_name"])
         # create dest folder
         os.makedirs(os.path.dirname(dest_file), exist_ok=True)
         # download file
-        item.filesystem.download(item["file_url"], dest_file)
+        item.fsspec.download(item["file_url"], dest_file)
         # return file item unchanged
         return item
 
@@ -121,7 +118,9 @@ def copy_files_resource(local_folder: str) -> None:
 
     # download to table "listing"
     # downloader = filesystem(TESTS_BUCKET_URL, file_glob="**").add_map(_copy)
-    load_info = pipeline.run(downloader.with_name("listing"), write_disposition="replace")
+    load_info = pipeline.run(
+        downloader.with_name("listing"), write_disposition="replace"
+    )
     # pretty print the information on data that was loaded
     print(load_info)
     print(pipeline.last_trace.last_normalize_info)
@@ -136,23 +135,25 @@ def stream_and_merge_csv() -> None:
     )
     # met_data contains 3 columns, where "date" column contain a date on which we want to merge
     # load all csvs in A801
-    met_files = filesystem(bucket_url=TESTS_BUCKET_URL, file_glob="met_csv/A801/*.csv") | read_csv()
+    met_files = (
+        filesystem(bucket_url=TESTS_BUCKET_URL, file_glob="met_csv/A801/*.csv")
+        | read_csv()
+    )
     # tell dlt to merge on date
     met_files.apply_hints(write_disposition="merge", merge_key="date")
     # NOTE: we load to met_csv table
-    load_info = pipeline.run(
-        met_files.with_name("met_csv")
-    )
+    load_info = pipeline.run(met_files.with_name("met_csv"))
     print(load_info)
     print(pipeline.last_trace.last_normalize_info)
 
     # now let's simulate loading on next day. not only current data appears but also updated record for the previous day are present
     # all the records for previous day will be replaced with new records
-    met_files = filesystem(bucket_url=TESTS_BUCKET_URL, file_glob="met_csv/A803/*.csv") | read_csv()
-    met_files.apply_hints(write_disposition="merge", merge_key="date")
-    load_info = pipeline.run(
-        met_files.with_name("met_csv")
+    met_files = (
+        filesystem(bucket_url=TESTS_BUCKET_URL, file_glob="met_csv/A803/*.csv")
+        | read_csv()
     )
+    met_files.apply_hints(write_disposition="merge", merge_key="date")
+    load_info = pipeline.run(met_files.with_name("met_csv"))
 
     # you can also do dlt pipeline standard_filesystem_csv show to confirm that all A801 were replaced with A803 records for overlapping day
     print(load_info)
@@ -172,12 +173,16 @@ def read_parquet_and_jsonl_chunked() -> None:
     # JSONL reading
     jsonl_reader = filesystem(TESTS_BUCKET_URL, file_glob="**/*.jsonl") | read_jsonl()
     # PARQUET reading
-    parquet_reader = filesystem(TESTS_BUCKET_URL, file_glob="**/*.parquet") | read_parquet()
+    parquet_reader = (
+        filesystem(TESTS_BUCKET_URL, file_glob="**/*.parquet") | read_parquet()
+    )
     # load both folders together to specified tables
-    load_info = pipeline.run([
-        jsonl_reader.with_name("jsonl_team_data"),
-        parquet_reader.with_name("parquet_team_data")
-    ])
+    load_info = pipeline.run(
+        [
+            jsonl_reader.with_name("jsonl_team_data"),
+            parquet_reader.with_name("parquet_team_data"),
+        ]
+    )
     print(load_info)
     print(pipeline.last_trace.last_normalize_info)
 
@@ -194,7 +199,7 @@ def read_files_incrementally_mtime() -> None:
     new_files = filesystem(bucket_url=TESTS_BUCKET_URL, file_glob="csv/*")
     # add incremental on modification time
     new_files.apply_hints(incremental=dlt.sources.incremental("modification_date"))
-    load_info = pipeline.run((new_files | read_csv()) .with_name("csv_files"))
+    load_info = pipeline.run((new_files | read_csv()).with_name("csv_files"))
     print(load_info)
     print(pipeline.last_trace.last_normalize_info)
 
@@ -202,57 +207,13 @@ def read_files_incrementally_mtime() -> None:
     new_files = filesystem(bucket_url=TESTS_BUCKET_URL, file_glob="csv/*")
     # add incremental on modification time
     new_files.apply_hints(incremental=dlt.sources.incremental("modification_date"))
-    load_info = pipeline.run((new_files | read_csv()) .with_name("csv_files"))
+    load_info = pipeline.run((new_files | read_csv()).with_name("csv_files"))
     print(load_info)
     print(pipeline.last_trace.last_normalize_info)
 
 
-# IMAP examples
-def imap_read_messages() -> None:
-    pipeline = dlt.pipeline(
-        pipeline_name="standard_inbox",
-        destination="duckdb",
-        dataset_name="standard_inbox_data",
-        full_refresh=True,
-    )
-
-    filter_emails = ("astra92293@gmail.com", "josue@sehnem.com")
-    data_source = messages_uids(filter_emails=filter_emails)
-
-    messages = data_source | get_message_content(include_body=True)
-
-    # run the pipeline with your parameters
-    load_info = pipeline.run(messages)
-    # pretty print the information on data that was loaded
-    print(load_info)
-
-
-def imap_get_attachments() -> None:
-    pipeline = dlt.pipeline(
-        pipeline_name="standard_inbox",
-        destination="duckdb",
-        dataset_name="standard_inbox_data",
-        full_refresh=True,
-    )
-
-    filter_emails = ("josue@sehnem.com",)
-    data_source = messages_uids(filter_emails=filter_emails)
-
-    attachments = (
-        data_source | get_attachments | copy_files(storage_path="standard/files")
-    )
-
-    # run the pipeline with your parameters
-    load_info = pipeline.run(attachments)
-    # pretty print the information on data that was loaded
-    print(load_info)
-
-
 if __name__ == "__main__":
     copy_files_resource("_storage")
-    # stream_and_merge_csv()
-    # read_parquet_and_jsonl_chunked()
-    # read_files_incrementally_mtime()
-    # read_file_content_resource()
-    # imap_read_messages()
-    # imap_get_attachments()
+    stream_and_merge_csv()
+    read_parquet_and_jsonl_chunked()
+    read_files_incrementally_mtime()

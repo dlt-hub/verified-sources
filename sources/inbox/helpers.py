@@ -1,11 +1,31 @@
 import email
 import imaplib
+import hashlib
 from email.message import Message
+from email.header import decode_header, make_header
 from time import mktime
-from typing import Any, Dict, Iterable, Optional, Sequence
+from typing import Any, Dict, Iterator, Optional, Sequence, Tuple
 
 from dlt.common import logger, pendulum
-from dlt.extract.source import TDataItems
+from dlt.sources import TDataItems
+from dlt.sources.filesystem import FileItem
+
+
+class ImapFileItem(FileItem):
+    """A Imap file item."""
+
+    file_hash: str
+
+
+def decode_header_word(v: Any) -> Any:
+    if not isinstance(v, str):
+        return v
+    try:
+        v = str(make_header(decode_header(v)))
+    except Exception:
+        pass
+
+    return v
 
 
 def get_message_uids(
@@ -23,7 +43,7 @@ def get_message_uids(
     status, messages = client.uid("search", *criterias)
 
     if status != "OK":
-        raise Exception("Error searching for emails.")
+        raise client.error(messages[-1])
 
     message_uids = messages[0].split()
 
@@ -44,12 +64,15 @@ def get_internal_date(client: imaplib.IMAP4_SSL, message_uid: str) -> Optional[A
     Returns:
         Optional[Any]: The internal date of the email message.
     """
-    client.select()
+    # client.select()
     status, data = client.uid("fetch", message_uid, "(INTERNALDATE)")
     date = None
-    if status == "OK":
-        timestruct = imaplib.Internaldate2tuple(data[0])
-        date = pendulum.from_timestamp(mktime(timestruct))
+
+    if status != "OK":
+        raise client.error(data[-1])
+
+    timestruct = imaplib.Internaldate2tuple(data[0])
+    date = pendulum.from_timestamp(mktime(timestruct))
     return date
 
 
@@ -70,21 +93,25 @@ def extract_email_info(msg: Message, include_body: bool = False) -> Dict[str, An
         email_data["body"] = get_email_body(msg)
 
     return {
-        k: v for k, v in email_data.items() if not k.startswith(("X-", "ARC-", "DKIM-"))
+        k: decode_header_word(v)
+        for k, v in email_data.items()
+        if not k.startswith(("X-", "ARC-", "DKIM-"))
     }
 
 
-def get_message(client: imaplib.IMAP4_SSL, message_uid: str) -> Optional[Message]:
-    """Get the email message from the imap server.
+def get_message_with_internal_date(
+    client: imaplib.IMAP4_SSL, message_uid: str
+) -> Tuple[Message, pendulum.DateTime]:
+    """Get the email message and internal date from the imap server.
 
     Parameters:
         client (imaplib.IMAP4_SSL): The imap client.
         message_uid (str): The uid of the message.
 
     Returns:
-        Optional[Message]: The email message object.
+        Tuple[Message, pendulum.DateTime]: The email message object and internal date as pendulum DateTime
     """
-    status, data = client.uid("fetch", message_uid, "(RFC822)")
+    status, data = client.uid("fetch", message_uid, "(RFC822 INTERNALDATE)")
 
     if status == "OK":
         try:
@@ -92,16 +119,16 @@ def get_message(client: imaplib.IMAP4_SSL, message_uid: str) -> Optional[Message
         except (IndexError, TypeError):
             raise Exception(f"Error getting content of email with uid {message_uid}.")
     else:
-        raise Exception(f"Error fetching email with uid {message_uid}.")
+        raise client.error(data[-1])
 
     msg = email.message_from_bytes(raw_email)
-
-    return msg
+    timestruct = imaplib.Internaldate2tuple(data[1])
+    return msg, pendulum.from_timestamp(mktime(timestruct))
 
 
 def extract_attachments(
-    message: Message, filter_by_mime_type: Optional[str] = None
-) -> Iterable[Dict[str, Any]]:
+    message: Message, filter_by_mime_type: Sequence[str] = None
+) -> Iterator[ImapFileItem]:
     """Extract the attachments from the email message.
 
     Parameters:
@@ -109,7 +136,7 @@ def extract_attachments(
         filter_by_mime_type (str): The mime type to filter the attachments.
 
     Returns:
-        Iterable[Dict[str, Any]]: The attachments.
+        Iterable[ImapFileItem]: The attachments.
     """
     for part in message.walk():
         content_type = part.get_content_type()
@@ -123,12 +150,15 @@ def extract_attachments(
         if filter_by_mime_type and content_type not in filter_by_mime_type:
             continue
 
-        attachment = {}
-        attachment["content_type"] = content_type
-        attachment["file_name"] = part.get_filename()
-        attachment["payload"] = part.get_payload(decode=True)
+        file_md = ImapFileItem(  # type: ignore
+            file_name=part.get_filename(),
+            mime_type=content_type,
+            file_content=part.get_payload(decode=True),
+        )
+        file_md["file_hash"] = hashlib.sha256(file_md["file_content"]).hexdigest()
+        file_md["size_in_bytes"] = len(file_md["file_content"])
 
-        yield attachment
+        yield file_md
 
 
 def get_email_body(msg: Message) -> str:

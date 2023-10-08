@@ -12,14 +12,14 @@ please visit [fsspec documentation](https://filesystem-spec.readthedocs.io/en/la
 
 The filesystem source can list, open and read files that can be used with other transformers to
 build pipelines that can serve various purposes. You can find examples of how to use this resource
-in the `standard_pipeline.py` file.
+in the `filesystem_pipeline.py` file.
 
 ## Initialize the source
 
 Initialize the source with dlt command:
 
 ```shell
-dlt init standard duckdb
+dlt init filesystem duckdb
 ```
 
 ## Set filesystem credentials
@@ -54,7 +54,7 @@ The resource is designed to work with [transform functions]() and [transformers]
 * [read file content and parse text out of PDF]()
 * [stream the content]() of **csv, jsonl or parquet** files
 
-Please refer to examples in [sources/standard_pipeline.py](../../standard_pipeline.py)
+Please refer to examples in [sources/filesystem_pipeline.py](../../filesystem_pipeline.py)
 
 `filesystem` resource takes following parameters:
 * **bucket_url**: An url to a bucket
@@ -86,8 +86,8 @@ will yield file names relative to **/standard_source/samples** path ie. **met_cs
 
 ### Open, read and manipulate files during extraction
 The `FileItem` is backed by an `dict` implementation that provides following helper methods:
-- **read_bytes(**: Reads the file and returns the content as **bytes**.
-- **open(**: Opens the file and returns a file object.
+- **read_bytes()**: Reads the file and returns the content as **bytes**.
+- **open()**: Opens the file and returns a file object.
 And property
 - **filesystem**: returns authorized `AbstractFilesystem` with all usual fsspec methods.
 
@@ -100,26 +100,26 @@ You can convert `filesystem` resource into incremental one. It already defines `
 ```
 
 ### Cleanup after loading
-You can get **fsspec** client from **filesystem** resource after it was extracted ie. in order to delete processed files etc. The standard module contains convenience
+You can get **fsspec** client from **filesystem** resource after it was extracted ie. in order to delete processed files etc. The filesystem module contains convenience
 method `fsspec_from_resource` that can be used as follows:
 ```python
-from standard import filesystem, fsspec_from_resource
+from filesystem import filesystem, fsspec_from_resource
 # get filesystem source
 gs_resource = filesystem("gs://ci-test-bucket/")
 # extract files
 pipeline.run(gs_resource | read_csv)
 # get fs client
 fs_client = fsspec_from_resource(gs_resource)
+# do any operation
 fs_client.ls("ci-test-bucket/standard_source/samples")
 ```
-
 
 ## Example
 
 ```python
 import os
 import dlt
-from sources.standard.filesystem import filesystem_resource
+from sources.filesystem import filesystem_resource
 
 @dlt.transformer
 def copy_files(
