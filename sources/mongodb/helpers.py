@@ -1,18 +1,19 @@
 """Mongo database source helpers"""
 
 from itertools import islice
-from typing import Any, Dict, Iterator, Optional
+from typing import TYPE_CHECKING, Any, Iterator, Optional
 
 import dlt
 from bson.decimal128 import Decimal128
 from bson.objectid import ObjectId
 from dlt.common.configuration.specs import BaseConfiguration, configspec
+from dlt.common.time import ensure_pendulum_datetime
 from dlt.common.typing import TDataItem
+from dlt.common.utils import map_nested_in_place
+from pendulum import _datetime
 from pymongo import MongoClient
 from pymongo.collection import Collection
 from pymongo.cursor import Cursor
-
-from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     TMongoClient = MongoClient[Any]
@@ -57,28 +58,10 @@ class CollectionLoader:
         cursor = self.collection.find(filter_op)
         return cursor
 
-    def clean_document(self, document: Dict[str, Any]) -> Any:
-        """Clean document to be json serializable"""
-        output = {}
-        if not isinstance(document, dict):
-            return document
-        for key, value in document.items():
-            if not isinstance(value, (dict, list, Decimal128, ObjectId)):
-                output[key] = value
-            elif isinstance(value, dict):
-                output[key] = self.clean_document(value)
-            elif isinstance(value, list):
-                output[key] = [self.clean_document(item) for item in value]
-            elif isinstance(value, Decimal128):
-                output[key] = value.to_decimal()
-            elif isinstance(value, ObjectId):
-                output[key] = str(value)
-        return output
-
     def load_documents(self) -> Iterator[TDataItem]:
         cursor = self.make_query()
         for document in cursor:
-            yield self.clean_document(document)
+            yield map_nested_in_place(convert_mongo_objs, document)
 
 
 def collection_documents(
@@ -102,6 +85,14 @@ def collection_documents(
     documents_load = loader.load_documents()
     while docs_slice := list(islice(documents_load, CHUNK_SIZE)):
         yield docs_slice
+
+
+def convert_mongo_objs(value: Any) -> Any:
+    if isinstance(value, (ObjectId, Decimal128)):
+        return str(value)
+    if isinstance(value, _datetime.datetime):
+        return ensure_pendulum_datetime(value)
+    return value
 
 
 def client_from_credentials(connection_url: str) -> TMongoClient:

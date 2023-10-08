@@ -1,95 +1,81 @@
 # Mongo Database
-Mongo is a document-oriented database that store json-like documents is one of the most used NoSQL databases. The Mongo Database `dlt` is a verified source and pipeline example that makes it easy to load data from your Mongo database to a destination of your choice. It offers flexibility in terms of loading either the entire database or specific collections to the target.
 
-## Initialize the pipeline with Mongo Database verified source
+MongoDB is a NoSQL database that stores JSON-like documents.
+
+Using this `dlt` verified example and
+pipeline example, you can load entire databases or specific collections from MongoDB to a
+[destination](https://dlthub.com/docs/dlt-ecosystem/destinations/) of your choice. You can load the
+following source using this pipeline example:
+
+| Name               | Description                                |
+|--------------------|--------------------------------------------|
+| mongodb            | loads a specific MongoDB database          |
+| mongodb_collection | loads a collection from a MongoDB database |
+
+## Initialize the pipeline
+
 ```bash
-dlt init mongodb bigquery
+dlt init mongodb duckdb
 ```
-Here, we chose BigQuery as the destination. Alternatively, you can also choose redshift, duckdb, or any of the other [destinations.](https://dlthub.com/docs/dlt-ecosystem/destinations/)
+
+Here, we chose duckdb as the destination. Alternatively, you can also choose redshift, bigquery, or
+any of the other [destinations](https://dlthub.com/docs/dlt-ecosystem/destinations/).
 
 ## Setup verified source
 
-To setup the Mongo Database Verified Source read the [full documentation here.](https://dlthub.com/docs/dlt-ecosystem/verified-sources/mongodb)
+To setup MongoDB and grab credentials refer to the
+[full documentation here.](https://dlthub.com/docs/dlt-ecosystem/verified-sources/mongodb)
 
 ## Add credentials
+
 1. Open `.dlt/secrets.toml`.
-2. In order to continue, you can use the a connection URL and database that looks like bellow, more details and database settings can be found in the mongodb [docs](https://www.mongodb.com/docs/manual/reference/connection-string/). If no database is provided, the default database will be used.
-    ```bash
-    connection_url = "mongodb://dbuser:passwd@host.or.ip:27017"
-    database = "local"
-    ```
-    Here's what the `secrets.toml` looks like:
-    ```toml
-    # Put your secret values and credentials here. do not share this file and do not upload it to github.
-    # We will set up creds with the following connection URL, which is a public database
-    
-    # The credentials are as follows
-    connection_url = "mongodb://dbuser:passwd@host.or.ip:27017" # Driver name for the database
-    database = "local" # Database name
-    ```
-3. Enter credentials for your chosen destination as per the [docs.](https://dlthub.com/docs/dlt-ecosystem/destinations/)
 
-## Running the pipeline example
+1. Add the MongoDB credentials as follows:
 
-1. Install the required dependencies by running the following command:
-    ```bash
-    pip install -r requirements.txt
-    ```
-    
-2. Now you can build the verified source by using the command:
-    ```bash
-    python3 mongodb_pipeline.py
-    ```
-    
-3. To ensure that everything loads as expected, use the command:
-    ```bash
-    dlt pipeline <pipeline_name> show
-    ```
-    
-    For example, the pipeline_name for the above pipeline example is `local_mongo`, you can use any custom name instead.
+   ```toml
+   # Put your secret values and credentials here.
+   # Note: Do not share this file and do not push it to GitHub!
+   connection_url = "mongodb://dbuser:passwd@host.or.ip:27017" # Database connection URL.
+   ```
 
-## How to use
+1. Update ".dlt/config.toml" with database and collection names:
 
-You can use the mongodb verified source to load data from your Mongo database to a destination of your choice. By default all the collections in database will be loaded.
+   ```
+   [your_pipeline_name]  # Set your pipeline name!
+   database = "defaultDB"  # Database name (Optional), default database is loaded if not provided.
+   collection_names = ["collection_1", "collection_2"] # Collection names (Optional), All collections are loaded if not provided.
+   ```
 
-```python
-from sources.mongodb import mongodb
-from dlt.pipeline.pipeline import Pipeline
+   > Optionally, you can set database and collection names in ".dlt/secrets.toml" under [sources.mongodb] without listing the pipeline name.
 
-pipeline = dlt.pipeline(
-    pipeline_name="mongo_pipeline", destination="duckdb", dataset_name="mongo_select"
-)
+1. Enter credentials for your chosen destination as per the
+   [docs.](https://dlthub.com/docs/dlt-ecosystem/destinations/)
 
-database = mongodb()
+## Run the pipeline example
 
-pipeline.database(database, write_disposition="merge")
-```
+1. Install the necessary dependencies by running the following command:
 
-If you want to select the collections, you can do it by calling the `with_resources` method with the collection names as arguments.
+   ```bash
+   pip install -r requirements.txt
+   ```
 
-```python
-database = mongodb().with_resources("collection1", "collection2")
-```
+1. Now the pipeline can be run by using the command:
 
-It is also possible to set the incremental parameter to load just the new records to the destination.
+   ```bash
+   python mongodb_pipeline.py
+   ```
 
-```python
-from dlt.sources import incremental
+1. To make sure that everything is loaded as expected, use the command:
 
-database = mongodb(incremental=incremental("date"))
-```
+   ```bash
+   dlt pipeline <pipeline_name> show
+   ```
 
-Or you can load a single collection using the `mongodb_collection` function.
+   For example, the pipeline_name for the above pipeline example is `local_mongo`, you may also use
+   any custom name instead.
 
-```python
-from sources.mongodb import mongodb
-
-collection = mongodb_collection(
-    collection="collection1",
-    incremental=incremental(
-        "lastupdated", initial_value=pendulum.DateTime(2016, 1, 1, 0, 0, 0)
-    ),
-)
-```
-
-💡 To explore additional customizations for this pipeline, we recommend referring to the official DLT Mongo Database verified documentation. It provides comprehensive information and guidance on how to further customize and tailor the pipeline to suit your specific needs. You can find the DLT Mongo Database documentation in [Setup Guide: Mongo Database.](https://dlthub.com/docs/dlt-ecosystem/verified-sources/mongo_database)
+💡 To explore additional customizations for this pipeline, we recommend referring to the official dlt
+MongoDB verified documentation. It provides comprehensive information and guidance on how to further
+customize and tailor the pipeline to suit your specific needs. You can find the dlt MongoDB
+documentation in
+[Setup Guide: MongoDB.](https://dlthub.com/docs/dlt-ecosystem/verified-sources/mongodb)

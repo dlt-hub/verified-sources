@@ -11,7 +11,7 @@ DEFAULT_ENDPOINTS = {
         },
     },
     "users": {
-        "api_path": "rest/api/3/users/search",
+        "api_path": "rest/api/3/users",
         "params": {"includeInactiveUsers": True},
     },
     "workflows": {
@@ -27,3 +27,4 @@ DEFAULT_ENDPOINTS = {
         },
     },
 }
+DEFAULT_PAGE_SIZE = 50
