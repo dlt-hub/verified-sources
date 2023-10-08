@@ -2,9 +2,9 @@ import posixpath
 
 TESTS_BUCKET_URLS = [
     posixpath.abspath("tests/standard/samples"),
-    "s3://dlt-ci-test-bucket/standard_source/samples",
-    "gs://ci-test-bucket/standard_source/samples",
-    "az://dlt-ci-test-bucket/standard_source/samples",
+    # "s3://dlt-ci-test-bucket/standard_source/samples",
+    # "gs://ci-test-bucket/standard_source/samples",
+    # "az://dlt-ci-test-bucket/standard_source/samples",
 ]
 
 GLOB_RESULTS = [

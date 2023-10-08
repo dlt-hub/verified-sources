@@ -1,96 +1,51 @@
 import json
 import os
 import posixpath
-from typing import Iterable
-
-import dlt
-from dlt.common.time import ensure_pendulum_datetime
-
-try:
-    from .standard.filesystem import FileSystemDict, filesystem_resource  # type: ignore
-    from .standard.inbox import get_attachments, get_message_content, messages_uids  # type: ignore
-except ImportError:
-    from standard.filesystem import FileSystemDict, filesystem_resource
-    from standard.inbox import messages_uids, get_attachments, get_message_content
-
+from typing import Any, Iterable
 import pandas as pd
 import pyarrow.parquet as pq  # type: ignore
+
+import dlt
+
+try:
+    from .standard.filesystem import FileSystemDict, filesystem  # type: ignore
+    from .standard.inbox import get_attachments, get_message_content, messages_uids  # type: ignore
+except ImportError:
+    from standard.filesystem import FileSystemDict, filesystem
+    from standard.inbox import messages_uids, get_attachments, get_message_content
+
+
 from dlt.extract.source import TDataItem
 
 TESTS_BUCKET_URL = posixpath.abspath("../tests/standard/samples/")
 
 
-@dlt.transformer(name="filesystem")
-def copy_files(
+@dlt.transformer(standalone=True)
+def read_csv(
     items: Iterable[FileSystemDict],
-    storage_path: str,
-) -> TDataItem:
-    """Reads files and copy them to local directory.
-
-    Args:
-        items (TDataItems): The list of files to copy.
-        storage_path (str, optional): The path to store the files.
-
-    Returns:
-        TDataItem: The list of files copied.
-    """
-    storage_path = os.path.abspath(storage_path)
-    os.makedirs(storage_path, exist_ok=True)
-    for file_obj in items:
-        file_dst = os.path.join(storage_path, file_obj["file_name"])
-        file_obj["path"] = file_dst
-        with open(file_dst, "wb") as f:
-            f.write(file_obj.read_bytes())
-        yield file_obj
-
-
-@dlt.transformer(
-    table_name="met_data",
-    merge_key="date",
-    primary_key="date",
-    write_disposition="merge",
-)
-def extract_met_csv(
-    items: Iterable[FileSystemDict],
-    incremental: dlt.sources.incremental[str] = dlt.sources.incremental(
-        "date",
-        primary_key="date",
-        initial_value="2023-01-01",
-        allow_external_schedulers=True,
-    ),
     chunksize: int = 15,
-) -> TDataItem:
-    """Reads file content and extract the data.
-
-    This example shows how to use the incremental source to keep track of the last value, it can be
-    used to keep track of the last date or id when fetching files that are continuously updated and
-    have a date or id column, avoiding to process the same data twice.
+):
+    """Reads csv file with Pandas chunk by chunk.
 
     Args:
         item (TDataItem): The list of files to copy.
-        incremental (dlt.sources.incremental[str], optional): The incremental source.
-
+        chunksize (int): Number of records to read in one chunk
     Returns:
         TDataItem: The file content
     """
     for file_obj in items:
         # Here we use pandas chunksize to read the file in chunks and avoid loading the whole file
         # in memory.
-        for df in pd.read_csv(
-            file_obj.open(),
-            usecols=["code", "date", "temperature"],
-            parse_dates=["date"],
-            chunksize=chunksize,
-        ):
-            # Ensure that the dates are pendulum datetime objects
-            last_value = ensure_pendulum_datetime(incremental.last_value)
-            df["date"] = df["date"].apply(ensure_pendulum_datetime)
-            # Filter the data by the last value avoiding processing twice the same data
-            df = df[df["date"] > last_value]
-            yield df.to_dict(orient="records")
+        with file_obj.open() as file:
+            for df in pd.read_csv(
+                file,
+                header="infer",
+                chunksize=chunksize,
+            ):
+                yield df.to_dict(orient="records")
 
 
-@dlt.transformer
+@dlt.transformer(standalone=True)
 def read_jsonl(
     items: Iterable[FileSystemDict],
     chunksize: int = 10,
@@ -116,7 +71,7 @@ def read_jsonl(
             yield lines_chunk
 
 
-@dlt.transformer
+@dlt.transformer(standalone=True)
 def read_parquet(
     items: Iterable[FileSystemDict],
     chunksize: int = 10,
@@ -137,74 +92,119 @@ def read_parquet(
                 yield rows.to_pylist()
 
 
-def copy_files_resource() -> None:
+def copy_files_resource(local_folder: str) -> None:
+    """Demonstrates how to copy files locally by adding a step to filesystem resource and the to load the download listing to db"""
     pipeline = dlt.pipeline(
-        pipeline_name="standard_filesystem",
+        pipeline_name="standard_filesystem_copy",
         destination="duckdb",
         dataset_name="standard_filesystem_data",
-        full_refresh=True,
     )
 
-    file_source = filesystem_resource(
-        bucket_url=TESTS_BUCKET_URL,
-        chunksize=10,
-        extract_content=True,
-    ) | copy_files(storage_path="standard/files")
+    # a step that copies files into test storage
+    def _copy(item: FileSystemDict):
+        # instantiate fsspec and copy file
+        dest_file = os.path.join(local_folder, item["file_name"])
+        # create dest folder
+        os.makedirs(os.path.dirname(dest_file), exist_ok=True)
+        # download file
+        item.filesystem.download(item["file_url"], dest_file)
+        # return file item unchanged
+        return item
 
-    # run the pipeline with your parameters
-    load_info = pipeline.run(file_source)
+    # use recursive glob pattern and add file copy step
+    downloader = filesystem(TESTS_BUCKET_URL, file_glob="**").add_map(_copy)
+
+    # NOTE: you do not need to load any data to execute extract, below we obtain
+    # a list of files in a bucket and also copy them locally
+    listing = list(downloader)
+    print(listing)
+
+    # download to table "listing"
+    # downloader = filesystem(TESTS_BUCKET_URL, file_glob="**").add_map(_copy)
+    load_info = pipeline.run(downloader.with_name("listing"), write_disposition="replace")
     # pretty print the information on data that was loaded
     print(load_info)
+    print(pipeline.last_trace.last_normalize_info)
 
 
-def read_file_content_resource() -> None:
+def stream_and_merge_csv() -> None:
+    """Demonstrates how to scan folder with csv files, load them in chunk and merge on date column with the next load"""
     pipeline = dlt.pipeline(
-        pipeline_name="standard_filesystem",
+        pipeline_name="standard_filesystem_csv",
         destination="duckdb",
         dataset_name="met_data",
     )
+    # met_data contains 3 columns, where "date" column contain a date on which we want to merge
+    # load all csvs in A801
+    met_files = filesystem(bucket_url=TESTS_BUCKET_URL, file_glob="met_csv/A801/*.csv") | read_csv()
+    # tell dlt to merge on date
+    met_files.apply_hints(write_disposition="merge", merge_key="date")
+    # NOTE: we load to met_csv table
+    load_info = pipeline.run(
+        met_files.with_name("met_csv")
+    )
+    print(load_info)
+    print(pipeline.last_trace.last_normalize_info)
 
+    # now let's simulate loading on next day. not only current data appears but also updated record for the previous day are present
+    # all the records for previous day will be replaced with new records
+    met_files = filesystem(bucket_url=TESTS_BUCKET_URL, file_glob="met_csv/A803/*.csv") | read_csv()
+    met_files.apply_hints(write_disposition="merge", merge_key="date")
+    load_info = pipeline.run(
+        met_files.with_name("met_csv")
+    )
+
+    # you can also do dlt pipeline standard_filesystem_csv show to confirm that all A801 were replaced with A803 records for overlapping day
+    print(load_info)
+    print(pipeline.last_trace.last_normalize_info)
+
+
+def read_parquet_and_jsonl_chunked() -> None:
+    pipeline = dlt.pipeline(
+        pipeline_name="standard_filesystem",
+        destination="duckdb",
+        dataset_name="teams_data",
+    )
     # When using the filesystem resource, you can specify a filter to select only the files you
     # want to load including a glob pattern. If you use a recursive glob pattern, the filenames
     # will include the path to the file inside the bucket_url.
-    csv_source = (
-        filesystem_resource(
-            bucket_url=TESTS_BUCKET_URL,
-            file_glob="*/*.csv",
-            extract_content=True,
-        )
-        | extract_met_csv
-    )
-
-    csv_source.table_name = "met_data"
-    # run the pipeline with your parameters
-    load_info = pipeline.run(csv_source)
-    # pretty print the information on data that was loaded
-    print(load_info)
 
     # JSONL reading
-    jsonl_source = (
-        filesystem_resource(bucket_url=TESTS_BUCKET_URL, file_glob="jsonl/*.jsonl")
-        | read_jsonl
-    )
-
-    jsonl_source.table_name = "jsonl_data"
-    # run the pipeline with your parameters
-    load_info = pipeline.run(jsonl_source)
-    # pretty print the information on data that was loaded
-    print(load_info)
-
+    jsonl_reader = filesystem(TESTS_BUCKET_URL, file_glob="**/*.jsonl") | read_jsonl()
     # PARQUET reading
-    parquet_source = (
-        filesystem_resource(bucket_url=TESTS_BUCKET_URL, file_glob="parquet/*.parquet")
-        | read_parquet
+    parquet_reader = filesystem(TESTS_BUCKET_URL, file_glob="**/*.parquet") | read_parquet()
+    # load both folders together to specified tables
+    load_info = pipeline.run([
+        jsonl_reader.with_name("jsonl_team_data"),
+        parquet_reader.with_name("parquet_team_data")
+    ])
+    print(load_info)
+    print(pipeline.last_trace.last_normalize_info)
+
+
+def read_files_incrementally_mtime() -> None:
+    pipeline = dlt.pipeline(
+        pipeline_name="standard_filesystem_incremental",
+        destination="duckdb",
+        dataset_name="file_tracker",
     )
 
-    parquet_source.table_name = "parquet_data"
-    # run the pipeline with your parameters
-    load_info = pipeline.run(parquet_source)
-    # pretty print the information on data that was loaded
+    # here we modify filesystem resource so it will track only new csv files
+    # such resource may be then combined with transformer doing further processing
+    new_files = filesystem(bucket_url=TESTS_BUCKET_URL, file_glob="csv/*")
+    # add incremental on modification time
+    new_files.apply_hints(incremental=dlt.sources.incremental("modification_date"))
+    load_info = pipeline.run((new_files | read_csv()) .with_name("csv_files"))
     print(load_info)
+    print(pipeline.last_trace.last_normalize_info)
+
+    # load again - no new files!
+    new_files = filesystem(bucket_url=TESTS_BUCKET_URL, file_glob="csv/*")
+    # add incremental on modification time
+    new_files.apply_hints(incremental=dlt.sources.incremental("modification_date"))
+    load_info = pipeline.run((new_files | read_csv()) .with_name("csv_files"))
+    print(load_info)
+    print(pipeline.last_trace.last_normalize_info)
 
 
 # IMAP examples
@@ -249,7 +249,10 @@ def imap_get_attachments() -> None:
 
 
 if __name__ == "__main__":
-    # copy_files_resource()
+    copy_files_resource("_storage")
+    # stream_and_merge_csv()
+    # read_parquet_and_jsonl_chunked()
+    # read_files_incrementally_mtime()
     # read_file_content_resource()
     # imap_read_messages()
-    imap_get_attachments()
+    # imap_get_attachments()

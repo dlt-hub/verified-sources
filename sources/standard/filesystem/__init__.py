@@ -1,29 +1,30 @@
-"""This source collects fsspec files."""
+"""List files in buckets using fsspec."""
 
-from typing import Iterator, List, Optional
+from typing import Iterator, List, Optional, Union
 
 import dlt
-from dlt.common.storages.configuration import FileSystemCredentials
-from dlt.common.storages.filesystem import FileItem
+from dlt.sources import FileItem
+from dlt.sources.credentials import FileSystemCredentials
 
 from .helpers import (
+    AbstractFileSystem,
     FilesystemConfigurationResource,
     FileSystemDict,
-    client_from_credentials,
+    fsspec_from_credentials,
+    fsspec_from_resource,
     get_files,
 )
 from .settings import DEFAULT_CHUNK_SIZE
 
 
 @dlt.resource(
-    name="filesystem_r",
     primary_key="file_url",
-    selected=False,
     spec=FilesystemConfigurationResource,
+    standalone=True
 )
-def filesystem_resource(
+def filesystem(
     bucket_url: str = dlt.secrets.value,
-    credentials: FileSystemCredentials = dlt.secrets.value,
+    credentials: Union[FileSystemCredentials, AbstractFileSystem] = dlt.secrets.value,
     file_glob: Optional[str] = "*",
     files_per_page: int = DEFAULT_CHUNK_SIZE,
     extract_content: bool = False,
@@ -32,7 +33,7 @@ def filesystem_resource(
 
     Args:
         bucket_url (str): The url to the bucket.
-        credentials (FileSystemCredentials): The credentials to the filesystem.
+        credentials (FileSystemCredentials | AbstractFilesystem): The credentials to the filesystem of fsspec `AbstractFilesystem` instance.
         file_glob (str, optional): The filter to apply to the files in glob format.
         files_per_page (int, optional): The number of files to process at once, defaults to 100.
         extract_content (bool, optional): If true, the content of the file will be extracted if
@@ -41,8 +42,10 @@ def filesystem_resource(
     Returns:
         Iterator[List[FileItem]]: The list of files.
     """
-
-    fs_client = client_from_credentials(bucket_url, credentials)
+    if isinstance(credentials, AbstractFileSystem):
+        fs_client = credentials
+    else:
+        fs_client = fsspec_from_credentials(bucket_url, credentials)
 
     files_chunk: List[FileItem] = []
     for file_model in get_files(fs_client, bucket_url, file_glob):

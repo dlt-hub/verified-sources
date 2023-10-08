@@ -3,24 +3,24 @@ import mimetypes
 import posixpath
 import io
 from io import BytesIO, IOBase
-from typing import Iterable, Optional, Type, Dict, Any
+from typing import Iterable, Optional, Type, Dict, Any, Union
 from urllib.parse import urlparse
 from fsspec import AbstractFileSystem  # type: ignore
 
-from dlt.common.configuration import configspec, resolve_type
-from dlt.common.configuration.specs import CredentialsConfiguration
+from dlt.common.configuration import resolve_type
 from dlt.common.storages import filesystem
-from dlt.common.storages.configuration import (
-    FilesystemConfiguration,
-    FileSystemCredentials,
-)
 from dlt.common.storages.filesystem import MTIME_DISPATCH, FileItem
+
+from dlt.sources import DltResource
+from dlt.sources.config import configspec, with_config
+from dlt.sources.credentials import CredentialsConfiguration, FilesystemConfiguration, FileSystemCredentials
 
 from .settings import DEFAULT_CHUNK_SIZE
 
 
 @configspec
 class FilesystemConfigurationResource(FilesystemConfiguration):
+    credentials: Union[FileSystemCredentials, AbstractFileSystem]
     file_glob: Optional[str] = "*"
     files_per_page: int = DEFAULT_CHUNK_SIZE
     extract_content: bool = False
@@ -28,7 +28,7 @@ class FilesystemConfigurationResource(FilesystemConfiguration):
     @resolve_type("credentials")
     def resolve_credentials_type(self) -> Type[CredentialsConfiguration]:
         # use known credentials or empty credentials for unknown protocol
-        return self.PROTOCOL_CREDENTIALS.get(self.protocol) or Optional[CredentialsConfiguration]  # type: ignore[return-value]
+        return Union[self.PROTOCOL_CREDENTIALS.get(self.protocol) or Optional[CredentialsConfiguration], AbstractFileSystem]  # type: ignore[return-value]
 
 
 class FileSystemDict(Dict[str, Any]):
@@ -39,7 +39,7 @@ class FileSystemDict(Dict[str, Any]):
     """
 
     def __init__(
-        self, mapping: FileItem, credentials: Optional[FileSystemCredentials] = None
+        self, mapping: FileItem, credentials: Optional[Union[FileSystemCredentials, AbstractFileSystem]] = None
     ):
         """Create a dictionary with the filesystem client.
 
@@ -58,7 +58,10 @@ class FileSystemDict(Dict[str, Any]):
         Returns:
             AbstractFileSystem: The filesystem client.
         """
-        return client_from_credentials(self["file_url"], self.credentials)
+        if isinstance(self.credentials, AbstractFileSystem):
+            return self.credentials
+        else:
+            return fsspec_from_credentials(self["file_url"], self.credentials)
 
     def open(self, **kwargs: Any) -> IOBase:  # noqa: A003
         """Open the file as a fsspec file.
@@ -106,7 +109,7 @@ class FileSystemDict(Dict[str, Any]):
         return content
 
 
-def client_from_credentials(
+def fsspec_from_credentials(
     bucket_url: str, credentials: FileSystemCredentials
 ) -> AbstractFileSystem:
     """Create a filesystem client from the credentials.
@@ -120,6 +123,17 @@ def client_from_credentials(
     """
     fs_client, _ = filesystem(bucket_url, credentials)
     return fs_client
+
+
+def fsspec_from_resource(filesystem_instance: DltResource) -> AbstractFileSystem:
+    """Extract authorized fsspec client from a filesystem resource"""
+
+    @with_config(spec=FilesystemConfiguration, sections=("sources", filesystem_instance.section, filesystem_instance.name))
+    def _get_fsspec(bucket_url: str, credentials: FileSystemCredentials) -> AbstractFileSystem:
+        print(bucket_url)
+        return fsspec_from_credentials(bucket_url, credentials)
+
+    return _get_fsspec(filesystem_instance.explicit_args.get("bucket_url", None), filesystem_instance.explicit_args.get("credentials", None))
 
 
 def get_files(

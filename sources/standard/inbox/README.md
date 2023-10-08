@@ -25,7 +25,7 @@ pip install dlt[duckdb]
 Initialize the source with dlt command:
 
 ```shell
-dlt init inbox duckdb
+dlt init standard duckdb
 ```
 
 ## Set email account credentials

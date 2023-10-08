@@ -1,11 +1,13 @@
-from typing import Any, Dict
-from urllib.parse import urlparse
+import os
+from typing import Any, Dict, List
 
 import dlt
 import pytest
+from dlt.common import pendulum
 
-from sources.standard import filesystem_resource
-from tests.utils import ALL_DESTINATIONS, assert_load_info, load_table_counts
+from sources.standard import filesystem, fsspec_from_resource, FileItem, FileSystemDict
+
+from tests.utils import assert_load_info, load_table_counts, assert_query_data, TEST_STORAGE_ROOT
 
 from .settings import GLOB_RESULTS, TESTS_BUCKET_URLS
 
@@ -20,12 +22,11 @@ def test_file_list(bucket_url: str, glob_params: Dict[str, Any]) -> None:
     # we just pass the glob parameter to the resource if it is not None
     if file_glob := glob_params["glob"]:
         filesystem_res = (
-            filesystem_resource(bucket_url=bucket_url, file_glob=file_glob) | bypass
+            filesystem(bucket_url=bucket_url, file_glob=file_glob) | bypass
         )
     else:
-        filesystem_res = filesystem_resource(bucket_url=bucket_url) | bypass
-    # assert filesystem_res.section == "filesystem"
-    # filesystem_res.section = "filesystem"
+        filesystem_res = filesystem(bucket_url=bucket_url) | bypass
+
     all_files = list(filesystem_res)
     file_count = len(all_files)
     file_names = [item["file_name"] for item in all_files]
@@ -36,51 +37,131 @@ def test_file_list(bucket_url: str, glob_params: Dict[str, Any]) -> None:
 @pytest.mark.parametrize("extract_content", [True, False])
 @pytest.mark.parametrize("bucket_url", TESTS_BUCKET_URLS)
 def test_load_content_resources(bucket_url: str, extract_content: bool) -> None:
+
     @dlt.transformer
-    def ext_file(items) -> str:
+    def assert_sample_content(items: List[FileItem]):
+        # expect just one file
         for item in items:
-            if item["file_name"] == "sample.txt":
-                content = item.read_bytes()
-                assert content == b"dlthub content"
-                assert item["size_in_bytes"] == 14
-                assert item["file_url"].endswith("/samples/sample.txt")
-                assert item["mime_type"] == "text/plain"
+            assert item["file_name"] == "sample.txt"
+            content = item.read_bytes()
+            assert content == b"dlthub content"
+            assert item["size_in_bytes"] == 14
+            assert item["file_url"].endswith("/samples/sample.txt")
+            assert item["mime_type"] == "text/plain"
+            assert isinstance(item["modification_date"], pendulum.DateTime)
+
         yield items
 
-    all_files = (
-        filesystem_resource(
+    # use transformer to test files
+    sample_file = (
+        filesystem(
             bucket_url=bucket_url,
             file_glob="sample.txt",
             extract_content=extract_content,
         )
-        | ext_file
+        | assert_sample_content
     )
     # just execute iterator
-    files = list(all_files)
+    files = list(sample_file)
     assert len(files) == 1
 
+    # take file from nested dir
+    # use map function to assert
+    def assert_csv_file(item: FileItem):
+        assert item["size_in_bytes"] == 742
+        assert item["file_name"] == "met_csv/A801/A881_20230920.csv"
+        assert item["file_url"].endswith("/samples/met_csv/A801/A881_20230920.csv")
+        assert item["mime_type"] == "text/csv"
+        # print(item)
+        return item
 
-# @pytest.mark.parametrize("bucket_url", TESTS_BUCKET_URLS)
-# def test_all_resources(bucket_url: str, destination_name: str) -> None:
+    nested_file = filesystem(bucket_url, file_glob="met_csv/A801/A881_20230920.csv")
 
-#     @dlt.transformer
-#     def bypass(items) -> str:
-#         return items
+    assert len(list(nested_file | assert_csv_file)) == 1
 
-#     pipeline = dlt.pipeline(
-#         pipeline_name="file_data",
-#         destination=destination_name,
-#         dataset_name="filesystem_data_duckdb",
-#         full_refresh=True,
-#     )
 
-#     # Load all files
-#     all_files = filesystem_resource(bucket_url=bucket_url, file_glob="csv/*")
-#     load_info = pipeline.run(all_files | bypass.with_name("csv_files"))
-#     assert_load_info(load_info)
+def test_fsspec_as_credentials():
+    # get gs filesystem
+    gs_resource = filesystem("gs://ci-test-bucket")
+    # get authenticated client
+    fs_client = fsspec_from_resource(gs_resource)
+    print(fs_client.ls("ci-test-bucket/standard_source/samples"))
+    # use to create resource instead of credentials
+    gs_resource = filesystem("gs://ci-test-bucket/standard_source/samples", credentials=fs_client)
+    print(list(gs_resource))
 
-#     table_counts = load_table_counts(pipeline, "csv_files")
-#     assert table_counts["csv_files"] == 4
+
+@pytest.mark.parametrize("bucket_url", TESTS_BUCKET_URLS)
+def test_csv_transformers(bucket_url: str) -> None:
+    from sources.standard_pipeline import read_csv
+
+    pipeline = dlt.pipeline(
+        pipeline_name="file_data",
+        destination="duckdb",
+        dataset_name="all_files",
+        full_refresh=True,
+    )
+
+    # load all csvs merging data on a date column
+    met_files = filesystem(bucket_url=bucket_url, file_glob="met_csv/A801/*.csv") | read_csv()
+    met_files.apply_hints(write_disposition="merge", merge_key="date")
+    load_info = pipeline.run(met_files.with_name("met_csv"))
+    assert_load_info(load_info)
+    # print(pipeline.last_trace.last_normalize_info)
+    # must contain 24 rows of A881
+    assert_query_data(pipeline, "SELECT code FROM met_csv", ["A881"] * 24)
+
+    # load the other folder that contains data for the same day + one other day
+    # the previous data will be replaced
+    met_files = filesystem(bucket_url=bucket_url, file_glob="met_csv/A803/*.csv") | read_csv()
+    met_files.apply_hints(write_disposition="merge", merge_key="date")
+    load_info = pipeline.run(met_files.with_name("met_csv"))
+    assert_load_info(load_info)
+    # print(pipeline.last_trace.last_normalize_info)
+    # must contain 48 rows of A803
+    assert_query_data(pipeline, "SELECT code FROM met_csv", ["A803"] * 48)
+    # and 48 rows in total -> A881 got replaced
+    # print(pipeline.default_schema.to_pretty_yaml())
+    assert load_table_counts(pipeline, "met_csv") == {"met_csv": 48}
+
+
+@pytest.mark.parametrize("bucket_url", TESTS_BUCKET_URLS)
+def test_standard_transformers(bucket_url: str) -> None:
+    from sources.standard_pipeline import read_jsonl, read_parquet
+
+    # extract pipes to read jsonl and parquet
+    jsonl_reader = filesystem(bucket_url, file_glob="**/*.jsonl") | read_jsonl()
+    parquet_reader = filesystem(bucket_url, file_glob="**/*.parquet") | read_parquet()
+
+    # a step that copies files into test storage
+    def _copy(item: FileSystemDict):
+        # instantiate fsspec and copy file
+        dest_file = os.path.join(TEST_STORAGE_ROOT, item["file_name"])
+        # create dest folder
+        os.makedirs(os.path.dirname(dest_file), exist_ok=True)
+        # download file
+        item.filesystem.download(item["file_url"], dest_file)
+        # return file item unchanged
+        return item
+
+    downloader = filesystem(bucket_url, file_glob="**").add_map(_copy)
+
+    # load in single pipeline
+    pipeline = dlt.pipeline(
+        pipeline_name="file_data",
+        destination="duckdb",
+        dataset_name="all_files",
+        full_refresh=True,
+    )
+    load_info = pipeline.run([
+        jsonl_reader.with_name("jsonl_example"),
+        parquet_reader.with_name("parquet_example"),
+        downloader.with_name("listing")]
+    )
+    assert_load_info(load_info)
+    assert load_table_counts(pipeline, "jsonl_example", "parquet_example", "listing") == {"jsonl_example": 1034, "parquet_example": 1034, "listing": 10}
+    # print(pipeline.last_trace.last_normalize_info)
+    # print(pipeline.default_schema.to_pretty_yaml())
 
 
 @pytest.mark.parametrize("bucket_url", TESTS_BUCKET_URLS)
@@ -97,10 +178,10 @@ def test_incremental_load(bucket_url: str) -> None:
     )
 
     # Load all files
-    all_files = filesystem_resource(bucket_url=bucket_url, file_glob="csv/*")
+    all_files = filesystem(bucket_url=bucket_url, file_glob="csv/*")
     # add incremental on modification time
     all_files.apply_hints(incremental=dlt.sources.incremental("modification_date"))
-    load_info = pipeline.run(all_files | bypass.with_name("csv_files"))
+    load_info = pipeline.run((all_files | bypass).with_name("csv_files"))
     assert_load_info(load_info)
     assert pipeline.last_trace.last_normalize_info.row_counts["csv_files"] == 4
 
@@ -108,17 +189,17 @@ def test_incremental_load(bucket_url: str) -> None:
     assert table_counts["csv_files"] == 4
 
     # load again
-    all_files = filesystem_resource(bucket_url=bucket_url, file_glob="csv/*")
+    all_files = filesystem(bucket_url=bucket_url, file_glob="csv/*")
     all_files.apply_hints(incremental=dlt.sources.incremental("modification_date"))
-    load_info = pipeline.run(all_files | bypass.with_name("csv_files"))
+    load_info = pipeline.run((all_files | bypass).with_name("csv_files"))
     # nothing into csv_files
     assert "csv_files" not in pipeline.last_trace.last_normalize_info.row_counts
     table_counts = load_table_counts(pipeline, "csv_files")
     assert table_counts["csv_files"] == 4
 
     # load again into different table
-    all_files = filesystem_resource(bucket_url=bucket_url, file_glob="csv/*")
+    all_files = filesystem(bucket_url=bucket_url, file_glob="csv/*")
     all_files.apply_hints(incremental=dlt.sources.incremental("modification_date"))
-    load_info = pipeline.run(all_files | bypass.with_name("csv_files_2"))
+    load_info = pipeline.run((all_files | bypass).with_name("csv_files_2"))
     assert_load_info(load_info)
     assert pipeline.last_trace.last_normalize_info.row_counts["csv_files_2"] == 4

@@ -7,10 +7,9 @@ from typing import Iterable, List, Optional, Sequence
 
 import dlt
 from dlt.common import logger, pendulum
-from dlt.extract.source import TDataItem, TDataItems
+from dlt.sources import TDataItem, TDataItems, FileItem
 
 from ..filesystem import FileSystemDict
-from ..filesystem.helpers import FileItem
 from .helpers import (
     extract_attachments,
     extract_email_info,
