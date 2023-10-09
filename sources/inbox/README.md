@@ -1,6 +1,6 @@
 # Inbox Source
 
-This source provides functionalities to collect inbox emails, get the attachment as a file object,
+This source provides functionalities to collect inbox emails, get the attachment as a [file items](../filesystem/README.md#the-fileitem-file-representation),
 and store all relevant email information in a destination. It utilizes the `imaplib` library to
 interact with the IMAP server, and `dlt` library to handle data processing and transformation.
 
@@ -25,7 +25,7 @@ pip install dlt[duckdb]
 Initialize the source with dlt command:
 
 ```shell
-dlt init standard duckdb
+dlt init inbox duckdb
 ```
 
 ## Set email account credentials
@@ -47,90 +47,51 @@ Use [App password](#getting-gmail-app-password) to set the password for a Gmail 
    [app password](#getting-gmail-app-password)).
 2. Replace the placeholders in `.dlt/secrets.toml` with your IMAP server hostname, email account
    credentials.
-3. Customize the FILTER_EMAILS list in the `inbox/settings.py` file if you want to fetch emails
-   only from specific senders.
-4. Customize the GMAIL_GROUP in the `inbox/settings.py` file if you want to fetch emails for
-   specific Google Group.
-5. Set the DEFAULT_START_DATE in the `inbox/settings.py` file to the date you want to fetch emails
-   from.
+
 
 ## Functionality
+You access the messages and attachments via `inbox_source` `dlt` source. This source exposes the resources
+as described below. Typically you'll pick one of those (ie. **messages**) and load it into a table with
+a specific name:
+```python
+# get messages resource from the source
+messages = inbox_source(
+    filter_emails=("astra92293@gmail.com", "josue@sehnem.com")
+).messages
+# configure the messages resource to not get bodies of the messages
+messages = messages(include_body=False).with_name("my_inbox")
+# load messages to "my_inbox" table
+load_info = pipeline.run(messages)
+```
+This way you can create several extract pipelines with different combination of filters and processing steps from a single `inbox_source`.
 
-### messages_uids resource
+### Additional `inbox_source` arguments
+Please refer to `inbox_source()` docstring for options to filter email messages and attachments by sender, date or mime type.
 
-This is a dlt resource that connects to the IMAP server, logs in to the email account, and fetches
-email messages from the specified folder ('INBOX' by default). It yields a dictionary containing
-only message UID.
+### messages resource
 
-### get_message_content transformer
-
-This dlt transformer takes an email message items from another resource (e.g. `messages_uids`) and
-fetches the corresponding email messages using their UID. It yields a dictionary containing email
+This resource fetches the corresponding email messages using their UID. It yields a dictionary containing email
 metadata such as message UID, message ID, sender, subject, date, modification date, content type,
 and email body.
 
-### get_attachments resource
+Please refer to **imap_read_messages()** example pipeline in **inbox_pipeline.py** that loads messages from particulars into
+**duckdb**.
 
-This dlt transformer resource takes an email message items from another resource (e.g.
-`messages_uids`) and extracts attachments from the email message using their UID. It connects to
-the IMAP server, fetches the email message by its UID, and return a file objects as filesystem. It
-yields a dictionary containing email metadata such as message UID, sender, date, content type, etc.
-It can be used with the same transformers used for filesystem.
+### attachments resource
 
-## Examples
+This resource extracts attachments from the email message using their UID. It connects to
+the IMAP server, fetches the email message by its UID, parses body and looks for attachments.
+It yields [file items](../filesystem/README.md#the-fileitem-file-representation) where attachments
+are loaded in the **file_content** field. The original email message is present in **message** filed.
 
-Here is an example of how to use the `messages_uids` to fetch uids and two transformers
-`get_attachments` to get the attachments and `copy_files` to copy the attachments to a local
-folder.
+Please refer to **imap_get_attachments()** example pipeline in **inbox_pipeline.py** that get **pdf** attachments
+from emails from particular senders, parsed pdfs and writes content into **duckdb**.
 
-```python
-import dlt
-from inbox import inbox_source
+### uids resource
 
-# configure the pipeline with your destination details
-pipeline = dlt.pipeline(
-    pipeline_name="inbox",
-    destination="duckdb",
-    dataset_name="inbox_data",
-    full_refresh=False,
-)
-
-attachments = (
-   messages_uids |
-   get_attachments(filter_by_mime_type=("application/pdf",)) |
-   copy_files(storage_path="standard/files")
-)
-
-# run the pipeline with your parameters
-load_info = pipeline.run(attachments)
-# pretty print the information on data that was loaded
-print(load_info)
-```
-
-You can also just fetch the content of the email message using the `get_message_content`
-transformer, in this example you can also see how to filter the emails by sender:
-
-```python
-import dlt
-from inbox import inbox_source
-
-# configure the pipeline with your destination details
-pipeline = dlt.pipeline(
-    pipeline_name="inbox",
-    destination="duckdb",
-    dataset_name="inbox_data",
-    full_refresh=False,
-)
-
-filter_emails = ("sender1@gmail.com", "sender2@gmail.com")
-uids = messages_uids(filter_emails=filter_emails)
-messages = uids | get_message_content(include_body=True)
-
-# run the pipeline with your parameters
-load_info = pipeline.run(attachments)
-# pretty print the information on data that was loaded
-print(load_info)
-```
+This is a dlt resource that connects to the IMAP server, logs in to the email account, and fetches
+email messages from the specified folder ('INBOX' by default). It yields a dictionary containing
+only message UID. You typically do not need to use this resource.
 
 ## Accessing Gmail Inbox
 

@@ -12,7 +12,7 @@ packages = [{include = "sources"}]
 
 [tool.poetry.dependencies]
 python = "^3.8.1"
-dlt = {version = "^0.3.18", allow-prereleases = true, extras = ["redshift", "bigquery", "postgres", "duckdb", "s3", "gs", "az"]}
+dlt = {version = "^0.3.19a1", allow-prereleases = true, extras = ["redshift", "bigquery", "postgres", "duckdb", "s3", "gs"]}
 
 [tool.poetry.group.dev.dependencies]
 mypy = "^0.991"
@@ -73,6 +73,10 @@ pymongo = "^4.3.3"
 
 [tool.poetry.group.airtable.dependencies]
 pyairtable = "^2.1.0.post1"
+
+
+[tool.poetry.group.filesystem.dependencies]
+adlfs = ">=2023.9.0"
 
 [build-system]
 requires = ["poetry-core"]

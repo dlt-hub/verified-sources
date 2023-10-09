@@ -45,14 +45,16 @@ dlt init filesystem duckdb
    [sources.filesystem]
    bucket_url="s3://my-bucket/csv_files/"
    ```
+
+**Note:** for azure use **adlfs>=2023.9.0** Older version do not handle globs correctly.
 ## Usage
 
 The filesystem resource will list files in selected bucket using specified glob pattern and return information on each file (`FileInfo` below) in pages of configurable size.
 The resource is designed to work with [transform functions]() and [transformers]() that should be used to build specialized extract pipelines ie.
 * filter only files with given mime type
 * copy the files locally
-* [read file content and parse text out of PDF]()
-* [stream the content]() of **csv, jsonl or parquet** files
+* read file content and parse text out of PDF
+* stream the content of **csv, jsonl or parquet** files
 
 Please refer to examples in [sources/filesystem_pipeline.py](../../filesystem_pipeline.py)
 
@@ -92,12 +94,77 @@ And property
 - **filesystem**: returns authorized `AbstractFilesystem` with all usual fsspec methods.
 
 ### Read csvs example
+This example shows how a very large csv file can be opened on any of supported buckets (or local file system) and then streamed in
+configurable chunks and loaded directly from the bucket.
 
+```python
+@dlt.transformer(standalone=True)
+def read_csv(
+    items: Iterable[FileItemDict],
+    chunksize: int = 15,
+) -> Iterator[TDataItems]:
+    """Reads csv file with Pandas chunk by chunk.
+
+    Args:
+        item (TDataItem): The list of files to copy.
+        chunksize (int): Number of records to read in one chunk
+    Returns:
+        TDataItem: The file content
+    """
+    for file_obj in items:
+        # Here we use pandas chunksize to read the file in chunks and avoid loading the whole file
+        # in memory.
+        with file_obj.open() as file:
+            for df in pd.read_csv(
+                file,
+                header="infer",
+                chunksize=chunksize,
+            ):
+                yield df.to_dict(orient="records")
+pipeline = dlt.pipeline(
+    pipeline_name="standard_filesystem_csv",
+    destination="duckdb",
+    dataset_name="met_data",
+)
+# load all csvs in A801 folder
+met_files = (
+    filesystem(bucket_url=TESTS_BUCKET_URL, file_glob="met_csv/A801/*.csv")
+    | read_csv()
+)
+# NOTE: we load to met_csv table
+load_info = pipeline.run(met_files.with_name("met_csv"))
+print(load_info)
+print(pipeline.last_trace.last_normalize_info)
+```
 
 ### Incremental loading
 You can convert `filesystem` resource into incremental one. It already defines `primary_key` on `file_url` and each `FileItem` contains `modification_time`. Following example will return only files that were modified/created from the previous run:
 ```python
+pipeline = dlt.pipeline(
+    pipeline_name="standard_filesystem_incremental",
+    destination="duckdb",
+    dataset_name="file_tracker",
+)
+
+# here we modify filesystem resource so it will track only new csv files
+# such resource may be then combined with transformer doing further processing
+new_files = filesystem(bucket_url=TESTS_BUCKET_URL, file_glob="csv/*")
+# add incremental on modification time
+new_files.apply_hints(incremental=dlt.sources.incremental("modification_date"))
+load_info = pipeline.run((new_files | read_csv()).with_name("csv_files"))
+print(load_info)
+print(pipeline.last_trace.last_normalize_info)
+
+# load again - no new files!
+new_files = filesystem(bucket_url=TESTS_BUCKET_URL, file_glob="csv/*")
+# add incremental on modification time
+new_files.apply_hints(incremental=dlt.sources.incremental("modification_date"))
+load_info = pipeline.run((new_files | read_csv()).with_name("csv_files"))
+print(load_info)
+print(pipeline.last_trace.last_normalize_info)
 ```
+Note how we use `apply_hints` to add incremental loading on **modification_date** to existing **new_files** and then
+run it twice to demonstrate that files loaded in the first run are filtered out.
 
 ### Cleanup after loading
 You can get **fsspec** client from **filesystem** resource after it was extracted ie. in order to delete processed files etc. The filesystem module contains convenience
@@ -113,34 +180,3 @@ fs_client = fsspec_from_resource(gs_resource)
 # do any operation
 fs_client.ls("ci-test-bucket/standard_source/samples")
 ```
-
-## Example
-
-```python
-import os
-import dlt
-from sources.filesystem import filesystem_resource
-
-@dlt.transformer
-def copy_files(
-   items: TDataItems,
-   storage_path: str,
-) -> TDataItem:
-   """Reads files and copy them to local directory."""
-   storage_path = os.path.abspath(storage_path)
-   os.makedirs(storage_path, exist_ok=True)
-   for file_obj in items:
-      file_dst = os.path.join(storage_path, file_obj["file_name"])
-      file_obj["path"] = file_dst
-      with open(file_dst, "wb") as f:
-            f.write(file_obj.read())
-      yield file_obj
-
-   file_source = filesystem_resource(chunksize=10) | copy_files(storage_path="standard/files")
-```
-
-The filesystem resource provides the following parameters:
-
-
-
-

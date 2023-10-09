@@ -4,9 +4,9 @@ from PyPDF2 import PdfReader
 import dlt
 
 try:
-    from .inbox import inbox_source, ImapFileItem, FileItemDict  # type: ignore
+    from .inbox import inbox_source, FileItemDict  # type: ignore
 except ImportError:
-    from inbox import inbox_source, ImapFileItem, FileItemDict
+    from inbox import inbox_source, FileItemDict
 
 
 @dlt.transformer(primary_key="file_hash", write_disposition="merge")
@@ -26,7 +26,7 @@ def pdf_to_text(file_items: Sequence[FileItemDict]) -> Iterator[Dict[str, Any]]:
                 yield page_item
 
 
-def imap_read_messages() -> None:
+def imap_read_messages() -> dlt.Pipeline:
     pipeline = dlt.pipeline(
         pipeline_name="standard_inbox_message_2",
         destination="duckdb",
@@ -38,14 +38,16 @@ def imap_read_messages() -> None:
     messages = inbox_source(
         filter_emails=("astra92293@gmail.com", "josue@sehnem.com")
     ).messages
+    # configure the messages resource to not get bodies of the messages
     messages = messages(include_body=False).with_name("my_inbox")
-    # load messages to "my_inbox" page, do not get bodies
+    # load messages to "my_inbox" table
     load_info = pipeline.run(messages)
     # pretty print the information on data that was loaded
     print(load_info)
+    return pipeline
 
 
-def imap_get_attachments() -> None:
+def imap_get_attachments() -> dlt.Pipeline:
     pipeline = dlt.pipeline(
         pipeline_name="standard_inbox_attachments",
         destination="duckdb",
@@ -63,8 +65,9 @@ def imap_get_attachments() -> None:
     load_info = pipeline.run((attachments | pdf_to_text).with_name("my_pages"))
     # pretty print the information on data that was loaded
     print(load_info)
+    return pipeline
 
 
 if __name__ == "__main__":
-    # imap_read_messages()
+    imap_read_messages()
     imap_get_attachments()

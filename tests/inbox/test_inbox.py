@@ -7,6 +7,8 @@ from dlt.extract.exceptions import ResourceExtractionError
 
 from sources.inbox import inbox_source
 
+from tests.utils import assert_query_data
+
 
 def test_load_uids_incremental() -> None:
     pipeline = dlt.pipeline(
@@ -97,3 +99,13 @@ def test_load_messages() -> None:
             assert item["Subject"] == "test subject"
 
     assert _idx == 2
+
+
+def test_parse_pdf() -> None:
+    from sources.inbox_pipeline import imap_get_attachments
+
+    # will find and load pdf
+    pipeline = imap_get_attachments()
+
+    # this is the only page we expect in data
+    assert_query_data(pipeline, "SELECT text FROM my_pages", ["Dumm y PDF file"])

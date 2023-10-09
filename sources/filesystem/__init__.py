@@ -3,14 +3,13 @@
 from typing import Iterator, List, Optional, Union
 
 import dlt
-from dlt.sources.filesystem import FileItem, FileItemDict, fsspec_filesystem
+from dlt.sources.filesystem import FileItem, FileItemDict, fsspec_filesystem, glob_files
 from dlt.sources.credentials import FileSystemCredentials
 
 from .helpers import (
     AbstractFileSystem,
     FilesystemConfigurationResource,
     fsspec_from_resource,
-    get_files,
 )
 from .settings import DEFAULT_CHUNK_SIZE
 
@@ -44,7 +43,7 @@ def filesystem(
         fs_client = fsspec_filesystem(bucket_url, credentials)[0]
 
     files_chunk: List[FileItem] = []
-    for file_model in get_files(fs_client, bucket_url, file_glob):
+    for file_model in glob_files(fs_client, bucket_url, file_glob):
         file_dict = FileItemDict(file_model, credentials)
         if extract_content:
             file_dict["file_content"] = file_dict.read_bytes()
