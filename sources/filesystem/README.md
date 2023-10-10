@@ -6,13 +6,16 @@ keywords: [filesystem, fsspec, s3]
 
 # Filesystem Source
 
-This [standalone resource]() lists files in s3, gcs and azure buckets and also supports
-local file system and other **fsspec** compatible file systems. For more information about **fsspec**,
+This [standalone resource](https://dlthub.com/docs/general-usage/resource#declare-a-standalone-resource) lists files in s3, gcs and azure buckets and also supports
+local files and other **fsspec** compatible filesystems. For more information about **fsspec**,
 please visit [fsspec documentation](https://filesystem-spec.readthedocs.io/en/latest/index.html).
+**filesystem** represents files uniformly for all buckets and provides convenience methods to open them
+and read the data. Those building blocks let you very quickly create pipelines that:
+* read file content and parse text out of PDFs
+* stream the content of large **csv, jsonl or parquet** files directly from the bucket
+* copy the files locally
 
-The filesystem source can list, open and read files that can be used with other transformers to
-build pipelines that can serve various purposes. You can find examples of how to use this resource
-in the `filesystem_pipeline.py` file.
+Please refer to examples in [sources/filesystem_pipeline.py](../../filesystem_pipeline.py)
 
 ## Initialize the source
 
@@ -25,7 +28,7 @@ dlt init filesystem duckdb
 ## Set filesystem credentials
 
 1. Open `.dlt/secrets.toml`.
-2. Please read the [corresponding documentation]() on **filesystem** destination which explains the setup of all bucket types.
+2. Please read the [corresponding documentation](https://dlthub.com/docs/dlt-ecosystem/destinations/filesystem) on **filesystem** destination which explains the setup of all bucket types.
    Just remember to replace `[destination.filesystem.*]` with `[sources.filesystem.*]` in all config/secret entries ie.
    ```toml
    [sources.filesystem.credentials]
@@ -50,26 +53,37 @@ dlt init filesystem duckdb
 ## Usage
 
 The filesystem resource will list files in selected bucket using specified glob pattern and return information on each file (`FileInfo` below) in pages of configurable size.
-The resource is designed to work with [transform functions]() and [transformers]() that should be used to build specialized extract pipelines ie.
-* filter only files with given mime type
-* copy the files locally
-* read file content and parse text out of PDF
-* stream the content of **csv, jsonl or parquet** files
+The resource is designed to work with [transform functions](https://dlthub.com/docs/general-usage/resource#filter-transform-and-pivot-data)
+and [transformers](https://dlthub.com/docs/general-usage/resource#process-resources-with-dlttransformer) that should be used to build specialized extract pipelines. Typically you also want to load data into a table with a given name (and not **filesystem** table which is the default). Snippet below illustrates both:
+```python
+@dlt.transformer(standalone=True)
+def read_csv(items, chunksize: int = 15) ->:
+    """Reads csv file with Pandas chunk by chunk."""
+    ...
 
-Please refer to examples in [sources/filesystem_pipeline.py](../../filesystem_pipeline.py)
+# list only the *.csv in specific folder and pass the file items to read_csv()
+met_files = (
+    filesystem(bucket_url="s3://my_bucket/data, file_glob="met_csv/A801/*.csv")
+    | read_csv()
+    )
+# load to met_csv table using with_name()
+pipeline.run(met_files.with_name("met_csv"))
+```
+
+**We recommend that you give each resource a [specific name](https://dlthub.com/docs/general-usage/resource#duplicate-and-rename-resources)** before loading with `pipeline.run`. This will make sure that data goes to a table with
+the name you want and that each pipeline [uses a separate state for incremental loading](https://dlthub.com/docs/general-usage/state#read-and-write-pipeline-state-in-a-resource).
+
 
 `filesystem` resource takes following parameters:
 * **bucket_url**: An url to a bucket
 * **credentials**: One of the bucket credentials (typically from config) or `AbstractFilesystem` (fsspec client) instance
 * **extract_content**: If set to `True`, the content of the file will be read and returned in the
   resource. Defaults to `False`.
-* **file_glob**: A glob pattern supported by [fsspec](). Defaults to `*` (all files from current folder, non recursive)
+* **file_glob**: A glob pattern supported by [fsspec](https://filesystem-spec.readthedocs.io/en/latest/api.html#fsspec.spec.AbstractFileSystem.glob). Defaults to `*` (all files from current folder, non recursive)
 * **chunksize**: The number of files that will be read at once. This is useful to avoid reading all
   the files at once, which can be a problem if you have a lot of files or if the files are big and
   you are using the `extract_content` parameter.
 
-**We recommend that you give each pipeline a [specific name]()** before loading with `pipeline.run`. This will make sure that data goes to a table with
-the name you want and that each pipeline [uses a separate state for incremental loading]().
 
 ### The `FileItem` file representation
 All `dlt` resources/sources that yield files adhere to `FileItem` contract. The content of the file is not accessed/loaded (if possible) - instead a full file information is available together with methods to open a file and read file content. Users can also request an authenticated **filespec** `AbstractFilesystem` instance. `FileItem` is a TypedDict with following fields
