@@ -174,7 +174,6 @@ def assert_query_data(
     with p.sql_client(schema_name=schema_name) as c:
         with c.execute_query(sql) as cur:
             rows = list(cur.fetchall())
-            print(rows)
             assert len(rows) == len(table_data)
             for row, d in zip(rows, table_data):
                 row = list(row)

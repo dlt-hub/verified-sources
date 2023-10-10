@@ -33,7 +33,7 @@ def jira(
         res_function = dlt.resource(
             get_paginated_data, name=endpoint_name, write_disposition="replace"
         )(
-            **endpoint_parameters,  # type: ignore
+            **endpoint_parameters,
             subdomain=subdomain,
             email=email,
             api_token=api_token,
