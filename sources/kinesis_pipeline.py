@@ -1,4 +1,5 @@
 import dlt
+import pendulum
 from dlt.pipeline.pipeline import Pipeline
 from dlt.common.pipeline import LoadInfo
 
@@ -11,23 +12,45 @@ except ImportError:
 
 def load_kinesis(pipeline: Pipeline = None) -> LoadInfo:
     """Use the kinesis source to completely load all streams"""
-    if pipeline is None:
-        # Create a pipeline
-        pipeline = dlt.pipeline(
-            pipeline_name="local_kinesis",
-            destination="duckdb",
-            dataset_name="kinesis_database",
+
+    @dlt.transformer
+    def segment_stream(items):
+        yield items
+
+    pipeline = dlt.pipeline(
+        pipeline_name="telemetry_pipeline",
+        destination="duckdb",
+        dataset_name="dlt_telemetry",
+    )
+    info = pipeline.run(
+        read_kinesis_stream(
+            "dlt_ci_kinesis_source",
+            last_ts=dlt.sources.incremental(
+                "_kinesis_ts", initial_value=pendulum.now().subtract(days=1)
+            ),
         )
-
-    source = read_kinesis_stream()
-
-    # Run the pipeline. For a large db this may take a while
-    info = pipeline.run(source, write_disposition="replace")
-
-    return info
+        | segment_stream
+    )
+    if len(info.loads_ids) == 0:
+        print("No messages in kinesis")
+    else:
+        print(info)
 
 
 if __name__ == "__main__":
     # Credentials for the sample database.
     # Load selected tables with different settings
-    print(load_kinesis())
+    load_kinesis()
+
+
+    # for i in range(200):
+    #     # create a data payload
+    #     data = {'key': f'value_{i}'}
+    #     data_str = json.dumps(data)
+
+    #     # put the record to the stream
+    #     response = kinesis_client.put_record(
+    #         StreamName=stream_name,
+    #         Data=data_str,
+    #         PartitionKey='tests_partition_key'
+    #     )
