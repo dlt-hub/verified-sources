@@ -12,10 +12,10 @@ packages = [{include = "sources"}]
 
 [tool.poetry.dependencies]
 python = "^3.8.1"
-dlt = {version = "^0.3.19", allow-prereleases = true, extras = ["redshift", "bigquery", "postgres", "duckdb", "s3", "gs"]}
+dlt = {version = "^0.3.20a0", allow-prereleases = true, extras = ["redshift", "bigquery", "postgres", "duckdb", "s3", "gs"]}
 
 [tool.poetry.group.dev.dependencies]
-mypy = "^0.991"
+mypy = "^1.6.0"
 flake8 = "^6.0.0"
 pytest = "^7.2.0"
 bandit = "^1.7.4"

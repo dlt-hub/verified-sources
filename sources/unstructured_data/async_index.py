@@ -23,7 +23,7 @@ class AVectorStoreIndexWrapper(VectorStoreIndexWrapper):
         self, question: str, llm: Optional[BaseLanguageModel] = None, **kwargs: Any
     ) -> str:
         """Query the vectorstore."""
-        llm = llm or OpenAI(temperature=0)
+        llm = llm or OpenAI(temperature=0)  # type: ignore[call-arg]
         chain = RetrievalQA.from_chain_type(
             llm, retriever=self.vectorstore.as_retriever(), **kwargs
         )

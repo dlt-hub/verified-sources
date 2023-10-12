@@ -1,92 +1,112 @@
 import json
 import os
 import posixpath
-from typing import Iterable, Iterator
-import pandas as pd
-import pyarrow.parquet as pq  # type: ignore
+from typing import Iterator
 
 import dlt
 from dlt.sources import TDataItem, TDataItems
 
 try:
-    from .filesystem import FileItemDict, filesystem  # type: ignore
+    from .filesystem import FileItemDict, filesystem, readers, read_csv, read_jsonl, read_parquet  # type: ignore
 except ImportError:
-    from filesystem import FileItemDict, filesystem
+    from filesystem import (
+        FileItemDict,
+        filesystem,
+        readers,
+        read_csv,
+        read_jsonl,
+        read_parquet,
+    )
 
 
 TESTS_BUCKET_URL = posixpath.abspath("../tests/filesystem/samples/")
 
 
-@dlt.transformer(standalone=True)
-def read_csv(
-    items: Iterable[FileItemDict],
-    chunksize: int = 15,
-) -> Iterator[TDataItems]:
-    """Reads csv file with Pandas chunk by chunk.
+def stream_and_merge_csv() -> None:
+    """Demonstrates how to scan folder with csv files, load them in chunk and merge on date column with the previous load"""
+    pipeline = dlt.pipeline(
+        pipeline_name="standard_filesystem_csv",
+        destination="duckdb",
+        dataset_name="met_data",
+    )
+    # met_data contains 3 columns, where "date" column contain a date on which we want to merge
+    # load all csvs in A801
+    met_files = readers(
+        bucket_url=TESTS_BUCKET_URL, file_glob="met_csv/A801/*.csv"
+    ).read_csv()
+    # tell dlt to merge on date
+    met_files.apply_hints(write_disposition="merge", merge_key="date")
+    # NOTE: we load to met_csv table
+    load_info = pipeline.run(met_files.with_name("met_csv"))
+    print(load_info)
+    print(pipeline.last_trace.last_normalize_info)
 
-    Args:
-        item (TDataItem): The list of files to copy.
-        chunksize (int): Number of records to read in one chunk
-    Returns:
-        TDataItem: The file content
-    """
-    for file_obj in items:
-        # Here we use pandas chunksize to read the file in chunks and avoid loading the whole file
-        # in memory.
-        with file_obj.open() as file:
-            for df in pd.read_csv(
-                file,
-                header="infer",
-                chunksize=chunksize,
-            ):
-                yield df.to_dict(orient="records")
+    # now let's simulate loading on next day. not only current data appears but also updated record for the previous day are present
+    # all the records for previous day will be replaced with new records
+    met_files = readers(
+        bucket_url=TESTS_BUCKET_URL, file_glob="met_csv/A801/*.csv"
+    ).read_csv()
+    met_files.apply_hints(write_disposition="merge", merge_key="date")
+    load_info = pipeline.run(met_files.with_name("met_csv"))
 
-
-@dlt.transformer(standalone=True)
-def read_jsonl(
-    items: Iterable[FileItemDict],
-    chunksize: int = 10,
-) -> Iterator[TDataItems]:
-    """Reads jsonl file content and extract the data.
-
-    Args:
-        item (Iterable[FileItemDict]): The list of files to copy.
-        chunksize (int, optional): The number of files to process at once, defaults to 10.
-
-    Returns:
-        TDataItem: The file content
-    """
-    for file_obj in items:
-        with file_obj.open() as f:
-            lines_chunk = []
-            for line in f:
-                lines_chunk.append(json.loads(line))
-                if len(lines_chunk) >= chunksize:
-                    yield lines_chunk
-                    lines_chunk = []
-        if lines_chunk:
-            yield lines_chunk
+    # you can also do dlt pipeline standard_filesystem_csv show to confirm that all A801 were replaced with A803 records for overlapping day
+    print(load_info)
+    print(pipeline.last_trace.last_normalize_info)
 
 
-@dlt.transformer(standalone=True)
-def read_parquet(
-    items: Iterable[FileItemDict],
-    chunksize: int = 10,
-) -> Iterator[TDataItems]:
-    """Reads parquet file content and extract the data.
+def read_parquet_and_jsonl_chunked() -> None:
+    pipeline = dlt.pipeline(
+        pipeline_name="standard_filesystem",
+        destination="duckdb",
+        dataset_name="teams_data",
+    )
+    # When using the readers resource, you can specify a filter to select only the files you
+    # want to load including a glob pattern. If you use a recursive glob pattern, the filenames
+    # will include the path to the file inside the bucket_url.
 
-    Args:
-        item (Iterable[FileItemDict]): The list of files to copy.
-        chunksize (int, optional): The number of files to process at once, defaults to 10.
+    # JSONL reading (in large chunks!)
+    jsonl_reader = readers(TESTS_BUCKET_URL, file_glob="**/*.jsonl").read_jsonl(
+        chunksize=10000
+    )
+    # PARQUET reading
+    parquet_reader = readers(TESTS_BUCKET_URL, file_glob="**/*.parquet").read_parquet()
+    # load both folders together to specified tables
+    load_info = pipeline.run(
+        [
+            jsonl_reader.with_name("jsonl_team_data"),
+            parquet_reader.with_name("parquet_team_data"),
+        ]
+    )
+    print(load_info)
+    print(pipeline.last_trace.last_normalize_info)
 
-    Returns:
-        TDataItem: The file content
-    """
-    for file_obj in items:
-        with file_obj.open() as f:
-            parquet_file = pq.ParquetFile(f)
-            for rows in parquet_file.iter_batches(batch_size=chunksize):
-                yield rows.to_pylist()
+
+def read_custom_file_type_excel() -> None:
+    """Here we create an extract pipeline using filesystem resource and read_csv transformer"""
+
+    # instantiate filesystem directly to get list of files (FileItems) and then use read_excel transformer to get
+    # content of excel via pandas
+
+    @dlt.transformer(standalone=True)
+    def read_excel(
+        items: Iterator[FileItemDict], sheet_name: str
+    ) -> Iterator[TDataItems]:
+        import pandas as pd
+
+        for file_obj in items:
+            with file_obj.open() as file:
+                yield pd.read_excel(file, sheet_name).to_dict(orient="records")
+
+    freshman_xls = filesystem(
+        bucket_url=TESTS_BUCKET_URL, file_glob="../custom/freshman_kgs.xlsx"
+    ) | read_excel("freshman_table")
+
+    load_info = dlt.run(
+        freshman_xls.with_name("freshman"),
+        destination="duckdb",
+        dataset_name="freshman_data",
+    )
+    print(load_info)
 
 
 def copy_files_resource(local_folder: str) -> None:
@@ -126,67 +146,6 @@ def copy_files_resource(local_folder: str) -> None:
     print(pipeline.last_trace.last_normalize_info)
 
 
-def stream_and_merge_csv() -> None:
-    """Demonstrates how to scan folder with csv files, load them in chunk and merge on date column with the next load"""
-    pipeline = dlt.pipeline(
-        pipeline_name="standard_filesystem_csv",
-        destination="duckdb",
-        dataset_name="met_data",
-    )
-    # met_data contains 3 columns, where "date" column contain a date on which we want to merge
-    # load all csvs in A801
-    met_files = (
-        filesystem(bucket_url=TESTS_BUCKET_URL, file_glob="met_csv/A801/*.csv")
-        | read_csv()
-    )
-    # tell dlt to merge on date
-    met_files.apply_hints(write_disposition="merge", merge_key="date")
-    # NOTE: we load to met_csv table
-    load_info = pipeline.run(met_files.with_name("met_csv"))
-    print(load_info)
-    print(pipeline.last_trace.last_normalize_info)
-
-    # now let's simulate loading on next day. not only current data appears but also updated record for the previous day are present
-    # all the records for previous day will be replaced with new records
-    met_files = (
-        filesystem(bucket_url=TESTS_BUCKET_URL, file_glob="met_csv/A803/*.csv")
-        | read_csv()
-    )
-    met_files.apply_hints(write_disposition="merge", merge_key="date")
-    load_info = pipeline.run(met_files.with_name("met_csv"))
-
-    # you can also do dlt pipeline standard_filesystem_csv show to confirm that all A801 were replaced with A803 records for overlapping day
-    print(load_info)
-    print(pipeline.last_trace.last_normalize_info)
-
-
-def read_parquet_and_jsonl_chunked() -> None:
-    pipeline = dlt.pipeline(
-        pipeline_name="standard_filesystem",
-        destination="duckdb",
-        dataset_name="teams_data",
-    )
-    # When using the filesystem resource, you can specify a filter to select only the files you
-    # want to load including a glob pattern. If you use a recursive glob pattern, the filenames
-    # will include the path to the file inside the bucket_url.
-
-    # JSONL reading
-    jsonl_reader = filesystem(TESTS_BUCKET_URL, file_glob="**/*.jsonl") | read_jsonl()
-    # PARQUET reading
-    parquet_reader = (
-        filesystem(TESTS_BUCKET_URL, file_glob="**/*.parquet") | read_parquet()
-    )
-    # load both folders together to specified tables
-    load_info = pipeline.run(
-        [
-            jsonl_reader.with_name("jsonl_team_data"),
-            parquet_reader.with_name("parquet_team_data"),
-        ]
-    )
-    print(load_info)
-    print(pipeline.last_trace.last_normalize_info)
-
-
 def read_files_incrementally_mtime() -> None:
     pipeline = dlt.pipeline(
         pipeline_name="standard_filesystem_incremental",
@@ -216,4 +175,5 @@ if __name__ == "__main__":
     copy_files_resource("_storage")
     stream_and_merge_csv()
     read_parquet_and_jsonl_chunked()
+    read_custom_file_type_excel()
     read_files_incrementally_mtime()
