@@ -5,7 +5,13 @@ import dlt
 import pytest
 from dlt.common import pendulum
 
-from sources.filesystem import filesystem, fsspec_from_resource, FileItem, FileItemDict
+from sources.filesystem import (
+    filesystem,
+    readers,
+    fsspec_from_resource,
+    FileItem,
+    FileItemDict,
+)
 from tests.utils import (
     assert_load_info,
     load_table_counts,
@@ -133,12 +139,15 @@ def test_csv_transformers(bucket_url: str) -> None:
 
 
 @pytest.mark.parametrize("bucket_url", TESTS_BUCKET_URLS)
-def test_standard_transformers(bucket_url: str) -> None:
+def test_standard_readers(bucket_url: str) -> None:
     from sources.filesystem_pipeline import read_jsonl, read_parquet
 
-    # extract pipes to read jsonl and parquet
-    jsonl_reader = filesystem(bucket_url, file_glob="**/*.jsonl") | read_jsonl()
-    parquet_reader = filesystem(bucket_url, file_glob="**/*.parquet") | read_parquet()
+    # extract pipes with standard readers
+    jsonl_reader = readers(bucket_url, file_glob="**/*.jsonl").read_jsonl()
+    parquet_reader = readers(bucket_url, file_glob="**/*.parquet").read_parquet()
+    csv_reader = readers(bucket_url, file_glob="**/*.csv").read_csv(
+        float_precision="high"
+    )
 
     # a step that copies files into test storage
     def _copy(item: FileItemDict):
@@ -165,12 +174,18 @@ def test_standard_transformers(bucket_url: str) -> None:
             jsonl_reader.with_name("jsonl_example"),
             parquet_reader.with_name("parquet_example"),
             downloader.with_name("listing"),
+            csv_reader.with_name("csv_example"),
         ]
     )
     assert_load_info(load_info)
     assert load_table_counts(
-        pipeline, "jsonl_example", "parquet_example", "listing"
-    ) == {"jsonl_example": 1034, "parquet_example": 1034, "listing": 10}
+        pipeline, "jsonl_example", "parquet_example", "listing", "csv_example"
+    ) == {
+        "jsonl_example": 1034,
+        "parquet_example": 1034,
+        "listing": 10,
+        "csv_example": 1270,
+    }
     # print(pipeline.last_trace.last_normalize_info)
     # print(pipeline.default_schema.to_pretty_yaml())
 
