@@ -75,7 +75,8 @@ def test_load_content_resources(bucket_url: str, extract_content: bool) -> None:
     # take file from nested dir
     # use map function to assert
     def assert_csv_file(item: FileItem):
-        assert item["size_in_bytes"] == 742
+        # on windows when checking out, git will convert lf into cr+lf so we have more bytes (+ number of lines: 25)
+        assert item["size_in_bytes"] in (742, 767)
         assert item["file_name"] == "met_csv/A801/A881_20230920.csv"
         assert item["file_url"].endswith("/samples/met_csv/A801/A881_20230920.csv")
         assert item["mime_type"] == "text/csv"
