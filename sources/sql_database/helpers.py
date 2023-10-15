@@ -66,10 +66,8 @@ class TableLoader:
             return query
         query = query.order_by(order_by)
         if self.last_value is None:
-            return cast(Select[Any], query)  # TODO: typing in sqlalchemy 2
-        return cast(
-            Select[Any], query.where(filter_op(self.cursor_column, self.last_value))
-        )
+            return query
+        return query.where(filter_op(self.cursor_column, self.last_value))
 
     def load_rows(self) -> Iterator[List[TDataItem]]:
         query = self.make_query()

@@ -78,7 +78,9 @@ def get_data_chunked(
     params: DictStrAny = {"limit": chunk_size}
     if states:
         params.update({"effective_status": states})
-    it: map[DictStrAny] = map(lambda c: c.export_all_data(), method(fields=fields, params=params))  # type: ignore
+    it: map[DictStrAny] = map(
+        lambda c: c.export_all_data(), method(fields=fields, params=params)
+    )
     while True:
         chunk = list(itertools.islice(it, chunk_size))
         if not chunk:

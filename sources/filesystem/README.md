@@ -1,21 +1,32 @@
 ---
 title: Filesystem
-description: dlt source for fsspec filesystems
-keywords: [filesystem, fsspec, s3]
+description: dlt source for fsspec filesystems and file readers
+keywords: [filesystem, fsspec, s3, gcs, azure blob storage]
 ---
 
-# Filesystem Source
+# Readers Source & Filesystem
+Use the `readers` source to easily stream (in chunks) files from s3, gcs, azure buckets or local filesystem. Currently we support following readers
+* **read_csv** (with Pandas)
+* **read_jsonl**
+* **read_parquet** (with pyarrow)
 
-This [standalone resource](https://dlthub.com/docs/general-usage/resource#declare-a-standalone-resource) lists files in s3, gcs and azure buckets and also supports
-local files and other **fsspec** compatible filesystems. For more information about **fsspec**,
-please visit [fsspec documentation](https://filesystem-spec.readthedocs.io/en/latest/index.html).
-**filesystem** represents files uniformly for all buckets and provides convenience methods to open them
+TODO: show example - link to specific demos
+It is extremely easy to add a new file reader! If you have anything neat (PDFs? excel files) - please contribute
+
+
+
+Use **filesystem** [standalone resource](https://dlthub.com/docs/general-usage/resource#declare-a-standalone-resource) to lists files in s3, gcs and azure buckets
+and **create your customized file readers or do anything else with the files**. Internally we use **fsspec**. For more information about **fsspec** please visit [fsspec documentation](https://filesystem-spec.readthedocs.io/en/latest/index.html).
+**filesystem** represents files uniformly for all bucket types and provides convenience methods to open them
 and read the data. Those building blocks let you very quickly create pipelines that:
 * read file content and parse text out of PDFs
-* stream the content of large **csv, jsonl or parquet** files directly from the bucket
+* stream the content of large files files directly from the bucket
 * copy the files locally
 
 Please refer to examples in [sources/filesystem_pipeline.py](../../filesystem_pipeline.py)
+
+**We recommend that you give each resource a [specific name](https://dlthub.com/docs/general-usage/resource#duplicate-and-rename-resources)** before loading with `pipeline.run`. This will make sure that data goes to a table with
+the name you want and that each pipeline [uses a separate state for incremental loading](https://dlthub.com/docs/general-usage/state#read-and-write-pipeline-state-in-a-resource).
 
 ## Initialize the source
 
@@ -26,6 +37,8 @@ dlt init filesystem duckdb
 ```
 
 ## Set filesystem credentials
+
+**skip if you read local files**
 
 1. Open `.dlt/secrets.toml`.
 2. Please read the [corresponding documentation](https://dlthub.com/docs/dlt-ecosystem/destinations/filesystem) on **filesystem** destination which explains the setup of all bucket types.
@@ -50,9 +63,9 @@ dlt init filesystem duckdb
    ```
 
 **Note:** for azure use **adlfs>=2023.9.0** Older version do not handle globs correctly.
-## Usage
+## Filesystem Usage
 
-The filesystem resource will list files in selected bucket using specified glob pattern and return information on each file (`FileInfo` below) in pages of configurable size.
+The **filesystem** resource will list files in selected bucket using specified glob pattern and return information on each file (`FileInfo` below) in pages of configurable size.
 The resource is designed to work with [transform functions](https://dlthub.com/docs/general-usage/resource#filter-transform-and-pivot-data)
 and [transformers](https://dlthub.com/docs/general-usage/resource#process-resources-with-dlttransformer) that should be used to build specialized extract pipelines. Typically you also want to load data into a table with a given name (and not **filesystem** table which is the default). Snippet below illustrates both:
 ```python
@@ -69,9 +82,6 @@ met_files = (
 # load to met_csv table using with_name()
 pipeline.run(met_files.with_name("met_csv"))
 ```
-
-**We recommend that you give each resource a [specific name](https://dlthub.com/docs/general-usage/resource#duplicate-and-rename-resources)** before loading with `pipeline.run`. This will make sure that data goes to a table with
-the name you want and that each pipeline [uses a separate state for incremental loading](https://dlthub.com/docs/general-usage/state#read-and-write-pipeline-state-in-a-resource).
 
 
 `filesystem` resource takes following parameters:
@@ -135,6 +145,7 @@ def read_csv(
                 chunksize=chunksize,
             ):
                 yield df.to_dict(orient="records")
+
 pipeline = dlt.pipeline(
     pipeline_name="standard_filesystem_csv",
     destination="duckdb",

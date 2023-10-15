@@ -1,11 +1,10 @@
 """Helpers for the filesystem resource."""
-from typing import Optional, Type, Union
+from typing import Optional, Type, Union, TYPE_CHECKING, Any
 from fsspec import AbstractFileSystem  # type: ignore
 
 from dlt.common.configuration import resolve_type
-from dlt.common.storages.fsspec_filesystem import MTIME_DISPATCH, FileItem
 
-from dlt.sources import DltResource
+from dlt.sources import DltResource, DltSource
 from dlt.sources.filesystem import fsspec_filesystem
 from dlt.sources.config import configspec, with_config
 from dlt.sources.credentials import (
