@@ -29,6 +29,7 @@ requests-mock = "^1.10.0"
 pandas-stubs = "^2.0.0"
 black = "^23.3.0"
 pypdf2 = "^3.0.1"
+greenlet = "<3.0.0"
 
 [tool.poetry.group.sql_database.dependencies]
 sqlalchemy = ">=1.4"
