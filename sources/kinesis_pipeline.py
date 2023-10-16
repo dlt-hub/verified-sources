@@ -1,22 +1,20 @@
 import dlt
 import pendulum
-from dlt.pipeline.pipeline import Pipeline
-from dlt.common.pipeline import LoadInfo
-import boto3
-import base64
 from dlt.common.configuration.specs import AwsCredentials
+from dlt.common.pipeline import LoadInfo
+from dlt.common.typing import TDataItem
 
 try:
-    from .kinesis import read_kinesis_stream
+    from .kinesis import read_kinesis_stream  # type: ignore
 except ImportError:
     from kinesis import read_kinesis_stream
 
 
-def load_kinesis(pipeline: Pipeline = None) -> LoadInfo:
+def load_kinesis() -> LoadInfo:
     """Use the kinesis source to completely load all streams"""
 
     @dlt.transformer
-    def segment_stream(items):
+    def segment_stream(items: TDataItem) -> TDataItem:
         yield items
 
     pipeline = dlt.pipeline(
@@ -36,12 +34,12 @@ def load_kinesis(pipeline: Pipeline = None) -> LoadInfo:
     )
     if len(info.loads_ids) == 0:
         print("No messages in kinesis")
-    else:
-        print(info)
+    return info
 
 
-def test_kinesis():
+def test_kinesis() -> None:
     import json
+
     pipeline = dlt.pipeline(
         pipeline_name="telemetry_pipeline",
         destination="duckdb",
@@ -61,17 +59,17 @@ def test_kinesis():
     kinesis_client.put_record(
         StreamName=stream_name,
         Data=b"binary_stream data\n",
-        PartitionKey='binary_partition'
+        PartitionKey="binary_partition",
     )
 
     # Some json records
     records = []
     for i in range(5):
-        data = {'key': f'value_{i}'}
+        data = {"key": f"value_{i}"}
         data_str = json.dumps(data).encode()
         record = {
-            'Data': data_str,
-            'PartitionKey': 'json_partition',
+            "Data": data_str,
+            "PartitionKey": "json_partition",
         }
         records.append(record)
 
@@ -81,10 +79,10 @@ def test_kinesis():
     )
 
     @dlt.transformer
-    def segment_stream(items):
+    def segment_stream(items: TDataItem) -> TDataItem:
         yield items
 
-    info = pipeline.run(
+    pipeline.run(
         read_kinesis_stream(
             stream_name,
             last_ts=dlt.sources.incremental(
@@ -93,6 +91,7 @@ def test_kinesis():
         )
         | segment_stream
     )
+
 
 if __name__ == "__main__":
     # Credentials for the sample database.

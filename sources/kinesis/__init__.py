@@ -1,9 +1,11 @@
+"""Kinesis source."""
 import json
-from typing import Optional, Union
+from typing import Iterable, Optional
 
 import dlt
 from dlt.common import pendulum
-from dlt.common.configuration.specs import AwsCredentials, AwsCredentialsWithoutDefaults
+from dlt.common.configuration.specs import AwsCredentials
+from dlt.common.typing import TDataItem
 
 
 @dlt.resource(
@@ -12,14 +14,10 @@ from dlt.common.configuration.specs import AwsCredentials, AwsCredentialsWithout
 )
 def read_kinesis_stream(
     stream_name: Optional[str] = dlt.secrets.value,
-    credentials: Union[
-        AwsCredentials, AwsCredentialsWithoutDefaults
-    ] = dlt.secrets.value,
-    last_ts=dlt.sources.incremental(
-        "_kinesis_ts", initial_value=pendulum.now().subtract(seconds=2)
-    ),
+    credentials: AwsCredentials = dlt.secrets.value,
+    last_ts: Optional[dlt.sources.incremental] = None,  # type: ignore[type-arg]
     chunk_size: int = 1000,
-):
+) -> Iterable[TDataItem]:
     session = credentials._to_botocore_session()
     kinesis_client = session.create_client("kinesis")
 
@@ -32,14 +30,15 @@ def read_kinesis_stream(
     shard_iterators = []
     for shard in shards:
         shard_id = shard["ShardId"]
-        if timestamp := last_ts.last_value:
-            iterator_params = dict(
-                ShardIteratorType="AT_TIMESTAMP", Timestamp=timestamp
-            )
-        else:
+        if last_ts is None or not last_ts.last_value:
             iterator_params = dict(
                 ShardIteratorType="TRIM_HORIZON"
             )  # Fetch all records from the beginning
+        else:
+            iterator_params = dict(
+                ShardIteratorType="AT_TIMESTAMP", Timestamp=last_ts.last_value
+            )
+
         shard_iterator = kinesis_client.get_shard_iterator(
             StreamName=stream_name, ShardId=shard_id, **iterator_params
         )

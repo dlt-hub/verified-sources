@@ -1,9 +1,8 @@
-import os
-from typing import Any, Dict, List
-
 import json
+
 import dlt
 from dlt.common import pendulum
+from dlt.common.configuration.specs import AwsCredentials
 
 from sources.kinesis import read_kinesis_stream
 from tests.utils import assert_load_info, load_table_counts
@@ -18,17 +17,21 @@ def test_new_stream() -> None:
 
     stream_name = "dlt_ci_kinesis_source"
 
+    credentials = dlt.secrets._get_value("sources.kinesis_pipeline.credentials")[0]
+    aws_credentials = AwsCredentials(credentials)
+
+    session = aws_credentials._to_botocore_session()
+    kinesis_client = session.create_client("kinesis")
+
     # Create a kinesis stream and put some records in it
     for i in range(10):
         # create a data payload
-        data = {'key': f'value_{i}'}
+        data = {"key": f"value_{i}"}
         data_str = json.dumps(data)
 
         # put the record to the stream
-        response = kinesis_client.put_record(
-            StreamName=stream_name,
-            Data=data_str,
-            PartitionKey='tests_partition_key'
+        kinesis_client.put_record(
+            StreamName=stream_name, Data=data_str, PartitionKey="tests_partition_key"
         )
 
     @dlt.transformer
