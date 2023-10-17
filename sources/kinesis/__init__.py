@@ -10,15 +10,33 @@ from dlt.common.typing import TDataItem
 
 
 @dlt.resource(
-    primary_key=("_shard_id", "_seq_no"),
+    primary_key=("_kinesis_shard_id", "_kinesis_seq_no"),
     selected=False,
 )
 def read_kinesis_stream(
     stream_name: Optional[str] = dlt.secrets.value,
     credentials: AwsCredentials = dlt.secrets.value,
-    last_ts: Optional[dlt.sources.incremental] = None,  # type: ignore[type-arg]
+    last_ts: Optional[dlt.sources.incremental] = dlt.sources.incremental("_kinesis_ts", initial_value=None),  # type: ignore[type-arg]
     chunk_size: int = 1000,
+    milliseconds_behind_latest: int = 1000,
 ) -> Iterable[TDataItem]:
+    """Reads a kinesis stream.
+    
+    Args:
+        stream_name (Optional[str]): The name of the stream to read from. If not provided, the
+            value of the secret `sources.kinesis_pipeline.stream_name` will be used.
+        credentials (AwsCredentials): The credentials to use to connect to kinesis. If not provided,
+            the value of the secret `sources.kinesis_pipeline.credentials` will be used.
+        last_ts (Optional[dlt.sources.incremental]): The timestamp to start reading from. If not
+            provided, the value of the secret `sources.kinesis_pipeline.last_ts` will be used.
+        chunk_size (int): The number of records to fetch at once. Defaults to 1000.
+        milliseconds_behind_latest (int): The maximum number of milliseconds behind the latest record
+            to fetch. Defaults to 1000.
+
+    Yields:
+            Iterable[TDataItem]: The records fetched from the stream.
+
+    """
     session = credentials._to_botocore_session()
     kinesis_client = session.create_client("kinesis")
 
@@ -32,7 +50,7 @@ def read_kinesis_stream(
     for shard in shards:
         shard_id = shard["ShardId"]
         iterator_params: Dict[str, Any]
-        if last_ts is None or not last_ts.last_value:
+        if last_ts is None or not (last_ts.last_value and last_ts.initial_value):
             iterator_params = dict(
                 ShardIteratorType="TRIM_HORIZON"
             )  # Fetch all records from the beginning
@@ -52,7 +70,8 @@ def read_kinesis_stream(
         shard_iterator = main_shard_iterator
         while True:
             records_response = kinesis_client.get_records(
-                ShardIterator=shard_iterator, Limit=10000
+                ShardIterator=shard_iterator,
+                Limit=chunk_size, #The size of data can be up to 1 MB, it must be controled by the user
             )
             shard_iterator = records_response["NextShardIterator"]
 
@@ -64,19 +83,20 @@ def read_kinesis_stream(
 
                 records.append(
                     {
-                        "_shard_id": shard_id,
-                        "_seq_no": sequence_number,
+                        "_kinesis_shard_id": shard_id,
+                        "_kinesis_seq_no": sequence_number,
                         "_kinesis_ts": timestamp,
                         "_kinesis_partition": partition,
-                        "stream_name": stream_name,
+                        "_kinesis_stream_name": stream_name,
                         "data": content,
                     }
                 )
                 if len(records) >= chunk_size:
                     yield records
                     records = []
-            # If we are 0ms behind the latest record we can break out of the loop
-            if not records_response.get("MillisBehindLatest", 0):
+
+            records_ms_behind_latest = records_response.get("MillisBehindLatest", 0)
+            if records_ms_behind_latest < milliseconds_behind_latest:
                 break
     if records:
         yield records
