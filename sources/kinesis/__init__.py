@@ -21,7 +21,7 @@ def read_kinesis_stream(
     milliseconds_behind_latest: int = 1000,
 ) -> Iterable[TDataItem]:
     """Reads a kinesis stream.
-    
+
     Args:
         stream_name (Optional[str]): The name of the stream to read from. If not provided, the
             value of the secret `sources.kinesis_pipeline.stream_name` will be used.
@@ -71,7 +71,7 @@ def read_kinesis_stream(
         while True:
             records_response = kinesis_client.get_records(
                 ShardIterator=shard_iterator,
-                Limit=chunk_size, #The size of data can be up to 1 MB, it must be controled by the user
+                Limit=chunk_size,  # The size of data can be up to 1 MB, it must be controled by the user
             )
             shard_iterator = records_response["NextShardIterator"]
 
