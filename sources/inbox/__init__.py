@@ -125,7 +125,7 @@ def inbox_source(
 
     @dlt.transformer(
         name="attachments",
-        primary_key="data_hash",
+        primary_key="file_hash",
     )
     def get_attachments(
         items: TDataItems,
