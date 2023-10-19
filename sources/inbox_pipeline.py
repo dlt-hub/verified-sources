@@ -26,17 +26,17 @@ def pdf_to_text(file_items: Sequence[FileItemDict]) -> Iterator[Dict[str, Any]]:
                 yield page_item
 
 
-def imap_read_messages() -> dlt.Pipeline:
+def imap_read_messages(senders: Sequence[str]) -> dlt.Pipeline:
     pipeline = dlt.pipeline(
-        pipeline_name="standard_inbox_message_2",
+        pipeline_name="standard_inbox",
         destination="duckdb",
-        dataset_name="standard_inbox_data",
+        dataset_name="messages_data",
         full_refresh=True,
     )
 
     # get messages resource from the source
     messages = inbox_source(
-        filter_emails=("astra92293@gmail.com", "josue@sehnem.com")
+        filter_emails=senders
     ).messages
     # configure the messages resource to not get bodies of the messages
     messages = messages(include_body=False).with_name("my_inbox")
@@ -47,18 +47,17 @@ def imap_read_messages() -> dlt.Pipeline:
     return pipeline
 
 
-def imap_get_attachments() -> dlt.Pipeline:
+def imap_get_attachments(senders) -> dlt.Pipeline:
     pipeline = dlt.pipeline(
-        pipeline_name="standard_inbox_attachments",
+        pipeline_name="standard_inbox",
         destination="duckdb",
-        dataset_name="standard_inbox_data",
+        dataset_name="attachments_data",
         full_refresh=True,
     )
 
     # get attachment resource from a source, we only want pdfs that we later parse
-    filter_emails = ["josue@sehnem.com"]
     attachments = inbox_source(
-        filter_emails=filter_emails, filter_by_mime_type=["application/pdf"]
+        filter_emails=senders, filter_by_mime_type=["application/pdf"]
     ).attachments
 
     # feed attachments into pdf parser and load text into my_pages table
@@ -69,5 +68,5 @@ def imap_get_attachments() -> dlt.Pipeline:
 
 
 if __name__ == "__main__":
-    imap_read_messages()
-    imap_get_attachments()
+    imap_read_messages(senders=("dlthub@dlthub.com", "google@gmail.com"))
+    imap_get_attachments(senders=("dlthub@dlthub.com", ))
