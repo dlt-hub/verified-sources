@@ -3,7 +3,6 @@ import json
 from typing import Any, Dict, Iterable, Optional
 
 import dlt
-from dlt.common import pendulum
 from dlt.common.configuration.specs import AwsCredentials
 from dlt.common.time import ensure_pendulum_datetime
 from dlt.common.typing import TDataItem
@@ -66,6 +65,40 @@ def read_kinesis_stream(
         shard_iterators.append((shard_id, shard_iterator["ShardIterator"]))
 
     records = []
+    shard_id, shard_iterator = shard_iterators.pop(0)
+    while True:
+        records_response = kinesis_client.get_records(
+            ShardIterator=shard_iterator,
+            Limit=chunk_size,  # The size of data can be up to 1 MB, it must be controled by the user
+        )
+        for record in records_response["Records"]:
+            sequence_number = record["SequenceNumber"]
+            timestamp = record["ApproximateArrivalTimestamp"]
+            partition = record["PartitionKey"]
+            content = record["Data"]
+
+            records.append(
+                {
+                    "_kinesis_shard_id": shard_id,
+                    "_kinesis_seq_no": sequence_number,
+                    "_kinesis_ts": timestamp,
+                    "_kinesis_partition": partition,
+                    "_kinesis_stream_name": stream_name,
+                    "data": content,
+                }
+            )
+            if len(records) >= chunk_size:
+                yield records
+                records = []
+
+        records_ms_behind_latest = records_response.get("MillisBehindLatest", 0)
+        if records_ms_behind_latest < milliseconds_behind_latest:
+            if not shard_iterators:
+                break
+            shard_id, shard_iterator = shard_iterators.pop(0)
+        else:
+            shard_iterator = records_response["NextShardIterator"]
+
     for shard_id, main_shard_iterator in shard_iterators:
         shard_iterator = main_shard_iterator
         while True:
