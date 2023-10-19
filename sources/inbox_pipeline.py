@@ -1,12 +1,12 @@
-from typing import Iterator, Sequence, Dict, Any
-from PyPDF2 import PdfReader
+from typing import Any, Dict, Iterator, Sequence
 
 import dlt
+from PyPDF2 import PdfReader
 
 try:
-    from .inbox import inbox_source, FileItemDict  # type: ignore
+    from .inbox import FileItemDict, inbox_source  # type: ignore
 except ImportError:
-    from inbox import inbox_source, FileItemDict
+    from inbox import FileItemDict, inbox_source
 
 
 @dlt.transformer(primary_key="file_hash", write_disposition="merge")
@@ -35,9 +35,7 @@ def imap_read_messages(senders: Sequence[str]) -> dlt.Pipeline:
     )
 
     # get messages resource from the source
-    messages = inbox_source(
-        filter_emails=senders
-    ).messages
+    messages = inbox_source(filter_emails=senders).messages
     # configure the messages resource to not get bodies of the messages
     messages = messages(include_body=False).with_name("my_inbox")
     # load messages to "my_inbox" table
@@ -69,4 +67,4 @@ def imap_get_attachments(senders: Sequence[str]) -> dlt.Pipeline:
 
 if __name__ == "__main__":
     imap_read_messages(senders=("dlthub@dlthub.com", "google@gmail.com"))
-    imap_get_attachments(senders=("dlthub@dlthub.com", ))
+    imap_get_attachments(senders=("dlthub@dlthub.com",))
