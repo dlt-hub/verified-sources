@@ -99,37 +99,5 @@ def read_kinesis_stream(
         else:
             shard_iterator = records_response["NextShardIterator"]
 
-    for shard_id, main_shard_iterator in shard_iterators:
-        shard_iterator = main_shard_iterator
-        while True:
-            records_response = kinesis_client.get_records(
-                ShardIterator=shard_iterator,
-                Limit=chunk_size,  # The size of data can be up to 1 MB, it must be controled by the user
-            )
-            shard_iterator = records_response["NextShardIterator"]
-
-            for record in records_response["Records"]:
-                sequence_number = record["SequenceNumber"]
-                timestamp = record["ApproximateArrivalTimestamp"]
-                partition = record["PartitionKey"]
-                content = record["Data"]
-
-                records.append(
-                    {
-                        "_kinesis_shard_id": shard_id,
-                        "_kinesis_seq_no": sequence_number,
-                        "_kinesis_ts": timestamp,
-                        "_kinesis_partition": partition,
-                        "_kinesis_stream_name": stream_name,
-                        "data": content,
-                    }
-                )
-                if len(records) >= chunk_size:
-                    yield records
-                    records = []
-
-            records_ms_behind_latest = records_response.get("MillisBehindLatest", 0)
-            if records_ms_behind_latest < milliseconds_behind_latest:
-                break
     if records:
         yield records
