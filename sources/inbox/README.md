@@ -1,133 +1,95 @@
 # Inbox Source
 
+
 This source provides functionalities to collect inbox emails, get the attachment as a [file items](../filesystem/README.md#the-fileitem-file-representation),
 and store all relevant email information in a destination. It utilizes the `imaplib` library to
 interact with the IMAP server, and `dlt` library to handle data processing and transformation.
 
-## Prerequisites
+Sources and resources that can be loaded using this verified source are:
 
-- Python 3.x
-- `dlt` library (you can install it using `pip install dlt`)
-- destination dependencies, e.g. `duckdb` (`pip install duckdb`)
+| Name              | Description                               |
+|-------------------|-------------------------------------------|
+| inbox_source      | Gathers inbox emails and saves attachments locally |
+| uids | Retrieves messages UUIDs from the mailbox |
+| messages | Retrieves emails from the mailbox using given UIDs |
+| attachments | Downloads attachments from emails using given UIDs |
 
-## Installation
+## Initialize the pipeline
 
-Make sure you have Python 3.x installed on your system.
-
-Install the required library by running the following command:
-
-```shell
-pip install dlt[duckdb]
-```
-
-## Initialize the source
-
-Initialize the source with dlt command:
-
-```shell
+```bash
 dlt init inbox duckdb
 ```
 
-## Set email account credentials
+Here, we chose `duckdb` as the destination. Alternatively, you can also choose `redshift`, `bigquery`, or
+any of the other [destinations.](https://dlthub.com/docs/dlt-ecosystem/destinations/)
 
-1. Open `.dlt/secrets.toml`.
-1. Enter the email account secrets:
+## Grab Inbox credentials
+
+To learn about grabbing the Inbox credentials and configuring the verified source, please refer to
+the
+[full documentation here.](https://dlthub.com/docs/dlt-ecosystem/verified-sources/inbox#grab-credentials)
+
+## Add credential
+
+1. Inside the `.dlt` folder, you'll find a file called `secrets.toml`, which is where you can
+   securely store your access tokens and other sensitive information. It's important to handle this
+   file with care and keep it safe. Here's what the file looks like:
+
    ```toml
+   # put your secret values and credentials here
+   # do not share this file and do not push it to github
    [sources.inbox]
-   host = 'imap.example.com'
-   email_account = "example@example.com"
-   password = 'set me up!'
+   host = "Please set me up!" # The host address of the email service provider.
+   email_account = "Please set me up!" # Email account associated with the service.
+   password = "Please set me up!" # # APP Password for the above email account.
    ```
 
-Use [App password](#getting-gmail-app-password) to set the password for a Gmail account.
+1. Replace the host, email and password value to
+   ensure secure access to your Inbox resources.
 
-## Usage
+   > When adding the App Password, remove any spaces. For instance, "abcd efgh ijkl mnop" should be
+   > "abcdefghijklmnop".
 
-1. Ensure that the email account you want to access allows access by less secure apps (or use an
-   [app password](#getting-gmail-app-password)).
-2. Replace the placeholders in `.dlt/secrets.toml` with your IMAP server hostname, email account
-   credentials.
+1. Next, follow the [destination documentation](../../dlt-ecosystem/destinations) instructions to
+   add credentials for your chosen destination, ensuring proper routing of your data to the final
+   destination.
 
+## Run the pipeline
 
-## Functionality
-You access the messages and attachments via `inbox_source` `dlt` source. This source exposes the resources
-as described below. Typically you'll pick one of those (ie. **messages**) and load it into a table with
-a specific name:
-```python
-# get messages resource from the source
-messages = inbox_source(
-    filter_emails=("astra92293@gmail.com", "josue@sehnem.com")
-).messages
-# configure the messages resource to not get bodies of the messages
-messages = messages(include_body=False).with_name("my_inbox")
-# load messages to "my_inbox" table
-load_info = pipeline.run(messages)
-```
-This way you can create several extract pipelines with different combination of filters and processing steps from a single `inbox_source`.
+1. Before running the pipeline, ensure that you have installed all the necessary dependencies by
+   running the command:
 
-### Additional `inbox_source` arguments
-Please refer to `inbox_source()` docstring for options to filter email messages and attachments by sender, date or mime type.
+   ```bash
+   pip install -r requirements.txt
+   ```
 
-### messages resource
+   Prerequisites for fetching messages differ by provider.
 
-This resource fetches the corresponding email messages using their UID. It yields a dictionary containing email
-metadata such as message UID, message ID, sender, subject, date, modification date, content type,
-and email body.
+    - For Gmail:
 
-Please refer to **imap_read_messages()** example pipeline in **inbox_pipeline.py** that loads messages from particulars into
-**duckdb**.
+      `pip install google-api-python-client>=2.86.0`
 
-### attachments resource
+      `pip install google-auth-oauthlib>=1.0.0`
 
-This resource extracts attachments from the email message using their UID. It connects to
-the IMAP server, fetches the email message by its UID, parses body and looks for attachments.
-It yields [file items](../filesystem/README.md#the-fileitem-file-representation) where attachments
-are loaded in the **file_content** field. The original email message is present in **message** filed.
+      `pip install google-auth-httplib2>=0.1.0`
 
-Please refer to **imap_get_attachments()** example pipeline in **inbox_pipeline.py** that get **pdf** attachments
-from emails from particular senders, parsed pdfs and writes content into **duckdb**.
+    - For pdf parsing:
 
-### uids resource
+      `pip install PyPDF2`
 
-This is a dlt resource that connects to the IMAP server, logs in to the email account, and fetches
-email messages from the specified folder ('INBOX' by default). It yields a dictionary containing
-only message UID. You typically do not need to use this resource.
+1. Once the pipeline has finished running, you can verify that everything loaded correctly by using
+   the following command:
 
-## Accessing Gmail Inbox
+   ```bash
+   dlt pipeline <pipeline_name> show
+   ```
 
-To connect to the Gmail server, we need the below information.
+   For example, the `pipeline_name` for the above pipeline example is `standard_inbox`, you may also
+   use any custom name instead.
 
-- SMTP server DNS. Its value will be 'imap.gmail.com' in our case.
-- SMTP server port. The value will be 993. This port is used for Internet message access protocol
-  over TLS/SSL.
+For more information, read the [Walkthrough: Run a pipeline.](../../walkthroughs/run-a-pipeline)
 
-### Set up Gmail with a third-party email client
-
-An app password is a 16-digit passcode that gives a less secure app or device permission to access
-your Google Account. App passwords can only be used with accounts that have 2-Step Verification
-turned on.
-
-Step 1: Create and use App Passwords
-1. Go to your Google Account.
-2. Select Security.
-3. Under "How you sign in to Google", select **2-Step Verification** -> Turn it on.
-4. Select again **2-Step Verification**.
-5. At the bottom of the page, select App passwords.
-6. Enter a name of device that helps you remember where you’ll use the app password.
-7. Select Generate.
-8. To enter the app password, follow the instructions on your screen. The app password is the
-   16-character code that generates on your device.
-9. Select Done.
-
-Read more in
-[this article](https://pythoncircle.com/post/727/accessing-gmail-inbox-using-python-imaplib-module/)
-or
-[Google official documentation.](https://support.google.com/mail/answer/185833#zippy=%2Cwhy-you-may-need-an-app-password)
-
-Step 2: Turn on IMAP in Gmail
-1. In Gmail, in the top right, click Settings -> See all settings.
-2. At the top, click the Forwarding and POP/IMAP tab.
-3. In the IMAP Access section, select Enable IMAP.
-4. At the bottom, click Save Changes.
-
-Read more in [official Google documentation.](https://support.google.com/a/answer/9003945#zippy=%2Cstep-turn-on-imap-in-gmail)
+💡 To explore additional customizations for this pipeline, we recommend referring to the official DLT
+Inbox documentation. It provides comprehensive information and guidance on how to further customize
+and tailor the pipeline to suit your specific needs. You can find the DLT Inbox documentation in
+the [Setup Guide: Inbox.](https://dlthub.com/docs/dlt-ecosystem/verified-sources/inbox)
