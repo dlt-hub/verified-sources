@@ -1,14 +1,18 @@
 # Inbox Source
 
-This source collects inbox emails, retrieves attachments, and stores relevant email data. It uses
-the imaplib library for IMAP interactions and the dlt library for data processing.
+
+This source provides functionalities to collect inbox emails, get the attachment as a [file items](../filesystem/README.md#the-fileitem-file-representation),
+and store all relevant email information in a destination. It utilizes the `imaplib` library to
+interact with the IMAP server, and `dlt` library to handle data processing and transformation.
 
 Sources and resources that can be loaded using this verified source are:
 
-| Name | Description | |-------------------|----------------------------------------------------| |
-inbox_source | Gathers inbox emails and saves attachments locally | | get_messages_uids | Retrieves
-messages UUIDs from the mailbox | | get_messages | Retrieves emails from the mailbox using given
-UIDs | | get_attachments | Downloads attachments from emails using given UIDs |
+| Name              | Description                               |
+|-------------------|-------------------------------------------|
+| inbox_source      | Gathers inbox emails and saves attachments locally |
+| uids | Retrieves messages UUIDs from the mailbox |
+| messages | Retrieves emails from the mailbox using given UIDs |
+| attachments | Downloads attachments from emails using given UIDs |
 
 ## Initialize the pipeline
 
@@ -16,7 +20,7 @@ UIDs | | get_attachments | Downloads attachments from emails using given UIDs |
 dlt init inbox duckdb
 ```
 
-Here, we chose duckdb as the destination. Alternatively, you can also choose redshift, bigquery, or
+Here, we chose `duckdb` as the destination. Alternatively, you can also choose `redshift`, `bigquery`, or
 any of the other [destinations.](https://dlthub.com/docs/dlt-ecosystem/destinations/)
 
 ## Grab Inbox credentials
@@ -40,7 +44,7 @@ the
    password = "Please set me up!" # # APP Password for the above email account.
    ```
 
-1. Replace the host, email and password value with the [previously copied one](#grab-credentials) to
+1. Replace the host, email and password value to
    ensure secure access to your Inbox resources.
 
    > When adding the App Password, remove any spaces. For instance, "abcd efgh ijkl mnop" should be
@@ -59,13 +63,19 @@ the
    pip install -r requirements.txt
    ```
 
-   Prerequisites for fetching messages differ by provider. For Gmail:
+   Prerequisites for fetching messages differ by provider.
 
-   - Python 3.x
-   - dlt library: pip install dlt
-   - PyPDF2: pip install PyPDF2
-   - Specific destinations, e.g., duckdb: pip install duckdb
-   - (Note: Confirm based on your service provider.)
+    - For Gmail:
+
+      `pip install google-api-python-client>=2.86.0`
+
+      `pip install google-auth-oauthlib>=1.0.0`
+
+      `pip install google-auth-httplib2>=0.1.0`
+
+    - For pdf parsing:
+
+      `pip install PyPDF2`
 
 1. Once the pipeline has finished running, you can verify that everything loaded correctly by using
    the following command:
