@@ -47,7 +47,7 @@ def imap_read_messages(senders: Sequence[str]) -> dlt.Pipeline:
     return pipeline
 
 
-def imap_get_attachments(senders) -> dlt.Pipeline:
+def imap_get_attachments(senders: Sequence[str]) -> dlt.Pipeline:
     pipeline = dlt.pipeline(
         pipeline_name="standard_inbox",
         destination="duckdb",
