@@ -2,8 +2,9 @@ from typing import List
 
 import dlt
 from dlt.common import pendulum
-from dlt.pipeline.pipeline import Pipeline
 from dlt.common.pipeline import LoadInfo
+from dlt.common.typing import TDataItems
+from dlt.pipeline.pipeline import Pipeline
 
 # As this pipeline can be run as standalone script or as part of the tests, we need to handle the import differently.
 try:
@@ -34,6 +35,14 @@ def load_select_collection_db(pipeline: Pipeline = None) -> LoadInfo:
     info = pipeline.run(mflix, write_disposition="merge")
 
     return info
+
+
+def load_select_collection_db_items(parallel: bool = False) -> TDataItems:
+    """Get the items from a mongo collection in parallel or not and return a list of records"""
+    comments = mongodb(
+        incremental=dlt.sources.incremental("date"), parallel=parallel
+    ).with_resources("comments")
+    return list(comments)
 
 
 def load_select_collection_db_filtered(pipeline: Pipeline = None) -> LoadInfo:

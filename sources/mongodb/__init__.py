@@ -20,6 +20,7 @@ def mongodb(
     collection_names: Optional[List[str]] = dlt.config.value,
     incremental: Optional[dlt.sources.incremental] = None,  # type: ignore[type-arg]
     write_disposition: Optional[str] = dlt.config.value,
+    parallel: Optional[bool] = dlt.config.value,
 ) -> Iterable[DltResource]:
     """
     A DLT source which loads data from a mongo database using PyMongo.
@@ -32,6 +33,7 @@ def mongodb(
         incremental (Optional[dlt.sources.incremental]): Option to enable incremental loading for the collection.
             E.g., `incremental=dlt.sources.incremental('updated_at', pendulum.parse('2022-01-01T00:00:00Z'))`
         write_disposition (str): Write disposition of the resource.
+        parallel (Optional[bool]): Option to enable parallel loading for the collection. Default is False.
     Returns:
         Iterable[DltResource]: A list of DLT resources for each collection to be loaded.
     """
@@ -56,7 +58,7 @@ def mongodb(
             primary_key="_id",
             write_disposition=write_disposition,
             spec=MongoDbCollectionConfiguration,
-        )(client, collection, incremental=incremental)
+        )(client, collection, incremental=incremental, parallel=parallel)
 
 
 @dlt.common.configuration.with_config(
@@ -68,6 +70,7 @@ def mongodb_collection(
     collection: str = dlt.config.value,
     incremental: Optional[dlt.sources.incremental] = None,  # type: ignore[type-arg]
     write_disposition: Optional[str] = dlt.config.value,
+    parallel: Optional[bool] = dlt.config.value,
 ) -> Any:
     """
     A DLT source which loads a collection from a mongo database using PyMongo.
@@ -79,6 +82,7 @@ def mongodb_collection(
         incremental (Optional[dlt.sources.incremental]): Option to enable incremental loading for the collection.
             E.g., `incremental=dlt.sources.incremental('updated_at', pendulum.parse('2022-01-01T00:00:00Z'))`
         write_disposition (str): Write disposition of the resource.
+        parallel (Optional[bool]): Option to enable parallel loading for the collection. Default is False.
     Returns:
         Iterable[DltResource]: A list of DLT resources for each collection to be loaded.
     """
@@ -96,4 +100,4 @@ def mongodb_collection(
         name=collection_obj.name,
         primary_key="_id",
         write_disposition=write_disposition,
-    )(client, collection_obj, incremental=incremental)
+    )(client, collection_obj, incremental=incremental, parallel=parallel)
