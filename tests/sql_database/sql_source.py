@@ -25,10 +25,12 @@ from dlt.common.pendulum import pendulum, timedelta
 
 
 class SQLAlchemySourceDB:
-    def __init__(self, credentials: ConnectionStringCredentials) -> None:
+    def __init__(
+        self, credentials: ConnectionStringCredentials, schema: str = None
+    ) -> None:
         self.credentials = credentials
         self.database_url = credentials.to_native_representation()
-        self.schema = "my_dlt_source" + uniq_id()
+        self.schema = schema or "my_dlt_source" + uniq_id()
         self.engine = create_engine(self.database_url)
         self.metadata = MetaData(schema=self.schema)
         self.table_infos: Dict[str, TableInfo] = {}
