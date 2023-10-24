@@ -73,7 +73,7 @@ class TableLoader:
         query = self.make_query()
         with self.engine.connect() as conn:
             result = conn.execution_options(yield_per=self.chunk_size).execute(query)
-            for partition in result.partitions():
+            for partition in result.partitions(size=self.chunk_size):
                 yield [dict(row._mapping) for row in partition]
 
 
