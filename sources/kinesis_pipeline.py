@@ -59,14 +59,14 @@ def decode_kinesis_messages() -> None:
         initial_at_timestamp=pendulum.now().subtract(hours=3),
     )
 
-    def _parse_json(item: TDataItem) -> TDataItem:
+    def _maybe_parse_json(item: TDataItem) -> TDataItem:
         try:
             item.update(json.loadb(item["data"]))
         except Exception:
             pass
         return item
 
-    info = pipeline.run(dlt_ci_kinesis_stream.add_map(_parse_json))
+    info = pipeline.run(dlt_ci_kinesis_stream.add_map(_maybe_parse_json))
     print(info)
 
 
