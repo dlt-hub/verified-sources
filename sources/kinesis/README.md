@@ -53,10 +53,10 @@ any of the other [destinations](https://dlthub.com/docs/dlt-ecosystem/destinatio
    [sources.kinesis.credentials]
    aws_access_key_id="AKIA********"
    aws_secret_access_key="K+o5mj********"
-   aws_region="eu-central-1"
+   region_name="eu-central-1"
    ```
 
-   Mind that **aws_region** is mandatory.
+   Mind that **region_name** must be set explicitly (or present in the default credentials on the machine).
 
 3. Optionally, you can configure **stream_name**. Update ".dlt/config.toml":
 

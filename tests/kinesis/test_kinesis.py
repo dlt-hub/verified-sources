@@ -31,11 +31,18 @@ def test_kinesis_read(kinesis_client: Any) -> None:
     # parse incoming messages as json
     kinesis_resource = kinesis_stream(
         KINESIS_STREAM_NAME,
-        parse_json=True,
+        parse_json=False,
         initial_at_timestamp=pendulum.now().subtract(seconds=5),
     )
     # assert resource name
     assert kinesis_resource.name == KINESIS_STREAM_NAME
+
+    def _maybe_parse_json(item: TDataItem) -> TDataItem:
+        try:
+            item.update(json.loadb(item["data"]))
+        except Exception:
+            pass
+        return item
 
     test_id = str(uuid.uuid4())
     kinesis_client.put_record(
@@ -44,7 +51,11 @@ def test_kinesis_read(kinesis_client: Any) -> None:
         PartitionKey="string_partition",
     )
     # look for message with required key
-    messages = [msg for msg in kinesis_resource if msg.get("key", None) == test_id]
+    messages = [
+        msg
+        for msg in kinesis_resource.add_map(_maybe_parse_json)
+        if msg.get("key", None) == test_id
+    ]
     assert len(messages) == 1
     # test message content
     assert "_kinesis" in messages[0]
