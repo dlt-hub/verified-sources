@@ -500,7 +500,7 @@ dev = ["PyTest", "PyTest-Cov", "bump2version (<1)", "sphinx (<2)", "tox"]
 
 [[package]]
 name = "dlt"
-version = "0.3.23a1"
+version = "0.3.23"
 description = "dlt is an open-source python-first scalable data loading library that does not require any backend to run."
 category = "main"
 optional = false
@@ -2970,7 +2970,7 @@ cffi = ["cffi (>=1.11)"]
 [metadata]
 lock-version = "1.1"
 python-versions = "^3.8.1"
-content-hash = "05586d63e8c9744b928d7b206c22860996f8beb27e69ec98f67835848aff957a"
+content-hash = "a7984ce8ed237389d66b79bdaf8da3a37ab4a60499e619bc62d81d0a0bc5995f"
 
 [metadata.files]
 adlfs = [
@@ -3444,8 +3444,8 @@ deprecated = [
     {file = "Deprecated-1.2.14.tar.gz", hash = "sha256:e5323eb936458dccc2582dc6f9c322c852a775a27065ff2b0c4970b9d53d01b3"},
 ]
 dlt = [
-    {file = "dlt-0.3.23a1-py3-none-any.whl", hash = "sha256:e02441e5224a63cf45e79b537f3d0a490180598835569467b4f441940ad15fef"},
-    {file = "dlt-0.3.23a1.tar.gz", hash = "sha256:65e5072f497cd6d790dddd1c84849c401855c9ce2b0b20cf608b3913cdda31bd"},
+    {file = "dlt-0.3.23-py3-none-any.whl", hash = "sha256:94f17d6788679bf7e9c5a718ea44e93eeab09f7fd26c249885b8891ef326f1e8"},
+    {file = "dlt-0.3.23.tar.gz", hash = "sha256:4c3173598369a8834c6ac1d4d5d2de0ce1fbc3be540890cd6f601ee80002c84e"},
 ]
 dnspython = [
     {file = "dnspython-2.4.2-py3-none-any.whl", hash = "sha256:57c6fbaaeaaf39c891292012060beb141791735dbb4004798328fc2c467402d8"},

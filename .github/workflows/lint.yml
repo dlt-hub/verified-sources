@@ -39,7 +39,7 @@ jobs:
         uses: actions/cache@v2
         with:
           path: dlt-pipelines/.venv
-          key: venv-${{ runner.os }}-${{ steps.setup-python.outputs.python-version }}-${{ hashFiles('**/poetry.lock') }}
+          key: venv-${{ runner.os }}-${{ matrix.python-version }}-${{ hashFiles('**/poetry.lock') }}
 
       - name: Install dependencies
         run: make dev
