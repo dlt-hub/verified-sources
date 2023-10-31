@@ -86,6 +86,6 @@ def filesystem(
         yield files_chunk
 
 
-read_csv = copy_sig(_read_csv)(dlt.transformer(_read_csv, standalone=True))
-read_jsonl = copy_sig(_read_jsonl)(dlt.transformer(_read_jsonl, standalone=True))
-read_parquet = copy_sig(_read_parquet)(dlt.transformer(_read_parquet, standalone=True))
+read_csv = dlt.transformer(standalone=True)(_read_csv)
+read_jsonl = dlt.transformer(standalone=True)(_read_jsonl)
+read_parquet = dlt.transformer(standalone=True)(_read_parquet)
