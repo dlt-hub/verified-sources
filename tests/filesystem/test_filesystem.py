@@ -1,5 +1,6 @@
 import os
 from typing import Any, Dict, List
+from urllib.parse import urlparse
 
 import dlt
 import pytest
@@ -53,7 +54,9 @@ def test_load_content_resources(bucket_url: str, extract_content: bool) -> None:
             content = item.read_bytes()
             assert content == b"dlthub content"
             assert item["size_in_bytes"] == 14
-            assert item["file_url"].endswith("/samples/sample.txt")
+            query = urlparse(item["file_url"]).get("query")
+            file_url = item["file_url"].rstrip(query)
+            assert file_url.endswith("/samples/sample.txt")
             assert item["mime_type"] == "text/plain"
             assert isinstance(item["modification_date"], pendulum.DateTime)
 
@@ -78,7 +81,9 @@ def test_load_content_resources(bucket_url: str, extract_content: bool) -> None:
         # on windows when checking out, git will convert lf into cr+lf so we have more bytes (+ number of lines: 25)
         assert item["size_in_bytes"] in (742, 767)
         assert item["file_name"] == "met_csv/A801/A881_20230920.csv"
-        assert item["file_url"].endswith("/samples/met_csv/A801/A881_20230920.csv")
+        query = urlparse(item["file_url"]).get("query")
+        file_url = item["file_url"].rstrip(query)
+        assert file_url.endswith("/samples/met_csv/A801/A881_20230920.csv")
         assert item["mime_type"] == "text/csv"
         # print(item)
         return item
