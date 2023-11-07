@@ -19,7 +19,7 @@ Sources and resources that can be used with this verified source are:
 Utilize `filesystem`, a
 [standalone resource](https://dlthub.com/docs/general-usage/resource#declare-a-standalone-resource),
 to enumerate S3, GCS, and Azure bucket files. Customize file readers or manage files as needed.
-"fsspec" underpins our system; for details, see the
+"fsspec" is used our system; for details, see the
 [fsspec documentation](https://filesystem-spec.readthedocs.io/en/latest/index.html). These building
 blocks enable you to rapidly develop pipelines for:
 
@@ -99,7 +99,7 @@ pipeline, please refer to the
 
 ## Run the pipeline
 
-For running the pipeline and installing dependencies, please refer to the original
+For running the pipeline and installing dependencies, please refer to the official
 [documentation.](https://dlthub.com/docs/dlt-ecosystem/verified-sources/filesystem#run-the-pipeline)
 
 ## Filesystem Integration and Data Extraction Guide
