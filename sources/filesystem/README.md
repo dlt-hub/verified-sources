@@ -1,43 +1,43 @@
-
 # Readers Source & Filesystem
 
-This verified source easily streams files from AWS S3, GCS, Azure, or local filesystem using the reader
-source.
+This verified source easily streams files from AWS S3, GCS, Azure, or local filesystem using the
+reader source.
 
 Sources and resources that can be used with this verified source are:
+
 
 | Name         | Type                 | Description                                                               |
 |--------------|----------------------|---------------------------------------------------------------------------|
 | readers      | Source               | Lists and reads files with resource `filesystem` and readers transformers |
 | filesystem   | Resource             | Lists files in `bucket_url` using `file_glob` pattern                     |
-| read_csv     | Resource-transformer | Reads csv file with **Pandas** chunk by chunk                             |
-| read_jsonl   | Resource-transformer | Reads jsonl file content and extract the data                             |
-| read_parquet | Resource-transformer | Reads parquet file content and extract the data with **Pyarrow**          |
-
-> TODO: show example - link to specific demos It is extremely easy to add a new file reader! If you
-> have anything neat (PDFs? excel files) - please contribute
+| read_csv     | Resource-transformer | Reads CSV file with "Pandas" chunk by chunk                               |
+| read_jsonl   | Resource-transformer | Reads JSONL file content and extracts the data                            |
+| read_parquet | Resource-transformer | Reads Parquet file content and extracts the data with "Pyarrow"           |
 
 ## Using standalone filesystem resources
 
-Use **filesystem**
-[standalone resource](https://dlthub.com/docs/general-usage/resource#declare-a-standalone-resource)
-to lists files in S3, gcs and azure buckets and **create your customized file readers or do anything
-else with the files**. Internally we use **fsspec**. For more information about **fsspec** please
-visit [fsspec documentation](https://filesystem-spec.readthedocs.io/en/latest/index.html).
-**filesystem** represents files uniformly for all bucket types and provides convenience methods to
-open them and read the data. Those building blocks let you very quickly create pipelines that:
+Utilize `filesystem`, a
+[standalone resource](https://dlthub.com/docs/general-usage/resource#declare-a-standalone-resource),
+to enumerate S3, GCS, and Azure bucket files. Customize file readers or manage files as needed.
+"fsspec" underpins our system; for details, see the
+[fsspec documentation](https://filesystem-spec.readthedocs.io/en/latest/index.html). These building
+blocks enable you to rapidly develop pipelines for:
 
-- read file content and parse text out of PDFs
-- stream the content of large files files directly from the bucket
-- copy the files locally
+- Extracting and parsing text from PDFs.
+- Streaming content from large files in a bucket.
+- Locally copying files
 
-Please refer to examples in [sources/filesystem_pipeline.py](../filesystem_pipeline.py) and resources in [filesystem/readers.py.](../filesystem/readers.py)
+For examples, see [sources/filesystem_pipeline.py](../filesystem_pipeline.py) and resources in
+[filesystem/readers.py](../filesystem/readers.py).
 
-**We recommend that you give each resource a
-[specific name](https://dlthub.com/docs/general-usage/resource#duplicate-and-rename-resources)**
-before loading with `pipeline.run`. This will make sure that data goes to a table with the name you
-want and that each pipeline
-[uses a separate state for incremental loading](https://dlthub.com/docs/general-usage/state#read-and-write-pipeline-state-in-a-resource).
+Assign a
+[unique name](https://dlthub.com/docs/general-usage/resource#duplicate-and-rename-resources) to each
+resource prior to executing `pipeline.run`. This ensures data is directed to your desired table
+and maintains distinct states for incremental loads.
+
+> To add a new file reader is straightforward. For demos, see
+> ["filesystem_pipeline.py"](../filesystem_pipeline.py). We welcome contributions for any file types,
+> including PDFs and Excel files.
 
 ## Initialize the source
 
@@ -46,7 +46,7 @@ dlt init filesystem duckdb
 ```
 
 Here, we chose duckdb as the destination. Alternatively, you can also choose redshift, bigquery, or
-any of the other [destinations.](https://dlthub.com/docs/dlt-ecosystem/destinations/)
+any of the other [destinations.](https://dlthub.com/docs/dlt-ecosystem/destinations/)
 
 ## Setup verified source
 
@@ -61,7 +61,7 @@ pipeline, please refer to the
    account authentication:
 
    ```toml
-   [sources.filesystem.credentials] # use [sources.readers.credentials] for the "readers" source
+   [sources.readers.credentials] # use [sources.readers.credentials] for the "readers" source
    # For AWS S3 access:
    aws_access_key_id="Please set me up!"
    aws_secret_access_key="Please set me up!"
@@ -76,9 +76,9 @@ pipeline, please refer to the
    azure_storage_account_key="Please set me up!"
    ```
 
-2. Finally, enter credentials for your chosen destination as per the [docs](../destinations/).
+1. Finally, enter credentials for your chosen destination as per the [docs](../destinations/).
 
-3. You can pass the bucket URL and glob pattern or use `config.toml`. For local filesystems, use
+1. You can pass the bucket URL and glob pattern or use `config.toml`. For local filesystems, use
    `file://` or skip the schema.
 
    ```toml
@@ -95,15 +95,16 @@ pipeline, please refer to the
    bucket_url="s3://my-bucket/csv_files/"
    ```
 
-   :::caution For Azure, use adlfs>=2023.9.0. Older versions mishandle globs. :::
+   > caution For Azure, use adlfs>=2023.9.0. Older versions mishandle globs.
 
 ## Run the pipeline
-For running the pipeline and installing dependencies, please refer to the original [documentation.](https://dlthub.com/docs/dlt-ecosystem/verified-sources/filesystem#run-the-pipeline)
 
+For running the pipeline and installing dependencies, please refer to the original
+[documentation.](https://dlthub.com/docs/dlt-ecosystem/verified-sources/filesystem#run-the-pipeline)
 
 ## Filesystem Integration and Data Extraction Guide
 
-To read more about Filesystem usage, Fileitem representation and File manipulation refer to our
+To read more about filesystem usage, fileitem representation and file manipulation refer to our
 official
 [documentation.](https://dlthub.com/docs/dlt-ecosystem/verified-sources/filesystem#filesystem-integration-and-data-extraction-guide)
 
@@ -159,8 +160,8 @@ print(pipeline.last_trace.last_normalize_info)
 
 ### Incremental loading pipeline
 
-Convert the filesystem resource into an incremental one using primary_key on file_url and
-modification_time in each FileItem. The example below retrieves files modified or created since the
+Convert the filesystem resource into an incremental one using `primary_key` on "file_url" and
+"modification_time" in each FileItem. The example below retrieves files modified or created since the
 last run:
 
 ```python
@@ -195,8 +196,8 @@ Running it twice illustrates that files from the first run are excluded.
 
 ### Cleanup after loading data
 
-Obtain an fsspec client from an extracted filesystem resource to perform operations like deleting
-processed files. Use the fsspec_from_resource method from the filesystem module as shown:
+Obtain an "fsspec" client from an extracted filesystem resource to perform operations like deleting
+processed files. Use the `fsspec_from_resource` method from the filesystem module as shown:
 
 ```python
 from filesystem import filesystem, fsspec_from_resource
