@@ -71,8 +71,6 @@ pipeline, please refer to the
    bucket_url="s3://my-bucket/csv_files/"
    ```
 
-> Caution: For Azure, use adlfs>=2023.9.0. Older versions mishandle globs.
-
 ## Usage
 
 Use `filesystem` as a
