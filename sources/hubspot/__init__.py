@@ -49,7 +49,7 @@ from .settings import (
 THubspotObjectType = Literal["company", "contact", "deal", "ticket", "product", "quote"]
 
 
-@dlt.source(name="hubspot")
+@dlt.source()
 def hubspot(
     api_key: str = dlt.secrets.value, include_history: bool = False
 ) -> Sequence[DltResource]:

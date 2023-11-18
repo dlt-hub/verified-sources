@@ -23,7 +23,7 @@ from dlt.common import pendulum
 from dlt.extract.typing import DataItemWithMeta
 
 
-@dlt.source(name="pipedrive")
+@dlt.source()
 def pipedrive_source(
     pipedrive_api_key: str = dlt.secrets.value,
     since_timestamp: Optional[Union[pendulum.DateTime, str]] = dlt.config.value,

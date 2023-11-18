@@ -54,7 +54,7 @@ from .settings import (
 )
 
 
-@dlt.source(name="facebook_ads")
+@dlt.source()
 def facebook_ads_source(
     account_id: str = dlt.config.value,
     access_token: str = dlt.secrets.value,
@@ -122,7 +122,7 @@ def facebook_ads_source(
     return campaigns, ads, ad_sets, ad_creatives, ads | leads
 
 
-@dlt.source(name="facebook_ads")
+@dlt.source()
 def facebook_insights_source(
     account_id: str = dlt.config.value,
     access_token: str = dlt.secrets.value,

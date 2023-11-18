@@ -20,7 +20,7 @@ from dlt.common.typing import TDataItem
 from .helpers import get_records
 
 
-@dlt.source(name="salesforce")
+@dlt.source()
 def salesforce_source(
     user_name: str = dlt.secrets.value,
     password: str = dlt.secrets.value,

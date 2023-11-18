@@ -28,7 +28,7 @@ Follow these steps:
 """
 
 
-@dlt.source(name="workable")
+@dlt.source()
 def workable_source(
     access_token: str = dlt.secrets.value,
     subdomain: str = dlt.config.value,

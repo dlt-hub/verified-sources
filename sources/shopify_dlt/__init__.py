@@ -17,7 +17,7 @@ from .settings import (
 from .helpers import ShopifyApi, TOrderStatus
 
 
-@dlt.source(name="shopify")
+@dlt.source()
 def shopify_source(
     private_app_password: str = dlt.secrets.value,
     api_version: str = DEFAULT_API_VERSION,

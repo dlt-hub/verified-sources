@@ -15,7 +15,7 @@ from .settings import FOLDER_IDS, STORAGE_FOLDER_PATH
 SCOPE = "https://www.googleapis.com/auth/drive.readonly"
 
 
-@dlt.source(name="google_drive")
+@dlt.source()
 def google_drive_source(
     credentials: Union[
         GcpOAuthCredentials, GcpServiceAccountCredentials
