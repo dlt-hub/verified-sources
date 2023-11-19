@@ -91,7 +91,9 @@ def kinesis_stream(
                     "_kinesis": {
                         "shard_id": shard_id,
                         "seq_no": sequence_number,
-                        "ts": record["ApproximateArrivalTimestamp"],
+                        "ts": ensure_pendulum_datetime(
+                            record["ApproximateArrivalTimestamp"]
+                        ),
                         "partition": record["PartitionKey"],
                         "stream_name": stream_name,
                     },
