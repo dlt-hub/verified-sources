@@ -26,12 +26,11 @@ python
 
 from typing import Any, Dict, List, Literal, Sequence, Iterator
 from urllib.parse import quote
-from itertools import chain
 
 import dlt
 from dlt.common import pendulum
 from dlt.common.typing import TDataItems, TDataItem
-from dlt.extract.source import DltResource
+from dlt.sources import DltResource
 
 from .helpers import (
     fetch_data,

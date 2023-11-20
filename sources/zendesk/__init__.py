@@ -9,7 +9,7 @@ import dlt
 from dlt.common import pendulum
 from dlt.common.time import ensure_pendulum_datetime
 from dlt.common.typing import TDataItem, TDataItems, TAnyDateTime
-from dlt.extract.source import DltResource
+from dlt.sources import DltResource
 
 from .helpers.api_helpers import process_ticket, process_ticket_field
 from .helpers.talk_api import PaginationType, ZendeskAPIClient

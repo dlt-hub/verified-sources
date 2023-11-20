@@ -4,7 +4,7 @@ from typing import Iterable, List, Optional
 
 import dlt
 from dlt.common.typing import DictStrAny, TDataItem
-from dlt.extract.source import DltResource
+from dlt.sources import DltResource
 from dlt.sources.helpers import requests
 
 from .settings import DEFAULT_ENDPOINTS, DEFAULT_PAGE_SIZE

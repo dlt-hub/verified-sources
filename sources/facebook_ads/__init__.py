@@ -12,7 +12,7 @@ from dlt.common import pendulum, logger
 from dlt.common.typing import TDataItems, TDataItem, DictStrAny
 from dlt.common.time import ensure_pendulum_datetime
 from dlt.extract.typing import ItemTransformFunctionWithMeta
-from dlt.extract.source import DltResource
+from dlt.sources import DltResource
 
 from .helpers import (
     get_data_chunked,

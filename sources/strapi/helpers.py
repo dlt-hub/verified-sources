@@ -4,7 +4,6 @@ import math
 from typing import Iterable
 
 from dlt.common.typing import TDataItem
-from dlt.extract.source import DltResource, DltSource
 from dlt.sources.helpers import requests
 
 

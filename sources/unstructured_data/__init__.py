@@ -6,7 +6,7 @@ from typing import Dict
 
 import dlt
 from dlt.common import logger
-from dlt.extract.source import DltResource, TDataItem
+from dlt.sources import DltResource, TDataItem
 
 from .helpers import (
     aprocess_file_to_structured,

@@ -2,8 +2,8 @@
 Basic strapi source
 """
 import dlt
-from typing import List, Sequence, Iterable
-from dlt.extract.source import DltResource
+from typing import List, Iterable
+from dlt.sources import DltResource
 
 from .helpers import get_endpoint
 

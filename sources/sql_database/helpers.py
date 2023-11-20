@@ -13,7 +13,6 @@ import operator
 
 import dlt
 from dlt.sources.credentials import ConnectionStringCredentials
-from dlt.extract.source import DltResource
 from dlt.common.configuration.specs import BaseConfiguration, configspec
 from dlt.common.typing import TDataItem
 from .settings import DEFAULT_CHUNK_SIZE

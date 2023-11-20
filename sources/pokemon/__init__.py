@@ -7,7 +7,7 @@ import typing as t
 from typing import Sequence, Iterable, Dict, Any
 import dlt
 from dlt.common.typing import TDataItem
-from dlt.extract.source import DltResource
+from dlt.sources import DltResource
 from dlt.sources.helpers import requests
 from .settings import BERRY_URL, POKEMON_URL
 

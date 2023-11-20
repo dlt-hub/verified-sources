@@ -4,8 +4,7 @@ import logging
 from typing import Any, Iterable, Optional
 
 import dlt
-from dlt.common.typing import TDataItem, TDataItems
-from dlt.extract.source import DltResource
+from dlt.sources import DltResource, TDataItem, TDataItems
 from pendulum import DateTime
 
 from .workable_client import WorkableClient

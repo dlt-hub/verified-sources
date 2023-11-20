@@ -5,7 +5,7 @@ from typing import Sequence, Union, Iterable
 import dlt
 from dlt.common import logger
 from dlt.sources.credentials import GcpServiceAccountCredentials, GcpOAuthCredentials
-from dlt.extract.source import DltResource
+from dlt.sources import DltResource
 
 from .helpers.data_processing import (
     ParsedRange,

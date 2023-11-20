@@ -4,8 +4,8 @@ from typing import Callable, Iterator, List, Sequence, Dict, Any
 
 import dlt
 from dlt.common import pendulum
-from dlt.common.typing import TDataItem, StrAny
-from dlt.extract.source import DltResource
+from dlt.common.typing import TDataItem
+from dlt.sources import DltResource
 from dlt.sources.helpers import requests
 from .helpers import get_url_with_retry, get_path_with_retry, validate_month_string
 

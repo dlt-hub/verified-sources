@@ -4,7 +4,7 @@ Supports whitelisting of tables or loading of all tables from a specified base.
 from typing import Optional, Iterable, Iterator, List, Dict, Any
 
 import dlt
-from dlt.extract.source import DltResource
+from dlt.sources import DltResource
 from dlt.common.typing import TDataItem
 
 import pyairtable

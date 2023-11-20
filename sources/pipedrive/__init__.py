@@ -18,7 +18,7 @@ from .helpers.pages import get_recent_items_incremental, get_pages
 from .helpers import parse_timestamp, group_deal_flows
 from .typing import TDataPage
 from .settings import ENTITY_MAPPINGS, RECENTS_ENTITIES
-from dlt.extract.source import DltResource
+from dlt.sources import DltResource
 from dlt.common import pendulum
 from dlt.extract.typing import DataItemWithMeta
 

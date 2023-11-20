@@ -5,7 +5,7 @@ from sqlalchemy import MetaData, Table
 from sqlalchemy.engine import Engine
 
 import dlt
-from dlt.extract.source import DltResource
+from dlt.sources import DltResource
 
 
 from dlt.sources.credentials import ConnectionStringCredentials

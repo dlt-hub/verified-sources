@@ -5,7 +5,7 @@ from typing import Any, Dict, Generator, Optional, Tuple, Iterable
 import dlt
 import stripe
 from dlt.common import pendulum
-from dlt.extract.source import DltResource
+from dlt.sources import DltResource
 from dlt.common.typing import TDataItem
 
 from pendulum import DateTime
