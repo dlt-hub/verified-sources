@@ -3,7 +3,7 @@ from typing import Iterator, List, Iterable
 import dlt
 import pendulum
 from dlt.common.typing import DictStrAny, TDataItem
-from dlt.extract.source import DltResource
+from dlt.sources import DltResource
 from .helpers.matomo_client import MatomoAPIClient
 from .helpers.data_processing import (
     get_matomo_date_range,

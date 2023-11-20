@@ -5,7 +5,7 @@ from typing import Any, Dict, Iterable, List, Optional
 
 import dlt
 from dlt.common.typing import TAnyDateTime, TDataItem
-from dlt.extract.source import DltResource
+from dlt.sources import DltResource
 from pendulum import DateTime
 
 from .helpers import SlackAPI, ensure_dt_type

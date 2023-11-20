@@ -7,7 +7,7 @@ from dlt.common import pendulum
 from dlt.sources.helpers import requests
 from requests.auth import HTTPBasicAuth
 from dlt.common.typing import TDataItem
-from dlt.extract.source import DltResource
+from dlt.sources import DltResource
 
 from .settings import API_BASE_URL, DEFAULT_LIMIT
 

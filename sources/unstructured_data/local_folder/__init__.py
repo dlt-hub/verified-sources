@@ -4,7 +4,7 @@ from pathlib import Path
 from typing import Sequence, Union
 
 import dlt
-from dlt.extract.source import TDataItem
+from dlt.sources import TDataItem
 
 
 @dlt.resource(write_disposition="replace", name="local_folder")

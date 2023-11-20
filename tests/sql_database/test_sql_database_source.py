@@ -4,7 +4,7 @@ from typing import List, Optional
 
 import dlt
 from dlt.common.utils import uniq_id
-from dlt.extract.source import DltResource
+from dlt.sources import DltResource
 from dlt.sources.credentials import ConnectionStringCredentials
 
 from sources.sql_database import sql_database, sql_table

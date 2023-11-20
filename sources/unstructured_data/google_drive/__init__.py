@@ -5,7 +5,7 @@ from typing import Any, Sequence, Union
 
 import dlt
 from dlt.common import logger
-from dlt.extract.source import TDataItem, TDataItems
+from dlt.sources import TDataItem, TDataItems
 from dlt.sources.credentials import GcpOAuthCredentials, GcpServiceAccountCredentials
 from googleapiclient.discovery import build  # type: ignore
 

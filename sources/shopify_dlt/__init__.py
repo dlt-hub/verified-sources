@@ -4,7 +4,7 @@ from typing import Any, Dict, Iterator, Iterator, Optional, Iterable
 
 import dlt
 
-from dlt.extract.source import DltResource
+from dlt.sources import DltResource
 from dlt.common.typing import TDataItem, TAnyDateTime
 from dlt.common.time import ensure_pendulum_datetime
 from dlt.common import pendulum

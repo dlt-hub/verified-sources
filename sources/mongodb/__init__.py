@@ -3,7 +3,7 @@
 from typing import Any, Iterable, List, Optional
 
 import dlt
-from dlt.extract.source import DltResource
+from dlt.sources import DltResource
 
 from .helpers import (
     MongoDbCollectionConfiguration,

@@ -7,7 +7,7 @@ import dlt
 from dlt.common.exceptions import MissingDependencyException
 from dlt.common.typing import TDataItem, DictStrAny
 
-from dlt.extract.source import DltResource
+from dlt.sources import DltResource
 from dlt.sources.credentials import GcpOAuthCredentials, GcpServiceAccountCredentials
 
 from .helpers.data_processing import to_dict

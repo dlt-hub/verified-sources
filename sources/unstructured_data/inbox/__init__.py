@@ -6,7 +6,7 @@ from typing import Optional, Sequence
 
 import dlt
 from dlt.common import logger, pendulum
-from dlt.extract.source import DltResource, TDataItem, TDataItems
+from dlt.sources import DltResource, TDataItem, TDataItems
 
 from .helpers import extract_email_info, get_internal_date, get_message_obj
 from .settings import (

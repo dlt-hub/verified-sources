@@ -2,7 +2,8 @@ from typing import Sequence
 
 import dlt
 import pytest
-from dlt.extract.source import DltResource
+
+from dlt.sources import DltResource
 
 from sources.unstructured_data import unstructured_to_structured_resource
 from sources.unstructured_data.google_drive import google_drive_source

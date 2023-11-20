@@ -8,7 +8,8 @@ To get the security token: https://onlinehelp.coveo.com/en/ces/7.0/administrator
 """
 
 import pendulum
-from dlt.extract.source import DltResource, Incremental
+from dlt.sources import DltResource
+from dlt.extract.source import Incremental
 
 from typing import Iterable
 

@@ -5,7 +5,7 @@ from typing import Any, Iterator, List, Sequence, Tuple
 import dlt
 from dlt.common.typing import StrAny, DictStrAny, TDataItems
 from dlt.common.utils import chunks
-from dlt.extract.source import DltResource
+from dlt.sources import DltResource
 from dlt.sources.helpers import requests
 
 from .queries import ISSUES_QUERY, RATE_LIMIT, COMMENT_REACTIONS_QUERY

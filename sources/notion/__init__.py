@@ -3,7 +3,7 @@
 from typing import List, Dict, Optional, Iterator
 
 import dlt
-from dlt.extract.source import DltResource
+from dlt.sources import DltResource
 
 from .helpers.client import NotionClient
 from .helpers.database import NotionDatabase
