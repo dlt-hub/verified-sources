@@ -7,9 +7,8 @@ Salesforce api docs: https://developer.salesforce.com/docs/apis
 To get the security token: https://onlinehelp.coveo.com/en/ces/7.0/administrator/getting_the_security_token_for_your_salesforce_account.htm
 """
 
-import pendulum
 from dlt.sources import DltResource
-from dlt.extract.source import Incremental
+from dlt.sources import incremental
 
 from typing import Iterable
 
@@ -52,7 +51,7 @@ def salesforce_source(
 
     @dlt.resource(write_disposition="merge")
     def opportunity(
-        last_timestamp: Incremental[str] = dlt.sources.incremental(
+        last_timestamp: incremental[str] = dlt.sources.incremental(
             "SystemModstamp", initial_value=None
         )
     ) -> Iterable[TDataItem]:
@@ -62,7 +61,7 @@ def salesforce_source(
 
     @dlt.resource(write_disposition="merge")
     def opportunity_line_item(
-        last_timestamp: Incremental[str] = dlt.sources.incremental(
+        last_timestamp: incremental[str] = dlt.sources.incremental(
             "SystemModstamp", initial_value=None
         )
     ) -> Iterable[TDataItem]:
@@ -72,7 +71,7 @@ def salesforce_source(
 
     @dlt.resource(write_disposition="merge")
     def opportunity_contact_role(
-        last_timestamp: Incremental[str] = dlt.sources.incremental(
+        last_timestamp: incremental[str] = dlt.sources.incremental(
             "SystemModstamp", initial_value=None
         )
     ) -> Iterable[TDataItem]:
@@ -85,7 +84,7 @@ def salesforce_source(
 
     @dlt.resource(write_disposition="merge")
     def account(
-        last_timestamp: Incremental[str] = dlt.sources.incremental(
+        last_timestamp: incremental[str] = dlt.sources.incremental(
             "LastModifiedDate", initial_value=None
         )
     ) -> Iterable[TDataItem]:
@@ -107,7 +106,7 @@ def salesforce_source(
 
     @dlt.resource(write_disposition="merge")
     def campaign_member(
-        last_timestamp: Incremental[str] = dlt.sources.incremental(
+        last_timestamp: incremental[str] = dlt.sources.incremental(
             "SystemModstamp", initial_value=None
         )
     ) -> Iterable[TDataItem]:
@@ -129,7 +128,7 @@ def salesforce_source(
 
     @dlt.resource(write_disposition="merge")
     def task(
-        last_timestamp: Incremental[str] = dlt.sources.incremental(
+        last_timestamp: incremental[str] = dlt.sources.incremental(
             "SystemModstamp", initial_value=None
         )
     ) -> Iterable[TDataItem]:
@@ -137,7 +136,7 @@ def salesforce_source(
 
     @dlt.resource(write_disposition="merge")
     def event(
-        last_timestamp: Incremental[str] = dlt.sources.incremental(
+        last_timestamp: incremental[str] = dlt.sources.incremental(
             "SystemModstamp", initial_value=None
         )
     ) -> Iterable[TDataItem]:
