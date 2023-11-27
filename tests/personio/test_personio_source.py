@@ -48,10 +48,10 @@ def test_incremental_endpoints(destination_name: str) -> None:
     )
     info = pipeline.run(personio_source().with_resources("employees"))
     assert_load_info(info)
-    # Personio will bring again the last record, so we expect 1 more load package
-    assert_load_info(info, expected_load_packages=1)
+    info = pipeline.run(personio_source().with_resources("employees"))
+    assert_load_info(info, expected_load_packages=0)
 
     info = pipeline.run(personio_source().with_resources("attendances"))
     assert_load_info(info)
-    # Personio will bring again the last record, so we expect 1 more load package
-    assert_load_info(info, expected_load_packages=1)
+    info = pipeline.run(personio_source().with_resources("attendances"))
+    assert_load_info(info, expected_load_packages=0)

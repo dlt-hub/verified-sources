@@ -39,7 +39,7 @@ class PersonioAPI:
     def get_pages(
         self,
         resource: str,
-        params: Dict[str, Any] = {},
+        params: Dict[str, Any] = None,
         page_size: int = 200,
     ) -> Iterable[TDataItems]:
         """Get all pages from Personio using requests.
@@ -52,6 +52,7 @@ class PersonioAPI:
         Yields:
             List of data items from the page
         """
+        params = params or {}
         headers = {"Authorization": f"Bearer {self.access_token}"}
         params.update({"limit": page_size, "offset": 0})
         url = urljoin(self.base_url, resource)
