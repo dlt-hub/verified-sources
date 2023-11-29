@@ -22,10 +22,15 @@ def _get_auth_header(access_token: str) -> StrAny:
 #
 # Rest API helpers
 #
-def get_rest_pages(access_token: str, query: str) -> Iterator[List[StrAny]]:
-    url = REST_API_BASE_URL + query
-    while True:
+def _get_rest_pages(access_token: str, query: str) -> Iterator[List[StrAny]]:
+    def _request(url: str) -> requests.Response:
         r = requests.get(url, headers=_get_auth_header(access_token))
+        print(f"got page {url}, requests left: " + r.headers["x-ratelimit-remaining"])
+        return r
+
+    url = "https://api.github.com" + query
+    while True:
+        r: requests.Response = _request(url)
         page_items = r.json()
         if len(page_items) == 0:
             break
@@ -38,13 +43,14 @@ def get_rest_pages(access_token: str, query: str) -> Iterator[List[StrAny]]:
 #
 # GraphQL API helpers
 #
-def get_reactions_data(
+def _get_reactions_data(
     node_type: str,
     owner: str,
     name: str,
     access_token: str,
     items_per_page: int,
     max_items: int,
+    max_item_age_seconds: float = None,
 ) -> Iterator[Iterator[StrAny]]:
     variables = {
         "owner": owner,
@@ -104,11 +110,15 @@ def _extract_nested_nodes(item: DictStrAny) -> DictStrAny:
 def _run_graphql_query(
     access_token: str, query: str, variables: DictStrAny
 ) -> Tuple[StrAny, StrAny]:
-    data = requests.post(
-        GRAPHQL_API_BASE_URL,
-        json={"query": query, "variables": variables},
-        headers=_get_auth_header(access_token),
-    ).json()
+    def _request() -> requests.Response:
+        r = requests.post(
+            "https://api.github.com/graphql",
+            json={"query": query, "variables": variables},
+            headers=_get_auth_header(access_token),
+        )
+        return r
+
+    data = _request().json()
     if "errors" in data:
         raise ValueError(data)
     data = data["data"]
