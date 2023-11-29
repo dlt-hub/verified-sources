@@ -11,6 +11,7 @@ from dlt.sources.helpers import requests
 from .queries import ISSUES_QUERY, RATE_LIMIT, COMMENT_REACTIONS_QUERY
 from .helpers import _get_rest_pages, _get_reactions_data
 
+
 @dlt.source
 def github_reactions(
     owner: str,
