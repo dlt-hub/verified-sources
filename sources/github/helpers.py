@@ -22,28 +22,30 @@ def _get_auth_header(access_token: str) -> StrAny:
 #
 # Rest API helpers
 #
-def _get_rest_pages(access_token: str, query: str) -> Iterator[List[StrAny]]:
-    def _request(url: str) -> requests.Response:
-        r = requests.get(url, headers=_get_auth_header(access_token))
-        print(f"got page {url}, requests left: " + r.headers["x-ratelimit-remaining"])
+def get_rest_pages(access_token: str, query: str) -> Iterator[List[StrAny]]:
+    def _request(page_url: str) -> requests.Response:
+        r = requests.get(page_url, headers=_get_auth_header(access_token))
+        print(
+            f"got page {page_url}, requests left: " + r.headers["x-ratelimit-remaining"]
+        )
         return r
 
-    url = "https://api.github.com" + query
+    next_page_url = "https://api.github.com" + query
     while True:
-        r: requests.Response = _request(url)
+        r: requests.Response = _request(next_page_url)
         page_items = r.json()
         if len(page_items) == 0:
             break
         yield page_items
         if "next" not in r.links:
             break
-        url = r.links["next"]["url"]
+        next_page_url = r.links["next"]["url"]
 
 
 #
 # GraphQL API helpers
 #
-def _get_reactions_data(
+def get_reactions_data(
     node_type: str,
     owner: str,
     name: str,
@@ -112,7 +114,7 @@ def _run_graphql_query(
 ) -> Tuple[StrAny, StrAny]:
     def _request() -> requests.Response:
         r = requests.post(
-            "https://api.github.com/graphql",
+            GRAPHQL_API_BASE_URL,
             json={"query": query, "variables": variables},
             headers=_get_auth_header(access_token),
         )

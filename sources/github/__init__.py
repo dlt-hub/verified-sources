@@ -9,7 +9,7 @@ from dlt.sources import DltResource
 from dlt.sources.helpers import requests
 
 from .queries import ISSUES_QUERY, RATE_LIMIT, COMMENT_REACTIONS_QUERY
-from .helpers import _get_rest_pages, _get_reactions_data
+from .helpers import get_rest_pages, get_reactions_data
 
 
 @dlt.source
@@ -42,7 +42,7 @@ def github_reactions(
     """
     return (
         dlt.resource(
-            _get_reactions_data(
+            get_reactions_data(
                 "issues",
                 owner,
                 name,
@@ -55,7 +55,7 @@ def github_reactions(
             write_disposition="replace",
         ),
         dlt.resource(
-            _get_reactions_data(
+            get_reactions_data(
                 "pullRequests",
                 owner,
                 name,
@@ -100,7 +100,7 @@ def github_repo_events(owner: str, name: str, access_token: str = None) -> DltRe
             urllib.parse.quote(name),
         )
 
-        for page in _get_rest_pages(access_token, repos_path + "?per_page=100"):
+        for page in get_rest_pages(access_token, repos_path + "?per_page=100"):
             yield page
 
             # stop requesting pages if the last element was already older than initial value
