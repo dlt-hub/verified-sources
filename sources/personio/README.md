@@ -28,13 +28,13 @@ dlt init personio duckdb
 Here, we chose duckdb as the destination. Alternatively, you can also choose redshift, bigquery, or
 any of the other [destinations](https://dlthub.com/docs/dlt-ecosystem/destinations/).
 
-## Grab credentials
+## Grab Personio credentials
 
 To learn about grabbing the Personio credentials and configuring the verified source, please refer
 to the
 [full documentation here.](https://dlthub.com/docs/dlt-ecosystem/verified-sources/personio#grab-credentials)
 
-## Add Personio credential
+## Add credential
 
 1. Inside the `.dlt` folder, you'll find a file called `secrets.toml`, which is where you can
    securely store your access tokens and other sensitive information. It's important to handle this
