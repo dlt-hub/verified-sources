@@ -147,4 +147,159 @@ def personio_source(
         for page in pages:
             yield [convert_item(item) for item in page]
 
-    return (employees, absences, attendances)
+    @dlt.resource(primary_key="id", write_disposition="replace")
+    def projects(items_per_page: int = items_per_page) -> Iterable[TDataItem]:
+        """
+        The resource for projects, supports pagination.
+
+        Args:
+            items_per_page: The max number of items to fetch per page. Defaults to 200.
+
+        Returns:
+            Iterable: A generator of projects.
+        """
+
+        pages = client.get_pages(
+            "company/attendances/projects", page_size=items_per_page
+        )
+
+        def convert_item(item: TDataItem) -> TDataItem:
+            """Converts an attendance item."""
+            output = dict(id=item["id"], **item.get("attributes"))
+            output["created_at"] = ensure_pendulum_datetime(output["created_at"])
+            output["updated_at"] = ensure_pendulum_datetime(output["updated_at"])
+            return output
+
+        for page in pages:
+            yield [convert_item(item) for item in page]
+
+    @dlt.resource(primary_key="id", write_disposition="replace")
+    def document_categories(
+        items_per_page: int = items_per_page,
+    ) -> Iterable[TDataItem]:
+        """
+        The resource for document_categories, supports pagination.
+
+        Args:
+            items_per_page: The max number of items to fetch per page. Defaults to 200.
+
+        Returns:
+            Iterable: A generator of document_categories.
+        """
+
+        pages = client.get_pages(
+            "company/document-categories", page_size=items_per_page
+        )
+
+        def convert_item(item: TDataItem) -> TDataItem:
+            """Converts an document_categories item."""
+            output = dict(id=item["id"], **item.get("attributes"))
+            return output
+
+        for page in pages:
+            yield [convert_item(item) for item in page]
+
+    @dlt.resource(primary_key="id", write_disposition="replace")
+    def custom_reports_list(
+        items_per_page: int = items_per_page,
+    ) -> Iterable[TDataItem]:
+        """
+        The resource for document_categories, supports pagination.
+
+        Args:
+            items_per_page: The max number of items to fetch per page. Defaults to 200.
+
+        Returns:
+            Iterable: A generator of document_categories.
+        """
+
+        params = {"status": "up_to_date"}
+        pages = client.get_pages(
+            "company/custom-reports/reports", params=params, page_size=items_per_page
+        )
+
+        for page in pages:
+            yield [item.get("attributes", {}) for item in page]
+
+    @dlt.transformer(
+        data_from=employees,
+        write_disposition="merge",
+        primary_key=["employee_id", "id"],
+    )
+    @dlt.defer
+    def employees_absences_balance(
+        employees: TDataItem, items_per_page: int = items_per_page
+    ) -> Iterable[TDataItem]:
+        """
+        The transformer for employees_absences_balance, supports pagination.
+
+        Args:
+            employee: The employee data.
+            items_per_page: The max number of items to fetch per page. Defaults to 200.
+
+        Returns:
+            Iterable: A generator of employees_absences_balance for each employee.
+        """
+        for employee in employees:
+            employee_id = employee["id"]
+            pages = client.get_pages(
+                f"company/employees/{employee_id}/absences/balance",
+                page_size=items_per_page,
+            )
+
+            for page in pages:
+                yield [dict(employee_id=employee_id, **i) for i in page]
+
+    @dlt.transformer(
+        data_from=custom_reports_list,
+        write_disposition="merge",
+        primary_key=["report_id", "item_id"],
+    )
+    @dlt.defer
+    def custom_reports(
+        custom_reports: TDataItem, items_per_page: int = items_per_page
+    ) -> Iterable[TDataItem]:
+        """
+        The transformer for custom_reports, supports pagination.
+
+        Args:
+            custom_reports: The custom_report data.
+            items_per_page: The max number of items to fetch per page. Defaults to 200.
+
+        Returns:
+            Iterable: A generator of employees_absences_balance for each employee.
+        """
+
+        def convert_item(item: TDataItem, report_id: str) -> TDataItem:
+            """Converts an employee item."""
+            attributes = item.pop("attributes")
+            output = dict(report_id=report_id, item_id=list(item.values())[0])
+            for value in attributes:
+                name = value["attribute_id"]
+                if value["data_type"] == "date" and value["value"]:
+                    output[name] = ensure_pendulum_datetime(value["value"])
+                else:
+                    output[name] = value["value"]
+            return output
+
+        for custom_report in custom_reports:
+            report_id = custom_report["id"]
+            pages = client.get_pages(
+                f"company/custom-reports/reports/{report_id}", page_size=items_per_page
+            )
+
+            for page in pages:
+                for report in page:
+                    report_items = report.get("attributes", {}).get("items", [])
+                    yield [convert_item(item, report_id) for item in report_items]
+
+    return (
+        employees,
+        absences,
+        attendances,
+        projects,
+        document_categories,
+        employees_absences_balance,
+        custom_reports_list,
+        custom_reports,
+    )

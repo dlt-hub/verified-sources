@@ -22,5 +22,15 @@ def load_all_resources(resources: List[str]) -> None:
 
 if __name__ == "__main__":
     # Add your desired resources to the list.
-    resources = ["employees", "absences", "attendances"]
+
+    resources = [
+        "employees",
+        "absences",
+        "attendances",
+        "projects",
+        "document_categories",
+        "employees_absences_balance",
+        "custom_reports_list",
+        "custom_reports",
+    ]
     load_all_resources(resources)
