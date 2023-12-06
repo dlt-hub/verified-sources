@@ -1,23 +1,24 @@
----
-title: Personio
-description: dlt source for Personio API
-keywords: [personio api, personio source, personio]
----
-
-
 # Personio
 
-[Personio](https://personio.de/) is a human resources management software that helps businesses streamline HR
-processes, including recruitment, employee data management, and payroll, in one platform.
+[Personio](https://personio.de/) is a human resources management software that helps businesses 
+streamline HRprocesses, including recruitment, employee data management, and payroll, in one 
+platform.
 
 Resources that can be loaded using this verified source are:
 
 | Name        | Description                                                                              |
 |-------------|------------------------------------------------------------------------------------------|
-| employees   | Retrieves company employees details. (Employees list, absense_entitlement, cost_centers) |
+| employees   | Retrieves company employees details. (employees_list, absense_entitlement, cost_centers) |
 | absences    | Retrieves list of various types of employee absences                                     |
 | attendances | Retrieves attendance records for each employee                                           |
 
+The `employees` endpoint includes the following details:
+
+| Name                | Description                                                                                 |
+|---------------------|---------------------------------------------------------------------------------------------|
+| employees_list      | A directory of all employees with their details like names, titles, and contact information |
+| absence_entitlement | Records of each employee's leave rights, including vacation and sick days                   |
+| cost_centers        | Organizational units for tracking and allocating employee-related costs                     |
 
 ## Initialize the pipeline
 
@@ -25,13 +26,12 @@ Resources that can be loaded using this verified source are:
 dlt init personio duckdb
 ```
 
-Here, we chose duckdb as the destination. Alternatively, you can also choose redshift, bigquery, or
-any of the other [destinations](https://dlthub.com/docs/dlt-ecosystem/destinations/).
+Here, we chose `duckdb` as the destination. Alternatively, you can also choose `redshift`,
+`bigquery`, or any of the other [destinations](https://dlthub.com/docs/dlt-ecosystem/destinations/).
 
-## Grab Personio credentials
+## Setup verified source
 
-To learn about grabbing the Personio credentials and configuring the verified source, please refer
-to the
+To grab Personio credentials and configure the verified source, please refer to the
 [full documentation here.](https://dlthub.com/docs/dlt-ecosystem/verified-sources/personio#grab-credentials)
 
 ## Add credential
@@ -48,9 +48,8 @@ to the
    client_secret = "papi-*****" # please set me up!
    ```
 
-1. Replace the value of `client_id` and `client_secret` with the one that
-   [you copied above](#grab-credentials). This will ensure that your data-verified source can access
-   your Personio API resources securely.
+1. Replace the value of `client_id` and `client_secret`. This will ensure that you can access
+   Personio API securely.
 
 1. Next, follow the instructions in [Destinations](../destinations/duckdb) to add credentials for
    your chosen destination. This will ensure that your data is properly routed to its final
@@ -67,17 +66,17 @@ to the
 1. Now the pipeline can be run by using the command:
 
    ```bash
-   python3 personio_pipeline.py
+   python personio_pipeline.py
    ```
 
 1. To make sure that everything is loaded as expected, use the command:
 
    ```bash
-   dlt pipeline personio_pipeline show
+   dlt pipeline <pipeline_name> show
    ```
 
-   For example, the pipeline_name for the above pipeline example is `personio`, you may also use any
-   custom name instead.
+   For example, the `pipeline_name` for the above pipeline example is `personio`, you may also use
+   any custom name instead.
 
 💡 To explore additional customizations for this pipeline, we recommend referring to the official
 `dlt` [Personio](https://dlthub.com/docs/dlt-ecosystem/verified-sources/personio) documentation. It
