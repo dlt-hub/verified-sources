@@ -1,15 +1,11 @@
 """Source that load github issues, pull requests and reactions for a specific repository via customizable graphql query. Loads events incrementally."""
 import urllib.parse
-from typing import Any, Iterator, List, Sequence, Tuple
+from typing import Iterator, Sequence
 
 import dlt
-from dlt.common.typing import StrAny, DictStrAny, TDataItems
-from dlt.common.utils import chunks
+from dlt.common.typing import TDataItems
 from dlt.sources import DltResource
-from dlt.sources.helpers import requests
-
-from .queries import ISSUES_QUERY, RATE_LIMIT, COMMENT_REACTIONS_QUERY
-from .helpers import get_rest_pages, get_reactions_data
+from .helpers import get_reactions_data, get_rest_pages
 
 
 @dlt.source
@@ -95,7 +91,7 @@ def github_repo_events(owner: str, name: str, access_token: str = None) -> DltRe
             "created_at", initial_value="1970-01-01T00:00:00Z", last_value_func=max
         )
     ) -> Iterator[TDataItems]:
-        repos_path = "/repos/%s/%s/events" % (
+        repos_path = "/repos/{}/{}/events".format(
             urllib.parse.quote(owner),
             urllib.parse.quote(name),
         )

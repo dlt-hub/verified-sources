@@ -1,11 +1,11 @@
 """Github source helpers"""
 
-from .queries import ISSUES_QUERY, RATE_LIMIT, COMMENT_REACTIONS_QUERY
-from typing import Any, Iterator, List, Sequence, Tuple
-from dlt.common.typing import StrAny, DictStrAny, TDataItems
-from dlt.sources.helpers import requests
+from typing import Iterator, List, Tuple
+from dlt.common.typing import DictStrAny, StrAny
 from dlt.common.utils import chunks
-from .settings import REST_API_BASE_URL, GRAPHQL_API_BASE_URL
+from dlt.sources.helpers import requests
+from .queries import COMMENT_REACTIONS_QUERY, ISSUES_QUERY, RATE_LIMIT
+from .settings import GRAPHQL_API_BASE_URL
 
 
 #
