@@ -6,12 +6,11 @@ platform.
 
 Resources that can be loaded using this verified source are:
 
-| Name        | Description                                                                              |
-|-------------|------------------------------------------------------------------------------------------|
-| employees   | Retrieves company employees details. (employees_list, absense_entitlement, cost_centers) |
-| absences    | Retrieves list of various types of employee absences                                     |
-| attendances | Retrieves attendance records for each employee                                           |
-
+| Name        | Description                                          |
+|-------------|------------------------------------------------------|
+| employees   | Retrieves company employees details                  |
+| absences    | Retrieves list of various types of employee absences |
+| attendances | Retrieves attendance records for each employee       |
 ## Initialize the pipeline
 
 ```bash
