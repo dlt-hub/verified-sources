@@ -5,7 +5,7 @@ from dlt.common.typing import DictStrAny, StrAny
 from dlt.common.utils import chunks
 from dlt.sources.helpers import requests
 from .queries import COMMENT_REACTIONS_QUERY, ISSUES_QUERY, RATE_LIMIT
-from .settings import GRAPHQL_API_BASE_URL
+from .settings import GRAPHQL_API_BASE_URL, REST_API_BASE_URL
 
 
 #
@@ -30,7 +30,7 @@ def get_rest_pages(access_token: str, query: str) -> Iterator[List[StrAny]]:
         )
         return r
 
-    next_page_url = "https://api.github.com" + query
+    next_page_url = REST_API_BASE_URL + query
     while True:
         r: requests.Response = _request(next_page_url)
         page_items = r.json()
