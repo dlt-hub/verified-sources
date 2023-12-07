@@ -173,8 +173,8 @@ def parsed_mapping(
 @dlt.resource(primary_key="id", write_disposition="merge")
 def leads(
     pipedrive_api_key: str = dlt.secrets.value,
-    update_time: Optional[dlt.sources.incremental[str]] = dlt.sources.incremental(
-        "update_time", "1970-01-01 00:00:00"
+    update_time: dlt.sources.incremental[str] = dlt.sources.incremental(
+        "update_time", initial_value=None,
     ),
 ) -> Iterator[TDataPage]:
     """Resource to incrementally load pipedrive leads by update_time"""
