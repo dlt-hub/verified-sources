@@ -12,14 +12,6 @@ Resources that can be loaded using this verified source are:
 | absences    | Retrieves list of various types of employee absences                                     |
 | attendances | Retrieves attendance records for each employee                                           |
 
-The `employees` endpoint includes the following details:
-
-| Name                | Description                                                                                 |
-|---------------------|---------------------------------------------------------------------------------------------|
-| employees_list      | A directory of all employees with their details like names, titles, and contact information |
-| absence_entitlement | Records of each employee's leave rights, including vacation and sick days                   |
-| cost_centers        | Organizational units for tracking and allocating employee-related costs                     |
-
 ## Initialize the pipeline
 
 ```bash
