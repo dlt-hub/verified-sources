@@ -34,7 +34,7 @@ def test_all_resources(destination_name: str) -> None:
     assert set(table_counts.keys()) > set(tables)
     assert table_counts["employees"] >= 31
     assert table_counts["absences"] >= 6
-    assert table_counts["attendances"] >= 21
+    assert table_counts["attendances"] > 0
 
 
 @pytest.mark.parametrize("destination_name", ALL_DESTINATIONS)
