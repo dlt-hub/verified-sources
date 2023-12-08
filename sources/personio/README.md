@@ -1,7 +1,7 @@
 # Personio
 
 [Personio](https://personio.de/) is a human resources management software that helps businesses 
-streamline HRprocesses, including recruitment, employee data management, and payroll, in one 
+streamline HR processes, including recruitment, employee data management, and payroll, in one 
 platform.
 
 Resources that can be loaded using this verified source are:
