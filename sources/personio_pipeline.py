@@ -20,7 +20,7 @@ def load_resources(resources: List[str]) -> None:
     print(load_info)
 
 
-def load_all_resources():
+def load_all_resources() -> None:
     """Execute a pipeline that will load all available Personio resources.
     """
 
