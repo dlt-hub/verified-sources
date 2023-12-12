@@ -1,8 +1,7 @@
 """Personio source helpers"""
-from typing import Any, Iterable, Optional
+from typing import Any, Iterable
 from urllib.parse import urljoin
 
-from dlt.common.time import ensure_pendulum_datetime
 from dlt.common.typing import Dict, TDataItems
 from dlt.sources.helpers import requests
 
@@ -41,6 +40,8 @@ class PersonioAPI:
         resource: str,
         params: Dict[str, Any] = None,
         page_size: int = 200,
+        start_offset: int = 0,
+        offset_by_page: bool = False,
     ) -> Iterable[TDataItems]:
         """Get all pages from Personio using requests.
 
@@ -54,20 +55,35 @@ class PersonioAPI:
         """
         params = params or {}
         headers = {"Authorization": f"Bearer {self.access_token}"}
-        params.update({"limit": page_size, "offset": 0})
+        params.update(
+            {"limit": page_size, "offset": start_offset, "page": start_offset}
+        )
         url = urljoin(self.base_url, resource)
+        starts_from_zero = False
         while True:
-            response = requests.request("GET", url, headers=headers, params=params)
+            response = requests.get(url, headers=headers, params=params)
             json_response = response.json()
-            # Get item list from the page
+            # Get an item list from the page
             yield json_response["data"]
+
             metadata = json_response.get("metadata")
             if not metadata:
                 break
 
-            current_page = metadata.get("current_page")
             total_pages = metadata.get("total_pages")
+            current_page = metadata.get("current_page")
+            if current_page == 0:
+                starts_from_zero = True
 
-            if current_page >= total_pages or not json_response["data"]:
+            if (
+                current_page >= (total_pages - int(starts_from_zero))
+                or not json_response["data"]
+            ):
                 break
-            params["offset"] += page_size
+
+            if offset_by_page:
+                params["offset"] += 1
+                params["page"] += 1
+            else:
+                params["offset"] += page_size
+                params["page"] += 1

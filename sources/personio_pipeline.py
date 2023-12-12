@@ -25,6 +25,7 @@ if __name__ == "__main__":
 
     resources = [
         "employees",
+        "absence_types",
         "absences",
         "attendances",
         "projects",

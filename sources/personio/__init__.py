@@ -81,9 +81,9 @@ def personio_source(
             yield [convert_item(item) for item in page]
 
     @dlt.resource(primary_key="id", write_disposition="replace")
-    def absences(items_per_page: int = items_per_page) -> Iterable[TDataItem]:
+    def absence_types(items_per_page: int = items_per_page) -> Iterable[TDataItem]:
         """
-        The resource for absences, supports pagination.
+        The resource for absence types (time-off-types), supports pagination.
 
         Args:
             items_per_page: The max number of items to fetch per page. Defaults to 200.
@@ -96,6 +96,50 @@ def personio_source(
 
         for page in pages:
             yield [item.get("attributes", {}) for item in page]
+
+    @dlt.resource(primary_key="id", write_disposition="merge")
+    def absences(
+        updated_at: dlt.sources.incremental[
+            pendulum.DateTime
+        ] = dlt.sources.incremental(
+            "updated_at", initial_value=None, allow_external_schedulers=True
+        ),
+        items_per_page: int = items_per_page,
+    ) -> Iterable[TDataItem]:
+        """
+        The resource for absence (time-offs), supports incremental loading and pagination.
+
+        Args:
+            updated_at: The saved state of the last 'updated_at' value.
+            items_per_page: The max number of items to fetch per page. Defaults to 200.
+
+        Returns:
+            Iterable: A generator of absences.
+        """
+        if updated_at.last_value:
+            updated_iso = updated_at.last_value.format("YYYY-MM-DDTHH:mm:ss")
+        else:
+            updated_iso = None
+
+        params = {
+            "updated_since": updated_iso,
+        }
+
+        def convert_item(item: TDataItem) -> TDataItem:
+            output = item.get("attributes", {})
+            output["created_at"] = ensure_pendulum_datetime(output["created_at"])
+            output["updated_at"] = ensure_pendulum_datetime(output["updated_at"])
+            return output
+
+        pages = client.get_pages(
+            "company/time-offs",
+            params=params,
+            page_size=items_per_page,
+            offset_by_page=True,
+        )
+
+        for page in pages:
+            yield [convert_item(item) for item in page]
 
     @dlt.resource(primary_key="id", write_disposition="merge")
     def attendances(
@@ -131,10 +175,12 @@ def personio_source(
             "start_date": ensure_pendulum_datetime(start_date).to_date_string(),
             "end_date": ensure_pendulum_datetime(end_date).to_date_string(),
             "updated_from": updated_iso,
+            "includePending": True,
         }
-
         pages = client.get_pages(
-            "company/attendances", params=params, page_size=items_per_page
+            "company/attendances",
+            params=params,
+            page_size=items_per_page,
         )
 
         def convert_item(item: TDataItem) -> TDataItem:
@@ -228,19 +274,19 @@ def personio_source(
     )
     @dlt.defer
     def employees_absences_balance(
-        employees: TDataItem, items_per_page: int = items_per_page
+        employees_item: TDataItem, items_per_page: int = items_per_page
     ) -> Iterable[TDataItem]:
         """
         The transformer for employees_absences_balance, supports pagination.
 
         Args:
-            employee: The employee data.
+            employees_item: The employee data.
             items_per_page: The max number of items to fetch per page. Defaults to 200.
 
         Returns:
             Iterable: A generator of employees_absences_balance for each employee.
         """
-        for employee in employees:
+        for employee in employees_item:
             employee_id = employee["id"]
             pages = client.get_pages(
                 f"company/employees/{employee_id}/absences/balance",
@@ -257,13 +303,13 @@ def personio_source(
     )
     @dlt.defer
     def custom_reports(
-        custom_reports: TDataItem, items_per_page: int = items_per_page
+        custom_reports_item: TDataItem, items_per_page: int = items_per_page
     ) -> Iterable[TDataItem]:
         """
-        The transformer for custom_reports, supports pagination.
+        The transformer for custom reports, supports pagination.
 
         Args:
-            custom_reports: The custom_report data.
+            custom_reports_item: The custom_report data.
             items_per_page: The max number of items to fetch per page. Defaults to 200.
 
         Returns:
@@ -282,10 +328,13 @@ def personio_source(
                     output[name] = value["value"]
             return output
 
-        for custom_report in custom_reports:
+        for custom_report in custom_reports_item:
             report_id = custom_report["id"]
             pages = client.get_pages(
-                f"company/custom-reports/reports/{report_id}", page_size=items_per_page
+                f"company/custom-reports/reports/{report_id}",
+                page_size=items_per_page,
+                start_offset=1,
+                offset_by_page=True,
             )
 
             for page in pages:
@@ -295,6 +344,7 @@ def personio_source(
 
     return (
         employees,
+        absence_types,
         absences,
         attendances,
         projects,
