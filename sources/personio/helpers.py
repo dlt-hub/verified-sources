@@ -1,5 +1,5 @@
 """Personio source helpers"""
-from typing import Any, Iterable
+from typing import Any, Iterable, Optional
 from urllib.parse import urljoin
 
 from dlt.common.typing import Dict, TDataItems
@@ -38,9 +38,7 @@ class PersonioAPI:
     def get_pages(
         self,
         resource: str,
-        params: Dict[str, Any] = None,
-        page_size: int = 200,
-        start_offset: int = 0,
+        params: Optional[Dict[str, Any]] = None,
         offset_by_page: bool = False,
     ) -> Iterable[TDataItems]:
         """Get all pages from Personio using requests.
@@ -55,9 +53,7 @@ class PersonioAPI:
         """
         params = params or {}
         headers = {"Authorization": f"Bearer {self.access_token}"}
-        params.update(
-            {"limit": page_size, "offset": start_offset, "page": start_offset}
-        )
+        params.update({"offset": int(offset_by_page), "page": int(offset_by_page)})
         url = urljoin(self.base_url, resource)
         starts_from_zero = False
         while True:
@@ -85,5 +81,5 @@ class PersonioAPI:
                 params["offset"] += 1
                 params["page"] += 1
             else:
-                params["offset"] += page_size
+                params["offset"] += params["limit"]
                 params["page"] += 1

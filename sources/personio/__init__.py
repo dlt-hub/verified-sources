@@ -72,11 +72,9 @@ def personio_source(
         else:
             last_value = None
 
-        params = {"updated_since": last_value}
+        params = {"limit": items_per_page, "updated_since": last_value}
 
-        pages = client.get_pages(
-            "company/employees", params=params, page_size=items_per_page
-        )
+        pages = client.get_pages("company/employees", params=params)
         for page in pages:
             yield [convert_item(item) for item in page]
 
@@ -92,7 +90,9 @@ def personio_source(
             Iterable: A generator of absences.
         """
 
-        pages = client.get_pages("company/time-off-types", page_size=items_per_page)
+        pages = client.get_pages(
+            "company/time-off-types", params={"limit": items_per_page}
+        )
 
         for page in pages:
             yield [item.get("attributes", {}) for item in page]
@@ -122,6 +122,7 @@ def personio_source(
             updated_iso = None
 
         params = {
+            "limit": items_per_page,
             "updated_since": updated_iso,
         }
 
@@ -134,7 +135,6 @@ def personio_source(
         pages = client.get_pages(
             "company/time-offs",
             params=params,
-            page_size=items_per_page,
             offset_by_page=True,
         )
 
@@ -172,6 +172,7 @@ def personio_source(
             updated_iso = None
 
         params = {
+            "limit": items_per_page,
             "start_date": ensure_pendulum_datetime(start_date).to_date_string(),
             "end_date": ensure_pendulum_datetime(end_date).to_date_string(),
             "updated_from": updated_iso,
@@ -180,7 +181,6 @@ def personio_source(
         pages = client.get_pages(
             "company/attendances",
             params=params,
-            page_size=items_per_page,
         )
 
         def convert_item(item: TDataItem) -> TDataItem:
@@ -194,20 +194,15 @@ def personio_source(
             yield [convert_item(item) for item in page]
 
     @dlt.resource(primary_key="id", write_disposition="replace")
-    def projects(items_per_page: int = items_per_page) -> Iterable[TDataItem]:
+    def projects() -> Iterable[TDataItem]:
         """
-        The resource for projects, supports pagination.
-
-        Args:
-            items_per_page: The max number of items to fetch per page. Defaults to 200.
+        The resource for projects.
 
         Returns:
             Iterable: A generator of projects.
         """
 
-        pages = client.get_pages(
-            "company/attendances/projects", page_size=items_per_page
-        )
+        pages = client.get_pages("company/attendances/projects")
 
         def convert_item(item: TDataItem) -> TDataItem:
             """Converts an attendance item."""
@@ -220,22 +215,15 @@ def personio_source(
             yield [convert_item(item) for item in page]
 
     @dlt.resource(primary_key="id", write_disposition="replace")
-    def document_categories(
-        items_per_page: int = items_per_page,
-    ) -> Iterable[TDataItem]:
+    def document_categories() -> Iterable[TDataItem]:
         """
-        The resource for document_categories, supports pagination.
-
-        Args:
-            items_per_page: The max number of items to fetch per page. Defaults to 200.
+        The resource for document_categories.
 
         Returns:
             Iterable: A generator of document_categories.
         """
 
-        pages = client.get_pages(
-            "company/document-categories", page_size=items_per_page
-        )
+        pages = client.get_pages("company/document-categories")
 
         def convert_item(item: TDataItem) -> TDataItem:
             """Converts an document_categories item."""
@@ -246,23 +234,15 @@ def personio_source(
             yield [convert_item(item) for item in page]
 
     @dlt.resource(primary_key="id", write_disposition="replace")
-    def custom_reports_list(
-        items_per_page: int = items_per_page,
-    ) -> Iterable[TDataItem]:
+    def custom_reports_list() -> Iterable[TDataItem]:
         """
-        The resource for document_categories, supports pagination.
-
-        Args:
-            items_per_page: The max number of items to fetch per page. Defaults to 200.
+        The resource for custom_reports.
 
         Returns:
-            Iterable: A generator of document_categories.
+            Iterable: A generator of custom_reports.
         """
 
-        params = {"status": "up_to_date"}
-        pages = client.get_pages(
-            "company/custom-reports/reports", params=params, page_size=items_per_page
-        )
+        pages = client.get_pages("company/custom-reports/reports")
 
         for page in pages:
             yield [item.get("attributes", {}) for item in page]
@@ -273,15 +253,12 @@ def personio_source(
         primary_key=["employee_id", "id"],
     )
     @dlt.defer
-    def employees_absences_balance(
-        employees_item: TDataItem, items_per_page: int = items_per_page
-    ) -> Iterable[TDataItem]:
+    def employees_absences_balance(employees_item: TDataItem) -> Iterable[TDataItem]:
         """
-        The transformer for employees_absences_balance, supports pagination.
+        The transformer for employees_absences_balance.
 
         Args:
             employees_item: The employee data.
-            items_per_page: The max number of items to fetch per page. Defaults to 200.
 
         Returns:
             Iterable: A generator of employees_absences_balance for each employee.
@@ -290,7 +267,6 @@ def personio_source(
             employee_id = employee["id"]
             pages = client.get_pages(
                 f"company/employees/{employee_id}/absences/balance",
-                page_size=items_per_page,
             )
 
             for page in pages:
@@ -332,8 +308,7 @@ def personio_source(
             report_id = custom_report["id"]
             pages = client.get_pages(
                 f"company/custom-reports/reports/{report_id}",
-                page_size=items_per_page,
-                start_offset=1,
+                params={"limit": items_per_page},
                 offset_by_page=True,
             )
 
