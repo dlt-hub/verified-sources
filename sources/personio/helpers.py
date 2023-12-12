@@ -46,7 +46,7 @@ class PersonioAPI:
         Args:
             resource: The resource to get pages for (e.g. employees, absences, attendances).
             params: The parameters for the resource.
-            page_size: The max number of items to fetch per page. Defaults to 200.
+            offset_by_page (bool): If True, offset increases by 1 per page; else, increases by page_size.
 
         Yields:
             List of data items from the page

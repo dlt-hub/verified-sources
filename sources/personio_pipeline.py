@@ -21,8 +21,7 @@ def load_resources(resources: List[str]) -> None:
 
 
 def load_all_resources() -> None:
-    """Execute a pipeline that will load all available Personio resources.
-    """
+    """Execute a pipeline that will load all available Personio resources."""
 
     pipeline = dlt.pipeline(
         pipeline_name="personio", destination="duckdb", dataset_name="personio_all_data"
