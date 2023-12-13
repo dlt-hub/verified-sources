@@ -44,12 +44,12 @@ def stream_and_merge_csv() -> None:
     # now let's simulate loading on next day. not only current data appears but also updated record for the previous day are present
     # all the records for previous day will be replaced with new records
     met_files = readers(
-        bucket_url=TESTS_BUCKET_URL, file_glob="met_csv/A801/*.csv"
+        bucket_url=TESTS_BUCKET_URL, file_glob="met_csv/A803/*.csv"
     ).read_csv()
     met_files.apply_hints(write_disposition="merge", merge_key="date")
     load_info = pipeline.run(met_files.with_name("met_csv"))
 
-    # you can also do dlt pipeline standard_filesystem_csv show to confirm that all A801 were replaced with A803 records for overlapping day
+    # you can also do `dlt pipeline standard_filesystem_csv show` to confirm that all A801 were replaced with A803 records for overlapping day
     print(load_info)
     print(pipeline.last_trace.last_normalize_info)
 
