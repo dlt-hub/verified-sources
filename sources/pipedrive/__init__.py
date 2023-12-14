@@ -187,7 +187,6 @@ def leads(
     )
     # Load leads pages sorted from newest to oldest and stop loading when
     # last incremental value is reached
-    last_value = update_time.last_value
     pages = get_pages(
         "leads",
         pipedrive_api_key,
