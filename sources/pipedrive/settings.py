@@ -13,7 +13,7 @@ ENTITY_MAPPINGS = [
 
 RECENTS_ENTITIES = {
     "activity": "activities",
-    "activityType": "activityTypes",
+    "activityType": "activity_types",
     "deal": "deals",
     "file": "files",
     "filter": "filters",

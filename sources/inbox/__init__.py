@@ -55,9 +55,9 @@ def inbox_source(
 
     @dlt.resource(name="uids")
     def get_messages_uids(
-        initial_message_num: dlt.sources.incremental[int] = dlt.sources.incremental(
-            "message_uid", initial_value=1
-        ),
+        initial_message_num: Optional[
+            dlt.sources.incremental[int]
+        ] = dlt.sources.incremental("message_uid", initial_value=1),
     ) -> TDataItem:
         """Collects email message UIDs (Unique IDs) from the mailbox.
         Args:

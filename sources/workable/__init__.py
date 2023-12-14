@@ -70,7 +70,7 @@ def workable_source(
 
     @dlt.resource(name="candidates", write_disposition="merge", primary_key="id")
     def candidates_resource(
-        updated_at: Any = dlt.sources.incremental(
+        updated_at: Optional[Any] = dlt.sources.incremental(
             "updated_at", initial_value=workable.start_date_iso
         )
     ) -> Iterable[TDataItem]:

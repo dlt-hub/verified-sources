@@ -32,7 +32,7 @@ class CollectionLoader:
         self,
         client: TMongoClient,
         collection: TCollection,
-        incremental: dlt.sources.incremental[Any] = None,
+        incremental: Optional[dlt.sources.incremental[Any]] = None,
     ) -> None:
         self.client = client
         self.collection = collection
@@ -110,7 +110,7 @@ class CollectionLoaderParallell(CollectionLoader):
 def collection_documents(
     client: TMongoClient,
     collection: TCollection,
-    incremental: dlt.sources.incremental[Any] = None,
+    incremental: Optional[dlt.sources.incremental[Any]] = None,
     parallel: bool = False,
 ) -> Iterator[TDataItem]:
     """
@@ -120,7 +120,7 @@ def collection_documents(
     Args:
         client (MongoClient): The PyMongo client `pymongo.MongoClient` instance.
         collection (Collection): The collection `pymongo.collection.Collection` to load.
-        incremental (dlt.sources.incremental[Any]): The incremental configuration.
+        incremental (Optional[dlt.sources.incremental[Any]]): The incremental configuration.
         parallel (bool): Option to enable parallel loading for the collection. Default is False.
 
     Returns:
