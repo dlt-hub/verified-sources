@@ -19,7 +19,7 @@ from .helpers import get_shard_iterator, max_sequence_by_shard
 def kinesis_stream(
     stream_name: str = dlt.config.value,
     credentials: AwsCredentials = dlt.secrets.value,
-    last_msg: Optional[dlt.sources.incremental[StrStr]] = dlt.sources.incremental(
+    last_msg: dlt.sources.incremental[StrStr] = dlt.sources.incremental(
         "_kinesis", last_value_func=max_sequence_by_shard
     ),
     initial_at_timestamp: TAnyDateTime = 0.0,
@@ -35,7 +35,7 @@ def kinesis_stream(
             value must be present in config/secrets
         credentials (AwsCredentials): The credentials to use to connect to kinesis. If not provided,
             the value from secrets or credentials present on the device will be used.
-        last_msg (Optional[dlt.sources.incremental]): An incremental over a mapping from shard_id to message sequence
+        last_msg (dlt.sources.incremental): An incremental over a mapping from shard_id to message sequence
             that will be used to create shard iterators of type AFTER_SEQUENCE_NUMBER when loading incrementally.
         initial_at_timestamp (TAnyDateTime): An initial timestamp used to generate AT_TIMESTAMP or LATEST iterator when timestamp value is 0
         max_number_of_messages (int): Maximum number of messages to read in one run. Actual read may exceed that number by up to chunk_size. Defaults to None (no limit).

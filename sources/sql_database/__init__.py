@@ -69,7 +69,7 @@ def sql_table(
     table: str = dlt.config.value,
     schema: Optional[str] = dlt.config.value,
     metadata: Optional[MetaData] = None,
-    incremental: Optional[dlt.sources.incremental[Any]] = None,
+    incremental: dlt.sources.incremental[Any] = None,
 ) -> DltResource:
     """
     A dlt resource which loads data from an SQL database table using SQLAlchemy.
@@ -79,7 +79,7 @@ def sql_table(
         table (str): Name of the table to load.
         schema (Optional[str]): Optional name of the schema the table belongs to.
         metadata (Optional[MetaData]): Optional `sqlalchemy.MetaData` instance. If provided, the `schema` argument is ignored.
-        incremental (Optional[dlt.sources.incremental[Any]]): Option to enable incremental loading for the table.
+        incremental (dlt.sources.incremental[Any]): Option to enable incremental loading for the table.
             E.g., `incremental=dlt.sources.incremental('updated_at', pendulum.parse('2022-01-01T00:00:00Z'))`
         write_disposition (str): Write disposition of the resource.
 

@@ -29,7 +29,7 @@ class TableLoader:
         engine: Engine,
         table: Table,
         chunk_size: int = 1000,
-        incremental: Optional[dlt.sources.incremental[Any]] = None,
+        incremental: dlt.sources.incremental[Any] = None,
     ) -> None:
         self.engine = engine
         self.table = table
@@ -80,7 +80,7 @@ def table_rows(
     engine: Engine,
     table: Table,
     chunk_size: int = DEFAULT_CHUNK_SIZE,
-    incremental: Optional[dlt.sources.incremental[Any]] = None,
+    incremental: dlt.sources.incremental[Any] = None,
 ) -> Iterator[TDataItem]:
     """
     A DLT source which loads data from an SQL database using SQLAlchemy.
