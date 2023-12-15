@@ -6,7 +6,7 @@ import dlt
 from personio import personio_source
 
 
-def load_all_resources(resources: List[str]) -> None:
+def load_resources(resources: List[str]) -> None:
     """Execute a pipeline that will load the given Personio resources incrementally.
     Subsequent runs will load only items updated since the previous run, if supported by the resource.
     """
@@ -20,7 +20,23 @@ def load_all_resources(resources: List[str]) -> None:
     print(load_info)
 
 
+def load_all_resources() -> None:
+    """Execute a pipeline that will load all available Personio resources."""
+
+    pipeline = dlt.pipeline(
+        pipeline_name="personio", destination="duckdb", dataset_name="personio_all_data"
+    )
+    load_info = pipeline.run(personio_source())
+    print(load_info)
+
+
 if __name__ == "__main__":
     # Add your desired resources to the list.
-    resources = ["employees", "absences", "attendances"]
-    load_all_resources(resources)
+
+    # resources = [
+    #     "employees",
+    #     "absences",
+    #     "attendances",
+    # ]
+    # load_resources(resources)
+    load_all_resources()

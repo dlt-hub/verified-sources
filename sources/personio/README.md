@@ -1,48 +1,50 @@
----
-title: Personio
-description: dlt source for Personio API
-keywords: [personio api, personio source, personio]
----
-
-
 # Personio
 
-[Personio](https://personio.de/) is a holistic HR software for companies from 10 - 2000 employees.
-It is one of the relevant data sources for our organisation.
+[Personio](https://personio.de/) is a human resources management software that helps businesses 
+streamline HR processes, including recruitment, employee data management, and payroll, in one 
+platform.
 
 Resources that can be loaded using this verified source are:
 
-| Name        | Description                                                                                                                  |
-| ----------- | ---------------------------------------------------------------------------------------------------------------------------- |
-| employees   | List Company Employees using the [employees](https://api.personio.de/v1/company/employees) endpoint.                         |
-| absences    | Provides a list of absence types using the [time-off-types](https://api.personio.de/v1/company/time-off-types) endpoint.     |
-| attendances | Fetch attendance data for the company employees using [attendances](https://api.personio.de/v1/company/attendances) endpoint.|
-
+| Name        | Description                                          |
+|-------------|------------------------------------------------------|
+| employees   | Retrieves company employees details                  |
+| absences    | Retrieves list of various types of employee absences |
+| attendances | Retrieves attendance records for each employee       |
 ## Initialize the pipeline
 
 ```bash
 dlt init personio duckdb
 ```
 
-Here, we chose duckdb as the destination. Alternatively, you can also choose redshift, bigquery, or
-any of the other [destinations](https://dlthub.com/docs/dlt-ecosystem/destinations/).
+Here, we chose `duckdb` as the destination. Alternatively, you can also choose `redshift`,
+`bigquery`, or any of the other [destinations](https://dlthub.com/docs/dlt-ecosystem/destinations/).
 
-## Add credentials
+## Setup verified source
 
-1. Get your Personio `client_id` and `client_secret`. The process is detailed in the
-   [docs](https://developer.personio.de/docs#21-employee-attendance-and-absence-endpoints).
-2. Open `.dlt/secrets.toml`.
-3. Enter the API `client_id` and `client_secret`:
+To grab Personio credentials and configure the verified source, please refer to the
+[full documentation here.](https://dlthub.com/docs/dlt-ecosystem/verified-sources/personio#grab-credentials)
+
+## Add credential
+
+1. Inside the `.dlt` folder, you'll find a file called `secrets.toml`, which is where you can
+   securely store your access tokens and other sensitive information. It's important to handle this
+   file with care and keep it safe. Here's what the file looks like:
 
    ```toml
+   # Put your secret values and credentials here
+   # Note: Do not share this file and do not push it to GitHub!
    [sources.personio]
-   client_id = 'papi-********-****-****-****-************'
-   client_secret = 'papi-************************************************'
-    ```
-4. Follow the instructions in the
-   [destinations](https://dlthub.com/docs/dlt-ecosystem/destinations/) document to add credentials
-   for your chosen destination.
+   client_id = "papi-*****" # please set me up!
+   client_secret = "papi-*****" # please set me up!
+   ```
 
+1. Replace the value of `client_id` and `client_secret`. This will ensure that you can access
+   Personio API securely.
+
+1. Next, follow the instructions in [Destinations](../destinations/duckdb) to add credentials for
+   your chosen destination. This will ensure that your data is properly routed to its final
+   destination.
 
 ## Run the pipeline
 
@@ -52,20 +54,22 @@ any of the other [destinations](https://dlthub.com/docs/dlt-ecosystem/destinatio
    pip install -r requirements.txt
    ```
 
-2. Now the pipeline can be run by using the command:
+1. Now the pipeline can be run by using the command:
 
    ```bash
-   python3 personio_pipeline.py
+   python personio_pipeline.py
    ```
 
-3. To make sure that everything is loaded as expected, use the command:
+1. To make sure that everything is loaded as expected, use the command:
 
    ```bash
-   dlt pipeline personio_pipeline show
+   dlt pipeline <pipeline_name> show
    ```
+
+   For example, the `pipeline_name` for the above pipeline example is `personio`, you may also use
+   any custom name instead.
 
 💡 To explore additional customizations for this pipeline, we recommend referring to the official
-`dlt` Chess documentation. It provides comprehensive information and guidance on how to further
-customize and tailor the pipeline to suit your specific needs. You can find the `dlt` Chess
-documentation in
-[Setup Guide: Personio.](https://dlthub.com/docs/dlt-ecosystem/verified-sources/personio)
+`dlt` [Personio](https://dlthub.com/docs/dlt-ecosystem/verified-sources/personio) documentation. It
+provides comprehensive information and guidance on how to further customize and tailor the pipeline
+to suit your specific needs.
