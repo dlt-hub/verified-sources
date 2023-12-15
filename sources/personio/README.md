@@ -1,16 +1,23 @@
 # Personio
 
-[Personio](https://personio.de/) is a human resources management software that helps businesses 
-streamline HR processes, including recruitment, employee data management, and payroll, in one 
+[Personio](https://personio.de/) is a human resources management software that helps businesses
+streamline HR processes, including recruitment, employee data management, and payroll, in one
 platform.
 
 Resources that can be loaded using this verified source are:
 
-| Name        | Description                                          |
-|-------------|------------------------------------------------------|
-| employees   | Retrieves company employees details                  |
-| absences    | Retrieves list of various types of employee absences |
-| attendances | Retrieves attendance records for each employee       |
+| Name                       | Description                                                                       | Endpoint                                          |
+|----------------------------|-----------------------------------------------------------------------------------|---------------------------------------------------|
+| employees                  | Retrieves company employees details                                               | /company/employees                                |
+| absences                   | Retrieves absence periods for absences tracked in days                            | /company/time-offs                                |
+| absences_types             | Retrieves list of various types of employee absences                              | /company/time-off-types                           |
+| attendances                | Retrieves attendance records for each employee                                    | /company/attendances                              |
+| projects                   | Retrieves a list of all company projects                                          | /company/attendances/projects                     |
+| document_categories        | Retrieves all document categories of the company                                  | /company/document-categories                      |
+| employees_absences_balance | The transformer, retrieves the absence balance for a specific employee            | /company/employees/{employee_id}/absences/balance |
+| custom_reports_list        | Retrieves metadata about existing custom reports (name, report type, report date) | /company/custom-reports/reports                   |
+| custom_reports             | The transformer for custom reports                                                | /company/custom-reports/reports/{report_id}       |
+
 ## Initialize the pipeline
 
 ```bash
@@ -66,7 +73,7 @@ To grab Personio credentials and configure the verified source, please refer to 
    dlt pipeline <pipeline_name> show
    ```
 
-   For example, the `pipeline_name` for the above pipeline example is `personio`, you may also use
+   For example, the `pipeline_name` for the above pipeline example is `personio`, you may also use
    any custom name instead.
 
 💡 To explore additional customizations for this pipeline, we recommend referring to the official
