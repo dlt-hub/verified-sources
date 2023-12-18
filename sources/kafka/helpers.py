@@ -1,10 +1,14 @@
+import datetime
+
 from typing import Dict, List
 
 from confluent_kafka import Consumer, Message, TopicPartition, OFFSET_BEGINNING
 
 from dlt.common.configuration import configspec
 from dlt.common.configuration.specs import CredentialsConfiguration
+from dlt.common.time import ensure_pendulum_datetime
 from dlt.common.typing import DictStrAny, TSecretValue
+from dlt.common.utils import digest128
 
 
 def default_message_processor(msg: Message) -> Dict:
@@ -36,11 +40,11 @@ def default_message_processor(msg: Message) -> Dict:
             "offset": msg.offset(),
             "ts": {
                 "type": ts[0],
-                "value": ensure_pendulum_datetime(ts[1]),
+                "value": ensure_pendulum_datetime(ts[1] / 1e3),
             },
             "data": msg.value().decode("utf-8"),
         },
-        "_kafka_msg_id": digest128(topic + partition + key),
+        "_kafka_msg_id": digest128(topic + str(partition) + str(key)),
     }
 
 

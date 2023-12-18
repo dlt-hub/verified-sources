@@ -18,7 +18,9 @@ from .helpers import (
 
 
 @dlt.resource(
-    name="kafka_messages", table_name=lambda msg: msg["topic"], standalone=True
+    name="kafka_messages",
+    table_name=lambda msg: msg["_kafka"]["topic"],
+    standalone=True,
 )
 def kafka_consumer(
     topics: Union[str, List[str]],
@@ -64,7 +66,7 @@ def kafka_consumer(
 
     while tracker.has_unread:
         batch = []
-        for msg in consumer.consume(num_messages=batch_size, timeout=1):
+        for msg in consumer.consume(batch_size, timeout=1):
             if msg.error():
                 print(f"ERROR: {msg.error()}")
             else:
