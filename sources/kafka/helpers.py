@@ -58,10 +58,16 @@ class OffsetTracker(dict):
         consumer (confluent_kafka.Consumer): Kafka consumer.
         topic_names (list): Names of topics to track.
         pl_state (DictStrAny): Pipeline current state.
+        start_from_ts (Optional[int]): A timestamp, after which messages
+            are read. Older messages are ignored.
     """
 
     def __init__(
-        self, consumer: Consumer, topic_names: List[str], pl_state: DictStrAny
+        self,
+        consumer: Consumer,
+        topic_names: List[str],
+        pl_state: DictStrAny,
+        start_from_ts: int = None,
     ):
         super().__init__()
 
@@ -73,7 +79,7 @@ class OffsetTracker(dict):
             "offsets", {t_name: {} for t_name in topic_names}
         )
 
-        self._init_partition_offsets()
+        self._init_partition_offsets(start_from_ts)
 
     def _read_topics(self, topic_names: List[str]):
         """Read the given topics metadata from Kafka.
@@ -95,24 +101,41 @@ class OffsetTracker(dict):
 
         return tracked_topics
 
-    def _init_partition_offsets(self):
+    def _init_partition_offsets(self, start_from_ts):
         """Designate current and maximum offsets for every partition.
 
         Current offsets are read from the state, if present. Set equal
         to the partition beginning otherwise.
+
+        Args:
+            start_from_ts (int): A timestamp, after which messages
+                are read. Older messages are ignored.
         """
         all_parts = []
         for t_name, topic in self._topics.items():
             self[t_name] = {}
 
             # init all the topic partitions from the partitions' metadata
-            parts = [TopicPartition(t_name, part) for part in topic.partitions]
+            parts = [
+                TopicPartition(
+                    t_name,
+                    part,
+                    start_from_ts if start_from_ts is not None else OFFSET_BEGINNING,
+                )
+                for part in topic.partitions
+            ]
+
+            if start_from_ts is not None:
+                ts_offsets = self._consumer.offsets_for_times(parts)
 
             # designate current and maximum offsets for every partition
             for i, part in enumerate(parts):
-                cur_offset = self._cur_offsets[t_name].get(
-                    str(part.partition), OFFSET_BEGINNING
-                )
+                if start_from_ts is not None:
+                    cur_offset = ts_offsets[i].offset
+                else:
+                    cur_offset = self._cur_offsets[t_name].get(
+                        str(part.partition), OFFSET_BEGINNING
+                    )
 
                 self[t_name][str(part.partition)] = {
                     "cur": cur_offset,

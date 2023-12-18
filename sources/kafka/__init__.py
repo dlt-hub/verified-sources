@@ -27,6 +27,7 @@ def kafka_consumer(
     credentials: Union[KafkaCredentials, Consumer] = dlt.secrets.value,
     msg_processor: Optional[Callable] = default_message_processor,
     batch_size: Optional[int] = 3000,
+    start_from_ts: Optional[int] = None,
 ) -> Iterable[TDataItem]:
     """Extract recent messages from the given Kafka topics.
 
@@ -43,6 +44,8 @@ def kafka_consumer(
             which'll process every Kafka message after it's read and
             before it's transfered to the destination.
         batch_size (Optional[int]): Messages batch size to read at once.
+        start_from_ts (Optional[int]): A timestamp, after which messages
+            are read. Older messages are ignored.
 
     Yields:
         Iterable[TDataItem]: Kafka messages.
@@ -62,7 +65,9 @@ def kafka_consumer(
     consumer = consumer or init_consumer(credentials, group_id)
     consumer.subscribe(topics)
 
-    tracker = OffsetTracker(consumer, topics, dlt.current.resource_state())
+    tracker = OffsetTracker(
+        consumer, topics, dlt.current.resource_state(), start_from_ts
+    )
 
     while tracker.has_unread:
         batch = []
