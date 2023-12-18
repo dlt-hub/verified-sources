@@ -4,22 +4,27 @@ When extraction starts, partitions length is checked -
 data is read only up to it, overriding the default Kafka's
 behavior of waiting for new messages in endless loop.
 """
-from typing import Callable, Dict, Iterable, List, Optional
+from typing import Callable, Dict, Iterable, List, Optional, Union
 
 from confluent_kafka import Consumer
 
 import dlt
 from dlt.common.typing import TDataItem
-from .helpers import default_message_processor, init_consumer, OffsetTracker
+from .helpers import (
+    default_message_processor,
+    KafkaCredentials,
+    OffsetTracker,
+)
 
 
-@dlt.resource(name="kafka_messages", standalone=True)
+@dlt.resource(
+    name="kafka_messages", table_name=lambda msg: msg["topic"], standalone=True
+)
 def kafka_consumer(
-    topics: list,
-    credentials: Optional[dict] = dlt.secrets.value,
-    group_id: Optional[str] = dlt.config.value,
-    consumer: Optional[Consumer] = None,
+    topics: Union[str, List[str]],
+    credentials: Union[KafkaCredentials, Consumer] = dlt.secrets.value,
     msg_processor: Optional[Callable] = default_message_processor,
+    batch_size: Optional[int] = 3000,
 ) -> Iterable[TDataItem]:
     """Extract recent messages from the given Kafka topics.
 
@@ -29,34 +34,43 @@ def kafka_consumer(
     Messages from different topics are saved in different tables.
 
     Args:
-        topics (list): Names of topics to extract.
-        credentials (Optional[dict]): Credentials for a Kafka consumer. By
-            default, are taken from secrets.
-        group_id (Optional[str]): Consumer group id. By default, is taken
-            from config.
-        consumer (Optional[confluent_kafka.Consumer]): A consumer to be
-            used for extraction. By default, will be initiated with the
-            credentials kept in secrets.
+        topics (Union[str, List[str]]): Names of topics to extract.
+        credentials (Union[KafkaCredentials, Consumer]): Auth credentials
+            or an initiated Kafka consumer.
         msg_processor(Optional[Callable]): A function-converter,
             which'll process every Kafka message after it's read and
             before it's transfered to the destination.
+        batch_size (Optional[int]): Messages batch size to read at once.
 
     Yields:
         Iterable[TDataItem]: Kafka messages.
     """
+    if not isinstance(topics, list):
+        topics = [topics]
+
+    if isinstance(credentials, Consumer):
+        consumer = consumer
+    elif isinstance(credentials, KafkaCredentials):
+        consumer = credentials.init_consumer()
+    else:
+        raise TypeError(
+            "Wrong credentials type provided. The credentials need to be of type: KafkaCredentials or confluent_kafka.Consumer"
+        )
+
     consumer = consumer or init_consumer(credentials, group_id)
     consumer.subscribe(topics)
 
-    tracker = OffsetTracker(consumer, topics)
+    tracker = OffsetTracker(consumer, topics, dlt.current.resource_state())
 
     while tracker.has_unread:
-        for msg in consumer.consume(num_messages=3000, timeout=1):
+        batch = []
+        for msg in consumer.consume(num_messages=batch_size, timeout=1):
             if msg.error():
                 print(f"ERROR: {msg.error()}")
             else:
-                message = msg_processor(msg)
-                yield dlt.mark.with_table_name(message, msg.topic())
-
+                batch.append(msg_processor(msg))
                 tracker.update(msg)
+
+        yield batch
 
     consumer.close()

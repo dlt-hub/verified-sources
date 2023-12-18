@@ -1,12 +1,21 @@
-from typing import Dict
+from typing import Dict, List
 
 from confluent_kafka import Consumer, Message, TopicPartition, OFFSET_BEGINNING
 
-import dlt
+from dlt.common.configuration import configspec
+from dlt.common.configuration.specs import CredentialsConfiguration
+from dlt.common.typing import DictStrAny, TSecretValue
 
 
 def default_message_processor(msg: Message) -> Dict:
     """Basic Kafka message processor.
+
+    Returns the message value and metadata. Timestamp consists of two values:
+    (type of the timestamp, timestamp). Type represents one of the Python
+    Kafka constants:
+        TIMESTAMP_NOT_AVAILABLE - Timestamps not supported by broker.
+        TIMESTAMP_CREATE_TIME - Message creation time (or source / producer time).
+        TIMESTAMP_LOG_APPEND_TIME - Broker receive time.
 
     Args:
         msg (confluent_kafka.Message): A single Kafka message.
@@ -14,32 +23,25 @@ def default_message_processor(msg: Message) -> Dict:
     Returns:
         dict: Processed Kafka message.
     """
-    return dict(
-        key=msg.key().decode("utf-8"),
-        value=msg.value().decode("utf-8"),
-        partition=msg.partition(),
-    )
+    ts = msg.timestamp()
 
-
-def init_consumer(credentials: dict, group_id: str) -> Consumer:
-    """Initiate a Kafka consumer with the given credentials.
-
-    Args:
-        credentials (dict): Kafka consumer credentials.
-        group_id (str): Kafka consumer group.
-
-    Returns:
-        confluent_kafka.Consumer: A ready to go Kafka consumer.
-    """
-    config = {
-        "bootstrap.servers": credentials["bootstrap"]["servers"],
-        "group.id": group_id,
-        "security.protocol": credentials["security"]["protocol"],
-        "sasl.mechanisms": credentials["sasl"]["mechanisms"],
-        "sasl.username": credentials["sasl"]["username"],
-        "sasl.password": credentials["sasl"]["password"],
+    topic = msg.topic()
+    partition = msg.partition()
+    key = msg.key().decode("utf-8")
+    return {
+        "_kafka": {
+            "partition": partition,
+            "topic": topic,
+            "key": key,
+            "offset": msg.offset(),
+            "ts": {
+                "type": ts[0],
+                "value": ensure_pendulum_datetime(ts[1]),
+            },
+            "data": msg.value().decode("utf-8"),
+        },
+        "_kafka_msg_id": digest128(topic + partition + key),
     }
-    return Consumer(config)
 
 
 class OffsetTracker(dict):
@@ -51,22 +53,25 @@ class OffsetTracker(dict):
     Args:
         consumer (confluent_kafka.Consumer): Kafka consumer.
         topic_names (list): Names of topics to track.
+        pl_state (DictStrAny): Pipeline current state.
     """
 
-    def __init__(self, consumer: Consumer, topic_names: list):
+    def __init__(
+        self, consumer: Consumer, topic_names: List[str], pl_state: DictStrAny
+    ):
         super().__init__()
 
         self._consumer = consumer
         self._topics = self._read_topics(topic_names)
 
         # read/init current offsets
-        self._cur_offsets = dlt.current.resource_state().setdefault(
+        self._cur_offsets = pl_state.setdefault(
             "offsets", {t_name: {} for t_name in topic_names}
         )
 
         self._init_partition_offsets()
 
-    def _read_topics(self, topic_names):
+    def _read_topics(self, topic_names: List[str]):
         """Read the given topics metadata from Kafka.
 
         Reads all the topics at once, instead of requesting
@@ -143,3 +148,36 @@ class OffsetTracker(dict):
         offset["cur"] = msg.offset()
 
         self._cur_offsets[topic][partition] = msg.offset()
+
+
+@configspec
+class KafkaCredentials(CredentialsConfiguration):
+    """Kafka source credentials.
+
+    NOTE: original Kafka credentials are written with a period, e.g.
+    bootstrap.servers. However, KafkaCredentials expect them to
+    use underscore symbols instead, e.g. bootstrap_servers.
+    """
+
+    bootstrap_servers: str
+    group_id: str
+    security_protocol: str
+    sasl_mechanisms: str
+    sasl_username: str
+    sasl_password: TSecretValue
+
+    def init_consumer(self):
+        """Init a Kafka consumer from this credentials.
+
+        Returns:
+            confluent_kafka.Consumer: an initiated consumer.
+        """
+        config = {
+            "bootstrap.servers": self.bootstrap_servers,
+            "group.id": self.group_id,
+            "security.protocol": self.security_protocol,
+            "sasl.mechanisms": self.sasl_mechanisms,
+            "sasl.username": self.sasl_username,
+            "sasl.password": self.sasl_password,
+        }
+        return Consumer(config)
