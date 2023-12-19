@@ -1,5 +1,11 @@
+# from datetime import datetime
+
 import dlt
-from sources.kafka import kafka_consumer
+
+try:
+    from .kafka import kafka_consumer  # type: ignore
+except ImportError:
+    from kafka import kafka_consumer
 
 
 # def my_msg_proc(msg):
@@ -19,7 +25,10 @@ if __name__ == "__main__":
         # full_refresh=True,
     )
 
+    # from_date = datetime(2023, 12, 15)
+
     data = kafka_consumer(["purchases", "books"])
+    # data = kafka_consumer(["books"], start_from=from_date)
     # data = kafka_consumer(["purchases", "books"], message_processor=my_msg_proc)
 
     info = pipeline.run(data)
