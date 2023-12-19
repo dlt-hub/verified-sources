@@ -27,7 +27,7 @@ from sources.pipedrive.helpers.custom_fields_munger import (
 ALL_RESOURCES = {
     "custom_fields_mapping",
     "activities",
-    "activityTypes",
+    "activity_types",
     "deals",
     "deals_flow",
     "deals_participants",
@@ -50,7 +50,7 @@ TESTED_RESOURCES = (
         "stages",
         "filters",
         "files",
-        "activityTypes",
+        "activity_types",
         "notes",
     }
 )
@@ -323,10 +323,12 @@ def test_resource_settings() -> None:
 
     assert source.resources["custom_fields_mapping"].write_disposition == "replace"
 
+    s = source.discover_schema()
+
     for rs_name in resource_names - {"custom_fields_mapping"}:
         rs = source.resources[rs_name]
         assert rs.write_disposition == "merge"
-        assert rs.table_schema()["columns"]["id"]["primary_key"] is True
+        assert s.tables[rs_name]["columns"]["id"]["primary_key"] is True
 
 
 def test_update_fields_new_enum_field() -> None:

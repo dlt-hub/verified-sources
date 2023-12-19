@@ -1,11 +1,11 @@
 """Github source helpers"""
 
-from .queries import ISSUES_QUERY, RATE_LIMIT, COMMENT_REACTIONS_QUERY
-from typing import Any, Iterator, List, Sequence, Tuple
-from dlt.common.typing import StrAny, DictStrAny, TDataItems
-from dlt.sources.helpers import requests
+from typing import Iterator, List, Tuple
+from dlt.common.typing import DictStrAny, StrAny
 from dlt.common.utils import chunks
-from .settings import REST_API_BASE_URL, GRAPHQL_API_BASE_URL
+from dlt.sources.helpers import requests
+from .queries import COMMENT_REACTIONS_QUERY, ISSUES_QUERY, RATE_LIMIT
+from .settings import GRAPHQL_API_BASE_URL, REST_API_BASE_URL
 
 
 #
@@ -23,16 +23,23 @@ def _get_auth_header(access_token: str) -> StrAny:
 # Rest API helpers
 #
 def get_rest_pages(access_token: str, query: str) -> Iterator[List[StrAny]]:
-    url = REST_API_BASE_URL + query
+    def _request(page_url: str) -> requests.Response:
+        r = requests.get(page_url, headers=_get_auth_header(access_token))
+        print(
+            f"got page {page_url}, requests left: " + r.headers["x-ratelimit-remaining"]
+        )
+        return r
+
+    next_page_url = REST_API_BASE_URL + query
     while True:
-        r = requests.get(url, headers=_get_auth_header(access_token))
+        r: requests.Response = _request(next_page_url)
         page_items = r.json()
         if len(page_items) == 0:
             break
         yield page_items
         if "next" not in r.links:
             break
-        url = r.links["next"]["url"]
+        next_page_url = r.links["next"]["url"]
 
 
 #
@@ -45,6 +52,7 @@ def get_reactions_data(
     access_token: str,
     items_per_page: int,
     max_items: int,
+    max_item_age_seconds: float = None,
 ) -> Iterator[Iterator[StrAny]]:
     variables = {
         "owner": owner,
@@ -104,11 +112,15 @@ def _extract_nested_nodes(item: DictStrAny) -> DictStrAny:
 def _run_graphql_query(
     access_token: str, query: str, variables: DictStrAny
 ) -> Tuple[StrAny, StrAny]:
-    data = requests.post(
-        GRAPHQL_API_BASE_URL,
-        json={"query": query, "variables": variables},
-        headers=_get_auth_header(access_token),
-    ).json()
+    def _request() -> requests.Response:
+        r = requests.post(
+            GRAPHQL_API_BASE_URL,
+            json={"query": query, "variables": variables},
+            headers=_get_auth_header(access_token),
+        )
+        return r
+
+    data = _request().json()
     if "errors" in data:
         raise ValueError(data)
     data = data["data"]
