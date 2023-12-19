@@ -13,6 +13,7 @@ packages = [{include = "sources"}]
 [tool.poetry.dependencies]
 python = "^3.8.1"
 dlt = {version = "^0.3.23", allow-prereleases = true, extras = ["redshift", "bigquery", "postgres", "duckdb", "s3", "gs"]}
+confluent-kafka = "^2.3.0"
 
 [tool.poetry.group.dev.dependencies]
 mypy = "1.6.1"

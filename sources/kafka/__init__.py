@@ -4,9 +4,9 @@ When extraction starts, partitions length is checked -
 data is read only up to it, overriding the default Kafka's
 behavior of waiting for new messages in endless loop.
 """
-from typing import Callable, Dict, Iterable, List, Optional, Union
+from typing import Any, Callable, Dict, Iterable, List, Optional, Union
 
-from confluent_kafka import Consumer
+from confluent_kafka import Consumer, Message  # type: ignore
 
 import dlt
 from dlt.common.time import ensure_pendulum_datetime
@@ -26,7 +26,9 @@ from .helpers import (
 def kafka_consumer(
     topics: Union[str, List[str]],
     credentials: Union[KafkaCredentials, Consumer] = dlt.secrets.value,
-    msg_processor: Optional[Callable] = default_message_processor,
+    msg_processor: Optional[
+        Callable[[Message], Dict[str, Any]]
+    ] = default_message_processor,
     batch_size: Optional[int] = 3000,
     start_from: Optional[TAnyDateTime] = None,
 ) -> Iterable[TDataItem]:
@@ -56,7 +58,7 @@ def kafka_consumer(
         topics = [topics]
 
     if isinstance(credentials, Consumer):
-        consumer = consumer
+        consumer = credentials
     elif isinstance(credentials, KafkaCredentials):
         consumer = credentials.init_consumer()
     else:
@@ -82,7 +84,7 @@ def kafka_consumer(
                 print(f"ERROR: {msg.error()}")
             else:
                 batch.append(msg_processor(msg))
-                tracker.update(msg)
+                tracker.renew(msg)
 
         yield batch
 

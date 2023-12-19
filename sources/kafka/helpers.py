@@ -1,9 +1,9 @@
-import datetime
+from typing import Any, Dict, List
 
-from typing import Dict, List
+from confluent_kafka import Consumer, Message, TopicPartition, OFFSET_BEGINNING  # type: ignore
+from confluent_kafka.admin import TopicMetadata  # type: ignore
 
-from confluent_kafka import Consumer, Message, TopicPartition, OFFSET_BEGINNING
-
+from dlt.common import pendulum
 from dlt.common.configuration import configspec
 from dlt.common.configuration.specs import CredentialsConfiguration
 from dlt.common.time import ensure_pendulum_datetime
@@ -11,7 +11,7 @@ from dlt.common.typing import DictStrAny, TSecretValue, TAnyDateTime
 from dlt.common.utils import digest128
 
 
-def default_message_processor(msg: Message) -> Dict:
+def default_message_processor(msg: Message) -> Dict[str, Any]:
     """Basic Kafka message processor.
 
     Returns the message value and metadata. Timestamp consists of two values:
@@ -48,7 +48,7 @@ def default_message_processor(msg: Message) -> Dict:
     }
 
 
-class OffsetTracker(dict):
+class OffsetTracker(dict):  # type: ignore
     """Object to control offsets of the given topics.
 
     Tracks all the partitions of the given topics with two params:
@@ -58,7 +58,7 @@ class OffsetTracker(dict):
         consumer (confluent_kafka.Consumer): Kafka consumer.
         topic_names (List): Names of topics to track.
         pl_state (DictStrAny): Pipeline current state.
-        start_from (Optional[TAnyDateTime]): A timestamp, after which messages
+        start_from (Optional[pendulum.DateTime]): A timestamp, after which messages
             are read. Older messages are ignored.
     """
 
@@ -67,7 +67,7 @@ class OffsetTracker(dict):
         consumer: Consumer,
         topic_names: List[str],
         pl_state: DictStrAny,
-        start_from: TAnyDateTime = None,
+        start_from: pendulum.DateTime = None,
     ):
         super().__init__()
 
@@ -81,7 +81,7 @@ class OffsetTracker(dict):
 
         self._init_partition_offsets(start_from)
 
-    def _read_topics(self, topic_names: List[str]):
+    def _read_topics(self, topic_names: List[str]) -> Dict[str, TopicMetadata]:
         """Read the given topics metadata from Kafka.
 
         Reads all the topics at once, instead of requesting
@@ -101,14 +101,14 @@ class OffsetTracker(dict):
 
         return tracked_topics
 
-    def _init_partition_offsets(self, start_from):
+    def _init_partition_offsets(self, start_from: pendulum.DateTime) -> None:
         """Designate current and maximum offsets for every partition.
 
         Current offsets are read from the state, if present. Set equal
         to the partition beginning otherwise.
 
         Args:
-            start_from (int): A timestamp, at which to start
+            start_from (pendulum.DateTime): A timestamp, at which to start
                 reading. Older messages are ignored.
         """
         all_parts = []
@@ -165,7 +165,9 @@ class OffsetTracker(dict):
                 if part["cur"] + 1 < part["max"]:
                     return True
 
-    def update(self, msg: Message):
+        return False
+
+    def renew(self, msg: Message) -> None:
         """Update partition offset from the given message.
 
         Args:
@@ -196,7 +198,7 @@ class KafkaCredentials(CredentialsConfiguration):
     sasl_username: str
     sasl_password: TSecretValue
 
-    def init_consumer(self):
+    def init_consumer(self) -> Consumer:
         """Init a Kafka consumer from this credentials.
 
         Returns:
