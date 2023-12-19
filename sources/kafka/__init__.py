@@ -9,7 +9,8 @@ from typing import Callable, Dict, Iterable, List, Optional, Union
 from confluent_kafka import Consumer
 
 import dlt
-from dlt.common.typing import TDataItem
+from dlt.common.time import ensure_pendulum_datetime
+from dlt.common.typing import TDataItem, TAnyDateTime
 from .helpers import (
     default_message_processor,
     KafkaCredentials,
@@ -27,25 +28,26 @@ def kafka_consumer(
     credentials: Union[KafkaCredentials, Consumer] = dlt.secrets.value,
     msg_processor: Optional[Callable] = default_message_processor,
     batch_size: Optional[int] = 3000,
-    start_from_ts: Optional[int] = None,
+    start_from: Optional[TAnyDateTime] = None,
 ) -> Iterable[TDataItem]:
     """Extract recent messages from the given Kafka topics.
 
-    The source tracks offsets for all the topics and partitions,
+    The resource tracks offsets for all the topics and partitions,
     and so reads data incrementally.
 
     Messages from different topics are saved in different tables.
 
     Args:
         topics (Union[str, List[str]]): Names of topics to extract.
-        credentials (Union[KafkaCredentials, Consumer]): Auth credentials
-            or an initiated Kafka consumer.
+        credentials (Optional[Union[KafkaCredentials, Consumer]]):
+            Auth credentials or an initiated Kafka consumer. By default,
+            is taken from secrets.
         msg_processor(Optional[Callable]): A function-converter,
             which'll process every Kafka message after it's read and
             before it's transfered to the destination.
         batch_size (Optional[int]): Messages batch size to read at once.
-        start_from_ts (Optional[int]): A timestamp, after which messages
-            are read. Older messages are ignored.
+        start_from (Optional[TAnyDateTime]): A timestamp, at which to start
+            reading. Older messages are ignored.
 
     Yields:
         Iterable[TDataItem]: Kafka messages.
@@ -59,16 +61,20 @@ def kafka_consumer(
         consumer = credentials.init_consumer()
     else:
         raise TypeError(
-            "Wrong credentials type provided. The credentials need to be of type: KafkaCredentials or confluent_kafka.Consumer"
+            (
+                "Wrong credentials type provided. The credentials need to "
+                "be of type: KafkaCredentials or confluent_kafka.Consumer"
+            )
         )
 
-    consumer = consumer or init_consumer(credentials, group_id)
+    if start_from is not None:
+        start_from = ensure_pendulum_datetime(start_from)
+
     consumer.subscribe(topics)
+    tracker = OffsetTracker(consumer, topics, dlt.current.resource_state(), start_from)
 
-    tracker = OffsetTracker(
-        consumer, topics, dlt.current.resource_state(), start_from_ts
-    )
-
+    # read the messages up to the maximum offsets,
+    # not waiting for new messages
     while tracker.has_unread:
         batch = []
         for msg in consumer.consume(batch_size, timeout=1):

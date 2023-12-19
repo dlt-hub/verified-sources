@@ -7,7 +7,7 @@ from confluent_kafka import Consumer, Message, TopicPartition, OFFSET_BEGINNING
 from dlt.common.configuration import configspec
 from dlt.common.configuration.specs import CredentialsConfiguration
 from dlt.common.time import ensure_pendulum_datetime
-from dlt.common.typing import DictStrAny, TSecretValue
+from dlt.common.typing import DictStrAny, TSecretValue, TAnyDateTime
 from dlt.common.utils import digest128
 
 
@@ -28,10 +28,10 @@ def default_message_processor(msg: Message) -> Dict:
         dict: Processed Kafka message.
     """
     ts = msg.timestamp()
-
     topic = msg.topic()
     partition = msg.partition()
     key = msg.key().decode("utf-8")
+
     return {
         "_kafka": {
             "partition": partition,
@@ -56,9 +56,9 @@ class OffsetTracker(dict):
 
     Args:
         consumer (confluent_kafka.Consumer): Kafka consumer.
-        topic_names (list): Names of topics to track.
+        topic_names (List): Names of topics to track.
         pl_state (DictStrAny): Pipeline current state.
-        start_from_ts (Optional[int]): A timestamp, after which messages
+        start_from (Optional[TAnyDateTime]): A timestamp, after which messages
             are read. Older messages are ignored.
     """
 
@@ -67,7 +67,7 @@ class OffsetTracker(dict):
         consumer: Consumer,
         topic_names: List[str],
         pl_state: DictStrAny,
-        start_from_ts: int = None,
+        start_from: TAnyDateTime = None,
     ):
         super().__init__()
 
@@ -79,7 +79,7 @@ class OffsetTracker(dict):
             "offsets", {t_name: {} for t_name in topic_names}
         )
 
-        self._init_partition_offsets(start_from_ts)
+        self._init_partition_offsets(start_from)
 
     def _read_topics(self, topic_names: List[str]):
         """Read the given topics metadata from Kafka.
@@ -101,15 +101,15 @@ class OffsetTracker(dict):
 
         return tracked_topics
 
-    def _init_partition_offsets(self, start_from_ts):
+    def _init_partition_offsets(self, start_from):
         """Designate current and maximum offsets for every partition.
 
         Current offsets are read from the state, if present. Set equal
         to the partition beginning otherwise.
 
         Args:
-            start_from_ts (int): A timestamp, after which messages
-                are read. Older messages are ignored.
+            start_from (int): A timestamp, at which to start
+                reading. Older messages are ignored.
         """
         all_parts = []
         for t_name, topic in self._topics.items():
@@ -120,17 +120,20 @@ class OffsetTracker(dict):
                 TopicPartition(
                     t_name,
                     part,
-                    start_from_ts if start_from_ts is not None else OFFSET_BEGINNING,
+                    start_from.int_timestamp * 1000
+                    if start_from is not None
+                    else OFFSET_BEGINNING,
                 )
                 for part in topic.partitions
             ]
 
-            if start_from_ts is not None:
+            # get offsets for the timestamp, if given
+            if start_from is not None:
                 ts_offsets = self._consumer.offsets_for_times(parts)
 
             # designate current and maximum offsets for every partition
             for i, part in enumerate(parts):
-                if start_from_ts is not None:
+                if start_from is not None:
                     cur_offset = ts_offsets[i].offset
                 else:
                     cur_offset = self._cur_offsets[t_name].get(
