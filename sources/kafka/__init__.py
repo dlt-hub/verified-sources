@@ -4,6 +4,7 @@ When extraction starts, partitions length is checked -
 data is read only up to it, overriding the default Kafka's
 behavior of waiting for new messages in endless loop.
 """
+from contextlib import closing
 from typing import Any, Callable, Dict, Iterable, List, Optional, Union
 
 from confluent_kafka import Consumer, Message  # type: ignore
@@ -77,15 +78,18 @@ def kafka_consumer(
 
     # read the messages up to the maximum offsets,
     # not waiting for new messages
-    while tracker.has_unread:
-        batch = []
-        for msg in consumer.consume(batch_size, timeout=1):
-            if msg.error():
-                print(f"ERROR: {msg.error()}")
-            else:
-                batch.append(msg_processor(msg))
-                tracker.renew(msg)
+    with closing(consumer):
+        while tracker.has_unread:
+            batch = []
+            for msg in consumer.consume(batch_size, timeout=1):
+                if msg.error():
+                    err = msg.error()
+                    if err.retriable() or not err.fatal():
+                        print(f"ERROR: {err} - RETRYING")
+                    else:
+                        raise err
+                else:
+                    batch.append(msg_processor(msg))
+                    tracker.renew(msg)
 
-        yield batch
-
-    consumer.close()
+            yield batch
