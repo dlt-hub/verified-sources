@@ -38,11 +38,17 @@ from .helpers import (
     fetch_property_history,
 )
 from .settings import (
+    CRM_OBJECT_ENDPOINTS,
+    DEFAULT_COMPANY_PROPS,
+    DEFAULT_CONTACT_PROPS,
+    DEFAULT_DEAL_PROPS,
+    DEFAULT_PRODUCT_PROPS,
+    DEFAULT_TICKET_PROPS,
+    DEFAULT_QUOTE_PROPS,
+    OBJECT_TYPE_SINGULAR,
+    OBJECT_TYPE_PLURAL,
     STARTDATE,
     WEB_ANALYTICS_EVENTS_ENDPOINT,
-    OBJECT_TYPE_SINGULAR,
-    CRM_OBJECT_ENDPOINTS,
-    OBJECT_TYPE_PLURAL,
 )
 
 THubspotObjectType = Literal["company", "contact", "deal", "ticket", "product", "quote"]
@@ -83,9 +89,25 @@ def crm_objects(
     object_type: str,
     api_key: str = dlt.secrets.value,
     include_history: bool = False,
+    props: Sequence[str] = None,
 ) -> Iterator[TDataItems]:
     """Building blocks for CRM resources."""
-    props = ",".join(_get_property_names(api_key, object_type))
+    if props is None:
+        props = ",".join(_get_property_names(api_key, object_type))
+    else:
+        props = ",".join(props)
+
+    if len(props) > 2000:
+        raise ValueError(
+            (
+                "Your request to Hubspot is too long to process. "
+                "Maximum allowed query length is 2000 symbols, while "
+                f"your list of properties `{props[:200]}`... is {len(props)} symbols long. "
+                "Use the `props` argument of the resource to set the list "
+                "of properties to extract from the endpoint."
+            )
+        )
+
     params = {"properties": props, "limit": 100}
 
     yield from fetch_data(CRM_OBJECT_ENDPOINTS[object_type], api_key, params=params)
@@ -104,50 +126,62 @@ def crm_objects(
 
 @dlt.resource(name="companies", write_disposition="replace")
 def companies(
-    api_key: str = dlt.secrets.value, include_history: bool = False
+    api_key: str = dlt.secrets.value,
+    include_history: bool = False,
+    props: Sequence[str] = DEFAULT_COMPANY_PROPS,
 ) -> Iterator[TDataItems]:
     """Hubspot companies resource"""
-    yield from crm_objects("company", api_key, include_history=False)
+    yield from crm_objects("company", api_key, include_history=False, props=props)
 
 
 @dlt.resource(name="contacts", write_disposition="replace")
 def contacts(
-    api_key: str = dlt.secrets.value, include_history: bool = False
+    api_key: str = dlt.secrets.value,
+    include_history: bool = False,
+    props: Sequence[str] = DEFAULT_CONTACT_PROPS,
 ) -> Iterator[TDataItems]:
     """Hubspot contacts resource"""
-    yield from crm_objects("contact", api_key, include_history)
+    yield from crm_objects("contact", api_key, include_history, props)
 
 
 @dlt.resource(name="deals", write_disposition="replace")
 def deals(
-    api_key: str = dlt.secrets.value, include_history: bool = False
+    api_key: str = dlt.secrets.value,
+    include_history: bool = False,
+    props: Sequence[str] = DEFAULT_DEAL_PROPS,
 ) -> Iterator[TDataItems]:
     """Hubspot deals resource"""
-    yield from crm_objects("deal", api_key, include_history)
+    yield from crm_objects("deal", api_key, include_history, props)
 
 
 @dlt.resource(name="tickets", write_disposition="replace")
 def tickets(
-    api_key: str = dlt.secrets.value, include_history: bool = False
+    api_key: str = dlt.secrets.value,
+    include_history: bool = False,
+    props: Sequence[str] = DEFAULT_TICKET_PROPS,
 ) -> Iterator[TDataItems]:
     """Hubspot tickets resource"""
-    yield from crm_objects("ticket", api_key, include_history)
+    yield from crm_objects("ticket", api_key, include_history, props)
 
 
 @dlt.resource(name="products", write_disposition="replace")
 def products(
-    api_key: str = dlt.secrets.value, include_history: bool = False
+    api_key: str = dlt.secrets.value,
+    include_history: bool = False,
+    props: Sequence[str] = DEFAULT_PRODUCT_PROPS,
 ) -> Iterator[TDataItems]:
     """Hubspot products resource"""
-    yield from crm_objects("product", api_key, include_history)
+    yield from crm_objects("product", api_key, include_history, props)
 
 
 @dlt.resource(name="quotes", write_disposition="replace")
 def quotes(
-    api_key: str = dlt.secrets.value, include_history: bool = False
+    api_key: str = dlt.secrets.value,
+    include_history: bool = False,
+    props: Sequence[str] = DEFAULT_QUOTE_PROPS,
 ) -> Iterator[TDataItems]:
     """Hubspot quotes resource"""
-    yield from crm_objects("quote", api_key, include_history)
+    yield from crm_objects("quote", api_key, include_history, props)
 
 
 @dlt.resource

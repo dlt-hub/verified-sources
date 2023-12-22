@@ -7,6 +7,7 @@ from typing import Any
 from urllib.parse import urljoin
 
 from dlt.common import pendulum
+from dlt.pipeline.exceptions import PipelineStepFailed
 from dlt.sources.helpers import requests
 from sources.hubspot import hubspot, hubspot_events_for_objects, contacts
 from sources.hubspot.helpers import fetch_data, BASE_URL
@@ -17,6 +18,7 @@ from sources.hubspot.settings import (
     CRM_PRODUCTS_ENDPOINT,
     CRM_TICKETS_ENDPOINT,
     CRM_QUOTES_ENDPOINT,
+    DEFAULT_CONTACT_PROPS,
 )
 from tests.hubspot.mock_data import (
     mock_contacts_data,
@@ -139,27 +141,26 @@ def test_resource_contacts_with_history(destination_name: str, mock_response) ->
             full_refresh=True,
         )
         load_info = pipeline.run(contacts(api_key="fake_key", include_history=True))
+
     assert_load_info(load_info)
 
-    assert m.call_count == 3
+    assert m.call_count == 2
 
     # Check that API is called with all properties listed
     m.assert_has_calls(
         [
             call(
-                urljoin(BASE_URL, "/crm/v3/properties/contacts"),
+                urljoin(BASE_URL, CRM_CONTACTS_ENDPOINT),
                 headers=ANY,
-                params=None,
+                params={"properties": ",".join(DEFAULT_CONTACT_PROPS), "limit": 100},
             ),
             call(
                 urljoin(BASE_URL, CRM_CONTACTS_ENDPOINT),
                 headers=ANY,
-                params={"properties": prop_string, "limit": 100},
-            ),
-            call(
-                urljoin(BASE_URL, CRM_CONTACTS_ENDPOINT),
-                headers=ANY,
-                params={"propertiesWithHistory": prop_string, "limit": 50},
+                params={
+                    "propertiesWithHistory": ",".join(DEFAULT_CONTACT_PROPS),
+                    "limit": 50,
+                },
             ),
         ]
     )
@@ -167,6 +168,20 @@ def test_resource_contacts_with_history(destination_name: str, mock_response) ->
     assert load_table_counts(pipeline, "contacts_property_history") == {
         "contacts_property_history": len(expected_rows)
     }
+
+
+@pytest.mark.parametrize("destination_name", ALL_DESTINATIONS)
+def test_too_many_properties(destination_name: str) -> None:
+    pipeline = dlt.pipeline(
+        pipeline_name="hubspot",
+        destination=destination_name,
+        dataset_name="hubspot_data",
+        full_refresh=True,
+    )
+    with pytest.raises(PipelineStepFailed):
+        load_info = pipeline.run(
+            contacts(api_key="fake_key", include_history=True, props=["property"] * 500)
+        )
 
 
 @pytest.mark.parametrize("destination_name", ALL_DESTINATIONS)
