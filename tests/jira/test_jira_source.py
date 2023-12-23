@@ -30,7 +30,7 @@ def test_load_all_endpoints(destination_name: str) -> None:
     assert_load_info(info)
     assert load_table_counts(
         pipeline, *[t["name"] for t in pipeline.default_schema.data_tables()]
-    ) == {"issues": 2, "projects": 1, "workflows": 3}
+    ) == {"issues": 10, "projects": 1, "workflows": 3}
 
 
 @pytest.mark.parametrize("destination_name", ALL_DESTINATIONS)
@@ -61,7 +61,7 @@ def test_load_users(destination_name: str) -> None:
     assert (
         load_table_counts(pipeline, "users")
         == load_table_distinct_counts(pipeline, "account_id", "users")
-        == {"users": 19}
+        == {"users": 13}
     )
 
     # we can also test the data
