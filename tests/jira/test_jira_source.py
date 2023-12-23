@@ -77,7 +77,7 @@ def test_load_users(destination_name: str) -> None:
 
             assert len(rows) == 1
             assert rows[0][0] == "Trello"
-            assert rows[0][1] == "atlassian"  # Anna has 'atlassian' account type
+            assert rows[0][1] == "app"  # Trello has 'app' account type
 
 
 @pytest.mark.parametrize("destination_name", ALL_DESTINATIONS)
@@ -85,7 +85,7 @@ def test_load_query_issues(destination_name: str) -> None:
     # test queries
     queries = [
         "created >= -30d order by created DESC",  # nothing returned
-        'key = "DEV-2"',  # one returned
+        'key = "KAN-2"',  # one returned
         "",  # all returned
     ]
 
@@ -113,6 +113,6 @@ def test_load_query_issues(destination_name: str) -> None:
     # tables are typed dicts
     users_table = data_tables[0]
     assert users_table["name"] == "issues"
-    assert load_table_counts(pipeline, "issues") == {"issues": 3}
+    assert load_table_counts(pipeline, "issues") == {"issues": 21}
     # distinct
-    assert load_table_distinct_counts(pipeline, "id", "issues") == {"issues": 2}
+    assert load_table_distinct_counts(pipeline, "id", "issues") == {"issues": 10}
