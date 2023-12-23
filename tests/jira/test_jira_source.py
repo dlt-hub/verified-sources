@@ -71,7 +71,7 @@ def test_load_users(destination_name: str) -> None:
         with c.execute_query(
             "SELECT display_name, account_type FROM users WHERE display_name IN (%s, %s) ORDER BY display_name ASC",
             "Trello",
-            "Adrian Brudaru",
+            "Anna Hofffmann",
         ) as cur:
             rows = list(cur.fetchall())
 
