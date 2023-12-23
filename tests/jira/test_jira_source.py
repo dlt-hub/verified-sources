@@ -76,7 +76,7 @@ def test_load_users(destination_name: str) -> None:
             rows = list(cur.fetchall())
 
             assert len(rows) == 1
-            assert rows[0][0] == "Anna Hofffmann"
+            assert rows[0][0] == "Trello"
             assert rows[0][1] == "atlassian"  # Anna has 'atlassian' account type
 
 
