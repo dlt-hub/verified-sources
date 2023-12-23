@@ -75,9 +75,9 @@ def test_load_users(destination_name: str) -> None:
         ) as cur:
             rows = list(cur.fetchall())
 
-            assert len(rows) == 3
-            assert rows[0][0] == "Adrian Brudaru"
-            assert rows[0][1] == "atlassian"  # Adrian has 'atlassian' account type
+            assert len(rows) == 1
+            assert rows[0][0] == "Anna Hofffmann"
+            assert rows[0][1] == "atlassian"  # Anna has 'atlassian' account type
 
 
 @pytest.mark.parametrize("destination_name", ALL_DESTINATIONS)
