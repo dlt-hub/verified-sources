@@ -7,9 +7,9 @@ from typing import Any
 from urllib.parse import urljoin
 
 from dlt.common import pendulum
-from dlt.pipeline.exceptions import PipelineStepFailed
+from dlt.extract.exceptions import ResourceExtractionError
 from dlt.sources.helpers import requests
-from sources.hubspot import hubspot, hubspot_events_for_objects, contacts
+from sources.hubspot import hubspot, hubspot_events_for_objects
 from sources.hubspot.helpers import fetch_data, BASE_URL
 from sources.hubspot.settings import (
     CRM_CONTACTS_ENDPOINT,
@@ -120,15 +120,12 @@ def test_fetch_data_quotes(mock_response):
 
 @pytest.mark.parametrize("destination_name", ALL_DESTINATIONS)
 def test_resource_contacts_with_history(destination_name: str, mock_response) -> None:
-    prop_names = [p["name"] for p in mock_contacts_properties["results"]]
-    prop_string = ",".join(prop_names)
+    expected_rows = []
+    global_props = ["global_property1", "global_property2"]
 
     def fake_get(url: str, *args, **kwargs) -> Any:  # type: ignore[no-untyped-def]
-        if "/properties" in url:
-            return mock_response(json_data=mock_contacts_properties)
         return mock_response(json_data=mock_contacts_with_history)
 
-    expected_rows = []
     for contact in mock_contacts_with_history["results"]:
         for items in contact["propertiesWithHistory"].values():  # type: ignore[attr-defined]
             expected_rows.extend(items)
@@ -140,7 +137,12 @@ def test_resource_contacts_with_history(destination_name: str, mock_response) ->
             dataset_name="hubspot_data",
             full_refresh=True,
         )
-        load_info = pipeline.run(contacts(api_key="fake_key", include_history=True))
+        source = hubspot(
+            api_key="fake_key",
+            include_history=True,
+            global_props=global_props,
+        )
+        load_info = pipeline.run(source.with_resources("contacts"))
 
     assert_load_info(load_info)
 
@@ -152,13 +154,18 @@ def test_resource_contacts_with_history(destination_name: str, mock_response) ->
             call(
                 urljoin(BASE_URL, CRM_CONTACTS_ENDPOINT),
                 headers=ANY,
-                params={"properties": ",".join(DEFAULT_CONTACT_PROPS), "limit": 100},
+                params={
+                    "properties": ",".join(DEFAULT_CONTACT_PROPS + global_props),
+                    "limit": 100,
+                },
             ),
             call(
                 urljoin(BASE_URL, CRM_CONTACTS_ENDPOINT),
                 headers=ANY,
                 params={
-                    "propertiesWithHistory": ",".join(DEFAULT_CONTACT_PROPS),
+                    "propertiesWithHistory": ",".join(
+                        DEFAULT_CONTACT_PROPS + global_props
+                    ),
                     "limit": 50,
                 },
             ),
@@ -178,10 +185,45 @@ def test_too_many_properties(destination_name: str) -> None:
         dataset_name="hubspot_data",
         full_refresh=True,
     )
-    with pytest.raises(PipelineStepFailed):
-        load_info = pipeline.run(
-            contacts(api_key="fake_key", include_history=True, props=["property"] * 500)
-        )
+    with pytest.raises(ResourceExtractionError):
+        source = hubspot(api_key="fake_key", include_history=True)
+        source.contacts.bind(props=["property"] * 500)
+        list(source.with_resources("contacts"))
+
+
+@pytest.mark.parametrize("destination_name", ALL_DESTINATIONS)
+def test_custom_properties(destination_name: str, mock_response) -> None:
+    def fake_get(url: str, *args, **kwargs) -> Any:  # type: ignore[no-untyped-def]
+        return mock_response(json_data=mock_contacts_with_history)
+
+    props = ["prop1", "prop2", "prop3"]
+
+    pipeline = dlt.pipeline(
+        pipeline_name="hubspot",
+        destination=destination_name,
+        dataset_name="hubspot_data",
+        full_refresh=True,
+    )
+    source = hubspot(api_key="fake_key")
+    source.contacts.bind(props=props)
+
+    with patch("dlt.sources.helpers.requests.get", side_effect=fake_get) as m:
+        load_info = pipeline.run(source.with_resources("contacts"))
+
+    assert_load_info(load_info)
+
+    m.assert_has_calls(
+        [
+            call(
+                urljoin(BASE_URL, CRM_CONTACTS_ENDPOINT),
+                headers=ANY,
+                params={
+                    "properties": ",".join(props),
+                    "limit": 100,
+                },
+            ),
+        ]
+    )
 
 
 @pytest.mark.parametrize("destination_name", ALL_DESTINATIONS)

@@ -54,6 +54,43 @@ def load_crm_data_with_history() -> None:
     print(info)
 
 
+def load_crm_objects_with_custom_properties() -> None:
+    """
+    Loads CRM objects, reading only properties defined by the user.
+    """
+
+    # Create a DLT pipeline object with the pipeline name,
+    # dataset name, properties to read and destination database
+    # type Add full_refresh=(True or False) if you need your
+    # pipeline to create the dataset in your destination
+    p = dlt.pipeline(
+        pipeline_name="hubspot_pipeline",
+        dataset_name="hubspot",
+        destination="postgres",
+    )
+
+    # set a list of properties, which must be read
+    # from all the included resources
+    source = hubspot(
+        global_props=[
+            "createdate",
+            "hs_analytics_last_timestamp",
+            "hs_analytics_last_visit_timestamp",
+        ]
+    )
+
+    # set a list of properties, wich must be read
+    # from the `contacts` resource in addition to
+    # the global properties
+    source.contacts.bind(props=["date_of_birth", "degree"])
+
+    # Run the pipeline with the HubSpot source connector
+    info = p.run(source)
+
+    # Print information about the pipeline run
+    print(info)
+
+
 def load_web_analytics_events(
     object_type: THubspotObjectType, object_ids: List[str]
 ) -> None:
@@ -86,3 +123,4 @@ if __name__ == "__main__":
     load_crm_data()
     # load_crm_data_with_history()
     # load_web_analytics_events("company", ["7086461639", "7086464459"])
+    # load_crm_objects_with_custom_properties()
