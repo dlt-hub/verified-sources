@@ -179,12 +179,6 @@ def test_resource_contacts_with_history(destination_name: str, mock_response) ->
 
 @pytest.mark.parametrize("destination_name", ALL_DESTINATIONS)
 def test_too_many_properties(destination_name: str) -> None:
-    pipeline = dlt.pipeline(
-        pipeline_name="hubspot",
-        destination=destination_name,
-        dataset_name="hubspot_data",
-        full_refresh=True,
-    )
     with pytest.raises(ResourceExtractionError):
         source = hubspot(api_key="fake_key", include_history=True)
         source.contacts.bind(props=["property"] * 500)

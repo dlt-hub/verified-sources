@@ -99,7 +99,10 @@ def hubspot(
     ) -> Iterator[TDataItems]:
         """Hubspot companies resource"""
         yield from crm_objects(
-            "company", api_key, include_history=False, props=props + global_props
+            "company",
+            api_key,
+            include_history=False,
+            props=props if props is None else props + global_props,  # type: ignore
         )
 
     @dlt.resource(name="contacts", write_disposition="replace")
@@ -110,7 +113,10 @@ def hubspot(
     ) -> Iterator[TDataItems]:
         """Hubspot contacts resource"""
         yield from crm_objects(
-            "contact", api_key, include_history, props + global_props
+            "contact",
+            api_key,
+            include_history,
+            props if props is None else props + global_props,  # type: ignore
         )
 
     @dlt.resource(name="deals", write_disposition="replace")
@@ -120,7 +126,12 @@ def hubspot(
         props: Sequence[str] = DEFAULT_DEAL_PROPS,
     ) -> Iterator[TDataItems]:
         """Hubspot deals resource"""
-        yield from crm_objects("deal", api_key, include_history, props + global_props)
+        yield from crm_objects(
+            "deal",
+            api_key,
+            include_history,
+            props if props is None else props + global_props,  # type: ignore
+        )
 
     @dlt.resource(name="tickets", write_disposition="replace")
     def tickets(
@@ -129,7 +140,12 @@ def hubspot(
         props: Sequence[str] = DEFAULT_TICKET_PROPS,
     ) -> Iterator[TDataItems]:
         """Hubspot tickets resource"""
-        yield from crm_objects("ticket", api_key, include_history, props + global_props)
+        yield from crm_objects(
+            "ticket",
+            api_key,
+            include_history,
+            props if props is None else props + global_props,  # type: ignore
+        )
 
     @dlt.resource(name="products", write_disposition="replace")
     def products(
@@ -139,7 +155,10 @@ def hubspot(
     ) -> Iterator[TDataItems]:
         """Hubspot products resource"""
         yield from crm_objects(
-            "product", api_key, include_history, props + global_props
+            "product",
+            api_key,
+            include_history,
+            props if props is None else props + global_props,  # type: ignore
         )
 
     @dlt.resource(name="quotes", write_disposition="replace")
@@ -149,7 +168,12 @@ def hubspot(
         props: Sequence[str] = DEFAULT_QUOTE_PROPS,
     ) -> Iterator[TDataItems]:
         """Hubspot quotes resource"""
-        yield from crm_objects("quote", api_key, include_history, props + global_props)
+        yield from crm_objects(
+            "quote",
+            api_key,
+            include_history,
+            props if props is None else props + global_props,  # type: ignore
+        )
 
     return companies, contacts, deals, tickets, products, quotes
 
