@@ -64,9 +64,9 @@ def messages_uids(
     gmail_group: Optional[str] = GMAIL_GROUP,
     folder: str = "INBOX",
     start_date: pendulum.DateTime = DEFAULT_START_DATE,
-    initial_message_num: Optional[
-        dlt.sources.incremental[int]
-    ] = dlt.sources.incremental("message_uid", initial_value=1),
+    initial_message_num: dlt.sources.incremental[int] = dlt.sources.incremental(
+        "message_uid", initial_value=1
+    ),
 ) -> TDataItem:
     """Collects email message UIDs (Unique IDs) from the mailbox.
 
@@ -78,7 +78,7 @@ def messages_uids(
         gmail_group (str, optional): The email address of the Google Group to filter emails sent to the group. Default is 'GMAIL_GROUP' from settings.
         folder (str, optional): The mailbox folder from which to collect emails. Default is 'INBOX'.
         start_date (pendulum.DateTime, optional): The start date from which to collect emails. Default is 'DEFAULT_START_DATE' from settings.
-        initial_message_num (Optional[dlt.sources.incremental[int]], optional): The initial value for the incremental message UID. Default is 1.
+        initial_message_num (dlt.sources.incremental[int]): The initial value for the incremental message UID. Default is 1.
 
     Yields:
         TDataItem: A dictionary containing the 'message_uid' of the collected email message.

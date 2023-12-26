@@ -120,7 +120,7 @@ def collection_documents(
     Args:
         client (MongoClient): The PyMongo client `pymongo.MongoClient` instance.
         collection (Collection): The collection `pymongo.collection.Collection` to load.
-        incremental: Optional[dlt.sources.incremental[Any]] : The incremental configuration.
+        incremental (Optional[dlt.sources.incremental[Any]]): The incremental configuration.
         parallel (bool): Option to enable parallel loading for the collection. Default is False.
 
     Returns:

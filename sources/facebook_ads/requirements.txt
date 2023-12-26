@@ -1,2 +1,2 @@
-dlt>=0.3.5,<0.4.0
+dlt>=0.3.5
 facebook-business>=16.0.2

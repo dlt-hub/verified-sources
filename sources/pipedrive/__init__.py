@@ -15,18 +15,19 @@ import dlt
 
 from .helpers.custom_fields_munger import update_fields_mapping, rename_fields
 from .helpers.pages import get_recent_items_incremental, get_pages
-from .helpers import parse_timestamp, group_deal_flows
+from .helpers import group_deal_flows
 from .typing import TDataPage
 from .settings import ENTITY_MAPPINGS, RECENTS_ENTITIES
-from dlt.sources import DltResource
 from dlt.common import pendulum
+from dlt.common.time import ensure_pendulum_datetime
+from dlt.sources import DltResource
 from dlt.extract.typing import DataItemWithMeta
 
 
 @dlt.source(name="pipedrive")
 def pipedrive_source(
     pipedrive_api_key: str = dlt.secrets.value,
-    since_timestamp: Optional[Union[pendulum.DateTime, str]] = dlt.config.value,
+    since_timestamp: Optional[Union[pendulum.DateTime, str]] = "1970-01-01 00:00:00",
 ) -> Iterator[DltResource]:
     """
     Get data from the Pipedrive API. Supports incremental loading and custom fields mapping.
@@ -65,7 +66,9 @@ def pipedrive_source(
     yield create_state(pipedrive_api_key) | parsed_mapping
 
     # parse timestamp and build kwargs
-    since_timestamp = parse_timestamp(since_timestamp)
+    since_timestamp = ensure_pendulum_datetime(since_timestamp).strftime(
+        "%Y-%m-%d %H:%M:%S"
+    )
     resource_kwargs: Any = (
         {"since_timestamp": since_timestamp} if since_timestamp else {}
     )
@@ -173,7 +176,7 @@ def parsed_mapping(
 @dlt.resource(primary_key="id", write_disposition="merge")
 def leads(
     pipedrive_api_key: str = dlt.secrets.value,
-    update_time: Optional[dlt.sources.incremental[str]] = dlt.sources.incremental(
+    update_time: dlt.sources.incremental[str] = dlt.sources.incremental(
         "update_time", "1970-01-01 00:00:00"
     ),
 ) -> Iterator[TDataPage]:
@@ -184,17 +187,13 @@ def leads(
     )
     # Load leads pages sorted from newest to oldest and stop loading when
     # last incremental value is reached
-    last_value = update_time.last_value
     pages = get_pages(
         "leads",
         pipedrive_api_key,
         extra_params={"sort": "update_time DESC"},
     )
     for page in pages:
-        # TODO: This check can be replaced with `update_time.start_out_of_range` in dlt 0.3.5
-        if last_value:
-            # Just check whether first item is lower, worst case we load 1 redundant page before break
-            first_item = page[0] if page else None
-            if first_item and first_item["update_time"] < last_value:
-                return
         yield rename_fields(page, fields_mapping)
+
+        if update_time.start_out_of_range:
+            return
