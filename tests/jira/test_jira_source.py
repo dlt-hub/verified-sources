@@ -61,7 +61,7 @@ def test_load_users(destination_name: str) -> None:
     assert (
         load_table_counts(pipeline, "users")
         == load_table_distinct_counts(pipeline, "account_id", "users")
-        == {"users": 13}
+        == {"users": 19}
     )
 
     # we can also test the data
