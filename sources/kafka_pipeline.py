@@ -60,7 +60,6 @@ def load_starting_from_date() -> None:
         pipeline_name="kafka_pipeline",
         destination="postgres",
         dataset_name="kafka_messages",
-        full_refresh=True,
     )
 
     from_date = datetime(2023, 12, 15)

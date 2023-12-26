@@ -1,7 +1,7 @@
 from typing import Any, Dict, List
 
-from confluent_kafka import Consumer, Message, TopicPartition, OFFSET_BEGINNING  # type: ignore
-from confluent_kafka.admin import TopicMetadata  # type: ignore
+from confluent_kafka import Consumer, Message, TopicPartition  # type: ignore
+from confluent_kafka.admin import AdminClient, TopicMetadata  # type: ignore
 
 from dlt.common import pendulum
 from dlt.common.configuration import configspec
@@ -120,9 +120,7 @@ class OffsetTracker(dict):  # type: ignore
                 TopicPartition(
                     t_name,
                     part,
-                    start_from.int_timestamp * 1000
-                    if start_from is not None
-                    else OFFSET_BEGINNING,
+                    start_from.int_timestamp * 1000 if start_from is not None else 0,
                 )
                 for part in topic.partitions
             ]
@@ -136,8 +134,8 @@ class OffsetTracker(dict):  # type: ignore
                 if start_from is not None:
                     cur_offset = ts_offsets[i].offset
                 else:
-                    cur_offset = self._cur_offsets[t_name].get(
-                        str(part.partition), OFFSET_BEGINNING
+                    cur_offset = (
+                        self._cur_offsets[t_name].get(str(part.partition), -1) + 1
                     )
 
                 self[t_name][str(part.partition)] = {
@@ -211,5 +209,6 @@ class KafkaCredentials(CredentialsConfiguration):
             "sasl.mechanisms": self.sasl_mechanisms,
             "sasl.username": self.sasl_username,
             "sasl.password": self.sasl_password,
+            "auto.offset.reset": "earliest",
         }
         return Consumer(config)

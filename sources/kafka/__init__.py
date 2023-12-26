@@ -73,8 +73,8 @@ def kafka_consumer(
     if start_from is not None:
         start_from = ensure_pendulum_datetime(start_from)
 
-    consumer.subscribe(topics)
     tracker = OffsetTracker(consumer, topics, dlt.current.resource_state(), start_from)
+    consumer.subscribe(topics)
 
     # read the messages up to the maximum offsets,
     # not waiting for new messages
