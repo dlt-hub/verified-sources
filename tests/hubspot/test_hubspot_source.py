@@ -18,6 +18,7 @@ from sources.hubspot.settings import (
     CRM_PRODUCTS_ENDPOINT,
     CRM_TICKETS_ENDPOINT,
     CRM_QUOTES_ENDPOINT,
+    CUSTOM_ONLY,
     DEFAULT_CONTACT_PROPS,
 )
 from tests.hubspot.mock_data import (
@@ -218,6 +219,31 @@ def test_custom_properties(destination_name: str, mock_response) -> None:
             ),
         ]
     )
+
+
+@pytest.mark.parametrize("destination_name", ALL_DESTINATIONS)
+def test_custom_only_properties(destination_name: str, mock_response) -> None:
+    def fake_get(url: str, *args, **kwargs) -> Any:  # type: ignore[no-untyped-def]
+        if "/properties" in url:
+            return mock_response(json_data=mock_contacts_properties)
+        return mock_response(json_data=mock_contacts_with_history)
+
+    pipeline = dlt.pipeline(
+        pipeline_name="hubspot",
+        destination=destination_name,
+        dataset_name="hubspot_data",
+        full_refresh=True,
+    )
+    source = hubspot(api_key="fake_key")
+    source.contacts.bind(props=CUSTOM_ONLY)
+
+    with patch("dlt.sources.helpers.requests.get", side_effect=fake_get) as m:
+        load_info = pipeline.run(source.with_resources("contacts"))
+
+    assert_load_info(load_info)
+
+    for prop in m.mock_calls[1][2]["params"]["properties"].split(","):
+        assert not prop.startswith("hs_")
 
 
 @pytest.mark.parametrize("destination_name", ALL_DESTINATIONS)

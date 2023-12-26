@@ -38,7 +38,9 @@ from .helpers import (
     fetch_property_history,
 )
 from .settings import (
+    ALL,
     CRM_OBJECT_ENDPOINTS,
+    CUSTOM_ONLY,
     DEFAULT_COMPANY_PROPS,
     DEFAULT_CONTACT_PROPS,
     DEFAULT_DEAL_PROPS,
@@ -102,7 +104,7 @@ def hubspot(
             "company",
             api_key,
             include_history=False,
-            props=props if props is None else props + global_props,  # type: ignore
+            props=props if props in (ALL, CUSTOM_ONLY) else props + global_props,  # type: ignore
         )
 
     @dlt.resource(name="contacts", write_disposition="replace")
@@ -116,7 +118,7 @@ def hubspot(
             "contact",
             api_key,
             include_history,
-            props if props is None else props + global_props,  # type: ignore
+            props if props in (ALL, CUSTOM_ONLY) else props + global_props,  # type: ignore
         )
 
     @dlt.resource(name="deals", write_disposition="replace")
@@ -130,7 +132,7 @@ def hubspot(
             "deal",
             api_key,
             include_history,
-            props if props is None else props + global_props,  # type: ignore
+            props if props in (ALL, CUSTOM_ONLY) else props + global_props,  # type: ignore
         )
 
     @dlt.resource(name="tickets", write_disposition="replace")
@@ -144,7 +146,7 @@ def hubspot(
             "ticket",
             api_key,
             include_history,
-            props if props is None else props + global_props,  # type: ignore
+            props if props in (ALL, CUSTOM_ONLY) else props + global_props,  # type: ignore
         )
 
     @dlt.resource(name="products", write_disposition="replace")
@@ -158,7 +160,7 @@ def hubspot(
             "product",
             api_key,
             include_history,
-            props if props is None else props + global_props,  # type: ignore
+            props if props in (ALL, CUSTOM_ONLY) else props + global_props,  # type: ignore
         )
 
     @dlt.resource(name="quotes", write_disposition="replace")
@@ -172,7 +174,7 @@ def hubspot(
             "quote",
             api_key,
             include_history,
-            props if props is None else props + global_props,  # type: ignore
+            props if props in (ALL, CUSTOM_ONLY) else props + global_props,  # type: ignore
         )
 
     return companies, contacts, deals, tickets, products, quotes
@@ -185,8 +187,11 @@ def crm_objects(
     props: Sequence[str] = None,
 ) -> Iterator[TDataItems]:
     """Building blocks for CRM resources."""
-    if props is None:
+    if props == ALL:
         props = ",".join(_get_property_names(api_key, object_type))
+    elif props == CUSTOM_ONLY:
+        all_props = _get_property_names(api_key, object_type)
+        props = ",".join([prop for prop in all_props if not prop.startswith("hs_")])
     else:
         props = ",".join(props)
 

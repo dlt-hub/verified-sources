@@ -95,3 +95,6 @@ DEFAULT_QUOTE_PROPS = [
     "hs_status",
     "hs_title",
 ]
+
+ALL = "ALL"
+CUSTOM_ONLY = "CUSTOM_ONLY"
