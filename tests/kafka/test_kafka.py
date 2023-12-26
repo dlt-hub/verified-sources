@@ -65,9 +65,10 @@ def kafka_topics(kafka_admin):
 
     _await(kafka_admin.create_topics(new_topics))
 
-    yield t_names
-
-    _await(kafka_admin.delete_topics(t_names))
+    try:
+        yield t_names
+    finally:
+        _await(kafka_admin.delete_topics(t_names))
 
 
 @pytest.fixture(scope="function")
