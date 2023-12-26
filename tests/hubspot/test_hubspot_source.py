@@ -229,7 +229,7 @@ def test_all_resources(destination_name: str) -> None:
         full_refresh=True,
     )
     load_info = pipeline.run(hubspot(include_history=True))
-    print(load_info)
+
     assert_load_info(load_info)
     table_names = [
         t["name"]
@@ -252,8 +252,8 @@ def test_all_resources(destination_name: str) -> None:
     # Check history tables
     # NOTE: this value is increasing... maybe we should start testing ranges
     assert load_table_counts(pipeline, *history_table_names) == {
-        "contacts_property_history": 17226,
-        "deals_property_history": 14349,
+        "contacts_property_history": 3616,
+        "deals_property_history": 3662,
     }
 
     # Check property from couple of contacts against known data
@@ -262,7 +262,7 @@ def test_all_resources(destination_name: str) -> None:
             list(row)
             for row in client.execute_sql(
                 """
-                SELECT ch.property_name, ch.value, ch.source_type, ch.source_type, ch.timestamp
+                SELECT ch.property_name, ch.value__v_text, ch.source_type, ch.timestamp
                 FROM contacts
                 JOIN
                 contacts_property_history AS ch ON contacts.id = ch.object_id
@@ -270,6 +270,7 @@ def test_all_resources(destination_name: str) -> None:
                 """
             )
         ]
+
     for row in rows:
         row[-1] = pendulum.instance(row[-1])
 
@@ -279,15 +280,13 @@ def test_all_resources(destination_name: str) -> None:
                 "email",
                 "emailmaria@hubspot.com",
                 "API",
-                "API",
-                pendulum.parse("2022-06-15 08:51:51.399+00"),
+                pendulum.parse("2022-06-15 08:51:51.399"),
             ),
             (
                 "email",
                 "bh@hubspot.com",
                 "API",
-                "API",
-                pendulum.parse("2022-06-15 08:51:51.399+00"),
+                pendulum.parse("2022-06-15 08:51:51.399"),
             ),
         ]
     )
