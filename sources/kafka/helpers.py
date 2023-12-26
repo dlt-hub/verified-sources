@@ -11,7 +11,7 @@ from dlt.common.typing import DictStrAny, TSecretValue, TAnyDateTime
 from dlt.common.utils import digest128
 
 
-def default_message_processor(msg: Message) -> Dict[str, Any]:
+def default_msg_processor(msg: Message) -> Dict[str, Any]:
     """Basic Kafka message processor.
 
     Returns the message value and metadata. Timestamp consists of two values:

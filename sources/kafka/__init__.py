@@ -13,7 +13,7 @@ import dlt
 from dlt.common.time import ensure_pendulum_datetime
 from dlt.common.typing import TDataItem, TAnyDateTime
 from .helpers import (
-    default_message_processor,
+    default_msg_processor,
     KafkaCredentials,
     OffsetTracker,
 )
@@ -29,7 +29,7 @@ def kafka_consumer(
     credentials: Union[KafkaCredentials, Consumer] = dlt.secrets.value,
     msg_processor: Optional[
         Callable[[Message], Dict[str, Any]]
-    ] = default_message_processor,
+    ] = default_msg_processor,
     batch_size: Optional[int] = 3000,
     start_from: Optional[TAnyDateTime] = None,
 ) -> Iterable[TDataItem]:
@@ -65,8 +65,8 @@ def kafka_consumer(
     else:
         raise TypeError(
             (
-                "Wrong credentials type provided. The credentials need to "
-                "be of type: KafkaCredentials or confluent_kafka.Consumer"
+                "Wrong credentials type provided. Need to be of type: "
+                "KafkaCredentials or confluent_kafka.Consumer"
             )
         )
 
@@ -76,7 +76,7 @@ def kafka_consumer(
     tracker = OffsetTracker(consumer, topics, dlt.current.resource_state(), start_from)
     consumer.subscribe(topics)
 
-    # read the messages up to the maximum offsets,
+    # read messages up to the maximum offsets,
     # not waiting for new messages
     with closing(consumer):
         while tracker.has_unread:

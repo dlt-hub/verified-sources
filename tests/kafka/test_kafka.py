@@ -9,7 +9,6 @@ import dlt
 from dlt.common import pendulum
 from sources.kafka import kafka_consumer
 from sources.kafka.helpers import (
-    default_message_processor,
     KafkaCredentials,
     OffsetTracker,
 )
@@ -18,13 +17,18 @@ from tests.utils import assert_load_info, assert_query_data, load_table_counts
 KAFKA_CONSUMER_NAME = "dlt_ci_kafka_source"
 
 
-def _creds_to_conf(credentials):
+def _await(res):
+    for future in res.values():
+        future.result()
+
+
+def _creds_to_conf(creds):
     return {
-        "bootstrap.servers": credentials.bootstrap_servers,
-        "security.protocol": credentials.security_protocol,
-        "sasl.mechanisms": credentials.sasl_mechanisms,
-        "sasl.username": credentials.sasl_username,
-        "sasl.password": credentials.sasl_password,
+        "bootstrap.servers": creds.bootstrap_servers,
+        "security.protocol": creds.security_protocol,
+        "sasl.mechanisms": creds.sasl_mechanisms,
+        "sasl.username": creds.sasl_username,
+        "sasl.password": creds.sasl_password,
     }
 
 
@@ -38,6 +42,7 @@ def _random_name(prefix):
 
 @pytest.fixture(scope="module")
 def kafka_admin():
+    """Init an admin client - for topics creation and deletion."""
     credentials = dlt.secrets.get("sources.kafka.credentials", KafkaCredentials)
     return AdminClient(_creds_to_conf(credentials))
 
@@ -58,20 +63,17 @@ def kafka_topics(kafka_admin):
         new_topics.append(NewTopic(name, num_partitions=2))
         t_names.append(name)
 
-    res = kafka_admin.create_topics(new_topics)
-    for future in res.values():
-        future.result()
+    _await(kafka_admin.create_topics(new_topics))
 
     yield t_names
 
-    res = kafka_admin.delete_topics(t_names)
-    for future in res.values():
-        future.result()
+    _await(kafka_admin.delete_topics(t_names))
 
 
 @pytest.fixture(scope="function")
 def kafka_messages(kafka_topics, kafka_producer):
     keys = {}
+
     for topic in kafka_topics:
         keys[topic] = []
         for i in range(3):
@@ -85,12 +87,11 @@ def kafka_messages(kafka_topics, kafka_producer):
 
 @pytest.fixture(scope="function")
 def kafka_timed_messages(kafka_admin, kafka_producer):
+    """Produce several messages with noticeable pause between them."""
     ts = None
 
     topic = _random_name("topic")
-    res = kafka_admin.create_topics([NewTopic(topic, num_partitions=1)])
-    for future in res.values():
-        future.result()
+    _await(kafka_admin.create_topics([NewTopic(topic, num_partitions=1)]))
 
     for i in range(3):
         key = str(i)
@@ -104,12 +105,11 @@ def kafka_timed_messages(kafka_admin, kafka_producer):
 
     yield topic, ts
 
-    res = kafka_admin.delete_topics([topic])
-    for future in res.values():
-        future.result()
+    _await(kafka_admin.delete_topics([topic]))
 
 
 def test_kafka_read(kafka_topics, kafka_messages):
+    """Test simple messages reading."""
     pipeline = dlt.pipeline(
         pipeline_name="kafka_test",
         destination="postgres",
@@ -139,6 +139,11 @@ def test_kafka_read(kafka_topics, kafka_messages):
 
 
 def test_kafka_read_custom_msg_processor(kafka_topics, kafka_messages):
+    """
+    Test messages reading and processing with a
+    custom processor-function.
+    """
+
     def _custom_msg_processor(msg):
         return {
             "_kafka": {
@@ -169,6 +174,7 @@ def test_kafka_read_custom_msg_processor(kafka_topics, kafka_messages):
 
 
 def test_kafka_read_with_timestamp(kafka_timed_messages):
+    """Test reading, starting from a particular timestamp."""
     topic, ts = kafka_timed_messages
 
     pipeline = dlt.pipeline(
@@ -190,6 +196,7 @@ def test_kafka_read_with_timestamp(kafka_timed_messages):
 
 
 def test_kafka_incremental_read(kafka_producer, kafka_topics):
+    """Test incremental messages reading."""
     topic = kafka_topics[0]
 
     for _ in range(3):
