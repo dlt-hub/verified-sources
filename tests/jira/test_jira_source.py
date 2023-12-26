@@ -106,7 +106,7 @@ def test_load_query_issues(destination_name: str) -> None:
     print(info)
     # make sure all jobs were loaded
     assert_load_info(info)
-    # now let's inspect the generates schema. it should contain just one table with data 
+    # now let's inspect the generates schema. it should contain just one table with data
     schema = pipeline.default_schema
     data_tables = schema.data_tables()
     assert len(data_tables) == 1
