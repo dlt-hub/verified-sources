@@ -75,7 +75,7 @@ def test_load_users(destination_name: str) -> None:
         ) as cur:
             rows = list(cur.fetchall())
 
-            assert len(rows) == 1
+            assert len(rows) == 2
             assert rows[0][0] == "Trello"
             assert rows[0][1] == "app"  # Trello has 'app' account type
 
