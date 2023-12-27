@@ -85,7 +85,8 @@ class GitPythonFileSystem(AbstractFileSystem):
         elif isinstance(object, git.Tree):
             return "directory"
         else:
-            return type(object).__name__
+            msg = f"There is no fileystem object type corresponding to Git object type: {type(object).__name__}"
+            raise TypeError(msg)
 
     def _details(
         self, object: git.Object, include_committed_date: bool = True
