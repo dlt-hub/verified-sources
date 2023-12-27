@@ -69,20 +69,16 @@ def load_crm_objects_with_custom_properties() -> None:
         destination="postgres",
     )
 
-    # set a list of properties, which must be read
-    # from all the included resources
-    source = hubspot(
-        global_props=[
-            "createdate",
-            "hs_analytics_last_timestamp",
-            "hs_analytics_last_visit_timestamp",
-        ]
-    )
+    source = hubspot()
 
-    # set a list of properties, wich must be read
-    # from the `contacts` resource in addition to
-    # the global properties
-    source.contacts.bind(props=["date_of_birth", "degree"])
+    # By default, all the custom properties of a CRM object are extracted,
+    # ignoring those driven by Hubspot (prefixed with `hs_`).
+
+    # To read fields in addition to the custom ones:
+    # source.contacts.bind(props=["date_of_birth", "degree"])
+
+    # To read only two particular fields:
+    source.contacts.bind(props=["date_of_birth", "degree"], include_custom_props=False)
 
     # Run the pipeline with the HubSpot source connector
     info = p.run(source)

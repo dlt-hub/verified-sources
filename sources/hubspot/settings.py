@@ -96,5 +96,4 @@ DEFAULT_QUOTE_PROPS = [
     "hs_title",
 ]
 
-ALL = "ALL"
-CUSTOM_ONLY = "CUSTOM_ONLY"
+ALL = ("ALL",)

@@ -40,14 +40,12 @@ from .helpers import (
 from .settings import (
     ALL,
     CRM_OBJECT_ENDPOINTS,
-    CUSTOM_ONLY,
     DEFAULT_COMPANY_PROPS,
     DEFAULT_CONTACT_PROPS,
     DEFAULT_DEAL_PROPS,
     DEFAULT_PRODUCT_PROPS,
     DEFAULT_TICKET_PROPS,
     DEFAULT_QUOTE_PROPS,
-    OBJECT_TYPE_SINGULAR,
     OBJECT_TYPE_PLURAL,
     STARTDATE,
     WEB_ANALYTICS_EVENTS_ENDPOINT,
@@ -60,7 +58,6 @@ THubspotObjectType = Literal["company", "contact", "deal", "ticket", "product", 
 def hubspot(
     api_key: str = dlt.secrets.value,
     include_history: bool = False,
-    global_props: Sequence[str] = None,
 ) -> Sequence[DltResource]:
     """
     A DLT source that retrieves data from the HubSpot API using the
@@ -78,9 +75,6 @@ def hubspot(
         include_history (Optional[bool]):
             Whether to load history of property changes along with entities.
             The history entries are loaded to separate tables.
-        global_props (Optional[Sequence[str]]):
-            List of properties to be requested in every resource included
-            into `hubspot`.
 
     Returns:
         Sequence[DltResource]: Dlt resources, one for each HubSpot API endpoint.
@@ -91,20 +85,20 @@ def hubspot(
         `api_key` argument.
     """
 
-    global_props = global_props or []
-
     @dlt.resource(name="companies", write_disposition="replace")
     def companies(
         api_key: str = api_key,
         include_history: bool = include_history,
         props: Sequence[str] = DEFAULT_COMPANY_PROPS,
+        include_custom_props: bool = True,
     ) -> Iterator[TDataItems]:
         """Hubspot companies resource"""
         yield from crm_objects(
             "company",
             api_key,
             include_history=False,
-            props=props if props in (ALL, CUSTOM_ONLY) else props + global_props,  # type: ignore
+            props=props,
+            include_custom_props=include_custom_props,
         )
 
     @dlt.resource(name="contacts", write_disposition="replace")
@@ -112,13 +106,15 @@ def hubspot(
         api_key: str = api_key,
         include_history: bool = include_history,
         props: Sequence[str] = DEFAULT_CONTACT_PROPS,
+        include_custom_props: bool = True,
     ) -> Iterator[TDataItems]:
         """Hubspot contacts resource"""
         yield from crm_objects(
             "contact",
             api_key,
             include_history,
-            props if props in (ALL, CUSTOM_ONLY) else props + global_props,  # type: ignore
+            props,
+            include_custom_props,
         )
 
     @dlt.resource(name="deals", write_disposition="replace")
@@ -126,13 +122,15 @@ def hubspot(
         api_key: str = api_key,
         include_history: bool = include_history,
         props: Sequence[str] = DEFAULT_DEAL_PROPS,
+        include_custom_props: bool = True,
     ) -> Iterator[TDataItems]:
         """Hubspot deals resource"""
         yield from crm_objects(
             "deal",
             api_key,
             include_history,
-            props if props in (ALL, CUSTOM_ONLY) else props + global_props,  # type: ignore
+            props,
+            include_custom_props,
         )
 
     @dlt.resource(name="tickets", write_disposition="replace")
@@ -140,13 +138,15 @@ def hubspot(
         api_key: str = api_key,
         include_history: bool = include_history,
         props: Sequence[str] = DEFAULT_TICKET_PROPS,
+        include_custom_props: bool = True,
     ) -> Iterator[TDataItems]:
         """Hubspot tickets resource"""
         yield from crm_objects(
             "ticket",
             api_key,
             include_history,
-            props if props in (ALL, CUSTOM_ONLY) else props + global_props,  # type: ignore
+            props,
+            include_custom_props,
         )
 
     @dlt.resource(name="products", write_disposition="replace")
@@ -154,13 +154,15 @@ def hubspot(
         api_key: str = api_key,
         include_history: bool = include_history,
         props: Sequence[str] = DEFAULT_PRODUCT_PROPS,
+        include_custom_props: bool = True,
     ) -> Iterator[TDataItems]:
         """Hubspot products resource"""
         yield from crm_objects(
             "product",
             api_key,
             include_history,
-            props if props in (ALL, CUSTOM_ONLY) else props + global_props,  # type: ignore
+            props,
+            include_custom_props,
         )
 
     @dlt.resource(name="quotes", write_disposition="replace")
@@ -168,13 +170,15 @@ def hubspot(
         api_key: str = api_key,
         include_history: bool = include_history,
         props: Sequence[str] = DEFAULT_QUOTE_PROPS,
+        include_custom_props: bool = True,
     ) -> Iterator[TDataItems]:
         """Hubspot quotes resource"""
         yield from crm_objects(
             "quote",
             api_key,
             include_history,
-            props if props in (ALL, CUSTOM_ONLY) else props + global_props,  # type: ignore
+            props,
+            include_custom_props,
         )
 
     return companies, contacts, deals, tickets, products, quotes
@@ -185,24 +189,27 @@ def crm_objects(
     api_key: str = dlt.secrets.value,
     include_history: bool = False,
     props: Sequence[str] = None,
+    include_custom_props: bool = True,
 ) -> Iterator[TDataItems]:
     """Building blocks for CRM resources."""
     if props == ALL:
-        props = ",".join(_get_property_names(api_key, object_type))
-    elif props == CUSTOM_ONLY:
+        props = list(_get_property_names(api_key, object_type))
+
+    if include_custom_props:
         all_props = _get_property_names(api_key, object_type)
-        props = ",".join([prop for prop in all_props if not prop.startswith("hs_")])
-    else:
-        props = ",".join(props)
+        custom_props = [prop for prop in all_props if not prop.startswith("hs_")]
+        props = props + custom_props  # type: ignore
+
+    props = ",".join(sorted(list(set(props))))
 
     if len(props) > 2000:
         raise ValueError(
             (
                 "Your request to Hubspot is too long to process. "
                 "Maximum allowed query length is 2000 symbols, while "
-                f"your list of properties `{props[:200]}`... is {len(props)} symbols long. "
-                "Use the `props` argument of the resource to set the list "
-                "of properties to extract from the endpoint."
+                f"your list of properties `{props[:200]}`... is {len(props)} "
+                "symbols long. Use the `props` argument of the resource to "
+                "set the list of properties to extract from the endpoint."
             )
         )
 
@@ -218,7 +225,8 @@ def crm_objects(
             props,
         ):
             yield dlt.mark.with_table_name(
-                history_entries, OBJECT_TYPE_PLURAL[object_type] + "_property_history"
+                history_entries,
+                OBJECT_TYPE_PLURAL[object_type] + "_property_history",
             )
 
 
