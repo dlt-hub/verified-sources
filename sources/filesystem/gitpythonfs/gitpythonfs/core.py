@@ -85,7 +85,8 @@ class GitPythonFileSystem(AbstractFileSystem):
         elif isinstance(object, git.Tree):
             return "directory"
         else:
-            return type(object).__name__
+            msg = f"There is no fileystem object type corresponding to Git object type: {type(object).__name__}"
+            raise TypeError(msg)
 
     def _details(
         self, object: git.Object, include_committed_date: bool = True
@@ -164,11 +165,10 @@ class GitPythonFileSystem(AbstractFileSystem):
         blob = tree / path
         return MemoryFile(data=blob.data_stream.read())
 
-
     READ_ONLY_MESSAGE = "This fsspec implementation is read-only."
 
     def mv(self, *args: Any, **kwargs: Any) -> None:
-            raise NotImplementedError(self.READ_ONLY_MESSAGE)
+        raise NotImplementedError(self.READ_ONLY_MESSAGE)
 
     def rm(self, *args: Any, **kwargs: Any) -> None:
         raise NotImplementedError(self.READ_ONLY_MESSAGE)

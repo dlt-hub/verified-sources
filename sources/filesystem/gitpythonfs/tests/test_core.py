@@ -21,6 +21,7 @@ from gitpythonfs.core import register_implementation_in_fsspec
 PROTOCOL = "gitpythonfs"
 # TEST_REPO_PATH = ["~/dlt"]
 
+
 @pytest.fixture()
 def repo_fixture() -> Iterator[tuple[str, str]]:
     """Create a temporary git repository.
@@ -182,8 +183,8 @@ def test_multiple_files(repo_fixture) -> None:
         len(files) == 4
     ), "Glob should recurse folders and return 4 files that start with `file`."
 
+
 def test_non_readonly_raises_exception() -> None:
     """Test that non-readonly operations raise an exception."""
     with pytest.raises(NotImplementedError):
         GitPythonFileSystem().mv()
-        
