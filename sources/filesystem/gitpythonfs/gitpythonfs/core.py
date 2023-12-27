@@ -163,3 +163,48 @@ class GitPythonFileSystem(AbstractFileSystem):
         tree = self.repo.tree()
         blob = tree / path
         return MemoryFile(data=blob.data_stream.read())
+
+
+    READ_ONLY_MESSAGE = "This fsspec implementation is read-only."
+
+    def mv(self, *args: Any, **kwargs: Any) -> None:
+            raise NotImplementedError(self.READ_ONLY_MESSAGE)
+
+    def rm(self, *args: Any, **kwargs: Any) -> None:
+        raise NotImplementedError(self.READ_ONLY_MESSAGE)
+
+    def touch(self, *args: Any, **kwargs: Any) -> None:
+        raise NotImplementedError(self.READ_ONLY_MESSAGE)
+
+    def mkdir(self, *args: Any, **kwargs: Any) -> None:
+        raise NotImplementedError(self.READ_ONLY_MESSAGE)
+
+    def mkdirs(self, *args: Any, **kwargs: Any) -> None:
+        raise NotImplementedError(self.READ_ONLY_MESSAGE)
+
+    def rmdir(self, *args: Any, **kwargs: Any) -> None:
+        raise NotImplementedError(self.READ_ONLY_MESSAGE)
+
+    def put_file(self, *args: Any, **kwargs: Any) -> None:
+        raise NotImplementedError(self.READ_ONLY_MESSAGE)
+
+    def put(self, *args: Any, **kwargs: Any) -> None:
+        raise NotImplementedError(self.READ_ONLY_MESSAGE)
+
+    def cp_file(self, *args: Any, **kwargs: Any) -> None:
+        raise NotImplementedError(self.READ_ONLY_MESSAGE)
+
+    def copy(self, *args: Any, **kwargs: Any) -> None:
+        raise NotImplementedError(self.READ_ONLY_MESSAGE)
+
+    def rm_file(self, *args: Any, **kwargs: Any) -> None:
+        raise NotImplementedError(self.READ_ONLY_MESSAGE)
+
+    def _rm(self, *args: Any, **kwargs: Any) -> None:
+        raise NotImplementedError(self.READ_ONLY_MESSAGE)
+
+    def chmod(self, *args: Any, **kwargs: Any) -> None:
+        raise NotImplementedError(self.READ_ONLY_MESSAGE)
+
+    def chown(self, *args: Any, **kwargs: Any) -> None:
+        raise NotImplementedError(self.READ_ONLY_MESSAGE)

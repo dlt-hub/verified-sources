@@ -180,4 +180,10 @@ def test_multiple_files(repo_fixture) -> None:
     files = fsspec.open_files(f"gitpythonfs://{d}:**/file*")
     assert (
         len(files) == 4
-    ), "Glob should return 4 files that start with `file` from any folder."
+    ), "Glob should recurse folders and return 4 files that start with `file`."
+
+def test_non_readonly_raises_exception() -> None:
+    """Test that non-readonly operations raise an exception."""
+    with pytest.raises(NotImplementedError):
+        GitPythonFileSystem().mv()
+        
