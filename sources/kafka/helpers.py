@@ -30,7 +30,9 @@ def default_msg_processor(msg: Message) -> Dict[str, Any]:
     ts = msg.timestamp()
     topic = msg.topic()
     partition = msg.partition()
-    key = msg.key().decode("utf-8")
+    key = msg.key()
+    if key is not None:
+        key = key.decode("utf-8")
 
     return {
         "_kafka": {

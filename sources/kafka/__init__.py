@@ -10,6 +10,7 @@ from typing import Any, Callable, Dict, Iterable, List, Optional, Union
 from confluent_kafka import Consumer, Message  # type: ignore
 
 import dlt
+from dlt.common import logger
 from dlt.common.time import ensure_pendulum_datetime
 from dlt.common.typing import TDataItem, TAnyDateTime
 from .helpers import (
@@ -85,7 +86,7 @@ def kafka_consumer(
                 if msg.error():
                     err = msg.error()
                     if err.retriable() or not err.fatal():
-                        print(f"ERROR: {err} - RETRYING")
+                        logger.warning(f"ERROR: {err} - RETRYING")
                     else:
                         raise err
                 else:

@@ -197,37 +197,56 @@ def test_kafka_read_with_timestamp(kafka_timed_messages):
 
 
 def test_kafka_incremental_read(kafka_producer, kafka_topics):
-    """Test incremental messages reading."""
-    topic = kafka_topics[0]
+    """Test incremental messages reading.
 
-    for _ in range(3):
-        kafka_producer.produce(topic, b"value", b"key")
-        kafka_producer.flush()
+    Every test topic has two partitions. If we produce
+    messages without key, messages are distributed between
+    partitions in Round Robin fashion. Thus, during the test
+    we add one message into every partition.
+    """
+    topic1 = kafka_topics[0]
+    topic2 = kafka_topics[1]
 
+    # produce 2 messages for every topic
+    for topic in kafka_topics:
+        for _ in range(2):
+            kafka_producer.produce(topic, b"value", None)
+
+    kafka_producer.flush()
+    _extract_assert(kafka_topics, {topic1: 2, topic2: 2})
+
+    # produce 2 messages for the first topic
+    for _ in range(2):
+        kafka_producer.produce(topic1, b"value", None)
+
+    kafka_producer.flush()
+    _extract_assert(kafka_topics, {topic1: 4, topic2: 2})
+
+    # produce 2 messages for the second topic
+    for _ in range(2):
+        kafka_producer.produce(topic2, b"value", None)
+
+    kafka_producer.flush()
+    _extract_assert(kafka_topics, {topic1: 4, topic2: 4})
+
+    # produce 2 messages for every topic
+    for topic in kafka_topics:
+        for _ in range(2):
+            kafka_producer.produce(topic, b"value", None)
+
+    kafka_producer.flush()
+    _extract_assert(kafka_topics, {topic1: 6, topic2: 6})
+
+
+def _extract_assert(topics, expected):
     pipeline = dlt.pipeline(
         pipeline_name="kafka_test",
         destination="postgres",
         dataset_name="kafka_test_data",
     )
 
-    resource = kafka_consumer(topic)
+    resource = kafka_consumer(topics)
     pipeline.run(resource)
 
-    table_counts = load_table_counts(pipeline, topic)
-    assert table_counts[topic] == 3
-
-    for _ in range(3):
-        kafka_producer.produce(topic, b"value", b"key")
-        kafka_producer.flush()
-
-    pipeline = dlt.pipeline(
-        pipeline_name="kafka_test",
-        destination="postgres",
-        dataset_name="kafka_test_data",
-    )
-
-    resource = kafka_consumer(topic)
-    pipeline.run(resource)
-
-    table_counts = load_table_counts(pipeline, topic)
-    assert table_counts[topic] == 6
+    table_counts = load_table_counts(pipeline, *topics)
+    assert table_counts == expected
