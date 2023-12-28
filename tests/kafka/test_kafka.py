@@ -100,9 +100,10 @@ def kafka_timed_messages(kafka_admin, kafka_producer):
         kafka_producer.flush()
 
         if i == 0:
+            time.sleep(10)
             ts = pendulum.now()
 
-        time.sleep(5)
+        time.sleep(10)
 
     yield topic, ts
 
