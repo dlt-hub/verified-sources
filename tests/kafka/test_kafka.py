@@ -64,7 +64,7 @@ def kafka_topics(kafka_admin):
         t_names.append(name)
 
     _await(kafka_admin.create_topics(new_topics))
-    time.sleep(5)
+    time.sleep(10)
 
     try:
         yield t_names
