@@ -11,7 +11,10 @@ from tests.utils import (
 )
 
 # will force duckdb to be created in pipeline folder
-from dlt.destinations.duckdb.configuration import DuckDbCredentials
+try:
+    from dlt.destinations.duckdb.configuration import DuckDbCredentials
+except ModuleNotFoundError:
+    from dlt.destinations.impl.duckdb.configuration import DuckDbCredentials
 
 DuckDbCredentials.database = ":pipeline:"
 
