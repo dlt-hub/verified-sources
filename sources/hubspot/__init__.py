@@ -96,7 +96,7 @@ def hubspot(
         yield from crm_objects(
             "company",
             api_key,
-            include_history=False,
+            include_history=include_history,
             props=props,
             include_custom_props=include_custom_props,
         )

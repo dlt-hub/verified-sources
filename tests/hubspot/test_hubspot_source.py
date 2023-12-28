@@ -363,6 +363,7 @@ def test_all_resources(destination_name: str) -> None:
     # Check history tables
     # NOTE: this value is increasing... maybe we should start testing ranges
     assert load_table_counts(pipeline, *history_table_names) == {
+        "companies_property_history": 4018,
         "contacts_property_history": 5935,
         "deals_property_history": 5162,
     }
