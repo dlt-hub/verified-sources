@@ -44,7 +44,10 @@ def extract_property_history(objects: List[Dict[str, Any]]) -> Iterator[Dict[str
 
 
 def fetch_property_history(
-    endpoint: str, api_key: str, props: str, params: Optional[Dict[str, Any]] = None
+    endpoint: str,
+    api_key: str,
+    props: str,
+    params: Optional[Dict[str, Any]] = None,
 ) -> Iterator[List[Dict[str, Any]]]:
     """Fetch property history from the given CRM endpoint.
 
