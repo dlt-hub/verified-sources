@@ -2,7 +2,7 @@ from typing import Any, Dict, Iterable, Optional
 
 from dlt.common.typing import TDataItem
 
-from .client import NotionClient
+from ...api_client import APIClient
 
 
 class NotionDatabase:
@@ -14,7 +14,7 @@ class NotionDatabase:
         notion_client (NotionClient): A client to interact with the Notion API.
     """
 
-    def __init__(self, database_id: str, notion_client: NotionClient):
+    def __init__(self, database_id: str, notion_client: APIClient):
         self.database_id = database_id
         self.notion_client = notion_client
 
@@ -27,7 +27,7 @@ class NotionDatabase:
         Returns:
             Any: The structure of the database.
         """
-        return self.notion_client.fetch_resource("databases", self.database_id)
+        return self.notion_client.get(f"databases/{self.database_id}")
 
     def query(
         self,
@@ -57,22 +57,18 @@ class NotionDatabase:
         Yields:
             List[Dict[str, Any]]: A record from the database.
         """
-        while True:
-            payload = {
-                "filter": filter_criteria,
-                "sorts": sorts,
-                "start_cursor": start_cursor,
-                "page_size": page_size,
-            }
-            response = self.notion_client.send_payload(
-                "databases",
-                self.database_id,
-                subresource="query",
-                query_params=filter_properties,
-                payload=payload,
-            )
+        payload = {
+            "filter": filter_criteria,
+            "sorts": sorts,
+            "start_cursor": start_cursor,
+            "page_size": page_size,
+        }
 
-            yield response.get("results", [])
-            if not response.get("has_more"):
-                break
-            start_cursor = response.get("next_cursor")
+        filtered_payload = {k: v for k, v in payload.items() if v is not None}
+
+        return self.notion_client.paginate(
+            f"databases/{self.database_id}/query",
+            params=filter_properties,
+            json=filtered_payload,
+            method="post",
+        )

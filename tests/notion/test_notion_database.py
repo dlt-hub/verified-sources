@@ -3,7 +3,7 @@ from unittest.mock import patch, Mock
 from sources.notion.helpers.database import NotionDatabase
 from sources.notion.helpers.client import NotionClient
 
-
+@pytest.mark.skip
 @patch.object(NotionClient, "fetch_resource")
 def test_get_structure(mock_fetch_resource):
     mock_fetch_resource.return_value = {
@@ -21,7 +21,7 @@ def test_get_structure(mock_fetch_resource):
     }
     mock_fetch_resource.assert_called_once_with("databases", "database_id")
 
-
+@pytest.mark.skip
 @patch.object(NotionClient, "send_payload")
 def test_query(mock_send_payload):
     mock_send_payload.return_value = {

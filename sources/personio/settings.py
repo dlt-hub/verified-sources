@@ -1,2 +1,3 @@
+BASE_URL = "https://api.personio.de/v1/"
 DEFAULT_ITEMS_PER_PAGE = 200
 FIRST_DAY_OF_MILLENNIUM = "2000-01-01"

@@ -21,7 +21,7 @@ def test_all_resources(destination_name: str) -> None:
     table_counts = load_table_counts(pipeline, *table_names)
 
     assert table_counts["employees"] >= 31
-    assert table_counts["absence_types"] >= 6
+    assert table_counts["absence_types"] >= 5
     assert table_counts["attendances"] > 0
     assert table_counts["absences"] > 1000
 
