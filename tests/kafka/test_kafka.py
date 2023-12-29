@@ -95,12 +95,12 @@ def kafka_timed_messages(kafka_admin, kafka_producer):
     topic = _random_name("topic")
     _await(kafka_admin.create_topics([NewTopic(topic, num_partitions=1)]))
 
-    for i in range(3):
+    for i in range(4):
         key = str(i)
         kafka_producer.produce(topic, b"value" + key.encode(), key.encode())
         kafka_producer.flush()
 
-        if i == 0:
+        if i == 1:
             time.sleep(15)
             ts = pendulum.now(tz="UTC")
 
@@ -194,7 +194,7 @@ def test_kafka_read_with_timestamp(kafka_timed_messages):
     assert_query_data(
         pipeline,
         f"SELECT _kafka__key FROM {topic} ORDER BY _kafka__key",
-        ["1", "2"],
+        ["2", "3"],
     )
 
 
