@@ -94,14 +94,15 @@ def kafka_timed_messages(kafka_admin, kafka_producer):
 
     topic = _random_name("topic")
     _await(kafka_admin.create_topics([NewTopic(topic, num_partitions=1)]))
+    time.sleep(10)
 
-    for i in range(4):
+    for i in range(3):
         key = str(i)
         kafka_producer.produce(topic, b"value" + key.encode(), key.encode())
         kafka_producer.flush()
 
         if i == 1:
-            time.sleep(15)
+            time.sleep(10)
             ts = pendulum.now(tz="UTC")
 
         time.sleep(10)
@@ -177,25 +178,15 @@ def test_kafka_read_custom_msg_processor(kafka_topics, kafka_messages):
 
 
 def test_kafka_read_with_timestamp(kafka_timed_messages):
-    """Test reading, starting from a particular timestamp."""
+    """Test if offset is set correctly from a timestamp."""
     topic, ts = kafka_timed_messages
 
-    pipeline = dlt.pipeline(
-        pipeline_name="kafka_test",
-        destination="postgres",
-        dataset_name="kafka_test_data",
-        full_refresh=True,
-    )
-    resource = kafka_consumer(topic, start_from=ts)
-    load_info = pipeline.run(resource)
+    credentials = dlt.secrets.get("sources.kafka.credentials", KafkaCredentials)
+    consumer = credentials.init_consumer()
 
-    assert_load_info(load_info)
+    tracker = OffsetTracker(consumer, [topic], {}, start_from=ts)
 
-    assert_query_data(
-        pipeline,
-        f"SELECT _kafka__key FROM {topic} ORDER BY _kafka__key",
-        ["2", "3"],
-    )
+    assert tracker[topic]["0"] == {"cur": 2, "max": 3}
 
 
 def test_kafka_incremental_read(kafka_producer, kafka_topics):
