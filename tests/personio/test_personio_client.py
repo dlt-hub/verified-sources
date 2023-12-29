@@ -4,7 +4,7 @@ from dlt.common import pendulum
 
 from dlt.sources.helpers import requests
 from sources.personio.helpers import PersonioAPI
-
+from sources.personio.settings import BASE_URL
 
 FIRST_DAY_OF_MILLENNIUM = pendulum.datetime(2000, 1, 1).to_date_string()
 DATE_NOW = pendulum.now().to_date_string()
@@ -13,6 +13,7 @@ DATE_NOW = pendulum.now().to_date_string()
 @pytest.fixture
 def client():
     return PersonioAPI(
+        base_url=BASE_URL,
         client_id=dlt.secrets["sources.personio.client_id"],
         client_secret=dlt.secrets["sources.personio.client_secret"],
     )
