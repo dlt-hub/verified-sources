@@ -206,7 +206,7 @@ def test_kafka_incremental_read(kafka_producer, kafka_topics):
             kafka_producer.produce(topic, b"value", None)
 
     kafka_producer.flush()
-    time.sleep(10)
+    time.sleep(15)
     _extract_assert(kafka_topics, {topic1: 2, topic2: 2})
 
     # produce 2 messages for the first topic
@@ -214,7 +214,7 @@ def test_kafka_incremental_read(kafka_producer, kafka_topics):
         kafka_producer.produce(topic1, b"value", None)
 
     kafka_producer.flush()
-    time.sleep(10)
+    time.sleep(15)
     _extract_assert(kafka_topics, {topic1: 4, topic2: 2})
 
     # produce 2 messages for the second topic
@@ -222,7 +222,7 @@ def test_kafka_incremental_read(kafka_producer, kafka_topics):
         kafka_producer.produce(topic2, b"value", None)
 
     kafka_producer.flush()
-    time.sleep(10)
+    time.sleep(15)
     _extract_assert(kafka_topics, {topic1: 4, topic2: 4})
 
     # produce 2 messages for every topic
@@ -231,7 +231,7 @@ def test_kafka_incremental_read(kafka_producer, kafka_topics):
             kafka_producer.produce(topic, b"value", None)
 
     kafka_producer.flush()
-    time.sleep(10)
+    time.sleep(15)
     _extract_assert(kafka_topics, {topic1: 6, topic2: 6})
 
 
