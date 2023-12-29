@@ -77,7 +77,7 @@ def kafka_consumer(
     tracker = OffsetTracker(consumer, topics, dlt.current.resource_state(), start_from)
     consumer.subscribe(topics)
 
-    logger.info(start_from, tracker)
+    raise ValueError(str(tracker))
 
     # read messages up to the maximum offsets,
     # not waiting for new messages
