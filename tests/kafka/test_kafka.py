@@ -102,7 +102,7 @@ def kafka_timed_messages(kafka_admin, kafka_producer):
 
         if i == 0:
             time.sleep(15)
-            ts = pendulum.now()
+            ts = pendulum.now(tz="UTC")
 
         time.sleep(10)
 
