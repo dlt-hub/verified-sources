@@ -240,6 +240,7 @@ def _extract_assert(topics, expected):
         pipeline_name="kafka_test",
         destination="postgres",
         dataset_name="kafka_test_data",
+        full_refresh=True,
     )
 
     resource = kafka_consumer(topics)
