@@ -36,7 +36,7 @@ class GitPythonFileSystem(AbstractFileSystem):
 
     protocol = "gitpythonfs"
 
-    def __init__(self, path: str = None, ref: str = None, **kwargs: Any) -> None:
+    def __init__(self, path: str, ref: str = None, **kwargs: Any) -> None:
         """
         Initialize a GitPythonFS object.
 

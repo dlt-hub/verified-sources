@@ -184,7 +184,9 @@ def test_multiple_files(repo_fixture) -> None:
     ), "Glob should recurse folders and return 4 files that start with `file`."
 
 
-def test_non_readonly_raises_exception() -> None:
+def test_non_readonly_raises_exception(repo_fixture) -> None:
     """Test that non-readonly operations raise an exception."""
+    d, _ = repo_fixture
+
     with pytest.raises(NotImplementedError):
-        GitPythonFileSystem().mv()
+        GitPythonFileSystem(d).mv()
