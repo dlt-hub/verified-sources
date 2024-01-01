@@ -125,6 +125,9 @@ def test_ls_file_details(repo_fixture) -> None:
     assert details["mime_type"] == "text/plain"
     assert isinstance(details["size"], int)
     assert isinstance(details["hex"], str)
+    assert isinstance(
+        details["mode"], str
+    ), "Should be a string representation of octal, without the 0o prefix."
     assert isinstance(details["committed_date"], int)
 
 
