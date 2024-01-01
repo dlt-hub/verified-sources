@@ -109,7 +109,7 @@ class GitPythonFileSystem(AbstractFileSystem):
             "type": self._git_type_to_file_type(object),
             "mime_type": object.mime_type if isinstance(object, git.Blob) else None,
             "size": object.size,
-            "hexsha": object.hexsha,
+            "hex": object.hexsha,
             # "committed_date": commit.committed_date,
         }
 

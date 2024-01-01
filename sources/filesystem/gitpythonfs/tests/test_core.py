@@ -124,7 +124,7 @@ def test_ls_file_details(repo_fixture) -> None:
     assert details["type"] == "file"
     assert details["mime_type"] == "text/plain"
     assert isinstance(details["size"], int)
-    assert isinstance(details["hexsha"], str)
+    assert isinstance(details["hex"], str)
     assert isinstance(details["committed_date"], int)
 
 
