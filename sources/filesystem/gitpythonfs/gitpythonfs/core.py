@@ -57,6 +57,7 @@ class GitPythonFileSystem(AbstractFileSystem):
         super().__init__(**kwargs)
         self.repo_path = path
         self.repo = git.Repo(self.repo_path)
+        self.ref = ref or self.repo.head.ref.name
 
     @classmethod
     def _strip_protocol(cls, path: str) -> str:
@@ -67,7 +68,6 @@ class GitPythonFileSystem(AbstractFileSystem):
             path = path.split("@", 1)[1]
         return path.lstrip("/")
 
-    # ToDo support arguments in url, like this example from git fsspec implementation:
     @staticmethod
     def _get_kwargs_from_urls(path: str) -> Dict[str, str]:
         if path.startswith("gitpythonfs://"):
@@ -121,13 +121,13 @@ class GitPythonFileSystem(AbstractFileSystem):
 
     def ls(
         self, path: str, detail: bool = False, ref: str = None, **kwargs: Any
-    ) -> Union[List[str], List[Dict]]:  # Todo implement ref
+    ) -> Union[List[str], List[Dict]]:
         """List files at given path in the repo."""
         path = self._strip_protocol(path)
         results = []
 
         # For traversal, always start at the root of repo.
-        tree = self.repo.tree()
+        tree = self.repo.tree(ref or self.ref)
         root_object = tree if path == "" else tree / path
 
         if isinstance(root_object, git.Tree):
@@ -148,7 +148,6 @@ class GitPythonFileSystem(AbstractFileSystem):
                 results.append(root_object.path)
                 return results
 
-    # ToDo implement refs
     def _open(
         self,
         path: str,
@@ -159,9 +158,8 @@ class GitPythonFileSystem(AbstractFileSystem):
         ref: str = None,
         **kwargs: Any,
     ) -> MemoryFile:
-        # ToDo: support refs, with something like `ref or self.ref`.
         path = self._strip_protocol(path)
-        tree = self.repo.tree()
+        tree = self.repo.tree(ref or self.ref)
         blob = tree / path
         return MemoryFile(data=blob.data_stream.read())
 

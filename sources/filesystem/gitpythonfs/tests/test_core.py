@@ -15,11 +15,12 @@ from fsspec.registry import (
     filesystem,
 )
 
+from git import BadName
+
 from gitpythonfs import GitPythonFileSystem
 from gitpythonfs.core import register_implementation_in_fsspec
 
 PROTOCOL = "gitpythonfs"
-# TEST_REPO_PATH = ["~/dlt"]
 
 
 @pytest.fixture()
@@ -132,31 +133,72 @@ def test_ls_file_details(repo_fixture) -> None:
 
 
 def test_git_refs(repo_fixture) -> None:
-    """Test results for git refs - eg sha, branch, tag."""
-    d, sha_first = repo_fixture
+    """Test results for git refs - eg commit sha, branch, tag."""
+    d, _ = repo_fixture
 
     with fsspec.open("gitpythonfs://inner/file3", path=d) as f:
-        bytes = f.read()
-        assert bytes == b"data3", "Should read from head if no ref given."
+        assert f.read() == b"data3", "Should read from HEAD if no ref given."
 
-    # with fsspec.open("gitpythonfs://file1", path=d, ref=sha_first) as f:
-    #     bytes = f.read()
-    #     assert bytes == b"data0", "Should read file version at given ref."
+    try:
+        with fsspec.open("gitpythonfs://inner/file3", path=d, ref="HEAD") as f:
+            f.read()
+    except BadName:
+        pytest.fail("Should accept HEAD as a ref.")
 
-    # with fsspec.open("git://file1", path=d, ref="thetag") as f:
-    #     assert f.read() == b"data00"
+    with pytest.raises(BadName):
+        with fsspec.open(
+            "gitpythonfs://file1", path=d, ref="somenonexisentgitref"
+        ) as f:
+            _ = f.read()
 
-    # with fsspec.open("git://file2", path=d, ref="master") as f:
-    #     assert f.read() == b"data000"
 
-    # with fsspec.open("git://file2", path=d, ref=None) as f:
-    #     assert f.read() == b"data000"
+def test_git_refs_on_open(repo_fixture) -> None:
+    d, sha_first = repo_fixture
 
-    # with fsspec.open("git://inner/file1", path=d, ref="abranch") as f:
-    #     assert f.read() == b"data3"
+    with fsspec.open("gitpythonfs://file1", path=d, ref=sha_first) as f:
+        assert (
+            f.read() == b"data0"
+        ), "Should read file version at given sha (aka commit id)."
+
+    with fsspec.open("gitpythonfs://file1", path=d, ref="thetag") as f:
+        assert f.read() == b"data00", "Should read file version at given tag."
+
+
+def test_git_refs_on_ls(repo_fixture) -> None:
+    d, sha_first = repo_fixture
+
+    fs = filesystem(PROTOCOL, path=d, ref=sha_first)
+    files = fs.ls("file1", detail=True)
+    assert len(files) == 1, "Should return a single object."
+    assert files[0]["size"] == 5, "Should return file size as at sha given in __init__."
+
+    fs = filesystem(PROTOCOL, path=d)
+    files = fs.ls("file1", ref=sha_first, detail=True)
+    assert len(files) == 1, "Should return a single object."
+    assert files[0]["size"] == 5, "Should return file size as at sha given in ls()."
+
+    fs = filesystem(PROTOCOL, path=d, ref="HEAD")
+    files = fs.ls("file1", ref=sha_first, detail=True)
+    assert len(files) == 1, "Should return a single object."
+    assert files[0]["size"] == 5, "ls() ref should override constructor ref."
+
+
+def test_get_kwargs_from_urls() -> None:
+    """Test getting kwargs from url."""
+    repo_path = "/some/path/to/repo"
+    ref = "some_tag"
+
+    url = f"gitpythonfs://{repo_path}:{ref}@file1"
+    kwargs = GitPythonFileSystem._get_kwargs_from_urls(url)
+    assert kwargs["path"] == repo_path
+    assert kwargs["ref"] == ref
 
 
 def test_url(repo_fixture) -> None:
+    """Test reading a file from a repository via url.
+
+    For supported url formats see GitPytonFileSystem class doco"""
+
     d, sha_first = repo_fixture
 
     with fsspec.open(f"gitpythonfs://file1", path=d) as f:
@@ -170,11 +212,22 @@ def test_url(repo_fixture) -> None:
             f.read() == b"data00"
         ), "Should return file via the repo path embedded in the url."
 
-    # ToDo expand test once refs supported.
-    # with fsspec.open(f"gitpythonfs://abranch@inner/file3", path=d) as f:
-    #     assert f.read() == b"data3", "Should return file at ref embedded in url."
-    # with fsspec.open(f"gitpythonfs://{d}:abranch@innerfile3") as f:
-    #     assert f.read() == b"data3", "Should return file at repo and ref embedded in url."
+    with fsspec.open(f"gitpythonfs://{d}:{sha_first}@file1") as f:
+        assert (
+            f.read() == b"data0"
+        ), "Should return file via the repo path and git ref embedded in the url."
+
+
+@pytest.mark.skip(
+    reason="Supplying arg in both url and function call throws fsspec error. Works in other fsspec implementatins?"
+)
+def test_args_precedence(repo_fixture) -> None:
+    """Test precedence of arguments passed in function parameters
+    vs passed in url."""
+    d, sha_first = repo_fixture
+
+    with fsspec.open(f"gitpythonfs://{d}:HEAD@file1", ref=sha_first) as f:
+        assert f.read() == b"data0", "Should return file for ref supplied in ???."
 
 
 def test_multiple_files(repo_fixture) -> None:
