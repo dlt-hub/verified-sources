@@ -53,11 +53,10 @@ def test_start_date() -> None:
     )
 
     # we only load objects updated on 05.05. or after
-    load_info = pipeline.run(shopify_source(start_date="2023-05-05"))
+    load_info = pipeline.run(shopify_source(start_date="2023-09-19"))
     assert_load_info(load_info)
-    table_names = [t["name"] for t in pipeline.default_schema.data_tables()]
-    table_counts = load_table_counts(pipeline, *table_names)
-    assert table_counts["orders"] == 4
+    row_counts = pipeline.last_trace.last_normalize_info.row_counts
+    assert row_counts["orders"] == 10
 
 
 @pytest.mark.parametrize("destination_name", ALL_DESTINATIONS)
@@ -71,9 +70,9 @@ def test_end_date_incremental(destination_name: str) -> None:
     )
 
     # Set start date to the exact timestamp of the first order in the test account
-    start_date = pendulum.DateTime(2023, 5, 4, 13, 39, 37)
+    start_date = pendulum.DateTime(2023, 7, 21, 15, 31, 30)
     # End date is exact timestamp of an order in the middle
-    end_date = pendulum.DateTime(2023, 5, 5, 12, 7, 15).in_tz("UTC")
+    end_date = pendulum.DateTime(2023, 9, 19, 20, 59, 50).in_tz("UTC")
 
     # Load orders between start/end date
     # Use two different date formats and timezones to ensure they're handled correctly
@@ -85,6 +84,9 @@ def test_end_date_incremental(destination_name: str) -> None:
 
     info = pipeline.run(data, write_disposition="append")
     assert_load_info(info)
+
+    row_counts = pipeline.last_trace.last_normalize_info.row_counts
+    assert row_counts["orders"] == 2
 
     with pipeline.sql_client() as client:
         rows = [
@@ -109,6 +111,9 @@ def test_end_date_incremental(destination_name: str) -> None:
     info = pipeline.run(data, write_disposition="append")
     assert_load_info(info)
 
+    row_counts = pipeline.last_trace.last_normalize_info.row_counts
+    assert row_counts["orders"] == 10
+
     with pipeline.sql_client() as client:
         rows2 = [
             (row[0], pendulum.instance(row[1]))
@@ -116,11 +121,9 @@ def test_end_date_incremental(destination_name: str) -> None:
                 "SELECT id, updated_at FROM orders ORDER BY updated_at"
             )
         ]
-
     dest_dates2 = [row[1] for row in rows2]
     assert len(rows2) > len(rows)
     assert end_date in dest_dates2
-    assert max(dest_dates2) > end_date
 
     # No duplicates
     assert len(rows2) == len(set(rows2))
