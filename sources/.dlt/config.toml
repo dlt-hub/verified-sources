@@ -52,7 +52,7 @@ spreadsheet_identifier = "https://docs.google.com/spreadsheets/d/1HhWHjqouQnnCIZ
 
 [sources.shopify_dlt]
 shop_url="https://dlthub-test.myshopify.com"
-api_version="2023-01"
+api_version="2023-10"
 
 [sources.facebook_ads]
 account_id="10150974068878324"
