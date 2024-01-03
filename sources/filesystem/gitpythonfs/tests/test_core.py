@@ -6,8 +6,8 @@ import shutil
 import pytest
 from typing import Iterator
 
-import fsspec  # ToDo, narrow for open()
-from fsspec.implementations.local import make_path_posix
+import fsspec
+
 from fsspec.registry import (
     get_filesystem_class,
     known_implementations,
@@ -20,7 +20,7 @@ from git import BadName
 from gitpythonfs import GitPythonFileSystem
 from gitpythonfs.core import register_implementation_in_fsspec
 
-PROTOCOL = "gitpythonfs"
+PROTOCOL = GitPythonFileSystem.PROTOCOL
 
 
 @pytest.fixture()
@@ -203,9 +203,6 @@ def test_url(repo_fixture) -> None:
 
     with fsspec.open(f"gitpythonfs://file1", path=d) as f:
         assert f.read() == b"data00", "Should return file at root."
-
-    # ToDo: implement/test more complex urls, eg gitpythonfs://[path-to-repo[:]][ref@]path/to/file as used in git fsspec implementation.
-    #   The colon (:) is compulsory if path-to-repo is give. ie, gitpythonfs://[path-to-repo:][ref@]path/to/file
 
     with fsspec.open(f"gitpythonfs://{d}:file1") as f:
         assert (

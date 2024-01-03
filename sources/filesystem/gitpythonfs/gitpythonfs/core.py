@@ -23,9 +23,9 @@ def register_implementation_in_fsspec() -> None:
 class GitPythonFileSystem(AbstractFileSystem):
     """A filesystem for git repositories on the local filesystem.
 
-    An instance of this class provides the files residing within a remote github
+    An instance of this class provides the files residing within a local git
     repository. You may specify a point in the repo's history, by SHA, branch
-    or tag (default is current master).
+    or tag (default is HEAD).
 
     You can retrieve information such as a file's modified time, which would not
     be possible if looking at the local filesystem directly.
@@ -34,7 +34,8 @@ class GitPythonFileSystem(AbstractFileSystem):
     files from a remote repo before reading them with this filesystem.
     """
 
-    protocol = "gitpythonfs"
+    PROTOCOL = "gitpythonfs"
+    READ_ONLY_MESSAGE = "This fsspec implementation is read-only."
 
     def __init__(self, path: str, ref: str = None, **kwargs: Any) -> None:
         """
@@ -52,7 +53,7 @@ class GitPythonFileSystem(AbstractFileSystem):
                     gitpythonfs:///some_folder/my_repo:path/to/intro.md
                     gitpythonfs:///some_folder/my_repo:mybranch@path/to/intro.md
             ref (str): (To be implemented). A branch, tag or commit hash to use.
-                Defaults to head of the local repo.
+                Defaults to HEAD of the local repo.
         """
         super().__init__(**kwargs)
         self.repo_path = path
@@ -162,8 +163,6 @@ class GitPythonFileSystem(AbstractFileSystem):
         tree = self.repo.tree(ref or self.ref)
         blob = tree / path
         return MemoryFile(data=blob.data_stream.read())
-
-    READ_ONLY_MESSAGE = "This fsspec implementation is read-only."
 
     def mv(self, *args: Any, **kwargs: Any) -> None:
         raise NotImplementedError(self.READ_ONLY_MESSAGE)
