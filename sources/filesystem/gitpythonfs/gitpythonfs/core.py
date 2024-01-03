@@ -37,12 +37,12 @@ class GitPythonFileSystem(AbstractFileSystem):
     PROTOCOL = "gitpythonfs"
     READ_ONLY_MESSAGE = "This fsspec implementation is read-only."
 
-    def __init__(self, path: str, ref: str = None, **kwargs: Any) -> None:
+    def __init__(self, repo_path: str, ref: str = None, **kwargs: Any) -> None:
         """
         Initialize a GitPythonFS object.
 
         Args:
-            path (str): Local location of the Git repo. When used with a higher
+            repo_path (str): Local location of the Git repo. When used with a higher
                 level function such as fsspec.open(), may be of the form
                 "gitpythonfs://[path-to-repo:][ref@]path/to/file" so that repo
                 and/or ref can be passed in the URL instead of arguments. (The
@@ -56,7 +56,7 @@ class GitPythonFileSystem(AbstractFileSystem):
                 Defaults to HEAD of the local repo.
         """
         super().__init__(**kwargs)
-        self.repo_path = path
+        self.repo_path = repo_path
         self.repo = git.Repo(self.repo_path)
         self.ref = ref or self.repo.head.ref.name
 
@@ -75,7 +75,7 @@ class GitPythonFileSystem(AbstractFileSystem):
             path = path[14:]
         out = {}
         if ":" in path:
-            out["path"], path = path.split(":", 1)
+            out["repo_path"], path = path.split(":", 1)
         if "@" in path:
             out["ref"], path = path.split("@", 1)
         return out
