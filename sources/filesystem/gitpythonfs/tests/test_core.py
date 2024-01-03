@@ -21,6 +21,7 @@ from gitpythonfs import GitPythonFileSystem
 from gitpythonfs.core import register_implementation_in_fsspec
 
 PROTOCOL = GitPythonFileSystem.PROTOCOL
+test_fs_kwargs = {"skip_instance_cache": True}
 
 
 @pytest.fixture()
@@ -79,14 +80,14 @@ def test_instantiate_fsspec_filesystem(repo_fixture) -> None:
     """Test instantiating a filesystem with fsspec."""
     d, _ = repo_fixture
 
-    fs = filesystem(PROTOCOL, repo_path=d)
+    fs = filesystem(PROTOCOL, repo_path=d, **test_fs_kwargs)
     assert type(fs) == GitPythonFileSystem
 
 
 def test_ls_entries(repo_fixture):
     """Test listing folders and files in a repository."""
-    d, sha_first = repo_fixture
-    fs = filesystem(PROTOCOL, repo_path=d)
+    d, _ = repo_fixture
+    fs = filesystem(PROTOCOL, repo_path=d, **test_fs_kwargs)
 
     assert fs.ls("") == [
         "file1",
@@ -108,7 +109,7 @@ def test_ls_file_details(repo_fixture) -> None:
 
     # setup
     d, sha_first = repo_fixture
-    fs = filesystem(PROTOCOL, repo_path=d)
+    fs = filesystem(PROTOCOL, repo_path=d, **test_fs_kwargs)
 
     # do
     files = fs.ls("file1", detail=True, include_committed_date=True)
@@ -131,18 +132,23 @@ def test_git_refs(repo_fixture) -> None:
     """Test results for git refs - eg commit sha, branch, tag."""
     d, _ = repo_fixture
 
-    with fsspec.open("gitpythonfs://inner/file3", repo_path=d) as f:
+    with fsspec.open("gitpythonfs://inner/file3", repo_path=d, **test_fs_kwargs) as f:
         assert f.read() == b"data3", "Should read from HEAD if no ref given."
 
     try:
-        with fsspec.open("gitpythonfs://inner/file3", repo_path=d, ref="HEAD") as f:
+        with fsspec.open(
+            "gitpythonfs://inner/file3", repo_path=d, ref="HEAD", **test_fs_kwargs
+        ) as f:
             f.read()
     except BadName:
         pytest.fail("Should accept HEAD as a ref.")
 
     with pytest.raises(BadName):
         with fsspec.open(
-            "gitpythonfs://file1", repo_path=d, ref="somenonexisentgitref"
+            "gitpythonfs://file1",
+            repo_path=d,
+            ref="somenonexisentgitref",
+            **test_fs_kwargs,
         ) as f:
             _ = f.read()
 
@@ -150,29 +156,33 @@ def test_git_refs(repo_fixture) -> None:
 def test_git_refs_on_open(repo_fixture) -> None:
     d, sha_first = repo_fixture
 
-    with fsspec.open("gitpythonfs://file1", repo_path=d, ref=sha_first) as f:
+    with fsspec.open(
+        "gitpythonfs://file1", repo_path=d, ref=sha_first, **test_fs_kwargs
+    ) as f:
         assert (
             f.read() == b"data0"
         ), "Should read file version at given sha (aka commit id)."
 
-    with fsspec.open("gitpythonfs://file1", repo_path=d, ref="thetag") as f:
+    with fsspec.open(
+        "gitpythonfs://file1", repo_path=d, ref="thetag", **test_fs_kwargs
+    ) as f:
         assert f.read() == b"data00", "Should read file version at given tag."
 
 
 def test_git_refs_on_ls(repo_fixture) -> None:
     d, sha_first = repo_fixture
 
-    fs = filesystem(PROTOCOL, repo_path=d, ref=sha_first)
+    fs = filesystem(PROTOCOL, repo_path=d, ref=sha_first, **test_fs_kwargs)
     files = fs.ls("file1", detail=True)
     assert len(files) == 1, "Should return a single object."
     assert files[0]["size"] == 5, "Should return file size as at sha given in __init__."
 
-    fs = filesystem(PROTOCOL, repo_path=d)
+    fs = filesystem(PROTOCOL, repo_path=d, **test_fs_kwargs)
     files = fs.ls("file1", ref=sha_first, detail=True)
     assert len(files) == 1, "Should return a single object."
     assert files[0]["size"] == 5, "Should return file size as at sha given in ls()."
 
-    fs = filesystem(PROTOCOL, repo_path=d, ref="HEAD")
+    fs = filesystem(PROTOCOL, repo_path=d, ref="HEAD", **test_fs_kwargs)
     files = fs.ls("file1", ref=sha_first, detail=True)
     assert len(files) == 1, "Should return a single object."
     assert files[0]["size"] == 5, "ls() ref should override constructor ref."
@@ -196,15 +206,15 @@ def test_url(repo_fixture) -> None:
 
     d, sha_first = repo_fixture
 
-    with fsspec.open(f"gitpythonfs://file1", repo_path=d) as f:
+    with fsspec.open(f"gitpythonfs://file1", repo_path=d, **test_fs_kwargs) as f:
         assert f.read() == b"data00", "Should return file at root."
 
-    with fsspec.open(f"gitpythonfs://{d}:file1") as f:
+    with fsspec.open(f"gitpythonfs://{d}:file1", **test_fs_kwargs) as f:
         assert (
             f.read() == b"data00"
         ), "Should return file via the repo path embedded in the url."
 
-    with fsspec.open(f"gitpythonfs://{d}:{sha_first}@file1") as f:
+    with fsspec.open(f"gitpythonfs://{d}:{sha_first}@file1", **test_fs_kwargs) as f:
         assert (
             f.read() == b"data0"
         ), "Should return file via the repo path and git ref embedded in the url."
@@ -218,7 +228,9 @@ def test_args_precedence(repo_fixture) -> None:
     vs passed in url."""
     d, sha_first = repo_fixture
 
-    with fsspec.open(f"gitpythonfs://{d}:HEAD@file1", ref=sha_first) as f:
+    with fsspec.open(
+        f"gitpythonfs://{d}:HEAD@file1", ref=sha_first, **test_fs_kwargs
+    ) as f:
         assert f.read() == b"data0", "Should return file for ref supplied in ???."
 
 
@@ -226,7 +238,7 @@ def test_multiple_files(repo_fixture) -> None:
     """Test reading multiple files from a repository."""
     d, sha_first = repo_fixture
 
-    files = fsspec.open_files(f"gitpythonfs://{d}:**/file*")
+    files = fsspec.open_files(f"gitpythonfs://{d}:**/file*", **test_fs_kwargs)
     assert (
         len(files) == 4
     ), "Glob should recurse folders and return 4 files that start with `file`."
@@ -237,4 +249,4 @@ def test_non_readonly_raises_exception(repo_fixture) -> None:
     d, _ = repo_fixture
 
     with pytest.raises(NotImplementedError):
-        GitPythonFileSystem(d).mv()
+        GitPythonFileSystem(d, **test_fs_kwargs).mv()

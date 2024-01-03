@@ -3,6 +3,7 @@ from fsspec.registry import register_implementation
 from fsspec.spec import AbstractFileSystem
 from fsspec.implementations.memory import MemoryFile
 import git
+from functools import lru_cache
 
 
 def register_implementation_in_fsspec() -> None:
@@ -30,19 +31,26 @@ class GitPythonFileSystem(AbstractFileSystem):
     You can retrieve information such as a file's modified time, which would not
     be possible if looking at the local filesystem directly.
 
-    It is based on the gitpython library, which could be used to clone or update
+    It is based on the gitpython library, which could also be used to clone or update
     files from a remote repo before reading them with this filesystem.
+
+    Instances of this class cache some git objects so it not recommended to change
+    the git repo within the lifetime of an instance. Calling clear_git_caches() may help.
+    Also note that fsspec itself caches entire instances, which can be overridden with
+    the `skip_instance_cache=True` keyword argument.
     """
 
     PROTOCOL = "gitpythonfs"
     READ_ONLY_MESSAGE = "This fsspec implementation is read-only."
 
-    def __init__(self, repo_path: str, ref: str = None, **kwargs: Any) -> None:
+    def __init__(self, repo_path: str = None, ref: str = None, **kwargs: Any) -> None:
         """
         Initialize a GitPythonFS object.
 
         Args:
-            repo_path (str): Local location of the Git repo. When used with a higher
+            repo_path (str): Local location of the Git repo. Defaults to current directory.
+
+                When used with a higher
                 level function such as fsspec.open(), may be of the form
                 "gitpythonfs://[path-to-repo:][ref@]path/to/file" so that repo
                 and/or ref can be passed in the URL instead of arguments. (The
@@ -52,13 +60,34 @@ class GitPythonFileSystem(AbstractFileSystem):
                     When calling open(), open_files() etc:
                     gitpythonfs:///some_folder/my_repo:path/to/intro.md
                     gitpythonfs:///some_folder/my_repo:mybranch@path/to/intro.md
-            ref (str): (To be implemented). A branch, tag or commit hash to use.
+            ref (str): A branch, tag or commit hash to use.
                 Defaults to HEAD of the local repo.
         """
         super().__init__(**kwargs)
         self.repo_path = repo_path
         self.repo = git.Repo(self.repo_path)
         self.ref = ref or self.repo.head.ref.name
+
+        self._get_tree = lru_cache(maxsize=128)(self._get_tree_uncached)
+
+    def _get_tree_uncached(self, ref: str) -> git.Tree:
+        """Get the tree at repo root for a given ref
+
+        Args:
+            ref (str): The reference to the commit, branch or tag
+
+        Returns:
+            git.Tree: The tree object at the root of the repository for the given ref
+        """
+        return self.repo.tree(ref)
+
+    def clear_git_caches(self) -> None:
+        """Clear the git caches.
+
+        This is useful if the repo has changed and you want to force a refresh of the
+        cached objects. Also not that fsspec itself may cache instances of AbstractFileSystem.
+        """
+        self._get_tree.cache_clear()
 
     @classmethod
     def _strip_protocol(cls, path: str) -> str:
@@ -127,26 +156,26 @@ class GitPythonFileSystem(AbstractFileSystem):
         path = self._strip_protocol(path)
         results = []
 
-        # For traversal, always start at the root of repo.
-        tree = self.repo.tree(ref or self.ref)
-        root_object = tree if path == "" else tree / path
+        # GitPython recommends always starting at root of repo.
+        tree = self._get_tree(ref or self.ref)
 
-        if isinstance(root_object, git.Tree):
+        object_at_path = tree if path == "" else tree / path
+        if isinstance(object_at_path, git.Tree):
             if detail:
-                for object in root_object:
+                for object in object_at_path:
                     results.append(self._details(object, **kwargs))
                 return results
             else:
-                for object in root_object:
+                for object in object_at_path:
                     results.append(object.path)
                 return results
         else:
             # path is to a single blob.
             if detail:
-                results.append(self._details(root_object, **kwargs))
+                results.append(self._details(object_at_path, **kwargs))
                 return results
             else:
-                results.append(root_object.path)
+                results.append(object_at_path.path)
                 return results
 
     def _open(
