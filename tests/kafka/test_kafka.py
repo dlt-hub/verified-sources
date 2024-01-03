@@ -189,15 +189,48 @@ def test_kafka_read_with_timestamp(kafka_timed_messages):
     assert tracker[topic]["0"] == {"cur": 2, "max": 3}
 
 
-def test_kafka_read_now(kafka_topics, kafka_messages):
+def test_kafka_read_now(kafka_admin, kafka_producer):
+    dataset_name = _random_name("dataset")
+
+    topic = _random_name("topic")
+    _await(kafka_admin.create_topics([NewTopic(topic, num_partitions=1)]))
+
+    time.sleep(15)
+
+    kafka_producer.produce(topic, b"value")
+    kafka_producer.produce(topic, b"value")
+    kafka_producer.produce(topic, b"value")
+    kafka_producer.flush()
+
+    time.sleep(15)
+
+    now = pendulum.now(tz="UTC")
     pipeline = dlt.pipeline(
         pipeline_name="kafka_test",
         destination="postgres",
-        dataset_name="kafka_test_data",
-        full_refresh=True,
+        dataset_name=dataset_name,
     )
 
-    resource = kafka_consumer(kafka_topics, start_from=pendulum.now(tz="UTC"))
+    resource = kafka_consumer(topic, start_from=now)
+    pipeline.run(resource)
+
+    table_names = [t["name"] for t in pipeline.default_schema.data_tables()]
+    assert table_names == []
+
+    kafka_producer.produce(topic, b"value")
+    kafka_producer.produce(topic, b"value")
+    kafka_producer.produce(topic, b"value")
+    kafka_producer.flush()
+
+    time.sleep(15)
+
+    pipeline = dlt.pipeline(
+        pipeline_name="kafka_test",
+        destination="postgres",
+        dataset_name=dataset_name,
+    )
+
+    resource = kafka_consumer(topic, start_from=now)
     load_info = pipeline.run(resource)
 
     assert_load_info(load_info)
@@ -205,8 +238,9 @@ def test_kafka_read_now(kafka_topics, kafka_messages):
     table_names = [t["name"] for t in pipeline.default_schema.data_tables()]
     table_counts = load_table_counts(pipeline, *table_names)
 
-    for tab in table_counts:
-        assert table_counts[tab] == 3
+    assert table_counts[topic] == 3
+
+    _await(kafka_admin.delete_topics([topic]))
 
 
 def test_kafka_incremental_read(kafka_producer, kafka_topics):

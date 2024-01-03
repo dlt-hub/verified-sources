@@ -133,8 +133,13 @@ class OffsetTracker(dict):  # type: ignore
 
             # designate current and maximum offsets for every partition
             for i, part in enumerate(parts):
-                if start_from is not None and ts_offsets[i].offset != -1:
-                    cur_offset = ts_offsets[i].offset
+                max_offset = self._consumer.get_watermark_offsets(part)[1]
+
+                if start_from is not None:
+                    if ts_offsets[i].offset != -1:
+                        cur_offset = ts_offsets[i].offset
+                    else:
+                        cur_offset = max_offset - 1
                 else:
                     cur_offset = (
                         self._cur_offsets[t_name].get(str(part.partition), -1) + 1
@@ -142,7 +147,7 @@ class OffsetTracker(dict):  # type: ignore
 
                 self[t_name][str(part.partition)] = {
                     "cur": cur_offset,
-                    "max": self._consumer.get_watermark_offsets(part)[1],
+                    "max": max_offset,
                 }
 
                 parts[i].offset = cur_offset
