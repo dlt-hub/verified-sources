@@ -189,6 +189,26 @@ def test_kafka_read_with_timestamp(kafka_timed_messages):
     assert tracker[topic]["0"] == {"cur": 2, "max": 3}
 
 
+def test_kafka_read_now(kafka_topics, kafka_messages):
+    pipeline = dlt.pipeline(
+        pipeline_name="kafka_test",
+        destination="postgres",
+        dataset_name="kafka_test_data",
+        full_refresh=True,
+    )
+
+    resource = kafka_consumer(kafka_topics, start_from=pendulum.now(tz="UTC"))
+    load_info = pipeline.run(resource)
+
+    assert_load_info(load_info)
+
+    table_names = [t["name"] for t in pipeline.default_schema.data_tables()]
+    table_counts = load_table_counts(pipeline, *table_names)
+
+    for tab in table_counts:
+        assert table_counts[tab] == 3
+
+
 def test_kafka_incremental_read(kafka_producer, kafka_topics):
     """Test incremental messages reading.
 

@@ -133,7 +133,7 @@ class OffsetTracker(dict):  # type: ignore
 
             # designate current and maximum offsets for every partition
             for i, part in enumerate(parts):
-                if start_from is not None:
+                if start_from is not None and ts_offsets[i].offset != -1:
                     cur_offset = ts_offsets[i].offset
                 else:
                     cur_offset = (
