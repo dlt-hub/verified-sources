@@ -189,7 +189,7 @@ class GitPythonFileSystem(AbstractFileSystem):
         **kwargs: Any,
     ) -> MemoryFile:
         path = self._strip_protocol(path)
-        tree = self.repo.tree(ref or self.ref)
+        tree = self._get_tree(ref or self.ref)
         blob = tree / path
         return MemoryFile(data=blob.data_stream.read())
 
