@@ -133,7 +133,6 @@ class GitPythonFileSystem(AbstractFileSystem):
         Returns:
             dict: A dictionary containing the details typical for fsspec.
         """
-        # commit=next(self.repo.iter_commits(paths=object.path, max_count=1))
         details = {
             "name": object.path,
             "type": self._git_type_to_file_type(object),
@@ -143,7 +142,7 @@ class GitPythonFileSystem(AbstractFileSystem):
             "mode": f"{object.mode:o}",
         }
 
-        if include_committed_date:
+        if isinstance(object, git.Blob) and include_committed_date:
             commit = next(self.repo.iter_commits(paths=object.path, max_count=1))
             details["committed_date"] = commit.committed_date
 
