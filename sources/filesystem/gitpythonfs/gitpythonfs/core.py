@@ -4,6 +4,7 @@ from fsspec.spec import AbstractFileSystem
 from fsspec.implementations.memory import MemoryFile
 import git
 from functools import lru_cache
+from gitpythonfs import git_cmd
 
 
 def register_implementation_in_fsspec() -> None:
@@ -119,7 +120,10 @@ class GitPythonFileSystem(AbstractFileSystem):
             raise TypeError(msg)
 
     def _details(
-        self, object: git.Object, include_committed_date: bool = True
+        self,
+        object: git.Object,
+        details_by_path: dict = None,
+        include_committed_date: bool = True,
     ) -> Dict[str, Union[str, int]]:
         """
         Retrieves the details of a Git object.
@@ -143,8 +147,7 @@ class GitPythonFileSystem(AbstractFileSystem):
         }
 
         if isinstance(object, git.Blob) and include_committed_date:
-            commit = next(self.repo.iter_commits(paths=object.path, max_count=1))
-            details["committed_date"] = commit.committed_date
+            details["committed_date"] = details_by_path[object.path]
 
         return details
 
@@ -153,16 +156,29 @@ class GitPythonFileSystem(AbstractFileSystem):
     ) -> Union[List[str], List[Dict]]:
         """List files at given path in the repo."""
         path = self._strip_protocol(path)
+        include_committed_date = kwargs.get("include_committed_date", True)
+        details_by_path = {}
         results = []
 
         # GitPython recommends always starting at root of repo.
         tree = self._get_tree(ref or self.ref)
 
         object_at_path = tree if path == "" else tree / path
+        object_type = self._git_type_to_file_type(object_at_path)
+
+        # Details that are faster to get in bulk via git command.
+        if detail and include_committed_date:
+            raw_details = git_cmd.get_revisions_info(
+                self.repo, ref or self.ref, path, object_type
+            )
+            details_by_path = git_cmd.parse_git_revlist(raw_details)
+
         if isinstance(object_at_path, git.Tree):
             if detail:
                 for object in object_at_path:
-                    results.append(self._details(object, **kwargs))
+                    results.append(
+                        self._details(object, details_by_path=details_by_path, **kwargs)
+                    )
                 return results
             else:
                 for object in object_at_path:
@@ -171,7 +187,11 @@ class GitPythonFileSystem(AbstractFileSystem):
         else:
             # path is to a single blob.
             if detail:
-                results.append(self._details(object_at_path, **kwargs))
+                results.append(
+                    self._details(
+                        object_at_path, details_by_path=details_by_path, **kwargs
+                    )
+                )
                 return results
             else:
                 results.append(object_at_path.path)
