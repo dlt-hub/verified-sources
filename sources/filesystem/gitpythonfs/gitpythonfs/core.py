@@ -140,10 +140,10 @@ class GitPythonFileSystem(AbstractFileSystem):
         details = {
             "name": object.path,
             "type": self._git_type_to_file_type(object),
+            "mode": f"{object.mode:o}",
             "mime_type": object.mime_type if isinstance(object, git.Blob) else None,
             "size": object.size,
             "hex": object.hexsha,
-            "mode": f"{object.mode:o}",
         }
 
         if isinstance(object, git.Blob) and include_committed_date:
