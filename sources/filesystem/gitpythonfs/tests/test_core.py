@@ -253,10 +253,40 @@ def test_non_readonly_raises_exception(repo_fixture) -> None:
 
 
 from git import Repo
-from gitpythonfs.git_cmd import get_revisions_info, parse_git_revlist
+from gitpythonfs.git_cmd import (
+    get_revisions_raw,
+    get_revisions_all_raw,
+    parse_git_revlist,
+)
 
 
-def test_get_revisions_info_at_path(repo_fixture) -> None:
+def test_get_revisions_all_raw(repo_fixture) -> None:
+    """Test getting all revisions."""
+    d, _ = repo_fixture
+    repo = Repo(d)
+    ref = "HEAD"
+
+    result = get_revisions_all_raw(repo, ref)
+
+    assert not result == "", "Should return some info"
+    assert all(
+        x in result for x in ["file1", "file2", "inner/file3", "inner/file4"]
+    ), "Should return info for all files in repo"
+
+
+def test_get_revisions_all_raw_at_ref(repo_fixture) -> None:
+    """Test getting all revisions at ref."""
+    d, sha_first = repo_fixture
+    repo = Repo(d)
+    ref = sha_first
+
+    result = get_revisions_all_raw(repo, ref=sha_first)
+
+    assert "file1" in result, "Should return info for one file that exists at ref"
+    assert not "file2" in result, "Should not return info for file not existent at ref"
+
+
+def test_get_revisions_raw_at_path(repo_fixture) -> None:
     """Test getting revisions at path."""
     d, _ = repo_fixture
     repo = Repo(d)
@@ -264,7 +294,7 @@ def test_get_revisions_info_at_path(repo_fixture) -> None:
     ref = "HEAD"
     path = "inner"
 
-    result = get_revisions_info(repo, ref, path, "directory")
+    result = get_revisions_raw(repo, ref, path, "directory")
 
     # assert "inner/file3" in result, "Should info about a file at the ref and path"
     assert not result == "", "Should return some info"
@@ -273,20 +303,21 @@ def test_get_revisions_info_at_path(repo_fixture) -> None:
     ), "Should return info for all files in `inner` directory"
 
 
-def test_get_revisions_info_at_ref(repo_fixture) -> None:
+def test_get_revisions_raw_at_ref(repo_fixture) -> None:
     """Test getting revisions at a ref."""
     d, _ = repo_fixture
     repo = Repo(d)
 
     ref = "thetag"
-    path = "inner"
+    path = ""
 
-    result = get_revisions_info(repo, ref, path, "directory")
+    result = get_revisions_raw(repo, ref, path, "directory")
 
-    assert result == "", "Should be blank because path did not exist at ref"
+    assert "file1" in result, "Should return info for one file that exists at ref"
+    assert not "file2" in result, "Should not return info for file not existent at ref"
 
 
-def test_get_revisions_info_one_file_at_root(repo_fixture) -> None:
+def test_get_revisions_raw_one_file_at_root(repo_fixture) -> None:
     """Test getting revisions for a single file at the root."""
     d, sha_first = repo_fixture
     repo = Repo(d)
@@ -294,13 +325,13 @@ def test_get_revisions_info_one_file_at_root(repo_fixture) -> None:
     ref = "master"
     path = "file1"
 
-    result = get_revisions_info(repo, ref, path, "file")
+    result = get_revisions_raw(repo, ref, path, "file")
 
     assert "file1" in result, "Should return info for one file at root of repo"
     assert not "file2" in result, "Should not return info for this other file"
 
 
-def test_get_revisions_info_at_root(repo_fixture) -> None:
+def test_get_revisions_raw_at_root(repo_fixture) -> None:
     """Test getting revisions at root directory."""
     d, sha_first = repo_fixture
     repo = Repo(d)
@@ -308,7 +339,7 @@ def test_get_revisions_info_at_root(repo_fixture) -> None:
     ref = "HEAD"
     path = ""
 
-    result = get_revisions_info(repo, ref, path, "directory")
+    result = get_revisions_raw(repo, ref, path, "directory")
 
     assert not result == "", "Should return some info"
     assert all(

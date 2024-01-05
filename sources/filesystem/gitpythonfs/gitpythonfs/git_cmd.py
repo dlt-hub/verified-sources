@@ -2,7 +2,7 @@ from typing import Dict
 import git
 
 
-def get_revisions_info(repo: git.Repo, ref: str, path: str, object_type: str) -> str:
+def get_revisions_raw(repo: git.Repo, ref: str, path: str, object_type: str) -> str:
     """
     Get the git revisions at a given ref and path. Does not recurse into subdirectories.
 
@@ -12,14 +12,13 @@ def get_revisions_info(repo: git.Repo, ref: str, path: str, object_type: str) ->
         path (str): The path to the file or directory to get the revisions for.
             The path is from the root of the repo.  The path should exist at,
             the given ref, but does not need to exist in the local file system.
-            For the root folder, use an empty string. ToDo: check this behaviour.
+            For the root folder, use an empty string.
         object_type (str): The type of the object at the given path.  Either "file" or "directory".
 
     Returns:
         str: The revisions at the given ref and path, as would be on stdout".
     """
 
-    # repo = git.Repo("/tmp/repo_fixture")
     git_cmd_runner = repo.git
 
     # todo: use pathlib?
@@ -38,6 +37,27 @@ def get_revisions_info(repo: git.Repo, ref: str, path: str, object_type: str) ->
         else:
             # get objects in root. fnmatch does not like leading slash.
             path_spec += "*"
+
+    out = git_cmd_runner.log(ref, path_spec, raw=True, no_merges=True, pretty="%at")
+    return out
+
+
+def get_revisions_all_raw(repo: git.Repo, ref: str) -> str:
+    """
+    Get the git revisions at a given ref for entire repo including subdirectories.
+
+    Args:
+        repo (git.Repo): The git repository object.
+        ref (str): The reference (commit, branch, tag, etc.) to get the revisions from.
+
+    Returns:
+        str: The revisions at the given ref, as would be on stdout".
+    """
+
+    git_cmd_runner = repo.git
+
+    # git uses fnmatch(3) style matching
+    path_spec = ":(top)"
 
     out = git_cmd_runner.log(ref, path_spec, raw=True, no_merges=True, pretty="%at")
     return out
@@ -77,3 +97,10 @@ def parse_git_revlist(git_cmd_output: str) -> Dict[str, int]:
                 done_files.append(filepath)
 
     return revisions_info
+
+
+def get_revisions_all(repo: git.Repo, ref: str) -> Dict[str, int]:
+    """Example of getting revisions raw output and parsing it."""
+
+    raw = get_revisions_all_raw(repo, ref)
+    return parse_git_revlist(raw)

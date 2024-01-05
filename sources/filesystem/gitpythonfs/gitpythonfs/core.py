@@ -67,9 +67,16 @@ class GitPythonFileSystem(AbstractFileSystem):
         super().__init__(**kwargs)
         self.repo_path = repo_path
         self.repo = git.Repo(self.repo_path)
+
+        # throw error early if bad ref. ToDo: check this whenever ref passed to any method
+        if ref:
+            self.repo.commit(ref)
         self.ref = ref or self.repo.head.ref.name
 
         self._get_tree = lru_cache(maxsize=128)(self._get_tree_uncached)
+        self._get_revision_details = lru_cache(maxsize=16)(
+            self._get_revision_details_uncached
+        )
 
     def _get_tree_uncached(self, ref: str) -> git.Tree:
         """Get the tree at repo root for a given ref
@@ -82,6 +89,19 @@ class GitPythonFileSystem(AbstractFileSystem):
         """
         return self.repo.tree(ref)
 
+    def _get_revision_details_uncached(self, ref: str) -> Dict[str, int]:
+        """Get the revisions at a given ref for entire repo including subdirectories.
+
+        Args:
+            ref (str): The reference to the commit, branch or tag
+
+        Returns:
+            Dict[str, int]: A dictionary mapping file path to file's last modified time
+        """
+        return git_cmd.parse_git_revlist(
+            git_cmd.get_revisions_all_raw(self.repo, ref or self.ref)
+        )
+
     def clear_git_caches(self) -> None:
         """Clear the git caches.
 
@@ -89,6 +109,7 @@ class GitPythonFileSystem(AbstractFileSystem):
         cached objects. Also not that fsspec itself may cache instances of AbstractFileSystem.
         """
         self._get_tree.cache_clear()
+        self._get_revision_details.cache_clear()
 
     @classmethod
     def _strip_protocol(cls, path: str) -> str:
@@ -122,7 +143,7 @@ class GitPythonFileSystem(AbstractFileSystem):
     def _details(
         self,
         object: git.Object,
-        details_by_path: dict = None,
+        ref: str = None,
         include_committed_date: bool = True,
     ) -> Dict[str, Union[str, int]]:
         """
@@ -137,17 +158,22 @@ class GitPythonFileSystem(AbstractFileSystem):
         Returns:
             dict: A dictionary containing the details typical for fsspec.
         """
+        object_type: str = self._git_type_to_file_type(object)
+
         details = {
             "name": object.path,
             "type": self._git_type_to_file_type(object),
             "mode": f"{object.mode:o}",
-            "mime_type": object.mime_type if isinstance(object, git.Blob) else None,
+            "mime_type": object.mime_type if object_type == "file" else None,
             "size": object.size,
             "hex": object.hexsha,
         }
 
-        if isinstance(object, git.Blob) and include_committed_date:
-            details["committed_date"] = details_by_path[object.path]
+        # Only get expensive details if needed.
+        if object_type == "file" and include_committed_date:
+            details["committed_date"] = self._get_revision_details(ref or self.ref)[
+                object.path
+            ]
 
         return details
 
@@ -164,21 +190,10 @@ class GitPythonFileSystem(AbstractFileSystem):
         tree = self._get_tree(ref or self.ref)
 
         object_at_path = tree if path == "" else tree / path
-        object_type = self._git_type_to_file_type(object_at_path)
-
-        # Details that are faster to get in bulk via git command.
-        if detail and include_committed_date:
-            raw_details = git_cmd.get_revisions_info(
-                self.repo, ref or self.ref, path, object_type
-            )
-            details_by_path = git_cmd.parse_git_revlist(raw_details)
-
         if isinstance(object_at_path, git.Tree):
             if detail:
                 for object in object_at_path:
-                    results.append(
-                        self._details(object, details_by_path=details_by_path, **kwargs)
-                    )
+                    results.append(self._details(object, ref or self.ref, **kwargs))
                 return results
             else:
                 for object in object_at_path:
@@ -187,11 +202,7 @@ class GitPythonFileSystem(AbstractFileSystem):
         else:
             # path is to a single blob.
             if detail:
-                results.append(
-                    self._details(
-                        object_at_path, details_by_path=details_by_path, **kwargs
-                    )
-                )
+                results.append(self._details(object_at_path, ref or self.ref, **kwargs))
                 return results
             else:
                 results.append(object_at_path.path)
