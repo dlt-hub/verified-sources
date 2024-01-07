@@ -91,10 +91,11 @@ def parse_git_revlist(git_cmd_output: str) -> Dict[str, int]:
             committed_at = int(line)
         else:
             filepath = line.split("\t")[-1]
-            # first occurence of a file is the most recent.
-            if not filepath in done_files:
+            # git outputs revisions newest first. So we ignore a files we've
+            # already seen it because we only want metadata for the latest
+            # commit for each file.
+            if not filepath in revisions_info:
                 revisions_info[filepath] = committed_at
-                done_files.append(filepath)
 
     return revisions_info
 
