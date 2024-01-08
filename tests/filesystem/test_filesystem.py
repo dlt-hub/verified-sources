@@ -141,8 +141,6 @@ def test_csv_transformers(bucket_url: str) -> None:
 
 @pytest.mark.parametrize("bucket_url", TESTS_BUCKET_URLS)
 def test_standard_readers(bucket_url: str) -> None:
-    from sources.filesystem_pipeline import read_jsonl, read_parquet
-
     # extract pipes with standard readers
     jsonl_reader = readers(bucket_url, file_glob="**/*.jsonl").read_jsonl()
     parquet_reader = readers(bucket_url, file_glob="**/*.parquet").read_parquet()
