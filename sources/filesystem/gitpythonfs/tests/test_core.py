@@ -20,7 +20,7 @@ from git import BadName
 from gitpythonfs import GitPythonFileSystem
 from gitpythonfs.core import register_implementation_in_fsspec
 
-PROTOCOL = GitPythonFileSystem.PROTOCOL
+PROTOCOL = GitPythonFileSystem.protocol
 test_fs_kwargs = {"skip_instance_cache": True}
 
 

@@ -41,7 +41,7 @@ class GitPythonFileSystem(AbstractFileSystem):
     the `skip_instance_cache=True` keyword argument.
     """
 
-    PROTOCOL = "gitpythonfs"
+    protocol = "gitpythonfs"
     READ_ONLY_MESSAGE = "This fsspec implementation is read-only."
 
     def __init__(self, repo_path: str = None, ref: str = None, **kwargs: Any) -> None:
