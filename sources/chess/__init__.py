@@ -158,9 +158,6 @@ def chess_dlt_config_example(
     Returns:
         DltResource: Returns a resource yielding the configured values.
     """
-    print(secret_str)
-    print(secret_dict)
-    print(config_int)
 
     # returns a resource yielding the configured values - it is just a test
     return dlt.resource([secret_str, secret_dict, config_int], name="config_values")

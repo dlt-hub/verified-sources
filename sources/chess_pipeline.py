@@ -27,7 +27,7 @@ def load_players_online_status() -> None:
 
     pipeline = dlt.pipeline(
         pipeline_name="chess_pipeline",
-        destination="postgres",
+        destination="duckdb",
         dataset_name="chess_players_games_data",
     )
     data = source(["magnuscarlsen", "vincentkeymer", "dommarajugukesh", "rpragchess"])
