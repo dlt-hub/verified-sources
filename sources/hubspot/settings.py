@@ -36,3 +36,64 @@ OBJECT_TYPE_SINGULAR = {
 }
 
 OBJECT_TYPE_PLURAL = {v: k for k, v in OBJECT_TYPE_SINGULAR.items()}
+
+DEFAULT_DEAL_PROPS = [
+    "amount",
+    "closedate",
+    "createdate",
+    "dealname",
+    "dealstage",
+    "hs_lastmodifieddate",
+    "hs_object_id",
+    "pipeline",
+]
+
+DEFAULT_COMPANY_PROPS = [
+    "createdate",
+    "domain",
+    "hs_lastmodifieddate",
+    "hs_object_id",
+    "name",
+]
+
+DEFAULT_CONTACT_PROPS = [
+    "createdate",
+    "email",
+    "firstname",
+    "hs_object_id",
+    "lastmodifieddate",
+    "lastname",
+]
+
+DEFAULT_TICKET_PROPS = [
+    "createdate",
+    "content",
+    "hs_lastmodifieddate",
+    "hs_object_id",
+    "hs_pipeline",
+    "hs_pipeline_stage",
+    "hs_ticket_category",
+    "hs_ticket_priority",
+    "subject",
+]
+
+DEFAULT_PRODUCT_PROPS = [
+    "createdate",
+    "description",
+    "hs_lastmodifieddate",
+    "hs_object_id",
+    "name",
+    "price",
+]
+
+DEFAULT_QUOTE_PROPS = [
+    "hs_createdate",
+    "hs_expiration_date",
+    "hs_lastmodifieddate",
+    "hs_object_id",
+    "hs_public_url_key",
+    "hs_status",
+    "hs_title",
+]
+
+ALL = ("ALL",)
