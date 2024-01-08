@@ -1,0 +1,1976 @@
+1704262217
+
+:100644 100644 b2c5378 a151a8c M	sources/filesystem/gitpythonfs/gitpythonfs/core.py
+1704259813
+
+:100644 100644 0560bef 14df1c9 M	sources/filesystem/gitpythonfs/docs/usage.ipynb
+:100644 100644 a1668c3 b2c5378 M	sources/filesystem/gitpythonfs/gitpythonfs/core.py
+:100644 100644 480c39c c5207f9 M	sources/filesystem/gitpythonfs/tests/test_core.py
+1704247924
+
+:100644 100644 316bc12 a1668c3 M	sources/filesystem/gitpythonfs/gitpythonfs/core.py
+:100644 100644 86f8279 480c39c M	sources/filesystem/gitpythonfs/tests/test_core.py
+1704246523
+
+:100644 100644 499db86 316bc12 M	sources/filesystem/gitpythonfs/gitpythonfs/core.py
+:100644 100644 daa122c 86f8279 M	sources/filesystem/gitpythonfs/tests/test_core.py
+1704238416
+
+:100644 100644 90b0bfa 499db86 M	sources/filesystem/gitpythonfs/gitpythonfs/core.py
+:100644 100644 39edef2 daa122c M	sources/filesystem/gitpythonfs/tests/test_core.py
+1704152891
+
+:100644 100644 f39674f 90b0bfa M	sources/filesystem/gitpythonfs/gitpythonfs/core.py
+:100644 100644 5aa790d 39edef2 M	sources/filesystem/gitpythonfs/tests/test_core.py
+1704150090
+
+:100644 100644 ab80282 f39674f M	sources/filesystem/gitpythonfs/gitpythonfs/core.py
+:100644 100644 71054d1 5aa790d M	sources/filesystem/gitpythonfs/tests/test_core.py
+1704149925
+
+:100644 100644 449e48b ab80282 M	sources/filesystem/gitpythonfs/gitpythonfs/core.py
+:100644 100644 d050745 71054d1 M	sources/filesystem/gitpythonfs/tests/test_core.py
+1703660027
+
+:100644 100644 b54031c 449e48b M	sources/filesystem/gitpythonfs/gitpythonfs/core.py
+:100644 100644 2ce7ad4 d050745 M	sources/filesystem/gitpythonfs/tests/test_core.py
+1703660027
+
+:100644 100644 b54031c 0f3f699 M	sources/filesystem/gitpythonfs/gitpythonfs/core.py
+1703659948
+
+:100644 100644 1e43ef0 b54031c M	sources/filesystem/gitpythonfs/gitpythonfs/core.py
+:100644 100644 afabaab 2ce7ad4 M	sources/filesystem/gitpythonfs/tests/test_core.py
+1703599509
+
+:100644 100644 be9fc75 a82e2c1 M	pyproject.toml
+:100644 100644 86fe591 5f14b95 M	sources/filesystem/gitpythonfs/pyproject.toml
+1703595955
+
+:100644 100644 30480db be9fc75 M	pyproject.toml
+:000000 100644 0000000 e9d3488 A	sources/filesystem/gitpythonfs/README.md
+:000000 100644 0000000 0560bef A	sources/filesystem/gitpythonfs/docs/usage.ipynb
+:000000 100644 0000000 4d16389 A	sources/filesystem/gitpythonfs/gitpythonfs/__init__.py
+:000000 100644 0000000 1e43ef0 A	sources/filesystem/gitpythonfs/gitpythonfs/core.py
+:000000 100644 0000000 8aa3d21 A	sources/filesystem/gitpythonfs/poetry.lock
+:000000 100644 0000000 86fe591 A	sources/filesystem/gitpythonfs/pyproject.toml
+:000000 100644 0000000 afabaab A	sources/filesystem/gitpythonfs/tests/test_core.py
+1702510906
+
+:100644 100644 af09238 513f42a M	sources/filesystem_pipeline.py
+1702290744
+
+:100644 100644 79b7567 9e2e545 M	sources/personio/README.md
+:100644 100644 6869c28 66cdd20 M	tests/personio/test_personio_source.py
+1701958667
+
+:100644 100644 fabfb7d c5298f5 M	sources/github/__init__.py
+:100644 100644 c247f93 0f65775 M	sources/github/helpers.py
+1701084998
+
+:000000 100644 0000000 79b7567 A	sources/personio/README.md
+:000000 100644 0000000 ad08d02 A	sources/personio/__init__.py
+:000000 100644 0000000 53d963c A	sources/personio/helpers.py
+:000000 100644 0000000 291a401 A	sources/personio/requirements.txt
+:000000 100644 0000000 4f80dd7 A	sources/personio/settings.py
+:000000 100644 0000000 5cc4c57 A	sources/personio_pipeline.py
+:000000 100644 0000000 e69de29 A	tests/personio/__init__.py
+:000000 100644 0000000 6869c28 A	tests/personio/test_personio_source.py
+1700558340
+
+:100644 100644 da7b547 77982f6 M	sources/salesforce/__init__.py
+1700483008
+
+:100644 100644 8942886 0917372 M	sources/kinesis/__init__.py
+:100644 100644 f55098a f4d33de M	sources/kinesis/requirements.txt
+1700482991
+
+:100644 100644 5a71129 e5632b6 M	sources/airtable/__init__.py
+:100644 100644 dec2024 ecdd276 M	sources/asana_dlt/__init__.py
+:100644 100644 3eb4bf5 24f49af M	sources/chess/__init__.py
+:100644 100644 fd0e8e9 42ce436 M	sources/facebook_ads/__init__.py
+:100644 100644 2a3b9ba fabfb7d M	sources/github/__init__.py
+:100644 100644 853225b 922e49d M	sources/google_analytics/__init__.py
+:100644 100644 2abab57 674c5dd M	sources/google_sheets/__init__.py
+:100644 100644 dfc61fc 16a5640 M	sources/hubspot/__init__.py
+:100644 100644 1a06955 5743130 M	sources/jira/__init__.py
+:100644 100644 57a82c3 9598e51 M	sources/matomo/__init__.py
+:100644 100644 4d94aa7 eee0f0c M	sources/mongodb/__init__.py
+:100644 100644 69d1a81 7dd4635 M	sources/mux/__init__.py
+:100644 100644 a9ae92f 7666a3d M	sources/notion/__init__.py
+:100644 100644 64695e7 62aae1b M	sources/pipedrive/__init__.py
+:100644 100644 35559ae da18a77 M	sources/pokemon/__init__.py
+:100644 100644 0eee584 da7b547 M	sources/salesforce/__init__.py
+:100644 100644 7b0f151 06f6e39 M	sources/shopify_dlt/__init__.py
+:100644 100644 235c006 7904824 M	sources/slack/__init__.py
+:100644 100644 49a498a 11c3ca9 M	sources/sql_database/__init__.py
+:100644 100644 a0f7d7f 6cde3a9 M	sources/sql_database/helpers.py
+:100644 100644 b9661ec c1eee4e M	sources/strapi/__init__.py
+:100644 100644 bc6e389 fc30c54 M	sources/strapi/helpers.py
+:100644 100644 b774c86 dadd64c M	sources/stripe_analytics/__init__.py
+:100644 100644 4c665a2 0b866e1 M	sources/unstructured_data/__init__.py
+:100644 100644 5429ef1 a52927f M	sources/unstructured_data/google_drive/__init__.py
+:100644 100644 5030322 aeca57c M	sources/unstructured_data/inbox/__init__.py
+:100644 100644 ef7850f a22fac3 M	sources/unstructured_data/local_folder/__init__.py
+:100644 100644 34b12bf 6f3a413 M	sources/workable/__init__.py
+:100644 100644 6121358 d47fa13 M	sources/zendesk/__init__.py
+:100644 100644 5c740e2 6bd3807 M	tests/sql_database/test_sql_database_source.py
+:100644 100644 f4e0efa 79a9eeb M	tests/unstructured_data/test_unstructured_data_source.py
+1699360553
+
+:100644 100644 0b1914b 340f708 M	sources/filesystem/README.md
+1698770765
+
+:100644 100644 4c13e1a 975035a M	.github/workflows/lint.yml
+:100644 100644 7dffff3 ee04361 M	poetry.lock
+:100644 100644 55f1a3f 30480db M	pyproject.toml
+:100644 100644 3700934 f80b82b M	sources/filesystem/__init__.py
+:100644 100644 0b1be55 f55098a M	sources/filesystem/requirements.txt
+:000000 100644 0000000 520c7ce A	sources/kinesis/README.md
+:000000 100644 0000000 8942886 A	sources/kinesis/__init__.py
+:000000 100644 0000000 65552e5 A	sources/kinesis/helpers.py
+:000000 100644 0000000 f55098a A	sources/kinesis/requirements.txt
+:000000 100644 0000000 792e920 A	sources/kinesis_pipeline.py
+:000000 100644 0000000 e69de29 A	tests/kinesis/__init__.py
+:000000 100644 0000000 b3a9cfe A	tests/kinesis/test_kinesis.py
+1698147655
+
+:100644 100644 a7ebf65 a0f7d7f M	sources/sql_database/helpers.py
+:100644 100644 afc98d3 7f7776b M	tests/sql_database/sql_source.py
+1698097114
+
+:100644 100644 ed4dd1d 4d94aa7 M	sources/mongodb/__init__.py
+:100644 100644 b99091f 9fc9245 M	sources/mongodb/helpers.py
+:100644 100644 1c6d956 afff4df M	sources/mongodb_pipeline.py
+:100644 100644 f5c0f4b 05b819f M	tests/mongodb/test_mongodb_source.py
+1697719890
+
+:100644 100644 d2d0327 1dca753 M	sources/inbox/README.md
+1697716491
+
+:100644 100644 e20ed30 841c386 M	sources/inbox/__init__.py
+:100644 100644 f425b67 8b88eed M	sources/inbox_pipeline.py
+:100644 100644 7dc5925 37b0028 M	tests/inbox/test_inbox.py
+1697397805
+
+:100644 100644 2941d5f 7dffff3 M	poetry.lock
+:100644 100644 b00f6c8 55f1a3f M	pyproject.toml
+:100644 100644 fffc5c9 0b1be55 M	sources/filesystem/requirements.txt
+:100644 100644 4312d1b 0a1afdb M	tests/filesystem/test_filesystem.py
+1697391520
+
+:100644 100644 8a2743b 156fd02 M	mypy.ini
+:100644 100644 7787206 2941d5f M	poetry.lock
+:100644 100644 68d277a b00f6c8 M	pyproject.toml
+:100644 100644 d022d21 9dfda54 M	sources/facebook_ads/helpers.py
+:100644 100644 4e9cece 0b1914b M	sources/filesystem/README.md
+:100644 100644 101fb9b 3700934 M	sources/filesystem/__init__.py
+:100644 100644 a6d6dc6 225b171 M	sources/filesystem/helpers.py
+:000000 100644 0000000 c59037d A	sources/filesystem/readers.py
+:100644 100644 b5a9469 af09238 M	sources/filesystem_pipeline.py
+:100644 100644 7e555bc 2a3b9ba M	sources/github/__init__.py
+:100644 100644 b71fd37 a7ebf65 M	sources/sql_database/helpers.py
+:100644 100644 e255333 da97716 M	sources/unstructured_data/async_index.py
+:000000 100644 0000000 2c3d0fb A	tests/filesystem/custom/freshman_kgs.xlsx
+:100644 100644 73e0824 5211b48 M	tests/filesystem/settings.py
+:100644 100644 19bec21 4312d1b M	tests/filesystem/test_filesystem.py
+1696943839
+
+:100644 100644 9f3cd80 7787206 M	poetry.lock
+:100644 100644 e2dd952 68d277a M	pyproject.toml
+:000000 100644 0000000 4e9cece A	sources/filesystem/README.md
+:000000 100644 0000000 101fb9b A	sources/filesystem/__init__.py
+:000000 100644 0000000 a6d6dc6 A	sources/filesystem/helpers.py
+:000000 100644 0000000 fffc5c9 A	sources/filesystem/requirements.txt
+:000000 100644 0000000 33fcb55 A	sources/filesystem/settings.py
+:000000 100644 0000000 b5a9469 A	sources/filesystem_pipeline.py
+:000000 100644 0000000 d2d0327 A	sources/inbox/README.md
+:000000 100644 0000000 e20ed30 A	sources/inbox/__init__.py
+:000000 100644 0000000 109657d A	sources/inbox/helpers.py
+:000000 100644 0000000 fffc5c9 A	sources/inbox/requirements.txt
+:000000 100644 0000000 50dafdb A	sources/inbox/settings.py
+:000000 100644 0000000 f425b67 A	sources/inbox_pipeline.py
+:100644 100644 178d4dc 1a06955 M	sources/jira/__init__.py
+:000000 100644 0000000 e69de29 A	tests/filesystem/__init__.py
+:000000 100644 0000000 0c44799 A	tests/filesystem/samples/csv/freshman_kgs.csv
+:000000 100644 0000000 31f4bd7 A	tests/filesystem/samples/csv/freshman_lbs.csv
+:000000 100644 0000000 fbc616a A	tests/filesystem/samples/csv/mlb_players.csv
+:000000 100644 0000000 c10f362 A	tests/filesystem/samples/csv/mlb_teams_2012.csv
+:000000 100644 0000000 7f8450a A	tests/filesystem/samples/jsonl/mlb_players.jsonl
+:000000 100644 0000000 c32710c A	tests/filesystem/samples/met_csv/A801/A881_20230920.csv
+:000000 100644 0000000 860057d A	tests/filesystem/samples/met_csv/A803/A803_20230919.csv
+:000000 100644 0000000 af41772 A	tests/filesystem/samples/met_csv/A803/A803_20230920.csv
+:000000 100644 0000000 b323796 A	tests/filesystem/samples/parquet/mlb_players.parquet
+:000000 100644 0000000 fd1ed11 A	tests/filesystem/samples/sample.txt
+:000000 100644 0000000 73e0824 A	tests/filesystem/settings.py
+:000000 100644 0000000 19bec21 A	tests/filesystem/test_filesystem.py
+:000000 100644 0000000 e69de29 A	tests/inbox/__init__.py
+:000000 100644 0000000 7dc5925 A	tests/inbox/test_inbox.py
+:100644 100644 77dec67 4fd8a8b M	tests/utils.py
+1696622099
+
+:100644 100644 551c2d0 178d4dc M	sources/jira/__init__.py
+:100644 100644 f9cab37 aee1059 M	sources/jira/settings.py
+:100644 100644 aa47321 8f669e4 M	tests/jira/test_jira_source.py
+1696498063
+
+:100644 100644 35be74b b82785f M	sources/mongodb/README.md
+1696345733
+
+:100644 100644 c12b1ed b99091f M	sources/mongodb/helpers.py
+:100644 100644 8a13ff2 f5c0f4b M	tests/mongodb/test_mongodb_source.py
+1695829181
+
+:100644 100644 0f95906 9f3cd80 M	poetry.lock
+:100644 100644 976b80b e2dd952 M	pyproject.toml
+:100644 100644 fc8e4ca 235c006 M	sources/slack/__init__.py
+:100644 100644 333a677 d11bea4 M	sources/slack/requirements.txt
+:100644 100644 cabc0b8 34040a9 M	sources/slack/settings.py
+:100644 100644 751956b 3b3a28f M	sources/slack_pipeline.py
+:100644 100644 57a8a05 89a5505 M	tests/slack/test_slack_source.py
+1695302671
+
+:100644 100644 c8f45cc 64695e7 M	sources/pipedrive/__init__.py
+:100644 100644 9cb4be1 8be9795 M	sources/pipedrive/helpers/pages.py
+:100644 100644 a79206d e273b53 M	tests/pipedrive/test_pipedrive_source.py
+1695236084
+
+:100644 100644 b241fec fd0e8e9 M	sources/facebook_ads/__init__.py
+:100644 100644 a12219f 8e71cfb M	sources/facebook_ads/settings.py
+1695202012
+
+:100644 100644 f87797f f296970 M	sources/airtable/README.md
+1695127910
+
+:100644 100644 9d07482 5a71129 M	sources/airtable/__init__.py
+:100644 100644 8fb63f0 44eb7c0 M	sources/airtable/requirements.txt
+1695112776
+
+:100644 100644 26c1bc8 9d07482 M	sources/airtable/__init__.py
+:100644 100644 5930187 0cf7307 M	sources/airtable_pipeline.py
+1694539098
+
+:100644 100644 c0c57b4 b71fd37 M	sources/sql_database/helpers.py
+1694537685
+
+:000000 100644 0000000 5ddc904 A	sources/slack/README.md
+:000000 100644 0000000 fc8e4ca A	sources/slack/__init__.py
+:000000 100644 0000000 d7f14bb A	sources/slack/helpers.py
+:000000 100644 0000000 333a677 A	sources/slack/requirements.txt
+:000000 100644 0000000 cabc0b8 A	sources/slack/settings.py
+:000000 100644 0000000 751956b A	sources/slack_pipeline.py
+:000000 100644 0000000 e69de29 A	tests/slack/__init__.py
+:000000 100644 0000000 57a8a05 A	tests/slack/test_slack_source.py
+1693424586
+
+:100644 100644 cd7b4e1 0f95906 M	poetry.lock
+:100644 100644 cca9c90 976b80b M	pyproject.toml
+:000000 100644 0000000 f87797f A	sources/airtable/README.md
+:000000 100644 0000000 26c1bc8 A	sources/airtable/__init__.py
+:000000 100644 0000000 8fb63f0 A	sources/airtable/requirements.txt
+:000000 100644 0000000 5930187 A	sources/airtable_pipeline.py
+:000000 100644 0000000 e69de29 A	tests/airtable/__init__.py
+:000000 100644 0000000 be57314 A	tests/airtable/test_airtable_source.py
+1693037370
+
+:100644 100644 afd3962 cd7b4e1 M	poetry.lock
+:100644 100644 6a9869c cca9c90 M	pyproject.toml
+:000000 100644 0000000 35be74b A	sources/mongodb/README.md
+:000000 100644 0000000 ed4dd1d A	sources/mongodb/__init__.py
+:000000 100644 0000000 c12b1ed A	sources/mongodb/helpers.py
+:000000 100644 0000000 fdc373a A	sources/mongodb/requirements.txt
+:000000 100644 0000000 1c6d956 A	sources/mongodb_pipeline.py
+:000000 100644 0000000 e69de29 A	tests/mongodb/__init__.py
+:000000 100644 0000000 8a13ff2 A	tests/mongodb/test_mongodb_source.py
+1692996858
+
+:100644 100644 2819aa8 4c13e1a M	.github/workflows/lint.yml
+1692976730
+
+:100644 100644 6265adf 2819aa8 M	.github/workflows/lint.yml
+1692559528
+
+:100644 100644 2b21a0a e2753d2 M	.github/workflows/get_changed_sources.yml
+1692558909
+
+:100644 100644 2cd717c 4c391bb M	.github/workflows/test_on_local_destinations.yml
+:100644 100644 c78139b d30caf8 M	.github/workflows/test_on_local_destinations_forks.yml
+:100644 100644 3d12315 1c80e6e M	CONTRIBUTING.md
+1692369671
+
+:100644 100644 33323f1 b241fec M	sources/facebook_ads/__init__.py
+:100644 100644 3f9ef69 d022d21 M	sources/facebook_ads/helpers.py
+:100644 100644 ad0b04a eb89f98 M	tests/facebook_ads/test_facebook_ads_source.py
+1692200185
+
+:100644 100644 27ff4e0 614cff6 M	.github/workflows/test_destinations_slow.yml
+:100644 100644 1f3bd4e 2cd717c R094	.github/workflows/test_destinations.yml	.github/workflows/test_on_local_destinations.yml
+:000000 100644 0000000 c78139b A	.github/workflows/test_on_local_destinations_forks.yml
+:100644 100644 57eb7ce 3d12315 M	CONTRIBUTING.md
+:100644 100644 327dcbb afd3962 M	poetry.lock
+:100644 100644 a21cb31 6a9869c M	pyproject.toml
+:100644 100644 f7e3be7 ccde899 M	sources/google_sheets/README.md
+:100644 100644 512ae51 2abab57 M	sources/google_sheets/__init__.py
+:100644 100644 b81dddc 06e7564 M	sources/google_sheets/helpers/api_calls.py
+1692182721
+
+:100644 100644 9d106bd abe9e6f M	sources/google_sheets_pipeline.py
+1692103192
+
+:100644 100644 9dcbb09 a9ae92f M	sources/notion/__init__.py
+:100644 100644 ef4bd3f 72a9fbb M	sources/notion/helpers/client.py
+1691961028
+
+:100644 100644 b5e2a3d c241346 M	sources/chess/README.md
+1691589983
+
+:100644 100644 9e2bc22 f7e3be7 M	sources/google_sheets/README.md
+:100644 100644 1f0d87f 512ae51 M	sources/google_sheets/__init__.py
+:100644 100644 92a7c93 b81dddc M	sources/google_sheets/helpers/api_calls.py
+:100644 100644 ca05f85 85311cb M	sources/google_sheets/helpers/data_processing.py
+:100644 100644 f988691 9d106bd M	sources/google_sheets_pipeline.py
+:100644 100644 f6e9397 e0fd8f4 M	tests/google_sheets/test_google_sheets_source.py
+1691427069
+
+:100644 100644 8e8314a 9e2bc22 M	sources/google_sheets/README.md
+:100644 100644 8fed97d 1f0d87f M	sources/google_sheets/__init__.py
+:100644 000000 048819f 0000000 D	sources/google_sheets/docs_images/Add_people.png
+:100644 000000 2ac37ef 0000000 D	sources/google_sheets/docs_images/Share_button.png
+:100644 100644 6ae5a98 92a7c93 M	sources/google_sheets/helpers/api_calls.py
+:100644 100644 6e0c4eb ca05f85 M	sources/google_sheets/helpers/data_processing.py
+:100644 100644 e36ebab f988691 M	sources/google_sheets_pipeline.py
+:100644 100644 ad301fc aea0fef M	tests/google_sheets/test_data_processing.py
+:100644 100644 510d1ee f6e9397 M	tests/google_sheets/test_google_sheets_source.py
+:100644 100644 1543443 77dec67 M	tests/utils.py
+1691416826
+
+:100644 100644 34fdb7d 327dcbb M	poetry.lock
+:100644 100644 add473c a21cb31 M	pyproject.toml
+:100644 100644 080375a 7b0f151 M	sources/shopify_dlt/__init__.py
+:100644 000000 ed0e85b 0000000 D	sources/shopify_dlt/date_helper.py
+:100644 100644 00c6106 4876bef M	sources/shopify_dlt/helpers.py
+:100644 100644 333a677 291a401 M	sources/shopify_dlt/requirements.txt
+:100644 100644 abbe38c 6121358 M	sources/zendesk/__init__.py
+:100644 100644 8023521 d2adec1 M	sources/zendesk/helpers/api_helpers.py
+:100644 100644 7411132 209dca8 M	sources/zendesk/helpers/talk_api.py
+:100644 100644 4f6ae41 6194737 M	sources/zendesk/requirements.txt
+:100644 100644 631895f 9abbcab M	sources/zendesk/settings.py
+:100644 100644 85f876f cac0571 M	sources/zendesk_pipeline.py
+:100644 000000 37de9b5 0000000 D	tests/shopify_dlt/test_date_helper.py
+:100644 100644 02bd820 bb9f34b M	tests/shopify_dlt/test_shopify_source.py
+:100644 100644 1fc17ff 3a10a71 M	tests/zendesk/test_zendesk_source.py
+1691160602
+
+:100644 100644 6abb4a9 6265adf M	.github/workflows/lint.yml
+:100644 100644 0ce9d2f bc59761 M	Makefile
+:100644 100644 518e80e 8a2743b M	mypy.ini
+:100644 100644 dc87e4d 34fdb7d M	poetry.lock
+:100644 100644 f0e3925 add473c M	pyproject.toml
+:000000 100644 0000000 3a4a208 A	sources/unstructured_data/README.md
+:000000 100644 0000000 4c665a2 A	sources/unstructured_data/__init__.py
+:000000 100644 0000000 e255333 A	sources/unstructured_data/async_index.py
+:000000 100644 0000000 0033a37 A	sources/unstructured_data/google_drive/README.md
+:000000 100644 0000000 5429ef1 A	sources/unstructured_data/google_drive/__init__.py
+:000000 100644 0000000 1ba8b89 A	sources/unstructured_data/google_drive/helpers.py
+:000000 100644 0000000 29f415e A	sources/unstructured_data/google_drive/requirements.txt
+:000000 100644 0000000 dc3b5da A	sources/unstructured_data/google_drive/settings.py
+:000000 100644 0000000 af751d8 A	sources/unstructured_data/google_drive/setup_script_gcp_oauth.py
+:000000 100644 0000000 c662fb8 A	sources/unstructured_data/helpers.py
+:000000 100644 0000000 0f0da1b A	sources/unstructured_data/inbox/README.md
+:000000 100644 0000000 5030322 A	sources/unstructured_data/inbox/__init__.py
+:000000 100644 0000000 f2d2bfb A	sources/unstructured_data/inbox/helpers.py
+:000000 100644 0000000 905d6b8 A	sources/unstructured_data/inbox/settings.py
+:000000 100644 0000000 2355327 A	sources/unstructured_data/local_folder/README.md
+:000000 100644 0000000 ef7850f A	sources/unstructured_data/local_folder/__init__.py
+:000000 100644 0000000 dd2df19 A	sources/unstructured_data/requirements.txt
+:000000 100644 0000000 e30681d A	sources/unstructured_data/settings.py
+:000000 100644 0000000 d7aa71a A	sources/unstructured_data_pipeline.py
+:000000 100644 0000000 e69de29 A	tests/unstructured_data/__init__.py
+:000000 100644 0000000 5f72072 A	tests/unstructured_data/conftest.py
+:000000 100644 0000000 1a33a82 A	tests/unstructured_data/test_data/invoice_1.pdf
+:000000 100644 0000000 d066bce A	tests/unstructured_data/test_data/invoice_2.txt
+:000000 100644 0000000 8bcd37b A	tests/unstructured_data/test_data/invoice_3.jpg
+:000000 100644 0000000 f4e0efa A	tests/unstructured_data/test_unstructured_data_source.py
+:100644 100644 058f125 1543443 M	tests/utils.py
+1690902322
+
+:100644 100644 bf4ed69 dc87e4d M	poetry.lock
+:100644 100644 b642def f0e3925 M	pyproject.toml
+:100644 100644 cf73d2c 3f9ef69 M	sources/facebook_ads/helpers.py
+:100644 100644 7d2f572 07e7f4c M	tests/test_dlt_init.py
+1690796617
+
+:100644 100644 57d3e85 6bbe1dc M	.github/ISSUE_TEMPLATE/extend-a-source.md
+:100644 100644 3dd07df 42ee573 M	.github/ISSUE_TEMPLATE/new-verified-source.md
+:100644 100644 1b6dac0 635b64e M	.github/ISSUE_TEMPLATE/source-request.md
+1690618687
+
+:100755 100755 4b409a6 e809695 M	check-package.sh
+:100644 100644 33f3f08 518e80e M	mypy.ini
+:100644 100644 b64fc5c bf4ed69 M	poetry.lock
+:100644 100644 4d11ada b642def M	pyproject.toml
+:100644 000000 e69de29 0000000 D	sources/__init__.py
+:100644 100644 e18745c cdc560b M	sources/jira_pipeline.py
+:100644 100644 ba02bfb 2613b18 M	sources/stripe_analytics_pipeline.py
+1690371367
+
+:100644 100644 a698188 30e71cc M	sources/google_analytics_pipeline.py
+1690314772
+
+:100644 100644 cb67d9a 57eb7ce M	CONTRIBUTING.md
+:100644 100644 f9fe22e 0ce9d2f M	Makefile
+:000000 100755 0000000 675ee76 A	check-requirements.py
+:100644 100644 d7cf09d 054dd4d M	sources/asana_dlt/requirements.txt
+:100644 100644 e69de29 333a677 M	sources/chess/requirements.txt
+:100644 100644 3578203 6ce9e93 M	sources/facebook_ads/requirements.txt
+:000000 100644 0000000 4f6ae41 A	sources/github/requirements.txt
+:100644 100644 d8055e0 83f486e M	sources/google_sheets/requirements.txt
+:100644 100644 f229360 4f6ae41 M	sources/hubspot/requirements.txt
+:000000 100644 0000000 4f6ae41 A	sources/jira/requirements.txt
+:000000 100644 0000000 4f6ae41 A	sources/mux/requirements.txt
+:000000 100644 0000000 4f6ae41 A	sources/notion/requirements.txt
+:000000 100644 0000000 4f6ae41 A	sources/pipedrive/requirements.txt
+:000000 100644 0000000 4f6ae41 A	sources/pokemon/requirements.txt
+:100644 100644 3be695f 2efb8d2 M	sources/salesforce/requirements.txt
+:100644 100644 e69de29 333a677 M	sources/shopify_dlt/requirements.txt
+:100644 100644 2866457 09edd00 M	sources/sql_database/requirements.txt
+:000000 100644 0000000 4f6ae41 A	sources/strapi/requirements.txt
+:100644 100644 75871af bd5c8e1 M	sources/stripe_analytics/requirements.txt
+:000000 100644 0000000 4f6ae41 A	sources/workable/requirements.txt
+:000000 100644 0000000 4f6ae41 A	sources/zendesk/requirements.txt
+:100644 100644 8e67122 af40060 M	tests/hubspot/test_hubspot_source.py
+:100644 100644 9b8ec9c 8127a98 M	tests/stripe_analytics/test_stripe_source.py
+1690229541
+
+:100644 100644 c24ce38 b64fc5c M	poetry.lock
+:100644 100644 cb5cdcc 4d11ada M	pyproject.toml
+:100644 100644 c24116e 080375a M	sources/shopify_dlt/__init__.py
+:000000 100644 0000000 ed0e85b A	sources/shopify_dlt/date_helper.py
+:100644 100644 1064bcb 00c6106 M	sources/shopify_dlt/helpers.py
+:100644 100644 81a4855 43a2f39 M	sources/shopify_dlt/settings.py
+:100644 100644 e65d869 86dbfbe M	sources/shopify_dlt_pipeline.py
+:000000 100644 0000000 37de9b5 A	tests/shopify_dlt/test_date_helper.py
+:100644 100644 c76c23d 02bd820 M	tests/shopify_dlt/test_shopify_source.py
+1690206780
+
+:100644 100644 7acb02a 85f876f M	sources/zendesk_pipeline.py
+1690122802
+
+:100644 100644 3ec5757 60e46d5 M	docs/BUILDING-BLOCKS.md
+1689709787
+
+:100644 100644 3a4a537 c24ce38 M	poetry.lock
+:100644 100644 0097bec cb5cdcc M	pyproject.toml
+:100644 100644 57531c5 cf73d2c M	sources/facebook_ads/helpers.py
+:100644 100644 3dab8c8 7e555bc M	sources/github/__init__.py
+:100644 100644 a784147 c8f45cc M	sources/pipedrive/__init__.py
+:100644 100644 227ec10 abbe38c M	sources/zendesk/__init__.py
+:100644 100644 13f2735 a2bd29e M	sources/zendesk/helpers/__init__.py
+:100644 100644 f5f5526 8023521 M	sources/zendesk/helpers/api_helpers.py
+:100644 100644 781b29f 7acb02a M	sources/zendesk_pipeline.py
+:100644 100644 a000db9 1fc17ff M	tests/zendesk/test_zendesk_source.py
+1689620497
+
+:100644 100644 60f1ee5 dfc61fc M	sources/hubspot/__init__.py
+:100644 100644 0417d56 946d6b6 M	sources/hubspot/helpers.py
+:100644 100644 3eeaf42 87669aa M	sources/hubspot/settings.py
+:100644 100644 d93052c 0c1308f M	sources/hubspot_pipeline.py
+:100644 100644 30cb70a c2d100a M	tests/hubspot/mock_data.py
+:100644 100644 caea1d7 8e67122 M	tests/hubspot/test_hubspot_source.py
+1689337530
+
+:100644 100644 c5b8860 a29a7e7 M	README.md
+:100644 100644 dc4eabd 9481090 M	docs/DISTRIBUTION.md
+1688728891
+
+:100644 100644 1a8e5d2 2d030f8 M	sources/pipedrive/README.md
+1688413850
+
+:100644 100644 5918cb1 a784147 M	sources/pipedrive/__init__.py
+:100644 100644 5d9d43a 2e2f17d M	sources/pipedrive/settings.py
+:100644 100644 782717f a79206d M	tests/pipedrive/test_pipedrive_source.py
+1688122825
+
+:100644 100644 b827c1b 5918cb1 M	sources/pipedrive/__init__.py
+:100644 100644 2e2f17d 5d9d43a M	sources/pipedrive/settings.py
+1688060247
+
+:100644 100644 c55ec5e 3a4a537 M	poetry.lock
+:100644 100644 4cae36a 0097bec M	pyproject.toml
+:100644 100644 1af95cd 227ec10 M	sources/zendesk/__init__.py
+:100644 100644 805847c f5f5526 M	sources/zendesk/helpers/api_helpers.py
+:100644 100644 be80d45 7411132 M	sources/zendesk/helpers/talk_api.py
+:100644 000000 c440dad 0000000 D	sources/zendesk/requirements.txt
+:100644 100644 83a05ee 631895f M	sources/zendesk/settings.py
+:100644 100644 fcc3e81 a000db9 M	tests/zendesk/test_zendesk_source.py
+1688056864
+
+:100644 100644 9b3da66 cb67d9a M	CONTRIBUTING.md
+1687958726
+
+:000000 100644 0000000 e13841e A	sources/workable/README.md
+1687953445
+
+:000000 100644 0000000 7a96076 A	sources/stripe_analytics/README.md
+1687871110
+
+:100644 100644 402bd78 99ff310 M	sources/zendesk/README.md
+1687855218
+
+:100644 100644 2347fac 0feedf3 M	sources/strapi/README.md
+1687770591
+
+:000000 100644 0000000 67e95e6 A	sources/shopify_dlt/README.md
+1687539118
+
+:000000 100644 0000000 a199032 A	sources/sql_database/README.md
+1687518287
+
+:100644 100644 1a2eb24 3b9fb9b M	sources/google_analytics/README.md
+1687446557
+
+:000000 100644 0000000 57d3e85 A	.github/ISSUE_TEMPLATE/extend-a-source.md
+:100644 100644 039502a 3dd07df M	.github/ISSUE_TEMPLATE/new-verified-source.md
+:100644 100644 6facc63 1b6dac0 M	.github/ISSUE_TEMPLATE/source-request.md
+1687425836
+
+:100644 100644 c504394 6739772 M	sources/notion/README.md
+1687425741
+
+:000000 100644 0000000 0804f6b A	sources/salesforce/README.md
+1687425596
+
+:000000 100644 0000000 4a8bf92 A	sources/matomo/README.md
+1687349151
+
+:000000 100644 0000000 1cd6942 A	sources/mux/README.md
+1687271316
+
+:100644 100644 406973b 8e8314a M	sources/google_sheets/README.md
+1687265455
+
+:100644 100644 0a4e00a 9e93d0e M	sources/hubspot/README.md
+1687253752
+
+:100644 100644 46035dd 9102372 M	sources/facebook_ads/README.md
+1687251096
+
+:100644 100644 84cfb9c 872488a M	sources/github/README.md
+1687183984
+
+:000000 100644 0000000 c179159 A	sources/asana_dlt/README.md
+1686817277
+
+:100644 100644 1c57f8c 781b29f M	sources/zendesk_pipeline.py
+1686742765
+
+:100644 000000 66f41ef 0000000 D	sources/notion/helpers.py
+1686641907
+
+:100644 100644 5417aeb d93052c M	sources/hubspot_pipeline.py
+1686554175
+
+:100644 100644 3d5c0e1 c55ec5e M	poetry.lock
+:100644 100644 a341d3f 4cae36a M	pyproject.toml
+:000000 100644 0000000 551c2d0 A	sources/jira/__init__.py
+:000000 100644 0000000 f9cab37 A	sources/jira/settings.py
+:000000 100644 0000000 e18745c A	sources/jira_pipeline.py
+:000000 100644 0000000 e69de29 A	tests/jira/__init__.py
+:000000 100644 0000000 aa47321 A	tests/jira/test_jira_source.py
+1686124613
+
+:100644 100644 cab5d95 9a9059b M	.github/ISSUE_TEMPLATE/bug-report.md
+:100644 100644 500c26e 039502a R063	.github/ISSUE_TEMPLATE/new-verified-pipeline.md	.github/ISSUE_TEMPLATE/new-verified-source.md
+:100644 100644 30f6a8c 6facc63 R063	.github/ISSUE_TEMPLATE/pipeline-request.md	.github/ISSUE_TEMPLATE/source-request.md
+:100644 100644 2337a26 80b0612 M	.github/pull_request_template.md
+:100644 000000 01cd554 0000000 D	.github/workflows/get_changed_pipelines.yml
+:000000 100644 0000000 2b21a0a A	.github/workflows/get_changed_sources.yml
+:100644 100644 0049eb2 1f3bd4e M	.github/workflows/test_destinations.yml
+:100644 100644 24ba82f 27ff4e0 M	.github/workflows/test_destinations_slow.yml
+:100644 100644 9d2ddfc 9b3da66 M	CONTRIBUTING.md
+:100644 100644 1fba60e f9fe22e M	Makefile
+:100644 100644 a3c84c7 c5b8860 M	README.md
+:100644 100644 cd4b76a 3ec5757 M	docs/BUILDING-BLOCKS.md
+:100644 100644 01284f7 dc4eabd M	docs/DISTRIBUTION.md
+:100644 100644 8e58387 7207e65 M	init/README.md
+:100644 100644 e3123e3 dcdb21b M	init/__init__.py
+:100644 000000 e69de29 0000000 D	pipelines/asana_dlt/py.typed
+:100644 000000 e69de29 0000000 D	pipelines/chess/py.typed
+:100644 000000 e69de29 0000000 D	pipelines/facebook_ads/py.typed
+:100644 000000 e69de29 0000000 D	pipelines/github/py.typed
+:100644 000000 e69de29 0000000 D	pipelines/google_analytics/py.typed
+:100644 000000 b829b61 0000000 D	pipelines/google_analytics/settings.py
+:100644 000000 e69de29 0000000 D	pipelines/google_sheets/helpers/__init__.py
+:100644 000000 e69de29 0000000 D	pipelines/google_sheets/py.typed
+:100644 000000 e69de29 0000000 D	pipelines/hubspot/py.typed
+:100644 000000 e69de29 0000000 D	pipelines/matomo/helpers/__init__.py
+:100644 000000 e69de29 0000000 D	pipelines/matomo/py.typed
+:100644 000000 585f313 0000000 D	pipelines/matomo/settings.py
+:100644 000000 e69de29 0000000 D	pipelines/mux/py.typed
+:100644 000000 e69de29 0000000 D	pipelines/notion/helpers/__init__.py
+:100644 000000 e69de29 0000000 D	pipelines/notion/py.typed
+:100644 000000 ffc6352 0000000 D	pipelines/notion/settings.py
+:100644 000000 e69de29 0000000 D	pipelines/pipedrive/py.typed
+:100644 000000 e69de29 0000000 D	pipelines/pokemon/py.typed
+:100644 000000 e69de29 0000000 D	pipelines/salesforce/py.typed
+:100644 000000 e69de29 0000000 D	pipelines/shopify_dlt/py.typed
+:100644 000000 e69de29 0000000 D	pipelines/sql_database/py.typed
+:100644 000000 ee5729f 0000000 D	pipelines/sql_database/settings.py
+:100644 000000 e69de29 0000000 D	pipelines/strapi/py.typed
+:100644 000000 e69de29 0000000 D	pipelines/strapi/settings.py
+:100644 000000 e69de29 0000000 D	pipelines/stripe_analytics/py.typed
+:100644 000000 e69de29 0000000 D	pipelines/workable/py.typed
+:100644 000000 e69de29 0000000 D	pipelines/zendesk/helpers/__init__.py
+:100644 000000 e69de29 0000000 D	pipelines/zendesk/py.typed
+:100644 100644 40db14e 3d5c0e1 M	poetry.lock
+:100644 100644 4cb554a a341d3f M	pyproject.toml
+:100644 100644 cebdd5d cebdd5d R100	pipelines/.dlt/config.toml	sources/.dlt/config.toml
+:100644 100644 63126e5 63126e5 R100	pipelines/.dlt/example.secrets.toml	sources/.dlt/example.secrets.toml
+:100644 100644 3b28aa3 3b28aa3 R100	pipelines/.gitignore	sources/.gitignore
+:100644 100644 e69de29 e69de29 R100	pipelines/__init__.py	sources/__init__.py
+:100644 100644 96848eb dec2024 R098	pipelines/asana_dlt/__init__.py	sources/asana_dlt/__init__.py
+:100644 100644 2c1c3ed f472df7 R090	pipelines/asana_dlt/helpers.py	sources/asana_dlt/helpers.py
+:100644 100644 d7cf09d d7cf09d R100	pipelines/asana_dlt/requirements.txt	sources/asana_dlt/requirements.txt
+:100644 100644 95135ba b091e79 R098	pipelines/asana_dlt/settings.py	sources/asana_dlt/settings.py
+:100644 100644 cb88ec5 cb88ec5 R100	pipelines/asana_dlt_pipeline.py	sources/asana_dlt_pipeline.py
+:100644 100644 4d2c698 b5e2a3d R078	pipelines/chess/README.md	sources/chess/README.md
+:100644 100644 66ccbbd 3eb4bf5 R098	pipelines/chess/__init__.py	sources/chess/__init__.py
+:100644 100644 c607c51 6a65462 R094	pipelines/chess/helpers.py	sources/chess/helpers.py
+:100644 100644 e69de29 e69de29 R100	pipelines/chess/requirements.txt	sources/chess/requirements.txt
+:100644 100644 e7c3354 3b729dd R072	pipelines/chess/settings.py	sources/chess/settings.py
+:100644 100644 bb24393 bb24393 R100	pipelines/chess_pipeline.py	sources/chess_pipeline.py
+:100644 100644 57488fb 46035dd R090	pipelines/facebook_ads/README.md	sources/facebook_ads/README.md
+:100644 100644 33323f1 33323f1 R100	pipelines/facebook_ads/__init__.py	sources/facebook_ads/__init__.py
+:100644 100644 b04d0f2 b04d0f2 R100	pipelines/facebook_ads/exceptions.py	sources/facebook_ads/exceptions.py
+:100644 100644 2dad235 57531c5 R098	pipelines/facebook_ads/helpers.py	sources/facebook_ads/helpers.py
+:100644 100644 3578203 3578203 R100	pipelines/facebook_ads/requirements.txt	sources/facebook_ads/requirements.txt
+:100644 100644 e0a67c6 a12219f R098	pipelines/facebook_ads/settings.py	sources/facebook_ads/settings.py
+:100644 100644 9f962c6 9f962c6 R100	pipelines/facebook_ads/utils.py	sources/facebook_ads/utils.py
+:100644 100644 b8a5748 b8a5748 R100	pipelines/facebook_ads_pipeline.py	sources/facebook_ads_pipeline.py
+:100644 100644 bfb7f95 84cfb9c R099	pipelines/github/README.md	sources/github/README.md
+:100644 100644 d645841 3dab8c8 R098	pipelines/github/__init__.py	sources/github/__init__.py
+:100644 100644 6564cb6 c247f93 R099	pipelines/github/helpers.py	sources/github/helpers.py
+:100644 100644 3fe95c1 3fe95c1 R100	pipelines/github/queries.py	sources/github/queries.py
+:100644 100644 84e4a3a 8b6d9c5 R082	pipelines/github/settings.py	sources/github/settings.py
+:100644 100644 9ed9e7d 9ed9e7d R100	pipelines/github_pipeline.py	sources/github_pipeline.py
+:100644 100644 ad3e14b 1a2eb24 R095	pipelines/google_analytics/README.md	sources/google_analytics/README.md
+:100644 100644 853225b 853225b R100	pipelines/google_analytics/__init__.py	sources/google_analytics/__init__.py
+:100644 100644 5eef843 0caf864 R098	pipelines/google_analytics/helpers/__init__.py	sources/google_analytics/helpers/__init__.py
+:100644 100644 bd732da bd732da R100	pipelines/google_analytics/helpers/data_processing.py	sources/google_analytics/helpers/data_processing.py
+:100644 100644 251598e 251598e R100	pipelines/google_analytics/requirements.txt	sources/google_analytics/requirements.txt
+:000000 100644 0000000 f003ce1 A	sources/google_analytics/settings.py
+:100644 100644 1a60251 1a60251 R100	pipelines/google_analytics/setup_script_gcp_oauth.py	sources/google_analytics/setup_script_gcp_oauth.py
+:100644 100644 a698188 a698188 R100	pipelines/google_analytics_pipeline.py	sources/google_analytics_pipeline.py
+:100644 100644 be4416a 406973b R097	pipelines/google_sheets/README.md	sources/google_sheets/README.md
+:100644 100644 2a52d8f 8fed97d R099	pipelines/google_sheets/__init__.py	sources/google_sheets/__init__.py
+:100644 100644 048819f 048819f R100	pipelines/google_sheets/docs_images/Add_people.png	sources/google_sheets/docs_images/Add_people.png
+:100644 100644 2ac37ef 2ac37ef R100	pipelines/google_sheets/docs_images/Share_button.png	sources/google_sheets/docs_images/Share_button.png
+:000000 100644 0000000 c573d76 A	sources/google_sheets/helpers/__init__.py
+:100644 100644 6ae5a98 6ae5a98 R100	pipelines/google_sheets/helpers/api_calls.py	sources/google_sheets/helpers/api_calls.py
+:100644 100644 c297fa3 6e0c4eb R099	pipelines/google_sheets/helpers/data_processing.py	sources/google_sheets/helpers/data_processing.py
+:100644 100644 d8055e0 d8055e0 R100	pipelines/google_sheets/requirements.txt	sources/google_sheets/requirements.txt
+:100644 100644 df61251 df61251 R100	pipelines/google_sheets/setup_script_gcp_oauth.py	sources/google_sheets/setup_script_gcp_oauth.py
+:100644 100644 e36ebab e36ebab R100	pipelines/google_sheets_pipeline.py	sources/google_sheets_pipeline.py
+:100644 100644 1a8c99b 0a4e00a R091	pipelines/hubspot/README.md	sources/hubspot/README.md
+:100644 100644 60f1ee5 60f1ee5 R100	pipelines/hubspot/__init__.py	sources/hubspot/__init__.py
+:100644 100644 257c7bd 0417d56 R099	pipelines/hubspot/helpers.py	sources/hubspot/helpers.py
+:100644 100644 f229360 f229360 R100	pipelines/hubspot/requirements.txt	sources/hubspot/requirements.txt
+:100644 100644 4347086 3eeaf42 R094	pipelines/hubspot/settings.py	sources/hubspot/settings.py
+:100644 100644 5417aeb 5417aeb R100	pipelines/hubspot_pipeline.py	sources/hubspot_pipeline.py
+:100644 100644 57a82c3 57a82c3 R100	pipelines/matomo/__init__.py	sources/matomo/__init__.py
+:000000 100644 0000000 72730cd A	sources/matomo/helpers/__init__.py
+:100644 100644 6ce2740 6ce2740 R100	pipelines/matomo/helpers/data_processing.py	sources/matomo/helpers/data_processing.py
+:100644 100644 0e422db 0e422db R100	pipelines/matomo/helpers/matomo_client.py	sources/matomo/helpers/matomo_client.py
+:100644 100644 9e49233 9e49233 R100	pipelines/matomo/requirements.txt	sources/matomo/requirements.txt
+:000000 100644 0000000 ae74144 A	sources/matomo/settings.py
+:100644 100644 4821163 4821163 R100	pipelines/matomo_pipeline.py	sources/matomo_pipeline.py
+:100644 100644 69d1a81 69d1a81 R100	pipelines/mux/__init__.py	sources/mux/__init__.py
+:100644 100644 ed239cb 8920de4 R058	pipelines/mux/settings.py	sources/mux/settings.py
+:100644 100644 9e596f5 9e596f5 R100	pipelines/mux_pipeline.py	sources/mux_pipeline.py
+:100644 100644 33afb62 c504394 R092	pipelines/notion/README.md	sources/notion/README.md
+:100644 100644 30ac61c 9dcbb09 R096	pipelines/notion/__init__.py	sources/notion/__init__.py
+:100644 100644 8378834 66f41ef R099	pipelines/notion/helpers.py	sources/notion/helpers.py
+:100644 100644 e69de29 e69de29 R100	pipelines/_helpers/__init__.py	sources/notion/helpers/__init__.py
+:100644 100644 ef4bd3f ef4bd3f R100	pipelines/notion/helpers/client.py	sources/notion/helpers/client.py
+:100644 100644 e668b1e e668b1e R100	pipelines/notion/helpers/database.py	sources/notion/helpers/database.py
+:000000 100644 0000000 fe4ecbb A	sources/notion/settings.py
+:100644 100644 0294663 0294663 R100	pipelines/notion_pipeline.py	sources/notion_pipeline.py
+:100644 100644 fdf928e 1a8e5d2 R087	pipelines/pipedrive/README.md	sources/pipedrive/README.md
+:100644 100644 9a0bfc1 b827c1b R098	pipelines/pipedrive/__init__.py	sources/pipedrive/__init__.py
+:100644 100644 3de19b2 3117b3e R097	pipelines/pipedrive/helpers/__init__.py	sources/pipedrive/helpers/__init__.py
+:100644 100644 c6ca5af c6ca5af R100	pipelines/pipedrive/helpers/custom_fields_munger.py	sources/pipedrive/helpers/custom_fields_munger.py
+:100644 100644 9cb4be1 9cb4be1 R100	pipelines/pipedrive/helpers/pages.py	sources/pipedrive/helpers/pages.py
+:100644 100644 234aae8 2e2f17d R093	pipelines/pipedrive/settings.py	sources/pipedrive/settings.py
+:100644 100644 54d1833 54d1833 R100	pipelines/pipedrive/typing.py	sources/pipedrive/typing.py
+:100644 100644 582ec35 582ec35 R100	pipelines/pipedrive_pipeline.py	sources/pipedrive_pipeline.py
+:100644 100644 162842e 35559ae R087	pipelines/pokemon/__init__.py	sources/pokemon/__init__.py
+:100644 100644 2c86483 2c86483 R100	pipelines/pokemon/helpers.py	sources/pokemon/helpers.py
+:100644 100644 d3a844b d3a844b R100	pipelines/pokemon/settings.py	sources/pokemon/settings.py
+:100644 100644 b36ee78 b36ee78 R100	pipelines/pokemon_pipeline.py	sources/pokemon_pipeline.py
+:100644 100644 9ab3b2b 0eee584 R098	pipelines/salesforce/__init__.py	sources/salesforce/__init__.py
+:100644 100644 407113c 0fe09ee R098	pipelines/salesforce/helpers.py	sources/salesforce/helpers.py
+:100644 100644 3be695f 3be695f R100	pipelines/salesforce/requirements.txt	sources/salesforce/requirements.txt
+:100644 100644 61b042d a6e23b3 R061	pipelines/salesforce/settings.py	sources/salesforce/settings.py
+:100644 100644 613feb7 613feb7 R100	pipelines/salesforce_pipeline.py	sources/salesforce_pipeline.py
+:100644 100644 c24116e c24116e R100	pipelines/shopify_dlt/__init__.py	sources/shopify_dlt/__init__.py
+:100644 100644 87d2a42 1064bcb R094	pipelines/shopify_dlt/helpers.py	sources/shopify_dlt/helpers.py
+:100644 100644 e69de29 e69de29 R100	pipelines/shopify_dlt/requirements.txt	sources/shopify_dlt/requirements.txt
+:100644 100644 81a4855 81a4855 R100	pipelines/shopify_dlt/settings.py	sources/shopify_dlt/settings.py
+:100644 100644 e65d869 e65d869 R100	pipelines/shopify_dlt_pipeline.py	sources/shopify_dlt_pipeline.py
+:100644 100644 00d84be 49a498a R096	pipelines/sql_database/__init__.py	sources/sql_database/__init__.py
+:100644 100644 6f23e19 c0c57b4 R099	pipelines/sql_database/helpers.py	sources/sql_database/helpers.py
+:100644 100644 2866457 2866457 R100	pipelines/sql_database/requirements.txt	sources/sql_database/requirements.txt
+:000000 100644 0000000 f1aa2d4 A	sources/sql_database/settings.py
+:100644 100644 a8202be a8202be R100	pipelines/sql_database_pipeline.py	sources/sql_database_pipeline.py
+:100644 100644 029ebad 2347fac R095	pipelines/strapi/README.md	sources/strapi/README.md
+:100644 100644 b9661ec b9661ec R100	pipelines/strapi/__init__.py	sources/strapi/__init__.py
+:100644 100644 afcae6e bc6e389 R097	pipelines/strapi/helpers.py	sources/strapi/helpers.py
+:000000 100644 0000000 eab35df A	sources/strapi/settings.py
+:100644 100644 a5f21d2 a5f21d2 R100	pipelines/strapi_pipeline.py	sources/strapi_pipeline.py
+:100644 100644 122b08d b774c86 R097	pipelines/stripe_analytics/__init__.py	sources/stripe_analytics/__init__.py
+:100644 100644 733a1d2 3b1d5ca R098	pipelines/stripe_analytics/helpers.py	sources/stripe_analytics/helpers.py
+:100644 100644 9829ad2 9829ad2 R100	pipelines/stripe_analytics/metrics.py	sources/stripe_analytics/metrics.py
+:100644 100644 75871af 75871af R100	pipelines/stripe_analytics/requirements.txt	sources/stripe_analytics/requirements.txt
+:100644 100644 9ec9882 e9694cb R085	pipelines/stripe_analytics/settings.py	sources/stripe_analytics/settings.py
+:100644 100644 ba02bfb ba02bfb R100	pipelines/stripe_analytics_pipeline.py	sources/stripe_analytics_pipeline.py
+:100644 100644 10539ed 34b12bf R097	pipelines/workable/__init__.py	sources/workable/__init__.py
+:100644 100644 23ed8d7 7357fee R092	pipelines/workable/settings.py	sources/workable/settings.py
+:100644 100644 b334a65 b334a65 R100	pipelines/workable/workable_client.py	sources/workable/workable_client.py
+:100644 100644 d3feb08 d3feb08 R100	pipelines/workable_pipeline.py	sources/workable_pipeline.py
+:100644 100644 b73d1a7 402bd78 R090	pipelines/zendesk/README.md	sources/zendesk/README.md
+:100644 100644 1af95cd 1af95cd R100	pipelines/zendesk/__init__.py	sources/zendesk/__init__.py
+:000000 100644 0000000 13f2735 A	sources/zendesk/helpers/__init__.py
+:100644 100644 805847c 805847c R100	pipelines/zendesk/helpers/api_helpers.py	sources/zendesk/helpers/api_helpers.py
+:100644 100644 851a648 851a648 R100	pipelines/zendesk/helpers/credentials.py	sources/zendesk/helpers/credentials.py
+:100644 100644 be80d45 be80d45 R100	pipelines/zendesk/helpers/talk_api.py	sources/zendesk/helpers/talk_api.py
+:100644 100644 c440dad c440dad R100	pipelines/zendesk/requirements.txt	sources/zendesk/requirements.txt
+:100644 100644 4dff5c3 83a05ee R097	pipelines/zendesk/settings.py	sources/zendesk/settings.py
+:100644 100644 1c57f8c 1c57f8c R100	pipelines/zendesk_pipeline.py	sources/zendesk_pipeline.py
+:100644 100644 55ac45a d638731 R096	tests/asana_dlt/test_asana_dlt_pipeline.py	tests/asana_dlt/test_asana_dlt_source.py
+:100644 100644 aec14ea 76de06d R098	tests/chess/test_chess_pipeline.py	tests/chess/test_chess_source.py
+:100644 100644 fc1cf5f ad0b04a R098	tests/facebook_ads/test_facebook_ads.py	tests/facebook_ads/test_facebook_ads_source.py
+:100644 100644 9873edf 5bbde79 R097	tests/github/test_github_pipeline.py	tests/github/test_github_source.py
+:100644 100644 ff2d0ed 0e59771 R099	tests/google_analytics/test_analytics.py	tests/google_analytics/test_google_analytics_source.py
+:100644 100644 9640df8 ad301fc M	tests/google_sheets/test_data_processing.py
+:100644 100644 9785062 510d1ee R099	tests/google_sheets/test_google_sheets_pipeline.py	tests/google_sheets/test_google_sheets_source.py
+:100644 100644 4a8460d caea1d7 R096	tests/hubspot/test_hubspot_pipeline.py	tests/hubspot/test_hubspot_source.py
+:100644 100644 31757a9 764b6c8 R099	tests/matomo/test_matomo_pipeline.py	tests/matomo/test_matomo_source.py
+:100644 100644 cd20ccb 0082e8a R092	tests/mux/test_mux_pipeline.py	tests/mux/test_mux_source.py
+:100644 100644 d22224b 70eb1c0 M	tests/notion/test_notion_client.py
+:100644 100644 fdc8a10 6ea48cb M	tests/notion/test_notion_database.py
+:100644 100644 b2bbabc 2e8b862 R098	tests/notion/test_notion_pipeline.py	tests/notion/test_notion_source.py
+:100644 100644 25bcc73 782717f R099	tests/pipedrive/test_pipedrive_pipeline.py	tests/pipedrive/test_pipedrive_source.py
+:100644 100644 fc57b88 9a04a55 R096	tests/pokemon/test_pipeline.py	tests/pokemon/test_pokemon_source.py
+:100644 100644 8d1e933 becbf9f R097	tests/salesforce/test_salesforce_pipeline.py	tests/salesforce/test_salesforce_source.py
+:100644 100644 b6b90a0 c76c23d R097	tests/shopify_dlt/test_shopify_pipeline.py	tests/shopify_dlt/test_shopify_source.py
+:100644 100644 180bb9b 5c740e2 R099	tests/sql_database/test_sql_database_pipeline.py	tests/sql_database/test_sql_database_source.py
+:100644 100644 09a1454 869bcfd M	tests/sql_database/test_util.py
+:100644 100644 3014216 3014216 R100	tests/strapi/test_strapi_pipeline.py	tests/strapi/test_strapi_source.py
+:100644 100644 f2c3323 69228b1 M	tests/stripe_analytics/test_metrics.py
+:100644 100644 5e7f141 9b8ec9c R099	tests/stripe_analytics/test_stripe_pipeline.py	tests/stripe_analytics/test_stripe_source.py
+:100644 100644 a5ed9e4 7d2f572 M	tests/test_dlt_init.py
+:100644 100644 08b9767 058f125 M	tests/utils.py
+:100644 100644 ab690ac 23ec6a1 R099	tests/workable/test_workable_pipeline.py	tests/workable/test_workable_source.py
+:100644 100644 cfcb3fa fcc3e81 R098	tests/zendesk/test_zendesk.py	tests/zendesk/test_zendesk_source.py
+:100644 000000 b90275e 0000000 D	tools/new_pipeline.py
+:000000 100644 0000000 200eda5 A	tools/new_source.py
+1685965812
+
+:100644 000000 c260004 0000000 D	.github/ISSUE_TEMPLATE/new-community-pipeline.md
+:100644 100644 824d127 500c26e M	.github/ISSUE_TEMPLATE/new-verified-pipeline.md
+:100644 100644 f7f62ea 2337a26 M	.github/pull_request_template.md
+:000000 100644 0000000 9d2ddfc A	CONTRIBUTING.md
+:100644 100644 2b7c0e8 1fba60e M	Makefile
+:100644 100644 ed2a8fb a3c84c7 M	README.md
+:100644 000000 dbe82aa 0000000 D	SHARE_PIPELINE.md
+:000000 100644 0000000 cd4b76a A	docs/BUILDING-BLOCKS.md
+:100644 100644 01284f7 01284f7 R100	DISTRIBUTION.md	docs/DISTRIBUTION.md
+:100644 100644 112f721 63126e5 M	pipelines/.dlt/example.secrets.toml
+:100644 100644 ad326eb 66ccbbd M	pipelines/chess/__init__.py
+:000000 100644 0000000 e69de29 A	tools/__init__.py
+:000000 100644 0000000 b90275e A	tools/new_pipeline.py
+1685872690
+
+:100644 100644 ca9311b 2b7c0e8 M	Makefile
+:100644 100644 bd966cc df89610 M	init/pipeline.py
+:100644 100644 2acc72b 420b38b M	init/pipeline_generic.py
+:100644 100644 49e1b39 bb24393 M	pipelines/chess_pipeline.py
+:100644 100644 bdda08d a698188 M	pipelines/google_analytics_pipeline.py
+:100644 100644 cabb52f 5417aeb M	pipelines/hubspot_pipeline.py
+:100644 100644 0b7e3d1 9e596f5 M	pipelines/mux_pipeline.py
+:100644 100644 db517fc 0294663 M	pipelines/notion_pipeline.py
+:100644 100644 d354ceb 582ec35 M	pipelines/pipedrive_pipeline.py
+:100644 100644 8a84e00 e65d869 M	pipelines/shopify_dlt_pipeline.py
+:100644 100644 27c37dd a5f21d2 M	pipelines/strapi_pipeline.py
+:100644 100644 f681944 ba02bfb M	pipelines/stripe_analytics_pipeline.py
+:100644 100644 565f0b4 d3feb08 M	pipelines/workable_pipeline.py
+:100644 100644 d775c1a 1c57f8c M	pipelines/zendesk_pipeline.py
+:100644 100644 8241560 4cb554a M	pyproject.toml
+1685864173
+
+:100644 100644 4515127 00d84be M	pipelines/sql_database/__init__.py
+:100644 100644 8dce019 6f23e19 R052	pipelines/sql_database/util.py	pipelines/sql_database/helpers.py
+:000000 100644 0000000 ee5729f A	pipelines/sql_database/settings.py
+:100644 000000 637a1ad 0000000 D	pipelines/sql_database/sql_database.py
+:100644 100644 89c1903 a8202be M	pipelines/sql_database_pipeline.py
+:100644 100644 122387c 09a1454 M	tests/sql_database/test_util.py
+1685863933
+
+:100644 100644 9c864c8 ad326eb M	pipelines/chess/__init__.py
+1685863857
+
+:100644 100644 4427691 2a52d8f M	pipelines/google_sheets/__init__.py
+:100644 100644 31ff116 6ae5a98 M	pipelines/google_sheets/helpers/api_calls.py
+:100644 100644 5c9a39d c297fa3 M	pipelines/google_sheets/helpers/data_processing.py
+:100644 100644 44f8dba df61251 M	pipelines/google_sheets/setup_script_gcp_oauth.py
+:100644 100644 33f0a87 e36ebab M	pipelines/google_sheets_pipeline.py
+1685729480
+
+:100644 100644 900ca33 9ab3b2b M	pipelines/salesforce/__init__.py
+:000000 100644 0000000 407113c A	pipelines/salesforce/helpers.py
+:000000 100644 0000000 61b042d A	pipelines/salesforce/settings.py
+:100644 100644 0d16bcd 613feb7 M	pipelines/salesforce_pipeline.py
+:100644 100644 58b259f 8241560 M	pyproject.toml
+1685729408
+
+:100644 100644 de29c59 30ac61c M	pipelines/notion/__init__.py
+:000000 100644 0000000 8378834 A	pipelines/notion/helpers.py
+:000000 100644 0000000 e69de29 A	pipelines/notion/helpers/__init__.py
+:100644 100644 ae51f1c ef4bd3f R084	pipelines/notion/client.py	pipelines/notion/helpers/client.py
+:100644 100644 366081b e668b1e R078	pipelines/notion/database.py	pipelines/notion/helpers/database.py
+:000000 100644 0000000 ffc6352 A	pipelines/notion/settings.py
+:100644 100644 df3fc90 db517fc M	pipelines/notion_pipeline.py
+:100644 100644 aa3e2b3 58b259f M	pyproject.toml
+:100644 100644 3fb24e2 d22224b M	tests/notion/test_notion_client.py
+:100644 100644 ed878d4 fdc8a10 M	tests/notion/test_notion_database.py
+1685728328
+
+:100644 100644 dc1376f 1af95cd M	pipelines/zendesk/__init__.py
+:100644 100644 d19b08e 805847c M	pipelines/zendesk/helpers/api_helpers.py
+:100644 100644 d097a51 851a648 M	pipelines/zendesk/helpers/credentials.py
+:100644 100644 81ea186 be80d45 M	pipelines/zendesk/helpers/talk_api.py
+:000000 100644 0000000 4dff5c3 A	pipelines/zendesk/settings.py
+:100644 100644 562a323 d775c1a M	pipelines/zendesk_pipeline.py
+:100644 100644 68c10ef aa3e2b3 M	pyproject.toml
+1685722970
+
+:100644 100644 65c3392 69d1a81 M	pipelines/mux/__init__.py
+:000000 100644 0000000 e69de29 A	pipelines/mux/py.typed
+:000000 100644 0000000 ed239cb A	pipelines/mux/settings.py
+:100644 100644 60438f0 0b7e3d1 M	pipelines/mux_pipeline.py
+:100644 100644 971236e 68c10ef M	pyproject.toml
+1685722814
+
+:100644 100644 0babad4 10539ed M	pipelines/workable/__init__.py
+:000000 100644 0000000 23ed8d7 A	pipelines/workable/settings.py
+:100644 100644 4b9afe0 b334a65 M	pipelines/workable/workable_client.py
+:100644 100644 f240439 971236e M	pyproject.toml
+1685722719
+
+:100644 100644 c9e3efd 57a82c3 M	pipelines/matomo/__init__.py
+:100644 100644 4719fe6 6ce2740 M	pipelines/matomo/helpers/data_processing.py
+:100644 100644 4073c6a 0e422db M	pipelines/matomo/helpers/matomo_client.py
+:100644 100644 d835ca7 122b08d M	pipelines/stripe_analytics/__init__.py
+:100644 100644 5d91a23 733a1d2 M	pipelines/stripe_analytics/helpers.py
+:100644 100644 d4e15c4 9829ad2 M	pipelines/stripe_analytics/metrics.py
+:000000 100644 0000000 e69de29 A	pipelines/stripe_analytics/py.typed
+:000000 100644 0000000 9ec9882 A	pipelines/stripe_analytics/settings.py
+:100644 100644 c6b962c f681944 M	pipelines/stripe_analytics_pipeline.py
+:100644 100644 61ac785 f240439 M	pyproject.toml
+1685722566
+
+:100644 100644 325042e b9661ec M	pipelines/strapi/__init__.py
+:000000 100644 0000000 afcae6e A	pipelines/strapi/helpers.py
+:000000 100644 0000000 e69de29 A	pipelines/strapi/py.typed
+:000000 100644 0000000 e69de29 A	pipelines/strapi/settings.py
+:100644 000000 cef018c 0000000 D	pipelines/strapi/strapi.py
+:100644 100644 663d78c 27c37dd M	pipelines/strapi_pipeline.py
+:100644 100644 602f235 d835ca7 M	pipelines/stripe_analytics/__init__.py
+:100644 100644 3f776b7 c6b962c M	pipelines/stripe_analytics_pipeline.py
+:100644 100644 7fd62b2 0babad4 M	pipelines/workable/__init__.py
+:100644 100644 fca5625 4b9afe0 M	pipelines/workable/workable_client.py
+:100644 100644 7b5e5e5 61ac785 M	pyproject.toml
+:000000 100644 0000000 e69de29 A	tests/strapi/__init__.py
+:000000 100644 0000000 3014216 A	tests/strapi/test_strapi_pipeline.py
+1685722413
+
+:100644 100644 55357e5 33323f1 M	pipelines/facebook_ads/__init__.py
+:100644 000000 4c6406a 0000000 D	pipelines/facebook_ads/fb.py
+:000000 100644 0000000 2dad235 A	pipelines/facebook_ads/helpers.py
+:100644 100644 1f737bf e0a67c6 M	pipelines/facebook_ads/settings.py
+:000000 100644 0000000 9f962c6 A	pipelines/facebook_ads/utils.py
+:100644 100644 d046d15 b8a5748 M	pipelines/facebook_ads_pipeline.py
+:100644 100644 0c2ae59 d645841 M	pipelines/github/__init__.py
+:100644 100644 1351e0c 7b5e5e5 M	pyproject.toml
+1685722323
+
+:100644 100644 5ecbf94 853225b M	pipelines/google_analytics/__init__.py
+:100644 100644 e69de29 5eef843 M	pipelines/google_analytics/helpers/__init__.py
+:100644 000000 91cf165 0000000 D	pipelines/google_analytics/helpers/credentials.py
+:100644 100644 bdfb0f7 bd732da M	pipelines/google_analytics/helpers/data_processing.py
+:000000 100644 0000000 b829b61 A	pipelines/google_analytics/settings.py
+:100644 100644 742e3f1 1a60251 M	pipelines/google_analytics/setup_script_gcp_oauth.py
+:100644 100644 de5e3d5 bdda08d M	pipelines/google_analytics_pipeline.py
+:100644 100644 5ca3ef1 1351e0c M	pyproject.toml
+:100644 100644 99634a5 ff2d0ed M	tests/google_analytics/test_analytics.py
+1685722249
+
+:100644 100644 3b9f60d c9e3efd M	pipelines/matomo/__init__.py
+:100644 100644 485aca8 4719fe6 M	pipelines/matomo/helpers/data_processing.py
+:100644 100644 bcb6500 4073c6a M	pipelines/matomo/helpers/matomo_client.py
+:000000 100644 0000000 585f313 A	pipelines/matomo/settings.py
+:100644 100644 a92f3de 4821163 M	pipelines/matomo_pipeline.py
+:100644 100644 3952c62 5ca3ef1 M	pyproject.toml
+1685722015
+
+:100644 100644 19096da 60f1ee5 M	pipelines/hubspot/__init__.py
+:100644 100644 8f7080b 257c7bd R080	pipelines/hubspot/client.py	pipelines/hubspot/helpers.py
+:100644 100644 f51b0d2 4347086 R072	pipelines/hubspot/endpoints.py	pipelines/hubspot/settings.py
+:100644 100644 cf01fe6 cabb52f M	pipelines/hubspot_pipeline.py
+:100644 100644 98d225e 3952c62 M	pyproject.toml
+:100644 100644 7e8a3ef 4a8460d M	tests/hubspot/test_hubspot_pipeline.py
+1685721960
+
+:100644 100644 81ee9b8 c24116e M	pipelines/shopify_dlt/__init__.py
+:000000 100644 0000000 87d2a42 A	pipelines/shopify_dlt/helpers.py
+:000000 100644 0000000 e69de29 A	pipelines/shopify_dlt/py.typed
+:000000 100644 0000000 81a4855 A	pipelines/shopify_dlt/settings.py
+:100644 100644 7cbfa17 8a84e00 M	pipelines/shopify_dlt_pipeline.py
+:100644 100644 5abac4e 98d225e M	pyproject.toml
+1685721900
+
+:100644 100644 aea260b 9a0bfc1 M	pipelines/pipedrive/__init__.py
+:100644 000000 f9a3981 0000000 D	pipelines/pipedrive/helpers.py
+:000000 100644 0000000 3de19b2 A	pipelines/pipedrive/helpers/__init__.py
+:100644 100644 96818d6 c6ca5af R065	pipelines/pipedrive/custom_fields_munger.py	pipelines/pipedrive/helpers/custom_fields_munger.py
+:000000 100644 0000000 9cb4be1 A	pipelines/pipedrive/helpers/pages.py
+:100644 000000 2905349 0000000 D	pipelines/pipedrive/recents.py
+:000000 100644 0000000 234aae8 A	pipelines/pipedrive/settings.py
+:100644 100644 196b04d d354ceb M	pipelines/pipedrive_pipeline.py
+:100644 100644 427d2d4 5abac4e M	pyproject.toml
+:100644 100644 a5fac94 25bcc73 M	tests/pipedrive/test_pipedrive_pipeline.py
+1685721610
+
+:100644 100644 fad6c51 9c864c8 M	pipelines/chess/__init__.py
+:000000 100644 0000000 c607c51 A	pipelines/chess/helpers.py
+:000000 100644 0000000 e7c3354 A	pipelines/chess/settings.py
+:100644 100644 afcca1c 49e1b39 M	pipelines/chess_pipeline.py
+:000000 100644 0000000 162842e A	pipelines/pokemon/__init__.py
+:000000 100644 0000000 2c86483 A	pipelines/pokemon/helpers.py
+:000000 100644 0000000 e69de29 A	pipelines/pokemon/py.typed
+:000000 100644 0000000 d3a844b A	pipelines/pokemon/settings.py
+:000000 100644 0000000 b36ee78 A	pipelines/pokemon_pipeline.py
+:100644 100644 31fbe56 427d2d4 M	pyproject.toml
+:100644 100644 9a3ac7d aec14ea M	tests/chess/test_chess_pipeline.py
+:000000 100644 0000000 e69de29 A	tests/pokemon/__init__.py
+:000000 100644 0000000 fc57b88 A	tests/pokemon/test_pipeline.py
+1685613205
+
+:100644 100644 5b4b691 7ef5a39 M	tests/pipedrive/recents_response_with_null.json
+1685545741
+
+:100644 100644 7c984ea 0c2ae59 M	pipelines/github/__init__.py
+:000000 100644 0000000 6564cb6 A	pipelines/github/helpers.py
+:100644 100644 26da555 3fe95c1 M	pipelines/github/queries.py
+:000000 100644 0000000 84e4a3a A	pipelines/github/settings.py
+:100644 100644 e9b8e1d 9ed9e7d M	pipelines/github_pipeline.py
+:100644 100644 cf6c5e0 31fbe56 M	pyproject.toml
+:100644 100644 d8969ac 08b9767 M	tests/utils.py
+1685488006
+
+:100644 100644 7247c58 ca9311b M	Makefile
+:100644 100644 1bba057 cf6c5e0 M	pyproject.toml
+:100644 100644 56650d2 55ac45a M	tests/asana_dlt/test_asana_dlt_pipeline.py
+:100644 100644 467ea2e 9a3ac7d M	tests/chess/test_chess_pipeline.py
+:100644 100644 4922829 539aac9 M	tests/conftest.py
+:100644 100644 f0cb690 bf3a721 M	tests/diff_pipelines.py
+:100644 100644 935a0de fc1cf5f M	tests/facebook_ads/test_facebook_ads.py
+:100644 100644 a14b7c3 9873edf M	tests/github/test_github_pipeline.py
+:100644 100644 4c22d00 99634a5 M	tests/google_analytics/test_analytics.py
+:100644 100644 b9a5a16 9640df8 M	tests/google_sheets/test_data_processing.py
+:100644 100644 fd1492b 9785062 M	tests/google_sheets/test_google_sheets_pipeline.py
+:100644 100644 60a199c 30cb70a M	tests/hubspot/mock_data.py
+:100644 100644 754ecad 7e8a3ef M	tests/hubspot/test_hubspot_pipeline.py
+:100644 100644 07de39c 31757a9 M	tests/matomo/test_matomo_pipeline.py
+:100644 100644 3ebf737 cd20ccb M	tests/mux/test_mux_pipeline.py
+:100644 100644 e6654b6 3fb24e2 M	tests/notion/test_notion_client.py
+:100644 100644 b209939 ed878d4 M	tests/notion/test_notion_database.py
+:100644 100644 86ce6dc b2bbabc M	tests/notion/test_notion_pipeline.py
+:100644 100644 2b3caea 5b4b691 M	tests/pipedrive/recents_response_with_null.json
+:100644 100644 6ecf089 a5fac94 M	tests/pipedrive/test_pipedrive_pipeline.py
+:100644 100644 cb60656 8e194fc M	tests/postgres/postgres.env
+:100644 100644 a559ea3 8d1e933 M	tests/salesforce/test_salesforce_pipeline.py
+:100644 100644 faa5a33 b6b90a0 M	tests/shopify_dlt/test_shopify_pipeline.py
+:100644 100644 6bed51c c6e4cc3 M	tests/sql_database/conftest.py
+:100644 100644 2829bf8 afc98d3 M	tests/sql_database/sql_source.py
+:100644 100644 344e739 180bb9b M	tests/sql_database/test_sql_database_pipeline.py
+:100644 100644 5159743 122387c M	tests/sql_database/test_util.py
+:100644 100644 49510f3 5e7f141 M	tests/stripe_analytics/test_stripe_pipeline.py
+:100644 100644 5d4072a a5ed9e4 M	tests/test_dlt_init.py
+:100644 100644 a71021b d8969ac M	tests/utils.py
+:100644 100644 fd1a3f9 cfcb3fa M	tests/zendesk/test_zendesk.py
+1685465434
+
+:100644 100644 8a06d1d 7247c58 M	Makefile
+:100644 100644 d5c59a8 96848eb M	pipelines/asana_dlt/__init__.py
+:000000 100644 0000000 2c1c3ed A	pipelines/asana_dlt/helpers.py
+:000000 100644 0000000 e69de29 A	pipelines/asana_dlt/py.typed
+:000000 100644 0000000 95135ba A	pipelines/asana_dlt/settings.py
+:100644 100644 7137b67 cb88ec5 M	pipelines/asana_dlt_pipeline.py
+:100644 100644 73390bc 40db14e M	poetry.lock
+:100644 100644 97f2328 1bba057 M	pyproject.toml
+1685451436
+
+:100644 100644 67b07ff cebdd5d M	pipelines/.dlt/config.toml
+:100644 100644 099c96e fad6c51 M	pipelines/chess/__init__.py
+:100644 100644 a0237f0 aea260b M	pipelines/pipedrive/__init__.py
+:100644 100644 38a0bc3 2905349 M	pipelines/pipedrive/recents.py
+:100644 100644 363b9a9 dc1376f M	pipelines/zendesk/__init__.py
+:100644 100644 59a9326 73390bc M	poetry.lock
+1685281837
+
+:100644 100644 556925f 67b07ff M	pipelines/.dlt/config.toml
+:100644 100644 41336f3 099c96e M	pipelines/chess/__init__.py
+1685095844
+
+:100644 100644 37bdf3d 112f721 M	pipelines/.dlt/example.secrets.toml
+:000000 100644 0000000 65c3392 A	pipelines/mux/__init__.py
+:000000 100644 0000000 60438f0 A	pipelines/mux_pipeline.py
+:000000 100644 0000000 e69de29 A	tests/mux/__init__.py
+:000000 100644 0000000 3ebf737 A	tests/mux/test_mux_pipeline.py
+:100644 100644 3a12f9f 86ce6dc M	tests/notion/test_notion_pipeline.py
+1685030950
+
+:100644 100644 233e2e7 4c22d00 M	tests/google_analytics/test_analytics.py
+:100644 100644 393f333 a71021b M	tests/utils.py
+:100644 100644 4cd07e9 fd1a3f9 M	tests/zendesk/test_zendesk.py
+1685004776
+
+:100644 100644 0bccfb5 37bdf3d M	pipelines/.dlt/example.secrets.toml
+:000000 100644 0000000 900ca33 A	pipelines/salesforce/__init__.py
+:000000 100644 0000000 e69de29 A	pipelines/salesforce/py.typed
+:000000 100644 0000000 3be695f A	pipelines/salesforce/requirements.txt
+:000000 100644 0000000 0d16bcd A	pipelines/salesforce_pipeline.py
+:100644 100644 ff3bd2e 59a9326 M	poetry.lock
+:100644 100644 de07780 97f2328 M	pyproject.toml
+:000000 100644 0000000 e69de29 A	tests/salesforce/__init__.py
+:000000 100644 0000000 a559ea3 A	tests/salesforce/test_salesforce_pipeline.py
+:100644 100644 63aac60 393f333 M	tests/utils.py
+1684764874
+
+:100644 100644 436802a 0bccfb5 M	pipelines/.dlt/example.secrets.toml
+:000000 100644 0000000 33afb62 A	pipelines/notion/README.md
+:000000 100644 0000000 de29c59 A	pipelines/notion/__init__.py
+:000000 100644 0000000 ae51f1c A	pipelines/notion/client.py
+:000000 100644 0000000 366081b A	pipelines/notion/database.py
+:000000 100644 0000000 e69de29 A	pipelines/notion/py.typed
+:000000 100644 0000000 df3fc90 A	pipelines/notion_pipeline.py
+:000000 100644 0000000 e69de29 A	tests/notion/__init__.py
+:000000 100644 0000000 e6654b6 A	tests/notion/test_notion_client.py
+:000000 100644 0000000 b209939 A	tests/notion/test_notion_database.py
+:000000 100644 0000000 3a12f9f A	tests/notion/test_notion_pipeline.py
+1684702055
+
+:100644 100644 ee2a177 556925f M	pipelines/.dlt/config.toml
+:100644 100644 5bd279e 436802a M	pipelines/.dlt/example.secrets.toml
+:000000 100644 0000000 3b28aa3 A	pipelines/.gitignore
+:000000 100644 0000000 57488fb A	pipelines/facebook_ads/README.md
+:000000 100644 0000000 55357e5 A	pipelines/facebook_ads/__init__.py
+:000000 100644 0000000 b04d0f2 A	pipelines/facebook_ads/exceptions.py
+:000000 100644 0000000 4c6406a A	pipelines/facebook_ads/fb.py
+:000000 100644 0000000 e69de29 A	pipelines/facebook_ads/py.typed
+:000000 100644 0000000 3578203 A	pipelines/facebook_ads/requirements.txt
+:000000 100644 0000000 1f737bf A	pipelines/facebook_ads/settings.py
+:000000 100644 0000000 d046d15 A	pipelines/facebook_ads_pipeline.py
+:100644 100644 24f9763 7c984ea M	pipelines/github/__init__.py
+:100644 100644 f61cade 5ecbf94 M	pipelines/google_analytics/__init__.py
+:100644 100644 431d649 3b9f60d M	pipelines/matomo/__init__.py
+:100644 100644 84b0be3 7fd62b2 M	pipelines/workable/__init__.py
+:100644 100644 e9403e5 ff3bd2e M	poetry.lock
+:100644 100644 bf933f0 de07780 M	pyproject.toml
+:000000 100644 0000000 e69de29 A	tests/facebook_ads/__init__.py
+:000000 100644 0000000 935a0de A	tests/facebook_ads/test_facebook_ads.py
+:100644 100644 9263682 233e2e7 M	tests/google_analytics/test_analytics.py
+1684483443
+
+:100644 100644 473e606 363b9a9 M	pipelines/zendesk/__init__.py
+:100644 100644 476a2b1 d19b08e M	pipelines/zendesk/helpers/api_helpers.py
+:100644 100644 8bafa66 4cd07e9 M	tests/zendesk/test_zendesk.py
+1684335179
+
+:100644 100644 21b85f8 5bd279e M	pipelines/.dlt/example.secrets.toml
+:100644 100644 5068921 ab690ac M	tests/workable/test_workable_pipeline.py
+1684243243
+
+:100644 100644 3820097 ee2a177 M	pipelines/.dlt/config.toml
+:100644 100644 56ff8aa 21b85f8 M	pipelines/.dlt/example.secrets.toml
+:000000 100644 0000000 84b0be3 A	pipelines/workable/__init__.py
+:000000 100644 0000000 e69de29 A	pipelines/workable/py.typed
+:000000 100644 0000000 fca5625 A	pipelines/workable/workable_client.py
+:000000 100644 0000000 565f0b4 A	pipelines/workable_pipeline.py
+:100644 100644 6ee22df bf933f0 M	pyproject.toml
+:000000 100644 0000000 e69de29 A	tests/workable/__init__.py
+:000000 100644 0000000 5068921 A	tests/workable/test_workable_pipeline.py
+1684243091
+
+:100644 100644 394c900 56ff8aa M	pipelines/.dlt/example.secrets.toml
+:100644 100644 48fc8fb 637a1ad M	pipelines/sql_database/sql_database.py
+:100644 100644 46718b1 89c1903 M	pipelines/sql_database_pipeline.py
+:100644 100644 862ccb7 344e739 M	tests/sql_database/test_sql_database_pipeline.py
+1684166004
+
+:100644 100644 248fc03 473e606 M	pipelines/zendesk/__init__.py
+:100644 100644 a2c812f 476a2b1 M	pipelines/zendesk/helpers/api_helpers.py
+1683919019
+
+:100644 100644 d11cfb2 394c900 M	pipelines/.dlt/example.secrets.toml
+:000000 100644 0000000 602f235 A	pipelines/stripe_analytics/__init__.py
+:000000 100644 0000000 5d91a23 A	pipelines/stripe_analytics/helpers.py
+:000000 100644 0000000 d4e15c4 A	pipelines/stripe_analytics/metrics.py
+:000000 100644 0000000 75871af A	pipelines/stripe_analytics/requirements.txt
+:000000 100644 0000000 3f776b7 A	pipelines/stripe_analytics_pipeline.py
+:100644 100644 ad51734 e9403e5 M	poetry.lock
+:100644 100644 869caf6 6ee22df M	pyproject.toml
+:000000 100644 0000000 e69de29 A	tests/stripe_analytics/__init__.py
+:000000 100644 0000000 a93e31d A	tests/stripe_analytics/conftest.py
+:000000 100644 0000000 f2c3323 A	tests/stripe_analytics/test_metrics.py
+:000000 100644 0000000 49510f3 A	tests/stripe_analytics/test_stripe_pipeline.py
+1683903642
+
+:100644 100644 7e81f32 38a0bc3 M	pipelines/pipedrive/recents.py
+:100644 100644 53339c4 ad51734 M	poetry.lock
+:100644 100644 7052a7d 869caf6 M	pyproject.toml
+:000000 100644 0000000 2b3caea A	tests/pipedrive/recents_response_with_null.json
+:100644 100644 202f8b1 6ecf089 M	tests/pipedrive/test_pipedrive_pipeline.py
+1683831342
+
+:100644 100644 b077b3d a0237f0 M	pipelines/pipedrive/__init__.py
+:100644 100644 0d2066e 96818d6 M	pipelines/pipedrive/custom_fields_munger.py
+:100644 100644 64c22b9 202f8b1 M	tests/pipedrive/test_pipedrive_pipeline.py
+1683733341
+
+:100644 100644 e94472e 862ccb7 M	tests/sql_database/test_sql_database_pipeline.py
+1683621271
+
+:100644 100644 c522ee2 ed2a8fb M	README.md
+1683621242
+
+:100644 100644 d47da96 824d127 M	.github/ISSUE_TEMPLATE/new-verified-pipeline.md
+1683621220
+
+:100644 100644 e161d26 be4416a M	pipelines/google_sheets/README.md
+1683501431
+
+:100644 100644 c42c503 c522ee2 M	README.md
+1683500507
+
+:100644 100644 e26db44 0049eb2 M	.github/workflows/test_destinations.yml
+:100644 100644 40abe98 24ba82f M	.github/workflows/test_destinations_slow.yml
+:100644 100644 0f365d9 8a06d1d M	Makefile
+:100644 100644 42302f6 c42c503 M	README.md
+:000000 100644 0000000 dbe82aa A	SHARE_PIPELINE.md
+:100644 100644 50d2ea8 d5c59a8 M	pipelines/asana_dlt/__init__.py
+:100644 100644 723565e 41336f3 M	pipelines/chess/__init__.py
+:100644 100644 24ed3e6 f61cade M	pipelines/google_analytics/__init__.py
+:100644 100644 ff64d94 742e3f1 M	pipelines/google_analytics/setup_script_gcp_oauth.py
+:100644 100644 2ef884c 4427691 M	pipelines/google_sheets/__init__.py
+:100644 100644 c56369f 31ff116 M	pipelines/google_sheets/helpers/api_calls.py
+:000000 100644 0000000 44f8dba A	pipelines/google_sheets/setup_script_gcp_oauth.py
+:100644 100644 94b407b 19096da M	pipelines/hubspot/__init__.py
+:100644 100644 2aa13ad 8f7080b M	pipelines/hubspot/client.py
+:100644 100644 fc853a8 f51b0d2 M	pipelines/hubspot/endpoints.py
+:100644 100644 e69de29 e69de29 R100	pipelines/zendesk/running_guide	pipelines/hubspot/py.typed
+:100644 100644 84ea26e cf01fe6 M	pipelines/hubspot_pipeline.py
+:100644 100644 216e738 48fc8fb M	pipelines/sql_database/sql_database.py
+:100644 100644 b032d8e 8dce019 M	pipelines/sql_database/util.py
+:100644 100644 bfb670b b73d1a7 M	pipelines/zendesk/README.md
+:100644 100644 fdd7718 248fc03 M	pipelines/zendesk/__init__.py
+:100644 100644 669982f a2c812f M	pipelines/zendesk/helpers/api_helpers.py
+:100644 100644 bdf7c31 81ea186 M	pipelines/zendesk/helpers/talk_api.py
+:100644 100644 735a182 53339c4 M	poetry.lock
+:100644 100644 fd1a6b6 7052a7d M	pyproject.toml
+:100644 100644 0fa1db0 56650d2 M	tests/asana_dlt/test_asana_dlt_pipeline.py
+:100644 100644 795f5d0 4922829 M	tests/conftest.py
+:100644 100644 e643867 9263682 M	tests/google_analytics/test_analytics.py
+:100644 100644 6a6bf55 b9a5a16 M	tests/google_sheets/test_data_processing.py
+:100644 100644 e9d9128 fd1492b M	tests/google_sheets/test_google_sheets_pipeline.py
+:100644 100644 d3aebb4 754ecad M	tests/hubspot/test_hubspot_pipeline.py
+:100644 100644 c2129f9 6bed51c M	tests/sql_database/conftest.py
+:100644 100644 ce3d8b6 2829bf8 M	tests/sql_database/sql_source.py
+:100644 100644 552c4fa e94472e M	tests/sql_database/test_sql_database_pipeline.py
+:100644 100644 df00dda 63aac60 M	tests/utils.py
+:100644 100644 8163be7 8bafa66 M	tests/zendesk/test_zendesk.py
+:100644 100644 7c14f48 c2d6602 M	tox.ini
+1683296816
+
+:100644 100644 7c95ddb 3820097 M	pipelines/.dlt/config.toml
+:100644 100644 5981219 d11cfb2 M	pipelines/.dlt/example.secrets.toml
+:000000 100644 0000000 81ee9b8 A	pipelines/shopify_dlt/__init__.py
+:000000 100644 0000000 e69de29 A	pipelines/shopify_dlt/requirements.txt
+:000000 100644 0000000 7cbfa17 A	pipelines/shopify_dlt_pipeline.py
+:100644 100644 69cc4a7 735a182 M	poetry.lock
+:100644 100644 91214d2 fd1a6b6 M	pyproject.toml
+:000000 100644 0000000 e69de29 A	tests/shopify_dlt/__init__.py
+:000000 100644 0000000 faa5a33 A	tests/shopify_dlt/test_shopify_pipeline.py
+1683291485
+
+:100644 000000 fa40472 0000000 D	pipelines/strapi/readme.md
+1683286572
+
+:100644 100644 b276dcf fdd7718 M	pipelines/zendesk/__init__.py
+1683197630
+
+:100644 100644 3b5fa46 fdf928e M	pipelines/pipedrive/README.md
+1683197610
+
+:100644 100644 3d991cd bfb7f95 M	pipelines/github/README.md
+1683197585
+
+:000000 100644 0000000 029ebad A	pipelines/strapi/README.md
+1683197363
+
+:000000 100644 0000000 ad3e14b A	pipelines/google_analytics/README.md
+1683197340
+
+:000000 100644 0000000 bfb670b A	pipelines/zendesk/README.md
+1683197310
+
+:000000 100644 0000000 4d2c698 A	pipelines/chess/README.md
+1683197284
+
+:000000 100644 0000000 1a8c99b A	pipelines/hubspot/README.md
+1683152052
+
+:100644 100644 a48ecac 7c95ddb M	pipelines/.dlt/config.toml
+:100644 100644 058c3f6 5981219 M	pipelines/.dlt/example.secrets.toml
+:000000 100644 0000000 431d649 A	pipelines/matomo/__init__.py
+:000000 100644 0000000 e69de29 A	pipelines/matomo/helpers/__init__.py
+:000000 100644 0000000 485aca8 A	pipelines/matomo/helpers/data_processing.py
+:000000 100644 0000000 bcb6500 A	pipelines/matomo/helpers/matomo_client.py
+:000000 100644 0000000 e69de29 A	pipelines/matomo/py.typed
+:000000 100644 0000000 9e49233 A	pipelines/matomo/requirements.txt
+:000000 100644 0000000 a92f3de A	pipelines/matomo_pipeline.py
+:000000 100644 0000000 e69de29 A	tests/matomo/__init__.py
+:000000 100644 0000000 07de39c A	tests/matomo/test_matomo_pipeline.py
+1683142445
+
+:100644 100644 92fcb70 b077b3d M	pipelines/pipedrive/__init__.py
+:100644 100644 38c3c90 0d2066e M	pipelines/pipedrive/custom_fields_munger.py
+:000000 100644 0000000 f9a3981 A	pipelines/pipedrive/helpers.py
+:000000 100644 0000000 7e81f32 A	pipelines/pipedrive/recents.py
+:000000 100644 0000000 54d1833 A	pipelines/pipedrive/typing.py
+:100644 100644 2070c7f 196b04d M	pipelines/pipedrive_pipeline.py
+:100644 100644 87e8c5c 64c22b9 M	tests/pipedrive/test_pipedrive_pipeline.py
+1683130044
+
+:100644 100644 ebd3ede 058c3f6 M	pipelines/.dlt/example.secrets.toml
+:100644 100644 203d2a5 50d2ea8 R078	pipelines/dlt_asana/__init__.py	pipelines/asana_dlt/__init__.py
+:100644 100644 d7cf09d d7cf09d R100	pipelines/dlt_asana/requirements.txt	pipelines/asana_dlt/requirements.txt
+:100644 100644 0921316 7137b67 R063	pipelines/dlt_asana_pipeline.py	pipelines/asana_dlt_pipeline.py
+:100644 100644 beee315 69cc4a7 M	poetry.lock
+:100644 100644 8606815 91214d2 M	pyproject.toml
+:000000 100644 0000000 e69de29 A	tests/asana_dlt/__init__.py
+:000000 100644 0000000 0fa1db0 A	tests/asana_dlt/test_asana_dlt_pipeline.py
+1682454302
+
+:100644 100644 3a48a7e ce3d8b6 M	tests/sql_database/sql_source.py
+:100644 100644 2892b29 552c4fa M	tests/sql_database/test_sql_database_pipeline.py
+1682454220
+
+:100644 100644 a858e21 216e738 M	pipelines/sql_database/sql_database.py
+:100644 100644 32d9594 b032d8e M	pipelines/sql_database/util.py
+1682454141
+
+:100644 100644 41e0414 beee315 M	poetry.lock
+:100644 100644 60faf9b 8606815 M	pyproject.toml
+1682077794
+
+:100644 100644 540d8e0 42302f6 M	README.md
+:100644 100644 448c399 b276dcf M	pipelines/zendesk/__init__.py
+1682005075
+
+:100644 100644 9c927a4 d47da96 M	.github/ISSUE_TEMPLATE/new-verified-pipeline.md
+1681991703
+
+:000000 100644 0000000 cab5d95 A	.github/ISSUE_TEMPLATE/bug-report.md
+:000000 100644 0000000 c260004 A	.github/ISSUE_TEMPLATE/new-community-pipeline.md
+:100644 100644 2ca4406 9c927a4 M	.github/ISSUE_TEMPLATE/new-verified-pipeline.md
+:000000 100644 0000000 30f6a8c A	.github/ISSUE_TEMPLATE/pipeline-request.md
+:000000 100644 0000000 f7f62ea A	.github/pull_request_template.md
+:100644 100644 f534f6b 01284f7 M	DISTRIBUTION.md
+:100644 100644 0c5d844 540d8e0 M	README.md
+1681991348
+
+:100644 100644 cbbee88 ff64d94 R053	pipelines/google_analytics/setup_script.py	pipelines/google_analytics/setup_script_gcp_oauth.py
+:100644 100644 c8ae9ea 41e0414 M	poetry.lock
+1681939640
+
+:100644 100644 3cd4194 a48ecac M	pipelines/.dlt/config.toml
+:100644 100644 a962737 24ed3e6 M	pipelines/google_analytics/__init__.py
+:100644 100644 a9b35db 91cf165 M	pipelines/google_analytics/helpers/credentials.py
+:100644 100644 1cf7fa4 cbbee88 M	pipelines/google_analytics/setup_script.py
+:100644 100644 ec62640 de5e3d5 M	pipelines/google_analytics_pipeline.py
+:100644 100644 027602e c8ae9ea M	poetry.lock
+1681843585
+
+:100644 100644 32e2ad3 01cd554 M	.github/workflows/get_changed_pipelines.yml
+:100644 100644 cd77876 0c5d844 M	README.md
+:100644 100644 467907a 3cd4194 M	pipelines/.dlt/config.toml
+:100644 100644 23032ee ebd3ede M	pipelines/.dlt/example.secrets.toml
+:000000 100644 0000000 a962737 A	pipelines/google_analytics/__init__.py
+:000000 100644 0000000 e69de29 A	pipelines/google_analytics/helpers/__init__.py
+:000000 100644 0000000 a9b35db A	pipelines/google_analytics/helpers/credentials.py
+:000000 100644 0000000 bdfb0f7 A	pipelines/google_analytics/helpers/data_processing.py
+:000000 100644 0000000 e69de29 A	pipelines/google_analytics/py.typed
+:000000 100644 0000000 251598e A	pipelines/google_analytics/requirements.txt
+:000000 100644 0000000 1cf7fa4 A	pipelines/google_analytics/setup_script.py
+:000000 100644 0000000 ec62640 A	pipelines/google_analytics_pipeline.py
+:100644 100644 95993c1 027602e M	poetry.lock
+:100644 100644 3874298 60faf9b M	pyproject.toml
+:100644 100644 d0a2722 795f5d0 M	tests/conftest.py
+:000000 100644 0000000 e69de29 A	tests/google_analytics/__init__.py
+:000000 100644 0000000 e643867 A	tests/google_analytics/test_analytics.py
+:100644 100644 7d0a079 5d4072a M	tests/test_dlt_init.py
+:100644 100644 ecd000b df00dda M	tests/utils.py
+:100644 100644 4533465 8163be7 M	tests/zendesk/test_zendesk.py
+1681817199
+
+:100644 100644 4cc7928 a37a289 M	.github/workflows/init.yml
+1681748086
+
+:000000 100644 0000000 4cc7928 A	.github/workflows/init.yml
+:100644 100644 647d009 0f365d9 M	Makefile
+:100644 100644 ff9c1e1 95993c1 M	poetry.lock
+:100644 100644 133eac7 3874298 M	pyproject.toml
+1681498674
+
+:100644 100644 f7f0bba 24f9763 M	pipelines/github/__init__.py
+:100644 100644 484db1a 7c14f48 M	tox.ini
+1681492171
+
+:100644 100644 01cd554 32e2ad3 M	.github/workflows/get_changed_pipelines.yml
+:100644 100644 0e83d39 467907a M	pipelines/.dlt/config.toml
+:100644 100644 ebd3ede 23032ee M	pipelines/.dlt/example.secrets.toml
+:100644 000000 a6e37a1 0000000 D	pipelines/google_analytics/__init__.py
+:100644 000000 e69de29 0000000 D	pipelines/google_analytics/helpers/__init__.py
+:100644 000000 a9b35db 0000000 D	pipelines/google_analytics/helpers/credentials.py
+:100644 000000 bdfb0f7 0000000 D	pipelines/google_analytics/helpers/data_processing.py
+:100644 000000 e69de29 0000000 D	pipelines/google_analytics/py.typed
+:100644 000000 920a12c 0000000 D	pipelines/google_analytics/requirements.txt
+:100644 000000 1cf7fa4 0000000 D	pipelines/google_analytics/setup_script.py
+:100644 000000 ce7ce25 0000000 D	pipelines/google_analytics_pipeline.py
+:100644 100644 db0c118 ff9c1e1 M	poetry.lock
+:100644 100644 441380f 133eac7 M	pyproject.toml
+:100644 000000 e69de29 0000000 D	tests/google_analytics/__init__.py
+:100644 000000 a49c329 0000000 D	tests/google_analytics/test_analytics.py
+1681481188
+
+:100644 100644 32e2ad3 01cd554 M	.github/workflows/get_changed_pipelines.yml
+:100644 100644 467907a 0e83d39 M	pipelines/.dlt/config.toml
+:100644 100644 23032ee ebd3ede M	pipelines/.dlt/example.secrets.toml
+:000000 100644 0000000 a6e37a1 A	pipelines/google_analytics/__init__.py
+:000000 100644 0000000 e69de29 A	pipelines/google_analytics/helpers/__init__.py
+:000000 100644 0000000 a9b35db A	pipelines/google_analytics/helpers/credentials.py
+:000000 100644 0000000 bdfb0f7 A	pipelines/google_analytics/helpers/data_processing.py
+:000000 100644 0000000 e69de29 A	pipelines/google_analytics/py.typed
+:000000 100644 0000000 920a12c A	pipelines/google_analytics/requirements.txt
+:000000 100644 0000000 1cf7fa4 A	pipelines/google_analytics/setup_script.py
+:000000 100644 0000000 ce7ce25 A	pipelines/google_analytics_pipeline.py
+:100644 100644 ff9c1e1 db0c118 M	poetry.lock
+:100644 100644 133eac7 441380f M	pyproject.toml
+:000000 100644 0000000 e69de29 A	tests/google_analytics/__init__.py
+:000000 100644 0000000 a49c329 A	tests/google_analytics/test_analytics.py
+1681478347
+
+:000000 100644 0000000 2ca4406 A	.github/ISSUE_TEMPLATE/new-verified-pipeline.md
+1681461162
+
+:100644 100644 caf626b 467907a M	pipelines/.dlt/config.toml
+:100644 100644 c300318 669982f M	pipelines/zendesk/helpers/api_helpers.py
+:100644 100644 23ca561 4533465 M	tests/zendesk/test_zendesk.py
+1681286247
+
+:100644 100644 acf5ee6 a858e21 M	pipelines/sql_database/sql_database.py
+:100644 100644 ea46bba 32d9594 M	pipelines/sql_database/util.py
+:100644 100644 80a4d6c ff9c1e1 M	poetry.lock
+:100644 100644 682062f 133eac7 M	pyproject.toml
+:100644 100644 6159e93 3a48a7e M	tests/sql_database/sql_source.py
+:100644 100644 4eb72c6 2892b29 M	tests/sql_database/test_sql_database_pipeline.py
+:100644 100644 b65e22f 5159743 M	tests/sql_database/test_util.py
+1681114333
+
+:100644 100644 ea37da0 acf5ee6 M	pipelines/sql_database/sql_database.py
+:100644 100644 4ccda8b 80a4d6c M	poetry.lock
+:100644 100644 136be1f 467ea2e M	tests/chess/test_chess_pipeline.py
+:100644 100644 0700f70 a14b7c3 M	tests/github/test_github_pipeline.py
+:100644 100644 9d4e57f e9d9128 M	tests/google_sheets/test_google_sheets_pipeline.py
+:100644 100644 53529c6 87e8c5c M	tests/pipedrive/test_pipedrive_pipeline.py
+:100644 100644 ca2fba8 4eb72c6 M	tests/sql_database/test_sql_database_pipeline.py
+:100644 100644 b1ab9f0 23ca561 M	tests/zendesk/test_zendesk.py
+1680716742
+
+:100644 100644 cbea0c1 32e2ad3 M	.github/workflows/get_changed_pipelines.yml
+1680687909
+
+:000000 100644 0000000 cbea0c1 A	.github/workflows/get_changed_pipelines.yml
+:100644 100644 14ac35c e26db44 M	.github/workflows/test_destinations.yml
+:100644 100644 d64a75d 40abe98 M	.github/workflows/test_destinations_slow.yml
+1680522566
+
+:100644 100644 56e57fa caf626b M	pipelines/.dlt/config.toml
+:100644 100644 35a6688 2ef884c M	pipelines/google_sheets/__init__.py
+:100644 000000 dea8709 0000000 D	pipelines/google_sheets/google_sheets.py
+:100644 100644 83d6dd0 c56369f M	pipelines/google_sheets/helpers/api_calls.py
+:100644 100644 c03fd2e 5c9a39d M	pipelines/google_sheets/helpers/data_processing.py
+:000000 100644 0000000 e69de29 A	pipelines/google_sheets/py.typed
+:100644 000000 b3c2347 0000000 D	pipelines/google_sheets/samples/test1.xlsx
+:100644 100644 9255cdc 33f0a87 M	pipelines/google_sheets_pipeline.py
+:100644 100644 499e679 4ccda8b M	poetry.lock
+:100644 100644 c6107e4 9d4e57f M	tests/google_sheets/test_google_sheets_pipeline.py
+1680284716
+
+:100644 100644 b0fd547 499e679 M	poetry.lock
+:100644 100644 800124d 682062f M	pyproject.toml
+:100644 100644 767dada ecd000b M	tests/utils.py
+1680272020
+
+:100644 100644 855d3be 448c399 M	pipelines/zendesk/__init__.py
+:100644 100644 eaf3d07 562a323 M	pipelines/zendesk_pipeline.py
+:100644 100644 35ad5ef b1ab9f0 M	tests/zendesk/test_zendesk.py
+1680268811
+
+:100644 100644 1b6967c c440dad M	pipelines/zendesk/requirements.txt
+:100644 100644 335875e eaf3d07 M	pipelines/zendesk_pipeline.py
+1680016304
+
+:100644 100644 dd9c0c8 23032ee M	pipelines/.dlt/example.secrets.toml
+:000000 100644 0000000 855d3be A	pipelines/zendesk/__init__.py
+:000000 100644 0000000 e69de29 A	pipelines/zendesk/helpers/__init__.py
+:000000 100644 0000000 c300318 A	pipelines/zendesk/helpers/api_helpers.py
+:000000 100644 0000000 d097a51 A	pipelines/zendesk/helpers/credentials.py
+:000000 100644 0000000 bdf7c31 A	pipelines/zendesk/helpers/talk_api.py
+:000000 100644 0000000 e69de29 A	pipelines/zendesk/py.typed
+:000000 100644 0000000 1b6967c A	pipelines/zendesk/requirements.txt
+:000000 100644 0000000 e69de29 A	pipelines/zendesk/running_guide
+:000000 100644 0000000 335875e A	pipelines/zendesk_pipeline.py
+:100644 100644 b22c4b5 b0fd547 M	poetry.lock
+:100644 100644 eb507cf 800124d M	pyproject.toml
+:000000 100644 0000000 e69de29 A	tests/zendesk/__init__.py
+:000000 100644 0000000 35ad5ef A	tests/zendesk/test_zendesk.py
+1679681719
+
+:100644 100644 0acba6d 203d2a5 R098	pipelines/asana/__init__.py	pipelines/dlt_asana/__init__.py
+:100644 100644 d7cf09d d7cf09d R100	pipelines/asana/requirements.txt	pipelines/dlt_asana/requirements.txt
+:100644 100644 08eeaba 0921316 R094	pipelines/asana_pipeline.py	pipelines/dlt_asana_pipeline.py
+:100644 000000 059333f 0000000 D	pipelines/strapi/requirements.txt
+1679679412
+
+:000000 100644 0000000 0acba6d A	pipelines/asana/__init__.py
+:000000 100644 0000000 d7cf09d A	pipelines/asana/requirements.txt
+:000000 100644 0000000 08eeaba A	pipelines/asana_pipeline.py
+1679650964
+
+:100644 100644 06236d9 bd966cc M	init/pipeline.py
+:100644 100644 14432b9 2acc72b M	init/pipeline_generic.py
+:100644 100644 84f473a 723565e M	pipelines/chess/__init__.py
+:100644 100644 7a8215e f7f0bba M	pipelines/github/__init__.py
+:100644 100644 8736087 2aa13ad M	pipelines/hubspot/client.py
+:100644 100644 d93c747 92fcb70 M	pipelines/pipedrive/__init__.py
+:100644 100644 341eda0 cef018c M	pipelines/strapi/strapi.py
+:100644 100644 451053f b22c4b5 M	poetry.lock
+:100644 100644 a801605 eb507cf M	pyproject.toml
+:100644 100644 496b0b0 d3aebb4 M	tests/hubspot/test_hubspot_pipeline.py
+:100644 100644 63a8b64 484db1a M	tox.ini
+1679577508
+
+:100644 100644 f17fadb dd9c0c8 M	pipelines/.dlt/example.secrets.toml
+:000000 100644 0000000 325042e A	pipelines/strapi/__init__.py
+:000000 100644 0000000 fa40472 A	pipelines/strapi/readme.md
+:000000 100644 0000000 059333f A	pipelines/strapi/requirements.txt
+:000000 100644 0000000 341eda0 A	pipelines/strapi/strapi.py
+:000000 100644 0000000 663d78c A	pipelines/strapi_pipeline.py
+1679388922
+
+:000000 100644 0000000 3d991cd A	pipelines/github/README.md
+:000000 100644 0000000 e161d26 A	pipelines/google_sheets/README.md
+:000000 100644 0000000 048819f A	pipelines/google_sheets/docs_images/Add_people.png
+:000000 100644 0000000 2ac37ef A	pipelines/google_sheets/docs_images/Share_button.png
+1678994571
+
+:100644 100644 84aa2cf e9b8e1d M	pipelines/github_pipeline.py
+1678890413
+
+:100644 100644 fc5829f f17fadb M	pipelines/.dlt/example.secrets.toml
+:000000 100644 0000000 94b407b A	pipelines/hubspot/__init__.py
+:000000 100644 0000000 8736087 A	pipelines/hubspot/client.py
+:000000 100644 0000000 fc853a8 A	pipelines/hubspot/endpoints.py
+:000000 100644 0000000 f229360 A	pipelines/hubspot/requirements.txt
+:000000 100644 0000000 84ea26e A	pipelines/hubspot_pipeline.py
+:000000 100644 0000000 e69de29 A	tests/hubspot/__init__.py
+:000000 100644 0000000 60a199c A	tests/hubspot/mock_data.py
+:000000 100644 0000000 496b0b0 A	tests/hubspot/test_hubspot_pipeline.py
+1678805058
+
+:100644 100644 19c9140 73b3564 M	.gitignore
+:100644 100644 814dc0c 634427b M	init/.dlt/config.toml
+:100644 100644 fa89fb4 fc5829f M	pipelines/.dlt/example.secrets.toml
+:000000 100644 0000000 7a8215e A	pipelines/github/__init__.py
+:000000 100644 0000000 e69de29 A	pipelines/github/py.typed
+:000000 100644 0000000 26da555 A	pipelines/github/queries.py
+:000000 100644 0000000 84aa2cf A	pipelines/github_pipeline.py
+:100644 100644 71e1122 d0a2722 M	tests/conftest.py
+:000000 100644 0000000 e69de29 A	tests/github/__init__.py
+:000000 100644 0000000 0700f70 A	tests/github/test_github_pipeline.py
+:100644 100644 e419cb3 767dada M	tests/utils.py
+1678726165
+
+:000000 100644 0000000 3b5fa46 A	pipelines/pipedrive/README.md
+:100644 000000 77cee06 0000000 D	pipelines/pipedrive/ReadMe.md
+:100644 000000 16ac298 0000000 D	pipelines/pipedrive/pipedrive_docs_imgs/Environment_view1.png
+:100644 000000 1490263 0000000 D	pipelines/pipedrive/pipedrive_docs_imgs/pipedrive_schema1.png
+:100644 000000 13de054 0000000 D	pipelines/pipedrive/pipedrive_docs_imgs/rename_postgres_ineditor1.png
+:100644 000000 2fc87e3 0000000 D	pipelines/pipedrive/pipedrive_docs_imgs/rename_tobigquery_ineditor1.png
+1678367112
+
+:100644 100644 d26396a 6abb4a9 M	.github/workflows/lint.yml
+:100644 100644 6708066 647d009 M	Makefile
+:100644 100644 8d90a27 cd77876 M	README.md
+:100644 100644 ac7cff9 451053f M	poetry.lock
+:100644 100644 5dcddd7 a801605 M	pyproject.toml
+:000000 100644 0000000 f0cb690 A	tests/diff_pipelines.py
+:000000 100644 0000000 7d0a079 A	tests/test_dlt_init.py
+1678205940
+
+:100644 100644 46ff911 8d90a27 M	README.md
+:100644 100644 4430b32 84f473a M	pipelines/chess/__init__.py
+:100644 100644 77f681f afcca1c M	pipelines/chess_pipeline.py
+:100644 100644 4330e9f 38c3c90 M	pipelines/pipedrive/custom_fields_munger.py
+:100644 100644 764472b 2866457 M	pipelines/sql_database/requirements.txt
+:100644 100644 3f2c401 ac7cff9 M	poetry.lock
+:100644 100644 2aa1b81 136be1f M	tests/chess/test_chess_pipeline.py
+:100644 100644 9ee1c6d 71e1122 M	tests/conftest.py
+:100644 100644 99f3ee3 53529c6 M	tests/pipedrive/test_pipedrive_pipeline.py
+1678107255
+
+:100644 100644 8c17dab f534f6b M	DISTRIBUTION.md
+:100644 100644 e39e32d 6708066 M	Makefile
+:100644 100644 f6ab502 46ff911 M	README.md
+:000000 100644 0000000 814dc0c A	init/.dlt/config.toml
+:000000 100644 0000000 3766bf1 A	init/.dlt/secrets.toml
+:000000 100644 0000000 3b28aa3 A	init/.gitignore
+:000000 100644 0000000 8e58387 A	init/README.md
+:000000 100644 0000000 e3123e3 A	init/__init__.py
+:000000 100644 0000000 06236d9 A	init/pipeline.py
+:000000 100644 0000000 14432b9 A	init/pipeline_generic.py
+:100644 100644 cef2452 4430b32 M	pipelines/chess/__init__.py
+:100644 100644 3b19cfd 77f681f M	pipelines/chess_pipeline.py
+:100644 100644 e69de29 35a6688 M	pipelines/google_sheets/__init__.py
+:100644 100644 69b5a34 dea8709 M	pipelines/google_sheets/google_sheets.py
+:100644 100644 4fa5e9e 83d6dd0 M	pipelines/google_sheets/helpers/api_calls.py
+:000000 100644 0000000 9255cdc A	pipelines/google_sheets_pipeline.py
+:100644 100644 418d629 d93c747 M	pipelines/pipedrive/__init__.py
+:100644 000000 a3189b2 0000000 D	pipelines/requirements.txt
+:100644 000000 8c392e6 0000000 D	pipelines/sheet_pipeline.py
+:100644 100644 99b4d5c 4515127 M	pipelines/sql_database/__init__.py
+:100644 100644 96cbdb6 ea37da0 M	pipelines/sql_database/sql_database.py
+:100644 100644 dcb5038 46718b1 M	pipelines/sql_database_pipeline.py
+1678043910
+
+:100644 100644 5d8d462 ea46bba M	pipelines/sql_database/util.py
+:000000 100644 0000000 c2129f9 A	tests/sql_database/conftest.py
+:100644 100644 38fef8d 6159e93 M	tests/sql_database/sql_source.py
+:100644 100644 b8fd870 ca2fba8 M	tests/sql_database/test_sql_database_pipeline.py
+:000000 100644 0000000 b65e22f A	tests/sql_database/test_util.py
+1677676076
+
+:100644 100644 2e14e84 99b4d5c M	pipelines/sql_database/__init__.py
+:100644 100644 d23032c 96cbdb6 M	pipelines/sql_database/sql_database.py
+:000000 100644 0000000 5d8d462 A	pipelines/sql_database/util.py
+:100644 100644 2af8720 38fef8d M	tests/sql_database/sql_source.py
+:100644 100644 41332a7 b8fd870 M	tests/sql_database/test_sql_database_pipeline.py
+1677583736
+
+:100644 100644 a5605ea 418d629 M	pipelines/pipedrive/__init__.py
+:000000 100644 0000000 4330e9f A	pipelines/pipedrive/custom_fields_munger.py
+:000000 100644 0000000 e69de29 A	pipelines/pipedrive/py.typed
+:100644 100644 852d348 3f2c401 M	poetry.lock
+:100644 100644 1bfeb97 5dcddd7 M	pyproject.toml
+:100644 100644 d8c21b3 99f3ee3 M	tests/pipedrive/test_pipedrive_pipeline.py
+1677241485
+
+:100644 100644 630f06f d23032c M	pipelines/sql_database/sql_database.py
+:100644 100644 407a39c dcb5038 M	pipelines/sql_database_pipeline.py
+:100644 100644 01d5eb8 852d348 M	poetry.lock
+:100644 100644 e278fee 1bfeb97 M	pyproject.toml
+:100644 100644 2d731c2 2af8720 M	tests/sql_database/sql_source.py
+1677157178
+
+:100644 100644 7c4f475 f6ab502 M	README.md
+:100644 100644 5b05fac cef2452 M	pipelines/chess/__init__.py
+:100644 100644 3dc090d 3b19cfd M	pipelines/chess_pipeline.py
+1677034664
+
+:100644 100644 fea8dd7 77cee06 M	pipelines/pipedrive/ReadMe.md
+1676934521
+
+:100644 100644 1e4c8f5 2d731c2 M	tests/sql_database/sql_source.py
+1676933068
+
+:100644 100644 931da86 7c4f475 M	README.md
+1676933052
+
+:100644 100644 8e14c23 69b5a34 M	pipelines/google_sheets/google_sheets.py
+:100644 100644 31725b9 4fa5e9e M	pipelines/google_sheets/helpers/api_calls.py
+:100644 100644 632d027 407a39c M	pipelines/sql_database_pipeline.py
+1676930567
+
+:100644 100644 e335c68 14ac35c M	.github/workflows/test_destinations.yml
+:100644 100644 dd0223e d64a75d M	.github/workflows/test_destinations_slow.yml
+:100644 100644 3b6e6ff fa89fb4 M	pipelines/.dlt/example.secrets.toml
+1676930548
+
+:100644 100644 08f6548 2e14e84 M	pipelines/sql_database/__init__.py
+:100644 100644 630f06f 630f06f R100	pipelines/sql_database/source.py	pipelines/sql_database/sql_database.py
+1676930514
+
+:100644 100644 521fb7e c03fd2e M	pipelines/google_sheets/helpers/data_processing.py
+1676928690
+
+:100644 100644 717ffcf e335c68 M	.github/workflows/test_destinations.yml
+:100644 100644 10dfa8e dd0223e R085	.github/workflows/test_destination_bigquery.yml	.github/workflows/test_destinations_slow.yml
+1676927494
+
+:100644 100644 f61f9ff 8e14c23 M	pipelines/google_sheets/google_sheets.py
+:100644 100644 95ddb27 31725b9 M	pipelines/google_sheets/helpers/api_calls.py
+:100644 100644 c224198 d8055e0 M	pipelines/google_sheets/requirements.txt
+:100644 100644 b06b487 01d5eb8 M	poetry.lock
+:100644 100644 08f1c5d e278fee M	pyproject.toml
+1676927059
+
+:000000 100644 0000000 10dfa8e A	.github/workflows/test_destination_bigquery.yml
+:100644 100644 d79e1d2 717ffcf M	.github/workflows/test_destinations.yml
+1676922210
+
+:100644 100644 a88170a d79e1d2 M	.github/workflows/test_destinations.yml
+:100644 100644 0448bb2 e39e32d M	Makefile
+:100644 100644 96ce392 931da86 M	README.md
+1676922189
+
+:100644 100644 8aa515b 56e57fa M	pipelines/.dlt/config.toml
+:100644 100644 c275202 3b6e6ff M	pipelines/.dlt/example.secrets.toml
+1676922150
+
+:000000 100644 0000000 e69de29 A	pipelines/chess/py.typed
+:000000 100644 0000000 e69de29 A	pipelines/sql_database/py.typed
+1676922127
+
+:100644 100644 e9a34a5 d26396a M	.github/workflows/lint.yml
+:100644 100644 19346f7 a88170a M	.github/workflows/test_destinations.yml
+1676922075
+
+:100644 100644 d610429 65e7050 M	.dockerignore
+:100644 100644 71c3888 b06b487 M	poetry.lock
+:100644 100644 5eb8be1 08f1c5d M	pyproject.toml
+1676922036
+
+:100644 100644 e1ad0b2 9ee1c6d M	tests/conftest.py
+:100644 100644 d363657 1e4c8f5 R097	tests/sql_source.py	tests/sql_database/sql_source.py
+:100644 100644 0214291 41332a7 M	tests/sql_database/test_sql_database_pipeline.py
+:100644 100644 28e4b81 e419cb3 M	tests/utils.py
+1676921797
+
+:100644 100644 09ca89a f61f9ff M	pipelines/google_sheets/google_sheets.py
+:100644 100644 4d082fe 95ddb27 M	pipelines/google_sheets/helpers/api_calls.py
+:100644 100644 3bda659 521fb7e M	pipelines/google_sheets/helpers/data_processing.py
+:100644 100644 2ca0172 6a6bf55 M	tests/google_sheets/test_data_processing.py
+:100644 100644 b92e03b c6107e4 M	tests/google_sheets/test_google_sheets_pipeline.py
+1676842002
+
+:000000 100644 0000000 e9a34a5 A	.github/workflows/lint.yml
+:000000 100644 0000000 19346f7 A	.github/workflows/test_destinations.yml
+1676841955
+
+:100644 100644 cbf9669 71c3888 M	poetry.lock
+:100644 100644 0ebe0ef 5eb8be1 M	pyproject.toml
+1676841924
+
+:100644 100644 dfc8806 d8c21b3 M	tests/pipedrive/test_pipedrive_pipeline.py
+:100644 100644 8c606ba 28e4b81 M	tests/utils.py
+1676841857
+
+:100644 100644 1952826 5b05fac M	pipelines/chess/__init__.py
+:100644 100644 478047f e69de29 M	pipelines/chess/requirements.txt
+:100644 100644 1f660c5 3dc090d M	pipelines/chess_pipeline.py
+1676841821
+
+:100644 100644 b03f060 8aa515b M	pipelines/.dlt/config.toml
+:100644 100644 32aef3b c275202 M	pipelines/.dlt/example.secrets.toml
+:100644 000000 09e7b17 0000000 D	tests/.dlt/config.toml
+:100644 000000 387a4fd 0000000 D	tests/.dlt/example.secrets.toml
+1676841787
+
+:000000 100644 0000000 8c17dab A	DISTRIBUTION.md
+:100644 100644 d84b241 96ce392 M	README.md
+1676819151
+
+:100644 100644 b312768 fea8dd7 M	pipelines/pipedrive/ReadMe.md
+1676808473
+
+:100644 100644 16ac298 16ac298 R100	pipelines/pipedrive/pipedrive_docs_imgs/Environment_view.png	pipelines/pipedrive/pipedrive_docs_imgs/Environment_view1.png
+:100644 100644 1490263 1490263 R100	pipelines/pipedrive/pipedrive_docs_imgs/pipedrive_schema.png	pipelines/pipedrive/pipedrive_docs_imgs/pipedrive_schema1.png
+:100644 100644 13de054 13de054 R100	pipelines/pipedrive/pipedrive_docs_imgs/rename_postgres_ineditor.png	pipelines/pipedrive/pipedrive_docs_imgs/rename_postgres_ineditor1.png
+:100644 100644 2fc87e3 2fc87e3 R100	pipelines/pipedrive/pipedrive_docs_imgs/rename_tobigquery_ineditor.png	pipelines/pipedrive/pipedrive_docs_imgs/rename_tobigquery_ineditor1.png
+1676795512
+
+:100644 100644 9b37b9c b312768 M	pipelines/pipedrive/ReadMe.md
+1676795133
+
+:100644 100644 e38b6c7 9b37b9c M	pipelines/pipedrive/ReadMe.md
+1676747402
+
+:100644 100644 d5b9cdd 630f06f M	pipelines/sql_database/source.py
+:100644 100644 316a4ce 632d027 M	pipelines/sql_database_pipeline.py
+1676747096
+
+:000000 100644 0000000 e69de29 A	tests/sql_database/__init__.py
+:000000 100644 0000000 0214291 A	tests/sql_database/test_sql_database_pipeline.py
+1676747066
+
+:100644 100644 b2035bd e1ad0b2 M	tests/conftest.py
+:100644 100644 04f96d7 9a7487a M	tests/postgres/postgres/01_init.sql
+:000000 100644 0000000 d363657 A	tests/sql_source.py
+:100644 100644 072261b 8c606ba M	tests/utils.py
+1676746986
+
+:100644 100644 35fbb75 cbf9669 M	poetry.lock
+:100644 100644 c76b80f 0ebe0ef M	pyproject.toml
+1676346870
+
+:100644 100644 c7a4fd2 b03f060 M	pipelines/.dlt/config.toml
+:100644 100644 e6720a6 32aef3b M	pipelines/.dlt/example.secrets.toml
+:000000 100644 0000000 08f6548 A	pipelines/sql_database/__init__.py
+:000000 100644 0000000 764472b A	pipelines/sql_database/requirements.txt
+:000000 100644 0000000 d5b9cdd A	pipelines/sql_database/source.py
+:000000 100644 0000000 316a4ce A	pipelines/sql_database_pipeline.py
+:100644 100644 88c8a13 35fbb75 M	poetry.lock
+:100644 100644 212dd63 c76b80f M	pyproject.toml
+1676047342
+
+:100644 000000 c568b32 0000000 D	pipelines/docker-compose.yaml
+1676047313
+
+:100644 100644 387a4fd e6720a6 M	pipelines/.dlt/example.secrets.toml
+1676047036
+
+:100644 100644 09e7b17 c7a4fd2 M	pipelines/.dlt/config.toml
+1675445801
+
+:100644 100644 e2cb867 b92e03b M	tests/google_sheets/test_google_sheets_pipeline.py
+1675445341
+
+:100644 100644 5df2617 e2cb867 M	tests/google_sheets/test_google_sheets_pipeline.py
+1675440961
+
+:100644 100644 73c3ae5 387a4fd M	pipelines/.dlt/example.secrets.toml
+:100644 100644 73c3ae5 387a4fd M	tests/.dlt/example.secrets.toml
+1675440785
+
+:100644 000000 269a8e1 0000000 D	pipelines/google_sheets/data_validator.py
+:100644 100644 c5df5ab 09ca89a M	pipelines/google_sheets/google_sheets.py
+:100644 100644 c089eac 4d082fe R063	pipelines/google_sheets/api_calls.py	pipelines/google_sheets/helpers/api_calls.py
+:000000 100644 0000000 3bda659 A	pipelines/google_sheets/helpers/data_processing.py
+:100644 100644 9acfeae b3c2347 R058	pipelines/google_sheets/samples/test_spreadsheet.xlsx	pipelines/google_sheets/samples/test1.xlsx
+:100644 100644 a1cac08 8c392e6 M	pipelines/sheet_pipeline.py
+:100644 100644 d388d62 2ca0172 R093	tests/google_sheets/test_data_validator.py	tests/google_sheets/test_data_processing.py
+:100644 100644 7d366e3 5df2617 M	tests/google_sheets/test_google_sheets_pipeline.py
+1675267830
+
+:100644 100644 66f02cf c089eac M	pipelines/google_sheets/api_calls.py
+:100644 100644 0276b14 269a8e1 M	pipelines/google_sheets/data_validator.py
+:100644 100644 e1bc9d7 c5df5ab M	pipelines/google_sheets/google_sheets.py
+:100644 100644 05bda19 a1cac08 M	pipelines/sheet_pipeline.py
+:100644 100644 8b13f91 d388d62 M	tests/google_sheets/test_data_validator.py
+:100644 100644 edc7ec6 7d366e3 M	tests/google_sheets/test_google_sheets_pipeline.py
+1675171803
+
+:100644 100644 f43e0ad e1bc9d7 M	pipelines/google_sheets/google_sheets.py
+:100644 100644 ef7afa5 8b13f91 M	tests/google_sheets/test_data_validator.py
+:100644 100644 a1afd60 edc7ec6 M	tests/google_sheets/test_google_sheets_pipeline.py
+1675154127
+
+:000000 100644 0000000 66f02cf A	pipelines/google_sheets/api_calls.py
+:100644 100644 ba922f3 0276b14 M	pipelines/google_sheets/data_validator.py
+:100644 100644 d5d7850 f43e0ad M	pipelines/google_sheets/google_sheets.py
+:000000 100644 0000000 e69de29 A	pipelines/google_sheets/helpers/__init__.py
+:100644 100644 9acfeae 9acfeae R100	tests/google_sheets/test_spreadsheet.xlsx	pipelines/google_sheets/samples/test_spreadsheet.xlsx
+:100644 100644 036fc04 05bda19 M	pipelines/sheet_pipeline.py
+:100644 100644 0773af9 ef7afa5 M	tests/google_sheets/test_data_validator.py
+:100644 100644 a74581e a1afd60 M	tests/google_sheets/test_google_sheets_pipeline.py
+1674829245
+
+:100644 100644 550a4ba ba922f3 M	pipelines/google_sheets/data_validator.py
+:100644 100644 d643b42 d5d7850 M	pipelines/google_sheets/google_sheets.py
+:100644 100644 1b22c7f 036fc04 M	pipelines/sheet_pipeline.py
+:100644 100644 58d750c a74581e M	tests/google_sheets/test_google_sheets_pipeline.py
+1674777631
+
+:100644 100644 087c06a 550a4ba M	pipelines/google_sheets/data_validator.py
+:100644 100644 cc0c8fb d643b42 M	pipelines/google_sheets/google_sheets.py
+:100644 100644 cdb5af9 1b22c7f M	pipelines/sheet_pipeline.py
+:000000 100644 0000000 09e7b17 A	tests/.dlt/config.toml
+:000000 100644 0000000 73c3ae5 A	tests/.dlt/example.secrets.toml
+:100644 100644 d892ff3 0773af9 M	tests/google_sheets/test_data_validator.py
+:100644 100644 91b7019 58d750c M	tests/google_sheets/test_google_sheets_pipeline.py
+:000000 100644 0000000 9acfeae A	tests/google_sheets/test_spreadsheet.xlsx
+1674494389
+
+:100644 100644 9c736d3 cc0c8fb M	pipelines/google_sheets/google_sheets.py
+:100644 100644 7e454cf cdb5af9 M	pipelines/sheet_pipeline.py
+:100644 100644 65c31f1 d892ff3 M	tests/google_sheets/test_data_validator.py
+1674212759
+
+:100644 100644 09bfa54 087c06a M	pipelines/google_sheets/data_validator.py
+:100644 100644 90ffa5f 9c736d3 M	pipelines/google_sheets/google_sheets.py
+:100644 100644 2873533 7e454cf M	pipelines/sheet_pipeline.py
+:100644 100644 688f5d3 91b7019 M	tests/google_sheets/test_google_sheets_pipeline.py
+1674064249
+
+:100644 100644 ab2a367 09bfa54 M	pipelines/google_sheets/data_validator.py
+:100644 100644 31303d1 90ffa5f M	pipelines/google_sheets/google_sheets.py
+:100644 100644 47beded 2873533 M	pipelines/sheet_pipeline.py
+:100644 100644 685814d 65c31f1 M	tests/google_sheets/test_data_validator.py
+1673951202
+
+:100644 100644 6e60bc2 73c3ae5 M	pipelines/.dlt/example.secrets.toml
+:100644 100644 92653d8 ab2a367 M	pipelines/google_sheets/data_validator.py
+:100644 100644 c9c7bb4 31303d1 M	pipelines/google_sheets/google_sheets.py
+:100644 100644 bf5cf58 47beded M	pipelines/sheet_pipeline.py
+:000000 100644 0000000 e69de29 A	tests/google_sheets/__init__.py
+:000000 100644 0000000 685814d A	tests/google_sheets/test_data_validator.py
+:000000 100644 0000000 688f5d3 A	tests/google_sheets/test_google_sheets_pipeline.py
+1673515766
+
+:100644 100644 c7a4fd2 09e7b17 M	pipelines/.dlt/config.toml
+:000000 100644 0000000 92653d8 A	pipelines/google_sheets/data_validator.py
+:100644 100644 979c435 c9c7bb4 M	pipelines/google_sheets/google_sheets.py
+:100644 100644 764cc88 bf5cf58 M	pipelines/sheet_pipeline.py
+1673348261
+
+:100644 100644 17c36f0 a5605ea M	pipelines/pipedrive/__init__.py
+1673346035
+
+:100644 100644 e25a2d2 17c36f0 M	pipelines/pipedrive/__init__.py
+1673345941
+
+:100644 100644 60e60d6 e25a2d2 M	pipelines/pipedrive/__init__.py
+1673285938
+
+:100644 100644 b7a2e5c 60e60d6 M	pipelines/pipedrive/__init__.py
+:100644 100644 57ab3d6 2070c7f M	pipelines/pipedrive_pipeline.py
+1673284469
+
+:100644 100644 9ab744e 1d0e345 M	pipelines/.dlt/example.secrets.toml
+:100644 100644 2eefa92 88c8a13 M	poetry.lock
+:100644 100644 672be93 2aa1b81 M	tests/chess/test_chess_pipeline.py
+:000000 100644 0000000 e69de29 A	tests/pipedrive/__init__.py
+:000000 100644 0000000 dfc8806 A	tests/pipedrive/test_pipedrive_pipeline.py
+:100644 100644 9a1d26a 072261b M	tests/utils.py
+1673284424
+
+:100644 100644 1704f1e b7a2e5c M	pipelines/pipedrive/__init__.py
+1673278183
+
+:100644 100644 feedbea 1704f1e M	pipelines/pipedrive/__init__.py
+1673277401
+
+:100644 100644 b5e7910 feedbea M	pipelines/pipedrive/__init__.py
+1673271856
+
+:100644 100644 01c5ab9 b5e7910 M	pipelines/pipedrive/__init__.py
+1673005910
+
+:100644 100644 cbdf1c7 01c5ab9 M	pipelines/pipedrive/__init__.py
+1672992240
+
+:000000 100644 0000000 cbdf1c7 A	pipelines/pipedrive/__init__.py
+:000000 100644 0000000 57ab3d6 A	pipelines/pipedrive_pipeline.py
+1673281798
+
+:100644 100644 377d7ec d84b241 M	README.md
+1673281511
+
+:100644 100644 261eeb9 1ab7adc M	LICENSE.txt
+1673281443
+
+:000000 100644 0000000 261eeb9 A	LICENSE.txt
+1673258519
+
+:100644 100644 93fd22c 1f50e4c M	tests/postgres/README.md
+1673020309
+
+:100644 100644 8b168dc c6d8bc3 M	pipelines/.dlt/example.secrets.toml
+:000000 100644 0000000 c568b32 A	pipelines/docker-compose.yaml
+:000000 100644 0000000 e69de29 A	pipelines/google_sheets/__init__.py
+:000000 100644 0000000 979c435 A	pipelines/google_sheets/google_sheets.py
+:000000 100644 0000000 c224198 A	pipelines/google_sheets/requirements.txt
+:000000 100644 0000000 a3189b2 A	pipelines/requirements.txt
+:000000 100644 0000000 764cc88 A	pipelines/sheet_pipeline.py
+1672930539
+
+:100644 000000 8e870cd 0000000 D	tests/.dlt/config.toml
+:100644 000000 21ee825 0000000 D	tests/.dlt/example.secrets.toml
+1672930512
+
+:100644 100644 e5ecc70 377d7ec M	README.md
+:100644 100644 09e7b17 c7a4fd2 M	pipelines/.dlt/config.toml
+:100644 100644 8b168dc 9ab744e M	pipelines/.dlt/example.secrets.toml
+:100644 100644 ae8a812 1952826 M	pipelines/chess/__init__.py
+:100644 100644 9d073fe 8e870cd M	tests/.dlt/config.toml
+:100644 100644 8b168dc 21ee825 M	tests/.dlt/example.secrets.toml
+:100644 100644 39996e3 672be93 M	tests/chess/test_chess_pipeline.py
+:100644 100644 4d82e42 9a1d26a M	tests/utils.py
+1672754123
+
+:100644 100644 924ca11 e5ecc70 M	README.md
+1672753281
+
+:000000 100644 0000000 ae8a812 A	pipelines/chess/__init__.py
+:000000 100644 0000000 478047f A	pipelines/chess/requirements.txt
+:000000 100644 0000000 1f660c5 A	pipelines/chess_pipeline.py
+:000000 100644 0000000 e69de29 A	tests/chess/__init__.py
+:000000 100644 0000000 39996e3 A	tests/chess/test_chess_pipeline.py
+1672753239
+
+:000000 100644 0000000 924ca11 A	README.md
+1672753219
+
+:000000 100644 0000000 09e7b17 A	pipelines/.dlt/config.toml
+:000000 100644 0000000 8b168dc A	pipelines/.dlt/example.secrets.toml
+:000000 100644 0000000 e69de29 A	pipelines/__init__.py
+:000000 100644 0000000 e69de29 A	pipelines/_helpers/__init__.py
+1672753183
+
+:000000 100644 0000000 e69de29 A	tests/__init__.py
+:000000 100644 0000000 93fd22c A	tests/postgres/README.md
+:000000 100644 0000000 aa0a2c5 A	tests/postgres/docker-compose.yml
+:000000 100644 0000000 cb60656 A	tests/postgres/postgres.env
+:000000 100644 0000000 04f96d7 A	tests/postgres/postgres/01_init.sql
+:000000 100644 0000000 1dfd569 A	tests/postgres/postgres/Dockerfile
+1672753146
+
+:000000 100644 0000000 0a2a6f9 A	pytest.ini
+:000000 100644 0000000 9d073fe A	tests/.dlt/config.toml
+:000000 100644 0000000 8b168dc A	tests/.dlt/example.secrets.toml
+:000000 100644 0000000 b2035bd A	tests/conftest.py
+:000000 100644 0000000 4d82e42 A	tests/utils.py
+:000000 100644 0000000 63a8b64 A	tox.ini
+1672753063
+
+:000000 100644 0000000 d610429 A	.dockerignore
+:000000 100644 0000000 82a6b37 A	.editorconfig
+:000000 100644 0000000 19c9140 A	.gitignore
+:000000 100644 0000000 0448bb2 A	Makefile
+:000000 100755 0000000 4b409a6 A	check-package.sh
+:000000 100644 0000000 33f3f08 A	mypy.ini
+:000000 100644 0000000 2eefa92 A	poetry.lock
+:000000 100644 0000000 212dd63 A	pyproject.toml
