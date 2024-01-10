@@ -2,9 +2,15 @@ import os
 
 TESTS_BUCKET_URLS = [
     os.path.abspath("tests/filesystem/samples"),
-    "s3://dlt-ci-test-bucket/standard_source/samples",
-    "gs://ci-test-bucket/standard_source/samples",
-    "az://dlt-ci-test-bucket/standard_source/samples",
+    # ToDo: test s3 locally
+    # "s3://dlt-ci-test-bucket/standard_source/samples",
+    # ToDo: uncomment gs, az before PR
+    # "gs://ci-test-bucket/standard_source/samples",
+    # "az://dlt-ci-test-bucket/standard_source/samples",
+    # ToDo: 
+    #   a) repo ref. relative to current working directory for tess runner?
+    #   b) ref tag with testable history. Do we need such system test?
+    "gitpythonfs://~/dlt-verified-sources:HEAD@tests/filesystem/samples",
 ]
 
 GLOB_RESULTS = [

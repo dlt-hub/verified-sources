@@ -12,6 +12,9 @@ from sources.filesystem import (
     FileItem,
     FileItemDict,
 )
+
+from sources.filesystem.gitpythonfs import gitpythonfs
+
 from tests.utils import (
     assert_load_info,
     load_table_counts,
