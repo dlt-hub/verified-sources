@@ -25,7 +25,8 @@ def scrapy_source(
     Source function for scraping links with Scrapy.
 
     Args:
-        start_urls (List[str]): List initial urls for crawling
+        queue (Queue): Queue instance
+        name (Queue | None): Optional name of resource
 
     Yields:
         DltResource: Scraped data from scrapy
