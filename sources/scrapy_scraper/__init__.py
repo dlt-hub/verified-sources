@@ -1,14 +1,15 @@
 """Basic scrapy source"""
-from queue import Queue
-from typing import Iterable
+from typing import Iterable, Optional
 import dlt
 from dlt.common.typing import TDataItem
 from dlt.sources import DltResource
 
+from .types import BaseQueue
+
 __all__ = ["scrapy_source"]
 
 
-def get_scraping_results(queue: Queue) -> Iterable[TDataItem]:
+def get_scraping_results(queue: BaseQueue) -> Iterable[TDataItem]:
     while True:
         result = queue.get()
         if "done" in result:
@@ -18,15 +19,15 @@ def get_scraping_results(queue: Queue) -> Iterable[TDataItem]:
 
 @dlt.source
 def scrapy_source(
-    queue: Queue,
-    name: str | None = "scrapy",
+    queue: BaseQueue,
+    name: Optional[str] = "scrapy",
 ) -> Iterable[DltResource]:
     """
     Source function for scraping links with Scrapy.
 
     Args:
-        queue (Queue): Queue instance
-        name (Queue | None): Optional name of resource
+        queue (BaseQueue): Queue instance
+        name (BaseQueue | None): Optional name of resource
 
     Yields:
         DltResource: Scraped data from scrapy

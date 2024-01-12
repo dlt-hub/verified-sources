@@ -1,14 +1,15 @@
 import threading
-from queue import Queue
-from typing import Callable, List, Type, TypeAlias
+from typing import Callable, List, Type
+from typing_extensions import TypeAlias
 from dlt import Pipeline
 
-from scrapy import Spider
-from scrapy.crawler import CrawlerProcess
+from scrapy import Spider  # type: ignore
+from scrapy.crawler import CrawlerProcess  # type: ignore
 
+from .types import BaseQueue
 from .settings import SOURCE_SCRAPY_SPIDER_SETTINGS
 
-PipelineRunner: TypeAlias = Callable[[Pipeline, Queue], None]
+PipelineRunner: TypeAlias = Callable[[Pipeline, BaseQueue], None]
 
 
 class Scraper:
@@ -19,7 +20,7 @@ class Scraper:
         pipeline: Pipeline,
         pipeline_runner: PipelineRunner,
         spider: Type[Spider],
-        queue: Queue,
+        queue: BaseQueue,
         start_urls: List[str],
     ):
         self.pipeline = pipeline
@@ -28,7 +29,7 @@ class Scraper:
         self.queue = queue
         self.start_urls = start_urls
 
-    def start(self):
+    def start(self) -> None:
         process = CrawlerProcess()
         process.crawl(
             self.spider,

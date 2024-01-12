@@ -1,7 +1,9 @@
-from queue import Queue
-from typing import Any, List
+from typing import Any, Dict, Generator, List, Optional
 
-import scrapy
+import scrapy  # type: ignore
+from scrapy.responsetypes import Response  # type: ignore
+
+from .types import BaseQueue
 
 
 class DLTSpiderBase(scrapy.Spider):
@@ -13,21 +15,21 @@ class DLTSpiderBase(scrapy.Spider):
 
     def __init__(
         self,
-        name: str | None = None,
-        queue: Queue | None = None,
-        settings: dict | None = {},
-        start_urls: List[str] | None = [],
+        queue: BaseQueue,
+        name: Optional[str] = None,
+        settings: Optional[Dict[str, Any]] = None,
+        start_urls: Optional[List[str]] = None,
         **kwargs: Any,
     ):
         super().__init__(name, **kwargs)
         self._queue = queue
-        self.custom_settings = settings
-        self.start_urls = start_urls
+        self.custom_settings = settings or {}
+        self.start_urls = start_urls or []
 
-    def send_data(self, data: Any):
+    def send_data(self, data: Any) -> None:
         self._queue.put(data)
 
-    def done(self):
+    def done(self) -> None:
         self.send_data({"done": True})
 
 
@@ -43,7 +45,9 @@ DLT pipeline can stop waiting for more data.
 
 
 class QuotesSpider(DLTSpiderBase):
-    def parse(self, response):
+    def parse(
+        self, response: Response
+    ) -> Optional[Generator[scrapy.Request, None, None]]:
         for quote in response.css("div.quote"):
             data = {
                 "headers": {
