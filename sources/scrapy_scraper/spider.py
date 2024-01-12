@@ -34,7 +34,7 @@ class DLTSpiderBase(scrapy.Spider):
 
 
 """
-This is a slightly modified example of Scrapy spider
+Below is a slightly modified example of Scrapy spider
 which you find in the official documentation
 https://docs.scrapy.org/en/latest/intro/tutorial.html#extracting-data-in-our-spider.
 

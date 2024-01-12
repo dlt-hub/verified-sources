@@ -24,6 +24,7 @@ def load(start_urls: List[str]) -> None:
     pipeline = dlt.pipeline(
         pipeline_name="famous_quotes",
         destination="postgres",
+        dataset_name="quotes",
     )
 
     scraper = Scraper(
