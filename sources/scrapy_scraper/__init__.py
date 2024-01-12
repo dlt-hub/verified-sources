@@ -8,7 +8,6 @@ from dlt.sources import DltResource
 __all__ = ["scrapy_source"]
 
 
-# from .helpers import get_endpoint
 def get_scraping_results(queue: Queue) -> Iterable[TDataItem]:
     while True:
         result = queue.get()

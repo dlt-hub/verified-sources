@@ -27,6 +27,9 @@ class DLTSpiderBase(scrapy.Spider):
     def send_data(self, data: Any):
         self._queue.put(data)
 
+    def done(self):
+        self.send_data({"done": True})
+
 
 """
 This is a slightly modified example of Scrapy spider
@@ -63,4 +66,4 @@ class QuotesSpider(DLTSpiderBase):
             next_page = response.urljoin(next_page)
             yield scrapy.Request(next_page, callback=self.parse)
         else:
-            self.send_data({"done": True})
+            self.done()
