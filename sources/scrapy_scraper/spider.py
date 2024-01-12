@@ -57,6 +57,8 @@ class QuotesSpider(DLTSpiderBase):
                 },
             }
 
+            # Once we have our data we need to send
+            # it over the queue to pipeline
             self.send_data(data)
 
         # Find the next page and create next request otherwise
@@ -66,4 +68,6 @@ class QuotesSpider(DLTSpiderBase):
             next_page = response.urljoin(next_page)
             yield scrapy.Request(next_page, callback=self.parse)
         else:
+            # Important: once we are done we need to send signal
+            # to pipeline so it can finalize and shutdown
             self.done()
