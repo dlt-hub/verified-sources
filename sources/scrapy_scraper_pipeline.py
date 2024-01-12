@@ -29,8 +29,8 @@ def load(start_urls: List[str]) -> None:
 
     scraper = Scraper(
         queue=result_queue,
-        pipeline_runner=pipeline_runner,
         pipeline=pipeline,
+        pipeline_runner=pipeline_runner,
         spider=QuotesSpider,
         start_urls=start_urls,
     )
