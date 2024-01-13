@@ -49,3 +49,4 @@ class Scraper:
         runner.start()
         process.start()
         runner.join()
+        process.join()
