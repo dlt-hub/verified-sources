@@ -228,3 +228,13 @@ def test_incremental_load(bucket_url: str) -> None:
     load_info = pipeline.run((all_files | bypass).with_name("csv_files_2"))
     assert_load_info(load_info)
     assert pipeline.last_trace.last_normalize_info.row_counts["csv_files_2"] == 4
+
+def test_file_chunking() -> None:
+    for file_chunk in filesystem(
+        bucket_url=TESTS_BUCKET_URLS[0],
+        file_glob="*/*.csv",
+        files_per_page=2,
+    ):
+        assert len(file_chunk) == 2
+        # no need to test more chunks
+        break
