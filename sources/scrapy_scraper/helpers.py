@@ -4,7 +4,8 @@ from typing_extensions import TypeAlias
 from dlt import Pipeline
 
 from scrapy import Spider  # type: ignore
-from scrapy.crawler import CrawlerProcess  # type: ignore
+from scrapy.crawler import CrawlerRunner  # type: ignore
+from twisted.internet import reactor
 
 from .types import BaseQueue
 from .settings import SOURCE_SCRAPY_SPIDER_SETTINGS
@@ -30,8 +31,8 @@ class Scraper:
         self.start_urls = start_urls
 
     def start(self) -> None:
-        process = CrawlerProcess()
-        process.crawl(
+        runner = CrawlerRunner()
+        runner.crawl(
             self.spider,
             queue=self.queue,
             name=f"{self.pipeline.pipeline_name}_spider",
@@ -39,14 +40,17 @@ class Scraper:
             settings=SOURCE_SCRAPY_SPIDER_SETTINGS,
         )
 
-        runner = threading.Thread(
+        pipeline_thread_runner = threading.Thread(
             target=self.pipeline_runner,
             args=(
                 self.pipeline,
                 self.queue,
             ),
         )
-        runner.start()
-        process.start()
-        runner.join()
-        process.join()
+        pipeline_thread_runner.start()
+
+        d = runner.join()
+        d.addBoth(lambda _: reactor.stop())
+        reactor.run()
+
+        pipeline_thread_runner.join()
