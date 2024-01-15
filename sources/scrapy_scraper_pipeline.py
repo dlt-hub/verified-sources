@@ -1,7 +1,7 @@
 from typing import Generator, List, Optional
 
 import dlt
-import scrapy
+import scrapy  # type: ignore
 
 from scrapy.responsetypes import Response  # type: ignore
 
