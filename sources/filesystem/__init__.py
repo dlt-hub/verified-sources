@@ -73,7 +73,7 @@ def filesystem(
 
     files_chunk: List[FileItem] = []
     for file_model in glob_files(fs_client, bucket_url, file_glob):
-        file_dict = FileItemDict(file_model, credentials)
+        file_dict = FileItemDict(file_model, fs_client)
         if extract_content:
             file_dict["file_content"] = file_dict.read_bytes()
         files_chunk.append(file_dict)  # type: ignore
