@@ -38,6 +38,10 @@ start_urls = [
 ]
 ```
 
+## 🏎️ Running the pipeline
+
+
+
 ## 🔮 Parsing and paging
 
 In the `scraping_pipeline.py` you can see we defined the following callbacks, where
@@ -90,9 +94,9 @@ class CustomSpider(DLTSpiderBase):
             self.done()
 ```
 
-## 🚦 Swapping queue
+## 🚦 Swapping queues
 
-It is possible specify some other type of `queue.*`` to `build_scrapy_source(queue=XYZ)`
+It is possible specify some other type of `queue.*` to `build_scrapy_source(queue=XYZ)`
 
 <hr>
 <p align="center">✨ 🚀 ✨</p>
