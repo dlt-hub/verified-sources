@@ -40,7 +40,20 @@ start_urls = [
 
 ## 🏎️ Running the pipeline
 
+Install requirements and run the pipeline
 
+```sh
+pip install -r requirements.txt
+python scraping_pipeline.py
+```
+
+## Introspect using streamlit
+
+NOTE: you might need to set up `streamlit`, `pip install streamlit`
+
+```sh
+dlt pipeline <pipeline_name> show
+```
 
 ## 🔮 Parsing and paging
 
