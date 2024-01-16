@@ -1,10 +1,10 @@
 from queue import Queue
 import dlt
 import pytest
-from sources.scrapy_scraper import scrapy_source
-from sources.scrapy_scraper.helpers import Scraper
-from sources.scrapy_scraper.spider import QuotesSpider
-from sources.scrapy_scraper.types import BaseQueue
+from sources.scraping import scrapy_source
+from sources.scraping.helpers import Scraper
+from sources.scraping.spider import QuotesSpider
+from sources.scraping.types import BaseQueue
 from tests.utils import ALL_DESTINATIONS, load_table_counts
 
 start_urls = ["https://quotes.toscrape.com/page/1/"]
