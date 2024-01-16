@@ -1,17 +1,11 @@
 import threading
 from typing import Any, Callable, Dict, List, Type
-from typing_extensions import TypeAlias
-
-from dlt import Pipeline
-
 
 from scrapy import Spider  # type: ignore
 from scrapy.crawler import CrawlerRunner  # type: ignore
 from twisted.internet import reactor
 
 from .types import BaseQueue
-
-PipelineRunner: TypeAlias = Callable[[Pipeline, BaseQueue], None]
 
 
 def init_scrapy_runner(
@@ -42,6 +36,7 @@ def start_pipeline(
     pipeline_runner: Callable[[], None],
     scrapy_runner: Callable[[], None],
 ):
+    """Convenience method which handles the order of starting of pipeline and scrapy"""
     pipeline_thread_runner = threading.Thread(target=pipeline_runner)
     pipeline_thread_runner.start()
     scrapy_runner()

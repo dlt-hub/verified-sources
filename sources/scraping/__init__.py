@@ -9,7 +9,7 @@ from dlt.common.typing import TDataItem
 from dlt.sources import DltResource
 
 from .helpers import init_scrapy_runner
-from .settings import SOURCE_SCRAPY_SPIDER_SETTINGS
+from .settings import SOURCE_SCRAPY_SPIDER_SETTINGS, SOURCE_SCRAPY_QUEUE_SIZE
 from .spider import DLTSpider, DLTSpiderBase
 from .types import BaseQueue, OnNextPage, OnResult
 
@@ -33,6 +33,7 @@ def build_scrapy_source(
     on_result: Optional[OnResult] = None,
     on_next_page: Optional[OnNextPage] = None,
 ) -> Tuple[Callable[[None], None], Iterable[DltResource]]:
+    """Builder which configures scrapy and Dlt pipeline to run in and communicate using queue"""
     if on_next_page and on_result:
         logger.info("Using on_next_page` and `on_result` callbacks")
         spider = DLTSpider
@@ -45,19 +46,20 @@ def build_scrapy_source(
             " `on_next_page` and `on_result` callbacks"
         )
 
+    config = dlt.config["sources.scraping"]
     if queue is None:
         logger.info("Queue is not specified using defaul queue: queue.Queue")
-        queue = BaseQueue(maxsize=dlt.config["sources.scraping"]["queue_size"])
+        queue = BaseQueue(maxsize=config.get("queue_size", SOURCE_SCRAPY_QUEUE_SIZE))
 
     def scrapy_runner():
         init_scrapy_runner(
             name=f"{name}_crawler",
-            start_urls=dlt.config["sources.scraping"]["start_urls"],
+            start_urls=config.get("start_urls", []),
             spider=spider,
             queue=queue,
             on_result=on_result,
             on_next_page=on_next_page,
-            include_headers=dlt.config["sources.scraping"]["queue_size"],
+            include_headers=config.get("include_headers", False),
             settings=SOURCE_SCRAPY_SPIDER_SETTINGS,
         )
 
