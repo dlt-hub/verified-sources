@@ -32,6 +32,7 @@ def kafka_consumer(
         Callable[[Message], Dict[str, Any]]
     ] = default_msg_processor,
     batch_size: Optional[int] = 3000,
+    batch_timeout: Optional[int] = 3,
     start_from: Optional[TAnyDateTime] = None,
 ) -> Iterable[TDataItem]:
     """Extract recent messages from the given Kafka topics.
@@ -50,6 +51,8 @@ def kafka_consumer(
             which'll process every Kafka message after it's read and
             before it's transfered to the destination.
         batch_size (Optional[int]): Messages batch size to read at once.
+        batch_timeout (Optional[int]): Maximum time to wait for a batch
+            consume.
         start_from (Optional[TAnyDateTime]): A timestamp, at which to start
             reading. Older messages are ignored.
 
@@ -82,7 +85,7 @@ def kafka_consumer(
     with closing(consumer):
         while tracker.has_unread:
             batch = []
-            for msg in consumer.consume(batch_size, timeout=1):
+            for msg in consumer.consume(batch_size, timeout=batch_timeout):
                 if msg.error():
                     err = msg.error()
                     if err.retriable() or not err.fatal():
