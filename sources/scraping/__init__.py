@@ -34,17 +34,26 @@ def build_scrapy_source(
     on_next_page: Optional[OnNextPage] = None,
 ) -> Tuple[Callable[[None], None], Iterable[DltResource]]:
     """Builder which configures scrapy and Dlt pipeline to run in and communicate using queue"""
-    if on_next_page and on_result:
-        logger.info("Using on_next_page` and `on_result` callbacks")
-        spider = DLTSpider
-    elif spider and not (on_next_page or on_result):
-        logger.info(f"Using custom spider {spider.__class__.__name__}")
-    else:
+    if not spider and not (on_next_page and on_result):
         logger.error("Please provide spider or lifecycle hooks")
         raise RuntimeError(
             "Please provide spider class or otherwise specify"
             " `on_next_page` and `on_result` callbacks"
         )
+
+    if not spider:
+        if not (on_next_page and on_result):
+            raise RuntimeError(
+                "Please specify `on_next_page` and `on_result` callbacks"
+            )
+
+        logger.info(
+            "Using default generic spider with"
+            " `on_next_page` and `on_result` callbacks"
+        )
+        spider = DLTSpider
+    else:
+        logger.info(f"Using custom spider {spider.__class__.__name__}")
 
     config = dlt.config["sources.scraping"]
     if queue is None:
