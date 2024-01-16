@@ -63,7 +63,7 @@ subdomain="dlthub-test"
 
 [sources.scraping]
 queue_size = 3000
-include_headers = false
+include_headers = true
 start_urls = [
     "https://quotes.toscrape.com/page/1/"
 ]

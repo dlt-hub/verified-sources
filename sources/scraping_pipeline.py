@@ -11,10 +11,6 @@ from scraping.helpers import start_pipeline
 def parse(response: Response) -> Generator[Dict, None, None]:
     for quote in response.css("div.quote"):
         yield {
-            "headers": {
-                "status": response.status,
-                **dict(response.headers.to_unicode_dict()),
-            },
             "quote": {
                 "text": quote.css("span.text::text").get(),
                 "author": quote.css("small.author::text").get(),
