@@ -1,7 +1,7 @@
 """Basic scrapy source"""
 import logging
 
-from typing import Callable, Iterable, List, Optional, Tuple, Type
+from typing import Callable, Iterable, Optional, Tuple, Type
 
 import dlt
 
@@ -13,7 +13,7 @@ from .settings import SOURCE_SCRAPY_SPIDER_SETTINGS
 from .spider import DLTSpider, DLTSpiderBase
 from .types import BaseQueue, OnNextPage, OnResult
 
-__all__ = ["scrapy_source"]
+__all__ = ["build_scrapy_source"]
 
 logger = logging.getLogger(__file__)
 
@@ -24,28 +24,6 @@ def get_scraping_results(queue: BaseQueue) -> Iterable[TDataItem]:
         if "done" in result:
             break
         yield result
-
-
-@dlt.source
-def scrapy_source(
-    name: Optional[str] = "scrapy",
-    queue: Optional[BaseQueue] = None,
-) -> Iterable[DltResource]:
-    """
-    Source function for scraping links with Scrapy.
-
-    Args:
-        name (BaseQueue | None): Optional name of resource
-        queue (BaseQueue): Queue instance
-
-    Yields:
-        DltResource: Scraped data from scrapy
-    """
-    yield dlt.resource(  # type: ignore
-        get_scraping_results(queue=queue),
-        name=name,
-        write_disposition="replace",
-    )
 
 
 def build_scrapy_source(
