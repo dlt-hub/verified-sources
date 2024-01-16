@@ -30,50 +30,17 @@ def get_scraping_results(queue: BaseQueue) -> Iterable[TDataItem]:
 def scrapy_source(
     name: Optional[str] = "scrapy",
     queue: Optional[BaseQueue] = None,
-    spider: Optional[Type[DLTSpiderBase]] = None,
-    on_result: Optional[OnResult] = None,
-    on_next_page: Optional[OnNextPage] = None,
-    queue_size: int = dlt.config.value,
-    include_headers: bool = dlt.config.value,
-    start_urls: List[str] = dlt.config.value,
 ) -> Iterable[DltResource]:
     """
     Source function for scraping links with Scrapy.
 
     Args:
-        queue (BaseQueue): Queue instance
         name (BaseQueue | None): Optional name of resource
+        queue (BaseQueue): Queue instance
 
     Yields:
         DltResource: Scraped data from scrapy
     """
-    if on_next_page and on_result:
-        logger.info("Using on_next_page` and `on_result` callbacks")
-        spider = DLTSpider
-    elif spider and not (on_next_page or on_result):
-        logger.info(f"Using custom spider {spider.__class__.__name__}")
-    else:
-        logger.error("Please provide spider or lifecycle hooks")
-        raise RuntimeError(
-            "Please provide spider class or otherwise specify"
-            " `on_next_page` and `on_result` callbacks"
-        )
-
-    if queue is None:
-        logger.info("Queue is not specified using defaul queue: queue.Queue")
-        queue = BaseQueue(maxsize=queue_size)
-
-    init_scrapy_runner(
-        name=f"{name}_crawler",
-        start_urls=start_urls,
-        spider=spider,
-        queue=queue,
-        on_result=on_result,
-        on_next_page=on_next_page,
-        include_headers=include_headers,
-        settings=SOURCE_SCRAPY_SPIDER_SETTINGS,
-    )
-
     yield dlt.resource(  # type: ignore
         get_scraping_results(queue=queue),
         name=name,
