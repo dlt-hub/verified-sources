@@ -49,12 +49,12 @@ if __name__ == "__main__":
         dataset_name="world",
     )
 
-    run_scrapy, scrapy_source = build_scrapy_source(
+    scrapy_runner, scrapy_source = build_scrapy_source(
         on_result=parse,
         on_next_page=next_page,
     )
 
     start_pipeline(
         pipeline_runner(pipeline, scrapy_source()),
-        run_scrapy,
+        scrapy_runner,
     )
