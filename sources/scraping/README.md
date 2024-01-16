@@ -47,7 +47,7 @@ pip install -r requirements.txt
 python scraping_pipeline.py
 ```
 
-## Introspect using streamlit
+## 🧐 Introspection using streamlit
 
 NOTE: you might need to set up `streamlit`, `pip install streamlit`
 
