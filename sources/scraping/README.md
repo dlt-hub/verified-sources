@@ -5,12 +5,14 @@ to enable this capability.
 
 ## 🧠 How it works?
 
-Under the hood we run DLT [pipeline](https://dlthub.com/docs/api_reference/pipeline) in a separate thread
-while scrapy uses [`scrapy.CrawlerRunner`](https://docs.scrapy.org/en/latest/topics/api.html#scrapy.crawler.CrawlerRunner) is running in the main thread.
+Under the hood we run DLT [pipeline](https://dlthub.com/docs/api_reference/pipeline) in a separate thread while scrapy uses [`scrapy.CrawlerRunner`](https://docs.scrapy.org/en/latest/topics/api.html#scrapy.crawler.CrawlerRunner) is running in the main thread.
+
 Communication between the two is done via the queue, where
 
 * Spider is responsible to put the results in the queue,
 * DLT resource is constantly reading from the queue and terminates upon receiving `done` in the message.
+
+![simple diagram](./diagram.png)
 
 ### 🛡️ Custom spider vs callbacks
 
