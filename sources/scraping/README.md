@@ -3,6 +3,28 @@
 Scraping source allows you to scrape content from web and uses [Scrapy](https://doc.scrapy.org/en/latest/)
 to enable this capability.
 
+## 🧠 How it works?
+
+Under the hood we run DLT [pipeline](https://dlthub.com/docs/api_reference/pipeline) in a separate thread
+while scrapy uses [`scrapy.CrawlerRunner`](https://docs.scrapy.org/en/latest/topics/api.html#scrapy.crawler.CrawlerRunner) is running in the main thread.
+Communication between the two is done via the queue, where
+
+* Spider is responsible to put the results in the queue,
+* DLT resource is constantly reading from the queue and terminates upon receiving `done` in the message.
+
+### 🛡️ Custom spider vs callbacks
+
+`build_scrapy_source` accepts callbacks and a custom spider implementation. If custom spider is provided then it will be used while callbacks are skipped, if you instead resort to custom callbacks then we will use our generic `spider.DLTSpider` which takes care of calling them and
+facilitates scraping continuation as well as sending chunks of data to pipeline over the queue.
+
+```py
+build_scrapy_source(
+    spider=spider,
+    on_result=parse,
+    on_next_page=next_page,
+)
+```
+
 ## 🎲 Configuration
 
 It is possible to provide configuration via `.dlt/config.toml` below you can see an example
@@ -15,31 +37,6 @@ start_urls = [
     "https://quotes.toscrape.com/page/1/"
 ]
 ```
-
-## 🧠 How it works?
-
-Under the hood we run DLT [pipeline](https://dlthub.com/docs/api_reference/pipeline) in a separate thread
-while scrapy uses [`scrapy.CrawlerRunner`](https://docs.scrapy.org/en/latest/topics/api.html#scrapy.crawler.CrawlerRunner) is running in the main thread.
-Communication between the two is done via the queue, where
-
-* Spider is responsible to put the results in the queue,
-* DLT resource is constantly reading from the queue and terminates upon receiving `done` in the message.
-
-### 🛡️ Custom spider vs callbacks
-
-`build_scrapy_source` accepts callbacks and a custom spider implementation then custom spider be used while callbacks are skipped,
-if you instead resort to custom callbacks then we will use our generic `spider.DLTSpider` which takes care of calling them and
-facilitates scraping continuation as well as sending chunks of data to pipeline over the queue.
-
-```py
-build_scrapy_source(
-    spider=spider,
-    on_result=parse,
-    on_next_page=next_page,
-)
-```
-
-If custom spider implementation is provided then 
 
 ## 🔮 Parsing and paging
 
