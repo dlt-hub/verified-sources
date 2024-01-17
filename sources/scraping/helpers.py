@@ -15,7 +15,7 @@ def init_scrapy_runner(
     queue: BaseQueue,
     settings: Dict[str, Any],
     **kwargs,
-) -> CrawlerRunner:
+) -> None:
     """Builds and prepares to run crawler with prepared configuration"""
     runner = CrawlerRunner()
     runner.crawl(
