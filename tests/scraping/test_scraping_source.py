@@ -1,25 +1,49 @@
 from queue import Queue
+from typing import Any, Callable, Dict, Generator, Iterable, Optional
 import dlt
 import pytest
-from sources.scraping.types import BaseQueue
+from dlt.sources import DltResource
+from scrapy.http import Response  # type: ignore
+
+from sources.scraping import build_scrapy_source
+from sources.scraping.helpers import start_pipeline
 from tests.utils import ALL_DESTINATIONS, load_table_counts
 
 start_urls = ["https://quotes.toscrape.com/page/1/"]
 
 
-def pipeline_runner(pipeline: dlt.Pipeline, queue: BaseQueue) -> None:
-    load_info = pipeline.run(
-        scrapy_source(queue=queue),
-        table_name="fam_quotes",
-        write_disposition="replace",
-    )
+def parse(response: Response) -> Generator[Dict[str, Any], None, None]:
+    for quote in response.css("div.quote"):
+        yield {
+            "quote": {
+                "text": quote.css("span.text::text").get(),
+                "author": quote.css("small.author::text").get(),
+                "tags": quote.css("div.tags a.tag::text").getall(),
+            },
+        }
 
-    print(load_info)
+
+def next_page(response: Response) -> Optional[str]:
+    return str(response.css("li.next a::attr(href)").get())
+
+
+def pipeline_runner(
+    pipeline: dlt.Pipeline,
+    source: Iterable[DltResource],
+) -> Callable[[], None]:
+    def run() -> None:
+        load_info = pipeline.run(
+            source,
+            table_name="famous_quotes",
+            write_disposition="replace",
+        )
+        print(load_info)
+
+    return run
 
 
 @pytest.mark.parametrize("destination_name", ALL_DESTINATIONS)
 def test_all_resources(destination_name: str) -> None:
-    result_queue = Queue(maxsize=1000)
     pipeline = dlt.pipeline(
         pipeline_name="famous_quotes",
         destination=destination_name,
@@ -27,15 +51,16 @@ def test_all_resources(destination_name: str) -> None:
         full_refresh=True,
     )
 
-    scraper = Scraper(
-        queue=result_queue,
-        pipeline=pipeline,
-        pipeline_runner=pipeline_runner,
-        spider=QuotesSpider,
+    scrapy_runner, scrapy_source = build_scrapy_source(
+        on_result=parse,
+        on_next_page=next_page,
         start_urls=start_urls,
     )
 
-    scraper.start()
+    start_pipeline(
+        pipeline_runner(pipeline, scrapy_source()),
+        scrapy_runner,
+    )
 
     table_names = [t["name"] for t in pipeline.default_schema.data_tables()]
     table_counts = load_table_counts(pipeline, *table_names)
