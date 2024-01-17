@@ -17,7 +17,7 @@ def init_scrapy_runner(  # type: ignore[no-untyped-def]
     name: str,
     start_urls: List[str],
     spider: Type[Spider],
-    queue: BaseQueue[T],    # type: ignore[unused-ignore]
+    queue: Type[BaseQueue],
     settings: Dict[str, Any],
     **kwargs,
 ) -> None:
