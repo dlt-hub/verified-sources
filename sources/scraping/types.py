@@ -9,6 +9,7 @@ if TYPE_CHECKING:
 
     class _Queue(Queue[T]):
         pass
+
 else:
 
     class _Queue(Generic[T], Queue):
