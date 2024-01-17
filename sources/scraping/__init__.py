@@ -1,8 +1,9 @@
 """Basic scrapy source"""
 import logging
 from queue import Queue
+import sys
 
-from typing import Callable, Iterable, Optional, Tuple, Type, TypeVar
+from typing import Any, Callable, Dict, Iterable, List, Optional, Tuple, Type, TypeVar
 
 import dlt
 
@@ -33,6 +34,7 @@ def build_scrapy_source(
     name: Optional[str] = "scrapy",
     queue: Optional[BaseQueue[T]] = None,
     spider: Optional[Type[DLTSpiderBase]] = None,
+    start_urls: Optional[List[str]] = None,
     on_result: Optional[OnResult] = None,
     on_next_page: Optional[OnNextPage] = None,
 ) -> Tuple[Callable[[], None], Callable[[], DltSource]]:
@@ -58,15 +60,24 @@ def build_scrapy_source(
     else:
         logger.info(f"Using custom spider {spider.__class__.__name__}")
 
-    config = dlt.config["sources.scraping"]
+    config: Dict[str, Any] = dlt.config.get("sources.scraping") or None
     if queue is None:
         logger.info("Queue is not specified using defaul queue: queue.Queue")
         queue = Queue(maxsize=config.get("queue_size", SOURCE_SCRAPY_QUEUE_SIZE))
 
+    urls_to_scrape = start_urls or config.get("start_urls")
+    if len(urls_to_scrape) == 0:
+        logger.warning("No urls to scrape, terminating...")
+        sys.exit(0)
+
     def scrapy_runner() -> None:
+        """Prepared scrapy runner
+        Later used to start scrapy crawler in the main thread
+        and while pipeline runs inside a separate thread.
+        """
         init_scrapy_runner(
             name=f"{name}_crawler",
-            start_urls=config.get("start_urls", []),
+            start_urls=urls_to_scrape,
             spider=spider,
             queue=queue,
             on_result=on_result,
