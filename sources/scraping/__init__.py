@@ -1,7 +1,6 @@
 """Basic scrapy source"""
 import logging
 import sys
-from queue import Queue
 
 from typing import Any, Callable, Dict, Iterable, List, Optional, Tuple, Type, TypeVar
 
