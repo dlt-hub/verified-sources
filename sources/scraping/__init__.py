@@ -60,7 +60,7 @@ def build_scrapy_source(
     else:
         logger.info(f"Using custom spider {spider.__class__.__name__}")
 
-    config: Dict[str, Any] = dlt.config.get("sources.scraping") or None
+    config: Dict[str, Any] = dlt.config.get("sources.scraping") or {}
     if queue is None:
         logger.info("Queue is not specified using defaul queue: queue.Queue")
         queue = Queue(maxsize=config.get("queue_size", SOURCE_SCRAPY_QUEUE_SIZE))
