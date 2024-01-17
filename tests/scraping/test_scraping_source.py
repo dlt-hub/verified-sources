@@ -1,9 +1,6 @@
 from queue import Queue
 import dlt
 import pytest
-from sources.scraping import scrapy_source
-from sources.scraping.helpers import Scraper
-from sources.scraping.spider import QuotesSpider
 from sources.scraping.types import BaseQueue
 from tests.utils import ALL_DESTINATIONS, load_table_counts
 
@@ -25,7 +22,7 @@ def test_all_resources(destination_name: str) -> None:
     result_queue = Queue(maxsize=1000)
     pipeline = dlt.pipeline(
         pipeline_name="famous_quotes",
-        destination="postgres",
+        destination=destination_name,
         dataset_name="quotes",
         full_refresh=True,
     )

@@ -1,3 +1,4 @@
+import logging
 import threading
 from typing import Any, Callable, Dict, List, Type, TypeVar
 
@@ -8,6 +9,8 @@ from twisted.internet import reactor
 from .types import BaseQueue
 
 T = TypeVar("T")
+
+logger = logging.getLogger(__name__)
 
 
 def init_scrapy_runner(  # type: ignore[no-untyped-def]
@@ -39,7 +42,10 @@ def start_pipeline(
     scrapy_runner: Callable[[], None],
 ) -> None:
     """Convenience method which handles the order of starting of pipeline and scrapy"""
+    logger.info("Starting scraping pipeline")
     pipeline_thread_runner = threading.Thread(target=pipeline_runner)
     pipeline_thread_runner.start()
+
+    logger.info("Starting scrapy crawler runner")
     scrapy_runner()
     pipeline_thread_runner.join()
