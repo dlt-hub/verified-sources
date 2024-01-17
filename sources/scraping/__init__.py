@@ -1,7 +1,7 @@
 """Basic scrapy source"""
 import logging
-from queue import Queue
 import sys
+from queue import Queue
 
 from typing import Any, Callable, Dict, Iterable, List, Optional, Tuple, Type, TypeVar
 
@@ -22,12 +22,18 @@ logger = logging.getLogger(__file__)
 T = TypeVar("T")
 
 
+@dlt.resource
 def get_scraping_results(queue: BaseQueue[T]) -> Iterable[TDataItem]:
     while True:
         result = queue.get()
         if isinstance(result, dict) and "done" in result:
             break
         yield result
+
+
+@dlt.source
+def scrapy_source(queue: BaseQueue[T]) -> Iterable[DltResource]:
+    yield get_scraping_results(queue=queue)
 
 
 def build_scrapy_source(
@@ -86,11 +92,7 @@ def build_scrapy_source(
             settings=SOURCE_SCRAPY_SPIDER_SETTINGS,
         )
 
-    @dlt.source(name=name)
-    def scraper_source() -> Iterable[DltResource]:
-        yield dlt.resource(  # type: ignore
-            get_scraping_results(queue=queue),
-            name=name,
-        )
+    def get_source() -> None:
+        return scrapy_source(queue=queue)
 
-    return scrapy_runner, scraper_source
+    return scrapy_runner, get_source
