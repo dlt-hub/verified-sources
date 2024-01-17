@@ -1,6 +1,5 @@
 import pytest
 import os
-import sys
 from typing import Any, List
 
 from dlt.common.configuration.providers import SecretsTomlProvider
