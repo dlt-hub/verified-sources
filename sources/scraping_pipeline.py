@@ -1,14 +1,14 @@
-from typing import Callable, Dict, Generator, Iterable, Optional
+from typing import Any, Callable, Dict, Generator, Iterable, Optional
 
 import dlt
 from dlt.sources import DltResource
-from scrapy.http import Response
+from scrapy.http import Response  # type: ignore
 
 from scraping import build_scrapy_source
 from scraping.helpers import start_pipeline
 
 
-def parse(response: Response) -> Generator[Dict, None, None]:
+def parse(response: Response) -> Generator[Dict[str, Any], None, None]:
     for quote in response.css("div.quote"):
         yield {
             "quote": {
@@ -20,14 +20,14 @@ def parse(response: Response) -> Generator[Dict, None, None]:
 
 
 def next_page(response: Response) -> Optional[str]:
-    return response.css("li.next a::attr(href)").get()
+    return str(response.css("li.next a::attr(href)").get())
 
 
 def pipeline_runner(
     pipeline: dlt.Pipeline,
     source: Iterable[DltResource],
 ) -> Callable[[], None]:
-    def run():
+    def run() -> None:
         load_info = pipeline.run(
             source,
             table_name="hello_world",

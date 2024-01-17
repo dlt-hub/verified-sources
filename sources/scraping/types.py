@@ -1,6 +1,6 @@
 from typing import TYPE_CHECKING, Any, Callable, Generator, Optional, TypeVar
 from queue import Queue
-from scrapy.http import Response
+from scrapy.http import Response  # type: ignore
 
 
 # Please read more at https://mypy.readthedocs.io/en/stable/runtime_troubles.html#not-generic-runtime

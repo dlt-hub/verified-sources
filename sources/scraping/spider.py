@@ -1,12 +1,14 @@
 import logging
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, TypeVar
 
-import scrapy
+import scrapy  # type: ignore
 from scrapy.http import Response  # type: ignore
 
 from .types import BaseQueue, OnNextPage, OnResult
 
 logger = logging.getLogger(__file__)
+
+T = TypeVar("T")
 
 
 class DLTSpiderBase(scrapy.Spider):
@@ -18,7 +20,7 @@ class DLTSpiderBase(scrapy.Spider):
 
     def __init__(
         self,
-        queue: BaseQueue,
+        queue: BaseQueue[T],
         name: Optional[str] = None,
         settings: Optional[Dict[str, Any]] = None,
         start_urls: Optional[List[str]] = None,
@@ -45,7 +47,7 @@ class DLTSpider(DLTSpiderBase):
     next page to user defined callbacks.
     """
 
-    def __init__(
+    def __init__(  # type: ignore[no-untyped-def]
         self,
         *args,
         on_next_page: OnNextPage,

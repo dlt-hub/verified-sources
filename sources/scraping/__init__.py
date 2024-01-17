@@ -1,12 +1,13 @@
 """Basic scrapy source"""
 import logging
+from queue import Queue
 
-from typing import Callable, Iterable, Optional, Tuple, Type
+from typing import Callable, Iterable, Optional, Tuple, Type, TypeVar
 
 import dlt
 
 from dlt.common.typing import TDataItem
-from dlt.sources import DltResource
+from dlt.sources import DltResource, DltSource
 
 from .helpers import init_scrapy_runner
 from .settings import SOURCE_SCRAPY_SPIDER_SETTINGS, SOURCE_SCRAPY_QUEUE_SIZE
@@ -17,22 +18,24 @@ __all__ = ["build_scrapy_source"]
 
 logger = logging.getLogger(__file__)
 
+T = TypeVar("T")
 
-def get_scraping_results(queue: BaseQueue) -> Iterable[TDataItem]:
+
+def get_scraping_results(queue: BaseQueue[T]) -> Iterable[TDataItem]:
     while True:
         result = queue.get()
-        if "done" in result:
+        if isinstance(result, dict) and "done" in result:
             break
         yield result
 
 
 def build_scrapy_source(
     name: Optional[str] = "scrapy",
-    queue: Optional[BaseQueue] = None,
+    queue: Optional[BaseQueue[T]] = None,
     spider: Optional[Type[DLTSpiderBase]] = None,
     on_result: Optional[OnResult] = None,
     on_next_page: Optional[OnNextPage] = None,
-) -> Tuple[Callable[[None], None], Iterable[DltResource]]:
+) -> Tuple[Callable[[], None], Callable[[], DltSource]]:
     """Builder which configures scrapy and Dlt pipeline to run in and communicate using queue"""
     if not spider and not (on_next_page and on_result):
         logger.error("Please provide spider or lifecycle hooks")
@@ -58,9 +61,9 @@ def build_scrapy_source(
     config = dlt.config["sources.scraping"]
     if queue is None:
         logger.info("Queue is not specified using defaul queue: queue.Queue")
-        queue = BaseQueue(maxsize=config.get("queue_size", SOURCE_SCRAPY_QUEUE_SIZE))
+        queue = Queue(maxsize=config.get("queue_size", SOURCE_SCRAPY_QUEUE_SIZE))
 
-    def scrapy_runner():
+    def scrapy_runner() -> None:
         init_scrapy_runner(
             name=f"{name}_crawler",
             start_urls=config.get("start_urls", []),
