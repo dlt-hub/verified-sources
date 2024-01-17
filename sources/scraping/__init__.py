@@ -92,7 +92,7 @@ def build_scrapy_source(
             settings=SOURCE_SCRAPY_SPIDER_SETTINGS,
         )
 
-    def get_source() -> None:
+    def get_source() -> DltSource:
         return scrapy_source(queue=queue)
 
     return scrapy_runner, get_source
