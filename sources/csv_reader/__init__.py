@@ -9,7 +9,12 @@ import pendulum
 
 import dlt
 from dlt.common.typing import TDataItem, TAnyDateTime
-from filesystem import filesystem
+
+try:
+    from filesystem import filesystem
+except ImportError:
+    from sources.filesystem import filesystem
+
 from fsspec.implementations.local import LocalFileSystem
 
 from .helpers import add_columns
