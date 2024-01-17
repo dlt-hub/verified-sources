@@ -66,7 +66,7 @@ def build_scrapy_source(
         queue = Queue(maxsize=config.get("queue_size", SOURCE_SCRAPY_QUEUE_SIZE))
 
     urls_to_scrape = start_urls or config.get("start_urls")
-    if len(urls_to_scrape) == 0:
+    if not urls_to_scrape:
         logger.warning("No urls to scrape, terminating...")
         sys.exit(0)
 
