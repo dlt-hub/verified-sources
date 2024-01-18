@@ -20,7 +20,8 @@ def parse(response: Response) -> Generator[Dict[str, Any], None, None]:
 
 
 def next_page(response: Response) -> Optional[str]:
-    return str(response.css("li.next a::attr(href)").get())
+    next_url: Optional[str] = response.css("li.next a::attr(href)").get()
+    return next_url
 
 
 def pipeline_runner(
