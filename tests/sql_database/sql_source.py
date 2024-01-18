@@ -17,6 +17,11 @@ from sqlalchemy import (
     text,
     schema as sqla_schema,
     ForeignKey,
+    BigInteger,
+    Numeric,
+    SmallInteger,
+    String,
+    DateTime,
 )
 
 from dlt.common.utils import chunks, uniq_id
@@ -126,6 +131,17 @@ class SQLAlchemySourceDB:
             Column("b", Integer(), primary_key=True),
             Column("c", Integer(), primary_key=True),
         )
+        Table(
+            "has_precision",
+            self.metadata,
+            Column("int_col", Integer()),
+            Column("bigint_col", BigInteger()),
+            Column("smallint_col", SmallInteger()),
+            Column("numeric_col", Numeric(precision=10, scale=2)),
+            Column("numeric_default_col", Numeric()),
+            Column("string_col", String(length=10)),
+            Column("string_default_col", String()),
+        )
 
         self.metadata.create_all(bind=self.engine)
 
@@ -209,6 +225,23 @@ class SQLAlchemySourceDB:
         info["ids"].extend(message_ids)
         return message_ids
 
+    def _fake_precision_data(self, n: int = 100) -> None:
+        table = self.metadata.tables[f"{self.schema}.has_precision"]
+        rows = [
+            dict(
+                int_col=random.randrange(-2147483648, 2147483647),
+                bigint_col=random.randrange(-9223372036854775808, 9223372036854775807),
+                smallint_col=random.randrange(-32768, 32767),
+                numeric_col=random.randrange(-9999999999, 9999999999) / 100,
+                numeric_default_col=random.randrange(-9999999999, 9999999999) / 100,
+                string_col=mimesis.Text().word()[:10],
+                string_default_col=mimesis.Text().word(),
+            )
+            for i in range(n)
+        ]
+        with self.engine.begin() as conn:
+            conn.execute(table.insert().values(rows))
+
     def _fake_chat_data(self, n: int = 9402) -> None:
         self._fake_users()
         self._fake_channels()
@@ -216,6 +249,7 @@ class SQLAlchemySourceDB:
 
     def insert_data(self) -> None:
         self._fake_chat_data()
+        self._fake_precision_data()
 
 
 class IncrementingDate:
