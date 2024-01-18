@@ -1,7 +1,10 @@
-from queue import Queue
+import sys
 from typing import Any, Callable, Dict, Generator, Iterable, Optional
+from unittest import mock
+
 import dlt
 import pytest
+
 from dlt.sources import DltResource
 from scrapy.http import Response  # type: ignore
 
@@ -71,3 +74,31 @@ def test_all_resources(destination_name: str) -> None:
 
     assert table_counts["fam_quotes"] == 100
     assert table_counts["fam_quotes__quote__tags"] == 232
+
+
+def test_callbacks_are_called(mocker):
+    pipeline = dlt.pipeline(
+        pipeline_name="famous_quotes",
+        destination="duckdb",
+        dataset_name="quotes",
+        full_refresh=True,
+    )
+
+    this_module_name = globals()["__name__"]
+    this_module = sys.modules[this_module_name]
+
+    spy_on_result = mocker.spy(this_module, "parse")
+
+    scrapy_runner, scrapy_source = build_scrapy_source(
+        on_result=parse,
+        on_next_page=lambda x: None,
+        start_urls=["https://quotes.toscrape.com/page/1000/"],
+    )
+
+    start_pipeline(
+        pipeline_runner(pipeline, scrapy_source()),
+        scrapy_runner,
+    )
+
+    assert spy_on_result.call_count == 1
+    assert isinstance(spy_on_result.mock_calls[0].args[0], Response)

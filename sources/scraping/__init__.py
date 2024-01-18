@@ -67,7 +67,7 @@ def build_scrapy_source(
 
     config: Dict[str, Any] = dlt.config.get("sources.scraping") or {}
     if queue is None:
-        logger.info("Queue is not specified using defaul queue: queue.Queue")
+        logger.info("Queue is not specified using default queue: queue.Queue")
         queue = BaseQueue(maxsize=config.get("queue_size", SOURCE_SCRAPY_QUEUE_SIZE))
 
     urls_to_scrape = start_urls or config.get("start_urls")
