@@ -88,10 +88,11 @@ def test_callbacks_are_called(mocker):
     this_module = sys.modules[this_module_name]
 
     spy_on_result = mocker.spy(this_module, "parse")
-
+    next_page_callback_mock = mock.MagicMock()
+    next_page_callback_mock.return_value = None
     scrapy_runner, scrapy_source = build_scrapy_source(
         on_result=parse,
-        on_next_page=lambda x: None,
+        on_next_page=next_page_callback_mock,
         start_urls=["https://quotes.toscrape.com/page/1000/"],
     )
 
@@ -102,3 +103,4 @@ def test_callbacks_are_called(mocker):
 
     assert spy_on_result.call_count == 1
     assert isinstance(spy_on_result.mock_calls[0].args[0], Response)
+    assert next_page_callback_mock.assert_called
