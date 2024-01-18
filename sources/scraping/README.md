@@ -61,10 +61,11 @@ dlt pipeline <pipeline_name> show
 
 In the `scraping_pipeline.py` you can see we defined the following callbacks, where
 1. `parse` should be a generator or iterable,
-2. `next_page` shoudl return the next page url absolute or relative (scrapy will figure out the rest),
+2. `next_page` shoudl return the next page url absolute or relative (scrapy will figure out the rest)
 
-Both callbacks receive [`scrapy.http.Response`](https://docs.scrapy.org/en/latest/topics/request-response.html#response-objects) instance so you can take full advantage of parsing and extracting data
-from `text`, `xml`, `html`, `json` ([parsel](https://github.com/scrapy/parsel) is used unde the hood).
+Returning `None` from `next_page` callback will end scraping because it will not create the next request.
+
+Both callbacks receive [`scrapy.http.Response`](https://docs.scrapy.org/en/latest/topics/request-response.html#response-objects) instance so you can take full advantage of parsing and extracting data from `text`, `xml`, `html`, `json` ([parsel](https://github.com/scrapy/parsel) is used unde the hood).
 
 ```py
 def parse(response: Response) -> Generator[Dict, None, None]:
