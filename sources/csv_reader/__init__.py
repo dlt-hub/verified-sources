@@ -5,6 +5,7 @@ to extract CSV files data from the given locations.
 from typing import Iterable, List
 
 import duckdb
+import fsspec
 import pendulum
 
 import dlt
@@ -62,7 +63,7 @@ def csv_reader(bucket: str, globs: List[str] = ("*",)) -> Iterable[TDataItem]:
         Iterable[TDataItem]:
             Data items, read from the matched CSV files.
     """
-    duckdb.register_filesystem(LocalFileSystem())
+    duckdb.register_filesystem(fsspec.filesystem(bucket.split(":")[0]))
 
     for glob in globs:
         files = filesystem(bucket_url=bucket, file_glob=glob)

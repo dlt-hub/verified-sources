@@ -9,7 +9,7 @@ from tests.utils import assert_load_info, assert_query_data, load_table_counts
 
 
 TESTS_BUCKET_URLS = [
-    ("/home/ilya/test_files/", ("*ddb*.csv",)),
+    ("file:///home/ilya/test_files/", ("*csv_reader_test*.csv",)),
 ]
 
 

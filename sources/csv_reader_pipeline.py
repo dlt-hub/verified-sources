@@ -11,7 +11,7 @@ def csv_with_duck_db():
         full_refresh=True,
     )
 
-    reader = csv_reader("/home/ilya/test_files/", ("*ddb*.csv",))
+    reader = csv_reader("protocol:///bucket_url", ("*file*.csv",))
     load_info = pipeline.run(reader)
     print(load_info)
 
@@ -24,7 +24,7 @@ def csv_with_duck_db_hints():
         full_refresh=True,
     )
 
-    reader = csv_reader("/home/ilya/test_files/", ("*ddb*.csv",))
+    reader = csv_reader("protocol:///bucket_url", ("*file*.csv",))
     reader.resources["read_location"].apply_hints(primary_key="col1")
     load_info = pipeline.run(reader)
     print(load_info)
