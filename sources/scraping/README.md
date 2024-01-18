@@ -105,6 +105,19 @@ class CustomSpider(DLTSpiderBase):
             self.done()
 ```
 
+## 💈 Using custom queue
+
+You can provide custom queue to `build_scrapy_source` via `queue=CustomQueue` parameter and it is up to you
+to initialize and prepare it accordring your requriements.
+
+Also please note that we have generic typing definition of queue in `types.py`
+
+```py
+class BaseQueue(_Queue[T]):
+    pass
+```
+
+
 <p align="center"><strong>Enjoy it!<strong></p>
 <hr>
 <p align="center">✨ 🚀 ✨</p>
