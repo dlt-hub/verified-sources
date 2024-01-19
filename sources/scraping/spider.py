@@ -78,7 +78,8 @@ class DLTSpider(DLTSpiderBase):
         # If next page is available
         # Then we create next request
         # Else we stop spider because no pages left
-        if next_page := self.on_next_page(response):
+        next_page = self.on_next_page(response)
+        if next_page is not None:
             next_page = response.urljoin(next_page)
             logger.debug(
                 "Got next page link",
