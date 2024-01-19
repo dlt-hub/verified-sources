@@ -79,6 +79,9 @@ pyairtable = "^2.1.0.post1"
 [tool.poetry.group.filesystem.dependencies]
 adlfs = ">=2023.9.0"
 
+[tool.poetry.group.datadog.dependencies]
+datadog-api-client = ">=2.21.0"
+
 [build-system]
 requires = ["poetry-core"]
 build-backend = "poetry.core.masonry.api"
