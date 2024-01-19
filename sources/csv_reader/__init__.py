@@ -35,12 +35,15 @@ def read_location(files):
     start_from = state.setdefault("last_modified", pendulum.datetime(1970, 1, 1))
 
     results = []
+    connection = duckdb.connect()
+
     for file in files:
         if file["modification_date"] <= start_from:
             continue
 
-        file_res = duckdb.sql(f"""SELECT * FROM read_csv_auto('{file["file_url"]}')""")
-        results += add_columns(file_res.columns, file_res.fetchall())
+        with fsspec.open(file["file_url"], mode="rb") as f:
+            file_res = connection.read_csv(f)
+            results += add_columns(file_res.columns, file_res.fetchall())
 
         state["last_modified"] = max(file["modification_date"], state["last_modified"])
 
@@ -63,8 +66,6 @@ def csv_reader(bucket: str, globs: List[str] = ("*",)) -> Iterable[TDataItem]:
         Iterable[TDataItem]:
             Data items, read from the matched CSV files.
     """
-    duckdb.register_filesystem(fsspec.filesystem(bucket.split(":")[0]))
-
     for glob in globs:
         files = filesystem(bucket_url=bucket, file_glob=glob)
         yield dlt.resource(read_location(files))

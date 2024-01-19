@@ -9,7 +9,10 @@ from tests.utils import assert_load_info, assert_query_data, load_table_counts
 
 
 TESTS_BUCKET_URLS = [
-    ("file:///home/ilya/test_files/", ("*csv_reader_test*.csv",)),
+    # ("file:///home/ilya/test_files/", ("test*.csv",)),
+    ("s3://dlt-ci-test-bucket/standard_source/samples", ("*",)),
+    # ("gs://ci-test-bucket/standard_source/samples", ("*",)),
+    # ("az://dlt-ci-test-bucket/standard_source/samples", ("*",)),
 ]
 
 
@@ -63,7 +66,7 @@ def test_extract_incremental(globs):
     with mock.patch(
         "dlt.current.resource_state",
         return_value={
-            "last_modified": pendulum.datetime(2024, 1, 17, 9, 24, 47),
+            "last_modified": pendulum.datetime(2024, 1, 19, 8, 56, 58),
         },
     ):
         load_info = pipeline.run(res)
