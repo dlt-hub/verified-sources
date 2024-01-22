@@ -15,7 +15,7 @@ To setup the SQL Database Verified Source read the [full documentation here.](ht
 1. Open `.dlt/secrets.toml`.
 2. In order to continue, we will use the supplied connection URL to establish credentials. The connection URL is associated with a public database and looks like this:
     ```bash
-    connection_url = "mysql+pymysql://rfamro@mysql-rfam-public.ebi.ac.uk:4497/Rfam"
+    connection_url = "mysql+pymysql://anonymous@ensembldb.ensembl.org:3306/acanthochromis_polyacanthus_core_100_1"
     ```
     Here's what the `secrets.toml` looks like:
     ```toml
@@ -24,10 +24,10 @@ To setup the SQL Database Verified Source read the [full documentation here.](ht
     
     # The credentials are as follows
     drivername = "mysql+pymysql" # Driver name for the database
-    database = "Rfam # Database name
-    username = "rfamro" # username associated with the database
-    host = "mysql-rfam-public.ebi.ac.uk" # host address
-    port = "4497 # port required for connection
+    database = "acanthochromis_polyacanthus_core_100_1" # Database name
+    username = "anonymous" # username associated with the database
+    host = "anonymous@ensembldb.ensembl.org" # host address
+    port = "3306" # port required for connection
     ```
 3. Enter credentials for your chosen destination as per the [docs.](https://dlthub.com/docs/dlt-ecosystem/destinations/)
 
@@ -48,7 +48,7 @@ To setup the SQL Database Verified Source read the [full documentation here.](ht
     dlt pipeline <pipeline_name> show
     ```
     
-    For example, the pipeline_name for the above pipeline example is `rfam`, you can use any custom name instead.
+    For example, the pipeline_name for the above pipeline example is `ensembl`, you can use any custom name instead.
     
 
 
