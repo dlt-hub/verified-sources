@@ -4,7 +4,7 @@
 import dlt
 from dlt.common import pendulum
 from typing import List, Tuple
-from shopify_dlt import shopify_source, TAnyDateTime
+from shopify_dlt import shopify_source, TAnyDateTime, shopify_partner_query
 
 
 def load_all_resources(resources: List[str], start_date: TAnyDateTime) -> None:
@@ -65,9 +65,52 @@ def incremental_load_with_backloading() -> None:
     print(load_info)
 
 
+def load_partner_api_transactions() -> None:
+    """Load transactions from the Shopify Partner API.
+    The partner API uses GraphQL and this example loads all transactions from the beginning paginated.
+
+    The `shopify_partner_query` resource can be used to run custom GraphQL queries to load paginated data.
+    """
+
+    pipeline = dlt.pipeline(
+        pipeline_name="shopify_partner",
+        destination="duckdb",
+        dataset_name="shopify_partner_data",
+    )
+
+    # Construct query to load transactions 100 per page, the `$after` variable is used to paginate
+    query = """query Transactions($after: String, first: 100) {
+        transactions(after: $after) {
+            edges {
+                cursor
+                node {
+                    id
+                }
+            }
+        }
+    }
+    """
+
+    # Configure the resource with the query and json paths to extract the data and pagination cursor
+    resource = shopify_partner_query(
+        query,
+        # JSON path pointing to the data item in the results
+        data_items_path="data.transactions.edges[*].node",
+        # JSON path pointing to the highest page cursor in the results
+        pagination_cursor_path="data.transactions.edges[-1].cursor",
+        # The variable name used for pagination
+        pagination_variable_name="after",
+    )
+
+    load_info = pipeline.run(resource)
+    print(load_info)
+
+
 if __name__ == "__main__":
     # Add your desired resources to the list...
     resources = ["products", "orders", "customers"]
     load_all_resources(resources, start_date="2000-01-01")
 
     # incremental_load_with_backloading()
+
+    # load_partner_api_transactions()
