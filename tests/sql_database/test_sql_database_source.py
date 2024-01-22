@@ -198,6 +198,58 @@ def test_load_sql_table_resource__incremental_initial_value(
     assert_row_counts(pipeline, sql_source_db, ["chat_message"])
 
 
+def test_detect_precision_hints(sql_source_db: SQLAlchemySourceDB) -> None:
+    source = sql_database(
+        credentials=sql_source_db.credentials,
+        schema=sql_source_db.schema,
+        detect_precision_hints=True,
+    )
+
+    pipeline = make_pipeline("duckdb")
+
+    pipeline.extract(source)
+    pipeline.normalize()
+
+    schema = pipeline.default_schema
+    table = schema.tables["has_precision"]
+    columns = table["columns"]
+
+    assert columns["bigint_col"] == {
+        "data_type": "bigint",
+        "precision": 64,
+        "name": "bigint_col",
+    }
+    assert columns["int_col"] == {
+        "data_type": "bigint",
+        "precision": 32,
+        "name": "int_col",
+    }
+    assert columns["smallint_col"] == {
+        "data_type": "bigint",
+        "precision": 16,
+        "name": "smallint_col",
+    }
+    assert columns["numeric_col"] == {
+        "data_type": "decimal",
+        "precision": 10,
+        "scale": 2,
+        "name": "numeric_col",
+    }
+    assert columns["numeric_default_col"] == {
+        "data_type": "decimal",
+        "name": "numeric_default_col",
+    }
+    assert columns["string_col"] == {
+        "data_type": "text",
+        "precision": 10,
+        "name": "string_col",
+    }
+    assert columns["string_default_col"] == {
+        "data_type": "text",
+        "name": "string_default_col",
+    }
+
+
 def test_incremental_composite_primary_key_from_table(
     sql_source_db: SQLAlchemySourceDB,
 ) -> None:
