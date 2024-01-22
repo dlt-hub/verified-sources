@@ -10,19 +10,20 @@ import pendulum
 
 import dlt
 from dlt.common.typing import TDataItem, TAnyDateTime
+from dlt.common.storages.fsspec_filesystem import prepare_fsspec_args
+from dlt.common.storages.configuration import FilesystemConfiguration
+from sources.filesystem.helpers import FilesystemConfigurationResource
 
 try:
     from filesystem import filesystem
 except ImportError:
     from sources.filesystem import filesystem
 
-from fsspec.implementations.local import LocalFileSystem
-
 from .helpers import add_columns
 
 
-@dlt.resource
-def read_location(files):
+@dlt.resource(spec=FilesystemConfigurationResource)
+def read_location(files, bucket, credentials=dlt.secrets.value):
     """A resource to extract data from the given CSV files.
 
     Args:
@@ -31,6 +32,9 @@ def read_location(files):
     Returns:
         Iterable[TDataItem]: Data items, read from the given CSV files.
     """
+    config = FilesystemConfiguration(bucket, credentials)
+    kwargs = prepare_fsspec_args(config)
+
     state = dlt.current.resource_state()
     start_from = state.setdefault("last_modified", pendulum.datetime(1970, 1, 1))
 
@@ -41,7 +45,7 @@ def read_location(files):
         if file["modification_date"] <= start_from:
             continue
 
-        with fsspec.open(file["file_url"], mode="rb") as f:
+        with fsspec.open(file["file_url"], mode="rb", **kwargs) as f:
             file_res = connection.read_csv(f)
             results += add_columns(file_res.columns, file_res.fetchall())
 
@@ -68,4 +72,4 @@ def csv_reader(bucket: str, globs: List[str] = ("*",)) -> Iterable[TDataItem]:
     """
     for glob in globs:
         files = filesystem(bucket_url=bucket, file_glob=glob)
-        yield dlt.resource(read_location(files))
+        yield dlt.resource(read_location(files, bucket))

@@ -9,8 +9,16 @@ from tests.utils import assert_load_info, assert_query_data, load_table_counts
 
 
 TESTS_BUCKET_URLS = [
-    # ("file:///home/ilya/test_files/", ("test*.csv",)),
-    ("s3://dlt-ci-test-bucket/standard_source/samples", ("*",)),
+    (
+        "file://tests/filesystem/samples",
+        ("test*.csv",),
+        pendulum.datetime(2024, 1, 19, 8, 56, 56),
+    ),
+    (
+        "s3://dlt-ci-test-bucket/standard_source/samples",
+        ("test*.csv",),
+        pendulum.datetime(2024, 1, 19, 10, 49, 20),
+    ),
     # ("gs://ci-test-bucket/standard_source/samples", ("*",)),
     # ("az://dlt-ci-test-bucket/standard_source/samples", ("*",)),
 ]
@@ -53,6 +61,7 @@ def test_extract_data(globs):
 @pytest.mark.parametrize("globs", TESTS_BUCKET_URLS)
 def test_extract_incremental(globs):
     bucket_url = globs[0]
+    date = globs[2]
     globs = globs[1]
 
     pipeline = dlt.pipeline(
@@ -63,12 +72,7 @@ def test_extract_incremental(globs):
 
     res = csv_reader(bucket_url, globs)
 
-    with mock.patch(
-        "dlt.current.resource_state",
-        return_value={
-            "last_modified": pendulum.datetime(2024, 1, 19, 8, 56, 58),
-        },
-    ):
+    with mock.patch("dlt.current.resource_state", return_value={"last_modified": date}):
         load_info = pipeline.run(res)
 
     assert_load_info(load_info)
