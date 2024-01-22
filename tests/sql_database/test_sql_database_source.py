@@ -100,30 +100,30 @@ def test_load_sql_table_incremental(
 def test_load_mysql_data_load(destination_name: str) -> None:
     # reflect a database
     credentials = ConnectionStringCredentials(
-        "mysql+pymysql://rfamro@mysql-rfam-public.ebi.ac.uk:4497/Rfam"
+        "mysql+pymysql://anonymous@ensembldb.ensembl.org:3306/acanthochromis_polyacanthus_core_100_1"
     )
     database = sql_database(credentials)
-    assert "family" in database.resources
+    assert "analysis" in database.resources
 
     # load a single table
     family_table = sql_table(
-        credentials="mysql+pymysql://rfamro@mysql-rfam-public.ebi.ac.uk:4497/Rfam",
-        table="family",
+        credentials="mysql+pymysql://anonymous@ensembldb.ensembl.org:3306/acanthochromis_polyacanthus_core_100_1",
+        table="analysis",
     )
 
     pipeline = make_pipeline(destination_name)
     load_info = pipeline.run(family_table, write_disposition="merge")
     assert_load_info(load_info)
-    counts_1 = load_table_counts(pipeline, "family")
+    counts_1 = load_table_counts(pipeline, "analysis")
 
     # load again also with merge
     family_table = sql_table(
-        credentials="mysql+pymysql://rfamro@mysql-rfam-public.ebi.ac.uk:4497/Rfam",
-        table="family",
+        credentials="mysql+pymysql://anonymous@ensembldb.ensembl.org:3306/acanthochromis_polyacanthus_core_100_1",
+        table="analysis",
     )
     load_info = pipeline.run(family_table, write_disposition="merge")
     assert_load_info(load_info)
-    counts_2 = load_table_counts(pipeline, "family")
+    counts_2 = load_table_counts(pipeline, "analysis")
     # no duplicates
     assert counts_1 == counts_2
 
