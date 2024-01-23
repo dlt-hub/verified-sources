@@ -78,15 +78,15 @@ class ZendeskAPIClient(APIClient):
         paginator = None
 
         if pagination == PaginationType.CURSOR:
-            paginator = CursorPaginator(content_key=data_point_name)
+            paginator = CursorPaginator(records_key=data_point_name)
         elif pagination == PaginationType.OFFSET:
             paginator = JSONResponsePaginator(
-                next_key="next_page", content_key=data_point_name
+                next_key="next_page", records_key=data_point_name
             )
         elif pagination == PaginationType.STREAM:
-            paginator = StreamPaginator(content_key=data_point_name)
+            paginator = StreamPaginator(records_key=data_point_name)
         elif pagination == PaginationType.START_TIME:
-            paginator = StartTimePaginator(content_key=data_point_name)
+            paginator = StartTimePaginator(records_key=data_point_name)
         else:
             raise ValueError(f"Invalid pagination type: {pagination}")
 

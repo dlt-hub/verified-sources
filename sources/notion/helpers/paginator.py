@@ -1,21 +1,23 @@
-class NotionPaginator:
-    def __init__(self, cursor_key='next_cursor', content_key='results'):
+from dlt.sources.helpers.requests import Response
+from api_client import BasePaginator
+
+class NotionPaginator(BasePaginator):
+    def __init__(self, cursor_key='next_cursor', records_key='results'):
+        super().__init__()
         self.cursor_key = cursor_key
-        self.content_key = content_key
+        self.records_key = records_key
 
-    def paginate(self, client, url, method, params, json):
-        has_more = True
-        next_cursor = None
+    def update_state(self, response: Response):
+        self.next_cursor = response.json().get(self.cursor_key)
+        self._has_next_page = self.next_cursor is not None
 
-        while has_more:
-            json = json or {}
-            if next_cursor:
-                json["start_cursor"] = next_cursor
+    def prepare_next_request_args(self, url, params, json):
+        json = json or {}
 
-            response = client.make_request(path=url, method=method, params=params, json=json)
-            response_json = response.json()
+        if self.next_cursor:
+            json["start_cursor"] = self.next_cursor
 
-            yield response_json.get(self.content_key, [])
+        return url, params, json
 
-            next_cursor = response_json.get(self.cursor_key)
-            has_more = next_cursor is not None
+    def extract_records(self, response: Response):
+        return response.json().get(self.records_key, [])
