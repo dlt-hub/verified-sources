@@ -64,7 +64,25 @@ class BasePaginator(ABC):
         ...
 
 
-class HeaderLinkPaginator(BasePaginator):
+class BaseNextUrlPaginator(BasePaginator):
+    def __init__(self):
+        super().__init__()
+        self._next_url: Optional[str] = None
+
+    @property
+    def next_url(self) -> Optional[str]:
+        return self._next_url
+
+    @next_url.setter
+    def next_url(self, url: Optional[str]):
+        self._next_url = url
+        self._has_next_page = url is not None
+
+    def prepare_next_request_args(self, url, params, json):
+        return self._next_url, params, json
+
+
+class HeaderLinkPaginator(BaseNextUrlPaginator):
     """A paginator that uses the 'Link' header in HTTP responses
     for pagination.
 
@@ -73,22 +91,22 @@ class HeaderLinkPaginator(BasePaginator):
     """
 
     def __init__(self, links_next_key: str = "next") -> None:
+        """
+        Args:
+            links_next_key (str, optional): The key (rel ) in the 'Link' header
+                that contains the next page URL. Defaults to 'next'.
+        """
         super().__init__()
         self.links_next_key = links_next_key
-        self.next_url: Optional[str] = None
 
     def update_state(self, response: Response) -> None:
         self.next_url = response.links.get(self.links_next_key, {}).get("url")
-        self._has_next_page = self.next_url is not None
-
-    def prepare_next_request_args(self, url, params, json):
-        return self.next_url, params, json
 
     def extract_records(self, response: Response) -> Any:
         return response.json()
 
 
-class JSONResponsePaginator(BasePaginator):
+class JSONResponsePaginator(BaseNextUrlPaginator):
     """A paginator that uses a specific key in the JSON response to find
     the next page URL.
     """
@@ -102,16 +120,11 @@ class JSONResponsePaginator(BasePaginator):
                 contains the page's records. Defaults to 'results'.
         """
         super().__init__()
-        self.next_url: Optional[str] = None
         self.next_key = next_key
         self.records_key = records_key
 
     def update_state(self, response: Response):
         self.next_url = response.json().get(self.next_key)
-        self._has_next_page = self.next_url is not None
-
-    def prepare_next_request_args(self, url, params, json):
-        return self.next_url, params, json
 
     def extract_records(self, response: Response) -> Any:
         return response.json().get(self.records_key, [])
