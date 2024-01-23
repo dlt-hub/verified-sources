@@ -1,2 +1,3 @@
+dlt>=0.3.5
 duckdb
 fsspec
