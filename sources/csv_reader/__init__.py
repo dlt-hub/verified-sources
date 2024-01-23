@@ -2,32 +2,44 @@
 Source, which uses the `filesystem` source and DuckDB
 to extract CSV files data from the given locations.
 """
-from typing import Iterable, List
+from typing import Iterable, List, Union
 
 import duckdb
 import fsspec
 import pendulum
 
 import dlt
-from dlt.common.typing import TDataItem, TAnyDateTime
+from dlt.common.typing import TDataItem
 from dlt.common.storages.fsspec_filesystem import prepare_fsspec_args
 from dlt.common.storages.configuration import FilesystemConfiguration
-from sources.filesystem.helpers import FilesystemConfigurationResource
 
 try:
     from filesystem import filesystem
+    from filesystem import FileItemDict
+    from filesystem.helpers import (
+        AbstractFileSystem,
+        FilesystemConfigurationResource,
+        FileSystemCredentials,
+    )
 except ImportError:
-    from sources.filesystem import filesystem
-
-from .helpers import add_columns
+    from sources.filesystem import FileItemDict, filesystem
+    from sources.filesystem.helpers import (
+        AbstractFileSystem,
+        FilesystemConfigurationResource,
+        FileSystemCredentials,
+    )
 
 
 @dlt.resource(spec=FilesystemConfigurationResource)
-def read_location(files, bucket, credentials=dlt.secrets.value):
+def read_location(
+    files: List[FileItemDict],
+    bucket: str,
+    credentials: Union[FileSystemCredentials, AbstractFileSystem] = dlt.secrets.value,
+):
     """A resource to extract data from the given CSV files.
 
     Args:
-        files (List[FileItem]): A list of files to read.
+        files (List[FileItemDict]): A list of files to read.
 
     Returns:
         Iterable[TDataItem]: Data items, read from the given CSV files.
@@ -38,7 +50,6 @@ def read_location(files, bucket, credentials=dlt.secrets.value):
     state = dlt.current.resource_state()
     start_from = state.setdefault("last_modified", pendulum.datetime(1970, 1, 1))
 
-    results = []
     connection = duckdb.connect()
 
     for file in files:
@@ -46,12 +57,12 @@ def read_location(files, bucket, credentials=dlt.secrets.value):
             continue
 
         with fsspec.open(file["file_url"], mode="rb", **kwargs) as f:
-            file_res = connection.read_csv(f)
-            results += add_columns(file_res.columns, file_res.fetchall())
+            file_data = connection.read_csv(f).to_arrow_table()
+
+            for batch in file_data.to_batches(max_chunksize=5000):
+                yield batch
 
         state["last_modified"] = max(file["modification_date"], state["last_modified"])
-
-    yield results
 
 
 @dlt.source

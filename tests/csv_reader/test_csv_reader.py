@@ -15,12 +15,20 @@ TESTS_BUCKET_URLS = [
         pendulum.datetime(2024, 1, 19, 8, 56, 56),
     ),
     (
-        "s3://dlt-ci-test-bucket/standard_source/samples",
+        "s3://dlt-ci-test-bucket/standard_source/csv_reader",
         ("test*.csv",),
-        pendulum.datetime(2024, 1, 19, 10, 49, 20),
+        pendulum.datetime(2024, 1, 22, 12, 27, 53),
     ),
-    # ("gs://ci-test-bucket/standard_source/samples", ("*",)),
-    # ("az://dlt-ci-test-bucket/standard_source/samples", ("*",)),
+    # (
+    #     "gs://ci-test-bucket/standard_source/samples",
+    #     ("*",),
+    #     pendulum.datetime(2024, 1, 19, 8, 56, 56),
+    # ),
+    (
+        "az://dlt-ci-test-bucket",
+        ("csv_reader_test*.csv",),
+        pendulum.datetime(2024, 1, 22, 10, 24, 30),
+    ),
 ]
 
 

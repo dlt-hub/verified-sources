@@ -10,7 +10,6 @@ from dlt.sources.credentials import FileSystemCredentials
 from .helpers import (
     AbstractFileSystem,
     FilesystemConfigurationResource,
-    fsspec_from_resource,
 )
 from .readers import ReadersSource, _read_csv, _read_jsonl, _read_parquet
 from .settings import DEFAULT_CHUNK_SIZE
