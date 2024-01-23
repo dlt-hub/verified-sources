@@ -1,5 +1,6 @@
 from abc import ABC, abstractmethod
-from typing import Optional, Dict, Any, Generator
+from typing import Optional, Dict, Any, Generator, Tuple
+import copy
 from requests.auth import AuthBase
 
 from dlt.sources.helpers import requests
@@ -7,16 +8,60 @@ from dlt.sources.helpers.requests import Response
 
 
 class BasePaginator(ABC):
+    def __init__(self) -> None:
+        self._has_next_page = True
+
+    @property
+    def has_next_page(self) -> bool:
+        """
+        Check if there is a next page available.
+
+        Returns:
+            bool: True if there is a next page available, False otherwise.
+        """
+        return self._has_next_page
+
     @abstractmethod
-    def paginate(
-        self,
-        client: "APIClient",
-        url: str,
-        method: str,
-        params: Optional[Dict[str, Any]],
-        json: Optional[Dict[str, Any]],
-    ) -> Generator[Any, None, None]:
-        pass
+    def update_state(self, response: Response) -> None:
+        """Update the paginator state based on the response.
+
+        Args:
+            response (Response): The response object from the API.
+        """
+        ...
+
+    @abstractmethod
+    def prepare_next_request_args(
+        self, url: str, params: Optional[Dict[str, Any]], json: Optional[Dict[str, Any]]
+    ) -> Tuple[Optional[str], Optional[Dict[str, Any]], Optional[Dict[str, Any]]]:
+        """
+        Prepare the arguments for the next API request based on the current state of pagination.
+
+        Subclasses must implement this method to update the request arguments appropriately.
+
+        Args:
+            url (str): The original URL used in the current API request.
+            params (Optional[Dict[str, Any]]): The original query parameters used in the current API request.
+            json (Optional[Dict[str, Any]]): The original JSON body of the current API request.
+
+        Returns:
+            tuple: A tuple containing the updated URL, query parameters, and JSON body to be used
+                for the next API request. These values are used to progress through the paginated data.
+        """
+        ...
+
+    @abstractmethod
+    def extract_records(self, response: Response) -> Any:
+        """
+        Extract the records data from the response.
+
+        Args:
+            response (Response): The response object from the API.
+
+        Returns:
+            Any: The extracted records data.
+        """
+        ...
 
 
 class HeaderLinkPaginator(BasePaginator):
@@ -26,58 +71,50 @@ class HeaderLinkPaginator(BasePaginator):
     A good example of this is the GitHub API:
         https://docs.github.com/en/rest/guides/traversing-with-pagination
     """
-    def get_next_url(self, response: Response) -> Optional[str]:
-        return response.links.get("next", {}).get("url")
 
-    def paginate(
-        self,
-        client: "APIClient",
-        url: str,
-        method: str,
-        params: Optional[Dict[str, Any]],
-        json: Optional[Dict[str, Any]],
-    ) -> Generator[Dict[str, Any], None, None]:
-        while url:
-            response = client.make_request(url, method, params, json)
+    def __init__(self, links_next_key: str = "next") -> None:
+        super().__init__()
+        self.links_next_key = links_next_key
+        self.next_url: Optional[str] = None
 
-            yield response.json()
+    def update_state(self, response: Response) -> None:
+        self.next_url = response.links.get(self.links_next_key, {}).get("url")
+        self._has_next_page = self.next_url is not None
 
-            url = self.get_next_url(response)
+    def prepare_next_request_args(self, url, params, json):
+        return self.next_url, params, json
+
+    def extract_records(self, response: Response) -> Any:
+        return response.json()
 
 
 class JSONResponsePaginator(BasePaginator):
     """A paginator that uses a specific key in the JSON response to find
     the next page URL.
     """
-    def __init__(self, next_key: str = "next", content_key: str = "results"):
+
+    def __init__(self, next_key: str = "next", records_key: str = "results"):
         """
         Args:
             next_key (str, optional): The key in the JSON response that
                 contains the next page URL. Defaults to 'next'.
-            content_key (str, optional): The key in the JSON response that
-                contains the page content. Defaults to 'results'.
+            records_key (str, optional): The key in the JSON response that
+                contains the page's records. Defaults to 'results'.
         """
+        super().__init__()
+        self.next_url: Optional[str] = None
         self.next_key = next_key
-        self.content_key = content_key
+        self.records_key = records_key
 
-    def get_next_url(self, response: Response) -> Optional[str]:
-        return response.json().get(self.next_key)
+    def update_state(self, response: Response):
+        self.next_url = response.json().get(self.next_key)
+        self._has_next_page = self.next_url is not None
 
-    def extract_page_content(self, response: Response) -> Any:
-        return response.json().get(self.content_key)
+    def prepare_next_request_args(self, url, params, json):
+        return self.next_url, params, json
 
-    def paginate(
-        self,
-        client: "APIClient",
-        url: str,
-        method: str,
-        params: Optional[Dict[str, Any]],
-        json: Optional[Dict[str, Any]],
-    ) -> Generator[Any, None, None]:
-        while url:
-            response = client.make_request(url, method, params, json)
-            yield self.extract_page_content(response)
-            url = self.get_next_url(response)
+    def extract_records(self, response: Response) -> Any:
+        return response.json().get(self.records_key, [])
 
 
 class BearerTokenAuth(AuthBase):
@@ -103,7 +140,10 @@ class APIClient:
         headers (Optional[Dict[str, str]]): Headers to include in all requests.
         auth (Optional[AuthBase]): An authentication object to use for all requests.
         paginator (Optional[BasePaginator]): A paginator object for handling API pagination.
+            Note that this object will be deepcopied for each request to ensure that the
+            paginator state is not shared between requests.
     """
+
     def __init__(
         self,
         base_url: str,
@@ -154,7 +194,14 @@ class APIClient:
             >>> for page in client.paginate("/search", method="post", json={"query": "foo"}):
             >>>     print(page)
         """
+        paginator = copy.deepcopy(paginator if paginator else self.paginator)
 
-        paginator = paginator if paginator else self.paginator
+        while paginator.has_next_page:
+            response = self.make_request(
+                path=path, method=method, params=params, json=json
+            )
 
-        return paginator.paginate(self, path, method, params, json)
+            yield paginator.extract_records(response)
+
+            paginator.update_state(response)
+            path, params, json = paginator.prepare_next_request_args(path, params, json)
