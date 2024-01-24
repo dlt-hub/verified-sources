@@ -1,4 +1,4 @@
-from typing import TYPE_CHECKING, Any, Dict, Iterator, List, Optional, Union
+from typing import TYPE_CHECKING, Any, Dict, Iterator, Optional, Union
 
 import dlt
 from dlt.common import json
@@ -8,16 +8,12 @@ from dlt.common.typing import copy_sig
 from dlt.sources import TDataItems, DltResource, DltSource
 from dlt.sources.filesystem import FileItemDict
 
-try:
-    from filesystem.helpers import (
-        AbstractFileSystem,
-        FileSystemCredentials,
-    )
-except ImportError:
-    from sources.filesystem.helpers import (
-        AbstractFileSystem,
-        FileSystemCredentials,
-    )
+from .helpers import (
+    fetch_arrow,
+    fetch_json,
+    AbstractFileSystem,
+    FileSystemCredentials,
+)
 
 
 def _read_csv(
@@ -88,53 +84,6 @@ def _read_parquet(
                 yield rows.to_pylist()
 
 
-def _add_columns(columns: List[str], rows: List[List[Any]]):
-    """Adds column names to the given rows.
-
-    Args:
-        columns (List[str]): The column names.
-        rows (List[List[Any]]): The rows.
-
-    Returns:
-        List[Dict[str, Any]]: The rows with column names.
-    """
-    result = []
-    for row in rows:
-        result.append(dict(zip(columns, row)))
-
-    return result
-
-
-def _fetch_arrow(file_data, chunk_size):
-    """Fetches data from the given CSV file.
-
-    Args:
-        file_data (DuckDBPyRelation): The CSV file data.
-        chunk_size (int): The number of rows to read at once.
-
-    Yields:
-        Iterable[TDataItem]: Data items, read from the given CSV file.
-    """
-    batcher = file_data.fetch_arrow_reader(batch_size=chunk_size)
-    yield from batcher
-
-
-def _fetch_json(file_data, chunk_size):
-    """Fetches data from the given CSV file.
-
-    Args:
-        file_data (DuckDBPyRelation): The CSV file data.
-        chunk_size (int): The number of rows to read at once.
-
-    Yields:
-        Iterable[TDataItem]: Data items, read from the given CSV file.
-    """
-    batch = True
-    while batch:
-        batch = file_data.fetchmany(chunk_size)
-        yield _add_columns(file_data.columns, batch)
-
-
 def _read_csv_duckdb(
     items: Iterator[FileItemDict],
     bucket: str,
@@ -175,7 +124,7 @@ def _read_csv_duckdb(
 
     connection = duckdb.connect()
 
-    helper = _fetch_arrow if use_pyarrow else _fetch_json
+    helper = fetch_arrow if use_pyarrow else fetch_json
 
     for item in items:
         if item["modification_date"] <= start_from:
