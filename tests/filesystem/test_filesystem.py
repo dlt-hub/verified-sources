@@ -147,6 +147,9 @@ def test_standard_readers(bucket_url: str) -> None:
     csv_reader = readers(bucket_url, file_glob="**/*.csv").read_csv(
         float_precision="high"
     )
+    csv_duckdb_reader = readers(bucket_url, file_glob="**/*.csv").read_csv_duckdb(
+        bucket_url
+    )
 
     # a step that copies files into test storage
     def _copy(item: FileItemDict):
@@ -174,16 +177,23 @@ def test_standard_readers(bucket_url: str) -> None:
             parquet_reader.with_name("parquet_example"),
             downloader.with_name("listing"),
             csv_reader.with_name("csv_example"),
+            csv_duckdb_reader.with_name("csv_duckdb_example"),
         ]
     )
     assert_load_info(load_info)
     assert load_table_counts(
-        pipeline, "jsonl_example", "parquet_example", "listing", "csv_example"
+        pipeline,
+        "jsonl_example",
+        "parquet_example",
+        "listing",
+        "csv_example",
+        "csv_duckdb_example",
     ) == {
         "jsonl_example": 1034,
         "parquet_example": 1034,
         "listing": 10,
         "csv_example": 1270,
+        "csv_duckdb_example": 1272,
     }
     # print(pipeline.last_trace.last_normalize_info)
     # print(pipeline.default_schema.to_pretty_yaml())

@@ -11,7 +11,13 @@ from .helpers import (
     AbstractFileSystem,
     FilesystemConfigurationResource,
 )
-from .readers import ReadersSource, _read_csv, _read_jsonl, _read_parquet
+from .readers import (
+    ReadersSource,
+    _read_csv,
+    _read_csv_duckdb,
+    _read_jsonl,
+    _read_parquet,
+)
 from .settings import DEFAULT_CHUNK_SIZE
 
 
@@ -38,6 +44,8 @@ def readers(
         | dlt.transformer(name="read_jsonl")(_read_jsonl),
         filesystem(bucket_url, credentials, file_glob=file_glob)
         | dlt.transformer(name="read_parquet")(_read_parquet),
+        filesystem(bucket_url, credentials, file_glob=file_glob)
+        | dlt.transformer(name="read_csv_duckdb")(_read_csv_duckdb),
     )
 
 
@@ -88,3 +96,4 @@ def filesystem(
 read_csv = dlt.transformer(standalone=True)(_read_csv)
 read_jsonl = dlt.transformer(standalone=True)(_read_jsonl)
 read_parquet = dlt.transformer(standalone=True)(_read_parquet)
+read_csv_duckdb = dlt.transformer(standalone=True)(_read_csv_duckdb)
