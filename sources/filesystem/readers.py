@@ -90,8 +90,8 @@ def _read_csv_duckdb(
     chunk_size: Optional[int] = 5000,
     use_pyarrow: bool = False,
     credentials: Union[FileSystemCredentials, AbstractFileSystem] = dlt.secrets.value,
-    read_csv_kwargs: Optional[Dict] = {},
-):
+    read_csv_kwargs: Optional[Dict[str, Any]] = {},
+) -> Iterator[TDataItems]:
     """A resource to extract data from the given CSV files.
 
     Uses DuckDB engine to import and cast CSV data.
@@ -107,13 +107,13 @@ def _read_csv_duckdb(
         credentials (Union[FileSystemCredentials, AbstractFileSystem]):
             The credentials to use. Defaults to dlt.secrets.value.
         read_csv_kwargs (Optional[Dict]):
-            Additional keyword arguments passed to `read_csv()`.
+            Additional keyword arguments to pass to the `read_csv()`.
 
     Returns:
         Iterable[TDataItem]: Data items, read from the given CSV files.
     """
     import duckdb
-    import fsspec
+    import fsspec  # type: ignore
     import pendulum
 
     config = FilesystemConfiguration(bucket, credentials)
@@ -122,9 +122,9 @@ def _read_csv_duckdb(
     state = dlt.current.resource_state()
     start_from = state.setdefault("last_modified", pendulum.datetime(1970, 1, 1))
 
-    connection = duckdb.connect()
-
     helper = fetch_arrow if use_pyarrow else fetch_json
+
+    connection = duckdb.connect()
 
     for item in items:
         if item["modification_date"] <= start_from:

@@ -1,10 +1,11 @@
 """Helpers for the filesystem resource."""
-from typing import TYPE_CHECKING, Any, List, Optional, Type, Union
+from typing import TYPE_CHECKING, Any, Dict, Iterable, List, Optional, Type, Union
 from fsspec import AbstractFileSystem  # type: ignore
 
 from dlt.common.configuration import resolve_type
+from dlt.common.typing import TDataItem
 
-from dlt.sources import DltResource, DltSource
+from dlt.sources import DltResource
 from dlt.sources.filesystem import fsspec_filesystem
 from dlt.sources.config import configspec, with_config
 from dlt.sources.credentials import (
@@ -48,7 +49,7 @@ def fsspec_from_resource(filesystem_instance: DltResource) -> AbstractFileSystem
     )
 
 
-def add_columns(columns: List[str], rows: List[List[Any]]):
+def add_columns(columns: List[str], rows: List[List[Any]]) -> List[Dict[str, Any]]:
     """Adds column names to the given rows.
 
     Args:
@@ -65,7 +66,7 @@ def add_columns(columns: List[str], rows: List[List[Any]]):
     return result
 
 
-def fetch_arrow(file_data, chunk_size):
+def fetch_arrow(file_data, chunk_size: int) -> Iterable[TDataItem]:  # type: ignore
     """Fetches data from the given CSV file.
 
     Args:
@@ -79,7 +80,7 @@ def fetch_arrow(file_data, chunk_size):
     yield from batcher
 
 
-def fetch_json(file_data, chunk_size):
+def fetch_json(file_data, chunk_size: int) -> List[Dict[str, Any]]:  # type: ignore
     """Fetches data from the given CSV file.
 
     Args:
@@ -89,7 +90,9 @@ def fetch_json(file_data, chunk_size):
     Yields:
         Iterable[TDataItem]: Data items, read from the given CSV file.
     """
-    batch = True
-    while batch:
+    while True:
         batch = file_data.fetchmany(chunk_size)
+        if not batch:
+            break
+
         yield add_columns(file_data.columns, batch)
