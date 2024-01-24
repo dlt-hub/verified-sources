@@ -11,14 +11,13 @@ class CursorPaginator(JSONResponsePaginator):
             return None
 
     def update_state(self, response: Response):
-        self.next_url = self.get_next_page_url(response.json())
-        self._has_next_page = self.next_url is not None
+        self.next_reference = self.get_next_page_url(response.json())
 
     def prepare_next_request_args(self, url, params, json):
         params = params or {}
         params["page[size]"] = settings.PAGE_SIZE
 
-        return self.next_url, params, json
+        return self.next_reference, params, json
 
 
 class StreamPaginator(JSONResponsePaginator):
@@ -29,14 +28,13 @@ class StreamPaginator(JSONResponsePaginator):
             return None
 
     def update_state(self, response: Response):
-        self.next_url = self.get_next_page_url(response.json())
-        self._has_next_page = self.next_url is not None
+        self.next_reference = self.get_next_page_url(response.json())
 
     def prepare_next_request_args(self, url, params, json):
         params = params or {}
         params["per_page"] = settings.INCREMENTAL_PAGE_SIZE
 
-        return self.next_url, params, json
+        return self.next_reference, params, json
 
 
 class StartTimePaginator(JSONResponsePaginator):
@@ -47,11 +45,10 @@ class StartTimePaginator(JSONResponsePaginator):
             return None
 
     def update_state(self, response: Response):
-        self.next_url = self.get_next_page_url(response.json())
-        self._has_next_page = self.next_url is not None
+        self.next_reference = self.get_next_page_url(response.json())
 
     def prepare_next_request_args(self, url, params, json):
         params = params or {}
         params["limit"] = settings.INCREMENTAL_PAGE_SIZE
 
-        return self.next_url, params, json
+        return self.next_reference, params, json

@@ -10,6 +10,7 @@ from dlt.sources.helpers.requests import Response
 class BasePaginator(ABC):
     def __init__(self) -> None:
         self._has_next_page = True
+        self._next_reference: Optional[str] = None
 
     @property
     def has_next_page(self) -> bool:
@@ -20,6 +21,15 @@ class BasePaginator(ABC):
             bool: True if there is a next page available, False otherwise.
         """
         return self._has_next_page
+
+    @property
+    def next_reference(self) -> Optional[str]:
+        return self._next_reference
+
+    @next_reference.setter
+    def next_reference(self, value: Optional[str]):
+        self._next_reference = value
+        self._has_next_page = value is not None
 
     @abstractmethod
     def update_state(self, response: Response) -> None:
@@ -65,21 +75,8 @@ class BasePaginator(ABC):
 
 
 class BaseNextUrlPaginator(BasePaginator):
-    def __init__(self):
-        super().__init__()
-        self._next_url: Optional[str] = None
-
-    @property
-    def next_url(self) -> Optional[str]:
-        return self._next_url
-
-    @next_url.setter
-    def next_url(self, url: Optional[str]):
-        self._next_url = url
-        self._has_next_page = url is not None
-
     def prepare_next_request_args(self, url, params, json):
-        return self._next_url, params, json
+        return self._next_reference, params, json
 
 
 class HeaderLinkPaginator(BaseNextUrlPaginator):
@@ -100,7 +97,7 @@ class HeaderLinkPaginator(BaseNextUrlPaginator):
         self.links_next_key = links_next_key
 
     def update_state(self, response: Response) -> None:
-        self.next_url = response.links.get(self.links_next_key, {}).get("url")
+        self.next_reference = response.links.get(self.links_next_key, {}).get("url")
 
     def extract_records(self, response: Response) -> Any:
         return response.json()
@@ -124,7 +121,7 @@ class JSONResponsePaginator(BaseNextUrlPaginator):
         self.records_key = records_key
 
     def update_state(self, response: Response):
-        self.next_url = response.json().get(self.next_key)
+        self.next_reference = response.json().get(self.next_key)
 
     def extract_records(self, response: Response) -> Any:
         return response.json().get(self.records_key, [])
