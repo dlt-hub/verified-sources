@@ -23,7 +23,7 @@ def stream_and_merge_csv() -> None:
     """Demonstrates how to scan folder with csv files, load them in chunk and merge on date column with the previous load"""
     pipeline = dlt.pipeline(
         pipeline_name="standard_filesystem_csv",
-        destination="postgres",
+        destination="duckdb",
         dataset_name="met_data",
     )
     # met_data contains 3 columns, where "date" column contain a date on which we want to merge
