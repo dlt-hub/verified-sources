@@ -60,3 +60,10 @@ access_token_expires_at=1688821881
 
 [sources.workable]
 subdomain="dlthub-test"
+
+[sources.scraping]
+queue_size = 3000
+queue_result_timeout = 5
+start_urls = [
+    "https://quotes.toscrape.com/page/1/"
+]
