@@ -1,21 +1,18 @@
-import json
 import os
 import posixpath
 from typing import Iterator
 
 import dlt
-from dlt.sources import TDataItem, TDataItems
+from dlt.sources import TDataItems
 
 try:
-    from .filesystem import FileItemDict, filesystem, readers, read_csv, read_jsonl, read_parquet  # type: ignore
+    from .filesystem import FileItemDict, filesystem, readers, read_csv  # type: ignore
 except ImportError:
     from filesystem import (
         FileItemDict,
         filesystem,
         readers,
         read_csv,
-        read_jsonl,
-        read_parquet,
     )
 
 
@@ -26,7 +23,7 @@ def stream_and_merge_csv() -> None:
     """Demonstrates how to scan folder with csv files, load them in chunk and merge on date column with the previous load"""
     pipeline = dlt.pipeline(
         pipeline_name="standard_filesystem_csv",
-        destination="duckdb",
+        destination="postgres",
         dataset_name="met_data",
     )
     # met_data contains 3 columns, where "date" column contain a date on which we want to merge
@@ -50,6 +47,24 @@ def stream_and_merge_csv() -> None:
     load_info = pipeline.run(met_files.with_name("met_csv"))
 
     # you can also do dlt pipeline standard_filesystem_csv show to confirm that all A801 were replaced with A803 records for overlapping day
+    print(load_info)
+    print(pipeline.last_trace.last_normalize_info)
+
+
+def read_csv_with_duckdb() -> None:
+    pipeline = dlt.pipeline(
+        pipeline_name="standard_filesystem",
+        destination="duckdb",
+        dataset_name="met_data",
+    )
+
+    # load all the CSV data, excluding headers
+    met_files = readers(
+        bucket_url=TESTS_BUCKET_URL, file_glob="met_csv/A801/*.csv"
+    ).read_csv_duckdb(chunk_size=1000, read_csv_kwargs={"header": True})
+
+    load_info = pipeline.run(met_files)
+
     print(load_info)
     print(pipeline.last_trace.last_normalize_info)
 
@@ -177,3 +192,4 @@ if __name__ == "__main__":
     read_parquet_and_jsonl_chunked()
     read_custom_file_type_excel()
     read_files_incrementally_mtime()
+    read_csv_with_duckdb()

@@ -1,18 +1,18 @@
 # Readers Source & Filesystem
 
-This verified source easily streams files from AWS S3, GCS, Azure, or local filesystem using the
-reader source.
+This verified source easily streams files from AWS S3, GCS, Azure, or local filesystem using the reader source.
 
 Sources and resources that can be used with this verified source are:
 
 
-| Name         | Type                 | Description                                                               |
-|--------------|----------------------|---------------------------------------------------------------------------|
-| readers      | Source               | Lists and reads files with resource `filesystem` and readers transformers |
-| filesystem   | Resource             | Lists files in `bucket_url` using `file_glob` pattern                     |
-| read_csv     | Resource-transformer | Reads CSV file with "Pandas" chunk by chunk                               |
-| read_jsonl   | Resource-transformer | Reads JSONL file content and extracts the data                            |
-| read_parquet | Resource-transformer | Reads Parquet file content and extracts the data with "Pyarrow"           |
+| Name            | Type                 | Description                                                               |
+|-----------------|----------------------|---------------------------------------------------------------------------|
+| readers         | Source               | Lists and reads files with resource `filesystem` and readers transformers |
+| filesystem      | Resource             | Lists files in `bucket_url` using `file_glob` pattern                     |
+| read_csv        | Resource-transformer | Reads CSV file with "Pandas" chunk by chunk                               |
+| read_csv_duckdb | Resource-transformer | Reads CSV file with DuckDB engine chunk by chunk                          |
+| read_jsonl      | Resource-transformer | Reads JSONL file content and extracts the data                            |
+| read_parquet    | Resource-transformer | Reads Parquet file content and extracts the data with "Pyarrow"           |
 
 
 ## Initialize the source

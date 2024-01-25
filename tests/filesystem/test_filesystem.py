@@ -148,7 +148,7 @@ def test_standard_readers(bucket_url: str) -> None:
         float_precision="high"
     )
     csv_duckdb_reader = readers(bucket_url, file_glob="**/*.csv").read_csv_duckdb(
-        bucket_url
+        read_csv_kwargs={"header": True}
     )
 
     # a step that copies files into test storage
@@ -193,7 +193,7 @@ def test_standard_readers(bucket_url: str) -> None:
         "parquet_example": 1034,
         "listing": 10,
         "csv_example": 1270,
-        "csv_duckdb_example": 1272,
+        "csv_duckdb_example": 1270,
     }
     # print(pipeline.last_trace.last_normalize_info)
     # print(pipeline.default_schema.to_pretty_yaml())

@@ -1,19 +1,12 @@
-from typing import TYPE_CHECKING, Any, Dict, Iterator, Optional, Union
+from typing import TYPE_CHECKING, Any, Dict, Iterator, Optional
 
 import dlt
 from dlt.common import json
-from dlt.common.storages.configuration import FilesystemConfiguration
-from dlt.common.storages.fsspec_filesystem import prepare_fsspec_args
 from dlt.common.typing import copy_sig
 from dlt.sources import TDataItems, DltResource, DltSource
 from dlt.sources.filesystem import FileItemDict
 
-from .helpers import (
-    fetch_arrow,
-    fetch_json,
-    AbstractFileSystem,
-    FileSystemCredentials,
-)
+from .helpers import fetch_arrow, fetch_json
 
 
 def _read_csv(
@@ -86,11 +79,9 @@ def _read_parquet(
 
 def _read_csv_duckdb(
     items: Iterator[FileItemDict],
-    bucket: str,
     chunk_size: Optional[int] = 5000,
     use_pyarrow: bool = False,
-    credentials: Union[FileSystemCredentials, AbstractFileSystem] = dlt.secrets.value,
-    read_csv_kwargs: Optional[Dict[str, Any]] = {},
+    read_csv_kwargs: Optional[Dict[str, Any]] = None,
 ) -> Iterator[TDataItems]:
     """A resource to extract data from the given CSV files.
 
@@ -98,14 +89,11 @@ def _read_csv_duckdb(
 
     Args:
         items (Iterator[FileItemDict]): CSV files to read.
-        bucket (str): The bucket name.
         chunk_size (Optional[int]):
             The number of rows to read at once. Defaults to 5000.
         use_pyarrow (bool):
             Whether to use `pyarrow` to read the data and designate
             data schema. If set to False (by default), JSON is used.
-        credentials (Union[FileSystemCredentials, AbstractFileSystem]):
-            The credentials to use. Defaults to dlt.secrets.value.
         read_csv_kwargs (Optional[Dict]):
             Additional keyword arguments to pass to the `read_csv()`.
 
@@ -113,11 +101,9 @@ def _read_csv_duckdb(
         Iterable[TDataItem]: Data items, read from the given CSV files.
     """
     import duckdb
-    import fsspec  # type: ignore
     import pendulum
 
-    config = FilesystemConfiguration(bucket, credentials)
-    fs_kwargs = prepare_fsspec_args(config)
+    read_csv_kwargs = read_csv_kwargs or {}
 
     state = dlt.current.resource_state()
     start_from = state.setdefault("last_modified", pendulum.datetime(1970, 1, 1))
@@ -130,8 +116,8 @@ def _read_csv_duckdb(
         if item["modification_date"] <= start_from:
             continue
 
-        with fsspec.open(item["file_url"], mode="rb", **fs_kwargs) as f:
-            file_data = connection.read_csv(f, **read_csv_kwargs)
+        with item.open() as f:
+            file_data = connection.read_csv(f, **read_csv_kwargs)  # type: ignore
 
             yield from helper(file_data, chunk_size)
 
