@@ -8,10 +8,10 @@ from dlt.common import pendulum
 from sources.filesystem import (
     filesystem,
     readers,
-    fsspec_from_resource,
     FileItem,
     FileItemDict,
 )
+from sources.filesystem.helpers import fsspec_from_resource
 from tests.utils import (
     assert_load_info,
     load_table_counts,
