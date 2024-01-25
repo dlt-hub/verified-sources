@@ -1,6 +1,7 @@
 import pytest
 import random
 import time
+from unittest import mock
 
 from confluent_kafka import Producer
 from confluent_kafka.admin import AdminClient, NewTopic
@@ -189,58 +190,29 @@ def test_kafka_read_with_timestamp(kafka_timed_messages):
     assert tracker[topic]["0"] == {"cur": 2, "max": 3}
 
 
-def test_kafka_read_now(kafka_admin, kafka_producer):
-    dataset_name = _random_name("dataset")
+def test_kafka_read_now():
+    """
+    Check that in case of a timestamp being too new,
+    the offset is set maximum.
+    """
+    # mocking one topic with one partition
+    topics_mock = mock.Mock()
+    topics_mock.topics = {"topic1": mock.Mock()}
+    topics_mock.topics["topic1"].partitions = [0]
 
-    topic = _random_name("topic")
-    _await(kafka_admin.create_topics([NewTopic(topic, num_partitions=1)]))
+    # an offset for the timestamp "now" - repeats Kafka's behavior
+    # of returning offset = -1 in case the timestamp is newer than
+    # the last message in the topic
+    offset_mock = mock.Mock()
+    offset_mock.offset = -1
 
-    time.sleep(15)
+    consumer = mock.Mock()
+    consumer.list_topics = mock.Mock(return_value=topics_mock)
+    consumer.offsets_for_times = mock.Mock(return_value=[offset_mock])
+    consumer.get_watermark_offsets = mock.Mock(return_value=[0, 10])
 
-    kafka_producer.produce(topic, b"value")
-    kafka_producer.produce(topic, b"value")
-    kafka_producer.produce(topic, b"value")
-    kafka_producer.flush()
-
-    time.sleep(15)
-
-    now = pendulum.now(tz="UTC")
-    pipeline = dlt.pipeline(
-        pipeline_name="kafka_test",
-        destination="postgres",
-        dataset_name=dataset_name,
-    )
-
-    resource = kafka_consumer(topic, start_from=now)
-    pipeline.run(resource)
-
-    table_names = [t["name"] for t in pipeline.default_schema.data_tables()]
-    assert table_names == []
-
-    kafka_producer.produce(topic, b"value")
-    kafka_producer.produce(topic, b"value")
-    kafka_producer.produce(topic, b"value")
-    kafka_producer.flush()
-
-    time.sleep(15)
-
-    pipeline = dlt.pipeline(
-        pipeline_name="kafka_test",
-        destination="postgres",
-        dataset_name=dataset_name,
-    )
-
-    resource = kafka_consumer(topic, start_from=now)
-    load_info = pipeline.run(resource)
-
-    assert_load_info(load_info)
-
-    table_names = [t["name"] for t in pipeline.default_schema.data_tables()]
-    table_counts = load_table_counts(pipeline, *table_names)
-
-    assert table_counts[topic] == 3
-
-    _await(kafka_admin.delete_topics([topic]))
+    tracker = OffsetTracker(consumer, ["topic1"], {}, start_from=pendulum.now(tz="UTC"))
+    assert tracker["topic1"]["0"] == {"cur": 9, "max": 10}
 
 
 def test_kafka_incremental_read(kafka_producer, kafka_topics):
