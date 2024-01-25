@@ -8,13 +8,15 @@ from dlt.sources import DltResource
 from dlt.common.typing import TDataItem, TAnyDateTime
 from dlt.common.time import ensure_pendulum_datetime
 from dlt.common import pendulum
+from dlt.common import jsonpath as jp
 
 from .settings import (
     DEFAULT_API_VERSION,
     FIRST_DAY_OF_MILLENNIUM,
     DEFAULT_ITEMS_PER_PAGE,
+    DEFAULT_PARTNER_API_VERSION,
 )
-from .helpers import ShopifyApi, TOrderStatus
+from .helpers import ShopifyApi, TOrderStatus, ShopifyPartnerApi
 
 
 @dlt.source(name="shopify")
@@ -161,3 +163,66 @@ def shopify_source(
         yield from client.get_pages("customers", params)
 
     return (products, orders, customers)
+
+
+@dlt.resource
+def shopify_partner_query(
+    query: str,
+    data_items_path: jp.TJsonPath,
+    pagination_cursor_path: jp.TJsonPath,
+    pagination_variable_name: str = "after",
+    variables: Optional[Dict[str, Any]] = None,
+    access_token: str = dlt.secrets.value,
+    organization_id: str = dlt.config.value,
+    api_version: str = DEFAULT_PARTNER_API_VERSION,
+) -> Iterable[TDataItem]:
+    """
+    Resource for getting paginated results from the Shopify Partner GraphQL API.
+
+    This resource will run the given GraphQL query and extract a list of data items from the result.
+    It will then run the query again with a pagination cursor to get the next page of results.
+
+    Example:
+        query = '''query Transactions($after: String) {
+            transactions(after: $after, first: 100) {
+                edges {
+                    cursor
+                    node {
+                        id
+                    }
+                }
+            }
+        }'''
+
+        partner_query_pages(
+            query,
+            data_items_path="data.transactions.edges[*].node",
+            pagination_cursor_path="data.transactions.edges[-1].cursor",
+            pagination_variable_name="after",
+        )
+
+    Args:
+        query: The GraphQL query to run.
+        data_items_path: The JSONPath to the data items in the query result. Should resolve to array items.
+        pagination_cursor_path: The JSONPath to the pagination cursor in the query result, will be piped to the next query via variables.
+        pagination_variable_name: The name of the variable to pass the pagination cursor to.
+        variables: Mapping of extra variables used in the query.
+        access_token: The Partner API Client access token, created in the Partner Dashboard.
+        organization_id: Your Organization ID, found in the Partner Dashboard.
+        api_version: The API version to use (e.g. 2024-01). Use `unstable` for the latest version.
+    Returns:
+        Iterable[TDataItem]: A generator of the query results.
+    """
+    client = ShopifyPartnerApi(
+        access_token=access_token,
+        organization_id=organization_id,
+        api_version=api_version,
+    )
+
+    yield from client.get_graphql_pages(
+        query,
+        data_items_path=data_items_path,
+        pagination_cursor_path=pagination_cursor_path,
+        pagination_variable_name=pagination_variable_name,
+        variables=variables,
+    )
