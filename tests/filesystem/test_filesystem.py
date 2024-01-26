@@ -191,7 +191,7 @@ def test_standard_readers(bucket_url: str) -> None:
     ) == {
         "jsonl_example": 1034,
         "parquet_example": 1034,
-        "listing": 10,
+        "listing": 11,
         "csv_example": 1270,
         "csv_duckdb_example": 1270,
     }
