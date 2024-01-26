@@ -1,7 +1,7 @@
 from typing import Any, Optional, TypeVar
 import scrapy  # type: ignore[import-untyped]
 
-from ..types import BaseQueue
+from ..queue import BaseQueue
 
 T = TypeVar("T")
 

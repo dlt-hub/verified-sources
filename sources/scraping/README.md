@@ -20,8 +20,10 @@ It is possible to provide configuration via `.dlt/config.toml` below you can see
 
 ```toml
 [sources.scraping]
+batch_size = 20
 queue_size = 3000
 queue_result_timeout = 5
+start_urls = [
 start_urls = [
     "https://quotes.toscrape.com/page/1/"
 ]

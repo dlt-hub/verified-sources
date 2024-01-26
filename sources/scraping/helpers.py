@@ -15,7 +15,8 @@ from dlt.common.configuration.specs.base_configuration import (
 from scrapy.crawler import CrawlerRunner  # type: ignore
 from twisted.internet import reactor
 
-from .types import AnyDict, BaseQueue
+from .types import AnyDict
+from .queue import BaseQueue
 from .scrapy.spider import DltSpider
 from .settings import SOURCE_SCRAPY_SETTINGS, SOURCE_SCRAPY_QUEUE_SIZE
 
@@ -30,11 +31,14 @@ class Runnable(t.Protocol):
 
 @configspec
 class ScrapingConfig(BaseConfiguration):
+    # Batch size for scraped items
+    batch_size: int = 20
+
     # maxsize for queue
     queue_size: t.Optional[int] = SOURCE_SCRAPY_QUEUE_SIZE
 
     # result wait timeout for our queue
-    queue_result_timeout: t.Optional[int] = 5000
+    queue_result_timeout: t.Optional[int] = 5
 
     # List of start urls
     start_urls: t.Optional[t.List[str]] = None
@@ -56,7 +60,6 @@ class ScrapyRunner(Runnable):
         self.include_headers = include_headers
 
     def run(self, *args: Any, **kwargs: AnyDict) -> None:
-        print("starting scrapy", self.settings, self.start_urls)
         runner = CrawlerRunner(settings=self.settings)
         runner.crawl(
             self.spider,
@@ -149,8 +152,8 @@ def create_pipeline_runner(
     pipeline_runner = PipelineRunner(pipeline=pipeline)
 
     def wait_for_results() -> None:
-        scrapy_runner.queue.join()
-        scrapy_runner.queue.close()
+        queue.join()
+        queue.close()
         pipeline_runner.join()
 
     return pipeline_runner, scrapy_runner, wait_for_results

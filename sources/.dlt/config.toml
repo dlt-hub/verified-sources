@@ -62,6 +62,7 @@ access_token_expires_at=1688821881
 subdomain="dlthub-test"
 
 [sources.scraping]
+batch_size = 20
 queue_size = 3000
 queue_result_timeout = 5
 start_urls = [
