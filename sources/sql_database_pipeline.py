@@ -1,4 +1,4 @@
-from typing import List
+from typing import Iterator, Any
 
 import dlt
 from dlt.sources.credentials import ConnectionStringCredentials
@@ -83,6 +83,77 @@ def load_standalone_table_resource() -> None:
 
     # Run the resources together
     info = pipeline.extract([family, genome], write_disposition="merge")
+    print(info)
+
+
+def reflect_and_connector_x() -> None:
+    """Uses sql_database to reflect the table schema and then connectorx to load it. Connectorx has rudimentary type support ie.
+    is not able to use decimal types and is not providing length information for text and binary types.
+
+    NOTE: mind that for DECIMAL/NUMERIC the data is converted into float64 and then back into decimal Python type. Do not use it
+    when decimal representation is important ie. when you process currency.
+    """
+
+    # uncomment line below to get load_id into your data (slows pyarrow loading down)
+    dlt.config["normalize.parquet_normalizer.add_dlt_load_id"] = True
+
+    # Create a pipeline
+    pipeline = dlt.pipeline(
+        pipeline_name="rfam_cx", destination="postgres", dataset_name="rfam_data_cx"
+    )
+
+    # Credentials for the sample database.
+    credentials = ConnectionStringCredentials(
+        "mysql+pymysql://rfamro@mysql-rfam-public.ebi.ac.uk:4497/Rfam"
+    )
+
+    # below we reflect family and genome tables. detect_precision_hints is set to True to emit
+    # full metadata
+    sql_alchemy_source = sql_database(
+        credentials, detect_precision_hints=True
+    ).with_resources("family", "genome")
+
+    # display metadata
+    print(sql_alchemy_source.family.columns)
+    print(sql_alchemy_source.genome.columns)
+
+    # define a resource that will be used to read data from connectorx
+    @dlt.resource
+    def read_sql_x(
+        conn_str: str,
+        query: str,
+    ) -> Iterator[Any]:
+        import connectorx as cx  # type: ignore[import-untyped]
+
+        yield cx.read_sql(
+            conn_str,
+            query,
+            return_type="arrow2",
+            protocol="binary",
+        )
+
+    # Option 1: use columns from sql_alchemy source to define columns for connectorx
+    genome_cx = read_sql_x(
+        "mysql://rfamro@mysql-rfam-public.ebi.ac.uk:4497/Rfam",
+        "SELECT * FROM genome LIMIT 100",
+    ).with_name("genome")
+    family_cx = read_sql_x(
+        "mysql://rfamro@mysql-rfam-public.ebi.ac.uk:4497/Rfam",
+        "SELECT * FROM family LIMIT 100",
+    ).with_name("family")
+
+    # Option 1: use columns from sql_alchemy source to define columns for connectorx
+    genome_cx.apply_hints(columns=sql_alchemy_source.genome.columns)
+    family_cx.apply_hints(columns=sql_alchemy_source.family.columns)
+
+    info = pipeline.run([genome_cx, family_cx])
+    print(info)
+    print(pipeline.default_schema.to_pretty_yaml())
+
+    # Option 2: replace sql alchemy date generator with connectorx data generator (this is hacky)
+    sql_alchemy_source.genome._pipe.replace_gen(genome_cx._pipe.gen)
+    sql_alchemy_source.family._pipe.replace_gen(family_cx._pipe.gen)
+    info = pipeline.run(sql_alchemy_source)
     print(info)
 
 
