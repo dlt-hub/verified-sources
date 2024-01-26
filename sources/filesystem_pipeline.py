@@ -69,7 +69,7 @@ def read_csv_with_duckdb() -> None:
     print(pipeline.last_trace.last_normalize_info)
 
 
-def read_csv_duckdb_compressed():
+def read_csv_duckdb_compressed() -> None:
     pipeline = dlt.pipeline(
         pipeline_name="standard_filesystem",
         destination="postgres",
