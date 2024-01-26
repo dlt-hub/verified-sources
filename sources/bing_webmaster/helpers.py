@@ -2,28 +2,28 @@
 
 import re
 from datetime import date
-from typing import Dict, Iterator, List
+from typing import Dict, List, Iterator
 
-from dlt.common.typing import DictStrAny, DictStrStr, StrAny
+from dlt.common.typing import DictStrAny, DictStrStr
 from dlt.sources.helpers import requests
 
 from .settings import BASE_URL, HEADERS
 
 
-def get_url_with_retry(url: str, params: DictStrStr) -> StrAny:
+def get_url_with_retry(url: str, params: DictStrStr) -> DictStrAny:
     r = requests.get(url, headers=HEADERS, params=params)
     r.raise_for_status()
     return r.json()  # type: ignore
 
 
-def get_stats_with_retry(api_path: str, params: DictStrStr) -> List[StrAny]:
+def get_stats_with_retry(api_path: str, params: DictStrStr) -> List[DictStrAny]:
     url = f"{BASE_URL}{api_path}"
     response = get_url_with_retry(url, params)
-    return response.get("d")
+    return response.get("d")  # type: ignore
 
 
 def parse_response(
-    response: Iterator[DictStrAny], site_url: str, page: str = None
+    response: List[DictStrAny], site_url: str, page: str = None
 ) -> Iterator[DictStrAny]:
     """
     Adds site_url from the request to the response.
@@ -65,7 +65,7 @@ def parse_response(
         yield r
 
 
-def _parse_date(record: Dict[str, str]) -> date:
+def _parse_date(record: DictStrStr) -> date:
     """Parses Microsoft's date format into a date. The number is a unix timestamp
     >>> _parse_date({'Date': '/Date(1700179200000)/'})
     datetime.date(2023, 11, 17)
