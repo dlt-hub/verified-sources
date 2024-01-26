@@ -1,4 +1,5 @@
-from typing import Any, Iterator, TypeVar
+"""Scraping source using scrapy"""
+from typing import Any, Iterator, List, TypeVar
 from queue import Empty
 
 import dlt
@@ -13,6 +14,7 @@ from .queue import BaseQueue
 T = TypeVar("T")
 
 
+@dlt.source
 def scrapy_source(queue: BaseQueue[T]) -> Iterator[Any]:
     yield scrapy_resource(queue)
 
@@ -32,17 +34,19 @@ def scrapy_resource(
     Returns:
         Iterator[Any]: yields scraped items one by one
     """
-    batch = []
+    batch: List[T] = []
+    num_batches = 0
     while True:
-        # We want to make sure to consume all
-        # items from queue before stopping
         if len(batch) >= batch_size:
+            num_batches += 1
             yield batch
             batch = []
 
         try:
             result = queue.get(timeout=queue_result_timeout)
             batch.append(result)
+
+            # Mark task as completed
             queue.task_done()
         except Empty:
             logger.info(
@@ -51,6 +55,8 @@ def scrapy_resource(
 
             # Return the last batch before exiting
             if len(batch) > 0:
+                num_batches += 1
                 yield batch
 
+            logger.info(f"Loaded {num_batches} batches")
             break

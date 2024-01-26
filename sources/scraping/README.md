@@ -5,12 +5,12 @@ to enable this capability.
 
 ## 🧠 How it works?
 
-Under the hood we run DLT [pipeline](https://dlthub.com/docs/api_reference/pipeline) in a separate thread while scrapy uses [`scrapy.CrawlerRunner`](https://docs.scrapy.org/en/latest/topics/api.html#scrapy.crawler.CrawlerRunner) is running in the main thread.
+Under the hood we run DLT [pipeline](https://dlthub.com/docs/api_reference/pipeline) in a separate thread while scrapy is running in the main thread.
 
 Communication between the two is done via the queue, where
 
 * Spider is responsible to put the results in the queue,
-* DLT resource is constantly reading from the queue and terminates upon receiving `done` in the message.
+* DLT resource collects and batches results from the queue.
 
 ![simple diagram](./diagram.png)
 
@@ -20,10 +20,13 @@ It is possible to provide configuration via `.dlt/config.toml` below you can see
 
 ```toml
 [sources.scraping]
+# Batch size - how many scraped results to collect
+# before dispatching to DLT pipeline
 batch_size = 20
+# Defaul queue size
 queue_size = 3000
+# How log to wait before exiting
 queue_result_timeout = 5
-start_urls = [
 start_urls = [
     "https://quotes.toscrape.com/page/1/"
 ]
