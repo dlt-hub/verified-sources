@@ -1,6 +1,5 @@
 from typing import TYPE_CHECKING, Any, Dict, Iterator, Optional
 
-import dlt
 from dlt.common import json
 from dlt.common.typing import copy_sig
 from dlt.sources import TDataItems, DltResource, DltSource
@@ -101,27 +100,17 @@ def _read_csv_duckdb(
         Iterable[TDataItem]: Data items, read from the given CSV files.
     """
     import duckdb
-    import pendulum
-
-    read_csv_kwargs = read_csv_kwargs or {}
-
-    state = dlt.current.resource_state()
-    start_from = state.setdefault("last_modified", pendulum.datetime(1970, 1, 1))
-
-    helper = fetch_arrow if use_pyarrow else fetch_json
 
     connection = duckdb.connect()
 
-    for item in items:
-        if item["modification_date"] <= start_from:
-            continue
+    read_csv_kwargs = read_csv_kwargs or {}
+    helper = fetch_arrow if use_pyarrow else fetch_json
 
+    for item in items:
         with item.open() as f:
             file_data = connection.read_csv(f, **read_csv_kwargs)  # type: ignore
 
             yield from helper(file_data, chunk_size)
-
-        state["last_modified"] = max(item["modification_date"], state["last_modified"])
 
 
 if TYPE_CHECKING:
