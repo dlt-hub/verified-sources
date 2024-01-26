@@ -85,6 +85,7 @@ adlfs = ">=2023.9.0"
 
 [tool.poetry.group.scrapy.dependencies]
 scrapy = "^2.11.0"
+twisted = "22.10.0"
 
 [build-system]
 requires = ["poetry-core"]
