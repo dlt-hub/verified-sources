@@ -186,6 +186,21 @@ def read_files_incrementally_mtime() -> None:
     print(pipeline.last_trace.last_normalize_info)
 
 
+def read_csv_with_duck_db_compressed():
+    pipeline = dlt.pipeline(
+        pipeline_name="standard_filesystem",
+        destination="postgres",
+        dataset_name="met_data",
+        full_refresh=True,
+    )
+
+    met_files = readers(bucket_url=TESTS_BUCKET_URL, file_glob="*.gz").read_csv_duckdb()
+
+    load_info = pipeline.run(met_files)
+
+    print(load_info)
+
+
 if __name__ == "__main__":
     copy_files_resource("_storage")
     stream_and_merge_csv()
@@ -193,3 +208,4 @@ if __name__ == "__main__":
     read_custom_file_type_excel()
     read_files_incrementally_mtime()
     read_csv_with_duckdb()
+    read_csv_with_duck_db_compressed()
