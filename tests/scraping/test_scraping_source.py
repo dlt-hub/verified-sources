@@ -58,11 +58,11 @@ def test_all_resources(destination_name: str) -> None:
     table_counts = load_table_counts(pipeline, *table_names)
 
     # for now only check main tables
-    expected_tables = {"fam_quotes", "fam_quotes__quote__tags"}
+    expected_tables = {"quotes", "quotes__quote__tags"}
     assert set(table_counts.keys()) >= set(expected_tables)
 
-    assert table_counts["fam_quotes"] == 100
-    assert table_counts["fam_quotes__quote__tags"] == 232
+    assert table_counts["quotes"] == 100
+    assert table_counts["quotes__quote__tags"] == 232
 
 
 def test_scrapy_pipeline_sends_data_in_queue(mocker):
