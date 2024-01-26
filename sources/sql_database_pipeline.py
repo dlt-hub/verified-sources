@@ -123,7 +123,7 @@ def reflect_and_connector_x() -> None:
         conn_str: str,
         query: str,
     ) -> Iterator[Any]:
-        import connectorx as cx  # type: ignore[import-untyped]
+        import connectorx as cx  # type: ignore
 
         yield cx.read_sql(
             conn_str,
