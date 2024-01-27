@@ -1,9 +1,9 @@
 """Chess source helpers"""
 
 import re
-from datetime import date
-from typing import Dict, List, Iterator
+from typing import Iterator, List
 
+from dlt.common import pendulum
 from dlt.common.typing import DictStrAny, DictStrStr
 from dlt.sources.helpers import requests
 
@@ -65,11 +65,12 @@ def parse_response(
         yield r
 
 
-def _parse_date(record: DictStrStr) -> date:
+def _parse_date(record: DictStrStr) -> pendulum.Date:
     """Parses Microsoft's date format into a date. The number is a unix timestamp
     >>> _parse_date({'Date': '/Date(1700179200000)/'})
     datetime.date(2023, 11, 17)
     """
     match = re.findall(r"\d+", record.get("Date"))  # extract the digits
     timestamp_in_seconds = int(match[0]) // 1000
-    return date.fromtimestamp(timestamp_in_seconds)
+    d: pendulum.Date = pendulum.Date.fromtimestamp(timestamp_in_seconds)
+    return d
