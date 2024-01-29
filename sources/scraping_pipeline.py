@@ -14,8 +14,6 @@ class MySpider(DltSpider):
         for next_page in response.css("li.next a::attr(href)"):
             if next_page:
                 yield response.follow(next_page, self.parse)
-            else:
-                self.queue.close()
 
         for quote in response.css("div.quote"):
             result = {

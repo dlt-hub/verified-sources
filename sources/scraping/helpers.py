@@ -5,15 +5,13 @@ from typing import Any
 import dlt
 import scrapy  # type: ignore
 
-from dlt.common.schema.typing import TWriteDisposition
 from dlt.common.configuration.inject import with_config
 from dlt.common.configuration.specs.base_configuration import (
     configspec,
     BaseConfiguration,
 )
 
-from scrapy.crawler import CrawlerRunner  # type: ignore
-from twisted.internet import reactor
+from scrapy.crawler import CrawlerProcess  # type: ignore
 
 from .types import AnyDict
 from .queue import BaseQueue
@@ -60,7 +58,7 @@ class ScrapyRunner(Runnable):
         self.include_headers = include_headers
 
     def run(self, *args: Any, **kwargs: AnyDict) -> None:
-        runner = CrawlerRunner(settings=self.settings)
+        runner = CrawlerProcess(settings=self.settings)
         runner.crawl(
             self.spider,
             queue=self.queue,
@@ -70,9 +68,9 @@ class ScrapyRunner(Runnable):
             **kwargs,
         )
 
-        d = runner.join()
-        d.addBoth(lambda _: reactor.stop())  # type: ignore[attr-defined]
-        reactor.run()  # type: ignore[attr-defined]
+        # Join and close queue
+        self.queue.join()
+        self.queue.close()
 
 
 class PipelineRunner(Runnable):
@@ -83,7 +81,6 @@ class PipelineRunner(Runnable):
         self,
         data: Any,
         *args: Any,
-        write_disposition: t.Optional[TWriteDisposition] = "append",
         **kwargs: Any,
     ) -> None:
         """You can use all regular dlt.pipeline.run() arguments
@@ -103,7 +100,7 @@ class PipelineRunner(Runnable):
         """
 
         def run() -> None:
-            self.pipeline.run(data, write_disposition=write_disposition, **kwargs)
+            self.pipeline.run(data, **kwargs)
 
         self.thread_runner = threading.Thread(target=run)
         self.thread_runner.start()
@@ -152,8 +149,6 @@ def create_pipeline_runner(
     pipeline_runner = PipelineRunner(pipeline=pipeline)
 
     def wait_for_results() -> None:
-        queue.join()
-        queue.close()
         pipeline_runner.join()
 
     return pipeline_runner, scrapy_runner, wait_for_results
