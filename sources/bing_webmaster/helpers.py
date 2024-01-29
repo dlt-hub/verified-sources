@@ -1,4 +1,4 @@
-"""Chess source helpers"""
+"""Bing Webmaster source helpers"""
 
 import re
 from typing import Iterator, List
