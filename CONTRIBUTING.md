@@ -3,7 +3,7 @@
 </h1>
 
 <div align="center">
-  <a target="_blank" href="https://join.slack.com/t/dlthub-community/shared_invite/zt-1slox199h-HAE7EQoXmstkP_bTqal65g" style="background:none">
+  <a target="_blank" href="https://dlthub.com/community" style="background:none">
     <img src="https://img.shields.io/badge/slack-join-dlt.svg?labelColor=191937&color=6F6FF7&logo=slack" />
   </a>
   <a target="_blank" href="https://pypi.org/project/dlt/" style="background:none">
@@ -30,7 +30,7 @@ What do you can do here:
   ["Walktrough: Create and contribute a new source"](#walktrough-create-and-contribute-a-new-source)
   section.
 - Join our slack to get support from us by following the
-  [invitation link](https://join.slack.com/t/dlthub-community/shared_invite/zt-1n5193dbq-rCBmJ6p~ckpSFK4hCF2dYA).
+  [invitation link](https://dlthub.com/community).
 
 ## Walktrough: Fix, improve, customize, document an existing pipeline
 

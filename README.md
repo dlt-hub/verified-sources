@@ -3,7 +3,7 @@
 </h1>
 
 <div align="center">
-  <a target="_blank" href="https://join.slack.com/t/dlthub-community/shared_invite/zt-1slox199h-HAE7EQoXmstkP_bTqal65g" style="background:none">
+  <a target="_blank" href="https://dlthub.com/community" style="background:none">
     <img src="https://img.shields.io/badge/slack-join-dlt.svg?labelColor=191937&color=6F6FF7&logo=slack" />
   </a>
   <a target="_blank" href="https://pypi.org/project/dlt/" style="background:none">
@@ -20,7 +20,7 @@ This repository contains verified dlt sources and demo pipelines for each source
 ## How to add a verified source to your dlt project
 `dlt` offers an `init` command that will clone and inject any source with an example pipeline from this repository into your project, setup the credentials and python dependencies. Please follow the step by step instructions in our [docs](https://dlthub.com/docs/walkthroughs/add-a-verified-source).
 ## How to contact us and get help
-Join our slack by following the [invitation link](https://join.slack.com/t/dlthub-community/shared_invite/zt-1n5193dbq-rCBmJ6p~ckpSFK4hCF2dYA)
+Join our slack by following the [invitation link](https://dlthub.com/community)
 
  - If you have added a source and something does not work, post in the `technical-help` channel
  - If you want to contribute sources, customization or a fix, post in the `dlt-contributors` channel
