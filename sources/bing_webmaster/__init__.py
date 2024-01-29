@@ -3,12 +3,12 @@ A source loading history of organic search traffic from Bing Webmaster API
 See documentation: https://learn.microsoft.com/en-us/dotnet/api/microsoft.bing.webmaster.api.interfaces.iwebmasterapi?view=bing-webmaster-dotnet
 """
 
-from typing import Any, Dict, Iterator, Iterable, List, Sequence
+import time
+from typing import Iterable, Iterator, List, Sequence
 
 import dlt
+from dlt.common.typing import DictStrAny, DictStrStr
 from dlt.sources import DltResource
-from dlt.common.typing import DictStrStr, DictStrAny
-import time
 
 from .helpers import get_stats_with_retry, parse_response
 
@@ -90,32 +90,3 @@ def page_query_stats(
         response = get_stats_with_retry(api_path, params)
         if len(response) > 0:
             yield parse_response(response, site_url, page)
-
-
-@dlt.source
-def chess_dlt_config_example(
-    secret_str: str = dlt.secrets.value,
-    secret_dict: Dict[str, Any] = dlt.secrets.value,
-    config_int: int = dlt.config.value,
-) -> DltResource:
-    """
-    An example of a source that uses dlt to provide secrets and config values.
-    Args:
-        secret_str (str, optional): Secret string provided by dlt.secrets.value. Defaults to dlt.secrets.value.
-        secret_dict (Dict[str, Any], optional): Secret dictionary provided by dlt.secrets.value. Defaults to dlt.secrets.value.
-        config_int (int, optional): Config integer provided by dlt.config.value. Defaults to dlt.config.value.
-    Returns:
-        DltResource: Returns a resource yielding the configured values.
-    """
-    print(secret_str)
-    print(secret_dict)
-    print(config_int)
-
-    # returns a resource yielding the configured values - it is just a test
-    return dlt.resource([secret_str, secret_dict, config_int], name="config_values")
-
-
-# if __name__ == "__main__":
-#     import doctest
-
-#     doctest.testmod()
