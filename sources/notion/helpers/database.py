@@ -57,14 +57,13 @@ class NotionDatabase:
         Yields:
             List[Dict[str, Any]]: A record from the database.
         """
-        payload = {
-            "filter": filter_criteria,
-            "sorts": sorts,
-            "start_cursor": start_cursor,
-            "page_size": page_size,
-        }
-
         while True:
+            payload = {
+                "filter": filter_criteria,
+                "sorts": sorts,
+                "start_cursor": start_cursor,
+                "page_size": page_size,
+            }
             response = self.notion_client.send_payload(
                 "databases",
                 self.database_id,
