@@ -16,6 +16,10 @@ else:
         pass
 
 
+class QueueClosedError(Exception):
+    pass
+
+
 class BaseQueue(_Queue[T]):
     def __init__(self, maxsize: int = 0) -> None:
         super().__init__(maxsize)

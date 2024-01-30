@@ -8,7 +8,7 @@ from dlt.common import logger
 from dlt.common.configuration.inject import with_config
 
 from .helpers import ScrapingConfig
-from .queue import BaseQueue
+from .queue import BaseQueue, QueueClosedError
 
 
 T = TypeVar("T")
@@ -44,7 +44,7 @@ def scrapy_resource(
 
         try:
             if queue.is_closed:
-                break
+                raise QueueClosedError
 
             result = queue.get(timeout=queue_result_timeout)
             batch.append(result)
@@ -52,9 +52,14 @@ def scrapy_resource(
             # Mark task as completed
             queue.task_done()
         except Empty:
-            logger.info(
-                f"Queue has been empty for {queue_result_timeout}s, stopping..."
-            )
+            logger.info(f"Queue has been empty for {queue_result_timeout}s...")
+
+            # Return the last batch before exiting
+            if len(batch) > 0:
+                num_batches += 1
+                yield batch
+        except QueueClosedError:
+            logger.info("Queue is closed, stopping...")
 
             # Return the last batch before exiting
             if len(batch) > 0:
@@ -62,3 +67,5 @@ def scrapy_resource(
                 yield batch
 
             logger.info(f"Loaded {num_batches} batches")
+
+            break
