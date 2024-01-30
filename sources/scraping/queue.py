@@ -27,13 +27,8 @@ class BaseQueue(_Queue[T]):
         self._is_closed = False
 
     def close(self) -> None:
-        with self._state_lock:
-            if self._is_closed:
-                return
-
-            self._is_closed = True
+        self._is_closed = True
 
     @property
     def is_closed(self) -> bool:
-        with self._state_lock:
-            return self._is_closed
+        return self._is_closed

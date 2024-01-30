@@ -44,7 +44,7 @@ def scrapy_resource(
 
         try:
             if queue.is_closed:
-                raise QueueClosedError
+                raise QueueClosedError("Queue is closed")
 
             result = queue.get(timeout=queue_result_timeout)
             batch.append(result)
