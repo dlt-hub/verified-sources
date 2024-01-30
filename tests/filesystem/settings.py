@@ -19,6 +19,7 @@ GLOB_RESULTS = [
             "csv/freshman_lbs.csv",
             "csv/mlb_players.csv",
             "csv/mlb_teams_2012.csv",
+            "gzip/taxi.csv.gz",
             "jsonl/mlb_players.jsonl",
             "parquet/mlb_players.parquet",
         ],
