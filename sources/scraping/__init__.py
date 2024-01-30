@@ -43,6 +43,9 @@ def scrapy_resource(
             batch = []
 
         try:
+            if queue.is_closed:
+                break
+
             result = queue.get(timeout=queue_result_timeout)
             batch.append(result)
 
@@ -59,4 +62,3 @@ def scrapy_resource(
                 yield batch
 
             logger.info(f"Loaded {num_batches} batches")
-            break
