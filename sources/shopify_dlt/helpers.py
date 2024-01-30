@@ -3,10 +3,12 @@ from urllib.parse import urljoin
 
 from dlt.common.time import ensure_pendulum_datetime
 from dlt.sources.helpers import requests
-from dlt.common.typing import TDataItem, TDataItems, Dict
+from dlt.common.typing import TDataItem, TDataItems, Dict, DictStrAny
+from dlt.common import jsonpath
 from typing import Any, Iterable, Optional, Literal
 
-from .settings import DEFAULT_API_VERSION
+from .settings import DEFAULT_API_VERSION, DEFAULT_PARTNER_API_VERSION
+from .exceptions import ShopifyPartnerApiError
 
 TOrderStatus = Literal["open", "closed", "cancelled", "any"]
 
@@ -74,3 +76,71 @@ class ShopifyApi:
             if field in item:
                 item[field] = ensure_pendulum_datetime(item[field])
         return item
+
+
+class ShopifyPartnerApi:
+    """Client for Shopify Partner grapql API"""
+
+    def __init__(
+        self,
+        access_token: str,
+        organization_id: str,
+        api_version: str = DEFAULT_PARTNER_API_VERSION,
+    ) -> None:
+        """
+        Args:
+            access_token: The access token to use
+            organization_id: The organization id to query
+            api_version: The API version to use (e.g. 2023-01)
+        """
+        self.access_token = access_token
+        self.organization_id = organization_id
+        self.api_version = api_version
+
+    @property
+    def graphql_url(self) -> str:
+        return f"https://partners.shopify.com/{self.organization_id}/api/{self.api_version}/graphql.json"
+
+    def run_graphql_query(
+        self, query: str, variables: Optional[DictStrAny] = None
+    ) -> DictStrAny:
+        """Run a graphql query against the Shopify Partner API
+
+        Args:
+            query: The query to run
+            variables: The variables to include in the query
+
+        Returns:
+            The response JSON
+        """
+        headers = {"X-Shopify-Access-Token": self.access_token}
+        response = requests.post(
+            self.graphql_url,
+            json={"query": query, "variables": variables},
+            headers=headers,
+        )
+        data = response.json()
+        if data.get("errors"):
+            raise ShopifyPartnerApiError(response.text)
+        return data  # type: ignore[no-any-return]
+
+    def get_graphql_pages(
+        self,
+        query: str,
+        data_items_path: jsonpath.TJsonPath,
+        pagination_cursor_path: jsonpath.TJsonPath,
+        pagination_variable_name: str,
+        variables: Optional[DictStrAny] = None,
+    ) -> Iterable[TDataItems]:
+        variables = dict(variables or {})
+        while True:
+            data = self.run_graphql_query(query, variables)
+            print(data)
+            data_items = jsonpath.find_values(data_items_path, data)
+            if not data_items:
+                break
+            yield data_items
+            cursors = jsonpath.find_values(pagination_cursor_path, data)
+            if not cursors:
+                break
+            variables[pagination_variable_name] = cursors[-1]

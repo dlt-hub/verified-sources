@@ -86,7 +86,7 @@ def filesystem(
         files_chunk.append(file_dict)  # type: ignore
 
         # wait for the chunk to be full
-        if len(file_dict) >= files_per_page:
+        if len(files_chunk) >= files_per_page:
             yield files_chunk
             files_chunk = []
     if files_chunk:

@@ -17,6 +17,7 @@ from .helpers import (
     SqlDatabaseTableConfiguration,
     SqlTableResourceConfiguration,
 )
+from .schema_types import table_to_columns
 
 
 @dlt.source
@@ -25,6 +26,7 @@ def sql_database(
     schema: Optional[str] = dlt.config.value,
     metadata: Optional[MetaData] = None,
     table_names: Optional[List[str]] = dlt.config.value,
+    detect_precision_hints: Optional[bool] = dlt.config.value,
 ) -> Iterable[DltResource]:
     """
     A DLT source which loads data from an SQL database using SQLAlchemy.
@@ -35,7 +37,8 @@ def sql_database(
         schema (Optional[str]): Name of the database schema to load (if different from default).
         metadata (Optional[MetaData]): Optional `sqlalchemy.MetaData` instance. `schema` argument is ignored when this is used.
         table_names (Optional[List[str]]): A list of table names to load. By default, all tables in the schema are loaded.
-
+        detect_precision_hints (bool): Set column precision and scale hints for supported data types in the target schema based on the columns in the source tables.
+            This is disabled by default.
     Returns:
         Iterable[DltResource]: A list of DLT resources for each table to be loaded.
     """
@@ -58,6 +61,7 @@ def sql_database(
             name=table.name,
             primary_key=get_primary_key(table),
             spec=SqlDatabaseTableConfiguration,
+            columns=table_to_columns(table) if detect_precision_hints else None,
         )(engine, table)
 
 
@@ -70,6 +74,7 @@ def sql_table(
     schema: Optional[str] = dlt.config.value,
     metadata: Optional[MetaData] = None,
     incremental: Optional[dlt.sources.incremental[Any]] = None,
+    detect_precision_hints: Optional[bool] = dlt.config.value,
 ) -> DltResource:
     """
     A dlt resource which loads data from an SQL database table using SQLAlchemy.
@@ -82,6 +87,8 @@ def sql_table(
         incremental (Optional[dlt.sources.incremental[Any]]): Option to enable incremental loading for the table.
             E.g., `incremental=dlt.sources.incremental('updated_at', pendulum.parse('2022-01-01T00:00:00Z'))`
         write_disposition (str): Write disposition of the resource.
+        detect_precision_hints (bool): Set column precision and scale hints for supported data types in the target schema based on the columns in the source tables.
+            This is disabled by default.
 
     Returns:
         DltResource: The dlt resource for loading data from the SQL database table.
@@ -93,5 +100,8 @@ def sql_table(
     table_obj = Table(table, metadata, autoload_with=engine)
 
     return dlt.resource(
-        table_rows, name=table_obj.name, primary_key=get_primary_key(table_obj)
+        table_rows,
+        name=table_obj.name,
+        primary_key=get_primary_key(table_obj),
+        columns=table_to_columns(table_obj) if detect_precision_hints else None,
     )(engine, table_obj, incremental=incremental)
