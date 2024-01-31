@@ -55,13 +55,13 @@ def read_csv_with_duckdb() -> None:
     pipeline = dlt.pipeline(
         pipeline_name="standard_filesystem",
         destination="duckdb",
-        dataset_name="met_data",
+        dataset_name="met_data_duckdb",
     )
 
     # load all the CSV data, excluding headers
     met_files = readers(
         bucket_url=TESTS_BUCKET_URL, file_glob="met_csv/A801/*.csv"
-    ).read_csv_duckdb(chunk_size=1000, read_csv_kwargs={"header": True})
+    ).read_csv_duckdb(chunk_size=1000, header=True)
 
     load_info = pipeline.run(met_files)
 
@@ -72,18 +72,19 @@ def read_csv_with_duckdb() -> None:
 def read_csv_duckdb_compressed() -> None:
     pipeline = dlt.pipeline(
         pipeline_name="standard_filesystem",
-        destination="postgres",
-        dataset_name="met_data",
+        destination="duckdb",
+        dataset_name="taxi_data",
         full_refresh=True,
     )
 
     met_files = readers(
         bucket_url=TESTS_BUCKET_URL,
-        file_glob="gzip/*.gz",
+        file_glob="gzip/*",
     ).read_csv_duckdb()
-    load_info = pipeline.run(met_files)
 
+    load_info = pipeline.run(met_files)
     print(load_info)
+    print(pipeline.last_trace.last_normalize_info)
 
 
 def read_parquet_and_jsonl_chunked() -> None:

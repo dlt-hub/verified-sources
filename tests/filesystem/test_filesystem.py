@@ -144,12 +144,11 @@ def test_standard_readers(bucket_url: str) -> None:
     # extract pipes with standard readers
     jsonl_reader = readers(bucket_url, file_glob="**/*.jsonl").read_jsonl()
     parquet_reader = readers(bucket_url, file_glob="**/*.parquet").read_parquet()
-    csv_reader = readers(bucket_url, file_glob="**/*.csv").read_csv(
+    # also read zipped csvs
+    csv_reader = readers(bucket_url, file_glob="**/*.csv*").read_csv(
         float_precision="high"
     )
-    csv_duckdb_reader = readers(bucket_url, file_glob="**/*.csv").read_csv_duckdb(
-        read_csv_kwargs={"header": True}
-    )
+    csv_duckdb_reader = readers(bucket_url, file_glob="**/*.csv*").read_csv_duckdb()
 
     # a step that copies files into test storage
     def _copy(item: FileItemDict):
@@ -180,6 +179,8 @@ def test_standard_readers(bucket_url: str) -> None:
             csv_duckdb_reader.with_name("csv_duckdb_example"),
         ]
     )
+    # pandas incorrectly guesses that taxi dataset has headers so it skips one row
+    # so we have 1 less row in csv_example than in csv_duckdb_example
     assert_load_info(load_info)
     assert load_table_counts(
         pipeline,
@@ -192,8 +193,8 @@ def test_standard_readers(bucket_url: str) -> None:
         "jsonl_example": 1034,
         "parquet_example": 1034,
         "listing": 11,
-        "csv_example": 1270,
-        "csv_duckdb_example": 1270,
+        "csv_example": 1279,
+        "csv_duckdb_example": 1280,
     }
     # print(pipeline.last_trace.last_normalize_info)
     # print(pipeline.default_schema.to_pretty_yaml())

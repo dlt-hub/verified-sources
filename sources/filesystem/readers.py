@@ -80,7 +80,7 @@ def _read_csv_duckdb(
     items: Iterator[FileItemDict],
     chunk_size: Optional[int] = 5000,
     use_pyarrow: bool = False,
-    read_csv_kwargs: Optional[Dict[str, Any]] = None,
+    **duckdb_kwargs: Any
 ) -> Iterator[TDataItems]:
     """A resource to extract data from the given CSV files.
 
@@ -93,7 +93,7 @@ def _read_csv_duckdb(
         use_pyarrow (bool):
             Whether to use `pyarrow` to read the data and designate
             data schema. If set to False (by default), JSON is used.
-        read_csv_kwargs (Optional[Dict]):
+        duckdb_kwargs (Dict):
             Additional keyword arguments to pass to the `read_csv()`.
 
     Returns:
@@ -101,14 +101,11 @@ def _read_csv_duckdb(
     """
     import duckdb
 
-    connection = duckdb.connect()
-
-    read_csv_kwargs = read_csv_kwargs or {}
     helper = fetch_arrow if use_pyarrow else fetch_json
 
     for item in items:
         with item.open() as f:
-            file_data = connection.read_csv(f, **read_csv_kwargs)  # type: ignore
+            file_data = duckdb.from_csv_auto(f, **duckdb_kwargs)  # type: ignore
 
             yield from helper(file_data, chunk_size)
 
@@ -131,7 +128,7 @@ if TYPE_CHECKING:
             ...
 
         @copy_sig(_read_csv_duckdb)
-        def read_location(self) -> DltResource:
+        def read_csv_duckdb(self) -> DltResource:
             ...
 
 else:
