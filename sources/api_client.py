@@ -205,7 +205,6 @@ class APIClient:
             >>>     print(page)
         """
         paginator = copy.deepcopy(paginator if paginator else self.paginator)
-
         while paginator.has_next_page:
             response = self.make_request(
                 path=path, method=method, params=params, json=json
@@ -215,3 +214,6 @@ class APIClient:
 
             paginator.update_state(response)
             path, params, json = paginator.prepare_next_request_args(path, params, json)
+
+    def __iter__(self):
+        return self.paginate()
