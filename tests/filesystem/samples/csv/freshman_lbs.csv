@@ -1,4 +1,4 @@
-Sex,Weight(lbs,Sep),Weight(lbs,Apr),BMI(Sep),BMI(Apr)
+"Sex","Weight(lbs,Sep)","Weight(lbs,Apr)","BMI(Sep)","BMI(Apr)"
 M,159,130,22.02,18.14
 M,214,190,19.70,17.44
 M,163,152,24.09,22.43

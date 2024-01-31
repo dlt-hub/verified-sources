@@ -1,9 +1,11 @@
-from typing import TYPE_CHECKING, Any, Iterator
+from typing import TYPE_CHECKING, Any, Dict, Iterator, Optional
 
 from dlt.common import json
 from dlt.common.typing import copy_sig
 from dlt.sources import TDataItems, DltResource, DltSource
 from dlt.sources.filesystem import FileItemDict
+
+from .helpers import fetch_arrow, fetch_json
 
 
 def _read_csv(
@@ -74,6 +76,40 @@ def _read_parquet(
                 yield rows.to_pylist()
 
 
+def _read_csv_duckdb(
+    items: Iterator[FileItemDict],
+    chunk_size: Optional[int] = 5000,
+    use_pyarrow: bool = False,
+    **duckdb_kwargs: Any
+) -> Iterator[TDataItems]:
+    """A resource to extract data from the given CSV files.
+
+    Uses DuckDB engine to import and cast CSV data.
+
+    Args:
+        items (Iterator[FileItemDict]): CSV files to read.
+        chunk_size (Optional[int]):
+            The number of rows to read at once. Defaults to 5000.
+        use_pyarrow (bool):
+            Whether to use `pyarrow` to read the data and designate
+            data schema. If set to False (by default), JSON is used.
+        duckdb_kwargs (Dict):
+            Additional keyword arguments to pass to the `read_csv()`.
+
+    Returns:
+        Iterable[TDataItem]: Data items, read from the given CSV files.
+    """
+    import duckdb
+
+    helper = fetch_arrow if use_pyarrow else fetch_json
+
+    for item in items:
+        with item.open() as f:
+            file_data = duckdb.from_csv_auto(f, **duckdb_kwargs)  # type: ignore
+
+            yield from helper(file_data, chunk_size)
+
+
 if TYPE_CHECKING:
 
     class ReadersSource(DltSource):
@@ -89,6 +125,10 @@ if TYPE_CHECKING:
 
         @copy_sig(_read_parquet)
         def read_parquet(self) -> DltResource:
+            ...
+
+        @copy_sig(_read_csv_duckdb)
+        def read_csv_duckdb(self) -> DltResource:
             ...
 
 else:

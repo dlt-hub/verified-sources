@@ -1,10 +1,11 @@
 """Helpers for the filesystem resource."""
-from typing import Optional, Type, Union, TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Dict, Iterable, List, Optional, Type, Union
 from fsspec import AbstractFileSystem  # type: ignore
 
 from dlt.common.configuration import resolve_type
+from dlt.common.typing import TDataItem
 
-from dlt.sources import DltResource, DltSource
+from dlt.sources import DltResource
 from dlt.sources.filesystem import fsspec_filesystem
 from dlt.sources.config import configspec, with_config
 from dlt.sources.credentials import (
@@ -46,3 +47,52 @@ def fsspec_from_resource(filesystem_instance: DltResource) -> AbstractFileSystem
         filesystem_instance.explicit_args.get("bucket_url", None),
         filesystem_instance.explicit_args.get("credentials", None),
     )
+
+
+def add_columns(columns: List[str], rows: List[List[Any]]) -> List[Dict[str, Any]]:
+    """Adds column names to the given rows.
+
+    Args:
+        columns (List[str]): The column names.
+        rows (List[List[Any]]): The rows.
+
+    Returns:
+        List[Dict[str, Any]]: The rows with column names.
+    """
+    result = []
+    for row in rows:
+        result.append(dict(zip(columns, row)))
+
+    return result
+
+
+def fetch_arrow(file_data, chunk_size: int) -> Iterable[TDataItem]:  # type: ignore
+    """Fetches data from the given CSV file.
+
+    Args:
+        file_data (DuckDBPyRelation): The CSV file data.
+        chunk_size (int): The number of rows to read at once.
+
+    Yields:
+        Iterable[TDataItem]: Data items, read from the given CSV file.
+    """
+    batcher = file_data.fetch_arrow_reader(batch_size=chunk_size)
+    yield from batcher
+
+
+def fetch_json(file_data, chunk_size: int) -> List[Dict[str, Any]]:  # type: ignore
+    """Fetches data from the given CSV file.
+
+    Args:
+        file_data (DuckDBPyRelation): The CSV file data.
+        chunk_size (int): The number of rows to read at once.
+
+    Yields:
+        Iterable[TDataItem]: Data items, read from the given CSV file.
+    """
+    while True:
+        batch = file_data.fetchmany(chunk_size)
+        if not batch:
+            break
+
+        yield add_columns(file_data.columns, batch)
