@@ -2,7 +2,7 @@ from typing import Any, Sequence, Tuple
 
 import dlt
 from dlt.common import pendulum
-from dlt.common.typing import DictStrStr, StrAny, StrStr
+from dlt.common.typing import DictStrAny, StrAny, StrStr
 
 
 def get_shard_iterator(
@@ -20,7 +20,7 @@ def get_shard_iterator(
     sequence_state = (
         {} if last_msg is None else last_msg.last_value or last_msg.initial_value or {}
     )
-    iterator_params: DictStrStr
+    iterator_params: DictStrAny
     msg_sequence = sequence_state.get(shard_id, None)
     if msg_sequence:
         iterator_params = dict(
