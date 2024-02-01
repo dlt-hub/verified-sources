@@ -58,8 +58,8 @@ class ScrapyRunner(Runnable):
         self.include_headers = include_headers
 
     def run(self, *args: Any, **kwargs: AnyDict) -> None:
-        runner = CrawlerProcess(settings=self.settings)
-        runner.crawl(
+        crawler = CrawlerProcess(settings=self.settings)
+        crawler.crawl(
             self.spider,
             queue=self.queue,
             include_headers=self.include_headers,
@@ -67,6 +67,8 @@ class ScrapyRunner(Runnable):
             start_urls=self.start_urls,
             **kwargs,
         )
+
+        crawler.start()
 
         # Join and close queue
         self.queue.join()

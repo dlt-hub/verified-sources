@@ -1,7 +1,5 @@
 from typing import Type
-
 import scrapy  # type: ignore
-from scrapy.exceptions import CloseSpider  # type: ignore
 from dlt.common import logger
 
 from .spider import DltSpider
@@ -16,6 +14,5 @@ class ScrapingPipelineItem:
             spider.queue.put(item)  # type: ignore
         else:
             logger.warning("Queue is closed")
-            raise CloseSpider("Queue is closed, exiting...")
 
         return item

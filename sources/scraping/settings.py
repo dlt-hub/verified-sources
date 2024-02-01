@@ -8,4 +8,5 @@ SOURCE_SCRAPY_SETTINGS: AnyDict = {
     # If not set then will keep logging warning in the console
     # https://docs.scrapy.org/en/latest/topics/request-response.html#request-fingerprinter-implementation
     "REQUEST_FINGERPRINTER_IMPLEMENTATION": "2.7",
+    "TELNETCONSOLE_ENABLED": False,
 }

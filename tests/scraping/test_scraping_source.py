@@ -19,8 +19,6 @@ class MySpider(DltSpider):
         for next_page in response.css("li.next a::attr(href)"):
             if next_page:
                 yield response.follow(next_page, self.parse)
-            else:
-                self.queue.close()
 
         for quote in response.css("div.quote"):
             result = {
@@ -30,6 +28,7 @@ class MySpider(DltSpider):
                     "tags": quote.css("div.tags a.tag::text").getall(),
                 },
             }
+
             yield result
 
 
@@ -37,7 +36,7 @@ class MySpider(DltSpider):
 def test_all_resources(destination_name: str) -> None:
     pipeline = dlt.pipeline(
         pipeline_name="scraping",
-        destination="duckdb",
+        destination=destination_name,
         dataset_name="quotes",
     )
 
@@ -75,7 +74,9 @@ def test_scrapy_pipeline_sends_data_in_queue(mocker):
     spy_on_queue = mocker.spy(sources.scraping.helpers.BaseQueue, "put")
     spy_on_queue_close = mocker.spy(sources.scraping.helpers.BaseQueue, "close")
     pipeline_runner, scrapy_runner, wait = create_pipeline_runner(
-        pipeline, spider=MySpider
+        pipeline,
+        spider=MySpider,
+        start_urls=start_urls,
     )
 
     pipeline_runner.run(
