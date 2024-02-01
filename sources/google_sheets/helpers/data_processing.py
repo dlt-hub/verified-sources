@@ -224,7 +224,7 @@ def serial_date_to_datetime(
     )
     # int values are dates, float values are datetimes
     if data_type == "date":
-        return conv_datetime.date()  # type: ignore
+        return conv_datetime.date()
 
     return conv_datetime
 
