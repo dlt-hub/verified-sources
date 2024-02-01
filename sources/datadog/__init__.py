@@ -1,3 +1,5 @@
+"""A source loading Datagog SLOs, monitors, test results and other nice things."""
+
 import typing as t
 from typing import Sequence, Iterable, Dict, Any
 import dlt
@@ -21,6 +23,27 @@ def datadog_source(
     application_key: str = dlt.secrets.value,
     site: str = dlt.config.value,
 ) -> Iterable[DltResource]:
+    """Incrementally loads insight reports with defined granularity level, fields, breakdowns etc.
+
+    By default, the reports are generated one by one for each day, starting with today - attribution_window_days_lag. On subsequent runs, only the reports
+    from the last report date until today are loaded (incremental load). The reports from last 7 days (`attribution_window_days_lag`) are refreshed on each load to
+    account for changes during attribution window.
+
+    Mind that each report is a job and takes some time to execute.
+
+    Args:
+        api_key: str =  dlt.secrets.value,
+        application_key: str = dlt.secrets.value,
+        site: str = dlt.config.value
+
+    Returns:
+        DltResource: authentication
+        DltResource: slos
+        DltResource: monitors
+        DltResource: synthetics
+        DltResource: synthetic_tests
+
+    """
     configuration = Configuration()
     configuration.api_key["apiKeyAuth"] = api_key
     configuration.api_key["appKeyAuth"] = application_key
