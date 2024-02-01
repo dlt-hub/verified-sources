@@ -29,29 +29,6 @@ def parse_response(
     Adds site_url from the request to the response.
     Otherwise, we would not know to which site_url a page and its statistics belong.
     Further, corrects that what the API returns as 'Query' is actually the 'page'.
-    It parses response from GetPageStats API:
-    >>> list(_parse_response(response=[{
-      "__type": "QueryStats:#Microsoft.Bing.Webmaster.Api",
-      "AvgClickPosition": 1,
-      "AvgImpressionPosition": 1,
-      "Clicks": 100,
-      "Date": "/Date(1700179200000)/",
-      "Impressions": 1000,
-      "Query": "https://dlthub.com/why/"
-    }], site_url="dlthub.com"))
-    [{'AvgClickPosition': 1, 'AvgImpressionPosition': 1, 'Clicks': 100, 'Date': datetime.date(2023, 11, 17), 'Impressions': 1000, 'page': 'https://dlthub.com/why/', 'site_url': 'dlthub.com'}]
-
-    It parses response from GetPageQueryStats API:
-    >>> list(_parse_response(response=[{
-      "__type": "QueryStats:#Microsoft.Bing.Webmaster.Api",
-      "AvgClickPosition": 1,
-      "AvgImpressionPosition": 1,
-      "Clicks": 100,
-      "Date": "/Date(1700179200000)/",
-      "Impressions": 1000,
-      "Query": "dlt documentation"
-    }], site_url="dlthub.com", page="https://dlthub.com/docs/intro"))
-    [{'AvgClickPosition': 1, 'AvgImpressionPosition': 1, 'Clicks': 100, 'Date': datetime.date(2023, 11, 17), 'Impressions': 1000, 'Query': 'dlt documentation', 'page': 'https://dlthub.com/docs/intro', 'site_url': 'dlthub.com'}]
     """
     for r in response:
         if page is None:
@@ -66,10 +43,7 @@ def parse_response(
 
 
 def _parse_date(record: DictStrStr) -> pendulum.Date:
-    """Parses Microsoft's date format into a date. The number is a unix timestamp
-    >>> _parse_date({'Date': '/Date(1700179200000)/'})
-    datetime.date(2023, 11, 17)
-    """
+    """Parses Microsoft's date format into a date. The number is a unix timestamp"""
     match = re.findall(r"\d+", record.get("Date"))  # extract the digits
     timestamp_in_seconds = int(match[0]) // 1000
     d: pendulum.Date = pendulum.Date.fromtimestamp(timestamp_in_seconds)
