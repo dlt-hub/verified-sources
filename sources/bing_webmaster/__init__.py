@@ -46,7 +46,7 @@ def page_stats(
     API documentation:
     https://learn.microsoft.com/en-us/dotnet/api/microsoft.bing.webmaster.api.interfaces.iwebmasterapi.getpagestats
     Args:
-        site_urls (List[str]): List of player usernames to retrieve archives for.
+        site_urls (List[str]): List of site_urls to retrieve statistics for.
     Yields:
         Iterator[Dict[str, Any]]: An iterator over list of organic traffic statistics.
     """
