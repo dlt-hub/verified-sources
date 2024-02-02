@@ -62,9 +62,11 @@ def test_load_page_query_stats(destination_name: str) -> None:
     pipeline = _make_pipeline(destination_name)
     table_name = "bing_page_query_stats"
 
-    # TODO replace with domain that the CI has access to, e.g. dlthub.com
     data = source(
         site_url_pages=[
+            # TODO replace with actual pages that the CI has access to, e.g.
+            # {"site_url": "dlthub.com", "page": "https://dlthub.com/docs/intro"},
+            # {"site_url": "dlthub.com", "page":  "https://dlthub.com/why/"}
             {"site_url": "sipgate.de", "page": "https://www.sipgate.de/preise"},
             {"site_url": "sipgate.de", "page": "https://www.sipgate.de/app"},
         ]

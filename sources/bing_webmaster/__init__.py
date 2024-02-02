@@ -1,6 +1,8 @@
 """
 A source loading history of organic search traffic from Bing Webmaster API
 See documentation: https://learn.microsoft.com/en-us/dotnet/api/microsoft.bing.webmaster.api.interfaces.iwebmasterapi?view=bing-webmaster-dotnet
+The API returns aggregated weekly statistics for the entire history of up to 26 weeks.
+The dates are always Fridays and during tests, the data up to the last Friday has been available on the following Monday.
 """
 
 import time
@@ -72,7 +74,7 @@ def page_query_stats(
 ) -> Iterator[Iterator[DictStrAny]]:
     """
     Yields weekly statistics and queries for each pair of page and site_url.
-    Contains the entire available history. Thus, we recommend to use write_disposition="merge"
+    Contains the entire available history of up to 26 weeks. Thus, we recommend to use write_disposition="merge"
     API documentation:
     https://learn.microsoft.com/en-us/dotnet/api/microsoft.bing.webmaster.api.interfaces.iwebmasterapi.getpagequerystats
 

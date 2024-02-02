@@ -2,11 +2,11 @@
 
 import re
 from typing import Iterator, List
+from urllib.parse import urljoin
 
-from dlt.common import pendulum
+from dlt.common import logger, pendulum
 from dlt.common.typing import DictStrAny, DictStrStr
 from dlt.sources.helpers import requests
-from dlt.common import logger
 
 from .settings import BASE_URL, HEADERS
 
@@ -27,7 +27,7 @@ def get_url_with_retry(url: str, params: DictStrStr) -> DictStrAny:
 
 
 def get_stats_with_retry(api_path: str, params: DictStrStr) -> List[DictStrAny]:
-    url = f"{BASE_URL}{api_path}"
+    url = urljoin(BASE_URL, api_path)
     response = get_url_with_retry(url, params)
     return response.get("d")  # type: ignore
 
