@@ -17,9 +17,13 @@ def get_url_with_retry(url: str, params: DictStrStr) -> DictStrAny:
         return r.json()  # type: ignore
     except requests.HTTPError as e:
         if e.response.status_code == 400:
-            logger.warning(f"HTTP Error {e.response.status_code}. Is your API key authorized to fetch data about the domain '{params.get('siteUrl')}'?")
+            logger.warning(
+                f"""HTTP Error {e.response.status_code}.
+                Is your API key authorized to fetch data about the domain
+                '{params.get('siteUrl')}'?"""
+            )
         e.response.raise_for_status()
-
+        return e.response.json()  # type: ignore
 
 
 def get_stats_with_retry(api_path: str, params: DictStrStr) -> List[DictStrAny]:

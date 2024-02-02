@@ -1,9 +1,7 @@
+import dlt
 import pytest
 
-import dlt
-
-from sources.bing_webmaster import source, page_stats, page_query_stats
-
+from sources.bing_webmaster import source
 from tests.utils import ALL_DESTINATIONS, assert_load_info
 
 
@@ -27,35 +25,74 @@ def test_load_unauthorized_domain(destination_name: str) -> None:
 @pytest.mark.parametrize("destination_name", ALL_DESTINATIONS)
 def test_load_page_stats(destination_name: str) -> None:
     pipeline = _make_pipeline(destination_name)
-    data = source(site_urls=["satellite.me"])   # TODO replace with domain that the CI has access to
+    table_name = "bing_page_stats"
+
+    # TODO replace with domain that the CI has access to, e.g. dlthub.com
+    data = source(site_urls=["satellite.me"])
 
     info = pipeline.run(data.with_resources("page_stats"))
     assert_load_info(info)
 
     # assert created table schema
-    schema = pipeline.default_schema
-    tables = schema.data_tables()
+    tables = pipeline.default_schema.data_tables()
     assert len(tables) == 1
-    assert tables[0]["name"] == "bing_page_stats"
-
+    assert tables[0]["name"] == table_name
     expected_keys = [
         "date",
-        "page",
         "site_url",
-        "avg_click_position",
-        "avg_impression_position",
+        "page",
         "clicks",
         "impressions",
+        "avg_click_position",
+        "avg_impression_position",
         "_dlt_load_id",
-        "_dlt_id"
+        "_dlt_id",
     ]
     assert set(expected_keys) == set(tables[0]["columns"].keys())
 
     # assert data was loaded
     with pipeline.sql_client() as c:
-        with c.execute_query(
-            "SELECT COUNT(1) FROM bing_page_stats"
-        ) as cur:
-            rows = list(cur.fetchall())
-            assert len(rows) > 0
-            assert rows[0][0] > 0
+        with c.execute_query(f"SELECT COUNT(1) FROM {table_name}") as cur:
+            row_count = cur.fetchall()
+            assert row_count[0][0] > 0
+
+
+@pytest.mark.parametrize("destination_name", ALL_DESTINATIONS)
+def test_load_page_query_stats(destination_name: str) -> None:
+    pipeline = _make_pipeline(destination_name)
+    table_name = "bing_page_query_stats"
+
+    # TODO replace with domain that the CI has access to, e.g. dlthub.com
+    data = source(
+        site_url_pages=[
+            {"site_url": "sipgate.de", "page": "https://www.sipgate.de/preise"},
+            {"site_url": "sipgate.de", "page": "https://www.sipgate.de/app"},
+        ]
+    )
+    info = pipeline.run(data.with_resources("page_query_stats"))
+    assert_load_info(info)
+
+    # assert created table schema
+    tables = pipeline.default_schema.data_tables()
+    assert len(tables) == 1
+    assert tables[0]["name"] == table_name
+
+    expected_keys = [
+        "date",
+        "site_url",
+        "page",
+        "query",
+        "clicks",
+        "impressions",
+        "avg_click_position",
+        "avg_impression_position",
+        "_dlt_load_id",
+        "_dlt_id",
+    ]
+    assert set(expected_keys) == set(tables[0]["columns"].keys())
+
+    # assert data was loaded
+    with pipeline.sql_client() as c:
+        with c.execute_query(f"SELECT COUNT(1) FROM {table_name}") as cur:
+            row_count = cur.fetchall()
+            assert row_count[0][0] > 0

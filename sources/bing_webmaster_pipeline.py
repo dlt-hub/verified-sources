@@ -16,8 +16,9 @@ def load_page_stats_example() -> None:
     )
     # create the data source by providing a list of site_urls.
     # Note that you have to first verify your own site urls. Thus, most likely,
-    # you'll lack the permissions to request stats for the one provided in this example
+    # you'll lack the permissions to request statistics for the one provided in this example
     data = source(site_urls=["sipgate.de", "satellite.me"])
+
     # load the "page_stats" out of all the possible resources
     info = pipeline.run(data.with_resources("page_stats"))
     print(info)
@@ -37,7 +38,7 @@ def load_page_query_stats_example() -> None:
     )
     # create the data source by providing a list pairs of site_urls and pages.
     # Note that you have to first verify your own site urls. Thus, most likely,
-    # you'll lack the permissions to request stats for the one provided in this example
+    # you'll lack the permissions to request statistics for the one provided in this example
     data = source(
         site_url_pages=[
             {"site_url": "sipgate.de", "page": "https://www.sipgate.de/preise"},
