@@ -6,14 +6,20 @@ from typing import Iterator, List
 from dlt.common import pendulum
 from dlt.common.typing import DictStrAny, DictStrStr
 from dlt.sources.helpers import requests
+from dlt.common import logger
 
 from .settings import BASE_URL, HEADERS
 
 
 def get_url_with_retry(url: str, params: DictStrStr) -> DictStrAny:
-    r = requests.get(url, headers=HEADERS, params=params)
-    r.raise_for_status()
-    return r.json()  # type: ignore
+    try:
+        r = requests.get(url, headers=HEADERS, params=params)
+        return r.json()  # type: ignore
+    except requests.HTTPError as e:
+        if e.response.status_code == 400:
+            logger.warning(f"HTTP Error {e.response.status_code}. Is your API key authorized to fetch data about the domain '{params.get('siteUrl')}'?")
+        e.response.raise_for_status()
+
 
 
 def get_stats_with_retry(api_path: str, params: DictStrStr) -> List[DictStrAny]:
