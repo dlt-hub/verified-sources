@@ -8,6 +8,7 @@ from typing import Iterable, Iterator, List, Sequence
 
 import dlt
 from dlt.common.typing import DictStrAny, DictStrStr
+from dlt.common import logger
 from dlt.sources import DltResource
 
 from .helpers import get_stats_with_retry, parse_response
@@ -53,7 +54,7 @@ def page_stats(
     api_path = "GetPageStats"
     for site_url in site_urls:
         params = {"siteUrl": site_url, "apikey": bing_webmaster_api_key}
-        print(f"Fetching for site_url: {site_url}")
+        logger.info(f"Fetching for site_url: {site_url}")
         response = get_stats_with_retry(api_path, params)
         if len(response) > 0:
             yield parse_response(response, site_url)
@@ -86,7 +87,7 @@ def page_query_stats(
         site_url = record.get("site_url")
         page = record.get("page")
         params = {"siteUrl": site_url, "page": page, "apikey": bing_webmaster_api_key}
-        print(f"Fetching for site_url: {site_url}, page: {page}")
+        logger.info(f"Fetching for site_url: {site_url}, page: {page}")
         response = get_stats_with_retry(api_path, params)
         if len(response) > 0:
             yield parse_response(response, site_url, page)
