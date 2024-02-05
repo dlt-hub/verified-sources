@@ -16,7 +16,7 @@ from scrapy.crawler import CrawlerProcess
 
 from .types import AnyDict
 from .queue import BaseQueue
-from .scrapy.pipeline_item import get_pipeline_item
+from .scrapy.pipeline_item import get_item_pipeline
 from .settings import SOURCE_SCRAPY_SETTINGS, SOURCE_SCRAPY_QUEUE_SIZE
 
 
@@ -124,7 +124,7 @@ def create_pipeline_runner(
     if queue is None:
         queue = BaseQueue(maxsize=queue_size)
 
-    scrapy_pipeline_item = get_pipeline_item(queue)
+    scrapy_pipeline_item = get_item_pipeline(queue)
     settings = {
         "ITEM_PIPELINES": {scrapy_pipeline_item: 100},
         **SOURCE_SCRAPY_SETTINGS,

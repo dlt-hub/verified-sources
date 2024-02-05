@@ -16,7 +16,7 @@ class PipelineItem(ABC):
         raise NotImplementedError
 
 
-def get_pipeline_item(queue: Type[BaseQueue]) -> Type[PipelineItem]:
+def get_item_pipeline(queue: Type[BaseQueue]) -> Type[PipelineItem]:
     """Wraps our custom ItemPipeline and provides queue instance
 
     It is done this way because there is no way to define
