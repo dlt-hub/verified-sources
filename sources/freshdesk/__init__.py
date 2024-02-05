@@ -1,9 +1,8 @@
 import dlt
-from .helpers import create_auth_headers, get_endpoint, paginated_response
+from .helpers import create_auth_headers, paginated_response, get_endpoint
 from dlt.sources import DltResource
 from dlt.common.typing import TDataItem
 from typing import List, Iterable, Optional
-
 
 @dlt.source
 def freshdesk_source(
@@ -27,23 +26,20 @@ def freshdesk_source(
         endpoints = []  # Default to an empty list if None provided
 
     for endpoint in endpoints:
-        yield dlt.resource(  # type: ignore
-            get_endpoint(
-                api_secret_key=api_secret_key, domain=domain, endpoint=endpoint
-            ),
+        yield dlt.resource(
+            get_endpoint(api_secret_key=api_secret_key, domain=domain, endpoint=endpoint),
             name=endpoint,
             write_disposition="merge",
             primary_key="id",
         )
 
-
 @dlt.resource(write_disposition="append")
 def tickets(
-    created_at: dlt.sources.incremental = dlt.sources.incremental(
+    created_at: dlt.sources.incremental[str] = dlt.sources.incremental(
         "created_at", initial_value="2000-01-01T00:00:00Z"
     ),
     page: int = 1,
-    per_page: int = 100,
+    per_page: int = 100,  # Note: 100 is the maximum allowed per the Freshdesk API
     domain: str = dlt.config.value,
     api_secret_key: str = dlt.secrets.value,
 ) -> Iterable[TDataItem]:

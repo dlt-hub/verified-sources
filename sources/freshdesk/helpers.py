@@ -1,6 +1,6 @@
 import base64
-from dlt.sources.helpers import requests  # Assuming this should be the requests library directly
-from typing import Iterable, Dict
+from dlt.sources.helpers import requests
+from typing import Iterable, Dict, Any
 
 
 def create_auth_headers(api_secret_key: str) -> Dict[str, str]:
@@ -11,13 +11,13 @@ def create_auth_headers(api_secret_key: str) -> Dict[str, str]:
         api_secret_key (str): Freshdesk API secret key.
 
     Returns:
-        dict: Headers with Basic Authorization.
+        Dict[str, str]: Headers with Basic Authorization.
     """
     encoded_key = base64.b64encode(f"{api_secret_key}:X".encode()).decode()
     headers = {"Authorization": f"Basic {encoded_key}"}
     return headers
 
-def get_endpoint(api_secret_key: str, domain: str, endpoint: str) -> Iterable[Dict]:
+def get_endpoint(api_secret_key: str, domain: str, endpoint: str) -> Iterable[Dict[str, Any]]:
     """
     Fetches data from a Freshdesk API endpoint.
 
@@ -27,7 +27,7 @@ def get_endpoint(api_secret_key: str, domain: str, endpoint: str) -> Iterable[Di
         endpoint (str): Freshdesk API endpoint.
 
     Yields:
-        Iterable[Dict]: Data fetched from the endpoint.
+        Iterable[Dict[str, Any]]: Data fetched from the endpoint.
     """
     headers = create_auth_headers(api_secret_key)
     url = f"https://{domain}.freshdesk.com/api/v2/{endpoint}"
@@ -36,7 +36,7 @@ def get_endpoint(api_secret_key: str, domain: str, endpoint: str) -> Iterable[Di
     data = response.json()
     yield data
 
-def paginated_response(url: str, page: int, per_page: int, updated_since: str, headers: Dict[str, str]) -> Iterable[Dict]:
+def paginated_response(url: str, page: int, per_page: int, updated_since: str, headers: Dict[str, str]) -> Iterable[Dict[str, Any]]:
     """
     Retrieves data from a paginated Freshdesk API endpoint.
 
@@ -45,10 +45,10 @@ def paginated_response(url: str, page: int, per_page: int, updated_since: str, h
         page (int): Page number to start from.
         per_page (int): Number of items per page.
         updated_since (str): Timestamp for filtering.
-        headers (dict): Headers for the API request.
+        headers (Dict[str, str]): Headers for the API request.
 
     Yields:
-        Iterable[Dict]: Data fetched from the paginated endpoint.
+        Iterable[Dict[str, Any]]: Data fetched from the paginated endpoint.
     """
     while True:
         paginated_url = f"{url}?per_page={per_page}&page={page}&updated_since={updated_since}"
