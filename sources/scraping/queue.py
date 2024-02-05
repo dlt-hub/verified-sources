@@ -1,4 +1,3 @@
-import threading
 from typing import Generic, TypeVar, TYPE_CHECKING
 from queue import Queue
 
@@ -23,7 +22,6 @@ class QueueClosedError(Exception):
 class BaseQueue(_Queue[T]):
     def __init__(self, maxsize: int = 0) -> None:
         super().__init__(maxsize)
-        self._state_lock = threading.Lock()
         self._is_closed = False
 
     def close(self) -> None:

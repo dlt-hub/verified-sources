@@ -58,6 +58,7 @@ def scrapy_resource(
             if batch:
                 num_batches += 1
                 yield batch
+                batch = []
         except QueueClosedError:
             logger.info("Queue is closed, stopping...")
 
