@@ -86,6 +86,49 @@ class SinglePagePaginator(BasePaginator):
         return response.json()
 
 
+class OffsetPaginator(BasePaginator):
+    """A paginator that uses the 'offset' parameter for pagination."""
+
+    def __init__(
+        self,
+        initial_offset,
+        initial_limit,
+        records_key: Union[str, Sequence[str]] = "results",
+        offset_key: str = "offset",
+        limit_key: str = "limit",
+        total_key: str = "total",
+    ):
+        self.offset_key = offset_key
+        self.limit_key = limit_key
+        self._records_accessor = create_nested_accessor(records_key)
+        self._total_accessor = create_nested_accessor(total_key)
+
+        self.offset = initial_offset
+        self.limit = initial_limit
+
+    def update_state(self, response: Response) -> None:
+        total = self._total_accessor(response.json())
+
+        if total is None:
+            raise ValueError(
+                f"Total count not found in response for {self.__class__.__name__}"
+            )
+
+        self.offset += self.limit
+
+        if self.offset >= total:
+            self._has_next_page = False
+
+    def prepare_next_request_args(self, url, params, json):
+        if params is None:
+            params = {}
+
+        params[self.offset_key] = self.offset
+        params[self.limit_key] = self.limit
+
+        return url, params, json
+
+
 class BaseNextUrlPaginator(BasePaginator):
     def prepare_next_request_args(self, url, params, json):
         return self._next_reference, params, json
