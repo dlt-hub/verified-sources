@@ -50,7 +50,7 @@ def load_github():
         {
             "client": {
                 "base_url": "https://api.github.com/repos/dlt-hub/dlt/",
-                "default_paginator": "header_links",
+                # "default_paginator": "header_links",
                 # "auth": {
                 #     "token": dlt.secrets['token'],
                 # }

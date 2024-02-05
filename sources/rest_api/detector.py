@@ -1,12 +1,15 @@
 from dlt.sources.helpers.requests import Response
 
-from .paginators import HeaderLinkPaginator, JSONResponsePaginator
+from .paginators import HeaderLinkPaginator, JSONResponsePaginator, SinglePagePaginator, OffsetPaginator
 
-RECORD_KEY_PATTERNS = {'data', 'items', 'results', 'entries'}
-NEXT_PAGE_KEY_PATTERNS = {'next', 'nextpage', 'nexturl'}
+RECORD_KEY_PATTERNS = {"data", "items", "results", "entries"}
+NEXT_PAGE_KEY_PATTERNS = {"next", "nextpage", "nexturl"}
 
 
 def find_records_key(dictionary, path=None):
+    if not isinstance(dictionary, dict):
+        return None
+
     if path is None:
         path = []
 
@@ -27,6 +30,9 @@ def find_records_key(dictionary, path=None):
 
 
 def find_next_page_key(dictionary, path=None):
+    if not isinstance(dictionary, dict):
+        return None
+
     if path is None:
         path = []
 
@@ -67,12 +73,20 @@ def json_links_detector(response: Response):
     return JSONResponsePaginator(next_key=next_key, records_key=records_key)
 
 
-def limit_offset_detector():
+def single_page_detector(response: Response):
+    value = response.json()
+    if isinstance(value, list):
+        return SinglePagePaginator()
+
     return None
 
 
 def create_paginator(response: Response):
-    rules = [header_links_detector, json_links_detector, limit_offset_detector]
+    rules = [
+        header_links_detector,
+        json_links_detector,
+        single_page_detector,
+    ]
     for rule in rules:
         paginator = rule(response)
         if paginator:
