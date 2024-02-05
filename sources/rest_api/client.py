@@ -1,5 +1,6 @@
-from typing import Optional, Dict, Any, Generator
+from typing import Optional, Dict, Any, Generator, Literal
 import copy
+
 from requests.auth import AuthBase
 
 from dlt.sources.helpers import requests
@@ -59,7 +60,7 @@ class RESTClient:
     def paginate(
         self,
         path: str = "",
-        method: str = "get",
+        method: Literal["get", "post"] = "get",
         params: Optional[Dict[str, Any]] = None,
         json: Optional[Dict[str, Any]] = None,
         paginator: Optional[BasePaginator] = None,
