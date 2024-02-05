@@ -55,14 +55,14 @@ def scrapy_resource(
             logger.info(f"Queue has been empty for {queue_result_timeout}s...")
 
             # Return the last batch before exiting
-            if len(batch) > 0:
+            if batch:
                 num_batches += 1
                 yield batch
         except QueueClosedError:
             logger.info("Queue is closed, stopping...")
 
             # Return the last batch before exiting
-            if len(batch) > 0:
+            if batch:
                 num_batches += 1
                 yield batch
 
