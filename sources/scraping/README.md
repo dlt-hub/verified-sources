@@ -49,12 +49,11 @@ NOTE: you might need to set up `streamlit`, `pip install streamlit`
 dlt pipeline <pipeline_name> show
 ```
 
-## 🕷️ Defining a spider
+## 🕷️ Using custom spider
 
-When you develop your own spider please inherit it from `spider.DltSpider` because this base spider also accepts
-queue instance. Otherwise if you wish to derive from `scrapy.Spider` please make sure to accept additional `queue`
-parameter in constructor `__init__(self, queue, ...)` and save it in the instance.
-For more information about implementing a custom spider please see the official documentation on their [website](https://docs.scrapy.org/en/latest/topics/spiders.html).
+You just need to implement a new spider and pass it to `create_pipeline_runner(spider=MySpider)`,
+note it has to be a class not an instance of it.
+
 
 ## 💈 Using custom queue
 
