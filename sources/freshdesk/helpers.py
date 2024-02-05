@@ -1,10 +1,9 @@
 import base64
-from dlt.sources.helpers import requests
-from dlt.common.typing import TDataItem
-from typing import Iterable
+from dlt.sources.helpers import requests  # Assuming this should be the requests library directly
+from typing import Iterable, Dict
 
 
-def create_auth_headers(api_secret_key):
+def create_auth_headers(api_secret_key: str) -> Dict[str, str]:
     """
     Constructs Basic Authorization header required by Freshdesk.
 
@@ -18,19 +17,17 @@ def create_auth_headers(api_secret_key):
     headers = {"Authorization": f"Basic {encoded_key}"}
     return headers
 
-
-def get_endpoint(
-    api_secret_key: str, domain: str, endpoint: str
-) -> Iterable[TDataItem]:
+def get_endpoint(api_secret_key: str, domain: str, endpoint: str) -> Iterable[Dict]:
     """
     Fetches data from a Freshdesk API endpoint.
 
     Args:
         api_secret_key (str): Freshdesk API secret key.
+        domain (str): The Freshdesk domain.
         endpoint (str): Freshdesk API endpoint.
 
     Yields:
-        Iterable[TDataItem]: Data fetched from the endpoint.
+        Iterable[Dict]: Data fetched from the endpoint.
     """
     headers = create_auth_headers(api_secret_key)
     url = f"https://{domain}.freshdesk.com/api/v2/{endpoint}"
@@ -39,8 +36,7 @@ def get_endpoint(
     data = response.json()
     yield data
 
-
-def paginated_response(url, page, per_page, updated_since, headers):
+def paginated_response(url: str, page: int, per_page: int, updated_since: str, headers: Dict[str, str]) -> Iterable[Dict]:
     """
     Retrieves data from a paginated Freshdesk API endpoint.
 
@@ -52,22 +48,16 @@ def paginated_response(url, page, per_page, updated_since, headers):
         headers (dict): Headers for the API request.
 
     Yields:
-        dict: Data fetched from the paginated endpoint.
+        Iterable[Dict]: Data fetched from the paginated endpoint.
     """
     while True:
-        paginated_url = (
-            f"{url}?per_page={per_page}&page={page}&updated_since={updated_since}"
-        )
+        paginated_url = f"{url}?per_page={per_page}&page={page}&updated_since={updated_since}"
         response = requests.get(paginated_url, headers=headers)
         response.raise_for_status()
 
-        tickets = response.json()
-        if tickets is None:
-            print("Error: No data returned from API")
+        data = response.json()
+        if not data:
             break
 
-        if tickets:
-            yield tickets
-            page += 1
-        else:
-            break
+        yield data
+        page += 1
