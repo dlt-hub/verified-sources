@@ -2,19 +2,19 @@ from typing import Any
 import dlt
 import pytest
 
+from scrapy import Spider  # type: ignore
 from scrapy.http import Response  # type: ignore
 
 import sources.scraping.helpers
 
 from sources.scraping import scrapy_source
 from sources.scraping.helpers import create_pipeline_runner
-from sources.scraping.scrapy.spider import DltSpider
 from tests.utils import ALL_DESTINATIONS, load_table_counts
 
 start_urls = ["https://quotes.toscrape.com/page/1/"]
 
 
-class MySpider(DltSpider):
+class MySpider(Spider):
     def parse(self, response: Response, **kwargs: Any) -> Any:
         for next_page in response.css("li.next a::attr(href)"):
             if next_page:

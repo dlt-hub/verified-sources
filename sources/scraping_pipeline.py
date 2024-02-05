@@ -2,14 +2,14 @@ from typing import Any
 
 import dlt
 from dlt.common import logger
+from scrapy import Spider  # type: ignore
 from scrapy.http import Response  # type: ignore
 
 from scraping import scrapy_source
-from scraping.scrapy.spider import DltSpider
 from scraping.helpers import create_pipeline_runner
 
 
-class MySpider(DltSpider):
+class MySpider(Spider):
     def parse(self, response: Response, **kwargs: Any) -> Any:
         for next_page in response.css("li.next a::attr(href)"):
             if next_page:

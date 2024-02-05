@@ -11,11 +11,12 @@ from dlt.common.configuration.specs.base_configuration import (
     BaseConfiguration,
 )
 
-from scrapy.crawler import CrawlerProcess  # type: ignore
+from scrapy.crawler import CrawlerProcess
+
 
 from .types import AnyDict
 from .queue import BaseQueue
-from .scrapy.spider import DltSpider
+from .scrapy.pipeline_item import get_pipeline_item
 from .settings import SOURCE_SCRAPY_SETTINGS, SOURCE_SCRAPY_QUEUE_SIZE
 
 
@@ -111,32 +112,21 @@ class PipelineRunner(Runnable):
         self.thread_runner.join()
 
 
-# We need to do this because scrapy requires passing
-# module path instead of class type which it later
-# resolves internally. Why this is done this way
-# is because using inspect to get modulename etc.
-# will even more complicate things and ScrapingPipelineItem
-# at the moment is defined under `.scrapy.pipepline_item` is
-# enough for use just to use `__package__` shortcut and
-# manually construct module path. So if you move it somehwere else
-# please provide it to runner.
-ScrapyPipelineItemModule = f"{__package__}.scrapy.pipeline_item.ScrapingPipelineItem"
-
-
 @with_config(sections=("sources", "scraping"), spec=ScrapingConfig)
 def create_pipeline_runner(
     pipeline: dlt.Pipeline,
     queue: t.Optional[BaseQueue[T]] = None,
     queue_size: int = dlt.config.value,
-    spider: t.Type[DltSpider] = None,
+    spider: t.Type[scrapy.Spider] = None,
     start_urls: t.List[str] = dlt.config.value,
     include_headers: t.Optional[bool] = dlt.config.value,
 ) -> t.Tuple[PipelineRunner, ScrapyRunner, t.Callable[[], None]]:
     if queue is None:
         queue = BaseQueue(maxsize=queue_size)
 
+    scrapy_pipeline_item = get_pipeline_item(queue)
     settings = {
-        "ITEM_PIPELINES": {ScrapyPipelineItemModule: 100},
+        "ITEM_PIPELINES": {scrapy_pipeline_item: 100},
         **SOURCE_SCRAPY_SETTINGS,
     }
 
