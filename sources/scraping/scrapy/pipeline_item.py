@@ -1,4 +1,4 @@
-from abc import ABC
+import abc
 from typing import Type, TypeVar
 
 import scrapy  # type: ignore
@@ -12,7 +12,8 @@ from ..queue import BaseQueue
 T = TypeVar("T")
 
 
-class PipelineItem(ABC):
+class PipelineItem(abc.ABC):
+    @abc.abstractmethod
     def process_item(
         self, item: Type[scrapy.Item], spider: scrapy.Spider
     ) -> Type[scrapy.Item]:
