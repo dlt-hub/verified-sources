@@ -39,6 +39,7 @@ def tickets(
     ),
     page=1,
     per_page=100,  # maximum 100
+    domain=dlt.config.value,
     api_secret_key=dlt.secrets.value,
 ) -> Iterable[TDataItem]:
     """
@@ -48,11 +49,12 @@ def tickets(
         created_at (dlt.sources.incremental): Incremental timestamp for filtering.
         page (int): Page number.
         per_page (int): Number of tickets per page.
+        domain (str): Freshdesk domain.
         api_secret_key (str): Freshdesk API secret key.
 
     Yields:
         Iterable[TDataItem]: Freshdesk ticket data as TDataItem.
     """
     headers = create_auth_headers(api_secret_key)
-    url = "https://rydes.freshdesk.com/api/v2/tickets"
+    url = f"https://{domain}.freshdesk.com/api/v2/tickets"
     yield from paginated_response(url, page, per_page, created_at.start_value, headers)

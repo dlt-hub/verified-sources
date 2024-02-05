@@ -8,7 +8,7 @@ def load_endpoints(endpoints: List[str] = None) -> None:
     pipeline = dlt.pipeline(
         pipeline_name="freshdesk",
         destination="bigquery",
-        dataset_name="freshdesk_data443",
+        dataset_name="freshdesk_data",
     )
     load_info = pipeline.run(freshdesk_source(endpoints=endpoints))
     print(load_info)
@@ -21,7 +21,7 @@ def load_tickets(created_at: TAnyDateTime) -> None:
     pipeline = dlt.pipeline(
         pipeline_name="freshdesk",
         destination="bigquery",
-        dataset_name="freshdesk_data122",
+        dataset_name="freshdesk_data",
     )
 
     # run the pipeline with your parameters
