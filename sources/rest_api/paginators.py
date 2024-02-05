@@ -1,7 +1,9 @@
 from abc import ABC, abstractmethod
-from typing import Optional, Dict, Any, Tuple
+from typing import Optional, Dict, Any, Tuple, Sequence, Union
 
 from dlt.sources.helpers.requests import Response
+
+from .utils import create_nested_accessor
 
 
 class BasePaginator(ABC):
@@ -71,6 +73,19 @@ class BasePaginator(ABC):
         ...
 
 
+class SinglePagePaginator(BasePaginator):
+    """A paginator for single-page API responses."""
+
+    def update_state(self, response: Response) -> None:
+        self._has_next_page = False
+
+    def prepare_next_request_args(self, url, params, json):
+        return None, None, None
+
+    def extract_records(self, response: Response) -> Any:
+        return response.json()
+
+
 class BaseNextUrlPaginator(BasePaginator):
     def prepare_next_request_args(self, url, params, json):
         return self._next_reference, params, json
@@ -105,7 +120,11 @@ class JSONResponsePaginator(BaseNextUrlPaginator):
     the next page URL.
     """
 
-    def __init__(self, next_key: str = "next", records_key: str = "results"):
+    def __init__(
+        self,
+        next_key: Union[str, Sequence[str]] = "next",
+        records_key: Union[str, Sequence[str]] = "results",
+    ):
         """
         Args:
             next_key (str, optional): The key in the JSON response that
@@ -116,12 +135,14 @@ class JSONResponsePaginator(BaseNextUrlPaginator):
         super().__init__()
         self.next_key = next_key
         self.records_key = records_key
+        self._next_key_accessor = create_nested_accessor(next_key)
+        self._records_accessor = create_nested_accessor(records_key)
 
     def update_state(self, response: Response):
-        self.next_reference = response.json().get(self.next_key)
+        self.next_reference = self._next_key_accessor(response.json())
 
     def extract_records(self, response: Response) -> Any:
-        return response.json().get(self.records_key, [])
+        return self._records_accessor(response.json())
 
 
 class UnspecifiedPaginator(BasePaginator):
@@ -133,4 +154,3 @@ class UnspecifiedPaginator(BasePaginator):
 
     def prepare_next_request_args(self, url: str, params, json):
         return Exception("Can't prepare next request with this paginator")
-
