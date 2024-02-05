@@ -64,7 +64,7 @@ def json_links_detector(response: Response):
     if not next_key:
         return None
 
-    return JSONResponsePaginator(next_key=next_key, records_key=records_key[0])
+    return JSONResponsePaginator(next_key=next_key, records_key=records_key)
 
 
 def limit_offset_detector():
@@ -73,7 +73,6 @@ def limit_offset_detector():
 
 def create_paginator(response: Response):
     rules = [header_links_detector, json_links_detector, limit_offset_detector]
-
     for rule in rules:
         paginator = rule(response)
         if paginator:

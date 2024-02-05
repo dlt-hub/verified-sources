@@ -1,16 +1,17 @@
 """Generic API Source"""
-from typing import TypedDict, Optional, Dict, List, Any
+from typing import TypedDict, Optional, Dict, Any
 
 import dlt
 
 from .client import RESTClient
-from .paginators import JSONResponsePaginator, HeaderLinkPaginator
+from .paginators import JSONResponsePaginator, HeaderLinkPaginator, UnspecifiedPaginator
 from .auth import BearerTokenAuth
 
 
 PAGINATOR_MAP = {
     "json_links": JSONResponsePaginator,
     "header_links": HeaderLinkPaginator,
+    "auto": UnspecifiedPaginator,
 }
 
 

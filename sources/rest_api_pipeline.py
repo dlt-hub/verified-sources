@@ -105,7 +105,7 @@ def load_pokemon():
         {
             "client": {
                 "base_url": "https://pokeapi.co/api/v2/",
-                "default_paginator": "json_links",
+                # default_paginator: is "auto", so it will be inferred from the API
             },
             "endpoints": {
                 "pokemon": {
