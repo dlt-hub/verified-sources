@@ -1,10 +1,15 @@
 """Generic API Source"""
-from typing import TypedDict, Optional, Dict, Any
+from typing import TypedDict, Optional, Dict, Any, Union
 
 import dlt
 
 from .client import RESTClient
-from .paginators import JSONResponsePaginator, HeaderLinkPaginator, UnspecifiedPaginator
+from .paginators import (
+    BasePaginator,
+    JSONResponsePaginator,
+    HeaderLinkPaginator,
+    UnspecifiedPaginator,
+)
 from .auth import BearerTokenAuth
 
 
@@ -15,6 +20,9 @@ PAGINATOR_MAP = {
 }
 
 
+PaginatorType = Union[str, BasePaginator]
+
+
 class AuthConfig(TypedDict, total=False):
     token: str
 
@@ -22,7 +30,7 @@ class AuthConfig(TypedDict, total=False):
 class ClientConfig(TypedDict, total=False):
     base_url: str
     auth: Optional[AuthConfig]
-    default_paginator: Optional[str]
+    default_paginator: Optional[PaginatorType]
 
 
 class ResourceConfig(TypedDict, total=False):
@@ -41,7 +49,7 @@ class EndpointConfig(TypedDict):
     resource: ResourceConfig
     incremental: Optional[IncrementalConfig]
     method: str
-    paginator: str
+    paginator: Optional[PaginatorType]
 
 
 class RESTAPIConfig(TypedDict):
@@ -50,6 +58,8 @@ class RESTAPIConfig(TypedDict):
 
 
 def create_paginator(paginator_config):
+    if isinstance(paginator_config, BasePaginator):
+        return paginator_config
     return PAGINATOR_MAP.get(paginator_config, lambda: None)()
 
 
