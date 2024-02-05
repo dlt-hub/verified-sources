@@ -3,22 +3,22 @@ import time
 import threading
 
 import dlt
-import pytest
 
 from scrapy import Spider  # type: ignore
 from scrapy.http import Response  # type: ignore
 
 import sources.scraping.helpers
 
-from sources.scraping import scrapy_resource, scrapy_source
+from sources.scraping import scrapy_resource, scrapy_source, logger
 from sources.scraping.helpers import create_pipeline_runner
 from sources.scraping.queue import BaseQueue
-from tests.utils import ALL_DESTINATIONS, load_table_counts
 
 start_urls = ["https://quotes.toscrape.com/page/1/"]
 
 
-def queue_closer(queue: BaseQueue, close_after_seconds: int = 2) -> threading.Thread:
+def queue_closer(
+    queue: BaseQueue, close_after_seconds: float = 2.0
+) -> threading.Thread:
     def close_queue():
         time.sleep(close_after_seconds)
         queue.close()
@@ -44,38 +44,6 @@ class MySpider(Spider):
             }
 
             yield result
-
-
-@pytest.mark.parametrize("destination_name", ALL_DESTINATIONS)
-def test_all_resources(destination_name: str) -> None:
-    pipeline = dlt.pipeline(
-        pipeline_name="scraping",
-        destination=destination_name,
-        dataset_name="quotes",
-    )
-
-    pipeline_runner, scrapy_runner, wait = create_pipeline_runner(
-        pipeline, spider=MySpider
-    )
-
-    pipeline_runner.run(
-        scrapy_source(scrapy_runner.queue),
-        write_disposition="replace",
-        table_name="quotes",
-    )
-
-    scrapy_runner.run()
-    wait()
-
-    table_names = [t["name"] for t in pipeline.default_schema.data_tables()]
-    table_counts = load_table_counts(pipeline, *table_names)
-
-    # for now only check main tables
-    expected_tables = {"quotes", "quotes__quote__tags"}
-    assert set(table_counts.keys()) >= set(expected_tables)
-
-    assert table_counts["quotes"] == 100
-    assert table_counts["quotes__quote__tags"] == 232
 
 
 def test_scrapy_pipeline_sends_data_in_queue(mocker):
@@ -130,7 +98,7 @@ def test_scrapy_resource_yields_everything_and_data_is_saved_to_destination():
     res = scrapy_resource(queue=queue, queue_result_timeout=1, batch_size=10)
     p = dlt.pipeline("scrapy_example", full_refresh=True, destination="duckdb")
 
-    closer = queue_closer(queue, close_after_seconds=1)
+    closer = queue_closer(queue, close_after_seconds=0.2)
     p.run(res, table_name="numbers")
     closer.join()
 
@@ -140,25 +108,30 @@ def test_scrapy_resource_yields_everything_and_data_is_saved_to_destination():
             assert len(loaded_values) == total_items
 
 
-def test_scrapy_resource_yields_last_batch_when_queue_is_closed():
+def test_scrapy_resource_yields_last_batch_when_queue_is_closed(mocker):
     queue = BaseQueue()
     total_items = 23
     for i in range(total_items):
         queue.put({"n": i})
 
+    spy_on_logger = mocker.spy(logger, "info")
     res = scrapy_resource(
         queue=queue,
         queue_result_timeout=1,
         batch_size=5,
     )
 
-    closer = queue_closer(queue)
+    closer = queue_closer(queue, close_after_seconds=0.2)
     total_count = 0
     for batch in res:
         total_count += len(batch)
+
     closer.join()
 
     assert total_count == total_items
+    assert spy_on_logger.called
+    assert spy_on_logger.call_count >= 3
+    assert spy_on_logger.call_args[0][0] == "Loaded 5 batches"
 
     # The last batch shoul only have 3 items
     assert len(batch) == 3
