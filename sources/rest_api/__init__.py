@@ -120,7 +120,10 @@ def rest_api_source(config: RESTAPIConfig):
             },
         })
     """
+    return rest_api_resources(config)
 
+
+def rest_api_resources(config: RESTAPIConfig):
     client = RESTClient(**make_client_config(config))
 
     for endpoint, endpoint_config in config["endpoints"].items():
