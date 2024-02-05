@@ -116,6 +116,20 @@ def load_data_and_get_metrics() -> None:
     source_event = incremental_stripe_source(endpoints=("Event",))
     # Subscription is an endpoint with editable data, use stripe_source.
     source_subs = stripe_source(endpoints=("Subscription",))
+
+    # convert dates to the timestamp format
+    source_event.resources["Event"].apply_hints(
+        columns={
+            "created": {"data_type": "timestamp"},
+        }
+    )
+
+    source_subs.resources["Subscription"].apply_hints(
+        columns={
+            "created": {"data_type": "timestamp"},
+        }
+    )
+
     load_info = pipeline.run(data=[source_subs, source_event])
     print(load_info)
 
@@ -126,14 +140,14 @@ def load_data_and_get_metrics() -> None:
 
 
 if __name__ == "__main__":
-    # load only data that was created during the period between the May 1, 2023 (incl.), and the May 3, 2023 (not incl.).
-    load_data(start_date=datetime(2023, 5, 1), end_date=datetime(2023, 5, 3))
-    # load only data that was created during the period between the May 3, 2023 (incl.), and the May 5, 2023 (not incl.).
-    # after that, we load all new data that created after May 5, 2023
+    # load only data that was created during the period between the Jan 1, 2024 (incl.), and the Feb 1, 2024 (not incl.).
+    load_data(start_date=datetime(2024, 1, 1), end_date=datetime(2024, 2, 1))
+    # load only data that was created during the period between the May 3, 2023 (incl.), and the Feb 1, 2024 (not incl.).
+    # after that, we load all new data that created after Feb 1, 2024
     load_incremental_endpoints(
         endpoints=("Event",),
         initial_start_date=datetime(2023, 5, 3),
-        end_date=datetime(2023, 5, 5),
+        end_date=datetime(2024, 2, 1),
     )
     # load Subscription and Event data, calculate metrics, store them in a database
     load_data_and_get_metrics()
