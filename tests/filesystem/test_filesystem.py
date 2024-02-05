@@ -18,22 +18,32 @@ from tests.utils import (
     assert_query_data,
     TEST_STORAGE_ROOT,
 )
+from tests.filesystem.utils import unpack_factory_args
 
-from .settings import GLOB_RESULTS, TESTS_BUCKET_URLS
+from .settings import GLOB_RESULTS, FACTORY_ARGS
 
 
-@pytest.mark.parametrize("bucket_url", TESTS_BUCKET_URLS)
+@pytest.mark.parametrize("factory_args", FACTORY_ARGS)
 @pytest.mark.parametrize("glob_params", GLOB_RESULTS)
-def test_file_list(bucket_url: str, glob_params: Dict[str, Any]) -> None:
+def test_file_list(factory_args: Dict[str, Any], glob_params: Dict[str, Any]) -> None:
+    bucket_url, kwargs = unpack_factory_args(factory_args)
+
     @dlt.transformer
     def bypass(items) -> str:
         return items
 
-    # we just pass the glob parameter to the resource if it is not None
+    # we only pass the glob parameter to the resource if it is not None
     if file_glob := glob_params["glob"]:
-        filesystem_res = filesystem(bucket_url=bucket_url, file_glob=file_glob) | bypass
+        filesystem_res = (
+            filesystem(
+                bucket_url=bucket_url,
+                file_glob=file_glob,
+                kwargs=kwargs,
+            )
+            | bypass
+        )
     else:
-        filesystem_res = filesystem(bucket_url=bucket_url) | bypass
+        filesystem_res = filesystem(bucket_url=bucket_url, kwargs=kwargs) | bypass
 
     all_files = list(filesystem_res)
     file_count = len(all_files)
@@ -43,8 +53,12 @@ def test_file_list(bucket_url: str, glob_params: Dict[str, Any]) -> None:
 
 
 @pytest.mark.parametrize("extract_content", [True, False])
-@pytest.mark.parametrize("bucket_url", TESTS_BUCKET_URLS)
-def test_load_content_resources(bucket_url: str, extract_content: bool) -> None:
+@pytest.mark.parametrize("factory_args", FACTORY_ARGS)
+def test_load_content_resources(
+    factory_args: Dict[str, Any], extract_content: bool
+) -> None:
+    bucket_url, kwargs = unpack_factory_args(factory_args)
+
     @dlt.transformer
     def assert_sample_content(items: List[FileItem]):
         # expect just one file
@@ -65,6 +79,7 @@ def test_load_content_resources(bucket_url: str, extract_content: bool) -> None:
             bucket_url=bucket_url,
             file_glob="sample.txt",
             extract_content=extract_content,
+            kwargs=kwargs,
         )
         | assert_sample_content
     )
@@ -83,7 +98,11 @@ def test_load_content_resources(bucket_url: str, extract_content: bool) -> None:
         # print(item)
         return item
 
-    nested_file = filesystem(bucket_url, file_glob="met_csv/A801/A881_20230920.csv")
+    nested_file = filesystem(
+        bucket_url,
+        file_glob="met_csv/A801/A881_20230920.csv",
+        kwargs=kwargs,
+    )
 
     assert len(list(nested_file | assert_csv_file)) == 1
 
@@ -101,9 +120,11 @@ def test_fsspec_as_credentials():
     print(list(gs_resource))
 
 
-@pytest.mark.parametrize("bucket_url", TESTS_BUCKET_URLS)
-def test_csv_transformers(bucket_url: str) -> None:
+@pytest.mark.parametrize("factory_args", FACTORY_ARGS)
+def test_csv_transformers(factory_args: Dict[str, Any]) -> None:
     from sources.filesystem_pipeline import read_csv
+
+    bucket_url, kwargs = unpack_factory_args(factory_args)
 
     pipeline = dlt.pipeline(
         pipeline_name="file_data",
@@ -114,7 +135,12 @@ def test_csv_transformers(bucket_url: str) -> None:
 
     # load all csvs merging data on a date column
     met_files = (
-        filesystem(bucket_url=bucket_url, file_glob="met_csv/A801/*.csv") | read_csv()
+        filesystem(
+            bucket_url=bucket_url,
+            file_glob="met_csv/A801/*.csv",
+            kwargs=kwargs,
+        )
+        | read_csv()
     )
     met_files.apply_hints(write_disposition="merge", merge_key="date")
     load_info = pipeline.run(met_files.with_name("met_csv"))
@@ -126,7 +152,12 @@ def test_csv_transformers(bucket_url: str) -> None:
     # load the other folder that contains data for the same day + one other day
     # the previous data will be replaced
     met_files = (
-        filesystem(bucket_url=bucket_url, file_glob="met_csv/A803/*.csv") | read_csv()
+        filesystem(
+            bucket_url=bucket_url,
+            file_glob="met_csv/A803/*.csv",
+            kwargs=kwargs,
+        )
+        | read_csv()
     )
     met_files.apply_hints(write_disposition="merge", merge_key="date")
     load_info = pipeline.run(met_files.with_name("met_csv"))
@@ -139,16 +170,23 @@ def test_csv_transformers(bucket_url: str) -> None:
     assert load_table_counts(pipeline, "met_csv") == {"met_csv": 48}
 
 
-@pytest.mark.parametrize("bucket_url", TESTS_BUCKET_URLS)
-def test_standard_readers(bucket_url: str) -> None:
+@pytest.mark.parametrize("factory_args", FACTORY_ARGS)
+def test_standard_readers(factory_args: Dict[str, Any]) -> None:
+    bucket_url, kwargs = unpack_factory_args(factory_args)
+
     # extract pipes with standard readers
-    jsonl_reader = readers(bucket_url, file_glob="**/*.jsonl").read_jsonl()
-    parquet_reader = readers(bucket_url, file_glob="**/*.parquet").read_parquet()
-    # also read zipped csvs
-    csv_reader = readers(bucket_url, file_glob="**/*.csv*").read_csv(
+    jsonl_reader = readers(
+        bucket_url, file_glob="**/*.jsonl", kwargs=kwargs
+    ).read_jsonl()
+    parquet_reader = readers(
+        bucket_url, file_glob="**/*.parquet", kwargs=kwargs
+    ).read_parquet()
+    csv_reader = readers(bucket_url, file_glob="**/*.csv*", kwargs=kwargs).read_csv(
         float_precision="high"
     )
-    csv_duckdb_reader = readers(bucket_url, file_glob="**/*.csv*").read_csv_duckdb()
+    csv_duckdb_reader = readers(
+        bucket_url, file_glob="**/*.csv*", kwargs=kwargs
+    ).read_csv_duckdb()
 
     # a step that copies files into test storage
     def _copy(item: FileItemDict):
@@ -161,7 +199,7 @@ def test_standard_readers(bucket_url: str) -> None:
         # return file item unchanged
         return item
 
-    downloader = filesystem(bucket_url, file_glob="**").add_map(_copy)
+    downloader = filesystem(bucket_url, file_glob="**", kwargs=kwargs).add_map(_copy)
 
     # load in single pipeline
     pipeline = dlt.pipeline(
@@ -200,11 +238,13 @@ def test_standard_readers(bucket_url: str) -> None:
     # print(pipeline.default_schema.to_pretty_yaml())
 
 
-@pytest.mark.parametrize("bucket_url", TESTS_BUCKET_URLS)
-def test_incremental_load(bucket_url: str) -> None:
+@pytest.mark.parametrize("factory_args", FACTORY_ARGS)
+def test_incremental_load(factory_args: Dict[str, Any]) -> None:
     @dlt.transformer
     def bypass(items) -> str:
         return items
+
+    bucket_url, kwargs = unpack_factory_args(factory_args)
 
     pipeline = dlt.pipeline(
         pipeline_name="file_data",
@@ -214,7 +254,11 @@ def test_incremental_load(bucket_url: str) -> None:
     )
 
     # Load all files
-    all_files = filesystem(bucket_url=bucket_url, file_glob="csv/*")
+    all_files = filesystem(
+        bucket_url=bucket_url,
+        file_glob="csv/*",
+        kwargs=kwargs,
+    )
     # add incremental on modification time
     all_files.apply_hints(incremental=dlt.sources.incremental("modification_date"))
     load_info = pipeline.run((all_files | bypass).with_name("csv_files"))
@@ -225,7 +269,11 @@ def test_incremental_load(bucket_url: str) -> None:
     assert table_counts["csv_files"] == 4
 
     # load again
-    all_files = filesystem(bucket_url=bucket_url, file_glob="csv/*")
+    all_files = filesystem(
+        bucket_url=bucket_url,
+        file_glob="csv/*",
+        kwargs=kwargs,
+    )
     all_files.apply_hints(incremental=dlt.sources.incremental("modification_date"))
     load_info = pipeline.run((all_files | bypass).with_name("csv_files"))
     # nothing into csv_files
@@ -234,7 +282,11 @@ def test_incremental_load(bucket_url: str) -> None:
     assert table_counts["csv_files"] == 4
 
     # load again into different table
-    all_files = filesystem(bucket_url=bucket_url, file_glob="csv/*")
+    all_files = filesystem(
+        bucket_url=bucket_url,
+        file_glob="csv/*",
+        kwargs=kwargs,
+    )
     all_files.apply_hints(incremental=dlt.sources.incremental("modification_date"))
     load_info = pipeline.run((all_files | bypass).with_name("csv_files_2"))
     assert_load_info(load_info)
@@ -243,7 +295,7 @@ def test_incremental_load(bucket_url: str) -> None:
 
 def test_file_chunking() -> None:
     resource = filesystem(
-        bucket_url=TESTS_BUCKET_URLS[0],
+        bucket_url=FACTORY_ARGS[0]["bucket_url"],
         file_glob="*/*.csv",
         files_per_page=2,
     )

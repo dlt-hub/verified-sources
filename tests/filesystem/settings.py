@@ -1,10 +1,17 @@
 import os
 
-TESTS_BUCKET_URLS = [
-    os.path.abspath("tests/filesystem/samples"),
-    "s3://dlt-ci-test-bucket/standard_source/samples",
-    "gs://ci-test-bucket/standard_source/samples",
-    "az://dlt-ci-test-bucket/standard_source/samples",
+FACTORY_ARGS = [
+    {"bucket_url": os.path.abspath("tests/filesystem/samples")},
+    {"bucket_url": "s3://dlt-ci-test-bucket/standard_source/samples"},
+    {"bucket_url": "gs://ci-test-bucket/standard_source/samples"},
+    {"bucket_url": "az://dlt-ci-test-bucket/standard_source/samples"},
+    {
+        "bucket_url": "gitpythonfs://samples",
+        "kwargs": {
+            "repo_path": "tests/filesystem/cases/git",
+            "ref": "unmodified-samples",
+        },
+    }
 ]
 
 GLOB_RESULTS = [
