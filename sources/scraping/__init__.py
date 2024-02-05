@@ -54,7 +54,7 @@ def scrapy_resource(
         except Empty:
             logger.info(f"Queue has been empty for {queue_result_timeout}s...")
 
-            # Return the last batch if we have any data
+            # Return the current batch
             if batch:
                 num_batches += 1
                 yield batch
