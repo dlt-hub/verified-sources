@@ -2,7 +2,7 @@ from enum import Enum
 from typing import Dict, Iterator, Optional, Tuple, Any
 from dlt.common.typing import TDataItems
 
-from api_client import APIClient, BearerTokenAuth, JSONResponsePaginator
+from api_client import RESTClient, BearerTokenAuth, JSONResponsePaginator
 
 from .paginators import CursorPaginator, StreamPaginator, StartTimePaginator
 
@@ -21,7 +21,7 @@ class PaginationType(Enum):
     START_TIME = 3
 
 
-class ZendeskAPIClient(APIClient):
+class ZendeskAPIClient(RESTClient):
     """
     API client used to make requests to Zendesk talk, support and chat API
     """

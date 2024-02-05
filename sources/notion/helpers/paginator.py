@@ -1,5 +1,5 @@
 from dlt.sources.helpers.requests import Response
-from api_client import JSONResponsePaginator
+from rest_api import JSONResponsePaginator
 
 class NotionPaginator(JSONResponsePaginator):
     def __init__(self, cursor_key='next_cursor', records_key='results'):

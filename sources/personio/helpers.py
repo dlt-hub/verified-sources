@@ -5,11 +5,11 @@ from urllib.parse import urljoin
 from dlt.common.typing import Dict, TDataItems
 from dlt.sources.helpers import requests
 
-from ..api_client import APIClient, BearerTokenAuth
+from ..api_client import RESTClient, BearerTokenAuth
 from .paginator import Paginator
 
 
-class PersonioAPI(APIClient):
+class PersonioAPI(RESTClient):
     """A Personio API client."""
 
     def __init__(self, base_url: str, client_id: str, client_secret: str) -> None:
