@@ -50,7 +50,9 @@ def load_github():
         {
             "client": {
                 "base_url": "https://api.github.com/repos/dlt-hub/dlt/",
+                # If you leave out the default_paginator, it will be inferred from the API:
                 # "default_paginator": "header_links",
+
                 # "auth": {
                 #     "token": dlt.secrets['token'],
                 # }
@@ -105,7 +107,8 @@ def load_pokemon():
         {
             "client": {
                 "base_url": "https://pokeapi.co/api/v2/",
-                # default_paginator: is "auto", so it will be inferred from the API
+                 # If you leave out the default_paginator, it will be inferred from the API:
+                 # default_paginator: "json_links",
             },
             "endpoints": {
                 "pokemon": {
