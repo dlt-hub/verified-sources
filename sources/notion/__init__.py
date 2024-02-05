@@ -4,7 +4,7 @@ from typing import List, Dict, Optional, Iterator
 
 import dlt
 from dlt.sources import DltResource
-from ..api_client import APIClient, BearerTokenAuth
+from rest_api import RESTClient, BearerTokenAuth
 from .settings import API_URL, DEFAULT_HEADERS
 from .helpers.paginator import NotionPaginator
 
@@ -30,7 +30,7 @@ def notion_databases(
     Yields:
         DltResource: Data resources from Notion databases.
     """
-    notion_client = APIClient(
+    notion_client = RESTClient(
         base_url=API_URL,
         headers=DEFAULT_HEADERS,
         auth=BearerTokenAuth(api_key),

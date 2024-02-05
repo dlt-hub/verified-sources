@@ -2,7 +2,7 @@ from typing import Any, Dict, Iterable, Optional
 
 from dlt.common.typing import TDataItem
 
-from ...api_client import APIClient
+from api_client import RESTClient
 
 
 class NotionDatabase:
@@ -14,7 +14,7 @@ class NotionDatabase:
         notion_client (NotionClient): A client to interact with the Notion API.
     """
 
-    def __init__(self, database_id: str, notion_client: APIClient):
+    def __init__(self, database_id: str, notion_client: RESTClient):
         self.database_id = database_id
         self.notion_client = notion_client
 
