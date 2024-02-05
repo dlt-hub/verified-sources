@@ -11,7 +11,7 @@ from dlt.common.configuration.specs.base_configuration import (
     BaseConfiguration,
 )
 
-from scrapy.crawler import CrawlerProcess
+from scrapy.crawler import CrawlerProcess  # type: ignore
 
 
 from .types import AnyDict

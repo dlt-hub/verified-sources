@@ -1,12 +1,15 @@
 from abc import ABC
-from typing import Type
+from typing import Type, TypeVar
 
 import scrapy  # type: ignore
 
-from scrapy.exceptions import CloseSpider
+from scrapy.exceptions import CloseSpider  # type: ignore
 from dlt.common import logger
 
 from ..queue import BaseQueue
+
+
+T = TypeVar("T")
 
 
 class PipelineItem(ABC):
@@ -16,7 +19,7 @@ class PipelineItem(ABC):
         raise NotImplementedError
 
 
-def get_item_pipeline(queue: Type[BaseQueue]) -> Type[PipelineItem]:
+def get_item_pipeline(queue: BaseQueue[T]) -> Type[PipelineItem]:
     """Wraps our custom ItemPipeline and provides queue instance
 
     It is done this way because there is no way to define
