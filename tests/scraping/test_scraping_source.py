@@ -1,4 +1,7 @@
 from typing import Any
+import time
+import threading
+
 import dlt
 import pytest
 
@@ -7,11 +10,22 @@ from scrapy.http import Response  # type: ignore
 
 import sources.scraping.helpers
 
-from sources.scraping import scrapy_source
+from sources.scraping import scrapy_resource, scrapy_source
 from sources.scraping.helpers import create_pipeline_runner
+from sources.scraping.queue import BaseQueue
 from tests.utils import ALL_DESTINATIONS, load_table_counts
 
 start_urls = ["https://quotes.toscrape.com/page/1/"]
+
+
+def queue_closer(queue: BaseQueue, close_after_seconds: int = 2) -> threading.Thread:
+    def close_queue():
+        time.sleep(close_after_seconds)
+        queue.close()
+
+    closer = threading.Thread(target=close_queue)
+    closer.start()
+    return closer
 
 
 class MySpider(Spider):
@@ -90,3 +104,61 @@ def test_scrapy_pipeline_sends_data_in_queue(mocker):
 
     assert spy_on_queue.call_count == 100
     assert spy_on_queue_close.call_count == 1
+
+
+def test_scrapy_resource_yields_last_batch_on_queue_get_timeout():
+    queue = BaseQueue()
+    queue.put({"n": 1})
+
+    items = next(
+        scrapy_resource(
+            queue=queue,
+            queue_result_timeout=1,
+            batch_size=5,
+        )
+    )
+
+    assert len(items) == 1
+
+
+def test_scrapy_resource_yields_everything_and_data_is_saved_to_destination():
+    queue = BaseQueue()
+    total_items = 25
+    for i in range(total_items):
+        queue.put({"n": i})
+
+    res = scrapy_resource(queue=queue, queue_result_timeout=1, batch_size=10)
+    p = dlt.pipeline("scrapy_example", full_refresh=True, destination="duckdb")
+
+    closer = queue_closer(queue, close_after_seconds=1)
+    p.run(res, table_name="numbers")
+    closer.join()
+
+    with p.sql_client() as client:
+        with client.execute_query("SELECT * FROM numbers") as cursor:
+            loaded_values = [item for item in cursor.fetchall()]
+            assert len(loaded_values) == total_items
+
+
+def test_scrapy_resource_yields_last_batch_when_queue_is_closed():
+    queue = BaseQueue()
+    total_items = 23
+    for i in range(total_items):
+        queue.put({"n": i})
+
+    res = scrapy_resource(
+        queue=queue,
+        queue_result_timeout=1,
+        batch_size=5,
+    )
+
+    closer = queue_closer(queue)
+    total_count = 0
+    for batch in res:
+        total_count += len(batch)
+    closer.join()
+
+    assert total_count == total_items
+
+    # The last batch shoul only have 3 items
+    assert len(batch) == 3
