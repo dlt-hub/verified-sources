@@ -22,6 +22,7 @@ from google.analytics.data_v1beta.types import (
 )
 from apiclient.discovery import Resource
 
+print("hello!")
 
 @dlt.source(max_table_nesting=2)
 def google_analytics(
