@@ -1,17 +1,28 @@
-import os
+from typing import Union
+from os import PathLike
+from pathlib import Path
+from tempfile import gettempdir
+
+
+TEST_SAMPLES_PATH: str = "tests/filesystem/samples"
+REPO_FIXTURE_PATH: Union[str, PathLike] = Path(
+    gettempdir(), "dlt_test_repo_t8hY3x"
+).absolute()
+REPO_SAFE_PREFIX: str = "test-"
+REPO_GOOD_REF = "good-ref"
 
 FACTORY_ARGS = [
-    {"bucket_url": os.path.abspath("tests/filesystem/samples")},
+    {"bucket_url": str(Path(TEST_SAMPLES_PATH).absolute())},
     {"bucket_url": "s3://dlt-ci-test-bucket/standard_source/samples"},
     {"bucket_url": "gs://ci-test-bucket/standard_source/samples"},
     {"bucket_url": "az://dlt-ci-test-bucket/standard_source/samples"},
     {
-        "bucket_url": "gitpythonfs://samples",
+        "bucket_url": f"gitpythonfs://{REPO_SAFE_PREFIX}samples",
         "kwargs": {
-            "repo_path": "tests/filesystem/cases/git",
-            "ref": "unmodified-samples",
+            "repo_path": REPO_FIXTURE_PATH,
+            "ref": REPO_GOOD_REF,
         },
-    }
+    },
 ]
 
 GLOB_RESULTS = [
