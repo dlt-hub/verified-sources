@@ -3,6 +3,7 @@ import copy
 
 from requests.auth import AuthBase
 
+from dlt.common import logger
 from dlt.sources.helpers import requests
 
 from .paginators import BasePaginator, UnspecifiedPaginator
@@ -39,6 +40,11 @@ class RESTClient:
             url = path
         else:
             url = join_url(self.base_url, path)
+
+        logger.info(
+            f"Making {method.upper()} request to {url} with params={params}, "
+            f"json={json}"
+        )
 
         response = requests.request(
             method=method,
@@ -87,6 +93,8 @@ class RESTClient:
                     raise ValueError(
                         "No suitable paginator found for the API response."
                     )
+                else:
+                    logger.info(f"Detected paginator: {paginator.__class__.__name__}")
 
             yield paginator.extract_records(response)
 
