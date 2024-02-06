@@ -4,25 +4,17 @@ Defines all the sources and resources needed for Google Analytics V4
 from typing import Iterator, List, Optional, Union
 
 import dlt
-from dlt.common.exceptions import MissingDependencyException
-from dlt.common.typing import TDataItem, DictStrAny
-
+from apiclient.discovery import Resource
+from dlt.common.typing import DictStrAny, TDataItem
 from dlt.sources import DltResource
 from dlt.sources.credentials import GcpOAuthCredentials, GcpServiceAccountCredentials
+from google.analytics.data_v1beta import BetaAnalyticsDataClient
+from google.analytics.data_v1beta.types import GetMetadataRequest, Metadata
 
-from .helpers.data_processing import to_dict
 from .helpers import basic_report
-
+from .helpers.data_processing import to_dict
 from .settings import START_DATE
 
-from google.analytics.data_v1beta import BetaAnalyticsDataClient
-from google.analytics.data_v1beta.types import (
-    GetMetadataRequest,
-    Metadata,
-)
-from apiclient.discovery import Resource
-
-print("hello!")
 
 @dlt.source(max_table_nesting=2)
 def google_analytics(
