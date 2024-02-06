@@ -1,9 +1,10 @@
 """Hubspot source helpers"""
 
 import urllib.parse
-from typing import Iterator, Dict, Any, List, Optional, Iterable, Tuple
+from typing import Any, Dict, Iterator, List, Optional
 
 from dlt.sources.helpers import requests
+
 from .settings import OBJECT_TYPE_PLURAL
 
 BASE_URL = "https://api.hubapi.com/"

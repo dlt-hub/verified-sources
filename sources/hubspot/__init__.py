@@ -24,19 +24,15 @@ python
 >>> resources = hubspot(api_key="your_api_key")
 """
 
-from typing import Any, Dict, List, Literal, Sequence, Iterator
+from typing import Any, Dict, Iterator, List, Literal, Sequence
 from urllib.parse import quote
 
 import dlt
 from dlt.common import pendulum
-from dlt.common.typing import TDataItems, TDataItem
+from dlt.common.typing import TDataItems
 from dlt.sources import DltResource
 
-from .helpers import (
-    fetch_data,
-    _get_property_names,
-    fetch_property_history,
-)
+from .helpers import _get_property_names, fetch_data, fetch_property_history
 from .settings import (
     ALL,
     CRM_OBJECT_ENDPOINTS,
@@ -44,8 +40,8 @@ from .settings import (
     DEFAULT_CONTACT_PROPS,
     DEFAULT_DEAL_PROPS,
     DEFAULT_PRODUCT_PROPS,
-    DEFAULT_TICKET_PROPS,
     DEFAULT_QUOTE_PROPS,
+    DEFAULT_TICKET_PROPS,
     OBJECT_TYPE_PLURAL,
     STARTDATE,
     WEB_ANALYTICS_EVENTS_ENDPOINT,
@@ -204,13 +200,11 @@ def crm_objects(
 
     if len(props) > 2000:
         raise ValueError(
-            (
-                "Your request to Hubspot is too long to process. "
-                "Maximum allowed query length is 2000 symbols, while "
-                f"your list of properties `{props[:200]}`... is {len(props)} "
-                "symbols long. Use the `props` argument of the resource to "
-                "set the list of properties to extract from the endpoint."
-            )
+            "Your request to Hubspot is too long to process. "
+            "Maximum allowed query length is 2000 symbols, while "
+            f"your list of properties `{props[:200]}`... is {len(props)} "
+            "symbols long. Use the `props` argument of the resource to "
+            "set the list of properties to extract from the endpoint."
         )
 
     params = {"properties": props, "limit": 100}
