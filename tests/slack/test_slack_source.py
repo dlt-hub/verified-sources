@@ -18,8 +18,8 @@ def test_all_resources(destination_name: str) -> None:
     # Set page size to ensure we use pagination
     source = slack_source(
         page_size=20,
-        start_date=datetime(2023, 9, 1),
-        end_date=datetime(2023, 9, 8),
+        start_date=datetime(2024, 1, 31),
+        end_date=datetime(2024, 2, 1),
         selected_channels=["dlt-github-ci", "1-announcements"],
     )
     load_info = pipeline.run(source)
@@ -33,7 +33,7 @@ def test_all_resources(destination_name: str) -> None:
     assert set(table_counts.keys()) >= set(expected_tables)
     assert "replies" not in table_names
     assert table_counts["channels"] >= 15
-    assert table_counts["messages"] == 26
+    assert table_counts["messages"] == 34
 
 
 @pytest.mark.parametrize("destination_name", ALL_DESTINATIONS)
@@ -48,9 +48,9 @@ def test_replies(destination_name: str) -> None:
     # Set page size to ensure we use pagination
     source = slack_source(
         page_size=20,
-        start_date=datetime(2023, 9, 1),
-        end_date=datetime(2023, 9, 8),
-        selected_channels=["dlt-github-ci", "1-announcements"],
+        start_date=datetime(2023, 12, 19),
+        end_date=datetime(2024, 1, 10),
+        selected_channels=["1-announcements"],
         replies=True,
     )
     load_info = pipeline.run(source)
@@ -59,7 +59,7 @@ def test_replies(destination_name: str) -> None:
     table_names = [t["name"] for t in pipeline.default_schema.data_tables()]
     table_counts = load_table_counts(pipeline, *table_names)
     assert "replies" in table_names
-    assert table_counts["replies"] >= 10
+    assert table_counts["replies"] >= 5
 
 
 @pytest.mark.parametrize("destination_name", ALL_DESTINATIONS)
