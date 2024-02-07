@@ -1,7 +1,6 @@
 import dlt
-from dlt.sources.helpers import requests
-from rest_api import rest_api_source
-
+from rest_api import rest_api_source, ResolveConfig as resolve_from
+from rest_api.auth import BearerTokenAuth
 
 def load_github():
     pipeline = dlt.pipeline(
@@ -16,22 +15,18 @@ def load_github():
                 "base_url": "https://api.github.com/repos/dlt-hub/dlt/",
                 # If you leave out the default_paginator, it will be inferred from the API:
                 # "default_paginator": "header_links",
-
-                # "auth": {
-                #     "token": dlt.secrets['token'],
-                # }
+                "auth": {
+                    "token": dlt.secrets['github_token'],
+                }
             },
             "endpoints": {
-                "issues/comments": {
+                "issues/{issue_number}/comments": {
                     "params": {
                         "per_page": 100,
-                        "since": dlt.sources.incremental(
-                            "updated_at", initial_value="2024-01-25T11:21:28Z"
-                        ),
+                        "issue_number": resolve_from("issues", "number"),
                     },
                     "resource": {
                         "primary_key": "id",
-                        "write_disposition": "merge",
                     },
                 },
                 "issues": {
@@ -40,16 +35,13 @@ def load_github():
                         "sort": "updated",
                         "direction": "desc",
                         "state": "open",
+                        "since": dlt.sources.incremental(
+                            "updated_at", initial_value="2024-01-25T11:21:28Z"
+                        ),
                     },
                     "resource": {
                         "primary_key": "id",
                         "write_disposition": "merge",
-                    },
-                    "incremental": {
-                        "cursor_path": "updated_at",
-                        "initial_value": "2024-01-25T11:21:28Z",
-                        "param": "since",
-                        # also, todo: "transform": to_iso8601,
                     },
                 },
             },
@@ -71,8 +63,8 @@ def load_pokemon():
         {
             "client": {
                 "base_url": "https://pokeapi.co/api/v2/",
-                 # If you leave out the default_paginator, it will be inferred from the API:
-                 # default_paginator: "json_links",
+                # If you leave out the default_paginator, it will be inferred from the API:
+                # default_paginator: "json_links",
             },
             "endpoints": {
                 "pokemon": {
@@ -99,5 +91,5 @@ def load_pokemon():
 
 
 if __name__ == "__main__":
-    load_pokemon()
+    # load_pokemon()
     load_github()
