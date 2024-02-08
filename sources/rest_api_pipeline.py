@@ -67,16 +67,6 @@ def load_github_v2():
         ),
         Resource(
             Endpoint(
-                "issues/{issue_number}/comments",
-                params={
-                    "per_page": 100,
-                    "issue_number": resolve_from("issues", "number"),
-                },
-            ),
-            primary_key="id",
-        ),
-        Resource(
-            Endpoint(
                 "issues",
                 params={
                     "per_page": 100,
@@ -88,6 +78,16 @@ def load_github_v2():
             name="issues",
             primary_key="id",
             write_disposition="merge",
+        ),
+        Resource(
+            Endpoint(
+                "issues/{issue_number}/comments",
+                params={
+                    "per_page": 100,
+                    "issue_number": resolve_from("issues", "number"),
+                },
+            ),
+            primary_key="id",
         )
     )
 
