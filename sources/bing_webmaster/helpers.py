@@ -11,7 +11,6 @@ from dlt.sources.helpers import requests
 from .settings import BASE_URL, HEADERS
 
 
-
 def get_url_with_retry(url: str, params: DictStrStr) -> DictStrAny:
     try:
         r = requests.get(url, headers=HEADERS, params=params)
