@@ -146,14 +146,12 @@ def rest_api_resources(config: RESTAPIConfig):
 
     # Create the dependency graph
     for endpoint, endpoint_config in config["endpoints"].items():
-        request_params = endpoint_config.get("params", {})
         resource_name = endpoint_config.get("resource", {}).get("name", endpoint)
         path = endpoint_config.get("path", endpoint)
-        endpoint_config_map[resource_name] = endpoint_config
 
         resolved_params = [
             ResolvedParam(key, value)
-            for key, value in request_params.items()
+            for key, value in endpoint_config.get("params", {}).items()
             if isinstance(value, ResolveConfig)
         ]
 
@@ -165,10 +163,11 @@ def rest_api_resources(config: RESTAPIConfig):
         predecessors = set(x.resolve_config.resource_name for x in resolved_params)
 
         dependency_graph.add(resource_name, *predecessors)
-        endpoint_config_map[resource_name]["_resolved_param"] = (
+        endpoint_config["_resolved_param"] = (
             resolved_params[0] if resolved_params else None
         )
-        endpoint_config_map[resource_name]["path"] = path
+        endpoint_config["path"] = path
+        endpoint_config_map[resource_name] = endpoint_config
 
     # Create the resources
     for resource_name in dependency_graph.static_order():
@@ -181,7 +180,6 @@ def rest_api_resources(config: RESTAPIConfig):
         )
 
         if endpoint_config.get("_resolved_param") is None:
-            # This is the first resource
             def paginate_resource(
                 method,
                 path,
@@ -210,7 +208,6 @@ def rest_api_resources(config: RESTAPIConfig):
             )
 
         else:
-            # This is a dependent resource
             resolved_param: ResolvedParam = endpoint_config["_resolved_param"]
 
             predecessor = resources[resolved_param.resolve_config.resource_name]
@@ -218,7 +215,7 @@ def rest_api_resources(config: RESTAPIConfig):
             param_name = resolved_param.param_name
             request_params.pop(param_name, None)
 
-            def paginate_resource_dependent(
+            def paginate_dependent_resource(
                 items,
                 method,
                 path,
@@ -229,17 +226,14 @@ def rest_api_resources(config: RESTAPIConfig):
             ):
                 items = items or []
                 for item in items:
-                    path = path.format(**{param_name: item[field_path]})
+                    formatted_path = path.format(**{param_name: item[field_path]})
 
                     yield from client.paginate(
-                        method=method,
-                        path=path,
-                        params=params,
-                        paginator=paginator
+                        method=method, path=formatted_path, params=params, paginator=paginator
                     )
 
             resources[resource_name] = dlt.resource(
-                paginate_resource_dependent,
+                paginate_dependent_resource,
                 name=resource_name,
                 data_from=predecessor,
                 **resource_config,
