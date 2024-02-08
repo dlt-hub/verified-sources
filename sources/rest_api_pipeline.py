@@ -1,5 +1,6 @@
 import dlt
-from rest_api import rest_api_source, ResolveConfig as resolve_from
+from rest_api import rest_api_source, ResolveConfig as resolve_from, rest_api_resources_v2
+from rest_api import Client, Resource, Endpoint
 from rest_api.auth import BearerTokenAuth
 
 def load_github():
@@ -52,6 +53,48 @@ def load_github():
     print(load_info)
 
 
+def load_github_v2():
+    pipeline = dlt.pipeline(
+        pipeline_name="rest_api_github_v2",
+        destination="duckdb",
+        dataset_name="rest_api_data",
+    )
+
+    github_source = rest_api_resources_v2(
+        Client(
+            base_url="https://api.github.com/repos/dlt-hub/dlt/",
+            auth=BearerTokenAuth(dlt.secrets['github_token']),
+        ),
+        Resource(
+            Endpoint(
+                "issues/{issue_number}/comments",
+                params={
+                    "per_page": 100,
+                    "issue_number": resolve_from("issues", "number"),
+                },
+            ),
+            primary_key="id",
+        ),
+        Resource(
+            Endpoint(
+                "issues",
+                params={
+                    "per_page": 100,
+                    "sort": "updated",
+                    "direction": "desc",
+                    "state": "open",
+                },
+            ),
+            name="issues",
+            primary_key="id",
+            write_disposition="merge",
+        )
+    )
+
+    load_info = pipeline.run(github_source)
+    print(load_info)
+
+
 def load_pokemon():
     pipeline = dlt.pipeline(
         pipeline_name="rest_api_pokemon",
@@ -92,4 +135,5 @@ def load_pokemon():
 
 if __name__ == "__main__":
     # load_pokemon()
-    load_github()
+    # load_github()
+    load_github_v2()
