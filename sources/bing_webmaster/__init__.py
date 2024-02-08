@@ -42,7 +42,7 @@ def source(
     table_name="bing_page_stats",
 )
 def page_stats(
-    site_urls: List[str], bing_webmaster_api_key: str = dlt.secrets.value
+    site_urls: List[str], api_key: str = dlt.secrets.value
 ) -> Iterator[Iterator[DictStrAny]]:
     """
     Yields detailed traffic statistics for top pages belonging to a site_url
@@ -54,10 +54,10 @@ def page_stats(
     Yields:
         Iterator[Dict[str, Any]]: An iterator over list of organic traffic statistics.
     """
-    check_api_key(bing_webmaster_api_key)
+    check_api_key(api_key)
     api_path = "GetPageStats"
     for site_url in site_urls:
-        params = {"siteUrl": site_url, "apikey": bing_webmaster_api_key}
+        params = {"siteUrl": site_url, "apikey": api_key}
         logger.info(f"Fetching for site_url: {site_url}")
         response = get_stats_with_retry(api_path, params)
         if len(response) > 0:
@@ -72,7 +72,7 @@ def page_stats(
 )
 def page_query_stats(
     site_url_pages: Iterable[DictStrStr],
-    bing_webmaster_api_key: str = dlt.secrets.value,
+    api_key: str = dlt.secrets.value,
 ) -> Iterator[Iterator[DictStrAny]]:
     """
     Yields weekly statistics and queries for each pair of page and site_url.
@@ -85,13 +85,13 @@ def page_query_stats(
     Yields:
         Iterator[Dict[str, Any]]: An iterator over list of organic traffic statistics.
     """
-    check_api_key(bing_webmaster_api_key)
+    check_api_key(api_key)
     api_path = "GetPageQueryStats"
     for record in site_url_pages:
         time.sleep(0.5)  # this avoids rate limit observed after dozens of requests
         site_url = record.get("site_url")
         page = record.get("page")
-        params = {"siteUrl": site_url, "page": page, "apikey": bing_webmaster_api_key}
+        params = {"siteUrl": site_url, "page": page, "apikey": api_key}
         logger.info(f"Fetching for site_url: {site_url}, page: {page}")
         response = get_stats_with_retry(api_path, params)
         if len(response) > 0:

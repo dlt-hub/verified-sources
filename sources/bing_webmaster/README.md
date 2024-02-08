@@ -32,9 +32,15 @@ any of the other [destinations](https://dlthub.com/docs/dlt-ecosystem/destinatio
 1. [Bing Webmaster API](https://learn.microsoft.com/en-us/dotnet/api/microsoft.bing.webmaster.api.interfaces.iwebmasterapi) is an API that
    requires authentication or including secrets in `secrets.toml`. Create an account and generate the API key by clicking on the cog wheel in the [Bing Webmaster Web UI](https://www.bing.com/webmasters/home).
 
-2. Ensure to add your sites and also verify with Bing that you have ownership of the domains you want to fetch statics for. Follow this [Documentation on add and verify site](https://www.bing.com/webmasters/help/add-and-verify-site-12184f8b). It describes how you can achieve that by importing your sites from Google Search Console or by adding your sites manually.
+2. Add the obtained API key into `secrets.toml` as follows:
+```toml
+[sources.bing_webmaster]
+api_key = "Please set me up!" # please set me up!
+```
 
-2. Follow the instructions in the
+3. Ensure to add your sites and also verify with Bing that you have ownership of the domains you want to fetch statics for. Follow this [Documentation on add and verify site](https://www.bing.com/webmasters/help/add-and-verify-site-12184f8b). It describes how you can achieve that by importing your sites from Google Search Console or by adding your sites manually.
+
+4. Follow the instructions in the
    [destinations](https://dlthub.com/docs/dlt-ecosystem/destinations/) document to add credentials
    for your chosen destination.
 
