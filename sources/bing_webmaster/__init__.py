@@ -13,7 +13,7 @@ from dlt.common import logger
 from dlt.common.typing import DictStrAny, DictStrStr
 from dlt.sources import DltResource
 
-from .helpers import get_stats_with_retry, parse_response, check_api_key
+from .helpers import get_stats_with_retry, parse_response
 
 
 @dlt.source(name="bing_webmaster")
@@ -54,7 +54,6 @@ def page_stats(
     Yields:
         Iterator[Dict[str, Any]]: An iterator over list of organic traffic statistics.
     """
-    check_api_key(api_key)
     api_path = "GetPageStats"
     for site_url in site_urls:
         params = {"siteUrl": site_url, "apikey": api_key}
@@ -85,7 +84,6 @@ def page_query_stats(
     Yields:
         Iterator[Dict[str, Any]]: An iterator over list of organic traffic statistics.
     """
-    check_api_key(api_key)
     api_path = "GetPageQueryStats"
     for record in site_url_pages:
         time.sleep(0.5)  # this avoids rate limit observed after dozens of requests

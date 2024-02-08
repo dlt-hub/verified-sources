@@ -11,14 +11,6 @@ from dlt.sources.helpers import requests
 from .settings import BASE_URL, HEADERS
 
 
-def check_api_key(api_key: str) -> None:
-    if api_key is None or len(api_key) == 0:
-        raise ValueError(
-            """Please provide a Bing Webmaster API key in secrets.toml under
-            [sources.bing_webmaster]
-            api_key="your_api_key" """
-        )
-
 
 def get_url_with_retry(url: str, params: DictStrStr) -> DictStrAny:
     try:
