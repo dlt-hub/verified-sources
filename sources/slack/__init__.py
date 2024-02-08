@@ -90,7 +90,7 @@ def slack_source(
     @dlt.resource(name="users", primary_key="id", write_disposition="replace")
     def users_resource() -> Iterable[TDataItem]:
         """
-        Yield all channels as a DLT resource.
+        Yield all users as a DLT resource.
 
         Yields:
             Iterable[TDataItem]: A list of users.
@@ -143,7 +143,7 @@ def slack_source(
                 datetime_fields=MSG_DATETIME_FIELDS,
                 context={"channel": channel_data["id"]},
             ):
-                yield from page_data
+                yield page_data
 
     # It will not work in the pipeline or tests because it is a paid feature,
     # raise an error when it is not a paying account.
@@ -172,7 +172,7 @@ def slack_source(
         write_disposition="append",
     )
     @dlt.defer
-    def replies_resource(message: TDataItem) -> Iterable[TDataItem]:
+    def replies_resource(messages: List[TDataItem]) -> Iterable[TDataItem]:
         """
         Yield all the threads replies for selected channels.
 
@@ -182,19 +182,20 @@ def slack_source(
         Yields:
             Iterable[TDataItem]: A list of replies.
         """
-        params = {
-            "channel": message["channel"],
-            "ts": ensure_dt_type(message["ts"], to_ts=True),
-        }
+        for message in messages:
+            params = {
+                "channel": message["channel"],
+                "ts": ensure_dt_type(message["ts"], to_ts=True),
+            }
 
-        for page_data in api.get_pages(
-            resource="conversations.replies",
-            response_path="$.messages[*]",
-            params=params,
-            datetime_fields=MSG_DATETIME_FIELDS,
-            context={"channel": message["channel"]},
-        ):
-            yield [mes for mes in page_data if "parent_user_id" in mes]
+            for page_data in api.get_pages(
+                resource="conversations.replies",
+                response_path="$.messages[*]",
+                params=params,
+                datetime_fields=MSG_DATETIME_FIELDS,
+                context={"channel": message["channel"]},
+            ):
+                yield [mes for mes in page_data if "parent_user_id" in mes]
 
     yield from (channels_resource, users_resource, messages_resource, logs_resource)
     if replies:
