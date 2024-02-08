@@ -2,11 +2,17 @@
 
 from typing import TypedDict, Optional, Dict, Any, Union, NamedTuple
 
+from dataclasses import dataclass
+
 import graphlib
 
 import dlt
+from dlt.extract.source import DltResource
 
 from .client import RESTClient
+
+Client = RESTClient
+
 from .paginators import (
     BasePaginator,
     JSONResponsePaginator,
@@ -180,6 +186,7 @@ def rest_api_resources(config: RESTAPIConfig):
         )
 
         if endpoint_config.get("_resolved_param") is None:
+
             def paginate_resource(
                 method,
                 path,
@@ -229,7 +236,10 @@ def rest_api_resources(config: RESTAPIConfig):
                     formatted_path = path.format(**{param_name: item[field_path]})
 
                     yield from client.paginate(
-                        method=method, path=formatted_path, params=params, paginator=paginator
+                        method=method,
+                        path=formatted_path,
+                        params=params,
+                        paginator=paginator,
                     )
 
             resources[resource_name] = dlt.resource(
@@ -245,3 +255,178 @@ def rest_api_resources(config: RESTAPIConfig):
             )
 
     return list(resources.values())
+
+
+#
+# Alternative implementation
+#
+
+
+@dataclass
+class Endpoint:
+    path: str
+    method: str = "get"
+    params: Optional[Dict[str, Any]] = None
+    json: Optional[Dict[str, Any]] = None
+    paginator: Optional[PaginatorType] = None
+    incremental: Optional[IncrementalConfig] = None
+
+
+class Resource:
+    def __init__(self, endpoint: Endpoint, name: Optional[str] = None, **resource_kwargs):
+        self.endpoint = endpoint
+        self.name = name or endpoint.path
+        self.resource_kwargs = resource_kwargs
+
+@dlt.source
+def rest_api_resources_v2(client: RESTClient, *resources: Resource):
+    """
+    Alternative implementation of the rest_api_source function that uses
+    classes to represent the resources and their dependencies:
+
+    Example:
+        github_source = rest_api_resources_v2(
+            Client(
+                base_url="https://api.github.com/repos/dlt-hub/dlt/",
+                default_paginator="header_links",
+                auth=BearerTokenAuth(dlt.secrets["token"]),
+            ),
+            Resource(
+                Endpoint(
+                    "issues/{issue_id}/comments",
+                    params={
+                        "per_page": 100,
+                        "since": dlt.sources.incremental(
+                            "updated_at", initial_value="2024-01-25T11:21:28Z"
+                        ),
+                        "issue_id": resolve_from("issues", "id"),
+                    },
+                ),
+                primary_key="id",
+                write_disposition="merge",
+            ),
+            Resource(
+                Endpoint(
+                    "issues",
+                    params={
+                        "per_page": 100,
+                        "sort": "updated",
+                        "direction": "desc",
+                        "state": "open",
+                    },
+                ),
+                primary_key="id",
+                write_disposition="merge",
+                name="issues",
+            )
+        )
+    """
+    dependency_graph = graphlib.TopologicalSorter()
+    resource_config_map: Dict[str, Resource] = {}
+    dlt_resources: Dict[str, DltResource] = {}
+
+    # Create the dependency graph
+    for resource in resources:
+        resource_name = resource.name
+        resolved_params = [
+            ResolvedParam(key, value)
+            for key, value in resource.endpoint.params.items()
+            if isinstance(value, ResolveConfig)
+        ]
+
+        if len(resolved_params) > 1:
+            raise ValueError(
+                f"Multiple resolved params for resource {resource_name}: {resolved_params}"
+            )
+
+        predecessors = set(x.resolve_config.resource_name for x in resolved_params)
+
+        dependency_graph.add(resource_name, *predecessors)
+
+        # Store resolved param
+        resource.endpoint._resolved_param = (
+            resolved_params[0] if resolved_params else None
+        )
+        resource_config_map[resource_name] = resource
+
+    # Create the resources
+    for resource_name in dependency_graph.static_order():
+        resource_config = resource_config_map[resource_name]
+        endpoint = resource_config.endpoint
+        request_params = endpoint.params or {}
+
+        incremental_object, incremental_param = setup_incremental_object(
+            request_params, endpoint.incremental
+        )
+
+        if endpoint._resolved_param is None:
+
+            def paginate_resource(
+                method,
+                path,
+                params,
+                paginator,
+                incremental_object=incremental_object,
+                incremental_param=incremental_param,
+            ):
+                if incremental_object:
+                    params[incremental_param] = incremental_object.last_value
+
+                yield from client.paginate(
+                    method=method,
+                    path=path,
+                    params=params,
+                    paginator=paginator,
+                )
+
+            dlt_resources[resource_name] = dlt.resource(
+                paginate_resource, name=resource_name, **resource.resource_kwargs
+            )(
+                method=endpoint.method,
+                path=endpoint.path,
+                params=request_params,
+                paginator=create_paginator(endpoint.paginator),
+            )
+
+        else:
+            resolved_param: ResolvedParam = endpoint._resolved_param
+
+            predecessor = dlt_resources[resolved_param.resolve_config.resource_name]
+
+            param_name = resolved_param.param_name
+            request_params.pop(param_name, None)
+
+            def paginate_dependent_resource(
+                items,
+                method,
+                path,
+                params,
+                paginator,
+                param_name=param_name,
+                field_path=resolved_param.resolve_config.field_path,
+            ):
+                items = items or []
+                for item in items:
+                    formatted_path = path.format(**{param_name: item[field_path]})
+
+                    yield from client.paginate(
+                        method=method,
+                        path=formatted_path,
+                        params=params,
+                        paginator=paginator,
+                    )
+
+            dlt_resources[resource_name] = dlt.resource(
+                paginate_dependent_resource,
+                name=resource_name,
+                data_from=predecessor,
+                **resource.resource_kwargs,
+            )(
+                method=endpoint.method,
+                path=endpoint.path,
+                params=request_params,
+                paginator=create_paginator(endpoint.paginator),
+            )
+
+    return list(dlt_resources.values())
+
