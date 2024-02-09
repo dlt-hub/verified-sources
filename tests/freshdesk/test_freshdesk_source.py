@@ -28,7 +28,7 @@ def test_load_all_endpoints(destination_name: str) -> None:
     assert_load_info(info)
     assert load_table_counts(
         pipeline, *[t["name"] for t in pipeline.default_schema.data_tables()]
-    ) == {"agents": 1, "companies": 1, "contacts": 15, "groups": 3, "roles": 8}
+    ) == {"agents": 1, "companies": 1, "contacts": 16, "groups": 3, "roles": 8}
 
 
 @pytest.mark.parametrize("destination_name", ALL_DESTINATIONS)
