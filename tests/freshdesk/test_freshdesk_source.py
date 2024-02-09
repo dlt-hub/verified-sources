@@ -1,11 +1,16 @@
 import dlt
 import pytest
-from utils import assert_load_info, load_table_counts
+from tests.utils import (
+    ALL_DESTINATIONS,
+    assert_load_info,
+    load_table_counts,
+
+)
 
 from sources.freshdesk import freshdesk_source, tickets
 
 
-@pytest.mark.parametrize("destination_name", ["bigquery"])
+@pytest.mark.parametrize("destination_name", ALL_DESTINATIONS)
 def test_load_all_endpoints(destination_name: str) -> None:
     # mind the full_refresh flag - it makes sure that data is loaded to unique dataset. this allows you to run the tests on the same database in parallel
     pipeline = dlt.pipeline(
@@ -26,7 +31,7 @@ def test_load_all_endpoints(destination_name: str) -> None:
     ) == {"agents": 1, "companies": 1, "contacts": 15, "groups": 3, "roles": 8}
 
 
-@pytest.mark.parametrize("destination_name", ["bigquery"])
+@pytest.mark.parametrize("destination_name", ALL_DESTINATIONS)
 def test_incremental_tickets_load(destination_name: str) -> None:
     # do the initial load
     pipeline = dlt.pipeline(

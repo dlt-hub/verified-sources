@@ -1,7 +1,9 @@
+from typing import List
+
 import dlt
 from dlt.common.typing import TAnyDateTime
-from typing import List
 from freshdesk import freshdesk_source, tickets
+
 
 def load_endpoints(endpoints: List[str] = None) -> None:
 
