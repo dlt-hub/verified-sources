@@ -1,8 +1,11 @@
+from typing import Iterable, List, Optional
+
 import dlt
-from .helpers import create_auth_headers, paginated_response, get_endpoint
-from dlt.sources import DltResource
 from dlt.common.typing import TDataItem
-from typing import List, Iterable, Optional
+from dlt.sources import DltResource
+
+from .helpers import create_auth_headers, get_endpoint, paginated_response
+
 
 @dlt.source
 def freshdesk_source(
@@ -27,11 +30,14 @@ def freshdesk_source(
 
     for endpoint in endpoints:
         yield dlt.resource(
-            get_endpoint(api_secret_key=api_secret_key, domain=domain, endpoint=endpoint),
+            get_endpoint(
+                api_secret_key=api_secret_key, domain=domain, endpoint=endpoint
+            ),
             name=endpoint,
             write_disposition="merge",
             primary_key="id",
         )
+
 
 @dlt.resource(write_disposition="append")
 def tickets(

@@ -1,6 +1,7 @@
 import base64
+from typing import Any, Dict, Iterable
+
 from dlt.sources.helpers import requests
-from typing import Iterable, Dict, Any
 
 
 def create_auth_headers(api_secret_key: str) -> Dict[str, str]:
@@ -17,7 +18,10 @@ def create_auth_headers(api_secret_key: str) -> Dict[str, str]:
     headers = {"Authorization": f"Basic {encoded_key}"}
     return headers
 
-def get_endpoint(api_secret_key: str, domain: str, endpoint: str) -> Iterable[Dict[str, Any]]:
+
+def get_endpoint(
+    api_secret_key: str, domain: str, endpoint: str
+) -> Iterable[Dict[str, Any]]:
     """
     Fetches data from a Freshdesk API endpoint.
 
@@ -36,7 +40,10 @@ def get_endpoint(api_secret_key: str, domain: str, endpoint: str) -> Iterable[Di
     data = response.json()
     yield data
 
-def paginated_response(url: str, page: int, per_page: int, updated_since: str, headers: Dict[str, str]) -> Iterable[Dict[str, Any]]:
+
+def paginated_response(
+    url: str, page: int, per_page: int, updated_since: str, headers: Dict[str, str]
+) -> Iterable[Dict[str, Any]]:
     """
     Retrieves data from a paginated Freshdesk API endpoint.
 
@@ -51,7 +58,9 @@ def paginated_response(url: str, page: int, per_page: int, updated_since: str, h
         Iterable[Dict[str, Any]]: Data fetched from the paginated endpoint.
     """
     while True:
-        paginated_url = f"{url}?per_page={per_page}&page={page}&updated_since={updated_since}"
+        paginated_url = (
+            f"{url}?per_page={per_page}&page={page}&updated_since={updated_since}"
+        )
         response = requests.get(paginated_url, headers=headers)
         response.raise_for_status()
 
