@@ -1,40 +1,32 @@
-from typing import List
-
 import dlt
-from dlt.common.typing import TAnyDateTime
+
 from freshdesk import freshdesk_source, tickets
 
 
-def load_endpoints(endpoints: List[str] = None) -> None:
-
+def load_endpoints() -> None:
     pipeline = dlt.pipeline(
-        pipeline_name="freshdesk",
-        destination="bigquery",
-        dataset_name="freshdesk_data",
+        pipeline_name="freshdesk_pipeline",  # Name of pipeline
+        destination="bigquery",  # Target destination
+        dataset_name="freshdesk_pipeline",  # Name of the dataset
     )
-    load_info = pipeline.run(freshdesk_source(endpoints=endpoints))
+    # Run the pipeline with the freshdesk source
+    load_info = pipeline.run(freshdesk_source())
+    # print load details
     print(load_info)
-    trace = pipeline.last_trace
-    pipeline.run([trace], table_name="_trace")
 
 
-def load_tickets(created_at: TAnyDateTime) -> None:
-
+def load_tickets() -> None:
     pipeline = dlt.pipeline(
-        pipeline_name="freshdesk",
-        destination="bigquery",
-        dataset_name="freshdesk_data",
+        pipeline_name="freshdesk_pipeline",  # Name of pipeline
+        destination="bigquery",  # Target destination
+        dataset_name="freshdesk_pipeline",  # Name of the dataset
     )
-
-    # run the pipeline with your parameters
-    load_info = pipeline.run(tickets(created_at=created_at))
-    # pretty print the information on data that was loaded
+    # Run the pipeline with the tickets resource
+    load_info = pipeline.run(tickets())
+    # print load details
     print(load_info)
 
 
 if __name__ == "__main__":
-    # add your desired endpoints to the list
-    endpoints = ["agents", "companies", "contacts", "groups", "roles", "time_entries"]
-    load_endpoints(endpoints)
-
-    # load_tickets(created_at="2022-01-01T00:00:00Z")
+    load_endpoints()
+    load_tickets()
