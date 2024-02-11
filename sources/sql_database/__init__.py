@@ -45,7 +45,7 @@ def sql_database(
         detect_precision_hints (bool): Set column precision and scale hints for supported data types in the target schema based on the columns in the source tables.
             This is disabled by default.
         defer_table_reflect (bool): Will connect and reflect table schema only when yielding data. Requires table_names to be explicitly passed.
-            Enable this option when running on Airflow. Available on dlt 0.4.3 and later.
+            Enable this option when running on Airflow. Available on dlt 0.4.4 and later.
         table_adapter_callback: (Callable): Receives each reflected table. May be used to modify the list of columns that will be selected.
     Returns:
         Iterable[DltResource]: A list of DLT resources for each table to be loaded.
@@ -117,7 +117,7 @@ def sql_table(
         detect_precision_hints (bool): Set column precision and scale hints for supported data types in the target schema based on the columns in the source tables.
             This is disabled by default.
         defer_table_reflect (bool): Will connect and reflect table schema only when yielding data. Enable this option when running on Airflow. Available
-            on dlt 0.4.3 and later
+            on dlt 0.4.4 and later
         table_adapter_callback: (Callable): Receives each reflected table. May be used to modify the list of columns that will be selected.
 
     Returns:

@@ -2,9 +2,8 @@ from typing import Iterator, Any
 
 import dlt
 from dlt.sources.credentials import ConnectionStringCredentials
-from dlt.common import pendulum
 
-from sql_database import sql_database, sql_table
+from sql_database import sql_database, sql_table, Table
 
 
 def load_select_tables_from_database() -> None:
@@ -113,21 +112,19 @@ def select_columns() -> None:
         full_refresh=True,
     )
 
-    def table_adapter(table):
+    def table_adapter(table: Table) -> None:
         print(table.name)
         if table.name == "family":
             # this is SqlAlchemy table. _columns are writable
             # let's drop updated column
-            table._columns.remove(
-                table.columns["updated"]
-            )
+            table._columns.remove(table.columns["updated"])
 
     family = sql_table(
         credentials="mysql+pymysql://rfamro@mysql-rfam-public.ebi.ac.uk:4497/Rfam",
         table="family",
         chunk_size=10,
         detect_precision_hints=True,
-        table_adapter_callback=table_adapter
+        table_adapter_callback=table_adapter,
     )
 
     # also we do not want the whole table, so we add limit to get just one chunk (10 records)
@@ -213,6 +210,7 @@ if __name__ == "__main__":
     # Load selected tables with different settings
     # load_select_tables_from_database()
 
+    # load a table and select columns
     select_columns()
 
     # Load tables with the standalone table resource
