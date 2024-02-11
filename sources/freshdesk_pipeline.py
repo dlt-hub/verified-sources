@@ -6,7 +6,7 @@ from freshdesk import freshdesk_source, tickets
 def load_endpoints() -> None:
     pipeline = dlt.pipeline(
         pipeline_name="freshdesk_pipeline",  # Name of pipeline
-        destination="bigquery",  # Target destination
+        destination="duckdb",  # Target destination
         dataset_name="freshdesk_pipeline",  # Name of the dataset
     )
     # Run the pipeline with the freshdesk source
@@ -18,7 +18,7 @@ def load_endpoints() -> None:
 def load_tickets() -> None:
     pipeline = dlt.pipeline(
         pipeline_name="freshdesk_pipeline",  # Name of pipeline
-        destination="bigquery",  # Target destination
+        destination="duckdb",  # Target destination
         dataset_name="freshdesk_pipeline",  # Name of the dataset
     )
     # Run the pipeline with the tickets resource
