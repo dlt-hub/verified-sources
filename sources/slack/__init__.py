@@ -1,6 +1,7 @@
 """Fetches Slack Conversations, History and logs."""
 
-from typing import Iterable, List, Optional, Tuple
+from typing import Iterable, List, Optional, Tuple, Dict, Any
+from functools import partial
 
 import dlt
 from dlt.common.typing import TAnyDateTime, TDataItem
@@ -23,6 +24,7 @@ def slack_source(
     start_date: Optional[TAnyDateTime] = DEFAULT_START_DATE,
     end_date: Optional[TAnyDateTime] = None,
     selected_channels: Optional[List[str]] = dlt.config.value,
+    table_per_channel: bool = True,
     replies: bool = False,
 ) -> Iterable[DltResource]:
     """
@@ -35,6 +37,8 @@ def slack_source(
         start_date: The start time of the range for which to load. Defaults to January 1st 2000.
         end_date: The end time of the range for which to load data.
         selected_channels: The list of channels to load. If None, all channels will be loaded.
+        table_per_channel: Boolean flag, True by default. If True - for each channel separate table with messages is created.
+            Otherwise, all messages are put in one table.
         replies: Boolean flag indicating if you want a replies table to be present as well. False by default.
 
     Returns:
@@ -104,6 +108,58 @@ def slack_source(
         ):
             yield page_data
 
+    def get_messages(
+        channel_data: Dict[str, Any], start_date_ts: float, end_date_ts: float
+    ) -> Iterable[TDataItem]:
+        """
+        Generator, which gets channel messages for specific dates.
+        Args:
+            channel_data: dict with channels data.
+            start_date_ts: start timestamp.
+            end_date_ts: end timestamp.
+
+        Yields:
+            List[TDataItem]: messages.
+        """
+        params = {
+            "channel": channel_data["id"],
+            "oldest": start_date_ts,
+            "latest": end_date_ts,
+        }
+
+        for page_data in api.get_pages(
+            resource="conversations.history",
+            response_path="$.messages[*]",
+            params=params,
+            datetime_fields=MSG_DATETIME_FIELDS,
+            context={"channel": channel_data["id"]},
+        ):
+            yield page_data
+
+    def get_thread_replies(messages: List[Dict[str, Any]]) -> Iterable[TDataItem]:
+        """
+        Generator, which gets replies for each message.
+        Args:
+            messages: messages data.
+
+        Yields:
+            Li
+        """
+        for message in messages:
+            if message.get("thread_ts", None):
+                params = {
+                    "channel": message["channel"],
+                    "ts": ensure_dt_type(message["thread_ts"], to_ts=True),
+                }
+
+                for page_data in api.get_pages(
+                    resource="conversations.replies",
+                    response_path="$.messages[*]",
+                    params=params,
+                    context={"channel": message["channel"]},
+                ):
+                    yield page_data[1:]
+
     @dlt.resource(
         name="messages",
         primary_key=("channel", "ts"),
@@ -130,20 +186,34 @@ def slack_source(
         start_date_ts = ensure_dt_type(created_at.last_value, to_ts=True)
         end_date_ts = ensure_dt_type(created_at.end_value, to_ts=True)
         for channel_data in fetched_selected_channels:
-            params = {
-                "channel": channel_data["id"],
-                "oldest": start_date_ts,
-                "latest": end_date_ts,
-            }
+            yield from get_messages(channel_data, start_date_ts, end_date_ts)
 
-            for page_data in api.get_pages(
-                resource="conversations.history",
-                response_path="$.messages[*]",
-                params=params,
-                datetime_fields=MSG_DATETIME_FIELDS,
-                context={"channel": channel_data["id"]},
-            ):
-                yield page_data
+    def per_table_messages_resource(
+        channel_data: Dict[str, Any],
+        created_at: dlt.sources.incremental[DateTime] = dlt.sources.incremental(
+            "ts",
+            initial_value=start_dt,
+            end_value=end_dt,
+            allow_external_schedulers=True,
+        ),
+    ) -> Iterable[TDataItem]:
+        """Yield all messages for a given channel as a DLT resource. Keep blocks column without normalization.
+
+        Args:
+            channel_data (Dict[str, Any]): The channel data.
+            created_at (dlt.sources.incremental[DateTime]): The incremental created_at field.
+
+        Yields:
+            Iterable[TDataItem]: A list of messages.
+        """
+        start_date_ts = ensure_dt_type(created_at.last_value, to_ts=True)
+        end_date_ts = ensure_dt_type(created_at.end_value, to_ts=True)
+        yield from get_messages(channel_data, start_date_ts, end_date_ts)
+
+    def table_name_func(channel_name: str, payload: TDataItem) -> str:
+        """Return the table name for a given channel and payload."""
+        table_type = payload.get("subtype", payload["type"])
+        return f"{channel_name}_{table_type}"
 
     # It will not work in the pipeline or tests because it is a paid feature,
     # raise an error when it is not a paying account.
@@ -164,39 +234,36 @@ def slack_source(
         ):
             yield page_data
 
-    @dlt.transformer(
-        data_from=messages_resource,
-        primary_key=("thread_ts", "ts"),
-        name="replies",
-        columns={"blocks": {"data_type": "complex"}},
-        write_disposition="append",
-    )
-    @dlt.defer
-    def replies_resource(messages: List[TDataItem]) -> Iterable[TDataItem]:
-        """
-        Yield all the threads replies for selected channels.
+    yield from (channels_resource, users_resource, logs_resource)
 
-        Args:
-            message: Dict containing one message data.
+    if table_per_channel:
+        for channel in fetched_selected_channels:
+            channel_name = channel["name"]
+            table_name = partial(table_name_func, channel_name)
+            messages_channel = dlt.resource(
+                per_table_messages_resource,
+                name=channel_name,
+                table_name=table_name,
+                primary_key=("channel", "ts"),
+                write_disposition="append",
+                columns={"blocks": {"data_type": "complex"}},
+            )(channel)
 
-        Yields:
-            Iterable[TDataItem]: A list of replies.
-        """
-        for message in messages:
-            params = {
-                "channel": message["channel"],
-                "ts": ensure_dt_type(message["ts"], to_ts=True),
-            }
-
-            for page_data in api.get_pages(
-                resource="conversations.replies",
-                response_path="$.messages[*]",
-                params=params,
-                datetime_fields=MSG_DATETIME_FIELDS,
-                context={"channel": message["channel"]},
-            ):
-                yield [mes for mes in page_data if "parent_user_id" in mes]
-
-    yield from (channels_resource, users_resource, messages_resource, logs_resource)
-    if replies:
-        yield replies_resource
+            yield messages_channel
+            if replies:
+                yield messages_channel | dlt.transformer(
+                    get_thread_replies,
+                    name=channel_name + "_replies",
+                    table_name=partial(table_name_func, channel_name + "_replies"),
+                    primary_key=("thread_ts", "ts"),
+                    write_disposition="append",
+                )
+    else:
+        yield messages_resource
+        if replies:
+            yield messages_resource | dlt.transformer(
+                get_thread_replies,
+                name="replies",
+                primary_key=("thread_ts", "ts"),
+                write_disposition="append",
+            )
