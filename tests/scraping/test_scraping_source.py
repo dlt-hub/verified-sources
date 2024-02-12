@@ -3,6 +3,7 @@ import time
 import threading
 
 import dlt
+import pytest
 
 from scrapy import Spider  # type: ignore
 from scrapy.http import Response  # type: ignore
@@ -12,6 +13,7 @@ import sources.scraping.helpers
 from sources.scraping import scrapy_resource, scrapy_source, logger
 from sources.scraping.helpers import create_pipeline_runner
 from sources.scraping.queue import BaseQueue
+from tests.utils import ALL_DESTINATIONS, load_table_counts
 
 start_urls = ["https://quotes.toscrape.com/page/1/"]
 
@@ -135,3 +137,36 @@ def test_scrapy_resource_yields_last_batch_when_queue_is_closed(mocker):
 
     # The last batch shoul only have 3 items
     assert len(batch) == 3
+
+
+@pytest.mark.forked
+@pytest.mark.parametrize("destination_name", ALL_DESTINATIONS)
+def test_all_resources(destination_name: str) -> None:
+    pipeline = dlt.pipeline(
+        pipeline_name="scraping",
+        destination=destination_name,
+        dataset_name="quotes",
+    )
+
+    pipeline_runner, scrapy_runner, wait = create_pipeline_runner(
+        pipeline, spider=MySpider
+    )
+
+    pipeline_runner.run(
+        scrapy_source(scrapy_runner.queue),
+        write_disposition="replace",
+        table_name="quotes",
+    )
+
+    scrapy_runner.run()
+    wait()
+
+    table_names = [t["name"] for t in pipeline.default_schema.data_tables()]
+    table_counts = load_table_counts(pipeline, *table_names)
+
+    # for now only check main tables
+    expected_tables = {"quotes", "quotes__quote__tags"}
+    assert set(table_counts.keys()) >= set(expected_tables)
+
+    assert table_counts["quotes"] == 100
+    assert table_counts["quotes__quote__tags"] == 232
