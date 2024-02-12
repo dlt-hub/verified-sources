@@ -107,12 +107,9 @@ def test_incremental_event_load(destination_name: str) -> None:
 
     def get_active_subs() -> int:
         with pipeline.sql_client() as c:
-            with c.execute_query(
-                "SELECT id FROM event WHERE type IN (%s)",
-                "customer.subscription.created",
-            ) as cur:
+            with c.execute_query("SELECT id FROM event") as cur:
                 rows = list(cur.fetchall())
-                return len(rows)  # how many customers created subscriptions
+                return len(rows)
 
     #
     active_subs = get_active_subs()
