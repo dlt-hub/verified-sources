@@ -17,7 +17,6 @@ def test_tabel_per_channel(destination_name: str) -> None:
 
     # Set page size to ensure we use pagination
     source = slack_source(
-        page_size=20,
         start_date=datetime(2024, 1, 31),
         end_date=datetime(2024, 2, 1),
         selected_channels=["dlt-github-ci", "3-technical-help"],
@@ -49,7 +48,7 @@ def test_all_resources(destination_name: str) -> None:
 
     # Set page size to ensure we use pagination
     source = slack_source(
-        page_size=20,
+        page_size=40,
         start_date=datetime(2024, 1, 31),
         end_date=datetime(2024, 2, 1),
         selected_channels=["dlt-github-ci", "1-announcements"],
@@ -80,7 +79,6 @@ def test_replies(destination_name: str) -> None:
 
     # Set page size to ensure we use pagination
     source = slack_source(
-        page_size=20,
         start_date=datetime(2023, 12, 19),
         end_date=datetime(2024, 1, 10),
         selected_channels=["1-announcements"],

@@ -7,7 +7,7 @@ from urllib.parse import urljoin
 import pendulum
 from dlt.common.time import ensure_pendulum_datetime
 from dlt.common.typing import Dict, TAnyDateTime, TDataItem
-from dlt.sources.helpers.requests.retry import Client
+from dlt.sources.helpers import requests
 from jsonpath_ng.ext import parse  # type: ignore
 
 from .settings import MAX_PAGE_SIZE, SLACK_API_URL
@@ -75,7 +75,6 @@ class SlackAPI:
         """
         self.access_token = access_token
         self.page_size = page_size
-        self.request = Client(respect_retry_after_header=True)
 
     @property
     def headers(self) -> Dict[str, str]:
@@ -174,7 +173,7 @@ class SlackAPI:
         # Iterate through all pages
         while has_next_page:
             # Make the request
-            response = self.request.get(
+            response = requests.get(
                 url=self.url(resource),
                 headers=self.headers,
                 params=self.parameters(params or {}, next_cursor),
