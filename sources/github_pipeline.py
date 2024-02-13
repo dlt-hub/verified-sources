@@ -30,7 +30,7 @@ def load_airflow_events() -> None:
     print(pipeline.run(data))
 
 
-def load_dlthub_dlt_all_data() -> None:
+def load_dlthub_dlt_reactions() -> None:
     """Loads all issues, pull requests and comments for dlthub dlt repo"""
     pipeline = dlt.pipeline(
         "github_reactions",
@@ -43,6 +43,6 @@ def load_dlthub_dlt_all_data() -> None:
 
 
 if __name__ == "__main__":
-    # load_duckdb_repo_reactions_issues_only()
+    load_duckdb_repo_reactions_issues_only()
     load_airflow_events()
-    # load_dlthub_dlt_all_data()
+    load_dlthub_dlt_reactions()

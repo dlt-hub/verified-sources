@@ -5,6 +5,7 @@ from typing import Iterator, Sequence
 import dlt
 from dlt.common.typing import TDataItems
 from dlt.sources import DltResource
+
 from .helpers import get_reactions_data, get_rest_pages
 
 
