@@ -1,13 +1,11 @@
 """Source that loads tables form Airtable.
 Supports whitelisting of tables or loading of all tables from a specified base.
 """
-from typing import Optional, Iterable, Iterator, List, Dict, Any
+from typing import Any, Dict, Iterable, Iterator, List, Optional
 
 import dlt
-from dlt.sources import DltResource
-from dlt.common.typing import TDataItem
-
 import pyairtable
+from dlt.sources import DltResource
 
 
 @dlt.source
@@ -19,9 +17,13 @@ def airtable_source(
     """
     Represents tables for a single Airtable base.
     Args:
-        base_id (str): The id of the base. Obtain it e.g. from the URL in your webbrowser. It starts with "app". See https://support.airtable.com/docs/finding-airtable-ids
-        table_names (Optional[List[str]]): A list of table IDs or table names to load. Unless specified otherwise, all tables in the schema are loaded.  Names are freely user-defined. IDs start with "tbl". See https://support.airtable.com/docs/finding-airtable-ids
-        access_token (str): The personal access token. See https://support.airtable.com/docs/creating-and-using-api-keys-and-access-tokens#personal-access-tokens-basic-actions
+        base_id (str): The id of the base. Obtain it e.g. from the URL in your webbrowser.
+            It starts with "app". See https://support.airtable.com/docs/finding-airtable-ids
+        table_names (Optional[List[str]]): A list of table IDs or table names to load.
+            Unless specified otherwise, all tables in the schema are loaded.
+            Names are freely user-defined. IDs start with "tbl". See https://support.airtable.com/docs/finding-airtable-ids
+        access_token (str): The personal access token.
+            See https://support.airtable.com/docs/creating-and-using-api-keys-and-access-tokens#personal-access-tokens-basic-actions
     """
     api = pyairtable.Api(access_token)
     all_tables_url = api.build_url(f"meta/bases/{base_id}/tables")
@@ -43,7 +45,8 @@ def airtable_resource(
     Represents a single airtable.
     Args:
         api (pyairtable.Api): The API connection object
-        base_id (str): The id of the base. Obtain it e.g. from the URL in your webbrowser. It starts with "app". See https://support.airtable.com/docs/finding-airtable-ids
+        base_id (str): The id of the base. Obtain it e.g. from the URL in your webbrowser.
+            It starts with "app". See https://support.airtable.com/docs/finding-airtable-ids
         table (Dict[str, Any]): Metadata about an airtable, does not contain the actual records
     """
     primary_key_id = table["primaryFieldId"]
