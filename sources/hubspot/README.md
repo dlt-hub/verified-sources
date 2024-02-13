@@ -16,10 +16,10 @@ The `dlt` HubSpot verified source allows you to automatically load data from Hub
 
 ## Initialize the pipeline with Hubspot verified source
 ```bash
-dlt init hubspot bigquery
+dlt init hubspot duckdb
 ```
 
-Here, we chose BigQuery as the destination. Alternatively, you can also choose redshift, duckdb, or any of the other [destinations.](https://dlthub.com/docs/dlt-ecosystem/destinations/)
+Here, we chose DuckDB as the destination. Alternatively, you can also choose redshift, bigquery, or any of the other [destinations.](https://dlthub.com/docs/dlt-ecosystem/destinations/)
 
 ## Grab Hubspot credentials
 
@@ -59,4 +59,6 @@ To grab the Hubspot credentials, please refer to the [full documentation here.](
     ```
 
 
-💡 To explore additional customizations for this pipeline, we recommend referring to the official DLT Hubspot documentation. It provides comprehensive information and guidance on how to further customize and tailor the pipeline to suit your specific needs. You can find the DLT Hubspot documentation in [Setup Guide: Hubspot.](https://dlthub.com/docs/dlt-ecosystem/verified-sources/hubspot)
+💡 To explore additional customizations for this pipeline, we recommend referring to the official `dlt` Hubspot documentation.
+It provides comprehensive information and guidance on how to further customize and tailor the pipeline to suit your specific needs.
+You can find the `dlt` Hubspot documentation in [Setup Guide: Hubspot.](https://dlthub.com/docs/dlt-ecosystem/verified-sources/hubspot)

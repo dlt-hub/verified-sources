@@ -117,6 +117,6 @@ def load_web_analytics_events(
 if __name__ == "__main__":
     # Call the functions to load HubSpot data into the database with and without company events enabled
     load_crm_data()
-    # load_crm_data_with_history()
-    # load_web_analytics_events("company", ["7086461639", "7086464459"])
-    # load_crm_objects_with_custom_properties()
+    load_crm_data_with_history()
+    load_web_analytics_events("company", ["7086461639", "7086464459"])
+    load_crm_objects_with_custom_properties()

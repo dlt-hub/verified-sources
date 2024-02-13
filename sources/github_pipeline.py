@@ -25,9 +25,9 @@ def load_airflow_events() -> None:
     )
     data = github_repo_events("apache", "airflow", access_token="")
     print(pipeline.run(data))
-    # does not load same events again
-    data = github_repo_events("apache", "airflow", access_token="")
-    print(pipeline.run(data))
+    # if you uncomment this, it does not load the same events again
+    # data = github_repo_events("apache", "airflow", access_token="")
+    # print(pipeline.run(data))
 
 
 def load_dlthub_dlt_reactions() -> None:
