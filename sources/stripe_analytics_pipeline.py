@@ -73,22 +73,22 @@ def load_incremental_endpoints(
     load_info = pipeline.run(source)
     print(load_info)
 
-    # load nothing, because incremental loading and end date limit
-    source = incremental_stripe_source(
-        endpoints=endpoints,
-        initial_start_date=initial_start_date,
-        end_date=end_date,
-    )
-    load_info = pipeline.run(source)
-    print(load_info)
-
-    # load only the new data that created after end_date
-    source = incremental_stripe_source(
-        endpoints=endpoints,
-        initial_start_date=initial_start_date,
-    )
-    load_info = pipeline.run(source)
-    print(load_info)
+    # # load nothing, because incremental loading and end date limit
+    # source = incremental_stripe_source(
+    #     endpoints=endpoints,
+    #     initial_start_date=initial_start_date,
+    #     end_date=end_date,
+    # )
+    # load_info = pipeline.run(source)
+    # print(load_info)
+    #
+    # # load only the new data that created after end_date
+    # source = incremental_stripe_source(
+    #     endpoints=endpoints,
+    #     initial_start_date=initial_start_date,
+    # )
+    # load_info = pipeline.run(source)
+    # print(load_info)
 
 
 def load_data_and_get_metrics() -> None:
@@ -134,7 +134,6 @@ def load_data_and_get_metrics() -> None:
     print(load_info)
 
     resource = metrics_resource()
-    print(list(resource))
     load_info = pipeline.run(resource)
     print(load_info)
 
@@ -142,12 +141,11 @@ def load_data_and_get_metrics() -> None:
 if __name__ == "__main__":
     # load only data that was created during the period between the Jan 1, 2024 (incl.), and the Feb 1, 2024 (not incl.).
     load_data(start_date=datetime(2024, 1, 1), end_date=datetime(2024, 2, 1))
-    # load only data that was created during the period between the May 3, 2023 (incl.), and the Feb 1, 2024 (not incl.).
-    # after that, we load all new data that created after Feb 1, 2024
+    # load only data that was created during the period between the May 3, 2023 (incl.), and the March 1, 2024 (not incl.).
     load_incremental_endpoints(
         endpoints=("Event",),
         initial_start_date=datetime(2023, 5, 3),
-        end_date=datetime(2024, 2, 1),
+        end_date=datetime(2024, 3, 1),
     )
     # load Subscription and Event data, calculate metrics, store them in a database
     load_data_and_get_metrics()
