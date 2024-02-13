@@ -28,8 +28,7 @@ from .settings import (
 
 
 @dlt.source
-def asana_source(
-) -> Any:  # should be Sequence[DltResource]:
+def asana_source() -> Any:  # should be Sequence[DltResource]:
     """
     The main function that runs all the other functions to fetch data from Asana.
     Returns:
