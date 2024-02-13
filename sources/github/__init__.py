@@ -16,7 +16,6 @@ def github_reactions(
     access_token: str = dlt.secrets.value,
     items_per_page: int = 100,
     max_items: int = None,
-    max_item_age_seconds: float = None,
 ) -> Sequence[DltResource]:
     """Get reactions associated with issues, pull requests and comments in the repo `name` with owner `owner`
 
@@ -46,7 +45,6 @@ def github_reactions(
                 access_token,
                 items_per_page,
                 max_items,
-                max_item_age_seconds,
             ),
             name="issues",
             write_disposition="replace",
@@ -59,7 +57,6 @@ def github_reactions(
                 access_token,
                 items_per_page,
                 max_items,
-                max_item_age_seconds,
             ),
             name="pull_requests",
             write_disposition="replace",

@@ -1,11 +1,11 @@
-from typing import List
+from typing import List, Dict, Any
 
 import dlt
 
 from airtable import airtable_source
 
 
-def load_entire_base(base_id: str, resources_to_apply_hints: dict) -> None:
+def load_entire_base(base_id: str, resources_to_apply_hints: Dict[str, Any]) -> None:
     """
     Loads all tables from the specified Airtable base.
 
@@ -70,7 +70,7 @@ def load_select_tables_from_base_by_id(base_id: str, table_names: List[str]) -> 
 
 
 def load_select_tables_from_base_by_name(
-    base_id: str, table_names: List[str], resources_to_apply_hints: dict
+    base_id: str, table_names: List[str], resources_to_apply_hints: Dict[str, Any]
 ) -> None:
     """
     Loads specific table names from an Airtable base.
@@ -110,7 +110,7 @@ def load_select_tables_from_base_by_name(
 
 
 def load_and_customize_write_disposition(
-    base_id: str, table_names: List[str], resources_to_apply_hints: dict
+    base_id: str, table_names: List[str], resources_to_apply_hints: Dict[str, Any]
 ) -> None:
     """
     Loads data from a specific Airtable base's table with customized write disposition("merge") using field_name.
