@@ -16,8 +16,8 @@ def load_crm_data() -> None:
     # Add full_refresh=(True or False) if you need your pipeline to create the dataset in your destination
     p = dlt.pipeline(
         pipeline_name="hubspot_pipeline",
-        dataset_name="hubspot",
-        destination="redshift",
+        dataset_name="hubspot_dataset",
+        destination="duckdb",
     )
 
     # Run the pipeline with the HubSpot source connector
@@ -40,8 +40,8 @@ def load_crm_data_with_history() -> None:
     # Add full_refresh=(True or False) if you need your pipeline to create the dataset in your destination
     p = dlt.pipeline(
         pipeline_name="hubspot_pipeline",
-        dataset_name="hubspot",
-        destination="postgres",
+        dataset_name="hubspot_dataset",
+        destination="duckdb",
     )
 
     # Configure the source with `include_history` to enable property history load, history is disabled by default
@@ -65,8 +65,8 @@ def load_crm_objects_with_custom_properties() -> None:
     # pipeline to create the dataset in your destination
     p = dlt.pipeline(
         pipeline_name="hubspot_pipeline",
-        dataset_name="hubspot",
-        destination="postgres",
+        dataset_name="hubspot_dataset",
+        destination="duckdb",
     )
 
     source = hubspot()
@@ -99,9 +99,9 @@ def load_web_analytics_events(
 
     # Create a DLT pipeline object with the pipeline name, dataset name, and destination database type
     p = dlt.pipeline(
-        pipeline_name="hubspot",
-        dataset_name="hubspot",
-        destination="postgres",
+        pipeline_name="hubspot_pipeline",
+        dataset_name="hubspot_dataset",
+        destination="duckdb",
         full_refresh=False,
     )
 
