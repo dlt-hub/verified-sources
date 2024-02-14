@@ -1,25 +1,31 @@
 """Generic API Source"""
 
-from typing import TypedDict, Optional, Dict, Any, Union, NamedTuple
-
 from dataclasses import dataclass
-
-import graphlib
+import copy
+from typing import Any, Dict, NamedTuple, Optional, TypedDict, Union
 
 import dlt
+import graphlib
+from dlt.common.schema.typing import (
+    TColumnNames,
+    # TSchemaContract,
+    TTableFormat,
+    TTableSchemaColumns,
+    TWriteDisposition,
+)
+from dlt.extract.incremental import Incremental
 from dlt.extract.source import DltResource
+from dlt.extract.typing import TTableHintTemplate
 
+from .auth import BearerTokenAuth, AuthBase
 from .client import RESTClient
-
-Client = RESTClient
-
 from .paginators import (
     BasePaginator,
-    JSONResponsePaginator,
     HeaderLinkPaginator,
+    JSONResponsePaginator,
     UnspecifiedPaginator,
 )
-from .auth import BearerTokenAuth, AuthBase
+from .utils import remove_key, deep_merge
 
 
 PAGINATOR_MAP = {
@@ -61,7 +67,7 @@ class EndpointConfig(TypedDict):
     paginator: Optional[PaginatorType]
 
 
-class RESTAPIConfig(TypedDict):
+class RESTAPIConfigLegacy(TypedDict):
     client: ClientConfig
     endpoints: Dict[str, EndpointConfig]
 
@@ -74,6 +80,33 @@ class ResolveConfig(NamedTuple):
 class ResolvedParam(NamedTuple):
     param_name: str
     resolve_config: ResolveConfig
+
+
+class Endpoint(TypedDict, total=False):
+    path: str
+    method: str
+    params: Optional[Dict[str, Any]]
+    json: Optional[Dict[str, Any]]
+    paginator: Optional[PaginatorType]
+
+
+class EndpointResource(TypedDict, total=False):
+    name: TTableHintTemplate[str]
+    endpoint: Endpoint
+    write_disposition: TTableHintTemplate[TWriteDisposition]
+    parent: TTableHintTemplate[str]
+    columns: TTableHintTemplate[TTableSchemaColumns]
+    primary_key: TTableHintTemplate[TColumnNames]
+    merge_key: TTableHintTemplate[TColumnNames]
+    incremental: Incremental[Any]
+    # schema_contract: TTableHintTemplate[TSchemaContract]
+    table_format: TTableHintTemplate[TTableFormat]
+
+
+class RESTAPIConfig(TypedDict):
+    client: ClientConfig
+    resource_defaults: EndpointResource
+    resources: Dict[str, EndpointResource]
 
 
 def create_paginator(paginator_config):
@@ -101,6 +134,13 @@ def setup_incremental_object(request_params, incremental_config):
     for key, value in request_params.items():
         if isinstance(value, dlt.sources.incremental):
             return value, key
+        if isinstance(value, dict) and value.get("type") == "incremental":
+            return (
+                dlt.sources.incremental(
+                    value.get("cursor_path"), initial_value=value.get("initial_value")
+                ),
+                key,
+            )
 
     return setup_incremental_object_from_config(incremental_config)
 
@@ -145,6 +185,239 @@ def rest_api_source(config: RESTAPIConfig):
 
 
 def rest_api_resources(config: RESTAPIConfig):
+    """
+    Creates and configures a REST API source for data extraction.
+
+    Example:
+        github_source = rest_api_resources_v3({
+            "client": {
+                "base_url": "https://api.github.com/repos/dlt-hub/dlt/",
+                "auth": {
+                    "token": dlt.secrets["token"],
+                },
+            },
+            "resource_defaults": {
+                "primary_key": "id",
+                "write_disposition": "merge",
+                "endpoint": {
+                    "params": {
+                        "per_page": 100,
+                    },
+                },
+            },
+            "resources": [
+                {
+                    "name": "issues",
+                    "endpoint": {
+                        "path": "issues",
+                        "params": {
+                            "sort": "updated",
+                            "direction": "desc",
+                            "state": "open",
+                            "since": {
+                                "type": "incremental",
+                                "cursor_path": "updated_at",
+                                "initial_value": "2024-01-25T11:21:28Z",
+                            },
+                        },
+                    },
+                },
+                {
+                    "name": "issue_comments",
+                    "endpoint": {
+                        "path": "issues/{issue_number}/comments",
+                        "params": {
+                            "issue_number": {
+                                "type": "resolve",
+                                "resource": "issues",
+                                "field": "number",
+                            }
+                        },
+                    },
+                },
+            ],
+        })
+    """
+    client = RESTClient(**make_client_config(config))
+    dependency_graph = graphlib.TopologicalSorter()
+    endpoint_resource_map = {}
+    resources = {}
+
+    default_resource_config = config.get("resource_defaults", {})
+
+    resource_list = config.get("resources")
+
+    if resource_list is None:
+        raise ValueError("No resources defined")
+
+    # Create the dependency graph
+    for resource_kwargs in resource_list:
+        endpoint_resource = make_endpoint_resource(
+            resource_kwargs, default_resource_config
+        )
+
+        resource_name = endpoint_resource["name"]
+
+        resolved_params = find_resolved_params(endpoint_resource["endpoint"])
+
+        if len(resolved_params) > 1:
+            raise ValueError(
+                f"Multiple resolved params for resource {resource_name}: {resolved_params}"
+            )
+
+        predecessors = set(x.resolve_config.resource_name for x in resolved_params)
+
+        dependency_graph.add(resource_name, *predecessors)
+        endpoint_resource["_resolved_param"] = (
+            resolved_params[0] if resolved_params else None
+        )
+
+        if resource_name in endpoint_resource_map:
+            raise ValueError(f"Resource {resource_name} has already been defined")
+
+        endpoint_resource_map[resource_name] = endpoint_resource
+
+    # Create the resources
+    for resource_name in dependency_graph.static_order():
+        endpoint_resource = endpoint_resource_map[resource_name]
+        endpoint_config = endpoint_resource["endpoint"]
+        request_params = endpoint_config.get("params", {})
+
+        # TODO: Remove _resolved_param from endpoint_resource
+        resolved_param: ResolvedParam = endpoint_resource.pop("_resolved_param", None)
+        resource_kwargs = remove_key(endpoint_resource, "endpoint")
+
+        incremental_object, incremental_param = setup_incremental_object(
+            request_params, endpoint_config.get("incremental")
+        )
+
+        if resolved_param is None:
+
+            def paginate_resource(
+                method,
+                path,
+                params,
+                paginator,
+                incremental_object=incremental_object,
+                incremental_param=incremental_param,
+            ):
+                if incremental_object:
+                    params[incremental_param] = incremental_object.last_value
+
+                yield from client.paginate(
+                    method=method,
+                    path=path,
+                    params=params,
+                    paginator=paginator,
+                )
+
+            resources[resource_name] = dlt.resource(
+                paginate_resource, **resource_kwargs
+            )(
+                method=endpoint_config.get("method", "get"),
+                path=endpoint_config.get("path"),
+                params=request_params,
+                paginator=create_paginator(endpoint_config.get("paginator")),
+            )
+
+        else:
+            predecessor = resources[resolved_param.resolve_config.resource_name]
+
+            param_name = resolved_param.param_name
+            request_params.pop(param_name, None)
+
+            def paginate_dependent_resource(
+                items,
+                method,
+                path,
+                params,
+                paginator,
+                param_name=param_name,
+                field_path=resolved_param.resolve_config.field_path,
+            ):
+                items = items or []
+                for item in items:
+                    formatted_path = path.format(**{param_name: item[field_path]})
+
+                    yield from client.paginate(
+                        method=method,
+                        path=formatted_path,
+                        params=params,
+                        paginator=paginator,
+                    )
+
+            resources[resource_name] = dlt.resource(
+                paginate_dependent_resource,
+                data_from=predecessor,
+                **resource_kwargs,
+            )(
+                method=endpoint_config.get("method", "get"),
+                path=endpoint_config.get("path"),
+                params=request_params,
+                paginator=create_paginator(endpoint_config.get("paginator")),
+            )
+
+    return list(resources.values())
+
+
+def make_endpoint_resource(
+    resource: Union[str, EndpointResource], default_config: EndpointResource
+):
+    """
+    Creates an EndpointResource object based on the provided resource
+    definition and merges it with the default configuration.
+
+    This function supports defining a resource in multiple formats:
+    - As a string: The string is interpreted as both the resource name
+        and its endpoint path.
+    - As a dictionary: The dictionary must include 'name' and 'endpoint'
+        keys. The 'endpoint' can be a string representing the path,
+        or a dictionary for more complex configurations.
+    """
+    if isinstance(resource, str):
+        resource = {"name": resource, "endpoint": {"path": resource}}
+        return deep_merge(copy.deepcopy(default_config), resource)
+
+    if "endpoint" in resource and isinstance(resource["endpoint"], str):
+        resource["endpoint"] = {"path": resource["endpoint"]}
+
+    if "name" not in resource:
+        raise ValueError("Resource must have a name")
+
+    if "path" not in resource["endpoint"]:
+        raise ValueError("Resource endpoint must have a path")
+
+    return deep_merge(copy.deepcopy(default_config), resource)
+
+
+def make_resolved_param(key, value):
+    if isinstance(value, ResolveConfig):
+        return ResolvedParam(key, value)
+    if isinstance(value, dict) and value.get("type") == "resolve":
+        return ResolvedParam(
+            key,
+            ResolveConfig(resource_name=value["resource"], field_path=value["field"]),
+        )
+    return None
+
+
+def find_resolved_params(endpoint_config):
+    """
+    Find all resolved params in the endpoint configuration and return
+    a list of ResolvedParam objects.
+
+    Resolved params are either of type ResolveConfig or are dictionaries
+    with a key "type" set to "resolve".
+    """
+    return [
+        make_resolved_param(key, value)
+        for key, value in endpoint_config.get("params", {}).items()
+        if isinstance(value, ResolveConfig)
+        or (isinstance(value, dict) and value.get("type") == "resolve")
+    ]
+
+
+def rest_api_resources_legacy(config: RESTAPIConfigLegacy):
     client = RESTClient(**make_client_config(config))
     dependency_graph = graphlib.TopologicalSorter()
     endpoint_config_map = {}
@@ -302,14 +575,17 @@ class Endpoint:
     incremental: Optional[IncrementalConfig] = None
 
 
-class Resource:
-    def __init__(self, endpoint: Endpoint, name: Optional[str] = None, **resource_kwargs):
+class EndpointResource:
+    def __init__(
+        self, endpoint: Endpoint, name: Optional[str] = None, **resource_kwargs
+    ):
         self.endpoint = endpoint
         self.name = name or endpoint.path
         self.resource_kwargs = resource_kwargs
 
+
 @dlt.source
-def rest_api_resources_v2(client: RESTClient, *resources: Resource):
+def rest_api_resources_v2(client: RESTClient, *resources: EndpointResource):
     """
     Alternative implementation of the rest_api_source function that uses
     classes to represent the resources and their dependencies:
@@ -352,7 +628,7 @@ def rest_api_resources_v2(client: RESTClient, *resources: Resource):
         )
     """
     dependency_graph = graphlib.TopologicalSorter()
-    resource_config_map: Dict[str, Resource] = {}
+    resource_config_map: Dict[str, EndpointResource] = {}
     dlt_resources: Dict[str, DltResource] = {}
 
     # Create the dependency graph
