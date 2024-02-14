@@ -1,21 +1,20 @@
 """Loads Google Sheets data from tabs, named and explicit ranges. Contains the main source functions."""
 
-from typing import Sequence, Union, Iterable
+from typing import Iterable, Sequence, Union
 
 import dlt
 from dlt.common import logger
-from dlt.sources.credentials import GcpServiceAccountCredentials, GcpOAuthCredentials
 from dlt.sources import DltResource
+from dlt.sources.credentials import GcpOAuthCredentials, GcpServiceAccountCredentials
 
+from .helpers import api_calls
+from .helpers.api_calls import api_auth
 from .helpers.data_processing import (
-    ParsedRange,
     get_data_types,
     get_range_headers,
     get_spreadsheet_id,
     process_range,
 )
-from .helpers.api_calls import api_auth
-from .helpers import api_calls
 
 
 @dlt.source

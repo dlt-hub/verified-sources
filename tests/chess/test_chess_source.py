@@ -6,10 +6,13 @@ from sources.chess import source, chess_dlt_config_example
 
 from tests.utils import ALL_DESTINATIONS, assert_load_info
 
+PLAYERS = ["magnuscarlsen", "vincentkeymer", "dommarajugukesh", "rpragchess"]
+
 
 @pytest.mark.parametrize("destination_name", ALL_DESTINATIONS)
 def test_load_players_games(destination_name: str) -> None:
-    # mind the full_refresh flag - it makes sure that data is loaded to unique dataset. this allows you to run the tests on the same database in parallel
+    # mind the full_refresh flag - it makes sure that data is loaded to unique dataset.
+    # this allows you to run the tests on the same database in parallel
     pipeline = dlt.pipeline(
         pipeline_name="chess_players_games",
         destination=destination_name,
@@ -17,7 +20,7 @@ def test_load_players_games(destination_name: str) -> None:
         full_refresh=True,
     )
     data = source(
-        ["magnuscarlsen", "vincentkeymer", "dommarajugukesh", "rpragchess"],
+        PLAYERS,
         start_month="2022/11",
         end_month="2022/12",
     )
@@ -34,7 +37,8 @@ def test_load_players_games(destination_name: str) -> None:
     # tables are typed dicts
     players_games_table = user_tables[0]
     assert players_games_table["name"] == "players_games"
-    # TODO: if we have any columns of interest ie. that should be timestamps or have certain performance hints, we can also check it
+    # TODO: if we have any columns of interest ie. that should be timestamps
+    #  or have certain performance hints, we can also check it
     assert players_games_table["columns"]["end_time"]["data_type"] == "timestamp"
     # we can also test the data
     with pipeline.sql_client() as c:
@@ -47,6 +51,43 @@ def test_load_players_games(destination_name: str) -> None:
             rows = list(cur.fetchall())
             assert len(rows) == 1
             assert rows[0][1] == 374  # magnus has 374 games
+
+
+@pytest.mark.parametrize("destination_name", ALL_DESTINATIONS)
+def test_load_players_profiles(destination_name: str) -> None:
+    # mind the full_refresh flag - it makes sure that data is loaded to unique dataset.
+    # this allows you to run the tests on the same database in parallel
+    pipeline = dlt.pipeline(
+        pipeline_name="chess_players_profiles",
+        destination=destination_name,
+        dataset_name="chess_players_profiles_data",
+        full_refresh=True,
+    )
+    data = source(PLAYERS)
+    # load the "players_games" out of the data source
+    info = pipeline.run(data.with_resources("players_profiles"))
+    # lets print it (pytest -s will show it)
+    print(info)
+    # make sure all jobs were loaded
+    assert_load_info(info)
+    # now let's inspect the generates schema. it should contain just one table with user data
+    schema = pipeline.default_schema
+    user_tables = schema.data_tables()
+    assert len(user_tables) == 1
+    # tables are typed dicts
+    players_table = user_tables[0]
+    assert players_table["name"] == "players_profiles"
+    # TODO: if we have any columns of interest ie. that should be timestamps
+    #  or have certain performance hints, we can also check it
+    assert players_table["columns"]["last_online"]["data_type"] == "timestamp"
+    assert players_table["columns"]["joined"]["data_type"] == "timestamp"
+    # we can also test the data
+    with pipeline.sql_client() as c:
+        # you can use parametrized queries as well, see python dbapi
+        # you can use unqualified table names
+        with c.execute_query("SELECT * FROM players_profiles") as cur:
+            rows = list(cur.fetchall())
+            assert len(rows) == len(PLAYERS)
 
 
 @pytest.mark.parametrize("destination_name", ALL_DESTINATIONS)

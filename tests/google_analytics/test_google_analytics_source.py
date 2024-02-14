@@ -27,8 +27,8 @@ QUERIES = [
 ]
 # dict containing the name of the tables expected in the db as keys and the number of rows expected as values
 ALL_TABLES = {
-    "dimensions": 207,
-    "metrics": 100,
+    "dimensions": 208,
+    "metrics": 101,
     "sample_analytics_data1": 12,
     "sample_analytics_data2": 12,
 }
@@ -257,7 +257,9 @@ def test_starting_date(destination_name: str) -> None:
     second_load_counts = load_table_counts(pipeline_start_date_2, *ALL_TABLES.keys())
 
     # first load_counts is expected to have more data, check for that
-    assert second_load_counts != ALL_TABLES and first_load_counts == ALL_TABLES
+    assert second_load_counts != ALL_TABLES
+    assert first_load_counts == ALL_TABLES
+
     _count_comparison(
         first_counts=first_load_counts,
         second_counts=second_load_counts,

@@ -48,7 +48,7 @@ any of the other [destinations](https://dlthub.com/docs/dlt-ecosystem/destinatio
 2. Now the pipeline can be run by using the command:
 
    ```bash
-   python3 chess_pipeline.py
+   python chess_pipeline.py
    ```
 
 3. To make sure that everything is loaded as expected, use the command:
