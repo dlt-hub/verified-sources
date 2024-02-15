@@ -20,12 +20,12 @@ from tests.utils import (
 )
 from tests.filesystem.utils import unpack_factory_args
 
-from .settings import GLOB_RESULTS, FACTORY_ARGS
+from .settings import GLOBS, GLOB_TEST_IDS, FACTORY_ARGS, FACTORY_TEST_IDS
 
 
-@pytest.mark.parametrize("factory_args", FACTORY_ARGS)
-@pytest.mark.parametrize("glob_params", GLOB_RESULTS)
-def test_file_list(factory_args: Dict[str, Any], glob_params: Dict[str, Any]) -> None:
+@pytest.mark.parametrize("factory_args", FACTORY_ARGS, ids=FACTORY_TEST_IDS)
+@pytest.mark.parametrize("globs", GLOBS, ids=GLOB_TEST_IDS)
+def test_file_list(factory_args: Dict[str, Any], globs: Dict[str, Any]) -> None:
     bucket_url, kwargs = unpack_factory_args(factory_args)
 
     @dlt.transformer
@@ -33,7 +33,7 @@ def test_file_list(factory_args: Dict[str, Any], glob_params: Dict[str, Any]) ->
         return items
 
     # we only pass the glob parameter to the resource if it is not None
-    if file_glob := glob_params["glob"]:
+    if file_glob := globs["glob"]:
         filesystem_res = (
             filesystem(
                 bucket_url=bucket_url,
@@ -48,12 +48,12 @@ def test_file_list(factory_args: Dict[str, Any], glob_params: Dict[str, Any]) ->
     all_files = list(filesystem_res)
     file_count = len(all_files)
     file_names = [item["file_name"] for item in all_files]
-    assert file_count == len(glob_params["file_names"])
-    assert file_names == glob_params["file_names"]
+    assert file_count == len(globs["file_names"])
+    assert file_names == globs["file_names"]
 
 
 @pytest.mark.parametrize("extract_content", [True, False])
-@pytest.mark.parametrize("factory_args", FACTORY_ARGS)
+@pytest.mark.parametrize("factory_args", FACTORY_ARGS, ids=FACTORY_TEST_IDS)
 def test_load_content_resources(
     factory_args: Dict[str, Any], extract_content: bool
 ) -> None:
@@ -120,7 +120,7 @@ def test_fsspec_as_credentials():
     print(list(gs_resource))
 
 
-@pytest.mark.parametrize("factory_args", FACTORY_ARGS)
+@pytest.mark.parametrize("factory_args", FACTORY_ARGS, ids=FACTORY_TEST_IDS)
 def test_csv_transformers(factory_args: Dict[str, Any]) -> None:
     from sources.filesystem_pipeline import read_csv
 
@@ -170,7 +170,7 @@ def test_csv_transformers(factory_args: Dict[str, Any]) -> None:
     assert load_table_counts(pipeline, "met_csv") == {"met_csv": 48}
 
 
-@pytest.mark.parametrize("factory_args", FACTORY_ARGS)
+@pytest.mark.parametrize("factory_args", FACTORY_ARGS, ids=FACTORY_TEST_IDS)
 def test_standard_readers(factory_args: Dict[str, Any]) -> None:
     bucket_url, kwargs = unpack_factory_args(factory_args)
 
@@ -238,7 +238,7 @@ def test_standard_readers(factory_args: Dict[str, Any]) -> None:
     # print(pipeline.default_schema.to_pretty_yaml())
 
 
-@pytest.mark.parametrize("factory_args", FACTORY_ARGS)
+@pytest.mark.parametrize("factory_args", FACTORY_ARGS, ids=FACTORY_TEST_IDS)
 def test_incremental_load(factory_args: Dict[str, Any]) -> None:
     @dlt.transformer
     def bypass(items) -> str:

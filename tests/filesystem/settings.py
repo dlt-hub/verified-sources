@@ -25,7 +25,11 @@ FACTORY_ARGS = [
     },
 ]
 
-GLOB_RESULTS = [
+FACTORY_TEST_IDS = [
+    f"url={factory_args['bucket_url'][:15]}..." for factory_args in FACTORY_ARGS
+]
+
+GLOBS = [
     {
         "glob": None,
         "file_names": ["sample.txt"],
@@ -84,3 +88,5 @@ GLOB_RESULTS = [
         "file_names": ["sample.txt"],
     },
 ]
+
+GLOB_TEST_IDS = [f"glob={glob_result['glob']}" for glob_result in GLOBS]
