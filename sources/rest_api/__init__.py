@@ -19,7 +19,7 @@ from .paginators import (
     HeaderLinkPaginator,
     UnspecifiedPaginator,
 )
-from .auth import BearerTokenAuth
+from .auth import BearerTokenAuth, AuthBase
 
 
 PAGINATOR_MAP = {
@@ -83,7 +83,7 @@ def create_paginator(paginator_config):
 
 
 def create_auth(auth_config):
-    if isinstance(auth_config, BearerTokenAuth):
+    if isinstance(auth_config, AuthBase):
         return auth_config
     return BearerTokenAuth(auth_config.get("token")) if auth_config else None
 
