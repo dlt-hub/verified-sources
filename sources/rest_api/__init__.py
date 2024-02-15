@@ -181,6 +181,8 @@ def rest_api_resources(config: RESTAPIConfig):
         request_params = endpoint_config.get("params", {})
         resource_config = endpoint_config.get("resource", {})
 
+        include_from_parent: list[str] = resource_config.pop("include_from_parent", [])
+
         incremental_object, incremental_param = setup_incremental_object(
             request_params, endpoint_config.get("incremental")
         )
@@ -235,12 +237,24 @@ def rest_api_resources(config: RESTAPIConfig):
                 for item in items:
                     formatted_path = path.format(**{param_name: item[field_path]})
 
-                    yield from client.paginate(
+                    child_results = client.paginate(
                         method=method,
                         path=formatted_path,
                         params=params,
                         paginator=paginator,
                     )
+
+                    parent_resource_name = resolved_param.resolve_config.resource_name
+                    for r in child_results:
+                        if r:
+                            yield _add_from_parent(
+                                r,
+                                item,
+                                include_from_parent,
+                                parent_resource_name,
+                            )
+                        else:
+                            yield r
 
             resources[resource_name] = dlt.resource(
                 paginate_dependent_resource,
@@ -255,6 +269,22 @@ def rest_api_resources(config: RESTAPIConfig):
             )
 
     return list(resources.values())
+
+
+def _add_from_parent(
+    child_records,
+    parent_record,
+    include_from_parent,
+    parent_resource_name,
+):
+    """allows dependent resource to include parent resource values
+    which are not in the response of the child resource"""
+    for child in child_records:
+        for parent_field in include_from_parent:
+            field_from_parent = f"_{parent_resource_name}_{parent_field}"
+            if field_from_parent not in child:
+                child[field_from_parent] = parent_record[parent_field]
+    return child_records
 
 
 #
@@ -429,4 +459,3 @@ def rest_api_resources_v2(client: RESTClient, *resources: Resource):
             )
 
     return list(dlt_resources.values())
-
