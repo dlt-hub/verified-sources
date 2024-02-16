@@ -2,9 +2,11 @@ from typing import Optional, Dict, Any, Generator, Literal
 import copy
 
 from requests.auth import AuthBase
+from requests import Session as BaseSession
+
 
 from dlt.common import logger
-from dlt.sources.helpers import requests
+from dlt.sources.helpers.requests import client
 
 from .paginators import BasePaginator, UnspecifiedPaginator
 from .detector import create_paginator
@@ -29,10 +31,12 @@ class RESTClient:
         headers: Optional[Dict[str, str]] = None,
         auth: Optional[AuthBase] = None,
         paginator: Optional[BasePaginator] = None,
+        session: BaseSession = None
     ) -> None:
         self.base_url = base_url
         self.headers = headers
         self.auth = auth
+        self.session = session or client.session
         self.paginator = paginator if paginator else UnspecifiedPaginator()
 
     def make_request(self, path="", method="get", params=None, json=None):
@@ -46,7 +50,7 @@ class RESTClient:
             f"json={json}"
         )
 
-        response = requests.request(
+        response = self.session.request(
             method=method,
             url=url,
             headers=self.headers,
