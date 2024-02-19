@@ -182,7 +182,10 @@ class JSONResponsePaginator(BaseNextUrlPaginator):
         self._records_accessor = create_nested_accessor(records_key)
 
     def update_state(self, response: Response):
-        self.next_reference = self._next_key_accessor(response.json())
+        try:
+            self.next_reference = self._next_key_accessor(response.json())
+        except KeyError:
+            self.next_reference = None
 
     def extract_records(self, response: Response) -> Any:
         return self._records_accessor(response.json())
