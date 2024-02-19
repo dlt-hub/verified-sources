@@ -215,7 +215,7 @@ def slack_source(
 
     def table_name_func(channel_name: str, payload: TDataItem) -> str:
         """Return the table name for a given channel and payload."""
-        table_type = payload.get("subtype", payload["type"])
+        table_type = payload.get("subtype", payload.get("type", ""))
         return f"{channel_name}_{table_type}"
 
     # It will not work in the pipeline or tests because it is a paid feature,
