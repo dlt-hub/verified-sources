@@ -95,6 +95,42 @@ def test_replies(destination_name: str) -> None:
 
 
 @pytest.mark.parametrize("destination_name", ALL_DESTINATIONS)
+@pytest.mark.parametrize("table_per_channel", [True, False])
+def test_with_merge_disposition(destination_name: str, table_per_channel: bool) -> None:
+    """Checks the case if we run pipeline two times in a row with specified start and end dates.
+    In this case we don't want messages to be duplicated, therefore we source automatically changes write disposition to merge.
+    """
+    pipeline = dlt.pipeline(
+        pipeline_name="slack",
+        destination=destination_name,
+        dataset_name="slack_data",
+        full_refresh=True,
+    )
+
+    # Set page size to ensure we use pagination
+    source = slack_source(
+        start_date=datetime(2023, 12, 19),
+        end_date=datetime(2024, 1, 10),
+        selected_channels=["1-announcements"],
+        replies=True,
+        table_per_channel=table_per_channel,
+    )
+    pipeline.run(source)
+    table_names = [t["name"] for t in pipeline.default_schema.data_tables()]
+    current_table_counts = load_table_counts(pipeline, *table_names)
+    load_info = pipeline.run(source)
+    assert_load_info(load_info)
+
+    table_names = [t["name"] for t in pipeline.default_schema.data_tables()]
+    table_counts = load_table_counts(pipeline, *table_names)
+    assert all(
+        table_counts[table_name] == current_table_counts[table_name]
+        for table_name in table_names
+        if table_name != "users"
+    )
+
+
+@pytest.mark.parametrize("destination_name", ALL_DESTINATIONS)
 def test_users(destination_name: str) -> None:
     pipeline = dlt.pipeline(
         pipeline_name="slack",

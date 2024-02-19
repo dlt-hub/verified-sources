@@ -1,6 +1,6 @@
 """Fetches Slack Conversations, History and logs."""
 
-from typing import Iterable, List, Optional, Tuple, Dict, Any
+from typing import Iterable, List, Optional, Tuple, Dict, Any, Literal
 from functools import partial
 
 import dlt
@@ -47,6 +47,9 @@ def slack_source(
 
     end_dt: Optional[DateTime] = ensure_dt_type(end_date)
     start_dt: Optional[DateTime] = ensure_dt_type(start_date)
+    write_disposition: Literal["append", "merge"] = (
+        "append" if end_date is None else "merge"
+    )
 
     api = SlackAPI(
         access_token=access_token,
@@ -164,7 +167,7 @@ def slack_source(
         name="messages",
         primary_key=("channel", "ts"),
         columns={"blocks": {"data_type": "complex"}},
-        write_disposition="append",
+        write_disposition=write_disposition,
     )
     def messages_resource(
         created_at: dlt.sources.incremental[DateTime] = dlt.sources.incremental(
@@ -245,7 +248,7 @@ def slack_source(
                 name=channel_name,
                 table_name=table_name,
                 primary_key=("channel", "ts"),
-                write_disposition="append",
+                write_disposition=write_disposition,
                 columns={"blocks": {"data_type": "complex"}},
             )(channel)
 
@@ -256,7 +259,7 @@ def slack_source(
                     name=channel_name + "_replies",
                     table_name=partial(table_name_func, channel_name + "_replies"),
                     primary_key=("thread_ts", "ts"),
-                    write_disposition="append",
+                    write_disposition=write_disposition,
                 )
     else:
         yield messages_resource
@@ -265,5 +268,5 @@ def slack_source(
                 get_thread_replies,
                 name="replies",
                 primary_key=("thread_ts", "ts"),
-                write_disposition="append",
+                write_disposition=write_disposition,
             )
