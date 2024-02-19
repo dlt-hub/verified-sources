@@ -158,6 +158,10 @@ def setup_incremental_object_from_config(config):
     )
 
 
+def make_parent_key_name(resource_name, field_name):
+    return f"_{resource_name}_{field_name}"
+
+
 @dlt.source
 def rest_api_source(config: RESTAPIConfig):
     """
@@ -285,6 +289,15 @@ def rest_api_resources(config: RESTAPIConfig):
 
         # TODO: Remove _resolved_param from endpoint_resource
         resolved_param: ResolvedParam = endpoint_resource.pop("_resolved_param", None)
+        include_from_parent: list[str] = endpoint_resource.pop(
+            "include_from_parent", []
+        )
+        if not resolved_param and include_from_parent:
+            raise ValueError(
+                f"Resource {resource_name} has include_from_parent but is not "
+                "dependent on another resource"
+            )
+
         resource_kwargs = remove_key(endpoint_resource, "endpoint")
 
         incremental_object, incremental_param = setup_incremental_object(
@@ -338,13 +351,27 @@ def rest_api_resources(config: RESTAPIConfig):
                 items = items or []
                 for item in items:
                     formatted_path = path.format(**{param_name: item[field_path]})
+                    parent_resource_name = resolved_param.resolve_config.resource_name
 
-                    yield from client.paginate(
+                    parent_record = (
+                        {
+                            make_parent_key_name(parent_resource_name, key): item[key]
+                            for key in include_from_parent
+                        }
+                        if include_from_parent
+                        else None
+                    )
+
+                    for child_page in client.paginate(
                         method=method,
                         path=formatted_path,
                         params=params,
                         paginator=paginator,
-                    )
+                    ):
+                        if parent_record:
+                            for child_record in child_page:
+                                child_record.update(parent_record)
+                        yield child_page
 
             resources[resource_name] = dlt.resource(
                 paginate_dependent_resource,

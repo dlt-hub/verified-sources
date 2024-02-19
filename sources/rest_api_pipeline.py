@@ -67,6 +67,7 @@ def load_github():
                             }
                         },
                     },
+                    "include_from_parent": ["id"],
                 },
             ],
         }
