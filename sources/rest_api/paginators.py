@@ -185,7 +185,7 @@ class JSONResponsePaginator(BaseNextUrlPaginator):
         try:
             self.next_reference = self._next_key_accessor(response.json())
         except KeyError:
-           self.next_reference = None
+            self.next_reference = None
 
     def extract_records(self, response: Response) -> Any:
         return self._records_accessor(response.json())
