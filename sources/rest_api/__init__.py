@@ -400,9 +400,10 @@ def make_endpoint_resource(
     This function supports defining a resource in multiple formats:
     - As a string: The string is interpreted as both the resource name
         and its endpoint path.
-    - As a dictionary: The dictionary must include 'name' and 'endpoint'
-        keys. The 'endpoint' can be a string representing the path,
-        or a dictionary for more complex configurations.
+    - As a dictionary: The dictionary must include `name` and `endpoint`
+        keys. The `endpoint` can be a string representing the path,
+        or a dictionary for more complex configurations. If the `endpoint`
+        is missing the `path` key, the resource name is used as the `path`.
     """
     if isinstance(resource, str):
         resource = {"name": resource, "endpoint": {"path": resource}}
@@ -415,7 +416,7 @@ def make_endpoint_resource(
         raise ValueError("Resource must have a name")
 
     if "path" not in resource["endpoint"]:
-        raise ValueError("Resource endpoint must have a path")
+        resource["endpoint"]["path"] = resource["name"]
 
     return deep_merge(copy.deepcopy(default_config), resource)
 
