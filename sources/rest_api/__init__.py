@@ -24,6 +24,7 @@ from .paginators import (
     HeaderLinkPaginator,
     JSONResponsePaginator,
     UnspecifiedPaginator,
+    SinglePagePaginator,
 )
 from .utils import remove_key, deep_merge
 
@@ -32,6 +33,7 @@ PAGINATOR_MAP = {
     "json_links": JSONResponsePaginator,
     "header_links": HeaderLinkPaginator,
     "auto": UnspecifiedPaginator,
+    "single_page": SinglePagePaginator,
 }
 
 
@@ -286,6 +288,7 @@ def rest_api_resources(config: RESTAPIConfig):
         endpoint_resource = endpoint_resource_map[resource_name]
         endpoint_config = endpoint_resource["endpoint"]
         request_params = endpoint_config.get("params", {})
+        paginator = create_paginator(endpoint_config.get("paginator"))
 
         # TODO: Remove _resolved_param from endpoint_resource
         resolved_param: ResolvedParam = endpoint_resource.pop("_resolved_param", None)
@@ -330,7 +333,7 @@ def rest_api_resources(config: RESTAPIConfig):
                 method=endpoint_config.get("method", "get"),
                 path=endpoint_config.get("path"),
                 params=request_params,
-                paginator=create_paginator(endpoint_config.get("paginator")),
+                paginator=paginator,
             )
 
         else:
@@ -381,7 +384,7 @@ def rest_api_resources(config: RESTAPIConfig):
                 method=endpoint_config.get("method", "get"),
                 path=endpoint_config.get("path"),
                 params=request_params,
-                paginator=create_paginator(endpoint_config.get("paginator")),
+                paginator=paginator,
             )
 
     return list(resources.values())
