@@ -24,6 +24,9 @@ class BaseQueue(_Queue[T]):
         super().__init__(maxsize)
         self._is_closed = False
 
+    def get(self, block: TYPE_CHECKING = True, timeout: float | None = None) -> T:
+        return super().get(block, timeout)
+
     def close(self) -> None:
         self._is_closed = True
 
