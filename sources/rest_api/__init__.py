@@ -150,6 +150,8 @@ def make_client_config(config: Dict[str, Any]) -> ClientConfig:
         "base_url": client_config.get("base_url"),
         "auth": create_auth(client_config.get("auth")),
         "paginator": create_paginator(client_config.get("paginator")),
+        "request_client": client_config.get("request_client"),
+        "ignore_http_status_codes": client_config.get("ignore_http_status_codes"),
     }
 
 
