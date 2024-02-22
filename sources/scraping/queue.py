@@ -1,17 +1,21 @@
-from typing import Generic, TypeVar, TYPE_CHECKING
-from queue import Queue
+import typing as t
+
+from queue import Empty, Queue
+
+from dlt.common import logger
+
 
 # Please read more at https://mypy.readthedocs.io/en/stable/runtime_troubles.html#not-generic-runtime
-T = TypeVar("T")
+T = t.TypeVar("T")
 
-if TYPE_CHECKING:
+if t.TYPE_CHECKING:
 
     class _Queue(Queue[T]):
         pass
 
 else:
 
-    class _Queue(Generic[T], Queue):
+    class _Queue(Queue, t.Generic[T]):
         pass
 
 
@@ -19,13 +23,55 @@ class QueueClosedError(Exception):
     pass
 
 
-class BaseQueue(_Queue[T]):
-    def __init__(self, maxsize: int = 0) -> None:
+class ScrapingQueue(_Queue):
+    def __init__(
+        self,
+        maxsize: int = 0,
+        batch_size: int = 10,
+        read_timeout: float = 1.0,
+    ) -> None:
         super().__init__(maxsize)
+        self.batch_size = batch_size
+        self.read_timeout = read_timeout
         self._is_closed = False
 
-    def get(self, block: TYPE_CHECKING = True, timeout: float | None = None) -> T:
-        return super().get(block, timeout)
+    def get(self, block: bool = True, timeout: t.Optional[float] = None) -> T:
+        timeout = timeout if timeout else self.read_timeout
+        batch: t.List[T] = []
+        while True:
+            if len(batch) >= self.batch_size:
+                return batch
+
+            try:
+                if self.is_closed:
+                    raise QueueClosedError("Queue is closed")
+
+                item = super().get(block, timeout=timeout)
+                batch.append(item)
+
+                # Mark task as completed
+                self.task_done()
+            except Empty:
+                logger.info(f"Queue has been empty for {timeout}s...")
+                return batch
+            except QueueClosedError:
+                logger.info("Queue is closed, stopping...")
+
+                # Return the last batch before exiting
+                return batch
+
+    def get_batches(self) -> t.Iterator[t.Any]:
+        """Batching helper can be wrapped as a dlt.resource
+
+        Returns:
+            Iterator[Any]: yields scraped items one by one
+        """
+        while True:
+            if self.is_closed:
+                break
+
+            result = self.get()
+            yield result
 
     def close(self) -> None:
         self._is_closed = True
