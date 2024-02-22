@@ -27,8 +27,10 @@ class ScrapyRunner(Runnable):
 
         # We want to receive on_item_scraped callback from
         # outside so we don't have to know about any queue instance.
-        self.on_item_scraped = on_item_scraped
-        self.on_engien_stopped = on_engine_stopped
+        dispatcher.connect(on_item_scraped, signals.item_scraped)
+
+        # Once crawling engine stops we would like to know about it as well.
+        dispatcher.connect(on_engine_stopped, signals.engine_stopped)
 
     def run(self, *args: P.args, **kwargs: P.kwargs) -> t.Any:
         crawler = CrawlerProcess(settings=self.settings)
@@ -38,10 +40,6 @@ class ScrapyRunner(Runnable):
             start_urls=self.start_urls,
             **kwargs,
         )
-
-        # Setup signals
-        dispatcher.connect(self.on_item_scraped, signals.item_scraped)
-        dispatcher.connect(self.on_engien_stopped, signals.engine_stopped)
 
         try:
             crawler.start()
