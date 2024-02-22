@@ -3,7 +3,8 @@ import typing as t
 AnyDict = t.Dict[str, t.Any]
 
 # start_urls can be a file path or a list of urls
-StartUrls = t.Optional[t.Union[t.List[str], str]]
+StartUrls = t.Optional[t.List[str]]
+StartUrlsFile = t.Optional[str]
 P = t.ParamSpec("P")
 
 

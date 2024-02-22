@@ -4,7 +4,7 @@ import dlt
 from scrapy import Spider  # type: ignore
 from scrapy.http import Response  # type: ignore
 
-from scraping.helpers import run_pipeline
+from scraping import run_pipeline
 
 
 class MySpider(Spider):
