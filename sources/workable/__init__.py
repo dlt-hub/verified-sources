@@ -112,8 +112,8 @@ def workable_source(
         # A transformer functions that yield the activities and offers for each candidate.
         for sub_endpoint in DEFAULT_DETAILS["candidates"]:
             logging.info(
-                f"Loading additional data for 'candidates' from '{sub_endpoint}' in 'merge' mode."
+                f"Loading additional data for 'candidates' from '{sub_endpoint}' in 'append' mode."
             )
             yield candidates_resource | dlt.transformer(
-                name=f"candidates_{sub_endpoint}", write_disposition="merge"
+                name=f"candidates_{sub_endpoint}", write_disposition="append"
             )(_get_details)("candidates", sub_endpoint, "id")
