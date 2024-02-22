@@ -11,7 +11,7 @@ SOURCE_SCRAPY_SETTINGS: AnyDict = {
     "TELNETCONSOLE_ENABLED": False,
     # How many sub pages to scrape
     # https://docs.scrapy.org/en/latest/topics/settings.html#depth-limit
-    "DEPTH_LIMIT": 2,
+    "DEPTH_LIMIT": 0,
     "SPIDER_MIDDLEWARES": {
         "scrapy.spidermiddlewares.depth.DepthMiddleware": 200,
         "scrapy.spidermiddlewares.httperror.HttpErrorMiddleware": 300,

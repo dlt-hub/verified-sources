@@ -3,6 +3,7 @@ import typing as t
 
 import dlt
 from dlt.common import logger
+from pydispatch import dispatcher
 
 from scrapy import signals, Item, Spider  # type: ignore
 from scrapy.crawler import CrawlerProcess  # type: ignore
@@ -39,8 +40,8 @@ class ScrapyRunner(Runnable):
         )
 
         # Setup signals
-        crawler.signals.connect(self.on_item_scraped, signals.item_scraped)
-        crawler.signals.connect(self.on_engien_stopped, signals.engine_stopped)
+        dispatcher.connect(self.on_item_scraped, signals.item_scraped)
+        dispatcher.connect(self.on_engien_stopped, signals.engine_stopped)
 
         try:
             crawler.start()
@@ -117,7 +118,10 @@ class ScrapingHost:
         pipeline_worker = self.pipeline_runner.run(
             # Queue get_batches is a generator so we can
             # pass it to pipeline.run and dlt will handle the rest.
-            self.queue.get_batches(),
+            dlt.resource(
+                self.queue.get_batches,
+                name=f"{self.pipeline_runner.pipeline.pipeline_name}_results",
+            ),
             *args,
             **kwargs,
         )

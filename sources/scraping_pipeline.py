@@ -1,12 +1,10 @@
 from typing import Any
 
 import dlt
-from dlt.common import logger
 from scrapy import Spider  # type: ignore
 from scrapy.http import Response  # type: ignore
 
-from scraping import scrapy_source
-from scraping.helpers import create_pipeline_runner
+from scraping.helpers import run_pipeline
 
 
 class MySpider(Spider):
@@ -30,23 +28,13 @@ def scrape_quotes() -> None:
     pipeline = dlt.pipeline(
         pipeline_name="scraping",
         destination="duckdb",
-        dataset_name="quotes",
     )
 
-    pipeline_runner, scrapy_runner, wait = create_pipeline_runner(
-        pipeline, spider=MySpider
-    )
-
-    logger.info("Starting pipeline")
-    pipeline_runner.run(
-        scrapy_source(scrapy_runner.queue),
+    run_pipeline(
+        pipeline,
+        MySpider,
         write_disposition="replace",
-        table_name="quotes",
     )
-
-    logger.info("Starting scrapy crawler")
-    scrapy_runner.run()
-    wait()
 
 
 if __name__ == "__main__":

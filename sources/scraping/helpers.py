@@ -66,7 +66,6 @@ def create_pipeline_runner(
         queue.close()
 
     scrapy_runner = ScrapyRunner(
-        queue=queue,
         spider=spider,
         start_urls=resolve_start_urls(start_urls),
         settings=SOURCE_SCRAPY_SETTINGS,
@@ -74,8 +73,17 @@ def create_pipeline_runner(
         on_engine_stopped=on_engine_stopped,
     )
 
-    pipeline_runner = PipelineRunner(pipeline=pipeline)
-    scraping_host = ScrapingHost(scrapy_runner, pipeline_runner)
+    pipeline_runner = PipelineRunner(
+        pipeline=pipeline,
+        queue=queue,
+    )
+
+    scraping_host = ScrapingHost(
+        queue,
+        scrapy_runner,
+        pipeline_runner,
+    )
+
     return scraping_host
 
 
