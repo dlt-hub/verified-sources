@@ -47,7 +47,7 @@ class AuthConfig(TypedDict, total=False):
 class ClientConfig(TypedDict, total=False):
     base_url: str
     auth: Optional[AuthConfig]
-    default_paginator: Optional[PaginatorType]
+    paginator: Optional[PaginatorType]
 
 
 class IncrementalConfig(TypedDict, total=False):
@@ -110,7 +110,7 @@ def make_client_config(config):
     return {
         "base_url": client_config.get("base_url"),
         "auth": create_auth(client_config.get("auth")),
-        "paginator": create_paginator(client_config.get("default_paginator")),
+        "paginator": create_paginator(client_config.get("paginator")),
     }
 
 
