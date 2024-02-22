@@ -16,29 +16,38 @@ from scrapy.exceptions import CloseSpider  # type: ignore
 from .settings import SOURCE_SCRAPY_QUEUE_SIZE, SOURCE_SCRAPY_SETTINGS
 from .queue import ScrapingQueue
 from .runner import ScrapingHost, PipelineRunner, ScrapyRunner
-from .types import StartUrls, StartUrlsFile
 
 
 @configspec
 class ScrapingConfig(BaseConfiguration):
     # Batch size for scraped items
-    batch_size: int = 20
+    batch_size: int = 100
 
     # maxsize for queue
     queue_size: t.Optional[int] = SOURCE_SCRAPY_QUEUE_SIZE
 
     # result wait timeout for our queue
-    queue_result_timeout: t.Optional[int] = 5
+    queue_result_timeout: t.Optional[int] = 1
 
     # List of start urls
-    start_urls: StartUrls = None
-    start_urls_file: StartUrlsFile = None
+    start_urls: t.List[str] = None
+    start_urls_file: str = None
+
+    __config_gen_annotations__: t.ClassVar[t.List[str]] = ["start_urls_file"]
+
+    # def on_resolved(self) -> None:
+    #     url = urlparse(self.bucket_url)
+    #     if not url.path and not url.netloc:
+    #         raise ConfigurationValueError(
+    #             "File path or netloc missing. Field bucket_url of FilesystemClientConfiguration"
+    #             " must contain valid url with a path or host:password component."
+    #         )
 
 
 @with_config(sections=("sources", "scraping"), spec=ScrapingConfig)
 def resolve_start_urls(
-    start_urls: StartUrls = dlt.config.value,
-    start_urls_file: StartUrlsFile = dlt.config.value,
+    start_urls: t.Optional[t.List[str]] = dlt.config.value,
+    start_urls_file: t.Optional[str] = dlt.config.value,
 ) -> t.List[str]:
     urls = set()
     if os.path.exists(start_urls_file):

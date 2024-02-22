@@ -1,10 +1,16 @@
+"""Scraping source
+
+Integrates Dlt and Scrapy to facilitate scraping pipelines.
+"""
+import inspect
 import typing as t
 
 import dlt
+from dlt.common.source import _SOURCES, SourceInfo
 
 from scrapy import Spider
 
-from .helpers import create_pipeline_runner
+from .helpers import ScrapingConfig, create_pipeline_runner
 from .types import P
 
 
@@ -33,3 +39,10 @@ def run_pipeline(
     """
     scraping_host = create_pipeline_runner(pipeline, spider)
     scraping_host.run(*args, **kwargs)
+
+
+_SOURCES[run_pipeline.__qualname__] = SourceInfo(
+    ScrapingConfig,
+    run_pipeline,
+    inspect.getmodule(run_pipeline),
+)

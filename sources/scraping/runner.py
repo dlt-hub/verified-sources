@@ -57,6 +57,10 @@ class PipelineRunner(Runnable):
     ) -> None:
         self.pipeline = pipeline
         self.queue = queue
+        self.scrapy_resource = dlt.resource(
+            self.queue.get_batches,
+            name=f"{self.pipeline_runner.pipeline.pipeline_name}_results",
+        )
 
     def run(  # type: ignore[override]
         self,
@@ -82,11 +86,12 @@ class PipelineRunner(Runnable):
 
         def run() -> None:
             try:
-                self.pipeline.run(data, **kwargs)
+                self.pipeline.run(self.scrapy_resource, **kwargs)
             except Exception:
                 logger.error("Error during pipeline.run call, closing the queue")
-                self.queue.close()
                 raise
+            finally:
+                self.queue.close()
 
         thread_runner = threading.Thread(target=run)
         thread_runner.start()
@@ -116,10 +121,6 @@ class ScrapingHost:
         pipeline_worker = self.pipeline_runner.run(
             # Queue get_batches is a generator so we can
             # pass it to pipeline.run and dlt will handle the rest.
-            dlt.resource(
-                self.queue.get_batches,
-                name=f"{self.pipeline_runner.pipeline.pipeline_name}_results",
-            ),
             *args,
             **kwargs,
         )
