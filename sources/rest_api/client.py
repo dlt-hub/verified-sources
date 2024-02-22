@@ -89,7 +89,7 @@ class RESTClient:
             )
             if response.status_code in self.ignore_http_status_codes:
                 logger.warning(f"Request returned status code {response.status_code}")
-                response.json = lambda: None  # alternative: # response._content = b'[]'
+                response.json = lambda: None
 
             if isinstance(paginator, UnspecifiedPaginator):
                 # Detect suitable paginator and it's params
