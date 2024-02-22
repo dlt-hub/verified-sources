@@ -47,7 +47,7 @@ class AuthConfig(TypedDict, total=False):
 class ClientConfig(TypedDict, total=False):
     base_url: str
     auth: Optional[AuthConfig]
-    default_paginator: Optional[PaginatorType]
+    paginator: Optional[PaginatorType]
 
 
 class ResourceConfig(TypedDict, total=False):
@@ -173,7 +173,7 @@ def rest_api_source(config: RESTAPIConfig):
         pokemon_source = rest_api_source({
             "client": {
                 "base_url": "https://pokeapi.co/api/v2/",
-                "default_paginator": "json_links",
+                "paginator": "json_links",
             },
             "endpoints": {
                 "pokemon": {
@@ -625,7 +625,7 @@ def rest_api_resources_v2(client: RESTClient, *resources: EndpointResource):
         github_source = rest_api_resources_v2(
             Client(
                 base_url="https://api.github.com/repos/dlt-hub/dlt/",
-                default_paginator="header_links",
+                paginator="header_links",
                 auth=BearerTokenAuth(dlt.secrets["token"]),
             ),
             Resource(
