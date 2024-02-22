@@ -88,8 +88,8 @@ def load_github_legacy():
         {
             "client": {
                 "base_url": "https://api.github.com/repos/dlt-hub/dlt/",
-                # If you leave out the default_paginator, it will be inferred from the API:
-                # "default_paginator": "header_links",
+                # If you leave out the paginator, it will be inferred from the API:
+                # "paginator": "header_links",
                 "auth": {
                     "token": dlt.secrets["github_token"],
                 },
@@ -180,8 +180,8 @@ def load_pokemon():
         {
             "client": {
                 "base_url": "https://pokeapi.co/api/v2/",
-                # If you leave out the default_paginator, it will be inferred from the API:
-                # default_paginator: "json_links",
+                # If you leave out the paginator, it will be inferred from the API:
+                # paginator: "json_links",
             },
             "resource_defaults": {
                 "endpoint": {
