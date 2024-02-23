@@ -40,6 +40,10 @@ def resolve_start_urls(
     start_urls: t.Optional[t.List[str]] = dlt.config.value,
     start_urls_file: t.Optional[str] = dlt.config.value,
 ) -> t.List[str]:
+    """Merges start urls
+    If both `start_urls` and `start_urls_file` given, we will merge them
+    and return deduplicated list of `start_urls` for scrapy spider.
+    """
     urls = set()
     if os.path.exists(start_urls_file):
         with open(start_urls_file) as fp:

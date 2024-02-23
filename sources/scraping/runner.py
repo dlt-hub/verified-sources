@@ -13,6 +13,8 @@ from .queue import ScrapingQueue
 
 
 class ScrapyRunner(Runnable):
+    """Scrapy runner handles setup and teardown of scrapy crawling"""
+
     def __init__(
         self,
         spider: t.Type[Spider],
@@ -55,6 +57,11 @@ class ScrapyRunner(Runnable):
 
 
 class PipelineRunner(Runnable):
+    """Pipeline runner runs dlt pipeline in a separate thread
+    Since scrapy wants to run in the main thread it is the only available
+    option to host pipeline in a thread and communicate via the queue.
+    """
+
     def __init__(
         self,
         pipeline: dlt.Pipeline,
