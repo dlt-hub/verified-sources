@@ -20,7 +20,7 @@ class ScrapyRunner(Runnable):
         spider: t.Type[Spider],
         start_urls: t.List[str],
         settings: AnyDict,
-        on_item_scraped: t.Callable[[Item], None],
+        on_item_scraped: t.Callable[[Item, CrawlerProcess], None],
         on_engine_stopped: t.Callable[[], None],
     ) -> None:
         self.spider = spider
@@ -38,22 +38,27 @@ class ScrapyRunner(Runnable):
             **kwargs,
         )
 
+        # NOTE: signals set up this way because once they are move to helper method
+        #       it might become flaky. FIXME: Debug signal registration properly
         try:
-            self.setup_signals()
+            # We want to receive on_item_scraped callback from
+            # outside so we don't have to know about any queue instance.
+            def item_scraped(item: Item):
+                # Also we would like to pass crawler instance
+                # so we can stop crawling when the queue is closed.
+                self.on_item_scraped(item, crawler)
+
+            dispatcher.connect(item_scraped, signals.item_scraped)
+
+            # Once crawling engine stops we would like to know about it as well.
+            dispatcher.connect(self.on_engine_stopped, signals.engine_stopped)
+
             crawler.start()
         except Exception:
             logger.error("Was unable to start crawling process")
             raise
         finally:
             self.on_engine_stopped()
-
-    def setup_signals(self):
-        # We want to receive on_item_scraped callback from
-        # outside so we don't have to know about any queue instance.
-        dispatcher.connect(self.on_item_scraped, signals.item_scraped)
-
-        # Once crawling engine stops we would like to know about it as well.
-        dispatcher.connect(self.on_engine_stopped, signals.engine_stopped)
 
 
 class PipelineRunner(Runnable):
@@ -72,7 +77,7 @@ class PipelineRunner(Runnable):
         self.scrapy_resource = dlt.resource(
             # Queue get_batches is a generator so we can
             # pass it to pipeline.run and dlt will handle the rest.
-            self.queue.get_batches,
+            self.queue.get_batches(),
             name=f"{pipeline.pipeline_name}_results",
         )
 

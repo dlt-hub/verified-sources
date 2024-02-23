@@ -12,6 +12,7 @@ from dlt.common.configuration.specs.base_configuration import (
 
 from scrapy import Item, Spider  # type: ignore
 from scrapy.exceptions import CloseSpider  # type: ignore
+from scrapy.crawler import CrawlerProcess  # type: ignore
 
 from .queue import ScrapingQueue
 from .settings import SOURCE_SCRAPY_QUEUE_SIZE, SOURCE_SCRAPY_SETTINGS
@@ -60,16 +61,18 @@ def resolve_start_urls(
 def create_pipeline_runner(
     pipeline: dlt.Pipeline,
     spider: t.Type[Spider],
+    batch_size: int = dlt.config.value,
     queue_size: int = dlt.config.value,
     queue_result_timeout: int = dlt.config.value,
     scrapy_settings: t.Optional[AnyDict] = None,
 ) -> ScrapingHost:
     queue = ScrapingQueue(
         maxsize=queue_size,
+        batch_size=batch_size,
         read_timeout=queue_result_timeout,
     )
 
-    def on_item_scraped(item: Item) -> None:
+    def on_item_scraped(item: Item, crawler: CrawlerProcess) -> None:
         if not queue.is_closed:
             queue.put(item)  # type: ignore
         else:
