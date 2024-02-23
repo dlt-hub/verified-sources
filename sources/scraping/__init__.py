@@ -18,7 +18,7 @@ def run_pipeline(
     pipeline: dlt.Pipeline,
     spider: t.Type[Spider],
     *args: P.args,
-    scrapy_settings: t.Optional[AnyDict],
+    scrapy_settings: t.Optional[AnyDict] = None,
     **kwargs: P.kwargs,
 ) -> None:
     """Simple runner for the scraping pipeline
@@ -38,7 +38,11 @@ def run_pipeline(
         loader_file_format: TLoaderFileFormat = None
         ```
     """
-    scraping_host = create_pipeline_runner(pipeline, spider)
+    scraping_host = create_pipeline_runner(
+        pipeline,
+        spider,
+        scrapy_settings=scrapy_settings,
+    )
     scraping_host.run(*args, **kwargs)
 
 
