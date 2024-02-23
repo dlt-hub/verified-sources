@@ -24,13 +24,8 @@ class ScrapyRunner(Runnable):
         self.spider = spider
         self.settings = settings
         self.start_urls = start_urls
-
-        # We want to receive on_item_scraped callback from
-        # outside so we don't have to know about any queue instance.
-        dispatcher.connect(on_item_scraped, signals.item_scraped)
-
-        # Once crawling engine stops we would like to know about it as well.
-        dispatcher.connect(on_engine_stopped, signals.engine_stopped)
+        self.on_item_scraped = on_item_scraped
+        self.on_engine_stopped = on_engine_stopped
 
     def run(self, *args: P.args, **kwargs: P.kwargs) -> t.Any:
         crawler = CrawlerProcess(settings=self.settings)
@@ -42,11 +37,20 @@ class ScrapyRunner(Runnable):
         )
 
         try:
+            self.setup_signals()
             crawler.start()
         except Exception:
             logger.error("Was unable to start crawling process")
             self.on_engien_stopped()
             raise
+
+    def setup_signals(self):
+        # We want to receive on_item_scraped callback from
+        # outside so we don't have to know about any queue instance.
+        dispatcher.connect(self.on_item_scraped, signals.item_scraped)
+
+        # Once crawling engine stops we would like to know about it as well.
+        dispatcher.connect(self.on_engine_stopped, signals.engine_stopped)
 
 
 class PipelineRunner(Runnable):
@@ -58,13 +62,14 @@ class PipelineRunner(Runnable):
         self.pipeline = pipeline
         self.queue = queue
         self.scrapy_resource = dlt.resource(
+            # Queue get_batches is a generator so we can
+            # pass it to pipeline.run and dlt will handle the rest.
             self.queue.get_batches,
-            name=f"{self.pipeline_runner.pipeline.pipeline_name}_results",
+            name=f"{pipeline.pipeline_name}_results",
         )
 
     def run(  # type: ignore[override]
         self,
-        data: t.Any,
         *args: P.args,
         **kwargs: P.kwargs,
     ) -> threading.Thread:
@@ -118,12 +123,7 @@ class ScrapingHost:
     ) -> None:
         """You can pass kwargs which are passed to `pipeline.run`"""
         logger.info("Starting pipeline")
-        pipeline_worker = self.pipeline_runner.run(
-            # Queue get_batches is a generator so we can
-            # pass it to pipeline.run and dlt will handle the rest.
-            *args,
-            **kwargs,
-        )
+        pipeline_worker = self.pipeline_runner.run(*args, **kwargs)
 
         logger.info("Starting scrapy crawler")
         self.scrapy_runner.run()

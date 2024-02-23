@@ -35,43 +35,35 @@ class ScrapingQueue(_Queue):
         self.read_timeout = read_timeout
         self._is_closed = False
 
-    def get(self, block: bool = True, timeout: t.Optional[float] = None) -> T:
-        timeout = timeout if timeout else self.read_timeout
-        batch: t.List[T] = []
-        while True:
-            if len(batch) >= self.batch_size:
-                return batch
-
-            try:
-                if self.is_closed:
-                    raise QueueClosedError("Queue is closed")
-
-                item = super().get(block, timeout=timeout)
-                batch.append(item)
-
-                # Mark task as completed
-                self.task_done()
-            except Empty:
-                logger.info(f"Queue has been empty for {timeout}s...")
-                return batch
-            except QueueClosedError:
-                logger.info("Queue is closed, stopping...")
-
-                # Return the last batch before exiting
-                return batch
-
     def get_batches(self) -> t.Iterator[t.Any]:
         """Batching helper can be wrapped as a dlt.resource
 
         Returns:
             Iterator[Any]: yields scraped items one by one
         """
+        batch: t.List[T] = []
         while True:
-            if self.is_closed:
-                break
+            if len(batch) >= self.batch_size:
+                yield batch
 
-            result = self.get()
-            yield result
+            try:
+                if self.is_closed:
+                    raise QueueClosedError("Queue is closed")
+
+                item = self.get(timeout=self.read_timeout)
+                batch.append(item)
+
+                # Mark task as completed
+                self.task_done()
+            except Empty:
+                logger.info(f"Queue has been empty for {self.read_timeout}s...")
+                yield batch
+            except QueueClosedError:
+                logger.info("Queue is closed, stopping...")
+
+                # Return the last batch before exiting
+                yield batch
+                break
 
     def close(self) -> None:
         self._is_closed = True

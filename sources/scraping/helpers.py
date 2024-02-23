@@ -13,9 +13,10 @@ from dlt.common.configuration.specs.base_configuration import (
 from scrapy import Item, Spider  # type: ignore
 from scrapy.exceptions import CloseSpider  # type: ignore
 
-from .settings import SOURCE_SCRAPY_QUEUE_SIZE, SOURCE_SCRAPY_SETTINGS
 from .queue import ScrapingQueue
+from .settings import SOURCE_SCRAPY_QUEUE_SIZE, SOURCE_SCRAPY_SETTINGS
 from .runner import ScrapingHost, PipelineRunner, ScrapyRunner
+from .types import AnyDict  # type: ignore
 
 
 @configspec
@@ -67,6 +68,7 @@ def create_pipeline_runner(
     spider: t.Type[Spider],
     queue_size: int = dlt.config.value,
     queue_result_timeout: int = dlt.config.value,
+    scrapy_settings: t.Optional[AnyDict] = None,
 ) -> ScrapingHost:
     queue = ScrapingQueue(
         maxsize=queue_size,
@@ -88,6 +90,11 @@ def create_pipeline_runner(
         **SOURCE_SCRAPY_SETTINGS,
         "LOG_LEVEL": logger.log_level(),
     }
+
+    # Just to simple merge
+    if scrapy_settings:
+        settings = {**settings, **scrapy_settings}
+
     scrapy_runner = ScrapyRunner(
         spider=spider,
         start_urls=resolve_start_urls(),

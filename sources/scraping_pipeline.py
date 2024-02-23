@@ -28,11 +28,13 @@ def scrape_quotes() -> None:
     pipeline = dlt.pipeline(
         pipeline_name="scraping",
         destination="duckdb",
+        dataset_name="quotes",
     )
 
     run_pipeline(
         pipeline,
         MySpider,
+        scrapy_settings={},
         write_disposition="replace",
     )
 
