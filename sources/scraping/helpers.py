@@ -34,16 +34,6 @@ class ScrapingConfig(BaseConfiguration):
     start_urls: t.List[str] = None
     start_urls_file: str = None
 
-    __config_gen_annotations__: t.ClassVar[t.List[str]] = ["start_urls_file"]
-
-    # def on_resolved(self) -> None:
-    #     url = urlparse(self.bucket_url)
-    #     if not url.path and not url.netloc:
-    #         raise ConfigurationValueError(
-    #             "File path or netloc missing. Field bucket_url of FilesystemClientConfiguration"
-    #             " must contain valid url with a path or host:password component."
-    #         )
-
 
 @with_config(sections=("sources", "scraping"), spec=ScrapingConfig)
 def resolve_start_urls(
