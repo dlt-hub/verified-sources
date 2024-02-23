@@ -8,7 +8,9 @@ from datadog import datadog_source
 if __name__ == "__main__":
     # configure the pipeline with your destination details
     pipeline = dlt.pipeline(
-        pipeline_name="datadog", destination="duckdb", dataset_name="datadog_data"
+        pipeline_name="datadog",
+        destination="duckdb",
+        dataset_name="datadog_data",
     )
     load_info = pipeline.run(
         datadog_source().with_resources("authentication"),
