@@ -73,7 +73,12 @@ def test_dependent_resource(destination_name: str) -> None:
         "resources": [
             {
                 "name": "pokemon_list",
-                "endpoint": "pokemon",
+                "endpoint": {
+                    "path": "pokemon",
+                    "params": {
+                        "limit": "2",
+                    },
+                },
             },
             {
                 "name": "pokemon",
@@ -85,7 +90,7 @@ def test_dependent_resource(destination_name: str) -> None:
                             "resource": "pokemon_list",
                             "field": "name",
                         },
-                    }
+                    },
                 },
             },
         ],
@@ -100,5 +105,5 @@ def test_dependent_resource(destination_name: str) -> None:
 
     assert table_counts.keys() == {"pokemon_list", "pokemon"}
 
-    assert table_counts["pokemon_list"] == 1302
-    assert table_counts["pokemon"] == 1302
+    assert table_counts["pokemon_list"] == 2
+    assert table_counts["pokemon"] == 2
