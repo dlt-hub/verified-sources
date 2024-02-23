@@ -43,8 +43,9 @@ class ScrapingQueue(_Queue):
         """
         batch: t.List[T] = []
         while True:
-            if len(batch) >= self.batch_size:
+            if len(batch) == self.batch_size:
                 yield batch
+                batch = []
 
             try:
                 if self.is_closed:
@@ -57,12 +58,16 @@ class ScrapingQueue(_Queue):
                 self.task_done()
             except Empty:
                 logger.info(f"Queue has been empty for {self.read_timeout}s...")
-                yield batch
+                if batch:
+                    yield batch
+                    batch = []
             except QueueClosedError:
                 logger.info("Queue is closed, stopping...")
 
                 # Return the last batch before exiting
-                yield batch
+                if batch:
+                    yield batch
+
                 break
 
     def close(self) -> None:
