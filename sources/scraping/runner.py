@@ -41,8 +41,9 @@ class ScrapyRunner(Runnable):
             crawler.start()
         except Exception:
             logger.error("Was unable to start crawling process")
-            self.on_engien_stopped()
             raise
+        finally:
+            self.on_engine_stopped()
 
     def setup_signals(self):
         # We want to receive on_item_scraped callback from
