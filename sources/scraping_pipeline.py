@@ -5,6 +5,7 @@ from scrapy import Spider  # type: ignore
 from scrapy.http import Response  # type: ignore
 
 from scraping import run_pipeline
+from scraping.helpers import create_pipeline_runner
 
 
 class MySpider(Spider):
@@ -28,9 +29,7 @@ def scrape_quotes() -> None:
     pipeline = dlt.pipeline(
         pipeline_name="scraping",
         destination="duckdb",
-        dataset_name="quotes",
     )
-
     run_pipeline(
         pipeline,
         MySpider,
@@ -39,5 +38,17 @@ def scrape_quotes() -> None:
     )
 
 
+def scrape_quotes_advanced_runner() -> None:
+    pipeline = dlt.pipeline(
+        pipeline_name="scraping_advanced",
+        destination="duckdb",
+    )
+    scraping_host = create_pipeline_runner(pipeline, MySpider, batch_size=10)
+    scrapy_resource = scraping_host.pipeline_runner.scrapy_resource
+    scraping_host.pipeline_runner.scrapy_resource = scrapy_resource.add_limit(20)
+    scraping_host.run(dataset_name="quotes")
+
+
 if __name__ == "__main__":
     scrape_quotes()
+    # scrape_quotes_advanced_runner()
