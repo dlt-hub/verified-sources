@@ -43,9 +43,3 @@ def test_rest_api_source(destination_name: str) -> None:
     assert table_counts["pokemon"] == 1302
     assert table_counts["berry"] == 64
     assert table_counts["location"] == 1036
-
-
-# TODO: Add incorrect config test
-# - incorrect default_resource (missing endpoint, nested params)
-# - incorrect resources
-# - incorrect key (default_resource)

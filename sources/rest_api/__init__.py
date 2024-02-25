@@ -1,11 +1,22 @@
 """Generic API Source"""
 
-from dataclasses import dataclass
 import copy
-from typing import Any, Dict, NamedTuple, Optional, TypedDict, Union
+from typing import (
+    Type,
+    TypeVar,
+    Any,
+    Dict,
+    Tuple,
+    List,
+    NamedTuple,
+    Optional,
+    TypedDict,
+    Union,
+)
+import graphlib
 
 import dlt
-import graphlib
+from dlt.common.validation import validate_dict
 from dlt.common.schema.typing import (
     TColumnNames,
     # TSchemaContract,
@@ -38,6 +49,7 @@ PAGINATOR_MAP = {
 
 
 PaginatorType = Union[str, BasePaginator]
+PaginatorConfigType = TypeVar("PaginatorConfigType", bound=Dict[str, Any])
 
 
 class AuthConfig(TypedDict, total=False):
@@ -67,45 +79,73 @@ class ResolvedParam(NamedTuple):
 
 
 class Endpoint(TypedDict, total=False):
-    path: str
-    method: str
+    path: Optional[str]
+    method: Optional[str]
     params: Optional[Dict[str, Any]]
     json: Optional[Dict[str, Any]]
     paginator: Optional[PaginatorType]
 
 
+# TODO: check why validate_dict does not respect total=False
 class EndpointResource(TypedDict, total=False):
     name: TTableHintTemplate[str]
-    endpoint: Endpoint
-    write_disposition: TTableHintTemplate[TWriteDisposition]
-    parent: TTableHintTemplate[str]
-    columns: TTableHintTemplate[TTableSchemaColumns]
-    primary_key: TTableHintTemplate[TColumnNames]
-    merge_key: TTableHintTemplate[TColumnNames]
-    incremental: Incremental[Any]
-    # schema_contract: TTableHintTemplate[TSchemaContract]
-    table_format: TTableHintTemplate[TTableFormat]
+    endpoint: Optional[Union[str, Endpoint]]
+    write_disposition: Optional[TTableHintTemplate[TWriteDisposition]]
+    parent: Optional[TTableHintTemplate[str]]
+    columns: Optional[TTableHintTemplate[TTableSchemaColumns]]
+    primary_key: Optional[TTableHintTemplate[TColumnNames]]
+    merge_key: Optional[TTableHintTemplate[TColumnNames]]
+    incremental: Optional[Incremental[Any]]
+    table_format: Optional[TTableHintTemplate[TTableFormat]]
+    include_from_parent: Optional[List[str]]
+
+
+class FlexibleEndpointResource(EndpointResource, total=False):
+    name: Optional[TTableHintTemplate[str]]
 
 
 class RESTAPIConfig(TypedDict):
     client: ClientConfig
-    resource_defaults: EndpointResource
-    resources: Dict[str, EndpointResource]
+    resource_defaults: Optional[FlexibleEndpointResource]
+    resources: List[Union[str, EndpointResource]]
 
 
-def create_paginator(paginator_config):
+def get_paginator_class(paginator_type: str) -> Type[BasePaginator]:
+    try:
+        return PAGINATOR_MAP[paginator_type]
+    except KeyError:
+        available_options = ", ".join(PAGINATOR_MAP.keys())
+        raise ValueError(
+            f"Invalid paginator: {paginator_type}. "
+            f"Available options: {available_options}"
+        )
+
+
+def create_paginator(
+    paginator_config: Union[str, PaginatorConfigType]
+) -> Optional[BasePaginator]:
     if isinstance(paginator_config, BasePaginator):
         return paginator_config
-    return PAGINATOR_MAP.get(paginator_config, lambda: None)()
+
+    if isinstance(paginator_config, str):
+        paginator_class = get_paginator_class(paginator_config)
+        return paginator_class()
+
+    if isinstance(paginator_config, dict):
+        paginator_type = paginator_config.get("type", "auto")
+        paginator_class = get_paginator_class(paginator_type)
+        return paginator_class(**remove_key(paginator_config, "type"))
+
+    return None
 
 
-def create_auth(auth_config):
+def create_auth(auth_config: Optional[AuthConfig]) -> Optional[AuthBase]:
     if isinstance(auth_config, AuthBase):
         return auth_config
     return BearerTokenAuth(auth_config.get("token")) if auth_config else None
 
 
-def make_client_config(config):
+def make_client_config(config: Dict[str, Any]) -> ClientConfig:
     client_config = config.get("client", {})
     return {
         "base_url": client_config.get("base_url"),
@@ -114,7 +154,9 @@ def make_client_config(config):
     }
 
 
-def setup_incremental_object(request_params, incremental_config):
+def setup_incremental_object(
+    request_params: Dict[str, Any], incremental_config: Optional[IncrementalConfig]
+) -> Tuple[Optional[Incremental[Any]], Optional[str]]:
     for key, value in request_params.items():
         if isinstance(value, dlt.sources.incremental):
             return value, key
@@ -129,7 +171,9 @@ def setup_incremental_object(request_params, incremental_config):
     return setup_incremental_object_from_config(incremental_config)
 
 
-def setup_incremental_object_from_config(config):
+def setup_incremental_object_from_config(
+    config: Optional[IncrementalConfig],
+) -> Tuple[Optional[Incremental[Any]], Optional[str]]:
     return (
         (
             dlt.sources.incremental(
@@ -142,12 +186,12 @@ def setup_incremental_object_from_config(config):
     )
 
 
-def make_parent_key_name(resource_name, field_name):
+def make_parent_key_name(resource_name: str, field_name: str) -> str:
     return f"_{resource_name}_{field_name}"
 
 
 @dlt.source
-def rest_api_source(config: RESTAPIConfig):
+def rest_api_source(config: RESTAPIConfig) -> List[DltResource]:
     """
     Creates and configures a REST API source for data extraction.
 
@@ -172,7 +216,7 @@ def rest_api_source(config: RESTAPIConfig):
     return rest_api_resources(config)
 
 
-def rest_api_resources(config: RESTAPIConfig):
+def rest_api_resources(config: RESTAPIConfig) -> List[DltResource]:
     """
     Creates and configures a REST API source for data extraction.
 
@@ -226,6 +270,9 @@ def rest_api_resources(config: RESTAPIConfig):
             ],
         })
     """
+
+    validate_dict(RESTAPIConfig, config, path=".")
+
     client = RESTClient(**make_client_config(config))
     dependency_graph = graphlib.TopologicalSorter()
     endpoint_resource_map = {}
@@ -374,7 +421,7 @@ def rest_api_resources(config: RESTAPIConfig):
 
 def make_endpoint_resource(
     resource: Union[str, EndpointResource], default_config: EndpointResource
-):
+) -> EndpointResource:
     """
     Creates an EndpointResource object based on the provided resource
     definition and merges it with the default configuration.
@@ -403,7 +450,9 @@ def make_endpoint_resource(
     return deep_merge(copy.deepcopy(default_config), resource)
 
 
-def make_resolved_param(key, value):
+def make_resolved_param(
+    key: str, value: Union[ResolveConfig, Dict[str, Any]]
+) -> Optional[ResolvedParam]:
     if isinstance(value, ResolveConfig):
         return ResolvedParam(key, value)
     if isinstance(value, dict) and value.get("type") == "resolve":
@@ -414,7 +463,7 @@ def make_resolved_param(key, value):
     return None
 
 
-def find_resolved_params(endpoint_config):
+def find_resolved_params(endpoint_config: Endpoint) -> List[ResolvedParam]:
     """
     Find all resolved params in the endpoint configuration and return
     a list of ResolvedParam objects.

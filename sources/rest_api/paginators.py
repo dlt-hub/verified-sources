@@ -75,6 +75,7 @@ class BasePaginator(ABC):
 
 class SinglePagePaginator(BasePaginator):
     """A paginator for single-page API responses."""
+
     def __init__(
         self,
         records_key: Union[str, Sequence[str]] = None,
@@ -107,6 +108,7 @@ class OffsetPaginator(BasePaginator):
         limit_key: str = "limit",
         total_key: str = "total",
     ):
+        super().__init__()
         self.offset_key = offset_key
         self.limit_key = limit_key
         self._records_accessor = create_nested_accessor(records_key)
@@ -136,6 +138,11 @@ class OffsetPaginator(BasePaginator):
         params[self.limit_key] = self.limit
 
         return url, params, json
+
+    def extract_records(self, response: Response) -> Any:
+        if self.records_key is None:
+            return response.json()
+        return self._records_accessor(response.json())
 
 
 class BaseNextUrlPaginator(BasePaginator):
