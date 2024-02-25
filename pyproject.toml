@@ -35,6 +35,7 @@ confluent-kafka = "^2.3.0"
 [tool.poetry.group.sql_database.dependencies]
 sqlalchemy = ">=1.4"
 pymysql = "^1.0.3"
+pypgoutput = "0.0.3"
 
 [tool.poetry.group.google_sheets.dependencies]
 google-api-python-client = "^2.78.0"
