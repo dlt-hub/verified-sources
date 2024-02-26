@@ -26,6 +26,7 @@ from dlt.common.schema.typing import (
 from dlt.extract.incremental import Incremental
 from dlt.extract.source import DltResource
 from dlt.extract.typing import TTableHintTemplate
+from dlt.sources.helpers.requests.retry import Client
 
 from .auth import BearerTokenAuth, AuthBase
 from .client import RESTClient
@@ -59,6 +60,8 @@ class ClientConfig(TypedDict, total=False):
     base_url: str
     auth: Optional[AuthConfig]
     paginator: Optional[PaginatorType]
+    request_client: Client
+    ignore_http_status_codes: Optional[List[int]]
 
 
 class IncrementalConfig(TypedDict, total=False):
