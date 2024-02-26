@@ -5,5 +5,5 @@ DEFAULT_ENDPOINTS = [
     "contacts",
     "groups",
     "roles",
-    "time_entries",
+    "tickets"
 ]

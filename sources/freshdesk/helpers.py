@@ -1,42 +1,45 @@
-from typing import Any, Dict, Iterable, Optional
+"""Freshdesk source helpers"""
 
+from typing import Any, Iterable, Optional
+
+from dlt.common.typing import TDataItem
 from dlt.sources.helpers import requests
 
 
-def get_endpoint(
-    api_secret_key: str,
-    page: int,
-    per_page: int,
-    domain: str,
-    endpoint: str,
-    updated_at: Optional[str] = None,
-) -> Iterable[Dict[str, Any]]:
-    """
-    Fetches data from a Freshdesk API endpoint.
-    """
-    url = f"https://{domain}.freshdesk.com/api/v2/{endpoint}"
-    yield from paginated_response(
-        url, page, per_page, updated_at, api_secret_key, endpoint
-    )
-
-
 def paginated_response(
-    url: str,
+    endpoint: str,
     page: int,
     per_page: int,
-    updated_at: Optional[str],
+    updated_at: Optional[Any],
+    domain: str,
     api_secret_key: str,
-    endpoint: str,
-) -> Iterable[Dict[str, Any]]:
+) -> Iterable[TDataItem]:
     """
-    Retrieves data from a paginated Freshdesk API endpoint.
-    """
-    while True:
-        paginated_url = f"{url}?per_page={per_page}&page={page}"
-        if endpoint == "tickets":
-            paginated_url += f"&updated_since={updated_at}"
+    Retrieves data from an endpoint with pagination.
 
-        response = requests.get(paginated_url, auth=(api_secret_key, "X"))
+    Args:
+        page (int): The starting page number for the API request.
+        per_page (int): The number of items requested per page.
+        updated_at (Optional[Any]): An optional 'updated_at' to limit the data retrieved.
+                                    Defaults to None.
+        domain (str): The Freshdesk domain to construct the request URL.
+        api_secret_key (str): The API key used for authentication.
+        endpoint (str): The endpoint to retrieve data from (e.g., 'tickets', 'contacts').
+
+    Yields:
+        Iterable[TDataItem]: Data items retrieved from the endpoint.
+
+    """
+    base_url = f"https://{domain}.freshdesk.com/api/v2/{endpoint}"
+
+    while True:
+        params = {"per_page": per_page, "page": page}
+        if endpoint in ["tickets", "contacts"]:
+            params["updated_since" if endpoint == "tickets" else "_updated_since"] = (
+                updated_at
+            )
+
+        response = requests.get(base_url, params=params, auth=(api_secret_key, "X"))
         response.raise_for_status()
 
         data = response.json()
