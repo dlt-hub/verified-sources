@@ -57,7 +57,7 @@ api_key = "Please set me up!" # please set me up!
 3. Now the pipeline can be run by using the command:
 
    ```bash
-   python3 bing_webmaster_pipeline.py
+   python bing_webmaster_pipeline.py
    ```
 
 3. To make sure that everything is loaded as expected, use the command:
