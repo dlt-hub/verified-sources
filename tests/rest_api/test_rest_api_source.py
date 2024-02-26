@@ -51,12 +51,6 @@ def test_rest_api_source(destination_name: str) -> None:
     assert table_counts["location"] == 1036
 
 
-# TODO: Add incorrect config test
-# - incorrect default_resource (missing endpoint, nested params)
-# - incorrect resources
-# - incorrect key (default_resource)
-
-
 @pytest.mark.parametrize("destination_name", ALL_DESTINATIONS)
 def test_dependent_resource(destination_name: str) -> None:
     config = {
@@ -98,9 +92,7 @@ def test_dependent_resource(destination_name: str) -> None:
         ],
     }
 
-    data = (
-        rest_api_source(config).with_resources("pokemon_list", "pokemon")
-    )
+    data = rest_api_source(config).with_resources("pokemon_list", "pokemon")
     pipeline = _make_pipeline(destination_name)
     load_info = pipeline.run(data)
     assert_load_info(load_info)
