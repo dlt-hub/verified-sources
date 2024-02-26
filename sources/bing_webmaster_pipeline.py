@@ -16,7 +16,7 @@ def load_page_stats_example() -> None:
     )
     # create the data source by providing a list of site_urls.
     # Note that you have to first verify your own site urls. Thus, most likely,
-    # you'll lack the permissions to request statistics for the one provided in this example
+    # you'll lack the permissions to request statistics for the ones provided in this example
     data = source(site_urls=["sipgate.de", "satellite.me"])
 
     # load the "page_stats" out of all the possible resources
