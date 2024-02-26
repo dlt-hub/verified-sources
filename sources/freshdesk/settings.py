@@ -1,9 +1,2 @@
 # Define endpoints
-DEFAULT_ENDPOINTS = [
-    "agents",
-    "companies",
-    "contacts",
-    "groups",
-    "roles",
-    "tickets"
-]
+DEFAULT_ENDPOINTS = ["agents", "companies", "contacts", "groups", "roles", "tickets"]

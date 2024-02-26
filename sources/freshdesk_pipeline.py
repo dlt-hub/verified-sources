@@ -4,6 +4,7 @@ import dlt
 
 from freshdesk import freshdesk_source
 
+
 def load_endpoints(selected_endpoints: List[str] = None) -> None:
     """
     This demo script demonstrates the use of resources with incremental loading,
@@ -32,5 +33,8 @@ if __name__ == "__main__":
     load_endpoints()
 
     # To load data from selective endpoints
-    custom_endpoints = ["agents", "companies"]  # Renamed from 'endpoints' to 'custom_endpoints'
+    custom_endpoints = [
+        "agents",
+        "companies",
+    ]  # Renamed from 'endpoints' to 'custom_endpoints'
     load_endpoints(custom_endpoints)  # Pass 'custom_endpoints' instead of 'endpoints'

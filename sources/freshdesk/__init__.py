@@ -37,10 +37,10 @@ def freshdesk_source(
     """
 
     def incremental_resource(
-            endpoint: str,
-            updated_at: Optional[Any] = dlt.sources.incremental(
-                "updated_at", initial_value="2022-01-01T00:00:00Z"
-            ),
+        endpoint: str,
+        updated_at: Optional[Any] = dlt.sources.incremental(
+            "updated_at", initial_value="2022-01-01T00:00:00Z"
+        ),
     ) -> Generator[Dict[Any, Any], Any, None]:
         """
         Fetches and yields paginated data from a specified API endpoint.
