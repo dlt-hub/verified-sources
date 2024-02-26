@@ -3,7 +3,6 @@
 import copy
 from typing import (
     Type,
-    TypeVar,
     Any,
     Dict,
     Tuple,
@@ -48,8 +47,8 @@ PAGINATOR_MAP = {
 }
 
 
-PaginatorType = Union[str, BasePaginator]
-PaginatorConfigType = TypeVar("PaginatorConfigType", bound=Dict[str, Any])
+PaginatorConfigDict = Dict[str, Any]
+PaginatorType = Union[Any, BasePaginator, str, PaginatorConfigDict]
 
 
 class AuthConfig(TypedDict, total=False):
@@ -122,7 +121,7 @@ def get_paginator_class(paginator_type: str) -> Type[BasePaginator]:
 
 
 def create_paginator(
-    paginator_config: Union[str, PaginatorConfigType]
+    paginator_config: PaginatorType
 ) -> Optional[BasePaginator]:
     if isinstance(paginator_config, BasePaginator):
         return paginator_config
