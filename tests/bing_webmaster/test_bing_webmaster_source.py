@@ -27,8 +27,8 @@ def test_load_page_stats(destination_name: str) -> None:
     pipeline = _make_pipeline(destination_name)
     table_name = "bing_page_stats"
 
-    # TODO replace with domain that the CI has access to, e.g. dlthub.com
-    data = source(site_urls=["satellite.me"])
+    # Note: If this test fails: replace this with a site_url you can access
+    data = source(site_urls=["dlthub.com"])
 
     info = pipeline.run(data.with_resources("page_stats"))
     assert_load_info(info)
@@ -63,12 +63,10 @@ def test_load_page_query_stats(destination_name: str) -> None:
     table_name = "bing_page_query_stats"
 
     data = source(
+        # Note: If this test fails: replace this with site_url and pages you can access
         site_url_pages=[
-            # TODO replace with actual pages that the CI has access to, e.g.
-            # {"site_url": "dlthub.com", "page": "https://dlthub.com/docs/intro"},
-            # {"site_url": "dlthub.com", "page":  "https://dlthub.com/why/"}
-            {"site_url": "sipgate.de", "page": "https://www.sipgate.de/preise"},
-            {"site_url": "sipgate.de", "page": "https://www.sipgate.de/app"},
+            {"site_url": "dlthub.com", "page": "https://dlthub.com/docs/intro"},
+            {"site_url": "dlthub.com", "page": "https://dlthub.com/why/"},
         ]
     )
     info = pipeline.run(data.with_resources("page_query_stats"))
