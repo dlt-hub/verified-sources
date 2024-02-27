@@ -36,7 +36,12 @@ class RESTClient:
         self.base_url = base_url
         self.headers = headers
         self.auth = auth
-        self.session = request_client.session
+        if session:
+            self.session = session
+        elif request_client:
+            self.session = request_client.session
+        else:
+            self.session = Client().session
         self.paginator = paginator if paginator else UnspecifiedPaginator()
         self.ignore_http_status_codes = ignore_http_status_codes
 
