@@ -38,7 +38,7 @@ class MySpider(Spider):
 class TestCrawlerProcess(CrawlerRunner):
     def crawl(
         self,
-        crawler_or_spidercls: Union[Type[Spider] | str | Crawler],
+        crawler_or_spidercls: Union[Type[Spider], str, Crawler],
         *args: Any,
         **kwargs: Any,
     ) -> Deferred:
