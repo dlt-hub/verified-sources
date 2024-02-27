@@ -2,7 +2,6 @@ import os
 import typing as t
 
 import dlt
-from dlt.common import logger
 from dlt.common.configuration.inject import with_config
 from dlt.common.configuration.specs.base_configuration import (
     configspec,
@@ -10,13 +9,11 @@ from dlt.common.configuration.specs.base_configuration import (
 )
 
 
-from scrapy import Item, Spider  # type: ignore
-from scrapy.exceptions import CloseSpider  # type: ignore
-from scrapy.crawler import CrawlerProcess  # type: ignore
+from scrapy import Spider  # type: ignore
 
 from .queue import ScrapingQueue
 from .settings import SOURCE_SCRAPY_QUEUE_SIZE, SOURCE_SCRAPY_SETTINGS
-from .runner import ScrapingHost, PipelineRunner, ScrapyRunner
+from .runner import ScrapingHost, PipelineRunner, ScrapyRunner, Signals
 from .types import AnyDict  # type: ignore
 
 
@@ -29,7 +26,7 @@ class ScrapingConfig(BaseConfiguration):
     queue_size: t.Optional[int] = SOURCE_SCRAPY_QUEUE_SIZE
 
     # result wait timeout for our queue
-    queue_result_timeout: t.Optional[int] = 1
+    queue_result_timeout: t.Optional[float] = 1.0
 
     # List of start urls
     start_urls: t.List[str] = None
@@ -63,7 +60,7 @@ def create_pipeline_runner(
     spider: t.Type[Spider],
     batch_size: int = dlt.config.value,
     queue_size: int = dlt.config.value,
-    queue_result_timeout: int = dlt.config.value,
+    queue_result_timeout: float = dlt.config.value,
     scrapy_settings: t.Optional[AnyDict] = None,
 ) -> ScrapingHost:
     queue = ScrapingQueue(
@@ -72,32 +69,21 @@ def create_pipeline_runner(
         read_timeout=queue_result_timeout,
     )
 
-    def on_item_scraped(item: Item, crawler: CrawlerProcess) -> None:
-        if not queue.is_closed:
-            queue.put(item)  # type: ignore
-        else:
-            logger.error("Queue is closed")
-            raise CloseSpider("Queue is closed")
-
-    def on_engine_stopped() -> None:
-        queue.join()
-        queue.close()
-
-    settings = {
-        **SOURCE_SCRAPY_SETTINGS,
-        "LOG_LEVEL": logger.log_level(),
-    }
+    signals = Signals(
+        pipeline_name=pipeline.pipeline_name,
+        queue=queue,
+    )
 
     # Just to simple merge
+    settings = {**SOURCE_SCRAPY_SETTINGS}
     if scrapy_settings:
-        settings = {**settings, **scrapy_settings}
+        settings = {**scrapy_settings}
 
     scrapy_runner = ScrapyRunner(
         spider=spider,
         start_urls=resolve_start_urls(),
+        signals=signals,
         settings=settings,
-        on_item_scraped=on_item_scraped,
-        on_engine_stopped=on_engine_stopped,
     )
 
     pipeline_runner = PipelineRunner(
