@@ -59,7 +59,7 @@ class AuthConfig(TypedDict, total=False):
 
 class ClientConfig(TypedDict, total=False):
     base_url: str
-    auth: Optional[AuthConfig]
+    auth: Optional[Union[Any, AuthConfig]]
     paginator: Optional[PaginatorType]
     request_client: Optional[Client]
     ignore_http_status_codes: Optional[List[int]]
