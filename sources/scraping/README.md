@@ -4,19 +4,21 @@ description: dlt source to scrape web content
 keywords: [scrapy, scraping, spiders, crawler, crawling]
 ---
 
-# 🕸️ Scraping source
+# Scraping
 
 Scraping source allows you to scrape content from web and uses [Scrapy](https://doc.scrapy.org/en/latest/)
 to enable this capability.
 
-It is possible to access and manipulate a scraping resource when using advanced scraping pipeline builder.
+It is possible to access and manipulate a scraping resource via (please see `scraping_pipeline.py`)
 
-| Name      | Description                                                                              |
-| --------- | ---------------------------------------------------------------------------------------- |
-| issues    | individual pieces of work to be completed                                                |
-| users     | administrator of a given project                                                         |
-| workflows | the key aspect of managing and tracking the progress of issues or tasks within a project |
-| projects  | a collection of tasks that need to be completed to achieve a certain outcome             |
+1. `on_before_start` callback which will receive a `DltResource` as the only argument,
+2. The advanced scraping pipeline builder `scraping.helpers.create_pipeline_runner`
+
+## Initialize the pipeline
+
+```bash
+dlt init scraping duckdb
+```
 
 ## 🎲 Configuration
 
@@ -26,15 +28,19 @@ It is possible to provide configuration via `.dlt/config.toml` below you can see
 [sources.scraping]
 # Batch size - how many scraped results to collect
 # before dispatching to DLT pipeline
-batch_size = 20
+batch_size = 100
 # Defaul queue size
 queue_size = 3000
 # How log to wait before exiting
-queue_result_timeout = 5
+queue_result_timeout = 3.0
 start_urls = [
     "https://quotes.toscrape.com/page/1/"
 ]
+start_urls_file="/path/to/urls.txt"
 ```
+
+When both `start_urls` and `start_urls_file` they will be merged and deduplicated so Scrapy
+gets a unique set of `start_urls`.
 
 ## 🏎️ Running the pipeline
 
