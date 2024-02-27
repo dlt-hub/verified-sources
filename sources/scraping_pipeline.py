@@ -29,7 +29,9 @@ def scrape_quotes() -> None:
     pipeline = dlt.pipeline(
         pipeline_name="scraping",
         destination="duckdb",
+        dataset_name="quotes",
     )
+
     run_pipeline(
         pipeline,
         MySpider,
@@ -44,9 +46,8 @@ def scrape_quotes_advanced_runner() -> None:
         destination="duckdb",
     )
     scraping_host = create_pipeline_runner(pipeline, MySpider, batch_size=10)
-    scrapy_resource = scraping_host.pipeline_runner.scrapy_resource
-    scraping_host.pipeline_runner.scrapy_resource = scrapy_resource.add_limit(20)
-    scraping_host.run(dataset_name="quotes")
+    scraping_host.pipeline_runner.scrapy_resource.add_limit(2)
+    scraping_host.run(dataset_name="quotes", write_disposition="replace")
 
 
 if __name__ == "__main__":
