@@ -43,7 +43,7 @@ def resolve_start_urls(
     """
     urls = set()
     if os.path.exists(start_urls_file):
-        with open(start_urls_file) as fp:
+        with open(start_urls_file, encoding="utf-8") as fp:
             urls = {line for line in fp.readlines() if str(line).strip()}
 
     if start_urls:
