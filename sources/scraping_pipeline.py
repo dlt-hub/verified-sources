@@ -72,6 +72,6 @@ def scrape_quotes_advanced_runner() -> None:
 
 
 if __name__ == "__main__":
-    # scrape_quotes()
-    scrape_quotes_callback_access_resource()
+    scrape_quotes()
+    # scrape_quotes_callback_access_resource()
     # scrape_quotes_advanced_runner()
