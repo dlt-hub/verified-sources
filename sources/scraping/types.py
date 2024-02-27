@@ -1,8 +1,10 @@
 import typing as t
 
+from typing_extensions import ParamSpec
+
 AnyDict = t.Dict[str, t.Any]
 
-P = t.ParamSpec("P")
+P = ParamSpec("P")
 
 
 class Runnable(t.Protocol):
