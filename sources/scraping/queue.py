@@ -1,5 +1,4 @@
 import typing as t
-
 from queue import Empty, Queue
 
 from dlt.common import logger
@@ -57,7 +56,6 @@ class ScrapingQueue(_Queue):
                 # Mark task as completed
                 self.task_done()
             except Empty:
-                logger.info(f"Queue has been empty for {self.read_timeout}s...")
                 if batch:
                     yield batch
                     batch = []
@@ -69,6 +67,12 @@ class ScrapingQueue(_Queue):
                     yield batch
 
                 break
+
+    def stream(self) -> t.Iterator[t.Any]:
+        try:
+            yield from self.get_batches()
+        except GeneratorExit:
+            self.close()
 
     def close(self) -> None:
         self._is_closed = True
