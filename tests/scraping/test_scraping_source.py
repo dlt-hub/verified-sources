@@ -61,7 +61,7 @@ def test_queue_closed_if_pipeline_raises_an_exception(mocker):
     )
 
     spy_on_queue_close = mocker.spy(sources.scraping.queue.ScrapingQueue, "close")
-    with mocker.patch("dlt.pipeline.Pipeline.run", side_effect=OSError("bla")):
+    with mocker.patch("dlt.Pipeline.run", side_effect=OSError("bla")):
         run_pipeline(pipeline, MySpider, dataset_name="quotes")
         spy_on_queue_close.assert_called()
 
