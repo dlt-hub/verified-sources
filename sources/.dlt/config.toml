@@ -64,7 +64,7 @@ subdomain="dlthub-test"
 [sources.scraping]
 batch_size = 100
 queue_size = 3000
-queue_result_timeout = 5
+queue_result_timeout = 3.0
 start_urls_file="/path/to/urls.txt"
 start_urls = [
     "https://quotes.toscrape.com/page/1/"
