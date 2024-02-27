@@ -110,7 +110,7 @@ class PipelineRunner(Runnable):
 
         logger.info(f"Resource name: {resource_name}")
 
-        self.scrapy_resource = dlt.resource(
+        self.scraping_resource = dlt.resource(
             # Queue get_batches is a generator so we can
             # pass it to pipeline.run and dlt will handle the rest.
             self.queue.stream(),
@@ -140,7 +140,7 @@ class PipelineRunner(Runnable):
 
         def run() -> None:
             try:
-                self.pipeline.run(self.scrapy_resource, **kwargs)
+                self.pipeline.run(self.scraping_resource, **kwargs)
             except Exception:
                 logger.error("Error during pipeline.run call, closing the queue")
                 raise

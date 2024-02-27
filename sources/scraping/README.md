@@ -1,18 +1,22 @@
+---
+title: Scraping with DLT
+description: dlt source to scrape web content
+keywords: [scrapy, scraping, spiders, crawler, crawling]
+---
+
 # 🕸️ Scraping source
 
 Scraping source allows you to scrape content from web and uses [Scrapy](https://doc.scrapy.org/en/latest/)
 to enable this capability.
 
-## 🧠 How it works?
+It is possible to access and manipulate a scraping resource when using advanced scraping pipeline builder.
 
-Under the hood we run DLT [pipeline](https://dlthub.com/docs/api_reference/pipeline) in a separate thread while scrapy is running in the main thread.
-
-Communication between the two is done via the queue, where
-
-* Spider is responsible to put the results in the queue,
-* DLT resource collects and batches results from the queue.
-
-![simple diagram](./diagram.png)
+| Name      | Description                                                                              |
+| --------- | ---------------------------------------------------------------------------------------- |
+| issues    | individual pieces of work to be completed                                                |
+| users     | administrator of a given project                                                         |
+| workflows | the key aspect of managing and tracking the progress of issues or tasks within a project |
+| projects  | a collection of tasks that need to be completed to achieve a certain outcome             |
 
 ## 🎲 Configuration
 
@@ -49,24 +53,17 @@ NOTE: you might need to set up `streamlit`, `pip install streamlit`
 dlt pipeline <pipeline_name> show
 ```
 
-## 🕷️ Using custom spider
 
-You just need to implement a new spider and pass it to `create_pipeline_runner(spider=MySpider)`,
-note it has to be a class not an instance of it.
+## 🧠 How it works?
 
+Under the hood we run DLT [pipeline](https://dlthub.com/docs/api_reference/pipeline) in a separate thread while scrapy is running in the main thread.
 
-## 💈 Using custom queue
+Communication between the two is done via the queue, where
 
-You can provide custom queue to `build_scrapy_source` via `queue=CustomQueue` parameter and it is up to you
-to initialize and prepare it accordring your requriements.
+* Spider is responsible to put the results in the queue,
+* DLT resource collects and batches results from the queue.
 
-Also please note that we have generic typing definition of queue in `types.py`
-
-```py
-class BaseQueue(_Queue[T]):
-    pass
-```
-
+![simple diagram](./diagram.png)
 
 <p align="center"><strong>Enjoy it!<strong></p>
 <hr>

@@ -1,6 +1,7 @@
 from typing import Any
 
 import dlt
+from dlt.sources import DltResource
 from scrapy import Spider  # type: ignore
 from scrapy.http import Response  # type: ignore
 
@@ -40,16 +41,37 @@ def scrape_quotes() -> None:
     )
 
 
+def scrape_quotes_callback_access_resource() -> None:
+    pipeline = dlt.pipeline(
+        pipeline_name="scraping_resource_callback",
+        destination="duckdb",
+        dataset_name="quotes",
+    )
+
+    def on_before_start(res: DltResource):
+        res.add_limit(2)
+
+    run_pipeline(
+        pipeline,
+        MySpider,
+        batch_size=10,
+        scrapy_settings={},
+        on_before_start=on_before_start,
+        write_disposition="replace",
+    )
+
+
 def scrape_quotes_advanced_runner() -> None:
     pipeline = dlt.pipeline(
-        pipeline_name="scraping_advanced",
+        pipeline_name="scraping_advanced_direct",
         destination="duckdb",
     )
     scraping_host = create_pipeline_runner(pipeline, MySpider, batch_size=10)
-    scraping_host.pipeline_runner.scrapy_resource.add_limit(2)
+    scraping_host.pipeline_runner.scraping_resource.add_limit(2)
     scraping_host.run(dataset_name="quotes", write_disposition="replace")
 
 
 if __name__ == "__main__":
-    scrape_quotes()
+    # scrape_quotes()
+    scrape_quotes_callback_access_resource()
     # scrape_quotes_advanced_runner()

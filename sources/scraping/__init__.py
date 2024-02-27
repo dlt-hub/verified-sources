@@ -6,6 +6,8 @@ import inspect
 import typing as t
 
 import dlt
+
+from dlt.sources import DltResource
 from dlt.common.source import _SOURCES, SourceInfo
 
 from scrapy import Spider
@@ -18,7 +20,11 @@ def run_pipeline(
     pipeline: dlt.Pipeline,
     spider: t.Type[Spider],
     *args: P.args,
+    on_before_start: t.Callable[[DltResource], None] = None,
     scrapy_settings: t.Optional[AnyDict] = None,
+    batch_size: t.Optional[int] = None,
+    queue_size: t.Optional[int] = None,
+    queue_result_timeout: t.Optional[float] = None,
     **kwargs: P.kwargs,
 ) -> None:
     """Simple runner for the scraping pipeline
@@ -38,11 +44,24 @@ def run_pipeline(
         loader_file_format: TLoaderFileFormat = None
         ```
     """
-    scraping_host = create_pipeline_runner(
-        pipeline,
-        spider,
-        scrapy_settings=scrapy_settings,
-    )
+    options = {}
+    if scrapy_settings:
+        options["scrapy_settings"] = scrapy_settings
+
+    if batch_size:
+        options["batch_size"] = batch_size
+
+    if queue_size:
+        options["queue_size"] = queue_size
+
+    if queue_result_timeout:
+        options["queue_result_timeout"] = queue_result_timeout
+
+    scraping_host = create_pipeline_runner(pipeline, spider, **options)
+
+    if on_before_start:
+        on_before_start(scraping_host.pipeline_runner.scraping_resource)
+
     scraping_host.run(*args, **kwargs)
 
 
