@@ -27,6 +27,7 @@ from dlt.extract.incremental import Incremental
 from dlt.extract.source import DltResource, DltSource
 from dlt.extract.typing import TTableHintTemplate
 from dlt.common import logger
+from dlt.sources.helpers.requests.retry import Client
 
 from .auth import BearerTokenAuth, AuthBase
 from .client import RESTClient
@@ -60,6 +61,8 @@ class ClientConfig(TypedDict, total=False):
     base_url: str
     auth: Optional[AuthConfig]
     paginator: Optional[PaginatorType]
+    request_client: Optional[Client]
+    ignore_http_status_codes: Optional[List[int]]
 
 
 class IncrementalConfig(TypedDict, total=False):
@@ -121,9 +124,7 @@ def get_paginator_class(paginator_type: str) -> Type[BasePaginator]:
         )
 
 
-def create_paginator(
-    paginator_config: PaginatorType
-) -> Optional[BasePaginator]:
+def create_paginator(paginator_config: PaginatorType) -> Optional[BasePaginator]:
     if isinstance(paginator_config, BasePaginator):
         return paginator_config
 
@@ -151,6 +152,8 @@ def make_client_config(config: Dict[str, Any]) -> ClientConfig:
         "base_url": client_config.get("base_url"),
         "auth": create_auth(client_config.get("auth")),
         "paginator": create_paginator(client_config.get("paginator")),
+        "request_client": client_config.get("request_client"),
+        "ignore_http_status_codes": client_config.get("ignore_http_status_codes"),
     }
 
 
@@ -477,6 +480,7 @@ def find_resolved_params(endpoint_config: Endpoint) -> List[ResolvedParam]:
         if isinstance(value, ResolveConfig)
         or (isinstance(value, dict) and value.get("type") == "resolve")
     ]
+
 
 def check_connection(
     source: DltSource,

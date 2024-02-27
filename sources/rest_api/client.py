@@ -1,17 +1,17 @@
-from typing import Optional, Dict, Any, Generator, Literal
+from typing import Optional, Dict, Any, Generator, Literal, Sequence
 import copy
 
 from requests.auth import AuthBase
 from requests import Session as BaseSession
 
-
 from dlt.common import logger
-from dlt.sources.helpers.requests import client
+from dlt.sources.helpers.requests.retry import Client
 
 from .paginators import BasePaginator, UnspecifiedPaginator
 from .detector import create_paginator
 
 from .utils import join_url
+
 
 class RESTClient:
     """A generic REST client for making requests to an API.
@@ -31,13 +31,22 @@ class RESTClient:
         headers: Optional[Dict[str, str]] = None,
         auth: Optional[AuthBase] = None,
         paginator: Optional[BasePaginator] = None,
-        session: BaseSession = None
+        session: BaseSession = None,
+        request_client: Client = None,
+        ignore_http_status_codes: Optional[Sequence[int]] = None,
     ) -> None:
         self.base_url = base_url
         self.headers = headers
         self.auth = auth
-        self.session = session or client.session
+        if session:
+            self.session = session
+        elif request_client:
+            self.session = request_client.session
+        else:
+            self.session = Client().session
+
         self.paginator = paginator if paginator else UnspecifiedPaginator()
+        self.ignore_http_status_codes = ignore_http_status_codes or []
 
     def make_request(self, path="", method="get", params=None, json=None):
         if path.startswith("http"):
@@ -58,7 +67,6 @@ class RESTClient:
             json=json if method.lower() in ["post", "put"] else None,
             auth=self.auth,
         )
-        response.raise_for_status()
         return response
 
     def get(self, path="", params=None):
@@ -87,6 +95,9 @@ class RESTClient:
             response = self.make_request(
                 path=path, method=method, params=params, json=json
             )
+            if response.status_code in self.ignore_http_status_codes:
+                logger.warning(f"Request returned status code {response.status_code}")
+                response.json = lambda: None
 
             if isinstance(paginator, UnspecifiedPaginator):
                 # Detect suitable paginator and it's params
