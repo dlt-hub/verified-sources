@@ -7,27 +7,16 @@ from typing import (
     Dict,
     Tuple,
     List,
-    NamedTuple,
     Optional,
-    TypedDict,
     Union,
 )
 import graphlib
 
 import dlt
 from dlt.common.validation import validate_dict
-from dlt.common.schema.typing import (
-    TColumnNames,
-    # TSchemaContract,
-    TTableFormat,
-    TTableSchemaColumns,
-    TWriteDisposition,
-)
 from dlt.extract.incremental import Incremental
 from dlt.extract.source import DltResource, DltSource
-from dlt.extract.typing import TTableHintTemplate
 from dlt.common import logger
-from dlt.sources.helpers.requests.retry import Client
 
 from .auth import BearerTokenAuth, AuthBase
 from .client import RESTClient
@@ -37,6 +26,17 @@ from .paginators import (
     JSONResponsePaginator,
     UnspecifiedPaginator,
     SinglePagePaginator,
+)
+from .typing import (
+    AuthConfig,
+    ClientConfig,
+    IncrementalConfig,
+    PaginatorType,
+    ResolveConfig,
+    ResolvedParam,
+    Endpoint,
+    EndpointResource,
+    RESTAPIConfig,
 )
 from .utils import remove_key, deep_merge
 
@@ -49,68 +49,6 @@ PAGINATOR_MAP = {
 }
 
 
-PaginatorConfigDict = Dict[str, Any]
-PaginatorType = Union[Any, BasePaginator, str, PaginatorConfigDict]
-
-
-class AuthConfig(TypedDict, total=False):
-    token: str
-
-
-class ClientConfig(TypedDict, total=False):
-    base_url: str
-    auth: Optional[Union[Any, AuthConfig]]
-    paginator: Optional[PaginatorType]
-    request_client: Optional[Client]
-    ignore_http_status_codes: Optional[List[int]]
-
-
-class IncrementalConfig(TypedDict, total=False):
-    cursor_path: str
-    initial_value: str
-    param: str
-
-
-class ResolveConfig(NamedTuple):
-    resource_name: str
-    field_path: str
-
-
-class ResolvedParam(NamedTuple):
-    param_name: str
-    resolve_config: ResolveConfig
-
-
-class Endpoint(TypedDict, total=False):
-    path: Optional[str]
-    method: Optional[str]
-    params: Optional[Dict[str, Any]]
-    json: Optional[Dict[str, Any]]
-    paginator: Optional[PaginatorType]
-
-
-# TODO: check why validate_dict does not respect total=False
-class EndpointResource(TypedDict, total=False):
-    name: TTableHintTemplate[str]
-    endpoint: Optional[Union[str, Endpoint]]
-    write_disposition: Optional[TTableHintTemplate[TWriteDisposition]]
-    parent: Optional[TTableHintTemplate[str]]
-    columns: Optional[TTableHintTemplate[TTableSchemaColumns]]
-    primary_key: Optional[TTableHintTemplate[TColumnNames]]
-    merge_key: Optional[TTableHintTemplate[TColumnNames]]
-    incremental: Optional[Incremental[Any]]
-    table_format: Optional[TTableHintTemplate[TTableFormat]]
-    include_from_parent: Optional[List[str]]
-
-
-class FlexibleEndpointResource(EndpointResource, total=False):
-    name: Optional[TTableHintTemplate[str]]
-
-
-class RESTAPIConfig(TypedDict):
-    client: ClientConfig
-    resource_defaults: Optional[FlexibleEndpointResource]
-    resources: List[Union[str, EndpointResource]]
 
 
 def get_paginator_class(paginator_type: str) -> Type[BasePaginator]:
