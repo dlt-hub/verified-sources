@@ -49,7 +49,7 @@ def mock_api_server():
     with requests_mock.Mocker() as m:
         # Posts data
         m.get(
-            re.compile(r"https://api\.example\.com/posts(\?page=\d+)?$"),
+            re.compile(f"{MOCK_BASE_URL}/posts(\?page=\d+)?$"),
             text=lambda request, context: paginated_callback(
                 request, context, generate_posts(), f"{MOCK_BASE_URL}/posts"
             ),
@@ -57,7 +57,7 @@ def mock_api_server():
 
         # Comments data for each post
         m.get(
-            re.compile(r"https://api\.example\.com/posts/(\d+)/comments"),
+            re.compile(f"{MOCK_BASE_URL}/posts/(\d+)/comments"),
             text=lambda request, context: paginated_callback(
                 request,
                 context,
@@ -71,6 +71,6 @@ def mock_api_server():
             post_id = request.url.split("/")[-1]
             return json.dumps({"id": post_id, "body": f"Post body {post_id}"})
 
-        m.get(re.compile(r"https://api\.example\.com/posts/\d+$"), text=detail_callback)
+        m.get(re.compile(f"{MOCK_BASE_URL}/posts/\d+$"), text=detail_callback)
 
         yield m
