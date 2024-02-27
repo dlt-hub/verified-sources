@@ -1,5 +1,5 @@
 import dlt
-from rest_api import rest_api_source
+from rest_api import check_connection, rest_api_source
 
 
 def load_github():
@@ -9,63 +9,75 @@ def load_github():
         dataset_name="rest_api_data",
     )
 
-    github_source = rest_api_source(
-        {
-            "client": {
-                "base_url": "https://api.github.com/repos/dlt-hub/dlt/",
-                "auth": {
-                    "token": dlt.secrets["github_token"],
+    github_config = {
+        "client": {
+            "base_url": "https://api.github.com/repos/dlt-hub/dlt/",
+            "auth": {
+                "token": dlt.secrets["github_token"],
+            },
+        },
+        # Default params for all resouces and their endpoints
+        "resource_defaults": {
+            "primary_key": "id",
+            "write_disposition": "merge",
+            "endpoint": {
+                "params": {
+                    "per_page": 100,
                 },
             },
-            # Default params for all resouces and their endpoints
-            "resource_defaults": {
-                "primary_key": "id",
-                "write_disposition": "merge",
+        },
+        "resources": [
+            # "pulls", <- This is both name and endpoint path
+            # {
+            #     "name": "pulls",
+            #     "endpoint": "pulls",  # <- This is the endpoint path
+            # }
+            {
+                "name": "issues",
                 "endpoint": {
+                    "path": "issues",
                     "params": {
-                        "per_page": 100,
+                        "sort": "updated",
+                        "direction": "desc",
+                        "state": "open",
+                        "since": {
+                            "type": "incremental",
+                            "cursor_path": "updated_at",
+                            "initial_value": "2024-01-25T11:21:28Z",
+                        },
                     },
                 },
             },
-            "resources": [
-                # "pulls", <- This is both name and endpoint path
-                # {
-                #     "name": "pulls",
-                #     "endpoint": "pulls",  # <- This is the endpoint path
-                # }
-                {
-                    "name": "issues",
-                    "endpoint": {
-                        "path": "issues",
-                        "params": {
-                            "sort": "updated",
-                            "direction": "desc",
-                            "state": "open",
-                            "since": {
-                                "type": "incremental",
-                                "cursor_path": "updated_at",
-                                "initial_value": "2024-01-25T11:21:28Z",
-                            },
-                        },
+            {
+                "name": "issue_comments",
+                "endpoint": {
+                    "path": "issues/{issue_number}/comments",
+                    "params": {
+                        "issue_number": {
+                            "type": "resolve",
+                            "resource": "issues",
+                            "field": "number",
+                        }
                     },
                 },
-                {
-                    "name": "issue_comments",
-                    "endpoint": {
-                        "path": "issues/{issue_number}/comments",
-                        "params": {
-                            "issue_number": {
-                                "type": "resolve",
-                                "resource": "issues",
-                                "field": "number",
-                            }
-                        },
-                    },
-                    "include_from_parent": ["id"],
-                },
-            ],
-        }
-    )
+                "include_from_parent": ["id"],
+            },
+        ],
+    }
+
+    not_connecting_config = {
+        **github_config,
+        "client": {
+            "base_url": "https://api.github.com/repos/dlt-hub/dlt/",
+            "auth": {"token": "invalid token"},
+        },
+    }
+
+    not_connecting_gh_source = rest_api_source(not_connecting_config)
+    (can_connect, error_msg) = check_connection(not_connecting_gh_source, "issues")
+    assert not can_connect, "A miracle happened. Token should be invalid"
+
+    github_source = rest_api_source(github_config)
 
     load_info = pipeline.run(github_source)
     print(load_info)
@@ -99,6 +111,16 @@ def load_pokemon():
             ],
         }
     )
+
+    def check_network_and_authentication():
+        (can_connect, error_msg) = check_connection(
+            pokemon_source,
+            "not_existing_endpoint",
+        )
+        if not can_connect:
+            pass  # do something with the error message
+
+    check_network_and_authentication()
 
     load_info = pipeline.run(pokemon_source)
     print(load_info)
