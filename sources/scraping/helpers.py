@@ -13,7 +13,7 @@ from scrapy import Spider  # type: ignore
 from .queue import ScrapingQueue
 from .settings import SOURCE_SCRAPY_QUEUE_SIZE, SOURCE_SCRAPY_SETTINGS
 from .runner import ScrapingHost, PipelineRunner, ScrapyRunner, Signals
-from .types import AnyDict  # type: ignore
+from .types import AnyDict
 
 
 @configspec
@@ -62,7 +62,7 @@ def create_pipeline_runner(
     queue_result_timeout: float = dlt.config.value,
     scrapy_settings: t.Optional[AnyDict] = None,
 ) -> ScrapingHost:
-    queue = ScrapingQueue(
+    queue = ScrapingQueue(  # type: ignore
         maxsize=queue_size,
         batch_size=batch_size,
         read_timeout=queue_result_timeout,

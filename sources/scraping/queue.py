@@ -22,7 +22,7 @@ class QueueClosedError(Exception):
     pass
 
 
-class ScrapingQueue(_Queue):
+class ScrapingQueue(_Queue[T]):
     def __init__(
         self,
         maxsize: int = 0,

@@ -48,7 +48,7 @@ def scrape_quotes_callback_access_resource() -> None:
         dataset_name="quotes",
     )
 
-    def on_before_start(res: DltResource):
+    def on_before_start(res: DltResource) -> None:
         res.add_limit(2)
 
     run_pipeline(

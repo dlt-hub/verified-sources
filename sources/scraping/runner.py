@@ -3,7 +3,7 @@ import typing as t
 
 import dlt
 from dlt.common import logger
-from pydispatch import dispatcher
+from pydispatch import dispatcher  # type: ignore
 
 from scrapy import signals, Item, Spider  # type: ignore
 from scrapy.crawler import CrawlerProcess  # type: ignore
@@ -12,15 +12,17 @@ from scrapy.exceptions import CloseSpider  # type: ignore
 from .types import AnyDict, Runnable, P
 from .queue import ScrapingQueue
 
+T = t.TypeVar("T")
+
 
 class Signals:
-    def __init__(self, pipeline_name: str, queue: ScrapingQueue) -> None:
+    def __init__(self, pipeline_name: str, queue: ScrapingQueue[T]) -> None:
         self.queue = queue
         self.pipeline_name = pipeline_name
 
     def on_item_scraped(self, item: Item) -> None:
         if not self.queue.is_closed:
-            self.queue.put(item)  # type: ignore
+            self.queue.put(item)
         else:
             logger.info(
                 "Queue is closed ",
@@ -28,7 +30,7 @@ class Signals:
             )
             raise CloseSpider("Queue is closed")
 
-    def on_spider_opened(self):
+    def on_spider_opened(self) -> None:
         if self.queue.is_closed:
             raise CloseSpider("Queue is closed")
 
@@ -37,7 +39,7 @@ class Signals:
         self.queue.join()
         self.queue.close()
 
-    def __enter__(self):
+    def __enter__(self) -> None:
         # There might be an edge case when Scrapy opens a new spider but
         # the queue has already been closed thus rendering endless wait
         dispatcher.connect(self.on_spider_opened, signals.spider_opened)
@@ -49,7 +51,7 @@ class Signals:
         # Once crawling engine stops we would like to know about it as well.
         dispatcher.connect(self.on_engine_stopped, signals.engine_stopped)
 
-    def __exit__(self, exc_type, exc_val, exc_tb):
+    def __exit__(self, exc_type: t.Any, exc_val: t.Any, exc_tb: t.Any) -> None:
         dispatcher.disconnect(self.on_spider_opened, signals.spider_opened)
         dispatcher.disconnect(self.on_item_scraped, signals.item_scraped)
         dispatcher.disconnect(self.on_engine_stopped, signals.engine_stopped)
@@ -98,7 +100,7 @@ class PipelineRunner(Runnable):
     def __init__(
         self,
         pipeline: dlt.Pipeline,
-        queue: ScrapingQueue,
+        queue: ScrapingQueue[T],
     ) -> None:
         self.pipeline = pipeline
         self.queue = queue
@@ -117,7 +119,7 @@ class PipelineRunner(Runnable):
             name=resource_name,
         )
 
-    def run(  # type: ignore[override]
+    def run(
         self,
         *args: P.args,
         **kwargs: P.kwargs,
@@ -140,7 +142,7 @@ class PipelineRunner(Runnable):
 
         def run() -> None:
             try:
-                self.pipeline.run(self.scraping_resource, **kwargs)
+                self.pipeline.run(self.scraping_resource, **kwargs)  # type: ignore[arg-type]
             except Exception:
                 logger.error("Error during pipeline.run call, closing the queue")
                 raise
@@ -157,7 +159,7 @@ class ScrapingHost:
 
     def __init__(
         self,
-        queue: ScrapingQueue,
+        queue: ScrapingQueue[T],
         scrapy_runner: ScrapyRunner,
         pipeline_runner: PipelineRunner,
     ) -> None:

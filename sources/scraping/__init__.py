@@ -10,13 +10,13 @@ import dlt
 from dlt.sources import DltResource
 from dlt.common.source import _SOURCES, SourceInfo
 
-from scrapy import Spider
+from scrapy import Spider  # type: ignore
 
 from .helpers import ScrapingConfig, create_pipeline_runner
 from .types import P, AnyDict
 
 
-def run_pipeline(
+def run_pipeline(  # type: ignore[valid-type]
     pipeline: dlt.Pipeline,
     spider: t.Type[Spider],
     *args: P.args,
@@ -44,7 +44,7 @@ def run_pipeline(
         loader_file_format: TLoaderFileFormat = None
         ```
     """
-    options = {}
+    options: AnyDict = {}
     if scrapy_settings:
         options["scrapy_settings"] = scrapy_settings
 
