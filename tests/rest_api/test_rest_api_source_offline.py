@@ -11,7 +11,7 @@ from sources.rest_api import (
     Endpoint,
 )
 
-from .invalid_configs import INVALID_CONFIGS
+from .source_configs import VALID_CONFIGS, INVALID_CONFIGS
 
 
 def test_test_load_mock_api(mock_api_server):
@@ -141,3 +141,8 @@ def test_test_load_mock_api_typeddict_config(mock_api_server):
 def test_invalid_configurations(expected_message, exception, invalid_config):
     with pytest.raises(exception, match=expected_message):
         rest_api_source(invalid_config)
+
+
+@pytest.mark.parametrize("valid_config", VALID_CONFIGS)
+def test_valid_configurations(valid_config):
+    rest_api_source(valid_config)

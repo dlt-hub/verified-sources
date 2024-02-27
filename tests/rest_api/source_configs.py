@@ -1,5 +1,7 @@
 from collections import namedtuple
 from dlt.common.exceptions import DictValidationException
+from sources.rest_api.paginators import SinglePagePaginator
+
 
 ConfigTest = namedtuple("ConfigTest", ["expected_message", "exception", "config"])
 
@@ -36,4 +38,57 @@ INVALID_CONFIGS = [
             "resources": ["posts"],
         },
     ),
+]
+
+
+VALID_CONFIGS = [
+    {
+        "client": {"base_url": "https://api.example.com"},
+        "resources": [
+            "posts",
+            {
+                "name": "post_comments",
+                "endpoint": {
+                    "path": "posts/{post_id}/comments",
+                    "params": {
+                        "post_id": {
+                            "type": "resolve",
+                            "resource": "posts",
+                            "field": "id",
+                        },
+                    },
+                },
+            },
+        ],
+    },
+    {
+        "client": {"base_url": "https://api.example.com"},
+        "resources": [
+            {
+                "name": "posts",
+                "endpoint": {
+                    "path": "posts",
+                    "params": {
+                        "limit": 100,
+                    },
+                    "paginator": "json_links",
+                },
+            },
+        ],
+    },
+    {
+        "client": {"base_url": "https://api.example.com"},
+        "resources": [
+            {
+                "name": "posts",
+                "endpoint": {
+                    "path": "posts",
+                    "params": {
+                        "limit": 1,
+                    },
+                    "paginator": SinglePagePaginator(),
+                },
+            },
+        ],
+    },
 ]
