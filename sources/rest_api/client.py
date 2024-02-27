@@ -29,7 +29,7 @@ class RESTClient:
         headers: Optional[Dict[str, str]] = None,
         auth: Optional[AuthBase] = None,
         paginator: Optional[BasePaginator] = None,
-        # session: BaseSession = None
+        session: BaseSession = None
         request_client: Client = None,
         ignore_http_status_codes: Optional[Sequence[int]] = [],
     ) -> None:
