@@ -7,9 +7,52 @@ from pydispatch import dispatcher
 
 from scrapy import signals, Item, Spider  # type: ignore
 from scrapy.crawler import CrawlerProcess  # type: ignore
+from scrapy.exceptions import CloseSpider  # type: ignore
 
 from .types import AnyDict, Runnable, P
 from .queue import ScrapingQueue
+
+
+class Signals:
+    def __init__(self, pipeline_name: str, queue: ScrapingQueue) -> None:
+        self.queue = queue
+        self.pipeline_name = pipeline_name
+
+    def on_item_scraped(self, item: Item) -> None:
+        if not self.queue.is_closed:
+            self.queue.put(item)  # type: ignore
+        else:
+            logger.info(
+                "Queue is closed ",
+                extra={"pipeline_name": self.pipeline_name},
+            )
+            raise CloseSpider("Queue is closed")
+
+    def on_spider_opened(self):
+        if self.queue.is_closed:
+            raise CloseSpider("Queue is closed")
+
+    def on_engine_stopped(self) -> None:
+        logger.info(f"Crawling engine stopped for pipeline={self.pipeline_name}")
+        self.queue.join()
+        self.queue.close()
+
+    def __enter__(self):
+        # There might be an edge case when Scrapy opens a new spider but
+        # the queue has already been closed thus rendering endless wait
+        dispatcher.connect(self.on_spider_opened, signals.spider_opened)
+
+        # We want to receive on_item_scraped callback from
+        # outside so we don't have to know about any queue instance.
+        dispatcher.connect(self.on_item_scraped, signals.item_scraped)
+
+        # Once crawling engine stops we would like to know about it as well.
+        dispatcher.connect(self.on_engine_stopped, signals.engine_stopped)
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        dispatcher.disconnect(self.on_spider_opened, signals.spider_opened)
+        dispatcher.disconnect(self.on_item_scraped, signals.item_scraped)
+        dispatcher.disconnect(self.on_engine_stopped, signals.engine_stopped)
 
 
 class ScrapyRunner(Runnable):
@@ -20,45 +63,30 @@ class ScrapyRunner(Runnable):
         spider: t.Type[Spider],
         start_urls: t.List[str],
         settings: AnyDict,
-        on_item_scraped: t.Callable[[Item, CrawlerProcess], None],
-        on_engine_stopped: t.Callable[[], None],
+        signals: Signals,
     ) -> None:
         self.spider = spider
-        self.settings = settings
         self.start_urls = start_urls
-        self.on_item_scraped = on_item_scraped
-        self.on_engine_stopped = on_engine_stopped
+        self.crawler = CrawlerProcess(settings=settings)
+        self.signals = signals
 
     def run(self, *args: P.args, **kwargs: P.kwargs) -> t.Any:
-        crawler = CrawlerProcess(settings=self.settings)
-        crawler.crawl(
+        self.crawler.crawl(
             self.spider,
             name="scraping_spider",
             start_urls=self.start_urls,
             **kwargs,
         )
 
-        # NOTE: signals set up this way because once they are move to helper method
-        #       it might become flaky. FIXME: Debug signal registration properly
         try:
-            # We want to receive on_item_scraped callback from
-            # outside so we don't have to know about any queue instance.
-            def item_scraped(item: Item):
-                # Also we would like to pass crawler instance
-                # so we can stop crawling when the queue is closed.
-                self.on_item_scraped(item, crawler)
-
-            dispatcher.connect(item_scraped, signals.item_scraped)
-
-            # Once crawling engine stops we would like to know about it as well.
-            dispatcher.connect(self.on_engine_stopped, signals.engine_stopped)
-
-            crawler.start()
+            logger.info("Starting the crawler")
+            with self.signals:
+                self.crawler.start()
         except Exception:
             logger.error("Was unable to start crawling process")
             raise
         finally:
-            self.on_engine_stopped()
+            self.signals.on_engine_stopped()
 
 
 class PipelineRunner(Runnable):
@@ -74,11 +102,19 @@ class PipelineRunner(Runnable):
     ) -> None:
         self.pipeline = pipeline
         self.queue = queue
+
+        if pipeline.dataset_name:
+            resource_name = pipeline.dataset_name
+        else:
+            resource_name = f"{pipeline.pipeline_name}_results"
+
+        logger.info(f"Resource name: {resource_name}")
+
         self.scrapy_resource = dlt.resource(
             # Queue get_batches is a generator so we can
             # pass it to pipeline.run and dlt will handle the rest.
-            self.queue.get_batches(),
-            name=f"{pipeline.pipeline_name}_results",
+            self.queue.stream(),
+            name=resource_name,
         )
 
     def run(  # type: ignore[override]
