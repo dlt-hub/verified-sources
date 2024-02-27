@@ -24,8 +24,9 @@ from dlt.common.schema.typing import (
     TWriteDisposition,
 )
 from dlt.extract.incremental import Incremental
-from dlt.extract.source import DltResource
+from dlt.extract.source import DltResource, DltSource
 from dlt.extract.typing import TTableHintTemplate
+from dlt.common import logger
 from dlt.sources.helpers.requests.retry import Client
 
 from .auth import BearerTokenAuth, AuthBase
@@ -481,3 +482,14 @@ def find_resolved_params(endpoint_config: Endpoint) -> List[ResolvedParam]:
         if isinstance(value, ResolveConfig)
         or (isinstance(value, dict) and value.get("type") == "resolve")
     ]
+
+def check_connection(
+    source: DltSource,
+    *resource_names: list[str],
+) -> tuple[bool, str]:
+    try:
+        list(source.with_resources(*resource_names).add_limit(1))
+        return (True, "")
+    except Exception as e:
+        logger.error(f"Error checking connection: {e}")
+        return (False, str(e))
