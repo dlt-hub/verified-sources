@@ -70,7 +70,10 @@ def test_pipeline_runners_handle_extended_and_simple_use_cases(mocker):
 
 
 @pytest.mark.skip(
-    reason="This test should run in isolation and a new interpreter instance"
+    reason=(
+        "This test should run in isolation and a new interpreter"
+        "for each parametrized destination"
+    )
 )
 @pytest.mark.parametrize("destination_name", ALL_DESTINATIONS)
 @mock.patch("sources.scraping.runner.CrawlerProcess", TestCrawlerProcess)
