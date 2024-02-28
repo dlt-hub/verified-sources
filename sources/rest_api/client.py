@@ -1,4 +1,4 @@
-from typing import Optional, List, Dict, Any, Generator, Literal
+from typing import Optional, List, Dict, Any, Union, Generator, Literal
 import copy
 
 from requests.auth import AuthBase
@@ -9,10 +9,15 @@ from requests.exceptions import HTTPError
 from dlt.common import logger
 from dlt.sources.helpers.requests.retry import Client
 
-from .paginators import BasePaginator, UnspecifiedPaginator
-from .detector import create_paginator
+from .paginators import (
+    BasePaginator,
+    UnspecifiedPaginator,
+    SinglePagePaginator,
+    JSONResponsePaginator,
+)
+from .detector import create_paginator, find_records_key
 
-from .utils import join_url
+from .utils import join_url, create_nested_accessor
 
 
 class RESTClient:
@@ -82,6 +87,7 @@ class RESTClient:
         params: Optional[Dict[str, Any]] = None,
         json: Optional[Dict[str, Any]] = None,
         paginator: Optional[BasePaginator] = None,
+        records_path: Optional[Union[str, List[str]]] = None,
         response_actions: Optional[List[Dict[str, Any]]] = None,
     ) -> Generator[Any, None, None]:
         """Paginate over an API endpoint.
@@ -92,6 +98,11 @@ class RESTClient:
             >>>     print(page)
         """
         paginator = copy.deepcopy(paginator if paginator else self.paginator)
+
+        extract_records = (
+            self.create_records_extractor(records_path) if records_path else None
+        )
+
         while paginator.has_next_page:
             try:
                 response = self.make_request(
@@ -113,21 +124,36 @@ class RESTClient:
                     continue
 
             if isinstance(paginator, UnspecifiedPaginator):
-                # Detect suitable paginator and it's params
+                # Detect suitable paginator and its params
                 paginator = create_paginator(response)
 
                 # If no paginator is found, raise an error
                 if paginator is None:
                     raise ValueError(
-                        "No suitable paginator found for the API response."
+                        f"No suitable paginator found for the response at {response.url}"
                     )
                 else:
                     logger.info(f"Detected paginator: {paginator.__class__.__name__}")
 
-            yield paginator.extract_records(response)
+            # If extract_records is None, try to detect records key
+            # based on the paginator type
+            if extract_records is None:
+                if isinstance(paginator, SinglePagePaginator):
+                    extract_records = lambda response: response.json()  # noqa
+                elif isinstance(paginator, JSONResponsePaginator):
+                    _records_path = find_records_key(response.json())
+                    if _records_path:
+                        extract_records = self.create_records_extractor(_records_path)
+
+            yield extract_records(response)
 
             paginator.update_state(response)
             path, params, json = paginator.prepare_next_request_args(path, params, json)
+
+    def create_records_extractor(self, records_path: Optional[Union[str, List[str]]]):
+        nested_accessor = create_nested_accessor(records_path)
+
+        return lambda response: nested_accessor(response.json())
 
     def handle_response_actions(
         self, response: Response, actions: List[Dict[str, Any]]

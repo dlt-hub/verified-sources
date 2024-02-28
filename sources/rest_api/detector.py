@@ -1,6 +1,10 @@
 from dlt.sources.helpers.requests import Response
 
-from .paginators import HeaderLinkPaginator, JSONResponsePaginator, SinglePagePaginator, OffsetPaginator
+from .paginators import (
+    HeaderLinkPaginator,
+    JSONResponsePaginator,
+    SinglePagePaginator,
+)
 
 RECORD_KEY_PATTERNS = {"data", "items", "results", "entries"}
 NEXT_PAGE_KEY_PATTERNS = {"next", "nextpage", "nexturl"}
@@ -59,18 +63,12 @@ def header_links_detector(response: Response):
 
 def json_links_detector(response: Response):
     dictionary = response.json()
-
-    records_key = find_records_key(dictionary)
-
-    if not records_key:
-        return None
-
     next_key = find_next_page_key(dictionary)
 
     if not next_key:
         return None
 
-    return JSONResponsePaginator(next_key=next_key, records_key=records_key)
+    return JSONResponsePaginator(next_key=next_key)
 
 
 def single_page_detector(response: Response):

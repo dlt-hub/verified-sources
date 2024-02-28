@@ -14,7 +14,7 @@ from sources.rest_api import (
 from .source_configs import VALID_CONFIGS, INVALID_CONFIGS
 
 
-def test_test_load_mock_api(mock_api_server):
+def test_load_mock_api(mock_api_server):
     pipeline = dlt.pipeline(
         pipeline_name="rest_api_mock",
         destination="duckdb",
@@ -132,6 +132,34 @@ def test_ignoring_endpoint_returning_404(mock_api_server):
         {"id": 1, "title": "Post 1"},
         {"id": 2, "title": "Post 2"},
         {"id": 3, "title": "Post 3"},
+    ]
+
+
+def test_posts_under_results_key(mock_api_server):
+    mock_source = rest_api_source(
+        {
+            "client": {"base_url": "https://api.example.com"},
+            "resources": [
+                {
+                    "name": "posts",
+                    "endpoint": {
+                        "path": "posts_under_a_different_key",
+                        "records_path": "many-results",
+                        "paginator": "json_links",
+                    },
+                },
+            ],
+        }
+    )
+
+    res = list(mock_source.with_resources("posts").add_limit(1))
+
+    assert res[:5] == [
+        {"id": 0, "title": "Post 0"},
+        {"id": 1, "title": "Post 1"},
+        {"id": 2, "title": "Post 2"},
+        {"id": 3, "title": "Post 3"},
+        {"id": 4, "title": "Post 4"},
     ]
 
 

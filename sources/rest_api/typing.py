@@ -66,6 +66,7 @@ class Endpoint(TypedDict, total=False):
     params: Optional[Dict[str, Any]]
     json: Optional[Dict[str, Any]]
     paginator: Optional[PaginatorType]
+    records_path: Optional[Union[str, List[str]]]
     response_actions: Optional[List[ResponseAction]]
 
 

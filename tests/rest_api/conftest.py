@@ -27,16 +27,15 @@ class APIRouter:
 router = APIRouter(MOCK_BASE_URL)
 
 
-# TODO: Accept page_size
-def generate_paginated_response(data, page, total_pages, base_url):
+def serialize_page(records, page_number, total_pages, base_url, records_key="data"):
     response = {
-        "data": data,
-        "page": page,
+        records_key: records,
+        "page": page_number,
         "total_pages": total_pages,
     }
 
-    if page < total_pages:
-        next_page = page + 1
+    if page_number < total_pages:
+        next_page = page_number + 1
 
         scheme, netloc, path, _, _ = urlsplit(base_url)
         next_page = urlunsplit([scheme, netloc, path, f"page={next_page}", ""])
@@ -53,15 +52,20 @@ def generate_comments(post_id, count=50):
     return [{"id": i, "body": f"Comment {i} for post {post_id}"} for i in range(count)]
 
 
-def paginate_response(request, context, base_data, base_url):
-    page = int(request.qs.get("page", [1])[0])
-    page_size = 10
-    total_items = len(base_data)
-    total_pages = (total_items + page_size - 1) // page_size
-    start_index = (page - 1) * 10
+def get_page_number(qs, key="page", default=1):
+    return int(qs.get(key, [default])[0])
+
+
+def paginate_response(request, records, page_size=10, records_key="data"):
+    page_number = get_page_number(request.qs)
+    total_records = len(records)
+    total_pages = (total_records + page_size - 1) // page_size
+    start_index = (page_number - 1) * 10
     end_index = start_index + 10
-    data = base_data[start_index:end_index]
-    return generate_paginated_response(data, page, total_pages, base_url)
+    records_slice = records[start_index:end_index]
+    return serialize_page(
+        records_slice, page_number, total_pages, request.url, records_key
+    )
 
 
 @pytest.fixture(scope="module")
@@ -70,14 +74,12 @@ def mock_api_server():
 
         @router.get("/posts(\?page=\d+)?$")
         def posts(request, context):
-            return paginate_response(request, context, generate_posts(), request.url)
+            return paginate_response(request, generate_posts())
 
         @router.get("/posts/(\d+)/comments")
         def post_comments(request, context):
             post_id = int(request.url.split("/")[-2])
-            return paginate_response(
-                request, context, generate_comments(post_id), request.url
-            )
+            return paginate_response(request, generate_comments(post_id))
 
         @router.get("/posts/\d+$")
         def post_detail(request, context):
@@ -86,14 +88,17 @@ def mock_api_server():
 
         @router.get("/posts/\d+/some_details_404")
         def post_detail_404(request, context):
-            """Return 404 for post with id > 0. Used to test ignoring 404 errors.
-            """
+            """Return 404 for post with id > 0. Used to test ignoring 404 errors."""
             post_id = int(request.url.split("/")[-2])
             if post_id < 1:
                 return json.dumps({"id": post_id, "body": f"Post body {post_id}"})
             else:
                 context.status_code = 404
                 return json.dumps({"error": "Post not found"})
+
+        @router.get("/posts_under_a_different_key$")
+        def posts_with_results_key(request, context):
+            return paginate_response(request, generate_posts(), records_key="many-results")
 
         router.register_routes(m)
 

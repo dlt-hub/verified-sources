@@ -27,11 +27,6 @@ class TestHeaderLinkPaginator:
         paginator.update_state(response)
         assert paginator.has_next_page is False
 
-    def test_extract_records(self):
-        paginator = HeaderLinkPaginator()
-        response = Mock(Response, json=lambda: {"key": "value"})
-        assert paginator.extract_records(response) == {"key": "value"}
-
 
 class TestJSONResponsePaginator:
     def test_update_state_with_next(self):
@@ -50,11 +45,6 @@ class TestJSONResponsePaginator:
         assert paginator.next_reference is None
         assert paginator.has_next_page is False
 
-    def test_extract_records(self):
-        paginator = JSONResponsePaginator()
-        response = Mock(Response, json=lambda: {"results": ["record1", "record2"]})
-        assert paginator.extract_records(response) == ["record1", "record2"]
-
 
 class TestSinglePagePaginator:
     def test_update_state(self):
@@ -71,11 +61,6 @@ class TestSinglePagePaginator:
         response.links = {"next": {"url": "http://example.com/next"}}
         paginator.update_state(response)
         assert paginator.has_next_page is False
-
-    def test_extract_records(self):
-        paginator = SinglePagePaginator()
-        response = Mock(Response, json=lambda: {"key": "value"})
-        assert paginator.extract_records(response) == {"key": "value"}
 
 
 class TestOffsetPaginator:

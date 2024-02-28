@@ -27,7 +27,7 @@ class TestRESTClient:
     def test_pagination(self, rest_client):
         pages_iter = rest_client.paginate(
             "/posts",
-            paginator=JSONResponsePaginator(next_key="next_page", records_key="data"),
+            paginator=JSONResponsePaginator(next_key="next_page"),
         )
 
         pages = list(pages_iter)
@@ -44,7 +44,7 @@ class TestRESTClient:
     def test_paginate_with_response_actions(self, rest_client):
         pages_iter = rest_client.paginate(
             "/posts",
-            paginator=JSONResponsePaginator(next_key="next_page", records_key="data"),
+            paginator=JSONResponsePaginator(next_key="next_page"),
             response_actions=[
                 {"status_code": 404, "action": "ignore"},
             ],

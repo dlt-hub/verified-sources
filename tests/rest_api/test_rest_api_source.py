@@ -69,7 +69,8 @@ def test_dependent_resource(destination_name: str) -> None:
                 "name": "pokemon_list",
                 "endpoint": {
                     "path": "pokemon",
-                    "paginator": SinglePagePaginator(records_key="results"),
+                    "paginator": SinglePagePaginator(),
+                    "records_path": "results",
                     "params": {
                         "limit": 2,
                     },
