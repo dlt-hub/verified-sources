@@ -36,8 +36,11 @@ def scrape_quotes() -> None:
     run_pipeline(
         pipeline,
         MySpider,
-        scrapy_settings={},
-        write_disposition="replace",
+        # you can pass scrapy settings overrides here
+        scrapy_settings={
+            "DEPTH_LIMIT": 0,
+        },
+        write_disposition="append",
     )
 
 
@@ -57,7 +60,7 @@ def scrape_quotes_callback_access_resource() -> None:
         batch_size=10,
         scrapy_settings={},
         on_before_start=on_before_start,
-        write_disposition="replace",
+        write_disposition="append",
     )
 
 
@@ -68,7 +71,7 @@ def scrape_quotes_advanced_runner() -> None:
     )
     scraping_host = create_pipeline_runner(pipeline, MySpider, batch_size=10)
     scraping_host.pipeline_runner.scraping_resource.add_limit(2)
-    scraping_host.run(dataset_name="quotes", write_disposition="replace")
+    scraping_host.run(dataset_name="quotes", write_disposition="append")
 
 
 if __name__ == "__main__":

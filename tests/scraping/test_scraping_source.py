@@ -86,7 +86,7 @@ def test_scraping_all_resources(destination_name: str) -> None:
         pipeline,
         MySpider,
         dataset_name="quotes",
-        write_disposition="replace",
+        write_disposition="append",
     )
 
     table_names = [t["name"] for t in pipeline.default_schema.data_tables()]
