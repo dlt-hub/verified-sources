@@ -56,7 +56,7 @@ To read about grabbing the Facebook Ads credentials and configuring the verified
 2. Now the pipeline can be run by using the command:
 
     ```bash
-    python3 facebook_ads_pipeline.py
+    python facebook_ads_pipeline.py
     ```
 
 3. To make sure that everything is loaded as expected, use the command:

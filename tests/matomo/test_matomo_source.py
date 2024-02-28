@@ -66,6 +66,7 @@ ALL_TABLES_REPORTS = [
 ]
 
 
+@pytest.mark.skip("We don't have a Matomo test account.")
 @pytest.mark.parametrize("destination_name", ALL_DESTINATIONS)
 def test_reports(destination_name: str) -> None:
     """
@@ -84,6 +85,7 @@ def test_reports(destination_name: str) -> None:
     _check_pipeline_has_tables(pipeline, ALL_TABLES_REPORTS)
 
 
+@pytest.mark.skip("We don't have a Matomo test account.")
 @pytest.mark.parametrize("destination_name", ALL_DESTINATIONS)
 def test_visits(destination_name: str) -> None:
     """
@@ -118,6 +120,7 @@ def test_visits(destination_name: str) -> None:
         assert diff_count >= 0 and diff_count < 5
 
 
+@pytest.mark.skip("We don't have a Matomo test account.")
 @pytest.mark.parametrize("destination_name", ALL_DESTINATIONS)
 def test_visits_with_visitors(destination_name: str) -> None:
     """
@@ -269,6 +272,7 @@ def test_remove_active_visits(
     assert result == expected_visits
 
 
+@pytest.mark.skip("We don't have a Matomo test account.")
 @pytest.mark.parametrize("destination_name", ALL_DESTINATIONS)
 def test_incrementing_reports(destination_name: str) -> None:
     """
@@ -308,6 +312,7 @@ def test_incrementing_reports(destination_name: str) -> None:
     )
 
 
+@pytest.mark.skip("We don't have a Matomo test account.")
 @pytest.mark.parametrize("destination_name", ALL_DESTINATIONS)
 def test_start_date(destination_name: str) -> None:
     """
