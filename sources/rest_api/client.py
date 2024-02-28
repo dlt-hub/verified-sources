@@ -1,8 +1,10 @@
-from typing import Optional, Dict, Any, Generator, Literal, Sequence
+from typing import Optional, List, Dict, Any, Generator, Literal
 import copy
 
 from requests.auth import AuthBase
 from requests import Session as BaseSession
+from requests import Response
+from requests.exceptions import HTTPError
 
 from dlt.common import logger
 from dlt.sources.helpers.requests.retry import Client
@@ -33,7 +35,6 @@ class RESTClient:
         paginator: Optional[BasePaginator] = None,
         session: BaseSession = None,
         request_client: Client = None,
-        ignore_http_status_codes: Optional[Sequence[int]] = None,
     ) -> None:
         self.base_url = base_url
         self.headers = headers
@@ -46,7 +47,6 @@ class RESTClient:
             self.session = Client().session
 
         self.paginator = paginator if paginator else UnspecifiedPaginator()
-        self.ignore_http_status_codes = ignore_http_status_codes or []
 
     def make_request(self, path="", method="get", params=None, json=None):
         if path.startswith("http"):
@@ -82,6 +82,7 @@ class RESTClient:
         params: Optional[Dict[str, Any]] = None,
         json: Optional[Dict[str, Any]] = None,
         paginator: Optional[BasePaginator] = None,
+        response_actions: Optional[List[Dict[str, Any]]] = None,
     ) -> Generator[Any, None, None]:
         """Paginate over an API endpoint.
 
@@ -92,12 +93,24 @@ class RESTClient:
         """
         paginator = copy.deepcopy(paginator if paginator else self.paginator)
         while paginator.has_next_page:
-            response = self.make_request(
-                path=path, method=method, params=params, json=json
-            )
-            if response.status_code in self.ignore_http_status_codes:
-                logger.warning(f"Request returned status code {response.status_code}")
-                response.json = lambda: None
+            try:
+                response = self.make_request(
+                    path=path, method=method, params=params, json=json
+                )
+            except HTTPError as e:
+                if not response_actions:
+                    raise e
+                else:
+                    response = e.response
+
+            if response_actions:
+                action_type = self.handle_response_actions(response, response_actions)
+                if action_type == "ignore":
+                    logger.info("Ignoring response and stopping pagination.")
+                    break
+                elif action_type == "retry":
+                    logger.info("Retrying request.")
+                    continue
 
             if isinstance(paginator, UnspecifiedPaginator):
                 # Detect suitable paginator and it's params
@@ -115,6 +128,41 @@ class RESTClient:
 
             paginator.update_state(response)
             path, params, json = paginator.prepare_next_request_args(path, params, json)
+
+    def handle_response_actions(
+        self, response: Response, actions: List[Dict[str, Any]]
+    ):
+        """Handle response actions based on the response and the provided actions.
+
+        Example:
+        response_actions = [
+            {"status_code": 404, "action": "ignore"},
+            {"content": "Not found", "action": "ignore"},
+            {"status_code": 429, "action": "retry"},
+            {"status_code": 200, "content": "some text", "action": "retry"},
+        ]
+        action_type = client.handle_response_actions(response, response_actions)
+        """
+        content = response.text
+
+        for action in actions:
+            status_code = action.get("status_code")
+            content_substr = action.get("content")
+            action_type = action.get("action")
+
+            if status_code is not None and content_substr is not None:
+                if response.status_code == status_code and content_substr in content:
+                    return action_type
+
+            elif status_code is not None:
+                if response.status_code == status_code:
+                    return action_type
+
+            elif content_substr is not None:
+                if content_substr in content:
+                    return action_type
+
+        return None
 
     def __iter__(self):
         return self.paginate()

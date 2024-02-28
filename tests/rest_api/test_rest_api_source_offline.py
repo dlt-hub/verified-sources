@@ -94,8 +94,49 @@ def test_test_load_mock_api(mock_api_server):
     )
 
 
+def test_ignoring_endpoint_returning_404(mock_api_server):
+    mock_source = rest_api_source(
+        {
+            "client": {"base_url": "https://api.example.com"},
+            "resources": [
+                "posts",
+                {
+                    "name": "post_details",
+                    "endpoint": {
+                        "path": "posts/{post_id}/some_details_404",
+                        "params": {
+                            "post_id": {
+                                "type": "resolve",
+                                "resource": "posts",
+                                "field": "id",
+                            }
+                        },
+                        "paginator": "single_page",
+                        "response_actions": [
+                            {
+                                "status_code": 404,
+                                "action": "ignore",
+                            },
+                        ],
+                    },
+                },
+            ],
+        }
+    )
+
+    res = list(mock_source.with_resources("posts", "post_details").add_limit(1))
+
+    assert res[:5] == [
+        {"id": 0, "body": "Post body 0"},
+        {"id": 0, "title": "Post 0"},
+        {"id": 1, "title": "Post 1"},
+        {"id": 2, "title": "Post 2"},
+        {"id": 3, "title": "Post 3"},
+    ]
+
+
 @pytest.mark.skip
-def test_test_load_mock_api_typeddict_config(mock_api_server):
+def test_load_mock_api_typeddict_config(mock_api_server):
     pipeline = dlt.pipeline(
         pipeline_name="rest_api_mock",
         destination="duckdb",

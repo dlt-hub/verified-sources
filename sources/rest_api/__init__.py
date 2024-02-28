@@ -49,8 +49,6 @@ PAGINATOR_MAP = {
 }
 
 
-
-
 def get_paginator_class(paginator_type: str) -> Type[BasePaginator]:
     try:
         return PAGINATOR_MAP[paginator_type]
@@ -91,7 +89,6 @@ def make_client_config(config: Dict[str, Any]) -> ClientConfig:
         "auth": create_auth(client_config.get("auth")),
         "paginator": create_paginator(client_config.get("paginator")),
         "request_client": client_config.get("request_client"),
-        "ignore_http_status_codes": client_config.get("ignore_http_status_codes"),
     }
 
 
@@ -277,6 +274,8 @@ def rest_api_resources(config: RESTAPIConfig) -> List[DltResource]:
             request_params, endpoint_config.get("incremental")
         )
 
+        response_actions = endpoint_config.get("response_actions")
+
         if resolved_param is None:
 
             def paginate_resource(
@@ -284,6 +283,7 @@ def rest_api_resources(config: RESTAPIConfig) -> List[DltResource]:
                 path,
                 params,
                 paginator,
+                response_actions,
                 incremental_object=incremental_object,
                 incremental_param=incremental_param,
             ):
@@ -295,6 +295,7 @@ def rest_api_resources(config: RESTAPIConfig) -> List[DltResource]:
                     path=path,
                     params=params,
                     paginator=paginator,
+                    response_actions=response_actions,
                 )
 
             resources[resource_name] = dlt.resource(
@@ -304,6 +305,7 @@ def rest_api_resources(config: RESTAPIConfig) -> List[DltResource]:
                 path=endpoint_config.get("path"),
                 params=request_params,
                 paginator=paginator,
+                response_actions=response_actions,
             )
 
         else:
@@ -318,6 +320,7 @@ def rest_api_resources(config: RESTAPIConfig) -> List[DltResource]:
                 path,
                 params,
                 paginator,
+                response_actions,
                 param_name=param_name,
                 field_path=resolved_param.resolve_config.field_path,
             ):
@@ -340,6 +343,7 @@ def rest_api_resources(config: RESTAPIConfig) -> List[DltResource]:
                         path=formatted_path,
                         params=params,
                         paginator=paginator,
+                        response_actions=response_actions,
                     ):
                         if parent_record:
                             for child_record in child_page:
@@ -355,6 +359,7 @@ def rest_api_resources(config: RESTAPIConfig) -> List[DltResource]:
                 path=endpoint_config.get("path"),
                 params=request_params,
                 paginator=paginator,
+                response_actions=response_actions,
             )
 
     return list(resources.values())

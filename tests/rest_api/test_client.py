@@ -40,3 +40,27 @@ class TestRESTClient:
         pages = list(pages_iter)
 
         self._assert_pagination(pages)
+
+    def test_paginate_with_response_actions(self, rest_client):
+        pages_iter = rest_client.paginate(
+            "/posts",
+            paginator=JSONResponsePaginator(next_key="next_page", records_key="data"),
+            response_actions=[
+                {"status_code": 404, "action": "ignore"},
+            ],
+        )
+
+        pages = list(pages_iter)
+
+        self._assert_pagination(pages)
+
+        pages_iter = rest_client.paginate(
+            "/posts/1/some_details_404",
+            paginator=JSONResponsePaginator(),
+            response_actions=[
+                {"status_code": 404, "action": "ignore"},
+            ],
+        )
+
+        pages = list(pages_iter)
+        assert pages == []

@@ -36,7 +36,6 @@ class ClientConfig(TypedDict, total=False):
     auth: Optional[Union[Any, AuthConfig]]
     paginator: Optional[PaginatorType]
     request_client: Optional[Client]
-    ignore_http_status_codes: Optional[List[int]]
 
 
 class IncrementalConfig(TypedDict, total=False):
@@ -55,12 +54,19 @@ class ResolvedParam(NamedTuple):
     resolve_config: ResolveConfig
 
 
+class ResponseAction(TypedDict, total=False):
+    status_code: Optional[Union[int, str]]
+    content: Optional[str]
+    action: str
+
+
 class Endpoint(TypedDict, total=False):
     path: Optional[str]
     method: Optional[str]
     params: Optional[Dict[str, Any]]
     json: Optional[Dict[str, Any]]
     paginator: Optional[PaginatorType]
+    response_actions: Optional[List[ResponseAction]]
 
 
 # TODO: check why validate_dict does not respect total=False

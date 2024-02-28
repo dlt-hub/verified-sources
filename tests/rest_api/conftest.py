@@ -84,6 +84,17 @@ def mock_api_server():
             post_id = request.url.split("/")[-1]
             return json.dumps({"id": post_id, "body": f"Post body {post_id}"})
 
+        @router.get("/posts/\d+/some_details_404")
+        def post_detail_404(request, context):
+            """Return 404 for post with id > 0. Used to test ignoring 404 errors.
+            """
+            post_id = int(request.url.split("/")[-2])
+            if post_id < 1:
+                return json.dumps({"id": post_id, "body": f"Post body {post_id}"})
+            else:
+                context.status_code = 404
+                return json.dumps({"error": "Post not found"})
+
         router.register_routes(m)
 
         yield m
