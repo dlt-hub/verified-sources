@@ -5,7 +5,6 @@ the Freshdesk integration.
 
 import dlt
 import pytest
-
 from freshdesk import freshdesk_source
 from utils import assert_load_info, load_table_counts
 
@@ -50,8 +49,7 @@ def test_load_all_endpoints(destination_name: str) -> None:
     }
     assert (
         load_table_counts(
-            pipeline,
-            *[t["name"] for t in pipeline.default_schema.data_tables()]
+            pipeline, *[t["name"] for t in pipeline.default_schema.data_tables()]
         )
         == expected_counts
     )

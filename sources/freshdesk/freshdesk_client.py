@@ -19,6 +19,7 @@ class FreshdeskClient:
         domain (str): The Freshdesk domain specific to the user, used in constructing the base URL.
         base_url (str): The base URL constructed from the domain, targeting the Freshdesk API v2.
     """
+
     def __init__(self, api_key: str, domain: str):
         # Initialize the FreshdeskClient instance with API key and domain.
         # The API key is used for authentication with the Freshdesk API.
