@@ -47,11 +47,16 @@ def test_pipeline_runners_handle_extended_and_simple_use_cases(mocker):
     scraping_host = create_pipeline_runner(pipeline, MySpider, batch_size=10)
     scraping_host.pipeline_runner.scraping_resource.add_limit(2)
 
+    spy_on_queue_put = mocker.spy(sources.scraping.queue.ScrapingQueue, "put")
+    spy_on_queue_close = mocker.spy(sources.scraping.queue.ScrapingQueue, "close")
     scraping_host.run(write_disposition="replace")
     table_expect_at_least_n_records("scraping_res_add_limit_dataset", 20, pipeline)
     table_expect_at_least_n_records(
         "scraping_res_add_limit_dataset__quote__tags", 68, pipeline
     )
+
+    spy_on_queue_put.assert_called()
+    spy_on_queue_close.assert_called()
 
     err_pipeline = dlt.pipeline(
         pipeline_name="scraping_exc",
@@ -59,30 +64,10 @@ def test_pipeline_runners_handle_extended_and_simple_use_cases(mocker):
         dataset_name="quotes",
     )
 
-    spy_on_queue_close = mocker.spy(sources.scraping.queue.ScrapingQueue, "close")
+    spy_on_queue_close_err = mocker.spy(sources.scraping.queue.ScrapingQueue, "close")
     with mocker.patch("dlt.Pipeline.run", side_effect=OSError("bla")):
         run_pipeline(err_pipeline, MySpider, dataset_name="quotes")
-        spy_on_queue_close.assert_called()
-
-
-@pytest.mark.skip(
-    reason="This test should run in isolation and a new interpreter instance"
-)
-@mock.patch("sources.scraping.runner.CrawlerProcess", TestCrawlerProcess)
-def test_scrapy_pipeline_sends_data_in_queue(mocker):
-    pipeline = dlt.pipeline(
-        pipeline_name="scraping",
-        destination="duckdb",
-        dataset_name="quotes",
-    )
-
-    spy_on_queue_put = mocker.spy(sources.scraping.queue.ScrapingQueue, "put")
-    spy_on_queue_close = mocker.spy(sources.scraping.queue.ScrapingQueue, "close")
-    run_pipeline(pipeline, MySpider)
-
-    spy_on_queue_put.assert_called()
-    spy_on_queue_close.assert_called()
-    table_expect_at_least_n_records("quotes", 100, pipeline)
+        spy_on_queue_close_err.assert_called()
 
 
 @pytest.mark.skip(

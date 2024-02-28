@@ -13,10 +13,6 @@ from twisted.internet.defer import Deferred
 from sources.scraping.queue import ScrapingQueue
 
 
-start_urls = ["https://quotes.toscrape.com/page/1/"]
-default_queue_batch_size = 100
-
-
 class MySpider(Spider):
     def parse(self, response: Response, **kwargs: Any) -> Any:
         for next_page in response.css("li.next a::attr(href)"):
