@@ -12,7 +12,7 @@ except ImportError:
 def load_from_several_topics() -> None:
     pipeline = dlt.pipeline(
         pipeline_name="kafka_pipeline",
-        destination="postgres",
+        destination="duckdb",
         dataset_name="kafka_messages",
     )
 
@@ -25,7 +25,7 @@ def load_from_several_topics() -> None:
 def load_with_custom_processor() -> None:
     pipeline = dlt.pipeline(
         pipeline_name="kafka_pipeline",
-        destination="postgres",
+        destination="duckdb",
         dataset_name="kafka_messages",
     )
 
@@ -58,7 +58,7 @@ def load_starting_from_date() -> None:
 
     pipeline = dlt.pipeline(
         pipeline_name="kafka_pipeline",
-        destination="postgres",
+        destination="duckdb",
         dataset_name="kafka_messages",
     )
 
