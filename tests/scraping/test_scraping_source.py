@@ -64,10 +64,9 @@ def test_pipeline_runners_handle_extended_and_simple_use_cases(mocker):
         dataset_name="quotes",
     )
 
-    spy_on_queue_close_err = mocker.spy(sources.scraping.queue.ScrapingQueue, "close")
     with mocker.patch("dlt.Pipeline.run", side_effect=OSError("bla")):
         run_pipeline(err_pipeline, MySpider, dataset_name="quotes")
-        spy_on_queue_close_err.assert_called()
+        spy_on_queue_close.assert_called()
 
 
 @pytest.mark.skip(
