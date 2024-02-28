@@ -71,4 +71,5 @@ def table_expect_at_least_n_records(table_name: str, n: int, pipeline: dlt.Pipel
     with pipeline.sql_client() as client:
         with client.execute_query(f"SELECT * FROM {table_name}") as cursor:
             loaded_values = [item for item in cursor.fetchall()]
-            assert len(loaded_values) == n
+            n_loaded_values = len(loaded_values)
+            assert n_loaded_values == n, f"Expected {n} records, got {n_loaded_values}"

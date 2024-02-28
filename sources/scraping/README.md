@@ -51,6 +51,12 @@ pip install -r requirements.txt
 python scraping_pipeline.py
 ```
 
+## Implementing a spider
+
+It is your responsibility to implement the spider and data extraction logic from the responses
+because our runner expects spider class, please see as a reference an example of spider in `scraping_pipeline.py`.
+For more information about spider implementation please also see [Scrapy docs](https://docs.scrapy.org/en/latest/topics/spiders.html).
+
 ## 🧐 Introspection using streamlit
 
 NOTE: you might need to set up `streamlit`, `pip install streamlit`
@@ -58,7 +64,6 @@ NOTE: you might need to set up `streamlit`, `pip install streamlit`
 ```sh
 dlt pipeline <pipeline_name> show
 ```
-
 
 ## 🧠 How it works?
 
