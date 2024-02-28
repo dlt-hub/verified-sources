@@ -6,7 +6,7 @@ from typing import Any, Dict, Generator, Iterable, List, Optional
 import dlt
 from dlt.sources import DltResource
 
-from .helpers import paginated_response
+from .freshdesk_client import FreshdeskClient
 from .settings import DEFAULT_ENDPOINTS
 
 
@@ -35,6 +35,8 @@ def freshdesk_source(
         Iterable[DltResource]: Resources with data updated after the last 'updated_at'
         timestamp for each endpoint.
     """
+    # Instantiate FreshdeskClient with the provided domain and API key
+    freshdesk = FreshdeskClient(api_key=api_secret_key, domain=domain)
 
     def incremental_resource(
         endpoint: str,
@@ -51,23 +53,23 @@ def freshdesk_source(
         # Retrieve the last updated timestamp to fetch only new or updated records.
         updated_at = updated_at.last_value
 
-        # Log the endpoint and last updated timestamp for debugging purposes.
+        # Endpoint and last updated timestamp.
         print(
-            f"Fetching data from endpoint: {endpoint} and and the last updated_at is: {updated_at}"
+            f"Fetching data from endpoint: {endpoint} and and the last `updated_at` is: {updated_at}"
         )
-        yield from paginated_response(
+
+        # Use the FreshdeskClient instance to fetch paginated responses
+        yield from freshdesk.paginated_response(
             endpoint=endpoint,
             page=page,
             per_page=per_page,
             updated_at=updated_at,
-            api_secret_key=api_secret_key,
-            domain=domain,
         )
 
-    # Set default endpoints if not provided.
+    # Set default endpoints if not provided
     endpoints = endpoints or DEFAULT_ENDPOINTS
 
-    # For each endpoint, create and yield a DLT resource configured for incremental loading.
+    # For each endpoint, create and yield a DLT resource
     for endpoint in endpoints:
         yield dlt.resource(
             incremental_resource,
