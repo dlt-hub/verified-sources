@@ -6,10 +6,11 @@ the Freshdesk integration.
 import dlt
 import pytest
 from freshdesk import freshdesk_source
-from utils import assert_load_info, load_table_counts
+
+from tests.utils import ALL_DESTINATIONS, assert_load_info, load_table_counts
 
 
-@pytest.mark.parametrize("destination_name", ["bigquery"])
+@pytest.mark.parametrize("destination_name", ALL_DESTINATIONS)
 def test_load_all_endpoints(destination_name: str) -> None:
     """
     Tests loading data from all Freshdesk default endpoints to a specified
