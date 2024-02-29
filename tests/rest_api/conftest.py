@@ -79,21 +79,21 @@ def mock_api_server():
         def posts_no_key(request, context):
             return paginate_response(request, generate_posts(), records_key=None)
 
-        @router.get("/posts(\?page=\d+)?$")
+        @router.get(r"/posts(\?page=\d+)?$")
         def posts(request, context):
             return paginate_response(request, generate_posts())
 
-        @router.get("/posts/(\d+)/comments")
+        @router.get(r"/posts/(\d+)/comments")
         def post_comments(request, context):
             post_id = int(request.url.split("/")[-2])
             return paginate_response(request, generate_comments(post_id))
 
-        @router.get("/posts/\d+$")
+        @router.get(r"/posts/\d+$")
         def post_detail(request, context):
             post_id = request.url.split("/")[-1]
             return json.dumps({"id": post_id, "body": f"Post body {post_id}"})
 
-        @router.get("/posts/\d+/some_details_404")
+        @router.get(r"/posts/\d+/some_details_404")
         def post_detail_404(request, context):
             """Return 404 for post with id > 0. Used to test ignoring 404 errors."""
             post_id = int(request.url.split("/")[-2])
@@ -103,7 +103,7 @@ def mock_api_server():
                 context.status_code = 404
                 return json.dumps({"error": "Post not found"})
 
-        @router.get("/posts_under_a_different_key$")
+        @router.get(r"/posts_under_a_different_key$")
         def posts_with_results_key(request, context):
             return paginate_response(
                 request, generate_posts(), records_key="many-results"
