@@ -1,7 +1,7 @@
 from typing import Optional, Any, Type, TYPE_CHECKING
 from typing_extensions import TypeAlias
-from sqlalchemy import Table, Column, Select
-from sqlalchemy.sql import sqltypes
+from sqlalchemy import Table, Column
+from sqlalchemy.sql import sqltypes, Select
 
 from dlt.common.schema.typing import TColumnSchema, TTableSchemaColumns
 
