@@ -14,6 +14,7 @@ from .paginators import (
     UnspecifiedPaginator,
     SinglePagePaginator,
     JSONResponsePaginator,
+    HeaderLinkPaginator,
 )
 from .detector import create_paginator, find_records_key
 
@@ -140,7 +141,7 @@ class RESTClient:
             # If extract_records is None, try to detect records key
             # based on the paginator type
             if extract_records is None:
-                if isinstance(paginator, SinglePagePaginator):
+                if isinstance(paginator, (SinglePagePaginator, HeaderLinkPaginator)):
                     extract_records = lambda response: response.json()  # noqa
                 elif isinstance(paginator, JSONResponsePaginator):
                     _records_path = find_records_key(response.json())
