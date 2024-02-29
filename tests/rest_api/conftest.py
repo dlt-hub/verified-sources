@@ -28,6 +28,9 @@ router = APIRouter(MOCK_BASE_URL)
 
 
 def serialize_page(records, page_number, total_pages, base_url, records_key="data"):
+    if records_key is None:
+        return json.dumps(records)
+
     response = {
         records_key: records,
         "page": page_number,
@@ -72,6 +75,10 @@ def paginate_response(request, records, page_size=10, records_key="data"):
 def mock_api_server():
     with requests_mock.Mocker() as m:
 
+        @router.get(r"/posts_no_key(\?page=\d+)?$")
+        def posts_no_key(request, context):
+            return paginate_response(request, generate_posts(), records_key=None)
+
         @router.get("/posts(\?page=\d+)?$")
         def posts(request, context):
             return paginate_response(request, generate_posts())
@@ -98,7 +105,9 @@ def mock_api_server():
 
         @router.get("/posts_under_a_different_key$")
         def posts_with_results_key(request, context):
-            return paginate_response(request, generate_posts(), records_key="many-results")
+            return paginate_response(
+                request, generate_posts(), records_key="many-results"
+            )
 
         router.register_routes(m)
 

@@ -163,6 +163,35 @@ def test_posts_under_results_key(mock_api_server):
     ]
 
 
+def test_posts_without_key(mock_api_server):
+    mock_source = rest_api_source(
+        {
+            "client": {
+                "base_url": "https://api.example.com",
+                "paginator": "header_links",
+            },
+            "resources": [
+                {
+                    "name": "posts_no_key",
+                    "endpoint": {
+                        "path": "posts_no_key",
+                    },
+                },
+            ],
+        }
+    )
+
+    res = list(mock_source.with_resources("posts_no_key").add_limit(1))
+
+    assert res[:5] == [
+        {"id": 0, "title": "Post 0"},
+        {"id": 1, "title": "Post 1"},
+        {"id": 2, "title": "Post 2"},
+        {"id": 3, "title": "Post 3"},
+        {"id": 4, "title": "Post 4"},
+    ]
+
+
 @pytest.mark.skip
 def test_load_mock_api_typeddict_config(mock_api_server):
     pipeline = dlt.pipeline(
