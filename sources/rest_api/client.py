@@ -117,7 +117,9 @@ class RESTClient:
             if response_actions:
                 action_type = self.handle_response_actions(response, response_actions)
                 if action_type == "ignore":
-                    logger.info("Ignoring response and stopping pagination.")
+                    logger.info(
+                        f"Error {response.status_code}. Ignoring response '{response.json()}' and stopping pagination."
+                    )
                     break
                 elif action_type == "retry":
                     logger.info("Retrying request.")
