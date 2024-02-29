@@ -7,6 +7,8 @@ from arrow_pandas.example_resources import orders, customers
 
 
 if __name__ == "__main__":
-    pipeline = dlt.pipeline("orders_pipeline", destination="duckdb")
+    pipeline = dlt.pipeline(
+        "orders_pipeline", destination="duckdb", dataset_name="orders_dataset"
+    )
     # run both resources
     pipeline.run([orders, customers])
