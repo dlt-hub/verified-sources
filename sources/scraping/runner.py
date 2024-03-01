@@ -7,7 +7,6 @@ from pydispatch import dispatcher  # type: ignore
 
 from scrapy import signals, Item, Spider  # type: ignore
 from scrapy.crawler import CrawlerProcess  # type: ignore
-from scrapy.exceptions import CloseSpider  # type: ignore
 
 from .types import AnyDict, Runnable, P
 from .queue import ScrapingQueue
@@ -17,33 +16,31 @@ T = t.TypeVar("T")
 
 class Signals:
     def __init__(self, pipeline_name: str, queue: ScrapingQueue[T]) -> None:
+        self.stopping = False
         self.queue = queue
         self.pipeline_name = pipeline_name
+
+    def __call__(self, crawler: CrawlerProcess) -> None:
+        self.crawler = crawler
 
     def on_item_scraped(self, item: Item) -> None:
         if not self.queue.is_closed:
             self.queue.put(item)
         else:
             logger.info(
-                "Queue is closed ",
+                "Queue is closed, stopping",
                 extra={"pipeline_name": self.pipeline_name},
             )
-            raise CloseSpider("Queue is closed")
-
-    def on_spider_opened(self) -> None:
-        if self.queue.is_closed:
-            raise CloseSpider("Queue is closed")
+            self.stopping = True
+            self.crawler.stop()
 
     def on_engine_stopped(self) -> None:
         logger.info(f"Crawling engine stopped for pipeline={self.pipeline_name}")
+        self.stopping = True
         self.queue.join()
         self.queue.close()
 
     def __enter__(self) -> None:
-        # There might be an edge case when Scrapy opens a new spider but
-        # the queue has already been closed thus rendering endless wait
-        dispatcher.connect(self.on_spider_opened, signals.spider_opened)
-
         # We want to receive on_item_scraped callback from
         # outside so we don't have to know about any queue instance.
         dispatcher.connect(self.on_item_scraped, signals.item_scraped)
@@ -52,7 +49,6 @@ class Signals:
         dispatcher.connect(self.on_engine_stopped, signals.engine_stopped)
 
     def __exit__(self, exc_type: t.Any, exc_val: t.Any, exc_tb: t.Any) -> None:
-        dispatcher.disconnect(self.on_spider_opened, signals.spider_opened)
         dispatcher.disconnect(self.on_item_scraped, signals.item_scraped)
         dispatcher.disconnect(self.on_engine_stopped, signals.engine_stopped)
 
@@ -82,7 +78,7 @@ class ScrapyRunner(Runnable):
 
         try:
             logger.info("Starting the crawler")
-            with self.signals:
+            with self.signals(self.crawler):
                 self.crawler.start()
         except Exception:
             logger.error("Was unable to start crawling process")

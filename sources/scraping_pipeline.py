@@ -38,7 +38,7 @@ def scrape_quotes() -> None:
         MySpider,
         # you can pass scrapy settings overrides here
         scrapy_settings={
-            "DEPTH_LIMIT": 0,
+            "DEPTH_LIMIT": 10,
         },
         write_disposition="append",
     )
