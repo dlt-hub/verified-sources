@@ -5,6 +5,7 @@ import pytest
 
 import sources.scraping.helpers
 import sources.scraping.queue
+import sources.scraping.runner
 
 from sources.scraping import run_pipeline
 from sources.scraping.helpers import create_pipeline_runner
@@ -49,6 +50,7 @@ def test_pipeline_runners_handle_extended_and_simple_use_cases(mocker):
 
     spy_on_queue_put = mocker.spy(sources.scraping.queue.ScrapingQueue, "put")
     spy_on_queue_close = mocker.spy(sources.scraping.queue.ScrapingQueue, "close")
+    spy_on_crawler_process = mocker.spy(TestCrawlerProcess, "stop")
     scraping_host.run(write_disposition="replace")
     table_expect_at_least_n_records("scraping_res_add_limit_dataset", 20, pipeline)
     table_expect_at_least_n_records(
@@ -57,6 +59,7 @@ def test_pipeline_runners_handle_extended_and_simple_use_cases(mocker):
 
     spy_on_queue_put.assert_called()
     spy_on_queue_close.assert_called()
+    spy_on_crawler_process.assert_called()
 
     err_pipeline = dlt.pipeline(
         pipeline_name="scraping_exc",
