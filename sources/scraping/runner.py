@@ -1,9 +1,10 @@
 import threading
 import typing as t
-
 import dlt
+
 from dlt.common import logger
 from pydispatch import dispatcher  # type: ignore
+from typing_extensions import Self
 
 from scrapy import signals, Item, Spider  # type: ignore
 from scrapy.crawler import CrawlerProcess  # type: ignore
@@ -19,9 +20,6 @@ class Signals:
         self.stopping = False
         self.queue = queue
         self.pipeline_name = pipeline_name
-
-    def __call__(self, crawler: CrawlerProcess) -> None:
-        self.crawler = crawler
 
     def on_item_scraped(self, item: Item) -> None:
         if not self.queue.is_closed:
@@ -39,6 +37,10 @@ class Signals:
         self.stopping = True
         self.queue.join()
         self.queue.close()
+
+    def __call__(self, crawler: CrawlerProcess) -> Self:
+        self.crawler = crawler
+        return self
 
     def __enter__(self) -> None:
         # We want to receive on_item_scraped callback from
