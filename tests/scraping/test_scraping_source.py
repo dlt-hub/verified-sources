@@ -72,6 +72,27 @@ def test_pipeline_runners_handle_extended_and_simple_use_cases(mocker):
         spy_on_queue_close.assert_called()
 
 
+def test_resource_name_assignment_and_generation():
+    # If dataset_name is given to pipeline then we will have
+    # resource name same as dataset_name
+    pipeline1 = dlt.pipeline(
+        pipeline_name="pipeline_one",
+        destination="duckdb",
+        dataset_name="cookies",
+    )
+    scraping_host = create_pipeline_runner(pipeline1, MySpider)
+    scraping_host.pipeline_runner.scraping_resource.name == "cookies"
+
+    # If datasert_name is not given to pipeline then we will have
+    # resource name is generate like pipeline.name + "_result" suffix
+    pipeline2 = dlt.pipeline(
+        pipeline_name="pipeline_one",
+        destination="duckdb",
+    )
+    scraping_host = create_pipeline_runner(pipeline2, MySpider)
+    scraping_host.pipeline_runner.scraping_resource.name == "pipeline_one_results"
+
+
 @pytest.mark.skip(
     reason=(
         "This test should run in isolation and a new interpreter"
