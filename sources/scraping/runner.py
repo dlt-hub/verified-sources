@@ -96,15 +96,11 @@ class PipelineRunner(Runnable):
     option to host pipeline in a thread and communicate via the queue.
     """
 
-    def __init__(
-        self,
-        pipeline: dlt.Pipeline,
-        queue: ScrapingQueue[T],
-    ) -> None:
+    def __init__(self, pipeline: dlt.Pipeline, queue: ScrapingQueue[T]) -> None:
         self.pipeline = pipeline
         self.queue = queue
 
-        if pipeline.dataset_name:
+        if pipeline.dataset_name and not self.is_default_dataset_name(pipeline):
             resource_name = pipeline.dataset_name
         else:
             resource_name = f"{pipeline.pipeline_name}_results"
@@ -117,6 +113,10 @@ class PipelineRunner(Runnable):
             self.queue.stream(),
             name=resource_name,
         )
+
+    def is_default_dataset_name(self, pipeline: dlt.Pipeline) -> bool:
+        default_name = pipeline.pipeline_name + pipeline.DEFAULT_DATASET_SUFFIX
+        return pipeline.dataset_name == default_name
 
     def run(
         self,

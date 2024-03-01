@@ -9,8 +9,9 @@ import sources.scraping.runner
 
 from sources.scraping import run_pipeline
 from sources.scraping.helpers import create_pipeline_runner
-
 from sources.scraping.queue import ScrapingQueue
+from sources.scraping.runner import PipelineRunner
+
 from tests.utils import ALL_DESTINATIONS, load_table_counts
 
 from .utils import (
@@ -73,6 +74,7 @@ def test_pipeline_runners_handle_extended_and_simple_use_cases(mocker):
 
 
 def test_resource_name_assignment_and_generation():
+    queue = ScrapingQueue()
     # If dataset_name is given to pipeline then we will have
     # resource name same as dataset_name
     pipeline1 = dlt.pipeline(
@@ -80,17 +82,17 @@ def test_resource_name_assignment_and_generation():
         destination="duckdb",
         dataset_name="cookies",
     )
-    scraping_host = create_pipeline_runner(pipeline1, MySpider)
-    scraping_host.pipeline_runner.scraping_resource.name == "cookies"
+    pipeline_runner = PipelineRunner(
+        pipeline=pipeline1,
+        queue=queue,
+    )
+    assert pipeline_runner.scraping_resource.name == "cookies"
 
     # If datasert_name is not given to pipeline then we will have
     # resource name is generate like pipeline.name + "_result" suffix
-    pipeline2 = dlt.pipeline(
-        pipeline_name="pipeline_one",
-        destination="duckdb",
-    )
-    scraping_host = create_pipeline_runner(pipeline2, MySpider)
-    scraping_host.pipeline_runner.scraping_resource.name == "pipeline_one_results"
+    pipeline2 = dlt.pipeline(pipeline_name="pipeline_two", destination="duckdb")
+    pipeline_runner2 = PipelineRunner(pipeline2, queue=queue)
+    assert pipeline_runner2.scraping_resource.name == "pipeline_two_results"
 
 
 @pytest.mark.skip(
