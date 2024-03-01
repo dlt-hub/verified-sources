@@ -69,12 +69,19 @@ class ScrapingQueue(_Queue[T]):
                 break
 
     def stream(self) -> t.Iterator[t.Any]:
+        """Streaming generator, wraps get_batches
+        and handles `GeneratorExit` if dlt closes it.
+
+        Returns:
+            t.Iterator[t.Any]: returns batches of scraped content
+        """
         try:
             yield from self.get_batches()
         except GeneratorExit:
             self.close()
 
     def close(self) -> None:
+        """Marks queue as closed"""
         self._is_closed = True
 
     @property

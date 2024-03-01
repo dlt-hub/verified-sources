@@ -1,3 +1,4 @@
+"""This module contains abstractions to facilitate scraping and loading process"""
 import threading
 import typing as t
 import dlt
@@ -16,6 +17,12 @@ T = t.TypeVar("T")
 
 
 class Signals:
+    """Signals context wrapper
+
+    This wrapper is also a callable which accepts `CrawlerProcess` instance
+    this is required to stop the scraping process as soon as the queue closes.
+    """
+
     def __init__(self, pipeline_name: str, queue: ScrapingQueue[T]) -> None:
         self.stopping = False
         self.queue = queue
@@ -71,7 +78,12 @@ class ScrapyRunner(Runnable):
         self.crawler = CrawlerProcess(settings=settings)
         self.signals = signals
 
-    def run(self, *args: P.args, **kwargs: P.kwargs) -> t.Any:
+    def run(self, *args: P.args, **kwargs: P.kwargs) -> None:
+        """Runs scrapy crawler process
+
+        All `kwargs` are forwarded to `crawler.crawl(**kwargs)`.
+        Also manages relevant signal handling in proper way.
+        """
         self.crawler.crawl(
             self.spider,
             name="scraping_spider",

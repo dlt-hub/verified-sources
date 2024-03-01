@@ -57,6 +57,36 @@ It is your responsibility to implement the spider and data extraction logic from
 because our runner expects spider class, please see as a reference an example of spider in `scraping_pipeline.py`.
 For more information about spider implementation please also see [Scrapy docs](https://docs.scrapy.org/en/latest/topics/spiders.html).
 
+## Configuring Scrapy
+
+You can pass scrapy settings via
+
+1. `run_pipeline(..., scrapy_settings={...})`
+2. `create_pipeline_runner(..., scrapy_settings={...})`
+
+Example:
+```py
+run_pipeline(
+    pipeline,
+    MySpider,
+    scrapy_settings={
+        # How many sub pages to scrape
+        # https://docs.scrapy.org/en/latest/topics/settings.html#depth-limit
+        "DEPTH_LIMIT": 0,
+        "SPIDER_MIDDLEWARES": {
+            "scrapy.spidermiddlewares.depth.DepthMiddleware": 200,
+            "scrapy.spidermiddlewares.httperror.HttpErrorMiddleware": 300,
+        },
+        "HTTPERROR_ALLOW_ALL": True,
+    },
+)
+```
+
+Note: this is just a shallow merge.
+Also log level is automatically set in sync with the one
+dlt provides so providing it via `scrapy_settings` as `"LOG_LEVEL": "DEBUG"` will not work,
+please see [logging documentation](https://dlthub.com/docs/running-in-production/running#set-the-log-level-and-format) for dlt.
+
 ## 🧐 Introspection using streamlit
 
 NOTE: you might need to set up `streamlit`, `pip install streamlit`
@@ -71,8 +101,8 @@ Under the hood we run DLT [pipeline](https://dlthub.com/docs/api_reference/pipel
 
 Communication between the two is done via the queue, where
 
-* Spider is responsible to put the results in the queue,
-* DLT resource collects and batches results from the queue.
+- Spider is responsible to put the results in the queue,
+- DLT resource collects and batches results from the queue.
 
 ![simple diagram](./diagram.png)
 

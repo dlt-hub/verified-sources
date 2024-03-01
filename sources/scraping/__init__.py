@@ -65,6 +65,8 @@ def run_pipeline(  # type: ignore[valid-type]
     scraping_host.run(*args, **kwargs)
 
 
+# This way we allow dlt init to detect scraping source it is indeed hacky
+# and the core team is working to provide a better alternative.
 _SOURCES[run_pipeline.__qualname__] = SourceInfo(
     ScrapingConfig,
     run_pipeline,
