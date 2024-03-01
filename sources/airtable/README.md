@@ -67,7 +67,7 @@ to the
 1. You're now ready to run the pipeline! To get started, run the following command:
 
    ```bash
-   python3 airtable_pipeline.py
+   python airtable_pipeline.py
    ```
 
 1. Once the pipeline has finished running, you can verify that everything loaded correctly by using

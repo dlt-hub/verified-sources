@@ -1,18 +1,16 @@
 """ This source uses Stripe API and dlt to load data such as Customer, Subscription, Event etc. to the database and to calculate the MRR and churn rate. """
 
-from typing import Any, Dict, Generator, Optional, Tuple, Iterable
+from typing import Any, Dict, Generator, Iterable, Optional, Tuple
 
 import dlt
 import stripe
 from dlt.common import pendulum
-from dlt.sources import DltResource
 from dlt.common.typing import TDataItem
-
+from dlt.sources import DltResource
 from pendulum import DateTime
 
 from .helpers import pagination, transform_date
 from .metrics import calculate_mrr, churn_rate
-
 from .settings import ENDPOINTS, INCREMENTAL_ENDPOINTS
 
 
@@ -46,8 +44,7 @@ def stripe_source(
     def stripe_resource(
         endpoint: str,
     ) -> Generator[Dict[Any, Any], Any, None]:
-        for item in pagination(endpoint, start_date, end_date):
-            yield item
+        yield from pagination(endpoint, start_date, end_date)
 
     for endpoint in endpoints:
         yield dlt.resource(
@@ -94,8 +91,7 @@ def incremental_stripe_source(
         ),
     ) -> Generator[Dict[Any, Any], Any, None]:
         start_value = created.last_value
-        for item in pagination(endpoint, start_date=start_value, end_date=end_date):
-            yield item
+        yield from pagination(endpoint, start_date=start_value, end_date=end_date)
 
     for endpoint in endpoints:
         yield dlt.resource(

@@ -2,9 +2,8 @@ from typing import Iterator, Any
 
 import dlt
 from dlt.sources.credentials import ConnectionStringCredentials
-from dlt.common import pendulum
 
-from sql_database import sql_database, sql_table
+from sql_database import sql_database, sql_table, Table
 
 
 def load_select_tables_from_database() -> None:
@@ -63,27 +62,77 @@ def load_entire_database() -> None:
 
 
 def load_standalone_table_resource() -> None:
-    """Load a few known tables with the standalone sql_table resource"""
+    """Load a few known tables with the standalone sql_table resource, request full schema and deferred
+    table reflection"""
     pipeline = dlt.pipeline(
-        pipeline_name="rfam_database", destination="postgres", dataset_name="rfam_data"
+        pipeline_name="rfam_database",
+        destination="duckdb",
+        dataset_name="rfam_data",
+        full_refresh=True,
     )
 
     # Load a table incrementally starting at a given date
     # Adding incremental via argument like this makes extraction more efficient
     # as only rows newer than the start date are fetched from the table
+    # we also use `detect_precision_hints` to get detailed column schema
+    # and defer_table_reflect to reflect schema only during execution
     family = sql_table(
+        credentials="mysql+pymysql://rfamro@mysql-rfam-public.ebi.ac.uk:4497/Rfam",
         table="family",
         incremental=dlt.sources.incremental(
-            "updated", initial_value=pendulum.DateTime(2022, 1, 1, 0, 0, 0)
+            "updated",
         ),
+        detect_precision_hints=True,
+        defer_table_reflect=True,
     )
+    # columns will be empty here due to defer_table_reflect set to True
+    print(family.compute_table_schema())
 
     # Load all data from another table
-    genome = sql_table(table="genome")
+    genome = sql_table(
+        credentials="mysql+pymysql://rfamro@mysql-rfam-public.ebi.ac.uk:4497/Rfam",
+        table="genome",
+        detect_precision_hints=True,
+        defer_table_reflect=True,
+    )
 
     # Run the resources together
     info = pipeline.extract([family, genome], write_disposition="merge")
     print(info)
+    # Show inferred columns
+    print(pipeline.default_schema.to_pretty_yaml())
+
+
+def select_columns() -> None:
+    """Uses table adapter callback to modify list of columns to be selected"""
+    pipeline = dlt.pipeline(
+        pipeline_name="rfam_database",
+        destination="duckdb",
+        dataset_name="rfam_data_cols",
+        full_refresh=True,
+    )
+
+    def table_adapter(table: Table) -> None:
+        print(table.name)
+        if table.name == "family":
+            # this is SqlAlchemy table. _columns are writable
+            # let's drop updated column
+            table._columns.remove(table.columns["updated"])
+
+    family = sql_table(
+        credentials="mysql+pymysql://rfamro@mysql-rfam-public.ebi.ac.uk:4497/Rfam",
+        table="family",
+        chunk_size=10,
+        detect_precision_hints=True,
+        table_adapter_callback=table_adapter,
+    )
+
+    # also we do not want the whole table, so we add limit to get just one chunk (10 records)
+    pipeline.run(family.add_limit(1))
+    # only 10 rows
+    print(pipeline.last_trace.last_normalize_info)
+    # no "updated" column in "family" table
+    print(pipeline.default_schema.to_pretty_yaml())
 
 
 def reflect_and_connector_x() -> None:
@@ -159,7 +208,10 @@ def reflect_and_connector_x() -> None:
 
 if __name__ == "__main__":
     # Load selected tables with different settings
-    load_select_tables_from_database()
+    # load_select_tables_from_database()
+
+    # load a table and select columns
+    select_columns()
 
     # Load tables with the standalone table resource
     # load_standalone_table_resource()

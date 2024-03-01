@@ -47,7 +47,7 @@ if __name__ == "__main__":
 
     queries = [
         "created >= -30d order by created DESC",
-        'created >= -30d AND assignee in (619652abc510bc006b40d007) AND project = DEV AND issuetype = Epic AND status = "In Progress" order by created DESC',
+        'project = KAN AND status = "In Progress" order by created DESC',
     ]
 
     load_query_data(queries=queries)

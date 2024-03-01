@@ -1,12 +1,11 @@
 """SQL database source helpers"""
 
 from typing import (
-    cast,
+    Callable,
     Any,
     List,
     Optional,
     Iterator,
-    Dict,
     Union,
 )
 import operator
@@ -15,12 +14,11 @@ import dlt
 from dlt.sources.credentials import ConnectionStringCredentials
 from dlt.common.configuration.specs import BaseConfiguration, configspec
 from dlt.common.typing import TDataItem
-from .settings import DEFAULT_CHUNK_SIZE
+
+from .schema_types import table_to_columns, Table, SelectAny
 
 from sqlalchemy import Table, create_engine
-from sqlalchemy.engine import Engine, Row
-from sqlalchemy.sql import Select
-from sqlalchemy import MetaData, Table
+from sqlalchemy.engine import Engine
 
 
 class TableLoader:
@@ -47,7 +45,7 @@ class TableLoader:
             self.cursor_column = None
             self.last_value = None
 
-    def make_query(self) -> Select[Any]:
+    def make_query(self) -> SelectAny:
         table = self.table
         query = table.select()
         if not self.incremental:
@@ -79,22 +77,32 @@ class TableLoader:
 def table_rows(
     engine: Engine,
     table: Table,
-    chunk_size: int = DEFAULT_CHUNK_SIZE,
+    chunk_size: int,
     incremental: Optional[dlt.sources.incremental[Any]] = None,
+    detect_precision_hints: bool = False,
+    defer_table_reflect: bool = False,
+    table_adapter_callback: Callable[[Table], None] = None,
 ) -> Iterator[TDataItem]:
-    """
-    A DLT source which loads data from an SQL database using SQLAlchemy.
-    Resources are automatically created for each table in the schema or from the given list of tables.
+    if defer_table_reflect:
+        table = Table(
+            table.name, table.metadata, autoload_with=engine, extend_existing=True
+        )
+        if table_adapter_callback:
+            table_adapter_callback(table)
+        # set the primary_key in the incremental
+        if incremental and not incremental.primary_key:
+            primary_key = get_primary_key(table)
+            if primary_key:
+                incremental.primary_key = primary_key
+        # yield empty record to set hints
+        yield dlt.mark.with_hints(
+            [],
+            dlt.mark.make_hints(
+                primary_key=get_primary_key(table),
+                columns=table_to_columns(table) if detect_precision_hints else None,
+            ),
+        )
 
-    Args:
-        credentials (Union[ConnectionStringCredentials, Engine, str]): Database credentials or an `sqlalchemy.Engine` instance.
-        schema (Optional[str]): Name of the database schema to load (if different from default).
-        metadata (Optional[MetaData]): Optional `sqlalchemy.MetaData` instance. `schema` argument is ignored when this is used.
-        table_names (Optional[List[str]]): A list of table names to load. By default, all tables in the schema are loaded.
-
-    Returns:
-        Iterable[DltResource]: A list of DLT resources for each table to be loaded.
-    """
     loader = TableLoader(engine, table, incremental=incremental, chunk_size=chunk_size)
     yield from loader.load_rows()
 

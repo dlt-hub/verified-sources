@@ -113,6 +113,8 @@ def test_load_query_issues(destination_name: str) -> None:
     # tables are typed dicts
     users_table = data_tables[0]
     assert users_table["name"] == "issues"
-    assert load_table_counts(pipeline, "issues") == {"issues": 21}
-    # distinct
+    assert load_table_counts(pipeline, "issues") == {
+        "issues": 11
+    }  # values are changing (decrease)
+    # distinct. actually, we have only 10 unique issues in the project
     assert load_table_distinct_counts(pipeline, "id", "issues") == {"issues": 10}

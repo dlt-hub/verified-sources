@@ -1,11 +1,11 @@
 """Stripe analytics source helpers"""
 
-from typing import Any, Dict, Generator, Optional, Union, Iterable
+from typing import Any, Dict, Iterable, Optional, Union
 
 import stripe
 from dlt.common import pendulum
-from pendulum import DateTime
 from dlt.common.typing import TDataItem
+from pendulum import DateTime
 
 
 def pagination(
