@@ -17,22 +17,31 @@ T = t.TypeVar("T")
 
 class Signals:
     def __init__(self, pipeline_name: str, queue: ScrapingQueue[T]) -> None:
+        self.stopping = False
         self.queue = queue
         self.pipeline_name = pipeline_name
 
     def on_item_scraped(self, item: Item) -> None:
         if not self.queue.is_closed:
             self.queue.put(item)
-        else:
+        elif not self.stopping:
             logger.info(
                 "Queue is closed ",
                 extra={"pipeline_name": self.pipeline_name},
             )
-            raise CloseSpider("Queue is closed")
+            # self.stopping = True
+            if not self.stopping:
+                self._graceful_stop_reactor()
+                self.stopping = True
+                # self.crawler._signal_kill(9)
+            # raise CloseSpider("Queue is closed")
 
     def on_spider_opened(self) -> None:
-        if self.queue.is_closed:
-            raise CloseSpider("Queue is closed")
+        # NOTE: this will not have any effect. you could do it in pipeline, not in signals
+        # OR this signal takes spider in the argument?
+        pass
+        # if self.queue.is_closed:
+        #     raise CloseSpider("Queue is closed")
 
     def on_engine_stopped(self) -> None:
         logger.info(f"Crawling engine stopped for pipeline={self.pipeline_name}")
@@ -56,6 +65,20 @@ class Signals:
         dispatcher.disconnect(self.on_item_scraped, signals.item_scraped)
         dispatcher.disconnect(self.on_engine_stopped, signals.engine_stopped)
 
+    def _graceful_stop_reactor(self) -> t.Any:
+        d = self.crawler.stop()
+        # looks like we do not even need it. maybe in ProcessRunner? check it out
+        # NOTE: on_engine_stopped will be called so this looks legit
+        # d.addBoth(self._stop_reactor)
+        return d
+
+    def _stop_reactor(self, _: t.Any = None) -> None:
+        from twisted.internet import reactor
+
+        try:
+            reactor.stop()
+        except RuntimeError:  # raised if already stopped or in shutdown stage
+            pass
 
 class ScrapyRunner(Runnable):
     """Scrapy runner handles setup and teardown of scrapy crawling"""
@@ -82,6 +105,7 @@ class ScrapyRunner(Runnable):
 
         try:
             logger.info("Starting the crawler")
+            self.signals.crawler = self.crawler
             with self.signals:
                 self.crawler.start()
         except Exception:
