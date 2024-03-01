@@ -61,8 +61,9 @@ For more information about spider implementation please also see [Scrapy docs](h
 
 You can pass scrapy settings via
 
-1. `run_pipeline(..., scrapy_settings={...})`
-2. `create_pipeline_runner(..., scrapy_settings={...})`
+1. `run_pipeline(..., scrapy_settings={...})`,
+2. `create_pipeline_runner(..., scrapy_settings={...})`,
+3. Overriding defaults in `settings.py`.
 
 Example:
 ```py
