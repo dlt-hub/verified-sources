@@ -1,13 +1,35 @@
-import os
+from typing import Union
+from os import PathLike
+from pathlib import Path
+from tempfile import gettempdir
 
-TESTS_BUCKET_URLS = [
-    os.path.abspath("tests/filesystem/samples"),
-    "s3://dlt-ci-test-bucket/standard_source/samples",
-    "gs://ci-test-bucket/standard_source/samples",
-    "az://dlt-ci-test-bucket/standard_source/samples",
+
+TEST_SAMPLES_PATH: str = "tests/filesystem/samples"
+REPO_FIXTURE_PATH: Union[str, PathLike] = Path(
+    gettempdir(), "dlt_test_repo_t8hY3x"
+).absolute()
+REPO_SAFE_PREFIX: str = "test-"
+REPO_GOOD_REF = "good-ref"
+
+FACTORY_ARGS = [
+    {"bucket_url": str(Path(TEST_SAMPLES_PATH).absolute())},
+    {"bucket_url": "s3://dlt-ci-test-bucket/standard_source/samples"},
+    {"bucket_url": "gs://ci-test-bucket/standard_source/samples"},
+    {"bucket_url": "az://dlt-ci-test-bucket/standard_source/samples"},
+    {
+        "bucket_url": f"gitpythonfs://{REPO_SAFE_PREFIX}samples",
+        "kwargs": {
+            "repo_path": REPO_FIXTURE_PATH,
+            "ref": REPO_GOOD_REF,
+        },
+    },
 ]
 
-GLOB_RESULTS = [
+FACTORY_TEST_IDS = [
+    f"url={factory_args['bucket_url'][:15]}..." for factory_args in FACTORY_ARGS
+]
+
+GLOBS = [
     {
         "glob": None,
         "file_names": ["sample.txt"],
@@ -66,3 +88,5 @@ GLOB_RESULTS = [
         "file_names": ["sample.txt"],
     },
 ]
+
+GLOB_TEST_IDS = [f"glob={glob_result['glob']}" for glob_result in GLOBS]

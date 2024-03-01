@@ -2,10 +2,13 @@
 from typing import Iterator, List, Optional, Tuple, Union
 
 import dlt
-from dlt.common.typing import copy_sig
+from dlt.common.typing import copy_sig, DictStrAny
 from dlt.sources import DltResource
-from dlt.sources.filesystem import FileItem, FileItemDict, fsspec_filesystem, glob_files
+from dlt.sources.filesystem import FileItem, FileItemDict, glob_files
 from dlt.sources.credentials import FileSystemCredentials
+from dlt.common.storages.fsspec_filesystem import fsspec_from_config
+from dlt.common.storages.configuration import FilesystemConfiguration
+
 
 from .helpers import (
     AbstractFileSystem,
@@ -26,6 +29,7 @@ def readers(
     bucket_url: str = dlt.secrets.value,
     credentials: Union[FileSystemCredentials, AbstractFileSystem] = dlt.secrets.value,
     file_glob: Optional[str] = "*",
+    kwargs: Optional[DictStrAny] = None,
 ) -> Tuple[DltResource, ...]:
     """This source provides a few resources that are chunked file readers. Readers can be further parametrized before use
        read_csv(chunksize, **pandas_kwargs)
@@ -38,13 +42,28 @@ def readers(
         file_glob (str, optional): The filter to apply to the files in glob format. by default lists all files in bucket_url non-recursively
     """
     return (
-        filesystem(bucket_url, credentials, file_glob=file_glob)
+        filesystem(
+            bucket_url,
+            credentials,
+            file_glob=file_glob,
+            kwargs=kwargs,
+        )
         | dlt.transformer(name="read_csv")(_read_csv),
-        filesystem(bucket_url, credentials, file_glob=file_glob)
+        filesystem(
+            bucket_url,
+            credentials,
+            file_glob=file_glob,
+            kwargs=kwargs,
+        )
         | dlt.transformer(name="read_jsonl")(_read_jsonl),
-        filesystem(bucket_url, credentials, file_glob=file_glob)
+        filesystem(
+            bucket_url,
+            credentials,
+            file_glob=file_glob,
+            kwargs=kwargs,
+        )
         | dlt.transformer(name="read_parquet")(_read_parquet),
-        filesystem(bucket_url, credentials, file_glob=file_glob)
+        filesystem(bucket_url, credentials, file_glob=file_glob, kwargs=kwargs)
         | dlt.transformer(name="read_csv_duckdb")(_read_csv_duckdb),
     )
 
@@ -58,6 +77,7 @@ def filesystem(
     file_glob: Optional[str] = "*",
     files_per_page: int = DEFAULT_CHUNK_SIZE,
     extract_content: bool = False,
+    kwargs: Optional[DictStrAny] = None,
 ) -> Iterator[List[FileItem]]:
     """This resource lists files in `bucket_url` using `file_glob` pattern. The files are yielded as FileItem which also
     provide methods to open and read file data. It should be combined with transformers that further process (ie. load files)
@@ -73,14 +93,15 @@ def filesystem(
     Returns:
         Iterator[List[FileItem]]: The list of files.
     """
+    fs_config = FilesystemConfiguration(bucket_url, credentials, kwargs=kwargs)
     if isinstance(credentials, AbstractFileSystem):
         fs_client = credentials
     else:
-        fs_client = fsspec_filesystem(bucket_url, credentials)[0]
+        fs_client = fsspec_from_config(fs_config)[0]
 
     files_chunk: List[FileItem] = []
     for file_model in glob_files(fs_client, bucket_url, file_glob):
-        file_dict = FileItemDict(file_model, credentials)
+        file_dict = FileItemDict(file_model, fs_config)
         if extract_content:
             file_dict["file_content"] = file_dict.read_bytes()
         files_chunk.append(file_dict)  # type: ignore
