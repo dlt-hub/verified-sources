@@ -29,8 +29,9 @@ class Signals:
                 "Queue is closed, stopping",
                 extra={"pipeline_name": self.pipeline_name},
             )
-            self.stopping = True
-            self.crawler.stop()
+            if not self.stopping:
+                self.stopping = True
+                self.crawler.stop()
 
     def on_engine_stopped(self) -> None:
         logger.info(f"Crawling engine stopped for pipeline={self.pipeline_name}")
