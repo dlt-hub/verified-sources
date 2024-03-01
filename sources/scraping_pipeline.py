@@ -44,6 +44,31 @@ def scrape_quotes() -> None:
     )
 
 
+def scrape_quotes_scrapy_configs() -> None:
+    pipeline = dlt.pipeline(
+        pipeline_name="scraping_custom_scrapy_configs",
+        destination="duckdb",
+        dataset_name="quotes",
+    )
+
+    run_pipeline(
+        pipeline,
+        MySpider,
+        # you can pass scrapy settings overrides here
+        scrapy_settings={
+            # How many sub pages to scrape
+            # https://docs.scrapy.org/en/latest/topics/settings.html#depth-limit
+            "DEPTH_LIMIT": 100,
+            "SPIDER_MIDDLEWARES": {
+                "scrapy.spidermiddlewares.depth.DepthMiddleware": 200,
+                "scrapy.spidermiddlewares.httperror.HttpErrorMiddleware": 300,
+            },
+            "HTTPERROR_ALLOW_ALL": False,
+        },
+        write_disposition="append",
+    )
+
+
 def scrape_quotes_callback_access_resource() -> None:
     pipeline = dlt.pipeline(
         pipeline_name="scraping_resource_callback",
@@ -76,5 +101,6 @@ def scrape_quotes_advanced_runner() -> None:
 
 if __name__ == "__main__":
     scrape_quotes()
+    # scrape_quotes_scrapy_configs()
     # scrape_quotes_callback_access_resource()
     # scrape_quotes_advanced_runner()
