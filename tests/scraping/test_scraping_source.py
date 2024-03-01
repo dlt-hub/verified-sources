@@ -53,9 +53,9 @@ def test_pipeline_runners_handle_extended_and_simple_use_cases(mocker):
     spy_on_queue_close = mocker.spy(sources.scraping.queue.ScrapingQueue, "close")
     spy_on_crawler_process = mocker.spy(TestCrawlerProcess, "stop")
     scraping_host.run(write_disposition="replace")
-    table_expect_at_least_n_records("scraping_res_add_limit_dataset", 20, pipeline)
+    table_expect_at_least_n_records("scraping_res_add_limit_results", 20, pipeline)
     table_expect_at_least_n_records(
-        "scraping_res_add_limit_dataset__quote__tags", 68, pipeline
+        "scraping_res_add_limit_results__quote__tags", 68, pipeline
     )
 
     spy_on_queue_put.assert_called()
@@ -124,9 +124,9 @@ def test_scraping_all_resources(destination_name: str) -> None:
     # for now only check main tables
     expected_tables = {
         pipeline_name,
-        f"{pipeline_name}__quote__tags",
+        "quotes__quote__tags",
     }
     assert set(table_counts.keys()) >= set(expected_tables)
 
     table_expect_at_least_n_records(pipeline_name, 100, pipeline)
-    table_expect_at_least_n_records(f"{pipeline_name}__quote__tags", 232, pipeline)
+    table_expect_at_least_n_records("quotes__quote__tags", 232, pipeline)
