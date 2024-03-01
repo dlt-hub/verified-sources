@@ -17,6 +17,7 @@ from dlt.common.validation import validate_dict
 from dlt.extract.incremental import Incremental
 from dlt.extract.source import DltResource, DltSource
 from dlt.common import logger
+from dlt.common.utils import update_dict_nested
 
 from .auth import BearerTokenAuth, AuthBase
 from .client import RESTClient
@@ -38,7 +39,7 @@ from .typing import (
     EndpointResource,
     RESTAPIConfig,
 )
-from .utils import remove_key, deep_merge
+from .utils import remove_key
 
 
 PAGINATOR_MAP = {
@@ -388,7 +389,7 @@ def make_endpoint_resource(
     """
     if isinstance(resource, str):
         resource = {"name": resource, "endpoint": {"path": resource}}
-        return deep_merge(copy.deepcopy(default_config), resource)
+        return update_dict_nested(copy.deepcopy(default_config), resource)
 
     if "endpoint" in resource and isinstance(resource["endpoint"], str):
         resource["endpoint"] = {"path": resource["endpoint"]}
@@ -399,7 +400,7 @@ def make_endpoint_resource(
     if "path" not in resource["endpoint"]:
         resource["endpoint"]["path"] = resource["name"]
 
-    return deep_merge(copy.deepcopy(default_config), resource)
+    return update_dict_nested(copy.deepcopy(default_config), resource)
 
 
 def make_resolved_param(
