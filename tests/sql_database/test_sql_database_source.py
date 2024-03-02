@@ -1,6 +1,7 @@
 import pytest
 import os
 from typing import List, Optional, Set
+import humanize
 
 import dlt
 from dlt.common.utils import uniq_id
@@ -43,6 +44,30 @@ def test_load_sql_schema_loads_all_tables(
     pipeline = make_pipeline(destination_name)
     load_info = pipeline.run(
         sql_database(credentials=sql_source_db.credentials, schema=sql_source_db.schema)
+    )
+    print(
+        humanize.precisedelta(
+            pipeline.last_trace.finished_at - pipeline.last_trace.started_at
+        )
+    )
+    assert_load_info(load_info)
+
+    assert_row_counts(pipeline, sql_source_db)
+
+
+@pytest.mark.parametrize("destination_name", ALL_DESTINATIONS)
+def test_load_sql_schema_loads_all_tables_parallel(
+    sql_source_db: SQLAlchemySourceDB, destination_name: str
+) -> None:
+    pipeline = make_pipeline(destination_name)
+    source = sql_database(
+        credentials=sql_source_db.credentials, schema=sql_source_db.schema
+    ).parallelize()
+    load_info = pipeline.run(source)
+    print(
+        humanize.precisedelta(
+            pipeline.last_trace.finished_at - pipeline.last_trace.started_at
+        )
     )
     assert_load_info(load_info)
 
@@ -197,6 +222,36 @@ def test_load_sql_table_resource_incremental_initial_value(
     load_info = pipeline.run(sql_table_source())
     assert_load_info(load_info)
     assert_row_counts(pipeline, sql_source_db, ["chat_message"])
+
+
+@pytest.mark.parametrize("destination_name", ALL_DESTINATIONS)
+def test_load_sql_table_resource_incremental_end_value(
+    sql_source_db: SQLAlchemySourceDB, destination_name: str
+) -> None:
+    start_id = sql_source_db.table_infos["chat_message"]["ids"][0]
+    end_id = sql_source_db.table_infos["chat_message"]["ids"][-1] // 2
+
+    @dlt.source
+    def sql_table_source() -> List[DltResource]:
+        return [
+            sql_table(
+                credentials=sql_source_db.credentials,
+                schema=sql_source_db.schema,
+                table="chat_message",
+                incremental=dlt.sources.incremental(
+                    "id", initial_value=start_id, end_value=end_id, row_order="asc"
+                ),
+            )
+        ]
+
+    pipeline = make_pipeline(destination_name)
+    load_info = pipeline.run(sql_table_source())
+    assert_load_info(load_info)
+    # half of the records loaded -1 record. end values is non inclusive
+    assert (
+        pipeline.last_trace.last_normalize_info.row_counts["chat_message"]
+        == end_id - start_id
+    )
 
 
 @pytest.mark.parametrize("defer_table_reflect", (False, True))

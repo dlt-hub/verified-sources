@@ -1,6 +1,8 @@
 from typing import Iterator, Any
+import humanize
 
 import dlt
+from dlt.common import pendulum
 from dlt.sources.credentials import ConnectionStringCredentials
 
 from sql_database import sql_database, sql_table, Table
@@ -58,6 +60,11 @@ def load_entire_database() -> None:
 
     # Run the pipeline. For a large db this may take a while
     info = pipeline.run(source, write_disposition="replace")
+    print(
+        humanize.precisedelta(
+            pipeline.last_trace.finished_at - pipeline.last_trace.started_at
+        )
+    )
     print(info)
 
 
@@ -133,6 +140,33 @@ def select_columns() -> None:
     print(pipeline.last_trace.last_normalize_info)
     # no "updated" column in "family" table
     print(pipeline.default_schema.to_pretty_yaml())
+
+
+def select_with_end_value_and_row_order() -> None:
+    """Gets data from a table withing a specified range and sorts rows descending"""
+    pipeline = dlt.pipeline(
+        pipeline_name="rfam_database",
+        destination="duckdb",
+        dataset_name="rfam_data",
+        full_refresh=True,
+    )
+
+    # gets data from this range
+    start_date = pendulum.now().subtract(years=1)
+    end_date = pendulum.now()
+
+    family = sql_table(
+        credentials="mysql+pymysql://rfamro@mysql-rfam-public.ebi.ac.uk:4497/Rfam",
+        table="family",
+        incremental=dlt.sources.incremental(  # declares desc row order
+            "updated", initial_value=start_date, end_value=end_date, row_order="desc"  # type: ignore
+        ),
+        chunk_size=10,
+    )
+    # also we do not want the whole table, so we add limit to get just one chunk (10 records)
+    pipeline.run(family.add_limit(1))
+    # only 10 rows
+    print(pipeline.last_trace.last_normalize_info)
 
 
 def reflect_and_connector_x() -> None:
@@ -211,7 +245,9 @@ if __name__ == "__main__":
     # load_select_tables_from_database()
 
     # load a table and select columns
-    select_columns()
+    # select_columns()
+    load_entire_database()
+    # select_with_end_value_and_row_order()
 
     # Load tables with the standalone table resource
     # load_standalone_table_resource()
