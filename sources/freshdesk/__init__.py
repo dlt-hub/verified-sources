@@ -71,6 +71,6 @@ def freshdesk_source(
         yield dlt.resource(
             incremental_resource,
             name=endpoint,
-            write_disposition="append",
+            write_disposition="merge",
             primary_key="id",
         )(endpoint=endpoint)
