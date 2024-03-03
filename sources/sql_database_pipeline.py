@@ -206,79 +206,12 @@ def reflect_and_connector_x() -> None:
     print(info)
 
 
-def tmp() -> None:
-    from sql_database.pg_cdc_utils import (
-        cdc_rows,
-        rep_conn,
-        create_publication,
-        add_table_to_publication,
-        create_replication_slot,
-        get_max_lsn,
-    )
-
-    DATABASE = "dlt_data"
-    USER = "replication_reader" # CREATE USER replication_reader WITH PASSWORD 'replication_reader' LOGIN REPLICATION;
-    # USER = "loader"
-    PASSWORD = "replication_reader"
-    # PASSWORD = "loader"
-    HOST = "LOCALHOST"
-    PORT = '5432'
-    
-
-    conn = rep_conn(
-        database=DATABASE,
-        user=USER,
-        password=PASSWORD,
-        host=HOST,
-        port=PORT,
-    )
-
-    publication_name = "foo"
-    table_name = "tmp"
-    slot_name = "bar"  # "foo"
-    options = {'publication_names': publication_name, 'proto_version': '1'}
-
-    cur = conn.cursor()
-    # cur.drop_replication_slot(slot_name)
-    create_replication_slot(slot_name, cur)
-    create_publication(publication_name, cur)
-    add_table_to_publication(table_name, publication_name, cur)
-    max_lsn = get_max_lsn(slot_name, options, cur)
-    print(max_lsn)
-    cur.start_replication(slot_name=slot_name, decode=False, options=options)
-    
-    assert False
-    slot_name = "foo"
-
-    for row in cdc_rows(conn):
-        print(row)
-
-    # pipeline = dlt.pipeline(
-    #     pipeline_name="tmp",
-    #     destination='duckdb',
-    #     dataset_name="tmp",
-    #     pipelines_dir="tmp",
-    #     full_refresh=True,
-    # )
-
-    # tbl = sql_table(
-    #     credentials="postgresql://loader:loader@localhost:5432/dlt_data",
-    #     schema="tmp",
-    #     table="tmp",
-    # )
-
-    # pipeline.run(tbl)
-    # print(pipeline.last_trace.last_normalize_info)
-    # print(pipeline.default_schema.to_pretty_yaml())    
-
-
 if __name__ == "__main__":
     # Load selected tables with different settings
     # load_select_tables_from_database()
 
     # load a table and select columns
-    # select_columns()
-    tmp()
+    select_columns()
 
     # Load tables with the standalone table resource
     # load_standalone_table_resource()

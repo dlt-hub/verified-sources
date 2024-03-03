@@ -1,0 +1,95 @@
+import json
+from typing import Optional, Any
+
+import pypgoutput  # type: ignore[import-untyped]
+
+from dlt.common.data_types.typing import TDataType
+from dlt.common.data_types.type_helpers import coerce_value
+from dlt.common.schema.typing import TColumnSchema, TColumnType
+from dlt.destinations.impl.postgres import capabilities
+from dlt.destinations.impl.postgres.postgres import PostgresTypeMapper
+
+
+# maps postgres type OID to type string
+_PG_TYPES = {
+    16: "boolean",
+    17: "bytea",
+    20: "bigint",
+    21: "smallint",
+    23: "integer",
+    701: "double precision",
+    1043: "character varying",
+    1082: "date",
+    1083: "time without time zone",
+    1184: "timestamp with time zone",
+    1700: "numeric",
+    3802: "jsonb",
+}
+
+
+def _get_precision(type_id: int, atttypmod: int) -> Optional[int]:
+    # get precision from postgres type attributes: https://stackoverflow.com/a/3351120
+    if type_id == 21:  # smallint
+        return 16
+    elif type_id == 23:  # integer
+        return 32
+    elif type_id == 20:  # bigint
+        return 64
+    if atttypmod != -1:
+        if type_id == 1700:  # numeric
+            return ((atttypmod - 4) >> 16) & 65535
+        elif type_id in (
+            1083,
+            1184,
+        ):  # time without time zone, timestamp with time zone
+            return atttypmod
+        elif type_id == 1043:  # character varying
+            return atttypmod - 4
+    return None
+
+
+def _get_scale(type_id: int, atttypmod: int) -> Optional[int]:
+    # get scale from postgres type attributes: https://stackoverflow.com/a/3351120
+    if atttypmod != -1:
+        if type_id in (21, 23, 20):  # smallint, integer, bigint
+            return 0
+        if type_id == 1700:  # numeric
+            return (atttypmod - 4) & 65535
+    return None
+
+
+def _to_dlt_column_type(type_id: int, atttypmod: int) -> TColumnType:
+    # converts postgres type to dlt column type
+    pg_type = _PG_TYPES[type_id]
+    precision = _get_precision(type_id, atttypmod)
+    scale = _get_scale(type_id, atttypmod)
+    mapper = PostgresTypeMapper(capabilities())
+    return mapper.from_db_type(pg_type, precision, scale)
+
+
+def _to_dlt_column_schema(col: pypgoutput.decoders.ColumnType) -> TColumnSchema:
+    # converts pypgoutput ColumnType to dlt column schema
+    dlt_column_type = _to_dlt_column_type(col.type_id, col.atttypmod)
+    partial_column_schema = {
+        "name": col.name,
+        "primary_key": bool(col.part_of_pkey),
+        "nullable": not bool(col.part_of_pkey),
+    }
+    return {**dlt_column_type, **partial_column_schema}  # type: ignore[typeddict-item]
+
+
+def _to_dlt_val(val: str, data_type: TDataType, byte1: str) -> Any:
+    # converts pgoutput's text-formatted value into dlt-compatible data value
+    if byte1 == "n":
+        return None
+    elif byte1 == "t":
+        if data_type == "binary":
+            # https://www.postgresql.org/docs/current/datatype-binary.html#DATATYPE-BINARY-BYTEA-HEX-FORMAT
+            return bytes.fromhex(val.replace("\\x", ""))
+        elif data_type == "complex":
+            return json.loads(val)
+        return coerce_value(data_type, "text", val)
+    else:
+        raise ValueError(
+            f"Byte1 in replication message must be 'n' or 't', not '{byte1}'."
+        )
