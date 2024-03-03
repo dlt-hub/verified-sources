@@ -20,8 +20,7 @@ from .typing import TDataPage
 from .settings import ENTITY_MAPPINGS, RECENTS_ENTITIES
 from dlt.common import pendulum
 from dlt.common.time import ensure_pendulum_datetime
-from dlt.sources import DltResource
-from dlt.extract.typing import DataItemWithMeta
+from dlt.sources import DltResource, TDataItems
 
 
 @dlt.source(name="pipedrive")
@@ -99,7 +98,7 @@ def pipedrive_source(
 
 def _get_deals_flow(
     deals_page: TDataPage, pipedrive_api_key: str
-) -> Iterator[DataItemWithMeta]:
+) -> Iterator[TDataItems]:
     custom_fields_mapping = dlt.current.source_state().get("custom_fields_mapping", {})
     for row in deals_page:
         url = f"deals/{row['id']}/flow"

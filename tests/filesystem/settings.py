@@ -5,6 +5,7 @@ TESTS_BUCKET_URLS = [
     "s3://dlt-ci-test-bucket/standard_source/samples",
     "gs://ci-test-bucket/standard_source/samples",
     "az://dlt-ci-test-bucket/standard_source/samples",
+    "gdrive://15eC3e5MNew2XAIefWNlG8VlEa0ISnnaG/standard_source/samples",
 ]
 
 GLOB_RESULTS = [
