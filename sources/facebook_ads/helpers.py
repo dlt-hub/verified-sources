@@ -87,9 +87,7 @@ def get_data_chunked(
         yield chunk
 
 
-def enrich_ad_objects(
-    fb_obj_type: AbstractObject, fields: Sequence[str]
-) -> Any:
+def enrich_ad_objects(fb_obj_type: AbstractObject, fields: Sequence[str]) -> Any:
     """Returns a transformation that will enrich any of the resources returned by `` with additional fields
 
     In example below we add "thumbnail_url" to all objects loaded by `ad_creatives` resource:
