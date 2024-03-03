@@ -13,7 +13,6 @@ from dlt.common import logger
 from dlt.common.configuration.inject import with_config
 from dlt.common.time import ensure_pendulum_datetime
 from dlt.common.typing import DictStrAny, TDataItem, TDataItems
-from dlt.extract.typing import ItemTransformFunctionWithMeta
 from dlt.sources.helpers import requests
 from dlt.sources.helpers.requests import Client
 
@@ -90,7 +89,7 @@ def get_data_chunked(
 
 def enrich_ad_objects(
     fb_obj_type: AbstractObject, fields: Sequence[str]
-) -> ItemTransformFunctionWithMeta[TDataItems]:
+) -> Any:
     """Returns a transformation that will enrich any of the resources returned by `` with additional fields
 
     In example below we add "thumbnail_url" to all objects loaded by `ad_creatives` resource:
