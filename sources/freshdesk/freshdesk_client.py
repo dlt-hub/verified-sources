@@ -1,10 +1,7 @@
-"""Freshdesk source helpers"""
+"""Freshdesk Client for making authenticated requests"""
 
-import logging
-import time
 from typing import Any, Iterable, Optional
 
-import pendulum
 from dlt.common.typing import TDataItem
 from dlt.sources.helpers import requests
 
@@ -40,50 +37,50 @@ class FreshdeskClient:
         Handles rate limits in HTTP requests and ensures
         that the client doesn't exceed the limit set by the server.
         """
+        import logging
+        import time
+
+        import requests
+
         while True:
             try:
                 response = requests.get(url, **kwargs, auth=(self.api_key, "X"))
                 response.raise_for_status()
+
                 return response
             except requests.HTTPError as e:
                 if e.response.status_code == 429:
-                    logging.warning("Rate limited. Waiting to retry...")
-                    seconds_to_wait = (
-                        int(e.response.headers["X-Rate-Limit-Reset"])
-                        - pendulum.now().timestamp()
+
+                    # Get the 'Retry-After' header to know how long to wait
+                    # Fallback to 60 seconds if header is missing
+                    seconds_to_wait = int(
+                        e.response.headers.get("Retry-After", 60)
                     )
+                    # Log a warning message
+                    logging.warning(
+                        f"Rate limited. Waiting to retry after: {seconds_to_wait} secs"
+                    )
+
+                    # Wait for the specified number of seconds before retrying
                     time.sleep(seconds_to_wait)
                 else:
+                    # If the error is not a rate limit (429), raise the exception to be handled elsewhere or stop execution
                     raise
 
     def paginated_response(
         self,
         endpoint: str,
-        page: int = 1,
-        per_page: int = 100,
-        updated_at: Optional[Any] = None,
+        per_page: int,
+        updated_at: Optional[str] = None,
     ) -> Iterable[TDataItem]:
-        """
-        Retrieves data from an endpoint with pagination.
-
-        Args:
-            endpoint (str): The endpoint to retrieve data from (e.g., 'tickets', 'contacts').
-            page (int): The starting page number for the API request.
-            per_page (int): The number of items requested per page.
-            updated_at (Optional[Any]): An optional 'updated_at' to limit the data retrieved.
-                                        Defaults to None.
-
-        Yields:
-            Iterable[TDataItem]: Data items retrieved from the endpoint.
-
-        """
+        page = 1
         while True:
             # Construct the URL for the specific endpoint
             url = f"{self.base_url}/{endpoint}"
 
             params = {"per_page": per_page, "page": page}
 
-            # Adjust parameters based on the endpoint
+            # Implement date range splitting logic here, if applicable
             if endpoint in ["tickets", "contacts"]:
                 param_key = (
                     "updated_since" if endpoint == "tickets" else "_updated_since"
@@ -91,19 +88,12 @@ class FreshdeskClient:
                 if updated_at:
                     params[param_key] = updated_at
 
-            # To handle requests, use the method provided by the class,
-            # which includes rate-limiting.
+            # Handle requests with rate-limiting
+            # A maximum of 300 pages (30000 tickets) will be returned.
             response = self._request_with_rate_limit(url, params=params)
-
             data = response.json()
 
             if not data:
-                break
-
+                break  # Stop if no data or max page limit reached
             yield data
-
-            # Assuming the API does not return a full page of data if it's the last page
-            if len(data) < per_page:
-                break  # Last page reached
-
-            page += 1  # Prepare to fetch the next page
+            page += 1

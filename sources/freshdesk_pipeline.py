@@ -11,7 +11,7 @@ def load_endpoints() -> None:
 
     pipeline = dlt.pipeline(
         pipeline_name="freshdesk_pipeline",
-        destination="bigquery",
+        destination="duckdb",
         dataset_name="freshdesk_data",
     )
 
@@ -30,7 +30,7 @@ def load_selected_endpoints() -> None:
 
     pipeline = dlt.pipeline(
         pipeline_name="freshdesk_pipeline",
-        destination="bigquery",
+        destination="duckdb",
         dataset_name="freshdesk_data",
     )
 

@@ -13,7 +13,6 @@ from .settings import DEFAULT_ENDPOINTS
 @dlt.source()
 def freshdesk_source(
     endpoints: Optional[List[str]] = None,
-    page: int = 1,
     per_page: int = 100,
     domain: str = dlt.config.value,
     api_secret_key: str = dlt.secrets.value,
@@ -26,7 +25,6 @@ def freshdesk_source(
 
     Args:
         endpoints: A list of Freshdesk API endpoints to fetch. Deafults to 'settings.py'.
-        page: The starting page number for API pagination.
         per_page: The number of items to fetch per page, with a maximum of 100.
         domain: The Freshdesk domain from which to fetch the data. Defaults to 'config.toml'.
         api_secret_key: Freshdesk API key. Defaults to 'secrets.toml'.
@@ -61,7 +59,6 @@ def freshdesk_source(
         # Use the FreshdeskClient instance to fetch paginated responses
         yield from freshdesk.paginated_response(
             endpoint=endpoint,
-            page=page,
             per_page=per_page,
             updated_at=updated_at,
         )
