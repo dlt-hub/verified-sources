@@ -62,6 +62,10 @@ def create_pipeline_runner(
     queue_result_timeout: float = dlt.config.value,
     scrapy_settings: t.Optional[AnyDict] = None,
 ) -> ScrapingHost:
+    """Creates scraping host instance
+    This helper only creates pipeline host, so running and controlling
+    scrapy runner and pipeline is completely delegated to advanced users
+    """
     queue = ScrapingQueue(  # type: ignore
         maxsize=queue_size,
         batch_size=batch_size,
