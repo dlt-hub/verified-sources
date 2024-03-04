@@ -2,12 +2,10 @@
 
 from typing import (
     Callable,
-    cast,
     Any,
     List,
     Optional,
     Iterator,
-    Dict,
     Union,
 )
 import operator
@@ -16,12 +14,11 @@ import dlt
 from dlt.sources.credentials import ConnectionStringCredentials
 from dlt.common.configuration.specs import BaseConfiguration, configspec
 from dlt.common.typing import TDataItem
-from .schema_types import table_to_columns
+
+from .schema_types import table_to_columns, Table, SelectAny
 
 from sqlalchemy import Table, create_engine
 from sqlalchemy.engine import Engine
-from sqlalchemy.sql import Select
-from sqlalchemy import Table
 
 
 class TableLoader:
@@ -48,7 +45,7 @@ class TableLoader:
             self.cursor_column = None
             self.last_value = None
 
-    def make_query(self) -> Select[Any]:
+    def make_query(self) -> SelectAny:
         table = self.table
         query = table.select()
         if not self.incremental:

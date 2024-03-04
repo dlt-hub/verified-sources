@@ -7,7 +7,7 @@ from pendulum import datetime
 from slack import slack_source
 
 
-def load_all_resources() -> None:
+def load_all_resources(replies: bool = False) -> None:
     """Load all resources from slack without any selection of channels."""
 
     pipeline = dlt.pipeline(
@@ -15,10 +15,13 @@ def load_all_resources() -> None:
     )
 
     source = slack_source(
-        page_size=1000, start_date=datetime(2023, 9, 1), end_date=datetime(2023, 9, 8)
+        page_size=1000,
+        start_date=datetime(2023, 9, 1),
+        end_date=datetime(2023, 9, 8),
+        replies=replies,
     )
 
-    # Uncomment the following line to load only the access_logs resource. It is not selectes
+    # Uncomment the following line to load only the access_logs resource. It is not selected
     # by default because it is a resource just available on paid accounts.
     # source.access_logs.selected = True
 
@@ -71,8 +74,11 @@ if __name__ == "__main__":
     # resources = ["access_logs", "conversations", "conversations_history"]
 
     # load_all_resources()
-    # select_resource(selected_channels=["dlt-github-ci"])
 
+    # load all resources with replies
+    # load_all_resources(replies=True)
+
+    # select_resource(selected_channels=["dlt-github-ci"])
     # select_resource(selected_channels=["1-announcements", "dlt-github-ci"])
 
     get_users()

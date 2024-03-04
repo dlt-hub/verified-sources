@@ -28,7 +28,7 @@ jobs:
 
           raw_changed_sources=$(
             git diff --name-only ${{ github.event.pull_request.base.sha }} ${{ github.event.pull_request.head.sha }} \
-              | grep '^sources/[^._]' || true
+              | grep -E '^sources/[^._]|^tests/[^._]' || true
           )
 
           echo $raw_changed_sources
@@ -37,10 +37,11 @@ jobs:
             echo "No changed sources. Skipping tests."
           else
             changed_sources=$(echo "$raw_changed_sources" \
-              | sed -nE 's/^sources\/([^/]+)\/.*$/\1/p; s/^sources\/(.*)_pipeline\.py$/\1/p' \
+              | sed -nE 's/^sources\/([^/]+)\/.*$/\1/p; s/^sources\/(.*)_pipeline\.py$/\1/p; s/^tests\/([^/]+)\/.*$/\1/p' \
               | sort -u \
               | tr '\n' ' '
             )
-            echo "Changed sources: $changed_sources"
+            echo "Changed sources or sources tests: $changed_sources"
           fi
+
           echo "sources_list=$changed_sources" >> $GITHUB_OUTPUT

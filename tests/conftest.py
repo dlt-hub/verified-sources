@@ -1,5 +1,5 @@
 import os
-from typing import List
+import logging
 
 # will run the following auto use fixtures for all tests ie. to cleanup the datasets, env variables and file system after each test
 from tests.utils import (
@@ -44,3 +44,7 @@ def pytest_configure(config):
         return pendulum.now().format("_YYYYMMDDhhmmssSSSS")
 
     Pipeline._create_pipeline_instance_id = _create_pipeline_instance_id
+
+    # disable azure logging
+    for log in ["azure.core.pipeline.policies.http_logging_policy"]:
+        logging.getLogger(log).setLevel("ERROR")
