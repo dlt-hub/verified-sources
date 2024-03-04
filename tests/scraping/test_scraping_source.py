@@ -2,6 +2,7 @@ from unittest import mock
 
 import dlt
 import pytest
+from twisted.internet import reactor
 
 import sources.scraping.helpers
 import sources.scraping.queue
@@ -20,6 +21,16 @@ from .utils import (
     queue_closer,
     table_expect_at_least_n_records,
 )
+
+
+@pytest.fixture(scope="module")
+def shutdown_reactor():
+    yield True
+
+    try:
+        reactor.stop()
+    except Exception:  # noqa
+        pass
 
 
 def test_scrapy_resource_yields_last_batch_on_queue_get_timeout():
@@ -41,7 +52,9 @@ def test_scrapy_resource_yields_last_batch_if_queue_is_closed():
 
 
 @mock.patch("sources.scraping.runner.CrawlerProcess", TestCrawlerProcess)
-def test_pipeline_runners_handle_extended_and_simple_use_cases(mocker):
+def test_pipeline_runners_handle_extended_and_simple_use_cases(
+    mocker, shutdown_reactor
+):
     pipeline = dlt.pipeline(
         pipeline_name="scraping_res_add_limit",
         destination="duckdb",
@@ -103,7 +116,7 @@ def test_resource_name_assignment_and_generation():
 )
 @pytest.mark.parametrize("destination_name", ALL_DESTINATIONS)
 @mock.patch("sources.scraping.runner.CrawlerProcess", TestCrawlerProcess)
-def test_scraping_all_resources(destination_name: str) -> None:
+def test_scraping_all_resources(destination_name: str, shutdown_reactor) -> None:
     pipeline_name = f"scraping_forked_{destination_name}_results"
     pipeline = dlt.pipeline(
         pipeline_name=pipeline_name,
