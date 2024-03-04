@@ -2,6 +2,7 @@ from unittest import mock
 
 import dlt
 import pytest
+from dlt.sources import DltResource
 from twisted.internet import reactor
 
 import sources.scraping.helpers
@@ -9,7 +10,6 @@ import sources.scraping.queue
 import sources.scraping.runner
 
 from sources.scraping import run_pipeline
-from sources.scraping.helpers import create_pipeline_runner
 from sources.scraping.queue import ScrapingQueue
 from sources.scraping.runner import PipelineRunner
 
@@ -59,13 +59,21 @@ def test_pipeline_runners_handle_extended_and_simple_use_cases(
         pipeline_name="scraping_res_add_limit",
         destination="duckdb",
     )
-    scraping_host = create_pipeline_runner(pipeline, MySpider, batch_size=10)
-    scraping_host.pipeline_runner.scraping_resource.add_limit(2)
 
     spy_on_queue_put = mocker.spy(sources.scraping.queue.ScrapingQueue, "put")
     spy_on_queue_close = mocker.spy(sources.scraping.queue.ScrapingQueue, "close")
     spy_on_crawler_process = mocker.spy(TestCrawlerProcess, "stop")
-    scraping_host.run(write_disposition="replace")
+
+    def on_before_start(res: DltResource) -> None:
+        res.add_limit(2)
+
+    run_pipeline(
+        pipeline,
+        MySpider,
+        on_before_start=on_before_start,
+        batch_size=10,
+    )
+
     table_expect_at_least_n_records("scraping_res_add_limit_results", 20, pipeline)
     table_expect_at_least_n_records(
         "scraping_res_add_limit_results__quote__tags", 68, pipeline
