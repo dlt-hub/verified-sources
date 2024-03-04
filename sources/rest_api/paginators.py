@@ -1,7 +1,7 @@
 from abc import ABC, abstractmethod
-from typing import Optional, Dict, Any, Tuple, Sequence, Union
+from typing import Optional, Sequence, Union
 
-from dlt.sources.helpers.requests import Response
+from dlt.sources.helpers.requests import Response, Request
 
 from .utils import create_nested_accessor
 
@@ -40,22 +40,12 @@ class BasePaginator(ABC):
         ...
 
     @abstractmethod
-    def prepare_next_request_args(
-        self, url: str, params: Optional[Dict[str, Any]], json: Optional[Dict[str, Any]]
-    ) -> Tuple[Optional[str], Optional[Dict[str, Any]], Optional[Dict[str, Any]]]:
+    def update_request(self, request: Request) -> None:
         """
-        Prepare the arguments for the next API request based on the current state of pagination.
-
-        Subclasses must implement this method to update the request arguments appropriately.
+        Update the request object with the next arguments for the API request.
 
         Args:
-            url (str): The original URL used in the current API request.
-            params (Optional[Dict[str, Any]]): The original query parameters used in the current API request.
-            json (Optional[Dict[str, Any]]): The original JSON body of the current API request.
-
-        Returns:
-            tuple: A tuple containing the updated URL, query parameters, and JSON body to be used
-                for the next API request. These values are used to progress through the paginated data.
+            request (Request): The request object to be updated.
         """
         ...
 
@@ -66,8 +56,8 @@ class SinglePagePaginator(BasePaginator):
     def update_state(self, response: Response) -> None:
         self._has_next_page = False
 
-    def prepare_next_request_args(self, url, params, json):
-        return None, None, None
+    def update_request(self, request: Request) -> None:
+        return
 
 
 class OffsetPaginator(BasePaginator):
@@ -102,19 +92,17 @@ class OffsetPaginator(BasePaginator):
         if self.offset >= total:
             self._has_next_page = False
 
-    def prepare_next_request_args(self, url, params, json):
-        if params is None:
-            params = {}
+    def update_request(self, request: Request) -> None:
+        if request.params is None:
+            request.params = {}
 
-        params[self.offset_key] = self.offset
-        params[self.limit_key] = self.limit
-
-        return url, params, json
+        request.params[self.offset_key] = self.offset
+        request.params[self.limit_key] = self.limit
 
 
 class BaseNextUrlPaginator(BasePaginator):
-    def prepare_next_request_args(self, url, params, json):
-        return self._next_reference, params, json
+    def update_request(self, request: Request) -> None:
+        request.url = self._next_reference
 
 
 class HeaderLinkPaginator(BaseNextUrlPaginator):
@@ -167,5 +155,5 @@ class UnspecifiedPaginator(BasePaginator):
     def update_state(self, response: Response) -> None:
         return Exception("Can't update state with this paginator")
 
-    def prepare_next_request_args(self, url: str, params, json):
-        return Exception("Can't prepare next request with this paginator")
+    def update_request(self, request: Request) -> None:
+        return

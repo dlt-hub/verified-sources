@@ -80,12 +80,3 @@ class TestOffsetPaginator:
         response = Mock(Response, json=lambda: {})
         with pytest.raises(ValueError):
             paginator.update_state(response)
-
-    def test_prepare_next_request_args(self):
-        paginator = OffsetPaginator(0, 10)
-        updated_url, updated_params, updated_json = paginator.prepare_next_request_args(
-            "http://example.com", {}, {}
-        )
-        assert updated_url == "http://example.com"
-        assert updated_params == {"offset": 0, "limit": 10}
-        assert updated_json == {}

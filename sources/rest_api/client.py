@@ -1,9 +1,10 @@
 from typing import Optional, List, Dict, Any, Union, Generator, Literal
 import copy
+from urllib.parse import urlparse
 
 from requests.auth import AuthBase
 from requests import Session as BaseSession
-from requests import Response
+from requests import Response, Request
 from requests.exceptions import HTTPError
 
 from dlt.common import logger
@@ -54,32 +55,60 @@ class RESTClient:
 
         self.paginator = paginator if paginator else UnspecifiedPaginator()
 
-    def make_request(self, path="", method="get", params=None, json=None):
-        if path.startswith("http"):
+    def _create_request(
+        self,
+        path: str,
+        method: str,
+        params: Dict[str, Any],
+        json: Optional[Dict[str, Any]] = None,
+        auth: Optional[AuthBase] = None,
+        hooks: Optional[Dict[str, Any]] = None,
+    ) -> Request:
+        parsed_url = urlparse(path)
+        if parsed_url.scheme in ("http", "https"):
             url = path
         else:
             url = join_url(self.base_url, path)
 
-        logger.info(
-            f"Making {method.upper()} request to {url} with params={params}, "
-            f"json={json}"
-        )
+        auth = auth or self.auth
 
-        response = self.session.request(
+        return Request(
             method=method,
             url=url,
             headers=self.headers,
             params=params if method.lower() == "get" else None,
             json=json if method.lower() in ["post", "put"] else None,
-            auth=self.auth,
+            auth=auth,
+            hooks=hooks,
         )
-        return response
+
+    def _send_request(self, request: Request) -> Response:
+        logger.info(
+            f"Making {request.method.upper()} request to {request.url}"
+            f" with params={request.params}, json={request.json}"
+        )
+
+        prepared_request = self.session.prepare_request(request)
+
+        return self.session.send(prepared_request)
+
+    def request(self, path="", method="get", params=None, json=None, hooks=None):
+        hooks = hooks or {}
+
+        prepared_request = self._create_request(
+            path=path,
+            method=method,
+            params=params,
+            json=json,
+            hooks=hooks,
+        )
+        return self._send_request(prepared_request)
 
     def get(self, path="", params=None):
-        return self.make_request(path, method="get", params=params)
+        return self.request(path, method="get", params=params)
 
     def post(self, path="", json=None):
-        return self.make_request(path, method="post", json=json)
+        return self.request(path, method="post", json=json)
 
     def paginate(
         self,
@@ -87,9 +116,11 @@ class RESTClient:
         method: Literal["get", "post"] = "get",
         params: Optional[Dict[str, Any]] = None,
         json: Optional[Dict[str, Any]] = None,
+        auth: Optional[AuthBase] = None,
         paginator: Optional[BasePaginator] = None,
         data_selector: Optional[Union[str, List[str]]] = None,
         response_actions: Optional[List[Dict[str, Any]]] = None,
+        hooks: Optional[Dict[str, Any]] = None,
     ) -> Generator[Any, None, None]:
         """Paginate over an API endpoint.
 
@@ -104,11 +135,13 @@ class RESTClient:
             self.create_records_extractor(data_selector) if data_selector else None
         )
 
+        request = self._create_request(
+            path=path, method=method, params=params, json=json, auth=auth, hooks=hooks
+        )
+
         while paginator.has_next_page:
             try:
-                response = self.make_request(
-                    path=path, method=method, params=params, json=json
-                )
+                response = self._send_request(request)
             except HTTPError as e:
                 if not response_actions:
                     raise e
@@ -151,7 +184,7 @@ class RESTClient:
             yield extract_records(response)
 
             paginator.update_state(response)
-            path, params, json = paginator.prepare_next_request_args(path, params, json)
+            paginator.update_request(request)
 
     def create_records_extractor(self, data_selector: Optional[Union[str, List[str]]]):
         nested_accessor = create_nested_accessor(data_selector)
