@@ -144,7 +144,7 @@ def test_posts_under_results_key(mock_api_server):
                     "name": "posts",
                     "endpoint": {
                         "path": "posts_under_a_different_key",
-                        "records_path": "many-results",
+                        "data_selector": "many-results",
                         "paginator": "json_links",
                     },
                 },

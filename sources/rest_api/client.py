@@ -88,7 +88,7 @@ class RESTClient:
         params: Optional[Dict[str, Any]] = None,
         json: Optional[Dict[str, Any]] = None,
         paginator: Optional[BasePaginator] = None,
-        records_path: Optional[Union[str, List[str]]] = None,
+        data_selector: Optional[Union[str, List[str]]] = None,
         response_actions: Optional[List[Dict[str, Any]]] = None,
     ) -> Generator[Any, None, None]:
         """Paginate over an API endpoint.
@@ -101,7 +101,7 @@ class RESTClient:
         paginator = copy.deepcopy(paginator if paginator else self.paginator)
 
         extract_records = (
-            self.create_records_extractor(records_path) if records_path else None
+            self.create_records_extractor(data_selector) if data_selector else None
         )
 
         while paginator.has_next_page:
@@ -153,8 +153,8 @@ class RESTClient:
             paginator.update_state(response)
             path, params, json = paginator.prepare_next_request_args(path, params, json)
 
-    def create_records_extractor(self, records_path: Optional[Union[str, List[str]]]):
-        nested_accessor = create_nested_accessor(records_path)
+    def create_records_extractor(self, data_selector: Optional[Union[str, List[str]]]):
+        nested_accessor = create_nested_accessor(data_selector)
 
         return lambda response: nested_accessor(response.json())
 

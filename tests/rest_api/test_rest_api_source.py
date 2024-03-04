@@ -70,7 +70,7 @@ def test_dependent_resource(destination_name: str) -> None:
                 "endpoint": {
                     "path": "pokemon",
                     "paginator": SinglePagePaginator(),
-                    "records_path": "results",
+                    "data_selector": "results",
                     "params": {
                         "limit": 2,
                     },

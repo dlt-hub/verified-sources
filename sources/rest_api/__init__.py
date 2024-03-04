@@ -284,7 +284,7 @@ def rest_api_resources(config: RESTAPIConfig) -> List[DltResource]:
                 path,
                 params,
                 paginator,
-                records_path,
+                data_selector,
                 response_actions,
                 incremental_object=incremental_object,
                 incremental_param=incremental_param,
@@ -297,7 +297,7 @@ def rest_api_resources(config: RESTAPIConfig) -> List[DltResource]:
                     path=path,
                     params=params,
                     paginator=paginator,
-                    records_path=records_path,
+                    data_selector=data_selector,
                     response_actions=response_actions,
                 )
 
@@ -308,7 +308,7 @@ def rest_api_resources(config: RESTAPIConfig) -> List[DltResource]:
                 path=endpoint_config.get("path"),
                 params=request_params,
                 paginator=paginator,
-                records_path=endpoint_config.get("records_path"),
+                data_selector=endpoint_config.get("data_selector"),
                 response_actions=response_actions,
             )
 
@@ -324,7 +324,7 @@ def rest_api_resources(config: RESTAPIConfig) -> List[DltResource]:
                 path,
                 params,
                 paginator,
-                records_path,
+                data_selector,
                 response_actions,
                 param_name=param_name,
                 field_path=resolved_param.resolve_config.field_path,
@@ -348,7 +348,7 @@ def rest_api_resources(config: RESTAPIConfig) -> List[DltResource]:
                         path=formatted_path,
                         params=params,
                         paginator=paginator,
-                        records_path=records_path,
+                        data_selector=data_selector,
                         response_actions=response_actions,
                     ):
                         if parent_record:
@@ -365,7 +365,7 @@ def rest_api_resources(config: RESTAPIConfig) -> List[DltResource]:
                 path=endpoint_config.get("path"),
                 params=request_params,
                 paginator=paginator,
-                records_path=endpoint_config.get("records_path"),
+                data_selector=endpoint_config.get("data_selector"),
                 response_actions=response_actions,
             )
 
