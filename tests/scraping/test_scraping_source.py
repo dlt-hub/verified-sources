@@ -63,8 +63,8 @@ def test_pipeline_runners_handle_extended_and_simple_use_cases(
     scraping_host = create_pipeline_runner(pipeline, MySpider, batch_size=10)
     scraping_host.pipeline_runner.scraping_resource.add_limit(2)
 
-    # Make sure we close the queue to let the scraping to shut down
-    # in testing machine
+    # Make sure we close the queue to let the scraping
+    # to properly shut down in testing machine and exit
     queue_closer(scraping_host.queue, close_after_seconds=30)
     scraping_host.run(dataset_name="quotes", write_disposition="append")
 

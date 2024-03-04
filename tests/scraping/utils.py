@@ -60,7 +60,7 @@ def queue_closer(
             time.sleep(1)
             slept += 1
             if queue.is_closed:
-                return
+                break
 
             if slept >= close_after_seconds:
                 queue.close()
