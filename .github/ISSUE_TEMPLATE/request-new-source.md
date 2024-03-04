@@ -2,7 +2,7 @@
 name: Request new source
 about: I need a source for a data source
 title: ''
-labels: 'Request new source'
+labels: 'source request'
 assignees: ''
 
 ---
