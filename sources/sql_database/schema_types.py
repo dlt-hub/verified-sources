@@ -1,12 +1,20 @@
-from typing import Any, Optional
-
-from sqlalchemy.sql import sqltypes
+from typing import Optional, Any, Type, TYPE_CHECKING
+from typing_extensions import TypeAlias
 from sqlalchemy import Table, Column
+from sqlalchemy.sql import sqltypes, Select
 
 from dlt.common.schema.typing import TColumnSchema, TTableSchemaColumns
 
+# optionally create generics with any so they can be imported by dlt importer
+if TYPE_CHECKING:
+    SelectAny: TypeAlias = Select[Any]
+    ColumnAny: TypeAlias = Column[Any]
+else:
+    SelectAny: TypeAlias = Type[Any]
+    ColumnAny: TypeAlias = Type[Any]
 
-def sqla_col_to_column_schema(sql_col: Column[Any]) -> Optional[TColumnSchema]:
+
+def sqla_col_to_column_schema(sql_col: ColumnAny) -> Optional[TColumnSchema]:
     """Infer dlt schema column type from an sqlalchemy type.
 
     Precision and scale is inferred from that types that support it,

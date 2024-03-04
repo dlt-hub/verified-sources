@@ -1,17 +1,13 @@
 """Loads campaigns, ads sets, ads, leads and insight data from Facebook Marketing API"""
 
-import functools
-from typing import Any, Iterator, Sequence
-import time
+from typing import Iterator, Sequence
 
 from facebook_business import FacebookAdsApi
 from facebook_business.api import FacebookResponse
 
 import dlt
-from dlt.common import pendulum, logger
+from dlt.common import pendulum
 from dlt.common.typing import TDataItems, TDataItem, DictStrAny
-from dlt.common.time import ensure_pendulum_datetime
-from dlt.extract.typing import ItemTransformFunctionWithMeta
 from dlt.sources import DltResource
 
 from .helpers import (

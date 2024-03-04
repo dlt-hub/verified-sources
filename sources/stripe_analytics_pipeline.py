@@ -1,7 +1,7 @@
 from typing import Optional, Tuple
 
 import dlt
-from pendulum import DateTime, datetime
+from pendulum import DateTime
 from stripe_analytics import (
     ENDPOINTS,
     INCREMENTAL_ENDPOINTS,
@@ -139,13 +139,15 @@ def load_data_and_get_metrics() -> None:
 
 
 if __name__ == "__main__":
-    # load only data that was created during the period between the Jan 1, 2024 (incl.), and the Feb 1, 2024 (not incl.).
-    load_data(start_date=datetime(2024, 1, 1), end_date=datetime(2024, 2, 1))
-    # load only data that was created during the period between the May 3, 2023 (incl.), and the March 1, 2024 (not incl.).
-    load_incremental_endpoints(
-        endpoints=("Event",),
-        initial_start_date=datetime(2023, 5, 3),
-        end_date=datetime(2024, 3, 1),
-    )
-    # load Subscription and Event data, calculate metrics, store them in a database
-    load_data_and_get_metrics()
+    load_data()
+    # # load only data that was created during the period between the Jan 1, 2024 (incl.), and the Feb 1, 2024 (not incl.).
+    # from pendulum import datetime
+    # load_data(start_date=datetime(2024, 1, 1), end_date=datetime(2024, 2, 1))
+    # # load only data that was created during the period between the May 3, 2023 (incl.), and the March 1, 2024 (not incl.).
+    # load_incremental_endpoints(
+    #     endpoints=("Event",),
+    #     initial_start_date=datetime(2023, 5, 3),
+    #     end_date=datetime(2024, 3, 1),
+    # )
+    # # load Subscription and Event data, calculate metrics, store them in a database
+    # load_data_and_get_metrics()

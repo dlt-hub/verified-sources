@@ -87,9 +87,9 @@ def test_load_subscription(destination_name: str) -> None:
             assert len(rows) == 3  # 3 customers have active subscriptions
 
 
-# @pytest.mark.skip(
-#     "Stripe events expire after 30 days, generate events to run this test"
-# )
+@pytest.mark.skip(
+    "Stripe events expire after 30 days, generate events to run this test"
+)
 @pytest.mark.parametrize("destination_name", ALL_DESTINATIONS)
 def test_incremental_event_load(destination_name: str) -> None:
     # do the initial load
