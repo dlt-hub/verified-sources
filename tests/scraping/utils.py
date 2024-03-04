@@ -55,8 +55,16 @@ def queue_closer(
     queue: ScrapingQueue, close_after_seconds: float = 1.0
 ) -> threading.Thread:
     def close_queue():
-        time.sleep(close_after_seconds)
-        queue.close()
+        slept: int = 0
+        while True:
+            time.sleep(1)
+            slept += 1
+            if queue.is_closed:
+                return
+
+            if slept >= close_after_seconds:
+                queue.close()
+                break
 
     closer = threading.Thread(target=close_queue)
     closer.start()

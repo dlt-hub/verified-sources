@@ -2,14 +2,11 @@ from unittest import mock
 
 import dlt
 import pytest
-from dlt.sources import DltResource
+
 from twisted.internet import reactor
 
-import sources.scraping.helpers
-import sources.scraping.queue
-import sources.scraping.runner
-
 from sources.scraping import run_pipeline
+from sources.scraping.helpers import create_pipeline_runner
 from sources.scraping.queue import ScrapingQueue
 from sources.scraping.runner import PipelineRunner
 
@@ -60,19 +57,16 @@ def test_pipeline_runners_handle_extended_and_simple_use_cases(
         destination="duckdb",
     )
 
-    spy_on_queue_put = mocker.spy(sources.scraping.queue.ScrapingQueue, "put")
-    spy_on_queue_close = mocker.spy(sources.scraping.queue.ScrapingQueue, "close")
+    spy_on_queue_put = mocker.spy(ScrapingQueue, "put")
+    spy_on_queue_close = mocker.spy(ScrapingQueue, "close")
     spy_on_crawler_process = mocker.spy(TestCrawlerProcess, "stop")
+    scraping_host = create_pipeline_runner(pipeline, MySpider, batch_size=10)
+    scraping_host.pipeline_runner.scraping_resource.add_limit(2)
 
-    def on_before_start(res: DltResource) -> None:
-        res.add_limit(2)
-
-    run_pipeline(
-        pipeline,
-        MySpider,
-        on_before_start=on_before_start,
-        batch_size=10,
-    )
+    # Make sure we close the queue to let the scraping to shut down
+    # in testing machine
+    queue_closer(scraping_host.queue, close_after_seconds=30)
+    scraping_host.run(dataset_name="quotes", write_disposition="append")
 
     table_expect_at_least_n_records("scraping_res_add_limit_results", 20, pipeline)
     table_expect_at_least_n_records(
