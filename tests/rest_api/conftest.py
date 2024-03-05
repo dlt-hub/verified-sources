@@ -1,27 +1,51 @@
+import re
+from typing import NamedTuple, Callable, Pattern
+import json
+import base64
+
+from urllib.parse import urlsplit, urlunsplit
+
 import pytest
 import requests_mock
-import re
-import json
-from urllib.parse import urlsplit, urlunsplit
 
 MOCK_BASE_URL = "https://api.example.com"
 
 
+class Route(NamedTuple):
+    method: str
+    pattern: Pattern
+    callback: Callable
+
+
 class APIRouter:
-    def __init__(self, base_url):
+    def __init__(self, base_url: str):
         self.routes = []
         self.base_url = base_url
 
-    def get(self, pattern):
-        def decorator(func):
-            self.routes.append((re.compile(f"{self.base_url}{pattern}"), func))
-            return func
+    def _add_route(self, method: str, pattern: str, func: Callable) -> Callable:
+        compiled_pattern = re.compile(f"{self.base_url}{pattern}")
+        self.routes.append(Route(method, compiled_pattern, func))
+        return func
+
+    def get(self, pattern: str) -> Callable:
+        def decorator(func: Callable) -> Callable:
+            return self._add_route("GET", pattern, func)
 
         return decorator
 
-    def register_routes(self, mocker):
-        for pattern, callback in self.routes:
-            mocker.register_uri("GET", pattern, text=callback)
+    def post(self, pattern: str) -> Callable:
+        def decorator(func: Callable) -> Callable:
+            return self._add_route("POST", pattern, func)
+
+        return decorator
+
+    def register_routes(self, mocker: requests_mock.Mocker) -> None:
+        for route in self.routes:
+            mocker.register_uri(
+                route.method,
+                route.pattern,
+                text=route.callback,
+            )
 
 
 router = APIRouter(MOCK_BASE_URL)
@@ -108,6 +132,49 @@ def mock_api_server():
             return paginate_response(
                 request, generate_posts(), records_key="many-results"
             )
+
+        @router.get("/protected/posts/basic-auth")
+        def protected_basic_auth(request, context):
+            auth = request.headers.get("Authorization")
+            creds = "user:password"
+            creds_base64 = base64.b64encode(creds.encode()).decode()
+            if auth == f"Basic {creds_base64}":
+                return paginate_response(request, generate_posts())
+            context.status_code = 401
+            return json.dumps({"error": "Unauthorized"})
+
+        @router.get("/protected/posts/bearer-token")
+        def protected_bearer_token(request, context):
+            auth = request.headers.get("Authorization")
+            if auth == "Bearer test-token":
+                return paginate_response(request, generate_posts())
+            context.status_code = 401
+            return json.dumps({"error": "Unauthorized"})
+
+        @router.get("/protected/posts/api-key")
+        def protected_api_key(request, context):
+            api_key = request.headers.get("x-api-key")
+            if api_key == "test-api-key":
+                return paginate_response(request, generate_posts())
+            context.status_code = 401
+            return json.dumps({"error": "Unauthorized"})
+
+        @router.post("/oauth/token")
+        def oauth_token(request, context):
+            return json.dumps(
+                {
+                    "access_token": "test-token",
+                    "expires_in": 3600,
+                }
+            )
+
+        @router.post("/auth/refresh")
+        def refresh_token(request, context):
+            body = request.json()
+            if body.get("refresh_token") == "valid-refresh-token":
+                return json.dumps({"access_token": "new-valid-token"})
+            context.status_code = 401
+            return json.dumps({"error": "Invalid refresh token"})
 
         router.register_routes(m)
 

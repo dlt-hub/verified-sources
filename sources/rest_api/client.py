@@ -88,23 +88,19 @@ class RESTClient:
 
         return self.session.send(prepared_request)
 
-    def request(self, path="", method="get", params=None, json=None, hooks=None):
-        hooks = hooks or {}
-
+    def request(self, path="", method="get", **kwargs):
         prepared_request = self._create_request(
             path=path,
             method=method,
-            params=params,
-            json=json,
-            hooks=hooks,
+            **kwargs,
         )
         return self._send_request(prepared_request)
 
-    def get(self, path="", params=None):
-        return self.request(path, method="get", params=params)
+    def get(self, path="", params=None, **kwargs):
+        return self.request(path, method="get", params=params, **kwargs)
 
-    def post(self, path="", json=None):
-        return self.request(path, method="post", json=json)
+    def post(self, path="", json=None, **kwargs):
+        return self.request(path, method="post", json=json, **kwargs)
 
     def paginate(
         self,
