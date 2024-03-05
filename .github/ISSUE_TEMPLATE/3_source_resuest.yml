@@ -1,0 +1,70 @@
+---
+name: Source request
+description: Request a new verified source.
+labels: ["source request"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        If you want to request new source, please make sure you've checked the `sources` folder of this repo
+        or `dlt init -l` listing and requested source is not there.
+        If you need any help, join our [Slack](https://dlthub.com/community)
+        and ask in the #3-technical-help channel.
+    validations:
+      required: true
+  - type: input
+    attributes:
+      label: Source name
+      description: Name of the affected source as displayed by `dlt init` or present in `sources` folder of this repo.
+    validations:
+      required: true
+  - type: textarea
+    attributes:
+      label: Describe the source data.
+      description: Briefly describe what is the data used in this source. Is it an API? Other database? Link relevant information.
+      placeholder: >
+        Provide the description of the source.
+    validations:
+      required: true
+  - type: dropdown
+    attributes:
+      label: What is your plan for this source.
+      description: Please tell us what is the purpose of this source.
+      multiple: false
+      options:
+        - "I want to run it myself"
+        - "I need the data for my hobby project"
+        - "I need the data for my work"
+        - "I want to run it in production"
+    validations:
+      required: true
+  - type: textarea
+    attributes:
+      label: Use case
+      description: Please, provide up to 3 use case description, that is not only targeted at the developers but also by people creating test account and doing demos.
+      placeholder: >
+          Provide up to 3 use cases for this source.
+    validations:
+      required: true
+  - type: textarea
+    attributes:
+      label: Describe the desired tables.
+      description: Describe the data you need in terms of tables. Describe how it should be loaded, which resources you want to see.
+      placeholder: >
+        Provide description of the resulting tables.
+    validations:
+      required: true
+  - type: textarea
+    attributes:
+      label: Who else will benefit?
+      description: Please tell us who else could use this source? It could be general description of companies, groups of people of specific companies.
+      placeholder: >
+        Who else will benefit?
+    validations:
+      required: true
+  - type: textarea
+    attributes:
+      label: Additional information
+      description: Is there anything else you'd like us to know?
+      placeholder: >
+        E.g. issue frequency, workarounds, related issues, suggestions on how to fix, etc.
