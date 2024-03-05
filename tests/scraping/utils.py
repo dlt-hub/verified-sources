@@ -36,6 +36,7 @@ class TestQueue(ScrapingQueue):
     """Test queue alters the default get_batches behavior by
     adding max attempts count on queue read timeout
     """
+
     def __init__(
         self, maxsize: int = 0, batch_size: int = 10, read_timeout: float = 1.0
     ) -> None:
