@@ -20,13 +20,13 @@ def find_records_key(dictionary, path=None):
     for key, value in dictionary.items():
         # Direct match
         if key in RECORD_KEY_PATTERNS:
-            return path + [key]
+            return [*path, key]
 
         if isinstance(value, list) and len(value) > 0 and isinstance(value[0], dict):
-            return path + [key]
+            return [*path, key]
 
         if isinstance(value, dict):
-            result = find_records_key(value, path + [key])
+            result = find_records_key(value, [*path, key])
             if result:
                 return result
 
@@ -43,10 +43,10 @@ def find_next_page_key(dictionary, path=None):
     for key, value in dictionary.items():
         normalized_key = key.lower()
         if any(pattern in normalized_key for pattern in NEXT_PAGE_KEY_PATTERNS):
-            return path + [key]
+            return [*path, key]
 
         if isinstance(value, dict):
-            result = find_next_page_key(value, path + [key])
+            result = find_next_page_key(value, [*path, key])
             if result:
                 return result
 
