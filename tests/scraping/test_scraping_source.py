@@ -50,7 +50,7 @@ def test_scrapy_resource_yields_last_batch_if_queue_is_closed():
 
 
 @mock.patch("sources.scraping.runner.CrawlerProcess", TestCrawlerProcess)
-@mock.patch("sources.scraping.queue.ScrapingQueue", TestQueue)
+@mock.patch("sources.scraping.helpers.ScrapingQueue", TestQueue)
 def test_pipeline_runners_handle_extended_and_simple_use_cases(
     mocker, shutdown_reactor
 ):
@@ -59,8 +59,8 @@ def test_pipeline_runners_handle_extended_and_simple_use_cases(
         destination="duckdb",
     )
 
-    spy_on_queue_put = mocker.spy(ScrapingQueue, "put")
-    spy_on_queue_close = mocker.spy(ScrapingQueue, "close")
+    spy_on_queue_put = mocker.spy(TestQueue, "put")
+    spy_on_queue_close = mocker.spy(TestQueue, "close")
     spy_on_crawler_process = mocker.spy(TestCrawlerProcess, "stop")
     scraping_host = create_pipeline_runner(pipeline, MySpider, batch_size=10)
     scraping_host.pipeline_runner.scraping_resource.add_limit(2)
