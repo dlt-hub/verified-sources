@@ -1,26 +1,21 @@
 
-name: test all sources (postgres and duckdb)
+name: test all sources (linux, duckdb)
 
 on:
   schedule:
   - cron: 0 0 * * *
 env:
-  ALL_DESTINATIONS: '["postgres", "duckdb"]'
+  ALL_DESTINATIONS: '["duckdb"]'
   DLT_SECRETS_TOML: ${{ secrets.DLT_SECRETS_TOML }}
   RUNTIME__LOG_LEVEL: ERROR
 
 jobs:
   run_loader:
-    name: test all sources (postgres and duckdb)
-    strategy:
-      max-parallel: 2
-      fail-fast: false
-      matrix:
-        os: ["macos-latest", "windows-latest"]
+    name: test all sources (linux, duckdb)
     defaults:
       run:
         shell: bash
-    runs-on: ${{ matrix.os }}
+    runs-on: "ubuntu-latest"
 
     steps:
       - name: Check out
@@ -54,10 +49,4 @@ jobs:
         run: pwd && echo "$DLT_SECRETS_TOML" > sources/.dlt/secrets.toml
 
       - run: poetry run pytest tests
-        if: runner.os != 'Windows'
-        name: Run tests on Linux/macOS
-
-      - run: poetry run pytest tests
-        if: runner.os == 'Windows'
-        name: Run tests on Windows
-        shell: cmd
+        name: Run tests on Linux
