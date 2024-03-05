@@ -33,6 +33,9 @@ class MySpider(Spider):
 
 
 class TestQueue(ScrapingQueue):
+    """Test queue alters the default get_batches behavior by
+    adding max attempts count on queue read timeout
+    """
     def __init__(
         self, maxsize: int = 0, batch_size: int = 10, read_timeout: float = 1.0
     ) -> None:
@@ -40,11 +43,6 @@ class TestQueue(ScrapingQueue):
         self.max_empty_get_attempts = 5
 
     def get_batches(self) -> Iterator[Any]:
-        """Batching helper can be wrapped as a dlt.resource
-
-        Returns:
-            Iterator[Any]: yields scraped items one by one
-        """
         batch: List = []
         get_attempts: int = 0
         while True:
@@ -58,7 +56,6 @@ class TestQueue(ScrapingQueue):
 
                 item = self.get(timeout=self.read_timeout)
                 batch.append(item)
-                get_attempts += 1
 
                 # Mark task as completed
                 self.task_done()
@@ -70,6 +67,8 @@ class TestQueue(ScrapingQueue):
                 if get_attempts >= self.max_empty_get_attempts:
                     self.close()
                     break
+
+                get_attempts += 1
             except QueueClosedError:
                 # Return the last batch before exiting
                 if batch:
