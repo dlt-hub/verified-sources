@@ -15,6 +15,7 @@ from sources.facebook_ads import (
 from tests.utils import ALL_DESTINATIONS, assert_load_info, load_table_counts
 
 
+@pytest.mark.skip("We don't have a Facebook Ads test account.")
 @pytest.mark.parametrize("destination_name", ALL_DESTINATIONS)
 def test_load_all_ads_object(destination_name: str) -> None:
     pipeline = dlt.pipeline(
@@ -40,6 +41,7 @@ def test_load_all_ads_object(destination_name: str) -> None:
     assert all(c > 0 for c in table_counts.values())
 
 
+@pytest.mark.skip("We don't have a Facebook Ads test account.")
 def test_set_ads_fields() -> None:
     s = facebook_ads_source()
     # get only ids for ads
@@ -51,6 +53,7 @@ def test_set_ads_fields() -> None:
         assert "id" in ad
 
 
+@pytest.mark.skip("We don't have a Facebook Ads test account.")
 def test_select_only_ads_with_state() -> None:
     s = facebook_ads_source()
     all_ads = list(s.with_resources("ads"))
@@ -61,6 +64,7 @@ def test_select_only_ads_with_state() -> None:
     assert len(all_ads) > len(disapproved_ads)
 
 
+@pytest.mark.skip("We don't have a Facebook Ads test account.")
 def test_enrich_objects_multiple_chunks() -> None:
     s = facebook_ads_source()
     s.campaigns.bind(fields=("id",))
@@ -81,12 +85,14 @@ def test_enrich_objects_multiple_chunks() -> None:
     assert "name" in full_campaigns[0]
 
 
+@pytest.mark.skip("We don't have a Facebook Ads test account.")
 def test_load_insights() -> None:
     # just load 1 past day with attribution window of 7 days - that will re-acquire last 8 days + today
     i_daily = facebook_insights_source(initial_load_past_days=1)
     assert len(list(i_daily)) == 0
 
 
+@pytest.mark.skip("We don't have a Facebook Ads test account.")
 def test_load_insights_weekly() -> None:
     i_weekly = facebook_insights_source(initial_load_past_days=1, time_increment_days=7)
     assert len(list(i_weekly)) == 0
