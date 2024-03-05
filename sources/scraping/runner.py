@@ -43,8 +43,8 @@ class Signals:
     def on_engine_stopped(self) -> None:
         logger.info(f"Crawling engine stopped for pipeline={self.pipeline_name}")
         self.stopping = True
-        self.queue.join()
         self.queue.close()
+        self.queue.join()
 
     def __call__(self, crawler: CrawlerProcess) -> Self:
         self.crawler = crawler
@@ -100,6 +100,7 @@ class ScrapyRunner(Runnable):
             raise
         finally:
             self.signals.on_engine_stopped()
+            logger.info("Scraping stopped")
 
 
 class PipelineRunner(Runnable):
