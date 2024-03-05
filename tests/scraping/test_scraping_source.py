@@ -15,6 +15,7 @@ from tests.utils import ALL_DESTINATIONS, load_table_counts
 from .utils import (
     MySpider,
     TestCrawlerProcess,
+    TestQueue,
     queue_closer,
     table_expect_at_least_n_records,
 )
@@ -49,6 +50,7 @@ def test_scrapy_resource_yields_last_batch_if_queue_is_closed():
 
 
 @mock.patch("sources.scraping.runner.CrawlerProcess", TestCrawlerProcess)
+@mock.patch("sources.scraping.queue.ScrapingQueue", TestQueue)
 def test_pipeline_runners_handle_extended_and_simple_use_cases(
     mocker, shutdown_reactor
 ):
@@ -62,10 +64,6 @@ def test_pipeline_runners_handle_extended_and_simple_use_cases(
     spy_on_crawler_process = mocker.spy(TestCrawlerProcess, "stop")
     scraping_host = create_pipeline_runner(pipeline, MySpider, batch_size=10)
     scraping_host.pipeline_runner.scraping_resource.add_limit(2)
-
-    # Make sure we close the queue to let the scraping
-    # to properly shut down in testing machine and exit
-    queue_closer(scraping_host.queue, close_after_seconds=30)
     scraping_host.run(dataset_name="quotes", write_disposition="append")
 
     table_expect_at_least_n_records("scraping_res_add_limit_results", 20, pipeline)

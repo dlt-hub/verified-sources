@@ -1,4 +1,5 @@
-from typing import Any, Type, Union
+from queue import Empty
+from typing import Any, Iterator, List, Type, Union
 import time
 import threading
 
@@ -10,7 +11,7 @@ from scrapy.http import Response  # type: ignore
 from twisted.internet import reactor
 from twisted.internet.defer import Deferred
 
-from sources.scraping.queue import ScrapingQueue
+from sources.scraping.queue import QueueClosedError, ScrapingQueue
 
 
 class MySpider(Spider):
@@ -29,6 +30,52 @@ class MySpider(Spider):
             }
 
             yield result
+
+
+class TestQueue(ScrapingQueue):
+    def __init__(
+        self, maxsize: int = 0, batch_size: int = 10, read_timeout: float = 1.0
+    ) -> None:
+        super().__init__(maxsize, batch_size, read_timeout)
+        self.max_empty_get_attempts = 5
+
+    def get_batches(self) -> Iterator[Any]:
+        """Batching helper can be wrapped as a dlt.resource
+
+        Returns:
+            Iterator[Any]: yields scraped items one by one
+        """
+        batch: List = []
+        get_attempts: int = 0
+        while True:
+            if len(batch) == self.batch_size:
+                yield batch
+                batch = []
+
+            try:
+                if self.is_closed:
+                    raise QueueClosedError("Queue is closed")
+
+                item = self.get(timeout=self.read_timeout)
+                batch.append(item)
+                get_attempts += 1
+
+                # Mark task as completed
+                self.task_done()
+            except Empty:
+                if batch:
+                    yield batch
+                    batch = []
+
+                if get_attempts >= self.max_empty_get_attempts:
+                    self.close()
+                    break
+            except QueueClosedError:
+                # Return the last batch before exiting
+                if batch:
+                    yield batch
+
+                break
 
 
 class TestCrawlerProcess(CrawlerRunner):
