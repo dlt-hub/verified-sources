@@ -93,35 +93,23 @@ def make_client_config(config: Dict[str, Any]) -> ClientConfig:
 
 
 def setup_incremental_object(
-    request_params: Dict[str, Any], incremental_config: Optional[IncrementalConfig]
+    request_params: Dict[str, Any],
+    incremental_config: Optional[IncrementalConfig] = None,
 ) -> Tuple[Optional[Incremental[Any]], Optional[str]]:
     for key, value in request_params.items():
         if isinstance(value, dlt.sources.incremental):
             return value, key
         if isinstance(value, dict) and value.get("type") == "incremental":
+            config = remove_key(value, "type")
             return (
-                dlt.sources.incremental(
-                    value.get("cursor_path"), initial_value=value.get("initial_value")
-                ),
+                dlt.sources.incremental(**config),
                 key,
             )
+    if incremental_config:
+        config = remove_key(incremental_config, "param")
+        return dlt.sources.incremental(**config), incremental_config.get("param")
 
-    return setup_incremental_object_from_config(incremental_config)
-
-
-def setup_incremental_object_from_config(
-    config: Optional[IncrementalConfig],
-) -> Tuple[Optional[Incremental[Any]], Optional[str]]:
-    return (
-        (
-            dlt.sources.incremental(
-                config.get("cursor_path"), initial_value=config.get("initial_value")
-            ),
-            config.get("param"),
-        )
-        if config
-        else (None, None)
-    )
+    return None, None
 
 
 def make_parent_key_name(resource_name: str, field_name: str) -> str:
