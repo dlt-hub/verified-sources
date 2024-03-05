@@ -5,7 +5,6 @@ from urllib.parse import urlparse
 from requests.auth import AuthBase
 from requests import Session as BaseSession
 from requests import Response, Request
-from requests.exceptions import HTTPError
 
 from dlt.common import logger
 from dlt.sources.helpers.requests.retry import Client
@@ -41,17 +40,14 @@ class RESTClient:
         auth: Optional[AuthBase] = None,
         paginator: Optional[BasePaginator] = None,
         session: BaseSession = None,
-        request_client: Client = None,
     ) -> None:
         self.base_url = base_url
         self.headers = headers
         self.auth = auth
         if session:
             self.session = session
-        elif request_client:
-            self.session = request_client.session
         else:
-            self.session = Client().session
+            self.session = Client(raise_for_status=False).session
 
         self.paginator = paginator if paginator else UnspecifiedPaginator()
 
@@ -140,13 +136,7 @@ class RESTClient:
         )
 
         while paginator.has_next_page:
-            try:
-                response = self._send_request(request)
-            except HTTPError as e:
-                if not response_actions:
-                    raise e
-                else:
-                    response = e.response
+            response = self._send_request(request)
 
             if response_actions:
                 action_type = self.handle_response_actions(response, response_actions)

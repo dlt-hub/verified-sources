@@ -35,7 +35,6 @@ class ClientConfig(TypedDict, total=False):
     base_url: str
     auth: Optional[Union[Any, AuthConfig]]
     paginator: Optional[PaginatorType]
-    request_client: Optional[Client]
 
 
 class IncrementalConfig(TypedDict, total=False):
