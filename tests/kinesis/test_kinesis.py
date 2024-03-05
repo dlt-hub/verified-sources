@@ -240,7 +240,11 @@ def test_shard_iterator_types(kinesis_client: Any) -> None:
 
     # at timestamp
     _, shard_params = get_shard_iterator(
-        kinesis_client, KINESIS_STREAM_NAME, shard_id, None, pendulum.now()
+        kinesis_client,
+        KINESIS_STREAM_NAME,
+        shard_id,
+        None,
+        pendulum.now().subtract(seconds=1),
     )
     assert shard_params["ShardIteratorType"] == "AT_TIMESTAMP"
     _, shard_params = get_shard_iterator(
