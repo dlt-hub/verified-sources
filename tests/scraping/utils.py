@@ -69,6 +69,7 @@ class TestQueue(ScrapingQueue):
                     self.close()
                     break
 
+                print("Get attempt #", get_attempts)
                 get_attempts += 1
             except QueueClosedError:
                 # Return the last batch before exiting
