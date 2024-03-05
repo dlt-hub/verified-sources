@@ -105,6 +105,7 @@ def test_kinesis_incremental(kinesis_client: Any) -> None:
         pipeline_name="kinesis_test",
         destination="duckdb",
         dataset_name="kinesis_test_data",
+        full_refresh=True,
     )
     test_id = str(uuid.uuid4())
 
