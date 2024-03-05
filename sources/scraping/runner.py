@@ -43,6 +43,7 @@ class Signals:
     def on_engine_stopped(self) -> None:
         logger.info(f"Crawling engine stopped for pipeline={self.pipeline_name}")
         self.stopping = True
+        self.crawler.stop()
         self.queue.close()
         self.queue.join()
 
