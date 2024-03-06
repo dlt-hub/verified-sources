@@ -9,7 +9,7 @@ from dlt.common.typing import TAnyDateTime, TDataItem
 from dlt.sources import DltResource
 
 from .helpers import PersonioAPI
-from .settings import BASE_URL, DEFAULT_ITEMS_PER_PAGE, FIRST_DAY_OF_MILLENNIUM
+from .settings import DEFAULT_ITEMS_PER_PAGE, FIRST_DAY_OF_MILLENNIUM
 
 
 @dlt.source(name="personio")
@@ -29,9 +29,7 @@ def personio_source(
         Iterable: A list of DltResource objects representing the data resources.
     """
 
-    client = PersonioAPI(
-        base_url=BASE_URL, client_id=client_id,client_secret=client_secret
-    )
+    client = PersonioAPI(client_id, client_secret)
 
     @dlt.resource(primary_key="id", write_disposition="merge")
     def employees(
