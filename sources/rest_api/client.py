@@ -11,7 +11,6 @@ from dlt.sources.helpers.requests.retry import Client
 
 from .paginators import (
     BasePaginator,
-    UnspecifiedPaginator,
     SinglePagePaginator,
     JSONResponsePaginator,
     HeaderLinkPaginator,
@@ -49,7 +48,7 @@ class RESTClient:
         else:
             self.session = Client(raise_for_status=False).session
 
-        self.paginator = paginator if paginator else UnspecifiedPaginator()
+        self.paginator = paginator
 
     def _create_request(
         self,
@@ -131,7 +130,7 @@ class RESTClient:
             path=path, method=method, params=params, json=json, auth=auth, hooks=hooks
         )
 
-        while paginator.has_next_page:
+        while True:
             response = self._send_request(request)
 
             if response_actions:
@@ -145,17 +144,8 @@ class RESTClient:
                     logger.info("Retrying request.")
                     continue
 
-            if isinstance(paginator, UnspecifiedPaginator):
-                # Detect suitable paginator and its params
-                paginator = create_paginator(response)
-
-                # If no paginator is found, raise an error
-                if paginator is None:
-                    raise ValueError(
-                        f"No suitable paginator found for the response at {response.url}"
-                    )
-                else:
-                    logger.info(f"Detected paginator: {paginator.__class__.__name__}")
+            if paginator is None:
+                paginator = self.detect_paginator(response)
 
             if extract_records is None:
                 extract_records = self.prepare_records_extractor(
@@ -166,6 +156,16 @@ class RESTClient:
 
             paginator.update_state(response)
             paginator.update_request(request)
+
+            if not paginator.has_next_page:
+                break
+
+    def detect_paginator(self, response: Response) -> BasePaginator:
+        paginator = create_paginator(response)
+        if paginator is None:
+            raise ValueError(f"No suitable paginator found for the response at {response.url}")
+        logger.info(f"Detected paginator: {paginator.__class__.__name__}")
+        return paginator
 
     def prepare_records_extractor(
         self,

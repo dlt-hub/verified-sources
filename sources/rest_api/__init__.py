@@ -25,7 +25,6 @@ from .paginators import (
     BasePaginator,
     HeaderLinkPaginator,
     JSONResponsePaginator,
-    UnspecifiedPaginator,
     SinglePagePaginator,
 )
 from .typing import (
@@ -45,7 +44,7 @@ from .utils import remove_key
 PAGINATOR_MAP = {
     "json_links": JSONResponsePaginator,
     "header_links": HeaderLinkPaginator,
-    "auto": UnspecifiedPaginator,
+    "auto": None,
     "single_page": SinglePagePaginator,
 }
 
