@@ -149,11 +149,3 @@ class JSONResponsePaginator(BaseNextUrlPaginator):
             self.next_reference = self._next_key_accessor(response.json())
         except KeyError:
             self.next_reference = None
-
-
-class UnspecifiedPaginator(BasePaginator):
-    def update_state(self, response: Response) -> None:
-        return Exception("Can't update state with this paginator")
-
-    def update_request(self, request: Request) -> None:
-        return
