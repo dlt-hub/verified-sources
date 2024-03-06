@@ -6,31 +6,41 @@ from .paginators import (
     SinglePagePaginator,
 )
 
-RECORD_KEY_PATTERNS = {"data", "items", "results", "entries"}
+RECORD_KEY_PATTERNS = {"data", "items", "results", "entries", "records", "rows", "entities", "payload"}
+NON_RECORD_KEY_PATTERNS = {"meta", "metadata", "pagination", "links", "extras", "headers"}
 NEXT_PAGE_KEY_PATTERNS = {"next", "nextpage", "nexturl"}
 
 
-def find_records_key(dictionary, path=None):
-    if not isinstance(dictionary, dict):
-        return None
+def find_all_lists(dict_, result=None, level=0):
+    """Recursively looks for lists in dict_ and returns tuples
+       in format (nesting level, dictionary key, list)
+    """
+    if level > 2:
+        return []
 
-    if path is None:
-        path = []
+    for key, value in dict_.items():
+        if isinstance(value, list):
+            result.append((level, key, value))
+        elif isinstance(value, dict):
+            find_all_lists(value, result, level + 1)
 
-    for key, value in dictionary.items():
-        # Direct match
-        if key in RECORD_KEY_PATTERNS:
-            return [*path, key]
+    return result
 
-        if isinstance(value, list) and len(value) > 0 and isinstance(value[0], dict):
-            return [*path, key]
 
-        if isinstance(value, dict):
-            result = find_records_key(value, [*path, key])
-            if result:
-                return result
-
-    return None
+def find_records(response):
+    # when a list was returned (or in rare case a simple type or null)
+    if not isinstance(response, dict):
+        return response
+    lists = find_all_lists(response, result=[])
+    if len(lists) == 0:
+        # could not detect anything
+        return response
+    # we are ordered by nesting level, find the most suitable list
+    try:
+        return next(l[2] for l in lists if l[1] in RECORD_KEY_PATTERNS and l[1] not in NON_RECORD_KEY_PATTERNS)
+    except StopIteration:
+        # return the least nested element
+        return lists[0][2]
 
 
 def find_next_page_key(dictionary, path=None):

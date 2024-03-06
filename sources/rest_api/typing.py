@@ -9,7 +9,7 @@ from typing import (
 )
 
 from dlt.sources.helpers.requests.retry import Client
-from dlt.extract.typing import TTableHintTemplate
+from dlt.extract.items import TTableHintTemplate
 from dlt.extract.incremental import Incremental
 
 from .paginators import BasePaginator
