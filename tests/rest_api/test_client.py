@@ -2,7 +2,7 @@ import os
 import pytest
 from sources.rest_api.client import RESTClient
 from sources.rest_api.paginators import JSONResponsePaginator
-from sources.rest_api.auth import BearerTokenAuth, APIKeyAuth, OAuthJWTAuth
+from sources.rest_api.auth import BearerTokenAuth, APIKeyAuth, HttpBasicAuth, OAuth2AuthBase, OAuthJWTAuth
 
 
 def load_private_key(name="private_key.pem"):
@@ -79,14 +79,14 @@ class TestRESTClient:
     def test_basic_auth_success(self, rest_client: RESTClient):
         response = rest_client.get(
             "/protected/posts/basic-auth",
-            auth=("user", "password"),
+            auth=HttpBasicAuth("user", "password"),
         )
         assert response.status_code == 200
         assert response.json()["data"][0] == {"id": 0, "title": "Post 0"}
 
         pages_iter = rest_client.paginate(
             "/protected/posts/basic-auth",
-            auth=("user", "password"),
+            auth=HttpBasicAuth("user", "password"),
         )
 
         pages = list(pages_iter)
@@ -111,7 +111,7 @@ class TestRESTClient:
     def test_api_key_auth_success(self, rest_client: RESTClient):
         response = rest_client.get(
             "/protected/posts/api-key",
-            auth=APIKeyAuth(key="x-api-key", value="test-api-key"),
+            auth=APIKeyAuth(name="x-api-key", api_key="test-api-key"),
         )
         assert response.status_code == 200
         assert response.json()["data"][0] == {"id": 0, "title": "Post 0"}

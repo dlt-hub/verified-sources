@@ -1,4 +1,6 @@
+from base64 import b64encode
 import math
+from typing import Dict, Final, Literal, Optional
 import requests
 from requests.auth import AuthBase
 from requests import PreparedRequest
@@ -9,9 +11,27 @@ from cryptography.hazmat.primitives import serialization
 
 from dlt.common import logger
 
+from dlt.common.configuration.specs.base_configuration import configspec
+from dlt.common.configuration.specs import CredentialsConfiguration
+from dlt.common.typing import TSecretStrValue
 
-class BearerTokenAuth(AuthBase):
-    def __init__(self, token: str) -> None:
+
+TApiKeyLocation = Literal["header", "cookie", "query", "param"]  # Alias for scheme "in" field
+
+class AuthConfigBase(AuthBase, CredentialsConfiguration):
+    """Authenticator base which is both `requests` friendly AuthBase and dlt SPEC
+       configurable via env variables or toml files
+    """
+    pass
+
+
+@configspec
+class BearerTokenAuth(AuthConfigBase):
+    type: Final[Literal["http"]] = "http"
+    scheme: Literal["bearer"] = "bearer"
+    token: TSecretStrValue
+
+    def __init__(self, token: TSecretStrValue) -> None:
         self.token = token
 
     def __call__(self, request: PreparedRequest) -> PreparedRequest:
@@ -19,21 +39,72 @@ class BearerTokenAuth(AuthBase):
         return request
 
 
-class APIKeyAuth(AuthBase):
-    def __init__(self, key: str, value: str, location: str = "headers") -> None:
-        self.key = key
-        self.value = value
+@configspec
+class APIKeyAuth(AuthConfigBase):
+    type: Final[Literal["apiKey"]] = "apiKey"
+    location: TApiKeyLocation = "header"
+    name: str
+    api_key: TSecretStrValue
+
+    def __init__(self, name: str, api_key: TSecretStrValue, location: TApiKeyLocation = "header") -> None:
+        self.name = name
+        self.api_key = api_key
         self.location = location
 
     def __call__(self, request: PreparedRequest) -> PreparedRequest:
-        if self.location == "headers":
-            request.headers[self.key] = self.value
-        elif self.location == "params":
-            request.prepare_url(request.url, {self.key: self.value})
+        if self.location == "header":
+            request.headers[self.name] = self.api_key
+        elif self.location in ["query", "param"]:
+            request.prepare_url(request.url, {self.name: self.api_key})
+        elif self.location == "cookie":
+            raise NotImplementedError()
         return request
 
 
-class OAuthJWTAuth(AuthBase):
+@configspec
+class HttpBasicAuth(AuthConfigBase):
+    type: Final[Literal["http"]] = "http"
+    scheme: Literal["basic"] = "basic"
+    username: str
+    password: TSecretStrValue
+
+    def __init__(self, username: str, password: TSecretStrValue) -> None:
+        self.username = username
+        self.password = password
+
+    def __call__(self, request: PreparedRequest) -> PreparedRequest:
+        encoded = b64encode(f"{self.username}:{self.password}".encode()).decode()
+        request.headers["Authorization"] = f"Basic {encoded}"
+        return request
+
+
+@configspec
+class OAuth2AuthBase(AuthConfigBase):
+    """Base class for oauth2 authenticators. requires access_token"""
+    # TODO: Separate class for flows (implicit, authorization_code, client_credentials, etc)
+    type: Final[Literal["oauth2"]] = "oauth2"
+    access_token: TSecretStrValue
+
+    def __init__(self, access_token: TSecretStrValue) -> None:
+        self.access_token = access_token
+
+    def __call__(self, request: PreparedRequest) -> PreparedRequest:
+        request.headers["Authorization"] = f"Bearer {self.access_token}"
+        return request
+
+
+@configspec
+class OAuthJWTAuth(BearerTokenAuth):
+    """This is a form of Bearer auth, actually there's not standard way to declare it in openAPI"""
+    format: Final[Literal["JWT"]] = "JWT"
+
+    client_id: str
+    private_key: TSecretStrValue
+    auth_endpoint: str
+    scopes: Optional[str] = None
+    headers: Optional[Dict[str, str]] = None
+    private_key_passphrase: Optional[TSecretStrValue] = None
+
     def __init__(
         self,
         client_id,
