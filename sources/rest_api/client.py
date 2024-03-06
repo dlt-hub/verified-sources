@@ -159,6 +159,7 @@ class RESTClient:
             paginator.update_state(response)
             paginator.update_request(request)
 
+
     def handle_response_actions(
         self, response: Response, actions: List[Dict[str, Any]]
     ):
