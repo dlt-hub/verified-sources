@@ -4,6 +4,7 @@ from typing import Optional, Sequence, Union
 from dlt.sources.helpers.requests import Response, Request
 
 from .utils import create_nested_accessor
+from .detector import PaginatorDetectorMixin, NEXT_PAGE_KEY_PATTERNS
 
 
 class BasePaginator(ABC):
@@ -50,7 +51,7 @@ class BasePaginator(ABC):
         ...
 
 
-class SinglePagePaginator(BasePaginator):
+class SinglePagePaginator(BasePaginator, PaginatorDetectorMixin):
     """A paginator for single-page API responses."""
 
     def update_state(self, response: Response) -> None:
@@ -58,6 +59,13 @@ class SinglePagePaginator(BasePaginator):
 
     def update_request(self, request: Request) -> None:
         return
+
+    @classmethod
+    def detect(cls, response: Response):
+        links_next_key = "next"
+        if response.links.get(links_next_key):
+            return cls()
+        return None
 
 
 class OffsetPaginator(BasePaginator):
@@ -105,7 +113,7 @@ class BaseNextUrlPaginator(BasePaginator):
         request.url = self._next_reference
 
 
-class HeaderLinkPaginator(BaseNextUrlPaginator):
+class HeaderLinkPaginator(BaseNextUrlPaginator, PaginatorDetectorMixin):
     """A paginator that uses the 'Link' header in HTTP responses
     for pagination.
 
@@ -125,8 +133,15 @@ class HeaderLinkPaginator(BaseNextUrlPaginator):
     def update_state(self, response: Response) -> None:
         self.next_reference = response.links.get(self.links_next_key, {}).get("url")
 
+    @classmethod
+    def detect(cls, response: Response):
+        links_next_key = "next"
+        if response.links.get(links_next_key):
+            return cls()
+        return None
 
-class JSONResponsePaginator(BaseNextUrlPaginator):
+
+class JSONResponsePaginator(BaseNextUrlPaginator, PaginatorDetectorMixin):
     """A paginator that uses a specific key in the JSON response to find
     the next page URL.
     """
@@ -150,6 +165,34 @@ class JSONResponsePaginator(BaseNextUrlPaginator):
         except KeyError:
             self.next_reference = None
 
+    @classmethod
+    def detect(cls, response: Response):
+        dictionary = response.json()
+        next_key = cls.find_next_page_key(dictionary)
+        if not next_key:
+            return None
+        return cls(next_key=next_key)
+
+    @staticmethod
+    def find_next_page_key(dictionary, path=None):
+        if not isinstance(dictionary, dict):
+            return None
+
+        if path is None:
+            path = []
+
+        for key, value in dictionary.items():
+            normalized_key = key.lower()
+            if any(pattern in normalized_key for pattern in NEXT_PAGE_KEY_PATTERNS):
+                return [*path, key]
+
+            if isinstance(value, dict):
+                result = JSONResponsePaginator.find_next_page_key(value, [*path, key])
+                if result:
+                    return result
+
+        return None
+
 
 class UnspecifiedPaginator(BasePaginator):
     def update_state(self, response: Response) -> None:
@@ -157,3 +200,15 @@ class UnspecifiedPaginator(BasePaginator):
 
     def update_request(self, request: Request) -> None:
         return
+
+    def autodetect(self, response: Response):
+        paginator_classes = [
+            HeaderLinkPaginator,
+            JSONResponsePaginator,
+            SinglePagePaginator,
+        ]
+        for PaginatorClass in paginator_classes:
+            paginator = PaginatorClass.detect(response)
+            if paginator:
+                return paginator
+        return None

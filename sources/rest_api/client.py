@@ -16,7 +16,7 @@ from .paginators import (
     JSONResponsePaginator,
     HeaderLinkPaginator,
 )
-from .detector import create_paginator, find_records_key
+from .detector import find_records_key
 
 from .utils import join_url, create_nested_accessor
 
@@ -147,7 +147,7 @@ class RESTClient:
 
             if isinstance(paginator, UnspecifiedPaginator):
                 # Detect suitable paginator and its params
-                paginator = create_paginator(response)
+                paginator = paginator.autodetect(response)
 
                 # If no paginator is found, raise an error
                 if paginator is None:
