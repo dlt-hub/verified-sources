@@ -1,5 +1,6 @@
 import pytest
 from sources.rest_api.detector import find_records, find_next_page_key
+from sources.rest_api.utils import create_nested_accessor
 
 
 TEST_RESPONSES = [
@@ -302,7 +303,8 @@ def test_find_records_key(test_case):
     r = find_records(response)
     # all of them look fine mostly because those are simple cases...
     # case 7 fails because it is nested but in fact we select a right response
-    assert r is response[expected[0]]
+    assert r is create_nested_accessor(expected)(response)
+
 
 @pytest.mark.parametrize("test_case", TEST_RESPONSES)
 def test_find_next_page_key(test_case):

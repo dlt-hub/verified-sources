@@ -11,29 +11,10 @@ NON_RECORD_KEY_PATTERNS = {"meta", "metadata", "pagination", "links", "extras", 
 NEXT_PAGE_KEY_PATTERNS = {"next", "nextpage", "nexturl"}
 
 
-# def find_records_key(dictionary, path=None):
-#     if not isinstance(dictionary, dict):
-#         return None
-
-#     if path is None:
-#         path = []
-
-#     for key, value in dictionary.items():
-#         # Direct match
-#         if key in RECORD_KEY_PATTERNS:
-#             return [*path, key]
-
-#         if isinstance(value, list) and len(value) > 0 and isinstance(value[0], dict):
-#             return [*path, key]
-
-#         if isinstance(value, dict):
-#             result = find_records_key(value, [*path, key])
-#             if result:
-#                 return result
-
-#     return None
-
-def find_all_lists(dict_, level=0, result=None):
+def find_all_lists(dict_, result=None, level=0):
+    """Recursively looks for lists in dict_ and returns tuples
+       in format (nesting level, dictionary key, list)
+    """
     if level > 2:
         return []
 
@@ -41,12 +22,14 @@ def find_all_lists(dict_, level=0, result=None):
         if isinstance(value, list):
             result.append((level, key, value))
         elif isinstance(value, dict):
-            find_all_lists(value, level + 1, result)
+            find_all_lists(value, result, level + 1)
 
     return result
 
+
 def find_records(response):
-    if isinstance(response, list):
+    # when a list was returned (or in rare case a simple type or null)
+    if not isinstance(response, dict):
         return response
     lists = find_all_lists(response, result=[])
     if len(lists) == 0:
