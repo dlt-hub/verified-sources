@@ -159,7 +159,7 @@ def select_with_end_value_and_row_order() -> None:
         credentials="mysql+pymysql://rfamro@mysql-rfam-public.ebi.ac.uk:4497/Rfam",
         table="family",
         incremental=dlt.sources.incremental(  # declares desc row order
-            "updated", initial_value=start_date, end_value=end_date, row_order="desc"  # type: ignore
+            "updated", initial_value=start_date, end_value=end_date, row_order="desc"
         ),
         chunk_size=10,
     )
