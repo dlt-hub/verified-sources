@@ -247,7 +247,7 @@ def rest_api_resources(config: RESTAPIConfig) -> List[DltResource]:
 
         # TODO: Remove _resolved_param from endpoint_resource
         resolved_param: ResolvedParam = endpoint_resource.pop("_resolved_param", None)
-        include_from_parent: list[str] = endpoint_resource.pop(
+        include_from_parent: List[str] = endpoint_resource.pop(
             "include_from_parent", []
         )
         if not resolved_param and include_from_parent:
@@ -421,8 +421,8 @@ def find_resolved_params(endpoint_config: Endpoint) -> List[ResolvedParam]:
 
 def check_connection(
     source: DltSource,
-    *resource_names: list[str],
-) -> tuple[bool, str]:
+    *resource_names: List[str],
+) -> Tuple[bool, str]:
     try:
         list(source.with_resources(*resource_names).add_limit(1))
         return (True, "")
