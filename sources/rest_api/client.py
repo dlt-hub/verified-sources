@@ -157,20 +157,31 @@ class RESTClient:
                 else:
                     logger.info(f"Detected paginator: {paginator.__class__.__name__}")
 
-            # If extract_records is None, try to detect records key
-            # based on the paginator type
             if extract_records is None:
-                if isinstance(paginator, (SinglePagePaginator, HeaderLinkPaginator)):
-                    extract_records = lambda response: response.json()  # noqa
-                elif isinstance(paginator, JSONResponsePaginator):
-                    _records_path = find_records_key(response.json())
-                    if _records_path:
-                        extract_records = self.create_records_extractor(_records_path)
+                extract_records = self.prepare_records_extractor(
+                    paginator, response, data_selector
+                )
 
             yield extract_records(response)
 
             paginator.update_state(response)
             paginator.update_request(request)
+
+    def prepare_records_extractor(
+        self,
+        paginator: BasePaginator,
+        response: Response,
+        data_selector: Optional[Union[str, List[str]]],
+    ):
+        if data_selector:
+            return self.create_records_extractor(data_selector)
+        elif isinstance(paginator, (SinglePagePaginator, HeaderLinkPaginator)):
+            return lambda resp: resp.json()
+        elif isinstance(paginator, JSONResponsePaginator):
+            records_key = find_records_key(response.json())
+            if records_key:
+                return self.create_records_extractor(records_key)
+        raise ValueError("Unable to prepare a records extractor.")
 
     def create_records_extractor(self, data_selector: Optional[Union[str, List[str]]]):
         nested_accessor = create_nested_accessor(data_selector)
