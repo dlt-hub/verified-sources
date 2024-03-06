@@ -7,6 +7,7 @@ from requests import Session as BaseSession
 from requests import Response, Request
 
 from dlt.common import logger
+from dlt.common import jsonpath
 from dlt.sources.helpers.requests.retry import Client
 
 from .paginators import (
@@ -16,7 +17,7 @@ from .paginators import (
     JSONResponsePaginator,
     HeaderLinkPaginator,
 )
-from .detector import create_paginator, find_records_key
+from .detector import create_paginator, find_records
 
 from .utils import join_url, create_nested_accessor
 
@@ -123,9 +124,9 @@ class RESTClient:
         """
         paginator = copy.deepcopy(paginator if paginator else self.paginator)
 
-        extract_records = (
-            self.create_records_extractor(data_selector) if data_selector else None
-        )
+        # extract_records = (
+        #     self.create_records_extractor(data_selector) if data_selector else None
+        # )
 
         request = self._create_request(
             path=path, method=method, params=params, json=json, auth=auth, hooks=hooks
@@ -157,36 +158,43 @@ class RESTClient:
                 else:
                     logger.info(f"Detected paginator: {paginator.__class__.__name__}")
 
-            if extract_records is None:
-                extract_records = self.prepare_records_extractor(
-                    paginator, response, data_selector
-                )
+            if data_selector:
+                # we should compile data_selector
+                data = jsonpath.find_values(data_selector, response.json())
+                # extract if single item selected
+                yield data[0] if len(data) == 1 else data
+            else:
+                yield find_records(response.json())
 
-            yield extract_records(response)
+            # if extract_records is None:
+            #     extract_records = self.prepare_records_extractor(
+            #         paginator, response, data_selector
+            #     )
+            # yield extract_records(response)
 
             paginator.update_state(response)
             paginator.update_request(request)
 
-    def prepare_records_extractor(
-        self,
-        paginator: BasePaginator,
-        response: Response,
-        data_selector: Optional[Union[str, List[str]]],
-    ):
-        if data_selector:
-            return self.create_records_extractor(data_selector)
-        elif isinstance(paginator, (SinglePagePaginator, HeaderLinkPaginator)):
-            return lambda resp: resp.json()
-        elif isinstance(paginator, JSONResponsePaginator):
-            records_key = find_records_key(response.json())
-            if records_key:
-                return self.create_records_extractor(records_key)
-        raise ValueError("Unable to prepare a records extractor.")
+    # def prepare_records_extractor(
+    #     self,
+    #     paginator: BasePaginator,
+    #     response: Response,
+    #     data_selector: Optional[Union[str, List[str]]],
+    # ):
+    #     if data_selector:
+    #         return self.create_records_extractor(data_selector)
+    #     elif isinstance(paginator, (SinglePagePaginator, HeaderLinkPaginator)):
+    #         return lambda resp: resp.json()
+    #     elif isinstance(paginator, JSONResponsePaginator):
+    #         records_key = find_records_key(response.json())
+    #         if records_key:
+    #             return self.create_records_extractor(records_key)
+    #     raise ValueError("Unable to prepare a records extractor.")
 
-    def create_records_extractor(self, data_selector: Optional[Union[str, List[str]]]):
-        nested_accessor = create_nested_accessor(data_selector)
+    # def create_records_extractor(self, data_selector: Optional[Union[str, List[str]]]):
+    #     nested_accessor = create_nested_accessor(data_selector)
 
-        return lambda response: nested_accessor(response.json())
+        # return lambda response: nested_accessor(response.json())
 
     def handle_response_actions(
         self, response: Response, actions: List[Dict[str, Any]]

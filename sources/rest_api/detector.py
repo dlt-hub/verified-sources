@@ -6,31 +6,58 @@ from .paginators import (
     SinglePagePaginator,
 )
 
-RECORD_KEY_PATTERNS = {"data", "items", "results", "entries"}
+RECORD_KEY_PATTERNS = {"data", "items", "results", "entries", "records", "rows", "entities", "payload"}
+NON_RECORD_KEY_PATTERNS = {"meta", "metadata", "pagination", "links", "extras", "headers"}
 NEXT_PAGE_KEY_PATTERNS = {"next", "nextpage", "nexturl"}
 
 
-def find_records_key(dictionary, path=None):
-    if not isinstance(dictionary, dict):
-        return None
+# def find_records_key(dictionary, path=None):
+#     if not isinstance(dictionary, dict):
+#         return None
 
-    if path is None:
-        path = []
+#     if path is None:
+#         path = []
 
-    for key, value in dictionary.items():
-        # Direct match
-        if key in RECORD_KEY_PATTERNS:
-            return [*path, key]
+#     for key, value in dictionary.items():
+#         # Direct match
+#         if key in RECORD_KEY_PATTERNS:
+#             return [*path, key]
 
-        if isinstance(value, list) and len(value) > 0 and isinstance(value[0], dict):
-            return [*path, key]
+#         if isinstance(value, list) and len(value) > 0 and isinstance(value[0], dict):
+#             return [*path, key]
 
-        if isinstance(value, dict):
-            result = find_records_key(value, [*path, key])
-            if result:
-                return result
+#         if isinstance(value, dict):
+#             result = find_records_key(value, [*path, key])
+#             if result:
+#                 return result
 
-    return None
+#     return None
+
+def find_all_lists(dict_, level=0, result=None):
+    if level > 2:
+        return []
+
+    for key, value in dict_.items():
+        if isinstance(value, list):
+            result.append((level, key, value))
+        elif isinstance(value, dict):
+            find_all_lists(value, level + 1, result)
+
+    return result
+
+def find_records(response):
+    if isinstance(response, list):
+        return response
+    lists = find_all_lists(response, result=[])
+    if len(lists) == 0:
+        # could not detect anything
+        return response
+    # we are ordered by nesting level, find the most suitable list
+    try:
+        return next(l[2] for l in lists if l[1] in RECORD_KEY_PATTERNS and l[1] not in NON_RECORD_KEY_PATTERNS)
+    except StopIteration:
+        # return the least nested element
+        return lists[0][2]
 
 
 def find_next_page_key(dictionary, path=None):
