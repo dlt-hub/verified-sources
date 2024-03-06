@@ -4,9 +4,6 @@ from typing import List, Dict, Optional, Iterator
 
 import dlt
 from dlt.sources import DltResource
-from rest_api import RESTClient, BearerTokenAuth
-from .settings import API_URL, DEFAULT_HEADERS
-from .helpers.paginator import NotionPaginator
 
 from .helpers.client import NotionClient
 from .helpers.database import NotionDatabase
@@ -30,24 +27,15 @@ def notion_databases(
     Yields:
         DltResource: Data resources from Notion databases.
     """
-    notion_client = RESTClient(
-        base_url=API_URL,
-        headers=DEFAULT_HEADERS,
-        auth=BearerTokenAuth(api_key),
-        paginator=NotionPaginator(),
-    )
+    notion_client = NotionClient(api_key)
 
     if database_ids is None:
-        search_results = notion_client.paginate(
-            "/search",
-            json={"filter": {"value": "database", "property": "object"}},
-            method="post",
+        search_results = notion_client.search(
+            filter_criteria={"value": "database", "property": "object"}
         )
-
         database_ids = [
             {"id": result["id"], "use_name": result["title"][0]["plain_text"]}
-            for page in search_results
-            for result in page
+            for result in search_results
         ]
 
     for database in database_ids:
