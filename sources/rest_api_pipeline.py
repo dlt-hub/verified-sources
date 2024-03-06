@@ -1,15 +1,15 @@
 import dlt
-from rest_api import check_connection, rest_api_source
+from rest_api import RESTAPIConfig, check_connection, rest_api_source
 
 
-def load_github():
+def load_github() -> None:
     pipeline = dlt.pipeline(
         pipeline_name="rest_api_github_v3",
         destination="duckdb",
         dataset_name="rest_api_data",
     )
 
-    github_config = {
+    github_config: RESTAPIConfig = {
         "client": {
             "base_url": "https://api.github.com/repos/dlt-hub/dlt/",
             "auth": {
@@ -65,7 +65,7 @@ def load_github():
         ],
     }
 
-    not_connecting_config = {
+    not_connecting_config: RESTAPIConfig = {
         **github_config,
         "client": {
             "base_url": "https://api.github.com/repos/dlt-hub/dlt/",
@@ -83,7 +83,7 @@ def load_github():
     print(load_info)
 
 
-def load_pokemon():
+def load_pokemon() -> None:
     pipeline = dlt.pipeline(
         pipeline_name="rest_api_pokemon",
         destination="duckdb",
@@ -112,7 +112,7 @@ def load_pokemon():
         }
     )
 
-    def check_network_and_authentication():
+    def check_network_and_authentication() -> None:
         (can_connect, error_msg) = check_connection(
             pokemon_source,
             "not_existing_endpoint",

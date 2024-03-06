@@ -26,7 +26,7 @@ class BasePaginator(ABC):
         return self._next_reference
 
     @next_reference.setter
-    def next_reference(self, value: Optional[str]):
+    def next_reference(self, value: Optional[str]) -> None:
         self._next_reference = value
         self._has_next_page = value is not None
 
@@ -65,12 +65,12 @@ class OffsetPaginator(BasePaginator):
 
     def __init__(
         self,
-        initial_offset,
-        initial_limit,
+        initial_offset: int,
+        initial_limit: int,
         offset_key: str = "offset",
         limit_key: str = "limit",
         total_key: str = "total",
-    ):
+    ) -> None:
         super().__init__()
         self.offset_key = offset_key
         self.limit_key = limit_key
@@ -144,7 +144,7 @@ class JSONResponsePaginator(BaseNextUrlPaginator):
         self.next_key = next_key
         self._next_key_accessor = create_nested_accessor(next_key)
 
-    def update_state(self, response: Response):
+    def update_state(self, response: Response) -> None:
         try:
             self.next_reference = self._next_key_accessor(response.json())
         except KeyError:

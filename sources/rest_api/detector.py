@@ -1,3 +1,4 @@
+from typing import List, Dict, Any, Tuple, Union, Optional, Set
 from dlt.sources.helpers.requests import Response
 
 from .paginators import (
@@ -28,7 +29,11 @@ NEXT_PAGE_KEY_PATTERNS = {"next", "nextpage", "nexturl"}
 NEXT_PAGE_DICT_KEY_PATTERNS = {"href", "url"}
 
 
-def find_all_lists(dict_, result=None, level=0):
+def find_all_lists(
+    dict_: Dict[str, Any],
+    result: List[Tuple[int, str, List[Any]]] = None,
+    level: int = 0,
+) -> List[Tuple[int, str, List[Any]]]:
     """Recursively looks for lists in dict_ and returns tuples
     in format (nesting level, dictionary key, list)
     """
@@ -44,7 +49,9 @@ def find_all_lists(dict_, result=None, level=0):
     return result
 
 
-def find_records(response):
+def find_records(
+    response: Union[Dict[str, Any], List[Any], Any],
+) -> Union[Dict[str, Any], List[Any], Any]:
     # when a list was returned (or in rare case a simple type or null)
     if not isinstance(response, dict):
         return response
@@ -64,12 +71,14 @@ def find_records(response):
         return lists[0][2]
 
 
-def matches_any_pattern(key, patterns):
+def matches_any_pattern(key: str, patterns: Set[str]) -> bool:
     normalized_key = key.lower()
     return any(pattern in normalized_key for pattern in patterns)
 
 
-def find_next_page_key(dictionary, path=None):
+def find_next_page_key(
+    dictionary: Dict[str, Any], path: Optional[List[str]] = None
+) -> Optional[List[str]]:
     if not isinstance(dictionary, dict):
         return None
 
@@ -92,7 +101,7 @@ def find_next_page_key(dictionary, path=None):
     return None
 
 
-def header_links_detector(response: Response):
+def header_links_detector(response: Response) -> Optional[HeaderLinkPaginator]:
     links_next_key = "next"
 
     if response.links.get(links_next_key):
@@ -100,7 +109,7 @@ def header_links_detector(response: Response):
     return None
 
 
-def json_links_detector(response: Response):
+def json_links_detector(response: Response) -> Optional[JSONResponsePaginator]:
     dictionary = response.json()
     next_key = find_next_page_key(dictionary)
 
@@ -110,7 +119,7 @@ def json_links_detector(response: Response):
     return JSONResponsePaginator(next_key=next_key)
 
 
-def single_page_detector(response: Response):
+def single_page_detector(response: Response) -> Optional[SinglePagePaginator]:
     value = response.json()
     if isinstance(value, list):
         return SinglePagePaginator()
@@ -118,7 +127,9 @@ def single_page_detector(response: Response):
     return None
 
 
-def create_paginator(response: Response):
+def create_paginator(
+    response: Response,
+) -> Optional[Union[HeaderLinkPaginator, JSONResponsePaginator, SinglePagePaginator]]:
     rules = [
         header_links_detector,
         json_links_detector,

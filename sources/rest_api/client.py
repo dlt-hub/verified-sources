@@ -83,7 +83,9 @@ class RESTClient:
 
         return self.session.send(prepared_request)
 
-    def request(self, path="", method="get", **kwargs):
+    def request(
+        self, path: str = "", method: Literal["get", "post"] = "get", **kwargs: Any
+    ) -> Response:
         prepared_request = self._create_request(
             path=path,
             method=method,
@@ -91,10 +93,14 @@ class RESTClient:
         )
         return self._send_request(prepared_request)
 
-    def get(self, path="", params=None, **kwargs):
+    def get(
+        self, path: str = "", params: Optional[Dict[str, Any]] = None, **kwargs: Any
+    ) -> Response:
         return self.request(path, method="get", params=params, **kwargs)
 
-    def post(self, path="", json=None, **kwargs):
+    def post(
+        self, path: str = "", json: Optional[Dict[str, Any]] = None, **kwargs: Any
+    ) -> Response:
         return self.request(path, method="post", json=json, **kwargs)
 
     def paginate(
@@ -168,7 +174,7 @@ class RESTClient:
 
     def handle_response_actions(
         self, response: Response, actions: List[Dict[str, Any]]
-    ):
+    ) -> Optional[str]:
         """Handle response actions based on the response and the provided actions.
 
         Example:
@@ -184,8 +190,8 @@ class RESTClient:
 
         for action in actions:
             status_code = action.get("status_code")
-            content_substr = action.get("content")
-            action_type = action.get("action")
+            content_substr: str = action.get("content")
+            action_type: str = action.get("action")
 
             if status_code is not None and content_substr is not None:
                 if response.status_code == status_code and content_substr in content:
@@ -201,5 +207,5 @@ class RESTClient:
 
         return None
 
-    def __iter__(self):
+    def __iter__(self) -> Generator[Any, None, None]:
         return self.paginate()

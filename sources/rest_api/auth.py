@@ -1,6 +1,6 @@
 from base64 import b64encode
 import math
-from typing import Dict, Final, Literal, Optional
+from typing import Dict, Final, Literal, Optional, Union
 import requests
 from requests.auth import AuthBase
 from requests import PreparedRequest
@@ -8,6 +8,8 @@ import pendulum
 import jwt
 from cryptography.hazmat.backends import default_backend
 from cryptography.hazmat.primitives import serialization
+from cryptography.hazmat.primitives.asymmetric.types import PrivateKeyTypes
+
 
 from dlt.common import logger
 
@@ -107,12 +109,12 @@ class OAuthJWTAuth(BearerTokenAuth):
 
     def __init__(
         self,
-        client_id,
-        private_key,
-        auth_endpoint,
-        scopes,
-        headers,
-        private_key_passphrase=None,
+        client_id: str,
+        private_key: TSecretStrValue,
+        auth_endpoint: str,
+        scopes: str,
+        headers: Optional[Dict[str, str]] = None,
+        private_key_passphrase: Optional[TSecretStrValue] = None,
     ):
         self.client_id = client_id
         self.private_key = private_key
@@ -121,18 +123,18 @@ class OAuthJWTAuth(BearerTokenAuth):
         self.scopes = scopes if isinstance(scopes, str) else " ".join(scopes)
         self.headers = headers
         self.token = None
-        self.token_expiry = None
+        self.token_expiry: Optional[pendulum.DateTime] = None
 
-    def __call__(self, r):
+    def __call__(self, r: PreparedRequest) -> PreparedRequest:
         if self.token is None or self.is_token_expired():
             self.obtain_token()
         r.headers["Authorization"] = f"Bearer {self.token}"
         return r
 
-    def is_token_expired(self):
+    def is_token_expired(self) -> bool:
         return not self.token_expiry or pendulum.now() >= self.token_expiry
 
-    def obtain_token(self):
+    def obtain_token(self) -> None:
         payload = self.create_jwt_payload()
         data = {
             "grant_type": "urn:ietf:params:oauth:grant-type:jwt-bearer",
@@ -152,7 +154,7 @@ class OAuthJWTAuth(BearerTokenAuth):
             seconds=token_response.get("expires_in", 3600)
         )
 
-    def create_jwt_payload(self):
+    def create_jwt_payload(self) -> Dict[str, Union[str, int]]:
         now = pendulum.now()
         return {
             "iss": self.client_id,
@@ -163,7 +165,7 @@ class OAuthJWTAuth(BearerTokenAuth):
             "scope": self.scopes,
         }
 
-    def load_private_key(self):
+    def load_private_key(self) -> PrivateKeyTypes:
         private_key_bytes = self.private_key.encode("utf-8")
         return serialization.load_pem_private_key(
             private_key_bytes,

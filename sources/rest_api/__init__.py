@@ -9,8 +9,10 @@ from typing import (
     List,
     Optional,
     Union,
+    Generator,
+    cast,
 )
-import graphlib
+import graphlib # type: ignore[import-untyped]
 
 import dlt
 from dlt.common.validation import validate_dict
@@ -18,6 +20,7 @@ from dlt.extract.incremental import Incremental
 from dlt.extract.source import DltResource, DltSource
 from dlt.common import logger
 from dlt.common.utils import update_dict_nested
+from dlt.common.typing import TSecretStrValue
 
 from .auth import BearerTokenAuth, AuthBase
 from .client import RESTClient
@@ -41,7 +44,7 @@ from .typing import (
 from .utils import remove_key
 
 
-PAGINATOR_MAP = {
+PAGINATOR_MAP: Dict[str, Type[BasePaginator]] = {
     "json_links": JSONResponsePaginator,
     "header_links": HeaderLinkPaginator,
     "auto": None,
@@ -79,7 +82,7 @@ def create_paginator(paginator_config: PaginatorType) -> Optional[BasePaginator]
 def create_auth(auth_config: Optional[AuthConfig]) -> Optional[AuthBase]:
     if isinstance(auth_config, AuthBase):
         return auth_config
-    return BearerTokenAuth(auth_config.get("token")) if auth_config else None
+    return BearerTokenAuth(cast(TSecretStrValue, auth_config.get("token"))) if auth_config else None
 
 
 def make_client_config(config: Dict[str, Any]) -> ClientConfig:
@@ -200,7 +203,7 @@ def rest_api_resources(config: RESTAPIConfig) -> List[DltResource]:
 
     client = RESTClient(**make_client_config(config))
     dependency_graph = graphlib.TopologicalSorter()
-    endpoint_resource_map = {}
+    endpoint_resource_map: Dict[str, EndpointResource] = {}
     resources = {}
 
     default_resource_config = config.get("resource_defaults", {})
@@ -240,7 +243,7 @@ def rest_api_resources(config: RESTAPIConfig) -> List[DltResource]:
     # Create the resources
     for resource_name in dependency_graph.static_order():
         endpoint_resource = endpoint_resource_map[resource_name]
-        endpoint_config = endpoint_resource["endpoint"]
+        endpoint_config: Endpoint = endpoint_resource["endpoint"]
         request_params = endpoint_config.get("params", {})
         paginator = create_paginator(endpoint_config.get("paginator"))
 
@@ -266,15 +269,15 @@ def rest_api_resources(config: RESTAPIConfig) -> List[DltResource]:
         if resolved_param is None:
 
             def paginate_resource(
-                method,
-                path,
-                params,
-                paginator,
-                data_selector,
-                response_actions,
+                method: str,
+                path: str,
+                params: Dict[str, Any],
+                paginator: Optional[BasePaginator],
+                data_selector: Optional[Union[str, List[str]]],
+                response_actions: Optional[List[Dict[str, Any]]],
                 incremental_object=incremental_object,
                 incremental_param=incremental_param,
-            ):
+            ) -> Generator[Any, None, None]:
                 if incremental_object:
                     params[incremental_param] = incremental_object.last_value
 
@@ -305,13 +308,13 @@ def rest_api_resources(config: RESTAPIConfig) -> List[DltResource]:
             request_params.pop(param_name, None)
 
             def paginate_dependent_resource(
-                items,
-                method,
-                path,
-                params,
-                paginator,
-                data_selector,
-                response_actions,
+                items: List[Dict[str, Any]],
+                method: str,
+                path: str,
+                params: Dict[str, Any],
+                paginator: Optional[BasePaginator],
+                data_selector: Optional[Union[str, List[str]]],
+                response_actions: Optional[List[Dict[str, Any]]],
                 param_name=param_name,
                 field_path=resolved_param.resolve_config.field_path,
             ):
@@ -375,7 +378,7 @@ def make_endpoint_resource(
     """
     if isinstance(resource, str):
         resource = {"name": resource, "endpoint": {"path": resource}}
-        return update_dict_nested(copy.deepcopy(default_config), resource)
+        return update_dict_nested(copy.deepcopy(default_config), resource)  # type: ignore[type-var]
 
     if "endpoint" in resource and isinstance(resource["endpoint"], str):
         resource["endpoint"] = {"path": resource["endpoint"]}
@@ -384,9 +387,9 @@ def make_endpoint_resource(
         raise ValueError("Resource must have a name")
 
     if "path" not in resource["endpoint"]:
-        resource["endpoint"]["path"] = resource["name"]
+        resource["endpoint"]["path"] = resource["name"]  # type: ignore
 
-    return update_dict_nested(copy.deepcopy(default_config), resource)
+    return update_dict_nested(copy.deepcopy(default_config), resource)  # type: ignore[type-var]
 
 
 def make_resolved_param(
@@ -420,7 +423,7 @@ def find_resolved_params(endpoint_config: Endpoint) -> List[ResolvedParam]:
 
 def check_connection(
     source: DltSource,
-    *resource_names: List[str],
+    *resource_names: str,
 ) -> Tuple[bool, str]:
     try:
         list(source.with_resources(*resource_names).add_limit(1))

@@ -84,7 +84,7 @@ class EndpointResource(TypedDict, total=False):
 
 
 class FlexibleEndpointResource(EndpointResource, total=False):
-    name: Optional[TTableHintTemplate[str]]
+    name: Optional[TTableHintTemplate[str]] # type: ignore[misc]
 
 
 class RESTAPIConfig(TypedDict):
