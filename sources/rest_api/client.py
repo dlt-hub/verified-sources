@@ -10,15 +10,10 @@ from dlt.common import logger
 from dlt.common import jsonpath
 from dlt.sources.helpers.requests.retry import Client
 
-from .paginators import (
-    BasePaginator,
-    SinglePagePaginator,
-    JSONResponsePaginator,
-    HeaderLinkPaginator,
-)
+from .paginators import BasePaginator
 from .detector import create_paginator, find_records
 
-from .utils import join_url, create_nested_accessor
+from .utils import join_url
 
 
 class RESTClient:
@@ -159,6 +154,17 @@ class RESTClient:
             paginator.update_state(response)
             paginator.update_request(request)
 
+            if not paginator.has_next_page:
+                break
+
+    def detect_paginator(self, response: Response) -> BasePaginator:
+        paginator = create_paginator(response)
+        if paginator is None:
+            raise ValueError(
+                f"No suitable paginator found for the response at {response.url}"
+            )
+        logger.info(f"Detected paginator: {paginator.__class__.__name__}")
+        return paginator
 
     def handle_response_actions(
         self, response: Response, actions: List[Dict[str, Any]]
