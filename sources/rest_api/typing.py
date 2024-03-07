@@ -6,14 +6,14 @@ from typing import (
     Optional,
     TypedDict,
     Union,
+    Literal,
 )
 
-from dlt.sources.helpers.requests.retry import Client
 from dlt.extract.items import TTableHintTemplate
 from dlt.extract.incremental import Incremental
 
 from .paginators import BasePaginator
-
+from .auth import AuthBase
 
 from dlt.common.schema.typing import (
     TColumnNames,
@@ -26,6 +26,10 @@ from dlt.common.schema.typing import (
 PaginatorConfigDict = Dict[str, Any]
 PaginatorType = Union[Any, BasePaginator, str, PaginatorConfigDict]
 
+HTTPMethodBasic = Literal["get", "post"]
+HTTPMethodExtended = Literal["put", "patch", "delete"]
+HTTPMethod = Union[HTTPMethodBasic, HTTPMethodExtended]
+
 
 class AuthConfig(TypedDict, total=False):
     token: str
@@ -33,7 +37,7 @@ class AuthConfig(TypedDict, total=False):
 
 class ClientConfig(TypedDict, total=False):
     base_url: str
-    auth: Optional[Union[Any, AuthConfig]]
+    auth: Optional[Union[AuthConfig, AuthBase]]
     paginator: Optional[PaginatorType]
 
 
@@ -61,7 +65,7 @@ class ResponseAction(TypedDict, total=False):
 
 class Endpoint(TypedDict, total=False):
     path: Optional[str]
-    method: Optional[str]
+    method: Optional[HTTPMethodBasic]
     params: Optional[Dict[str, Any]]
     json: Optional[Dict[str, Any]]
     paginator: Optional[PaginatorType]
@@ -78,13 +82,13 @@ class EndpointResource(TypedDict, total=False):
     columns: Optional[TTableHintTemplate[TTableSchemaColumns]]
     primary_key: Optional[TTableHintTemplate[TColumnNames]]
     merge_key: Optional[TTableHintTemplate[TColumnNames]]
-    incremental: Optional[Incremental[Any]]
+    incremental: Optional[IncrementalConfig]
     table_format: Optional[TTableHintTemplate[TTableFormat]]
     include_from_parent: Optional[List[str]]
 
 
 class FlexibleEndpointResource(EndpointResource, total=False):
-    name: Optional[TTableHintTemplate[str]] # type: ignore[misc]
+    name: Optional[TTableHintTemplate[str]]  # type: ignore[misc]
 
 
 class RESTAPIConfig(TypedDict):

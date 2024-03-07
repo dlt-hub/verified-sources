@@ -1,6 +1,6 @@
 from functools import reduce
 from operator import getitem
-from typing import Any, Dict, Sequence, Union
+from typing import Any, Dict, Mapping, Sequence, Union
 
 
 def join_url(base_url: str, path: str) -> str:
@@ -15,5 +15,5 @@ def create_nested_accessor(path: Union[str, Sequence[str]]) -> Any:
     return lambda d: d.get(path)
 
 
-def remove_key(d: Dict[str, Any], key: str) -> Dict[str, Any]:
+def remove_key(d: Mapping[str, Any], key: str) -> Dict[str, Any]:
     return {k: v for k, v in d.items() if k != key}

@@ -1,4 +1,4 @@
-from typing import Optional, List, Dict, Any, Union, Generator, Literal
+from typing import Optional, List, Dict, Any, Union, Generator
 import copy
 from urllib.parse import urlparse
 
@@ -10,6 +10,7 @@ from dlt.common import logger
 from dlt.common import jsonpath
 from dlt.sources.helpers.requests.retry import Client
 
+from .typing import HTTPMethodBasic, HTTPMethod
 from .paginators import BasePaginator
 from .detector import create_paginator, find_records
 
@@ -39,17 +40,28 @@ class RESTClient:
         self.base_url = base_url
         self.headers = headers
         self.auth = auth
+
         if session:
+            self._validate_session_raise_for_status(session)
             self.session = session
         else:
             self.session = Client(raise_for_status=False).session
 
         self.paginator = paginator
 
+    def _validate_session_raise_for_status(self, session: BaseSession) -> None:
+        # dlt.sources.helpers.requests.session.Session
+        # has raise_for_status=True by default
+        if getattr(self.session, "raise_for_status", False):
+            logger.warning(
+                "The session provided has raise_for_status enabled. "
+                "This may cause unexpected behavior."
+            )
+
     def _create_request(
         self,
         path: str,
-        method: str,
+        method: HTTPMethod,
         params: Dict[str, Any],
         json: Optional[Dict[str, Any]] = None,
         auth: Optional[AuthBase] = None,
@@ -84,7 +96,7 @@ class RESTClient:
         return self.session.send(prepared_request)
 
     def request(
-        self, path: str = "", method: Literal["get", "post"] = "get", **kwargs: Any
+        self, path: str = "", method: HTTPMethod = "get", **kwargs: Any
     ) -> Response:
         prepared_request = self._create_request(
             path=path,
@@ -106,7 +118,7 @@ class RESTClient:
     def paginate(
         self,
         path: str = "",
-        method: Literal["get", "post"] = "get",
+        method: HTTPMethodBasic = "get",
         params: Optional[Dict[str, Any]] = None,
         json: Optional[Dict[str, Any]] = None,
         auth: Optional[AuthBase] = None,

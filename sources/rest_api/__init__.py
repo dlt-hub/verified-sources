@@ -12,7 +12,7 @@ from typing import (
     Generator,
     cast,
 )
-import graphlib # type: ignore[import-untyped]
+import graphlib  # type: ignore[import-untyped]
 
 import dlt
 from dlt.common.validation import validate_dict
@@ -40,6 +40,7 @@ from .typing import (
     Endpoint,
     EndpointResource,
     RESTAPIConfig,
+    HTTPMethodBasic,
 )
 from .utils import remove_key
 
@@ -79,19 +80,25 @@ def create_paginator(paginator_config: PaginatorType) -> Optional[BasePaginator]
     return None
 
 
-def create_auth(auth_config: Optional[AuthConfig]) -> Optional[AuthBase]:
+def create_auth(
+    auth_config: Optional[Union[AuthConfig, AuthBase]],
+) -> Optional[AuthBase]:
     if isinstance(auth_config, AuthBase):
         return auth_config
-    return BearerTokenAuth(cast(TSecretStrValue, auth_config.get("token"))) if auth_config else None
+    return (
+        BearerTokenAuth(cast(TSecretStrValue, auth_config.get("token")))
+        if auth_config
+        else None
+    )
 
 
-def make_client_config(config: Dict[str, Any]) -> ClientConfig:
+def make_client_config(config: RESTAPIConfig) -> ClientConfig:
     client_config = config.get("client", {})
-    return {
-        "base_url": client_config.get("base_url"),
-        "auth": create_auth(client_config.get("auth")),
-        "paginator": create_paginator(client_config.get("paginator")),
-    }
+    return ClientConfig(
+        base_url=client_config.get("base_url"),
+        auth=create_auth(client_config.get("auth")),
+        paginator=create_paginator(client_config.get("paginator")),
+    )
 
 
 def setup_incremental_object(
@@ -221,7 +228,9 @@ def rest_api_resources(config: RESTAPIConfig) -> List[DltResource]:
 
         resource_name = endpoint_resource["name"]
 
-        resolved_params = find_resolved_params(endpoint_resource["endpoint"])
+        resolved_params = find_resolved_params(
+            cast(Endpoint, endpoint_resource["endpoint"])
+        )
 
         if len(resolved_params) > 1:
             raise ValueError(
@@ -261,7 +270,7 @@ def rest_api_resources(config: RESTAPIConfig) -> List[DltResource]:
         resource_kwargs = remove_key(endpoint_resource, "endpoint")
 
         incremental_object, incremental_param = setup_incremental_object(
-            request_params, endpoint_config.get("incremental")
+            request_params, endpoint_resource.get("incremental")
         )
 
         response_actions = endpoint_config.get("response_actions")
@@ -269,14 +278,14 @@ def rest_api_resources(config: RESTAPIConfig) -> List[DltResource]:
         if resolved_param is None:
 
             def paginate_resource(
-                method: str,
+                method: HTTPMethodBasic,
                 path: str,
                 params: Dict[str, Any],
                 paginator: Optional[BasePaginator],
                 data_selector: Optional[Union[str, List[str]]],
                 response_actions: Optional[List[Dict[str, Any]]],
-                incremental_object=incremental_object,
-                incremental_param=incremental_param,
+                incremental_object: Optional[Incremental[Any]] = incremental_object,
+                incremental_param: str = incremental_param,
             ) -> Generator[Any, None, None]:
                 if incremental_object:
                     params[incremental_param] = incremental_object.last_value
@@ -309,15 +318,15 @@ def rest_api_resources(config: RESTAPIConfig) -> List[DltResource]:
 
             def paginate_dependent_resource(
                 items: List[Dict[str, Any]],
-                method: str,
+                method: HTTPMethodBasic,
                 path: str,
                 params: Dict[str, Any],
                 paginator: Optional[BasePaginator],
                 data_selector: Optional[Union[str, List[str]]],
                 response_actions: Optional[List[Dict[str, Any]]],
-                param_name=param_name,
-                field_path=resolved_param.resolve_config.field_path,
-            ):
+                param_name: str = param_name,
+                field_path: str = resolved_param.resolve_config.field_path,
+            ) -> Generator[Any, None, None]:
                 items = items or []
                 for item in items:
                     formatted_path = path.format(**{param_name: item[field_path]})
