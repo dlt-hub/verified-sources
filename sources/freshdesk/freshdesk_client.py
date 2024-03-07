@@ -1,6 +1,6 @@
 """Freshdesk Client for making authenticated requests"""
 
-from typing import Any, Iterable, Optional
+from typing import Any, Iterable, Optional, Dict
 
 from dlt.common.typing import TDataItem
 from dlt.sources.helpers import requests
@@ -78,7 +78,7 @@ class FreshdeskClient:
             # Construct the URL for the specific endpoint
             url = f"{self.base_url}/{endpoint}"
 
-            params = {"per_page": per_page, "page": page}
+            params: Dict[str, Any] = {"per_page": per_page, "page": page}
 
             # Implement date range splitting logic here, if applicable
             if endpoint in ["tickets", "contacts"]:

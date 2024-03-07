@@ -5,7 +5,7 @@ the Freshdesk integration.
 
 import dlt
 import pytest
-from freshdesk import freshdesk_source
+from sources.freshdesk import freshdesk_source
 
 from tests.utils import ALL_DESTINATIONS, assert_load_info, load_table_counts
 
