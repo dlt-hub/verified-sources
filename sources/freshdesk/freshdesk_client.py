@@ -1,5 +1,7 @@
 """Freshdesk Client for making authenticated requests"""
 
+import logging
+import time
 from typing import Any, Dict, Iterable, Optional
 
 from dlt.common.typing import TDataItem
@@ -37,8 +39,6 @@ class FreshdeskClient:
         Handles rate limits in HTTP requests and ensures
         that the client doesn't exceed the limit set by the server.
         """
-        import logging
-        import time
 
         while True:
             try:
@@ -54,13 +54,14 @@ class FreshdeskClient:
                     seconds_to_wait = int(e.response.headers.get("Retry-After", 60))
                     # Log a warning message
                     logging.warning(
-                        f"Rate limited. Waiting to retry after: {seconds_to_wait} secs"
+                        "Rate limited. Waiting to retry after: %s secs", seconds_to_wait
                     )
 
                     # Wait for the specified number of seconds before retrying
                     time.sleep(seconds_to_wait)
                 else:
-                    # If the error is not a rate limit (429), raise the exception to be handled elsewhere or stop execution
+                    # If the error is not a rate limit (429), raise the exception to be
+                    # handled elsewhere or stop execution
                     raise
 
     def paginated_response(
@@ -69,6 +70,13 @@ class FreshdeskClient:
         per_page: int,
         updated_at: Optional[str] = None,
     ) -> Iterable[TDataItem]:
+        """
+        Fetches a paginated response from a specified endpoint.
+
+        This method will continuously fetch data from the given endpoint,
+        page by page, until no more data is available or until it reaches data
+        updated at the specified timestamp.
+        """
         page = 1
         while True:
             # Construct the URL for the specific endpoint
