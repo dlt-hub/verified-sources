@@ -1,6 +1,6 @@
 """Freshdesk Client for making authenticated requests"""
 
-from typing import Any, Iterable, Optional, Dict
+from typing import Any, Dict, Iterable, Optional
 
 from dlt.common.typing import TDataItem
 from dlt.sources.helpers import requests
@@ -40,8 +40,6 @@ class FreshdeskClient:
         import logging
         import time
 
-        import requests
-
         while True:
             try:
                 response = requests.get(url, **kwargs, auth=(self.api_key, "X"))
@@ -53,9 +51,7 @@ class FreshdeskClient:
 
                     # Get the 'Retry-After' header to know how long to wait
                     # Fallback to 60 seconds if header is missing
-                    seconds_to_wait = int(
-                        e.response.headers.get("Retry-After", 60)
-                    )
+                    seconds_to_wait = int(e.response.headers.get("Retry-After", 60))
                     # Log a warning message
                     logging.warning(
                         f"Rate limited. Waiting to retry after: {seconds_to_wait} secs"
