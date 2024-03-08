@@ -1,4 +1,6 @@
+import re
 from typing import List, Dict, Any, Tuple, Union, Optional, Set
+
 from dlt.sources.helpers.requests import Response
 
 from .paginators import (
@@ -27,6 +29,11 @@ NON_RECORD_KEY_PATTERNS = {
 }
 NEXT_PAGE_KEY_PATTERNS = {"next", "nextpage", "nexturl"}
 NEXT_PAGE_DICT_KEY_PATTERNS = {"href", "url"}
+
+
+def single_entity_path(path: str) -> bool:
+    """Checks if path ends with path param indicating that single object is returned"""
+    return re.search(r"\{([a-zA-Z_][a-zA-Z0-9_]*)\}$", path) is not None
 
 
 def find_all_lists(
@@ -120,11 +127,8 @@ def json_links_detector(response: Response) -> Optional[JSONResponsePaginator]:
 
 
 def single_page_detector(response: Response) -> Optional[SinglePagePaginator]:
-    value = response.json()
-    if isinstance(value, list):
-        return SinglePagePaginator()
-
-    return None
+    """This is our fallback paginator, also for results that are single entities"""
+    return SinglePagePaginator()
 
 
 def create_paginator(
