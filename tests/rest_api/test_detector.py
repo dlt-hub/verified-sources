@@ -1,5 +1,9 @@
 import pytest
-from sources.rest_api.detector import find_records, find_next_page_key
+from sources.rest_api.detector import (
+    find_records,
+    find_next_page_key,
+    single_entity_path,
+)
 from sources.rest_api.utils import create_nested_accessor
 
 
@@ -309,5 +313,45 @@ def test_find_records_key(test_case):
 @pytest.mark.parametrize("test_case", TEST_RESPONSES)
 def test_find_next_page_key(test_case):
     response = test_case["response"]
-    expected = test_case.get("expected").get("next_key", None)  # Some cases may not have next_key
+    expected = test_case.get("expected").get(
+        "next_key", None
+    )  # Some cases may not have next_key
     assert find_next_page_key(response) == expected
+
+
+@pytest.mark.parametrize(
+    "path",
+    [
+        "/users/{user_id}",
+        "/api/v1/products/{product_id}/",
+        "/api/v1/products/{product_id}//",
+        "/api/v1/products/{product_id}?param1=value1",
+        "/api/v1/products/{product_id}#section",
+        "/api/v1/products/{product_id}/#section",
+        "/users/{user_id}/posts/{post_id}",
+        "/users/{user_id}/posts/{post_id}/comments/{comment_id}",
+        "{entity}",
+        "/{entity}",
+        "/{user_123}",
+    ],
+)
+def test_single_entity_path_valid(path):
+    assert single_entity_path(path) is True
+
+
+@pytest.mark.parametrize(
+    "path",
+    [
+        "/users/user_id",
+        "/api/v1/products/product_id/",
+        "/users/{user_id}/details",
+        "/",
+        "/{}",
+        "/users/{123}",
+        "/users/{user-id}",
+        "/users/{user id}",
+        "/users/{user_id}/{",  # Invalid ending
+    ],
+)
+def test_single_entity_path_invalid(path):
+    assert single_entity_path(path) is False
