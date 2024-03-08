@@ -13,7 +13,3 @@ def create_nested_accessor(path: Union[str, Sequence[str]]) -> Any:
     if isinstance(path, (list, tuple)):
         return lambda d: reduce(getitem, path, d)
     return lambda d: d.get(path)
-
-
-def remove_key(d: Mapping[str, Any], key: str) -> Dict[str, Any]:
-    return {k: v for k, v in d.items() if k != key}

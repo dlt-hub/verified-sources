@@ -51,7 +51,6 @@ def test_load_mock_api(mock_api_server):
                                 "field": "id",
                             }
                         },
-                        "paginator": "single_page",
                     },
                 },
             ],
@@ -111,7 +110,6 @@ def test_ignoring_endpoint_returning_404(mock_api_server):
                                 "field": "id",
                             }
                         },
-                        "paginator": "single_page",
                         "response_actions": [
                             {
                                 "status_code": 404,

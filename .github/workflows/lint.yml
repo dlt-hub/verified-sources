@@ -5,6 +5,7 @@ on:
   pull_request:
     branches:
       - master
+      - enh/api_helper
   workflow_dispatch:
 
 jobs:
