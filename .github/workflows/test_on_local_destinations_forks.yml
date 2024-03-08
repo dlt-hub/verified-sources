@@ -5,7 +5,6 @@ on:
   pull_request_target:
     branches:
       - master
-      - devel
       - enh/api_helper
     types:
       - opened

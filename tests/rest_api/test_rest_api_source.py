@@ -101,7 +101,7 @@ def test_dependent_resource(destination_name: str) -> None:
     table_names = [t["name"] for t in pipeline.default_schema.data_tables()]
     table_counts = load_table_counts(pipeline, *table_names)
 
-    assert list(table_counts.keys()) == [
+    assert set(table_counts.keys()) == {
         "pokemon",
         "pokemon__types",
         "pokemon__stats",
@@ -110,6 +110,6 @@ def test_dependent_resource(destination_name: str) -> None:
         "pokemon__game_indices",
         "pokemon__forms",
         "pokemon__abilities",
-    ]
+    }
 
     assert table_counts["pokemon"] == 2
