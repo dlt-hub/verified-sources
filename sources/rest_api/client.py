@@ -1,4 +1,4 @@
-from typing import Optional, List, Dict, Any, Union, Generator, Literal
+from typing import Iterator, Optional, List, Dict, Any, TypeVar, Iterable, cast, Literal
 import copy
 from urllib.parse import urlparse
 
@@ -11,9 +11,33 @@ from dlt.common import jsonpath
 from dlt.sources.helpers.requests.retry import Client
 
 from .paginators import BasePaginator
+from .auth import AuthConfigBase
 from .detector import create_paginator, find_records
 
 from .utils import join_url
+
+
+_T = TypeVar("_T")
+
+
+class PageData(List[_T]):
+    """A list of elements in a single page of results with attached request context.
+
+      The context allows to inspect the response, paginator and authenticator, modify the request
+    """
+    def __init__(
+        self,
+        __iterable: Iterable[_T],
+        request: Request,
+        response: Response,
+        paginator: BasePaginator,
+        auth: AuthConfigBase
+    ):
+        super().__init__(__iterable)
+        self.request = request
+        self.response = response
+        self.paginator = paginator
+        self.auth = auth
 
 
 class RESTClient:
@@ -32,8 +56,9 @@ class RESTClient:
         self,
         base_url: str,
         headers: Optional[Dict[str, str]] = None,
-        auth: Optional[AuthBase] = None,
+        auth: Optional[AuthConfigBase] = None,
         paginator: Optional[BasePaginator] = None,
+        data_selector: Optional[jsonpath.TJsonPath] = None,
         session: BaseSession = None,
     ) -> None:
         self.base_url = base_url
@@ -45,12 +70,13 @@ class RESTClient:
             self.session = Client(raise_for_status=False).session
 
         self.paginator = paginator
+        self.data_selector = data_selector
 
     def _create_request(
         self,
         path: str,
-        method: str,
-        params: Dict[str, Any],
+        method: str = None,
+        params: Dict[str, Any] = None,
         json: Optional[Dict[str, Any]] = None,
         auth: Optional[AuthBase] = None,
         hooks: Optional[Dict[str, Any]] = None,
@@ -61,15 +87,13 @@ class RESTClient:
         else:
             url = join_url(self.base_url, path)
 
-        auth = auth or self.auth
-
         return Request(
             method=method,
             url=url,
             headers=self.headers,
-            params=params if method.lower() == "get" else None,
-            json=json if method.lower() in ["post", "put"] else None,
-            auth=auth,
+            params=params,
+            json=json,
+            auth=auth or self.auth,
             hooks=hooks,
         )
 
@@ -84,7 +108,7 @@ class RESTClient:
         return self.session.send(prepared_request)
 
     def request(
-        self, path: str = "", method: Literal["get", "post"] = "get", **kwargs: Any
+        self, path: str, method: str = "get", **kwargs: Any
     ) -> Response:
         prepared_request = self._create_request(
             path=path,
@@ -94,27 +118,27 @@ class RESTClient:
         return self._send_request(prepared_request)
 
     def get(
-        self, path: str = "", params: Optional[Dict[str, Any]] = None, **kwargs: Any
+        self, path: str, params: Optional[Dict[str, Any]] = None, **kwargs: Any
     ) -> Response:
         return self.request(path, method="get", params=params, **kwargs)
 
     def post(
-        self, path: str = "", json: Optional[Dict[str, Any]] = None, **kwargs: Any
+        self, path: str, json: Optional[Dict[str, Any]] = None, **kwargs: Any
     ) -> Response:
         return self.request(path, method="post", json=json, **kwargs)
 
     def paginate(
         self,
-        path: str = "",
-        method: Literal["get", "post"] = "get",
+        path: str,
+        method: str = "get",
         params: Optional[Dict[str, Any]] = None,
         json: Optional[Dict[str, Any]] = None,
-        auth: Optional[AuthBase] = None,
+        auth: Optional[AuthConfigBase] = None,
         paginator: Optional[BasePaginator] = None,
-        data_selector: Optional[Union[str, List[str]]] = None,
+        data_selector: Optional[jsonpath.TJsonPath] = None,
         response_actions: Optional[List[Dict[str, Any]]] = None,
         hooks: Optional[Dict[str, Any]] = None,
-    ) -> Generator[Any, None, None]:
+    ) -> Iterator[PageData[Any]]:
         """Paginate over an API endpoint.
 
         Example:
@@ -122,11 +146,9 @@ class RESTClient:
             >>> for page in client.paginate("/search", method="post", json={"query": "foo"}):
             >>>     print(page)
         """
-        paginator = copy.deepcopy(paginator if paginator else self.paginator)
-
-        # extract_records = (
-        #     self.create_records_extractor(data_selector) if data_selector else None
-        # )
+        paginator = paginator if paginator else copy.deepcopy(self.paginator)
+        auth = auth or self.auth
+        data_selector = data_selector or self.data_selector
 
         request = self._create_request(
             path=path, method=method, params=params, json=json, auth=auth, hooks=hooks
@@ -149,19 +171,29 @@ class RESTClient:
             if paginator is None:
                 paginator = self.detect_paginator(response)
 
-            if data_selector:
-                # we should compile data_selector
-                data = jsonpath.find_values(data_selector, response.json())
-                # extract if single item selected
-                yield data[0] if len(data) == 1 else data
-            else:
-                yield find_records(response.json())
-
+            data = self.extract_response(response, data_selector)
             paginator.update_state(response)
             paginator.update_request(request)
 
+
+            # yield data with context
+            yield PageData(data, request=request, response=response, paginator=paginator, auth=auth)
+
             if not paginator.has_next_page:
                 break
+
+    def extract_response(self, response: Response, data_selector: jsonpath.TJsonPath) -> List[Any]:
+        if data_selector:
+            # we should compile data_selector
+            data: Any = jsonpath.find_values(data_selector, response.json())
+            # extract if single item selected
+            data = data[0] if isinstance(data, list) and len(data) == 1 else data
+        else:
+            data = find_records(response.json())
+        # wrap single pages into lists
+        if not isinstance(data, list):
+            data = [data]
+        return cast(List[Any], data)
 
     def detect_paginator(self, response: Response) -> BasePaginator:
         paginator = create_paginator(response)
@@ -206,6 +238,3 @@ class RESTClient:
                     return action_type
 
         return None
-
-    def __iter__(self) -> Generator[Any, None, None]:
-        return self.paginate()

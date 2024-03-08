@@ -75,6 +75,7 @@ def test_dependent_resource(destination_name: str) -> None:
                         "limit": 2,
                     },
                 },
+                "selected": False,
             },
             {
                 "name": "pokemon",
@@ -87,13 +88,13 @@ def test_dependent_resource(destination_name: str) -> None:
                             "field": "name",
                         },
                     },
-                    "paginator": "single_page",
+
                 },
             },
         ],
     }
 
-    data = rest_api_source(config).with_resources("pokemon_list", "pokemon")
+    data = rest_api_source(config)
     pipeline = _make_pipeline(destination_name)
     load_info = pipeline.run(data)
     assert_load_info(load_info)
@@ -109,8 +110,6 @@ def test_dependent_resource(destination_name: str) -> None:
         "pokemon__game_indices",
         "pokemon__forms",
         "pokemon__abilities",
-        "pokemon_list",
     ]
 
-    assert table_counts["pokemon_list"] == 2
     assert table_counts["pokemon"] == 2

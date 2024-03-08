@@ -1,8 +1,12 @@
 import os
 import pytest
+from requests import Response, Request
+
 from sources.rest_api.client import RESTClient
-from sources.rest_api.paginators import JSONResponsePaginator
+from sources.rest_api.paginators import JSONResponsePaginator, BasePaginator
+from sources.rest_api.auth import AuthConfigBase
 from sources.rest_api.auth import BearerTokenAuth, APIKeyAuth, HttpBasicAuth, OAuth2AuthBase, OAuthJWTAuth
+
 
 
 def load_private_key(name="private_key.pem"):
@@ -45,7 +49,21 @@ class TestRESTClient:
 
         self._assert_pagination(pages)
 
-    def test_default_paginator(self, rest_client):
+    def test_page_context(self, rest_client: RESTClient) -> None:
+        for page in rest_client.paginate(
+            "/posts",
+            paginator=JSONResponsePaginator(next_key="next_page"),
+            auth=AuthConfigBase()
+        ):
+            # response that produced data
+            assert isinstance(page.response, Response)
+            # updated request
+            assert isinstance(page.request, Request)
+            # make request url should be same as next link in paginator
+            if page.paginator.has_next_page:
+                assert page.paginator.next_reference == page.request.url
+
+    def test_default_paginator(self, rest_client: RESTClient):
         pages_iter = rest_client.paginate("/posts")
 
         pages = list(pages_iter)
