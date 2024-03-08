@@ -86,7 +86,7 @@ def kafka_consumer(
     attempts = 0
     with closing(consumer):
         while tracker.has_unread:
-            if attempts == 30:
+            if attempts == 50:
                 break
 
             batch = []
