@@ -8,6 +8,8 @@ from confluent_kafka.admin import AdminClient, NewTopic
 
 import dlt
 from dlt.common import pendulum
+
+from dlt.destinations.exceptions import DatabaseUndefinedRelation
 from sources.kafka import kafka_consumer
 from sources.kafka.helpers import (
     KafkaCredentials,
@@ -109,6 +111,17 @@ def kafka_timed_messages(kafka_admin, kafka_producer):
         time.sleep(10)
 
     yield topic, ts
+
+    _await(kafka_admin.delete_topics([topic]))
+
+
+@pytest.fixture(scope="function")
+def empty_topic(kafka_admin):
+    topic = _random_name("topic")
+    _await(kafka_admin.create_topics([NewTopic(topic, num_partitions=1)]))
+    time.sleep(10)
+
+    yield topic
 
     _await(kafka_admin.delete_topics([topic]))
 
@@ -259,6 +272,21 @@ def test_kafka_incremental_read(kafka_producer, kafka_topics):
     kafka_producer.flush()
     time.sleep(15)
     _extract_assert(kafka_topics, {topic1: 6, topic2: 6})
+
+
+def test_attempts_fail(empty_topic):
+    pipeline = dlt.pipeline(
+        pipeline_name="kafka_test",
+        destination="postgres",
+        dataset_name="kafka_test_data",
+        full_refresh=True,
+    )
+
+    resource = kafka_consumer(empty_topic, batch_timeout=0.01)
+    pipeline.run(resource)
+
+    with pytest.raises(DatabaseUndefinedRelation):
+        load_table_counts(pipeline, empty_topic)
 
 
 def _extract_assert(topics, expected):
