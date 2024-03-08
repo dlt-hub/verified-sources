@@ -18,12 +18,13 @@ import dlt
 from dlt.common.validation import validate_dict
 from dlt.extract.incremental import Incremental
 from dlt.extract.source import DltResource, DltSource
-from dlt.common import logger
+from dlt.common import logger, jsonpath
 from dlt.common.utils import update_dict_nested
 from dlt.common.typing import TSecretStrValue
 
-from .auth import BearerTokenAuth, AuthBase
+from .auth import BearerTokenAuth, AuthConfigBase
 from .client import RESTClient
+from .detector import single_entity_path
 from .paginators import (
     BasePaginator,
     HeaderLinkPaginator,
@@ -41,7 +42,6 @@ from .typing import (
     EndpointResource,
     RESTAPIConfig,
 )
-from .utils import remove_key
 
 
 PAGINATOR_MAP: Dict[str, Type[BasePaginator]] = {
@@ -72,15 +72,15 @@ def create_paginator(paginator_config: PaginatorType) -> Optional[BasePaginator]
         return paginator_class()
 
     if isinstance(paginator_config, dict):
-        paginator_type = paginator_config.get("type", "auto")
+        paginator_type = paginator_config.pop("type", "auto")
         paginator_class = get_paginator_class(paginator_type)
-        return paginator_class(**remove_key(paginator_config, "type"))
+        return paginator_class(paginator_config)
 
     return None
 
 
-def create_auth(auth_config: Optional[AuthConfig]) -> Optional[AuthBase]:
-    if isinstance(auth_config, AuthBase):
+def create_auth(auth_config: Optional[AuthConfig]) -> Optional[AuthConfigBase]:
+    if isinstance(auth_config, AuthConfigBase):
         return auth_config
     return BearerTokenAuth(cast(TSecretStrValue, auth_config.get("token"))) if auth_config else None
 
@@ -101,15 +101,16 @@ def setup_incremental_object(
     for key, value in request_params.items():
         if isinstance(value, dlt.sources.incremental):
             return value, key
-        if isinstance(value, dict) and value.get("type") == "incremental":
-            config = remove_key(value, "type")
-            return (
-                dlt.sources.incremental(**config),
-                key,
-            )
+        if isinstance(value, dict):
+            param_type = value.pop("type")
+            if param_type  == "incremental":
+                return (
+                    dlt.sources.incremental(**value),
+                    key,
+                )
     if incremental_config:
-        config = remove_key(incremental_config, "param")
-        return dlt.sources.incremental(**config), incremental_config.get("param")
+        param = incremental_config.pop("param")
+        return dlt.sources.incremental(**incremental_config), param
 
     return None, None
 
@@ -243,7 +244,7 @@ def rest_api_resources(config: RESTAPIConfig) -> List[DltResource]:
     # Create the resources
     for resource_name in dependency_graph.static_order():
         endpoint_resource = endpoint_resource_map[resource_name]
-        endpoint_config: Endpoint = endpoint_resource["endpoint"]
+        endpoint_config = endpoint_resource.pop("endpoint")
         request_params = endpoint_config.get("params", {})
         paginator = create_paginator(endpoint_config.get("paginator"))
 
@@ -258,13 +259,17 @@ def rest_api_resources(config: RESTAPIConfig) -> List[DltResource]:
                 "dependent on another resource"
             )
 
-        resource_kwargs = remove_key(endpoint_resource, "endpoint")
-
         incremental_object, incremental_param = setup_incremental_object(
             request_params, endpoint_config.get("incremental")
         )
 
         response_actions = endpoint_config.get("response_actions")
+
+        # try to guess if list of entities or just single entity is returned
+        if single_entity_path(endpoint_config["path"]):
+            data_selector = "$"
+        else:
+            data_selector = None
 
         if resolved_param is None:
 
@@ -273,7 +278,7 @@ def rest_api_resources(config: RESTAPIConfig) -> List[DltResource]:
                 path: str,
                 params: Dict[str, Any],
                 paginator: Optional[BasePaginator],
-                data_selector: Optional[Union[str, List[str]]],
+                data_selector: Optional[jsonpath.TJsonPath],
                 response_actions: Optional[List[Dict[str, Any]]],
                 incremental_object=incremental_object,
                 incremental_param=incremental_param,
@@ -291,13 +296,13 @@ def rest_api_resources(config: RESTAPIConfig) -> List[DltResource]:
                 )
 
             resources[resource_name] = dlt.resource(
-                paginate_resource, **resource_kwargs
+                paginate_resource, **endpoint_resource
             )(
                 method=endpoint_config.get("method", "get"),
                 path=endpoint_config.get("path"),
                 params=request_params,
                 paginator=paginator,
-                data_selector=endpoint_config.get("data_selector"),
+                data_selector=endpoint_config.get("data_selector") or data_selector,
                 response_actions=response_actions,
             )
 
@@ -313,7 +318,7 @@ def rest_api_resources(config: RESTAPIConfig) -> List[DltResource]:
                 path: str,
                 params: Dict[str, Any],
                 paginator: Optional[BasePaginator],
-                data_selector: Optional[Union[str, List[str]]],
+                data_selector: Optional[jsonpath.TJsonPath],
                 response_actions: Optional[List[Dict[str, Any]]],
                 param_name=param_name,
                 field_path=resolved_param.resolve_config.field_path,
@@ -348,13 +353,13 @@ def rest_api_resources(config: RESTAPIConfig) -> List[DltResource]:
             resources[resource_name] = dlt.resource(
                 paginate_dependent_resource,
                 data_from=predecessor,
-                **resource_kwargs,
+                **endpoint_resource,
             )(
                 method=endpoint_config.get("method", "get"),
                 path=endpoint_config.get("path"),
                 params=request_params,
                 paginator=paginator,
-                data_selector=endpoint_config.get("data_selector"),
+                data_selector=endpoint_config.get("data_selector") or data_selector,
                 response_actions=response_actions,
             )
 
