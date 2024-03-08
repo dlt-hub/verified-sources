@@ -8,7 +8,7 @@ from typing import (
     Union,
 )
 
-from dlt.sources.helpers.requests.retry import Client
+from dlt.common import jsonpath
 from dlt.extract.items import TTableHintTemplate
 from dlt.extract.incremental import Incremental
 
@@ -65,13 +65,11 @@ class Endpoint(TypedDict, total=False):
     params: Optional[Dict[str, Any]]
     json: Optional[Dict[str, Any]]
     paginator: Optional[PaginatorType]
-    data_selector: Optional[Union[str, List[str]]]
+    data_selector: Optional[jsonpath.TJsonPath]
     response_actions: Optional[List[ResponseAction]]
 
 
-# TODO: check why validate_dict does not respect total=False
-class EndpointResource(TypedDict, total=False):
-    name: TTableHintTemplate[str]
+class EndpointResourceBase(TypedDict, total=False):
     endpoint: Optional[Union[str, Endpoint]]
     write_disposition: Optional[TTableHintTemplate[TWriteDisposition]]
     parent: Optional[TTableHintTemplate[str]]
@@ -81,13 +79,19 @@ class EndpointResource(TypedDict, total=False):
     incremental: Optional[Incremental[Any]]
     table_format: Optional[TTableHintTemplate[TTableFormat]]
     include_from_parent: Optional[List[str]]
+    selected: Optional[bool]
 
 
-class FlexibleEndpointResource(EndpointResource, total=False):
-    name: Optional[TTableHintTemplate[str]] # type: ignore[misc]
+# NOTE: redefining properties of TypedDict is not allowed
+class EndpointResource(EndpointResourceBase, total=False):
+    name: TTableHintTemplate[str]
+
+
+class DefaultEndpointResource(EndpointResourceBase, total=False):
+    name: Optional[TTableHintTemplate[str]]
 
 
 class RESTAPIConfig(TypedDict):
     client: ClientConfig
-    resource_defaults: Optional[FlexibleEndpointResource]
+    resource_defaults: Optional[DefaultEndpointResource]
     resources: List[Union[str, EndpointResource]]
