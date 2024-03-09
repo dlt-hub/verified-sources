@@ -102,14 +102,16 @@ def setup_incremental_object(
             return value, key
         if isinstance(value, dict):
             param_type = value.pop("type")
-            if param_type  == "incremental":
+            if param_type == "incremental":
                 return (
                     dlt.sources.incremental(**value),
                     key,
                 )
     if incremental_config:
         param = incremental_config.pop("param")
-        return dlt.sources.incremental(**cast(IncrementalArgs, incremental_config)), param
+        return dlt.sources.incremental(
+            **cast(IncrementalArgs, incremental_config)
+        ), param
 
     return None, None
 
@@ -210,9 +212,10 @@ def rest_api_resources(config: RESTAPIConfig) -> List[DltResource]:
 
     dependency_graph = graphlib.TopologicalSorter()
     endpoint_resource_map: Dict[str, EndpointResource] = {}
+    resolved_param_map: Dict[str, ResolvedParam] = {}
     resources = {}
 
-    default_resource_config = config.get("resource_defaults", {})
+    resource_defaults = config.get("resource_defaults", {})
 
     resource_list = config.get("resources")
 
@@ -221,11 +224,17 @@ def rest_api_resources(config: RESTAPIConfig) -> List[DltResource]:
 
     # Create the dependency graph
     for resource_kwargs in resource_list:
-        endpoint_resource = make_endpoint_resource(
-            resource_kwargs, default_resource_config
-        )
+        endpoint_resource = make_endpoint_resource(resource_kwargs, resource_defaults)
 
         resource_name = endpoint_resource["name"]
+
+        if not isinstance(resource_name, str):
+            raise ValueError(
+                f"Resource name must be a string, got {type(resource_name)}"
+            )
+
+        if resource_name in endpoint_resource_map:
+            raise ValueError(f"Resource {resource_name} has already been defined")
 
         resolved_params = find_resolved_params(
             cast(Endpoint, endpoint_resource["endpoint"])
@@ -239,24 +248,22 @@ def rest_api_resources(config: RESTAPIConfig) -> List[DltResource]:
         predecessors = set(x.resolve_config.resource_name for x in resolved_params)
 
         dependency_graph.add(resource_name, *predecessors)
-        endpoint_resource["_resolved_param"] = (
+
+        endpoint_resource_map[resource_name] = endpoint_resource
+        resolved_param_map[resource_name] = (
             resolved_params[0] if resolved_params else None
         )
 
-        if resource_name in endpoint_resource_map:
-            raise ValueError(f"Resource {resource_name} has already been defined")
-
-        endpoint_resource_map[resource_name] = endpoint_resource
-
     # Create the resources
     for resource_name in dependency_graph.static_order():
+        resource_name = cast(str, resource_name)
         endpoint_resource = endpoint_resource_map[resource_name]
-        endpoint_config = endpoint_resource.pop("endpoint")
+        endpoint_config = cast(Endpoint, endpoint_resource.pop("endpoint"))
         request_params = endpoint_config.get("params", {})
         paginator = create_paginator(endpoint_config.get("paginator"))
 
-        # TODO: Remove _resolved_param from endpoint_resource
-        resolved_param: ResolvedParam = endpoint_resource.pop("_resolved_param", None)
+        resolved_param: ResolvedParam = resolved_param_map[resource_name]
+
         include_from_parent: List[str] = endpoint_resource.pop(
             "include_from_parent", []
         )

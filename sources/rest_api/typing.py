@@ -10,11 +10,12 @@ from typing import (
 )
 
 from dlt.common import jsonpath
+from dlt.common.typing import TSortOrder
 from dlt.extract.items import TTableHintTemplate
-from dlt.extract.incremental import Incremental
+from dlt.extract.incremental.typing import LastValueFunc
 
 from .paginators import BasePaginator
-from .auth import AuthBase
+from .auth import AuthConfigBase
 
 from dlt.common.schema.typing import (
     TColumnNames,
@@ -38,13 +39,19 @@ class AuthConfig(TypedDict, total=False):
 
 class ClientConfig(TypedDict, total=False):
     base_url: str
-    auth: Optional[Union[AuthConfig, AuthBase]]
+    auth: Optional[Union[AuthConfig, AuthConfigBase]]
     paginator: Optional[PaginatorType]
 
 
-class IncrementalConfig(TypedDict, total=False):
+class IncrementalArgs(TypedDict, total=False):
     cursor_path: str
-    initial_value: str
+    initial_value: Optional[str]
+    last_value_func: LastValueFunc[str]
+    primary_key: Optional[TTableHintTemplate[TColumnNames]]
+    end_value: Optional[str]
+    row_order: Optional[TSortOrder]
+
+class IncrementalConfig(IncrementalArgs, total=False):
     param: str
 
 

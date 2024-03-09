@@ -2,7 +2,6 @@ from typing import Iterator, Optional, List, Dict, Any, TypeVar, Iterable, cast,
 import copy
 from urllib.parse import urlparse
 
-from requests.auth import AuthBase
 from requests import Session as BaseSession
 from requests import Response, Request
 
@@ -47,7 +46,7 @@ class RESTClient:
     Attributes:
         base_url (str): The base URL of the API.
         headers (Optional[Dict[str, str]]): Headers to include in all requests.
-        auth (Optional[AuthBase]): An authentication object to use for all requests.
+        auth (Optional[AuthConfigBase]): An authentication object to use for all requests.
         paginator (Optional[BasePaginator]): A paginator object for handling API pagination.
             Note that this object will be deepcopied for each request to ensure that the
             paginator state is not shared between requests.
@@ -90,7 +89,7 @@ class RESTClient:
         method: HTTPMethod,
         params: Dict[str, Any],
         json: Optional[Dict[str, Any]] = None,
-        auth: Optional[AuthBase] = None,
+        auth: Optional[AuthConfigBase] = None,
         hooks: Optional[Dict[str, Any]] = None,
     ) -> Request:
         parsed_url = urlparse(path)
