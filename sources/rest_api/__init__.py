@@ -34,6 +34,7 @@ from .paginators import (
 from .typing import (
     AuthConfig,
     ClientConfig,
+    IncrementalArgs,
     IncrementalConfig,
     PaginatorType,
     ResolveConfig,
@@ -75,7 +76,7 @@ def create_paginator(paginator_config: PaginatorType) -> Optional[BasePaginator]
     if isinstance(paginator_config, dict):
         paginator_type = paginator_config.pop("type", "auto")
         paginator_class = get_paginator_class(paginator_type)
-        return paginator_class(paginator_config)
+        return paginator_class(**paginator_config)
 
     return None
 
@@ -89,15 +90,6 @@ def create_auth(
         BearerTokenAuth(cast(TSecretStrValue, auth_config.get("token")))
         if auth_config
         else None
-    )
-
-
-def make_client_config(config: RESTAPIConfig) -> ClientConfig:
-    client_config = config.get("client", {})
-    return ClientConfig(
-        base_url=client_config.get("base_url"),
-        auth=create_auth(client_config.get("auth")),
-        paginator=create_paginator(client_config.get("paginator")),
     )
 
 
@@ -117,7 +109,7 @@ def setup_incremental_object(
                 )
     if incremental_config:
         param = incremental_config.pop("param")
-        return dlt.sources.incremental(**incremental_config), param
+        return dlt.sources.incremental(**cast(IncrementalArgs, incremental_config)), param
 
     return None, None
 
@@ -209,7 +201,13 @@ def rest_api_resources(config: RESTAPIConfig) -> List[DltResource]:
 
     validate_dict(RESTAPIConfig, config, path=".")
 
-    client = RESTClient(**make_client_config(config))
+    client_config = config["client"]
+    client = RESTClient(
+        base_url=client_config["base_url"],
+        auth=create_auth(client_config.get("auth")),
+        paginator=create_paginator(client_config.get("paginator")),
+    )
+
     dependency_graph = graphlib.TopologicalSorter()
     endpoint_resource_map: Dict[str, EndpointResource] = {}
     resources = {}
