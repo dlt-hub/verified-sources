@@ -1,1 +1,2 @@
 dlt>=0.3.8
+graphql-core==3.2.3
