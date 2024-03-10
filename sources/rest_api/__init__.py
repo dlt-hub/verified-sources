@@ -309,8 +309,9 @@ def rest_api_resources(config: RESTAPIConfig) -> List[DltResource]:
                     response_actions=response_actions,
                 )
 
-            resources[resource_name] = dlt.resource(
-                paginate_resource, **endpoint_resource
+            resources[resource_name] = dlt.resource(  # type: ignore[call-overload]
+                paginate_resource,
+                **endpoint_resource,  # TODO: implement typing.Unpack
             )(
                 method=endpoint_config.get("method", "get"),
                 path=endpoint_config.get("path"),
@@ -323,8 +324,7 @@ def rest_api_resources(config: RESTAPIConfig) -> List[DltResource]:
         else:
             predecessor = resources[resolved_param.resolve_config.resource_name]
 
-            param_name = resolved_param.param_name
-            request_params.pop(param_name, None)
+            request_params.pop(resolved_param.param_name, None)
 
             def paginate_dependent_resource(
                 items: List[Dict[str, Any]],
@@ -334,12 +334,16 @@ def rest_api_resources(config: RESTAPIConfig) -> List[DltResource]:
                 paginator: Optional[BasePaginator],
                 data_selector: Optional[jsonpath.TJsonPath],
                 response_actions: Optional[List[Dict[str, Any]]],
-                param_name: str = param_name,
-                field_path: str = resolved_param.resolve_config.field_path,
+                resolved_param: ResolvedParam = resolved_param,
+                include_from_parent: List[str] = include_from_parent,
             ) -> Generator[Any, None, None]:
+                field_path = resolved_param.resolve_config.field_path
+
                 items = items or []
                 for item in items:
-                    formatted_path = path.format(**{param_name: item[field_path]})
+                    formatted_path = path.format(
+                        **{resolved_param.param_name: item[field_path]}
+                    )
                     parent_resource_name = resolved_param.resolve_config.resource_name
 
                     parent_record = (
@@ -364,10 +368,10 @@ def rest_api_resources(config: RESTAPIConfig) -> List[DltResource]:
                                 child_record.update(parent_record)
                         yield child_page
 
-            resources[resource_name] = dlt.resource(
+            resources[resource_name] = dlt.resource(  # type: ignore[call-overload]
                 paginate_dependent_resource,
                 data_from=predecessor,
-                **endpoint_resource,
+                **endpoint_resource,  # TODO: implement typing.Unpack
             )(
                 method=endpoint_config.get("method", "get"),
                 path=endpoint_config.get("path"),

@@ -2,12 +2,12 @@ from typing import Iterator, Optional, List, Dict, Any, TypeVar, Iterable, cast,
 import copy
 from urllib.parse import urlparse
 
-from requests import Session as BaseSession
-from requests import Response, Request
+from requests import Session as BaseSession  # noqa: I251
 
 from dlt.common import logger
 from dlt.common import jsonpath
 from dlt.sources.helpers.requests.retry import Client
+from dlt.sources.helpers.requests import Response, Request
 
 from .typing import HTTPMethodBasic, HTTPMethod
 from .paginators import BasePaginator
@@ -23,15 +23,16 @@ _T = TypeVar("_T")
 class PageData(List[_T]):
     """A list of elements in a single page of results with attached request context.
 
-      The context allows to inspect the response, paginator and authenticator, modify the request
+    The context allows to inspect the response, paginator and authenticator, modify the request
     """
+
     def __init__(
         self,
         __iterable: Iterable[_T],
         request: Request,
         response: Response,
         paginator: BasePaginator,
-        auth: AuthConfigBase
+        auth: AuthConfigBase,
     ):
         super().__init__(__iterable)
         self.request = request
@@ -186,14 +187,17 @@ class RESTClient:
             paginator.update_state(response)
             paginator.update_request(request)
 
-
             # yield data with context
-            yield PageData(data, request=request, response=response, paginator=paginator, auth=auth)
+            yield PageData(
+                data, request=request, response=response, paginator=paginator, auth=auth
+            )
 
             if not paginator.has_next_page:
                 break
 
-    def extract_response(self, response: Response, data_selector: jsonpath.TJsonPath) -> List[Any]:
+    def extract_response(
+        self, response: Response, data_selector: jsonpath.TJsonPath
+    ) -> List[Any]:
         if data_selector:
             # we should compile data_selector
             data: Any = jsonpath.find_values(data_selector, response.json())

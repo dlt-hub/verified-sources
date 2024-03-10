@@ -1,17 +1,21 @@
 import os
 import pytest
-from requests import Response, Request
+from dlt.sources.helpers.requests import Response, Request
 
 from sources.rest_api.client import RESTClient
-from sources.rest_api.paginators import JSONResponsePaginator, BasePaginator
+from sources.rest_api.paginators import JSONResponsePaginator
 from sources.rest_api.auth import AuthConfigBase
-from sources.rest_api.auth import BearerTokenAuth, APIKeyAuth, HttpBasicAuth, OAuth2AuthBase, OAuthJWTAuth
-
+from sources.rest_api.auth import (
+    BearerTokenAuth,
+    APIKeyAuth,
+    HttpBasicAuth,
+    OAuthJWTAuth,
+)
 
 
 def load_private_key(name="private_key.pem"):
     key_path = os.path.join(os.path.dirname(__file__), name)
-    with open(key_path, "r") as key_file:
+    with open(key_path, "r", encoding="utf-8") as key_file:
         return key_file.read()
 
 
@@ -53,7 +57,7 @@ class TestRESTClient:
         for page in rest_client.paginate(
             "/posts",
             paginator=JSONResponsePaginator(next_key="next_page"),
-            auth=AuthConfigBase()
+            auth=AuthConfigBase(),
         ):
             # response that produced data
             assert isinstance(page.response, Response)

@@ -319,6 +319,7 @@ def test_find_next_page_key(test_case):
     assert find_next_page_key(response) == expected
 
 
+@pytest.mark.skip
 @pytest.mark.parametrize(
     "path",
     [

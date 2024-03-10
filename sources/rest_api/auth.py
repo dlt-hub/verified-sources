@@ -1,9 +1,9 @@
 from base64 import b64encode
 import math
 from typing import Dict, Final, Literal, Optional, Union
-import requests
+from dlt.sources.helpers import requests
 from requests.auth import AuthBase
-from requests import PreparedRequest
+from requests import PreparedRequest  # noqa: I251
 import pendulum
 import jwt
 from cryptography.hazmat.backends import default_backend
@@ -18,18 +18,22 @@ from dlt.common.configuration.specs import CredentialsConfiguration
 from dlt.common.typing import TSecretStrValue
 
 
-TApiKeyLocation = Literal["header", "cookie", "query", "param"]  # Alias for scheme "in" field
+TApiKeyLocation = Literal[
+    "header", "cookie", "query", "param"
+]  # Alias for scheme "in" field
+
 
 class AuthConfigBase(AuthBase, CredentialsConfiguration):
     """Authenticator base which is both `requests` friendly AuthBase and dlt SPEC
-       configurable via env variables or toml files
+    configurable via env variables or toml files
     """
+
     pass
 
 
 @configspec
 class BearerTokenAuth(AuthConfigBase):
-    type: Final[Literal["http"]] = "http"
+    type: Final[Literal["http"]] = "http"  # noqa: A003
     scheme: Literal["bearer"] = "bearer"
     token: TSecretStrValue
 
@@ -43,12 +47,14 @@ class BearerTokenAuth(AuthConfigBase):
 
 @configspec
 class APIKeyAuth(AuthConfigBase):
-    type: Final[Literal["apiKey"]] = "apiKey"
+    type: Final[Literal["apiKey"]] = "apiKey"  # noqa: A003
     location: TApiKeyLocation = "header"
     name: str
     api_key: TSecretStrValue
 
-    def __init__(self, name: str, api_key: TSecretStrValue, location: TApiKeyLocation = "header") -> None:
+    def __init__(
+        self, name: str, api_key: TSecretStrValue, location: TApiKeyLocation = "header"
+    ) -> None:
         self.name = name
         self.api_key = api_key
         self.location = location
@@ -65,7 +71,7 @@ class APIKeyAuth(AuthConfigBase):
 
 @configspec
 class HttpBasicAuth(AuthConfigBase):
-    type: Final[Literal["http"]] = "http"
+    type: Final[Literal["http"]] = "http"  # noqa: A003
     scheme: Literal["basic"] = "basic"
     username: str
     password: TSecretStrValue
@@ -83,8 +89,9 @@ class HttpBasicAuth(AuthConfigBase):
 @configspec
 class OAuth2AuthBase(AuthConfigBase):
     """Base class for oauth2 authenticators. requires access_token"""
+
     # TODO: Separate class for flows (implicit, authorization_code, client_credentials, etc)
-    type: Final[Literal["oauth2"]] = "oauth2"
+    type: Final[Literal["oauth2"]] = "oauth2"  # noqa: A003
     access_token: TSecretStrValue
 
     def __init__(self, access_token: TSecretStrValue) -> None:
@@ -98,7 +105,8 @@ class OAuth2AuthBase(AuthConfigBase):
 @configspec
 class OAuthJWTAuth(BearerTokenAuth):
     """This is a form of Bearer auth, actually there's not standard way to declare it in openAPI"""
-    format: Final[Literal["JWT"]] = "JWT"
+
+    format: Final[Literal["JWT"]] = "JWT"  # noqa: A003
 
     client_id: str
     private_key: TSecretStrValue
@@ -169,6 +177,8 @@ class OAuthJWTAuth(BearerTokenAuth):
         private_key_bytes = self.private_key.encode("utf-8")
         return serialization.load_pem_private_key(
             private_key_bytes,
-            password=self.private_key_passphrase.encode("utf-8") if self.private_key_passphrase else None,
+            password=self.private_key_passphrase.encode("utf-8")
+            if self.private_key_passphrase
+            else None,
             backend=default_backend(),
         )

@@ -88,7 +88,6 @@ def test_dependent_resource(destination_name: str) -> None:
                             "field": "name",
                         },
                     },
-
                 },
             },
         ],

@@ -51,6 +51,7 @@ class IncrementalArgs(TypedDict, total=False):
     end_value: Optional[str]
     row_order: Optional[TSortOrder]
 
+
 class IncrementalConfig(IncrementalArgs, total=False):
     param: str
 

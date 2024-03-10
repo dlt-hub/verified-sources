@@ -71,7 +71,8 @@ def find_records(
         return next(
             list_info[2]
             for list_info in lists
-            if list_info[1] in RECORD_KEY_PATTERNS and list_info[1] not in NON_RECORD_KEY_PATTERNS
+            if list_info[1] in RECORD_KEY_PATTERNS
+            and list_info[1] not in NON_RECORD_KEY_PATTERNS
         )
     except StopIteration:
         # return the least nested element
