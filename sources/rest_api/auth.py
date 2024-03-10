@@ -123,6 +123,7 @@ class OAuthJWTAuth(BearerTokenAuth):
         scopes: str,
         headers: Optional[Dict[str, str]] = None,
         private_key_passphrase: Optional[TSecretStrValue] = None,
+        default_token_expiration: int = 3600,
     ):
         self.client_id = client_id
         self.private_key = private_key
@@ -132,6 +133,7 @@ class OAuthJWTAuth(BearerTokenAuth):
         self.headers = headers
         self.token = None
         self.token_expiry: Optional[pendulum.DateTime] = None
+        self.default_token_expiration = default_token_expiration
 
     def __call__(self, r: PreparedRequest) -> PreparedRequest:
         if self.token is None or self.is_token_expired():
@@ -159,7 +161,7 @@ class OAuthJWTAuth(BearerTokenAuth):
         token_response = response.json()
         self.token = token_response["access_token"]
         self.token_expiry = pendulum.now().add(
-            seconds=token_response.get("expires_in", 3600)
+            seconds=token_response.get("expires_in", self.default_token_expiration)
         )
 
     def create_jwt_payload(self) -> Dict[str, Union[str, int]]:
