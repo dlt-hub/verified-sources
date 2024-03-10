@@ -53,15 +53,18 @@ class PageData(List[_T]):
 
 
 class RESTClient:
-    """A generic REST client for making requests to an API.
+    """A generic REST client for making requests to an API with support for
+    pagination and authentication.
 
-    Attributes:
-        base_url (str): The base URL of the API.
-        headers (Optional[Dict[str, str]]): Headers to include in all requests.
-        auth (Optional[AuthConfigBase]): An authentication object to use for all requests.
-        paginator (Optional[BasePaginator]): A paginator object for handling API pagination.
-            Note that this object will be deepcopied for each request to ensure that the
-            paginator state is not shared between requests.
+    Args:
+        base_url (str): The base URL of the API to make requests to.
+        headers (Optional[Dict[str, str]]): Default headers to include in all requests.
+        auth (Optional[AuthConfigBase]): Authentication configuration for all requests.
+        paginator (Optional[BasePaginator]): Default paginator for handling paginated responses.
+        data_selector (Optional[jsonpath.TJsonPath]): JSONPath selector for extracting data from responses.
+        session (BaseSession): HTTP session for making requests.
+        paginator_factory (Optional[PaginatorFactory]): Factory for creating paginator instances,
+            used for detecting paginators.
     """
 
     def __init__(
@@ -165,10 +168,27 @@ class RESTClient:
         response_actions: Optional[List[Dict[str, Any]]] = None,
         hooks: Optional[Dict[str, Any]] = None,
     ) -> Iterator[PageData[Any]]:
-        """Paginate over an API endpoint.
+        """Iterates over paginated API responses, yielding pages of data.
+
+        Args:
+            path (str): Endpoint path for the request, relative to `base_url`.
+            method (HTTPMethodBasic): HTTP method for the request, defaults to 'get'.
+            params (Optional[Dict[str, Any]]): URL parameters for the request.
+            json (Optional[Dict[str, Any]]): JSON payload for the request.
+            auth (Optional[AuthConfigBase]): Authentication configuration for the request.
+            paginator (Optional[BasePaginator]): Paginator instance for handling
+                pagination logic.
+            data_selector (Optional[jsonpath.TJsonPath]): JSONPath selector for
+                extracting data from the response.
+            response_actions (Optional[List[Dict[str, Any]]]): Actions to take based on
+                response content or status codes.
+            hooks (Optional[Dict[str, Any]]): Hooks to modify request/response objects.
+
+        Yields:
+            PageData[Any]: A page of data from the paginated API response, along with request and response context.
 
         Example:
-            >>> client = APIClient(...)
+            >>> client = RESTClient(base_url="https://api.example.com")
             >>> for page in client.paginate("/search", method="post", json={"query": "foo"}):
             >>>     print(page)
         """
@@ -222,6 +242,14 @@ class RESTClient:
         return cast(List[Any], data)
 
     def detect_paginator(self, response: Response) -> BasePaginator:
+        """Detects a paginator for the response and returns it.
+
+        Args:
+            response (Response): The response to detect the paginator for.
+
+        Returns:
+            BasePaginator: The paginator instance that was detected.
+        """
         paginator = self.pagination_factory.create_paginator(response)
         if paginator is None:
             raise ValueError(
