@@ -110,9 +110,10 @@ def setup_incremental_object(
                 )
     if incremental_config:
         param = incremental_config.pop("param")
-        return dlt.sources.incremental(
-            **cast(IncrementalArgs, incremental_config)
-        ), param
+        return (
+            dlt.sources.incremental(**cast(IncrementalArgs, incremental_config)),
+            param,
+        )
 
     return None, None
 
@@ -218,11 +219,13 @@ def rest_api_resources(config: RESTAPIConfig) -> List[DltResource]:
     if not resource_list:
         raise ValueError("No resources defined")
 
-    dependency_graph, endpoint_resource_map, resolved_param_map = (
-        build_resource_dependency_graph(
-            resource_defaults,
-            resource_list,
-        )
+    (
+        dependency_graph,
+        endpoint_resource_map,
+        resolved_param_map,
+    ) = build_resource_dependency_graph(
+        resource_defaults,
+        resource_list,
     )
 
     resources = create_resources(
