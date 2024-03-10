@@ -1,5 +1,5 @@
 import re
-from typing import List, Dict, Any, Tuple, Union, Optional, Set, Callable
+from typing import List, Dict, Any, Tuple, Union, Optional, Set, Callable, Iterable
 
 from dlt.sources.helpers.requests import Response
 
@@ -10,26 +10,34 @@ from .paginators import (
     SinglePagePaginator,
 )
 
-RECORD_KEY_PATTERNS = {
-    "data",
-    "items",
-    "results",
-    "entries",
-    "records",
-    "rows",
-    "entities",
-    "payload",
-}
-NON_RECORD_KEY_PATTERNS = {
-    "meta",
-    "metadata",
-    "pagination",
-    "links",
-    "extras",
-    "headers",
-}
-NEXT_PAGE_KEY_PATTERNS = {"next", "nextpage", "nexturl"}
-NEXT_PAGE_DICT_KEY_PATTERNS = {"href", "url"}
+RECORD_KEY_PATTERNS = frozenset(
+    [
+        "data",
+        "items",
+        "results",
+        "entries",
+        "records",
+        "rows",
+        "entities",
+        "payload",
+        "content",
+        "objects",
+    ]
+)
+
+NON_RECORD_KEY_PATTERNS = frozenset(
+    [
+        "meta",
+        "metadata",
+        "pagination",
+        "links",
+        "extras",
+        "headers",
+    ]
+)
+
+NEXT_PAGE_KEY_PATTERNS = frozenset(["next", "nextpage", "nexturl"])
+NEXT_PAGE_DICT_KEY_PATTERNS = frozenset(["href", "url"])
 
 
 def single_entity_path(path: str) -> bool:
@@ -80,7 +88,7 @@ def find_records(
         return lists[0][2]
 
 
-def matches_any_pattern(key: str, patterns: Set[str]) -> bool:
+def matches_any_pattern(key: str, patterns: Iterable[str]) -> bool:
     normalized_key = key.lower()
     return any(pattern in normalized_key for pattern in patterns)
 
