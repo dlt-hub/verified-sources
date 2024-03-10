@@ -211,13 +211,11 @@ def rest_api_resources(config: RESTAPIConfig) -> List[DltResource]:
         paginator=create_paginator(client_config.get("paginator")),
     )
 
-    resources = {}
-
     resource_defaults = config.get("resource_defaults", {})
 
     resource_list = config.get("resources")
 
-    if resource_list is None:
+    if not resource_list:
         raise ValueError("No resources defined")
 
     dependency_graph, endpoint_resource_map, resolved_param_map = (
@@ -227,7 +225,24 @@ def rest_api_resources(config: RESTAPIConfig) -> List[DltResource]:
         )
     )
 
-    # Create the resources
+    resources = create_resources(
+        client,
+        dependency_graph,
+        endpoint_resource_map,
+        resolved_param_map,
+    )
+
+    return list(resources.values())
+
+
+def create_resources(
+    client: RESTClient,
+    dependency_graph: graphlib.TopologicalSorter,
+    endpoint_resource_map: Dict[str, EndpointResource],
+    resolved_param_map: Dict[str, Optional[ResolvedParam]],
+) -> Dict[str, DltResource]:
+    resources = {}
+
     for resource_name in dependency_graph.static_order():
         resource_name = cast(str, resource_name)
         endpoint_resource = endpoint_resource_map[resource_name]
@@ -354,7 +369,7 @@ def rest_api_resources(config: RESTAPIConfig) -> List[DltResource]:
                 response_actions=response_actions,
             )
 
-    return list(resources.values())
+    return resources
 
 
 def build_resource_dependency_graph(
