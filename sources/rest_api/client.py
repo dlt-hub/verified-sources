@@ -1,4 +1,14 @@
-from typing import Iterator, Optional, List, Dict, Any, TypeVar, Iterable, cast, Literal
+from typing import (
+    Iterator,
+    Optional,
+    List,
+    Dict,
+    Any,
+    TypeVar,
+    Iterable,
+    Callable,
+    cast,
+)
 import copy
 from urllib.parse import urlparse
 
@@ -13,6 +23,7 @@ from .typing import HTTPMethodBasic, HTTPMethod
 from .paginators import BasePaginator
 from .auth import AuthConfigBase
 from .detector import create_paginator, find_records
+from .exceptions import IgnoreResponseException
 
 from .utils import join_url
 
@@ -161,24 +172,21 @@ class RESTClient:
         paginator = paginator if paginator else copy.deepcopy(self.paginator)
         auth = auth or self.auth
         data_selector = data_selector or self.data_selector
+        hooks = hooks or {}
+
+        if response_actions:
+            hook = self._create_response_actions_hook(response_actions)
+            hooks.setdefault("response", []).append(hook)
 
         request = self._create_request(
             path=path, method=method, params=params, json=json, auth=auth, hooks=hooks
         )
 
         while True:
-            response = self._send_request(request)
-
-            if response_actions:
-                action_type = self.handle_response_actions(response, response_actions)
-                if action_type == "ignore":
-                    logger.info(
-                        f"Error {response.status_code}. Ignoring response '{response.json()}' and stopping pagination."
-                    )
-                    break
-                elif action_type == "retry":
-                    logger.info("Retrying request.")
-                    continue
+            try:
+                response = self._send_request(request)
+            except IgnoreResponseException:
+                break
 
             if paginator is None:
                 paginator = self.detect_paginator(response)
@@ -219,7 +227,23 @@ class RESTClient:
         logger.info(f"Detected paginator: {paginator.__class__.__name__}")
         return paginator
 
-    def handle_response_actions(
+    def _create_response_actions_hook(
+        self, response_actions: List[Dict[str, Any]]
+    ) -> Callable[[Response, Any, Any], None]:
+        def response_actions_hook(
+            response: Response, *args: Any, **kwargs: Any
+        ) -> None:
+            action_type = self._handle_response_actions(response, response_actions)
+            if action_type == "ignore":
+                logger.info(
+                    f"Ignoring response with code {response.status_code} "
+                    f"and content '{response.json()}'."
+                )
+                raise IgnoreResponseException
+
+        return response_actions_hook
+
+    def _handle_response_actions(
         self, response: Response, actions: List[Dict[str, Any]]
     ) -> Optional[str]:
         """Handle response actions based on the response and the provided actions.

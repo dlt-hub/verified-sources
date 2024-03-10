@@ -1,0 +1,2 @@
+class IgnoreResponseException(Exception):
+    pass
