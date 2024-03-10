@@ -1,5 +1,5 @@
 import re
-from typing import List, Dict, Any, Tuple, Union, Optional, Set, Callable, Iterable
+from typing import List, Dict, Any, Tuple, Union, Optional, Callable, Iterable
 
 from dlt.sources.helpers.requests import Response
 
