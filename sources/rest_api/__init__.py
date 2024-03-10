@@ -12,7 +12,7 @@ from typing import (
     Generator,
     cast,
 )
-import graphlib  # type: ignore[import-untyped]
+import graphlib  # type: ignore[import,unused-ignore]
 
 import dlt
 from dlt.common.validation import validate_dict
