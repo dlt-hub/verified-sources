@@ -10,6 +10,7 @@ from typing import (
     Optional,
     Union,
     Generator,
+    Callable,
     cast,
 )
 import graphlib  # type: ignore[import,unused-ignore]
@@ -156,6 +157,9 @@ def rest_api_source(
             },
         })
     """
+    # import pdb
+
+    # pdb.set_trace()
     decorated = dlt.source(
         rest_api_resources,
         name,
@@ -509,3 +513,22 @@ def check_connection(
     except Exception as e:
         logger.error(f"Error checking connection: {e}")
         return (False, str(e))
+
+
+# XXX: This is a workaround pass test_dlt_init.py
+# since the source uses dlt.source as a function
+def _register_source(source_func: Callable[..., DltSource]) -> None:
+    import inspect
+    from dlt.common.configuration import get_fun_spec
+    from dlt.common.source import _SOURCES, SourceInfo
+
+    spec = get_fun_spec(source_func)
+    func_module = inspect.getmodule(source_func)
+    _SOURCES[source_func.__name__] = SourceInfo(
+        SPEC=spec,
+        f=source_func,
+        module=func_module,
+    )
+
+
+_register_source(rest_api_source)
