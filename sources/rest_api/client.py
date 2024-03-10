@@ -22,7 +22,7 @@ from dlt.sources.helpers.requests import Response, Request
 from .typing import HTTPMethodBasic, HTTPMethod
 from .paginators import BasePaginator
 from .auth import AuthConfigBase
-from .detector import create_paginator, find_records
+from .detector import PaginatorFactory, find_records
 from .exceptions import IgnoreResponseException
 
 from .utils import join_url
@@ -72,6 +72,7 @@ class RESTClient:
         paginator: Optional[BasePaginator] = None,
         data_selector: Optional[jsonpath.TJsonPath] = None,
         session: BaseSession = None,
+        paginator_factory: Optional[PaginatorFactory] = None,
     ) -> None:
         self.base_url = base_url
         self.headers = headers
@@ -84,6 +85,8 @@ class RESTClient:
             self.session = Client(raise_for_status=False).session
 
         self.paginator = paginator
+        self.pagination_factory = paginator_factory or PaginatorFactory()
+
         self.data_selector = data_selector
 
     def _validate_session_raise_for_status(self, session: BaseSession) -> None:
@@ -219,7 +222,7 @@ class RESTClient:
         return cast(List[Any], data)
 
     def detect_paginator(self, response: Response) -> BasePaginator:
-        paginator = create_paginator(response)
+        paginator = self.pagination_factory.create_paginator(response)
         if paginator is None:
             raise ValueError(
                 f"No suitable paginator found for the response at {response.url}"

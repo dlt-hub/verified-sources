@@ -1,9 +1,10 @@
 import re
-from typing import List, Dict, Any, Tuple, Union, Optional, Set
+from typing import List, Dict, Any, Tuple, Union, Optional, Set, Callable
 
 from dlt.sources.helpers.requests import Response
 
 from .paginators import (
+    BasePaginator,
     HeaderLinkPaginator,
     JSONResponsePaginator,
     SinglePagePaginator,
@@ -132,17 +133,21 @@ def single_page_detector(response: Response) -> Optional[SinglePagePaginator]:
     return SinglePagePaginator()
 
 
-def create_paginator(
-    response: Response,
-) -> Optional[Union[HeaderLinkPaginator, JSONResponsePaginator, SinglePagePaginator]]:
-    rules = [
-        header_links_detector,
-        json_links_detector,
-        single_page_detector,
-    ]
-    for rule in rules:
-        paginator = rule(response)
-        if paginator:
-            return paginator
+class PaginatorFactory:
+    def __init__(
+        self, detectors: List[Callable[[Response], Optional[BasePaginator]]] = None
+    ):
+        if detectors is None:
+            detectors = [
+                header_links_detector,
+                json_links_detector,
+                single_page_detector,
+            ]
+        self.detectors = detectors
 
-    return None
+    def create_paginator(self, response: Response) -> Optional[BasePaginator]:
+        for detector in self.detectors:
+            paginator = detector(response)
+            if paginator:
+                return paginator
+        return None
