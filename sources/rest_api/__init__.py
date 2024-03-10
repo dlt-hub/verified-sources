@@ -19,8 +19,11 @@ from dlt.common.validation import validate_dict
 from dlt.extract.incremental import Incremental
 from dlt.extract.source import DltResource, DltSource
 from dlt.common import logger, jsonpath
+from dlt.common.schema.schema import Schema
 from dlt.common.utils import update_dict_nested
 from dlt.common.typing import TSecretStrValue
+from dlt.common.schema.typing import TSchemaContract
+from dlt.common.configuration.specs import BaseConfiguration
 
 from .auth import BearerTokenAuth, AuthConfigBase
 from .client import RESTClient
@@ -122,8 +125,16 @@ def make_parent_key_name(resource_name: str, field_name: str) -> str:
     return f"_{resource_name}_{field_name}"
 
 
-@dlt.source
-def rest_api_source(config: RESTAPIConfig) -> List[DltResource]:
+def rest_api_source(
+    config: RESTAPIConfig,
+    name: str = None,
+    section: str = None,
+    max_table_nesting: int = None,
+    root_key: bool = False,
+    schema: Schema = None,
+    schema_contract: TSchemaContract = None,
+    spec: Type[BaseConfiguration] = None,
+) -> DltSource:
     """
     Creates and configures a REST API source for data extraction.
 
@@ -145,7 +156,18 @@ def rest_api_source(config: RESTAPIConfig) -> List[DltResource]:
             },
         })
     """
-    return rest_api_resources(config)
+    decorated = dlt.source(
+        rest_api_resources,
+        name,
+        section,
+        max_table_nesting,
+        root_key,
+        schema,
+        schema_contract,
+        spec,
+    )
+
+    return decorated(config)
 
 
 def rest_api_resources(config: RESTAPIConfig) -> List[DltResource]:
