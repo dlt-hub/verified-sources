@@ -29,7 +29,7 @@ PaginatorConfigDict = Dict[str, Any]
 PaginatorType = Union[Any, BasePaginator, str, PaginatorConfigDict]
 
 HTTPMethodBasic = Literal["get", "post"]
-HTTPMethodExtended = Literal["put", "patch", "delete"]
+HTTPMethodExtended = Literal["put", "patch", "delete", "head", "options"]
 HTTPMethod = Union[HTTPMethodBasic, HTTPMethodExtended]
 
 
