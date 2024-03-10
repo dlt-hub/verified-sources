@@ -41,6 +41,7 @@ from .typing import (
     ResolvedParam,
     Endpoint,
     EndpointResource,
+    DefaultEndpointResource,
     RESTAPIConfig,
     HTTPMethodBasic,
 )
@@ -210,9 +211,6 @@ def rest_api_resources(config: RESTAPIConfig) -> List[DltResource]:
         paginator=create_paginator(client_config.get("paginator")),
     )
 
-    dependency_graph = graphlib.TopologicalSorter()
-    endpoint_resource_map: Dict[str, EndpointResource] = {}
-    resolved_param_map: Dict[str, ResolvedParam] = {}
     resources = {}
 
     resource_defaults = config.get("resource_defaults", {})
@@ -222,37 +220,12 @@ def rest_api_resources(config: RESTAPIConfig) -> List[DltResource]:
     if resource_list is None:
         raise ValueError("No resources defined")
 
-    # Create the dependency graph
-    for resource_kwargs in resource_list:
-        endpoint_resource = make_endpoint_resource(resource_kwargs, resource_defaults)
-
-        resource_name = endpoint_resource["name"]
-
-        if not isinstance(resource_name, str):
-            raise ValueError(
-                f"Resource name must be a string, got {type(resource_name)}"
-            )
-
-        if resource_name in endpoint_resource_map:
-            raise ValueError(f"Resource {resource_name} has already been defined")
-
-        resolved_params = find_resolved_params(
-            cast(Endpoint, endpoint_resource["endpoint"])
+    dependency_graph, endpoint_resource_map, resolved_param_map = (
+        build_resource_dependency_graph(
+            resource_defaults,
+            resource_list,
         )
-
-        if len(resolved_params) > 1:
-            raise ValueError(
-                f"Multiple resolved params for resource {resource_name}: {resolved_params}"
-            )
-
-        predecessors = set(x.resolve_config.resource_name for x in resolved_params)
-
-        dependency_graph.add(resource_name, *predecessors)
-
-        endpoint_resource_map[resource_name] = endpoint_resource
-        resolved_param_map[resource_name] = (
-            resolved_params[0] if resolved_params else None
-        )
+    )
 
     # Create the resources
     for resource_name in dependency_graph.static_order():
@@ -382,6 +355,48 @@ def rest_api_resources(config: RESTAPIConfig) -> List[DltResource]:
             )
 
     return list(resources.values())
+
+
+def build_resource_dependency_graph(
+    resource_defaults: DefaultEndpointResource,
+    resource_list: List[Union[str, EndpointResource]],
+) -> Tuple[Any, Dict[str, EndpointResource], Dict[str, Optional[ResolvedParam]]]:
+    dependency_graph = graphlib.TopologicalSorter()
+    endpoint_resource_map: Dict[str, EndpointResource] = {}
+    resolved_param_map: Dict[str, ResolvedParam] = {}
+
+    for resource_kwargs in resource_list:
+        endpoint_resource = make_endpoint_resource(resource_kwargs, resource_defaults)
+
+        resource_name = endpoint_resource["name"]
+
+        if not isinstance(resource_name, str):
+            raise ValueError(
+                f"Resource name must be a string, got {type(resource_name)}"
+            )
+
+        if resource_name in endpoint_resource_map:
+            raise ValueError(f"Resource {resource_name} has already been defined")
+
+        resolved_params = find_resolved_params(
+            cast(Endpoint, endpoint_resource["endpoint"])
+        )
+
+        if len(resolved_params) > 1:
+            raise ValueError(
+                f"Multiple resolved params for resource {resource_name}: {resolved_params}"
+            )
+
+        predecessors = set(x.resolve_config.resource_name for x in resolved_params)
+
+        dependency_graph.add(resource_name, *predecessors)
+
+        endpoint_resource_map[resource_name] = endpoint_resource
+        resolved_param_map[resource_name] = (
+            resolved_params[0] if resolved_params else None
+        )
+
+    return dependency_graph, endpoint_resource_map, resolved_param_map
 
 
 def make_endpoint_resource(
