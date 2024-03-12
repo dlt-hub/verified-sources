@@ -1,6 +1,7 @@
 from collections import namedtuple
 from dlt.common.exceptions import DictValidationException
 from sources.rest_api.paginators import SinglePagePaginator
+from sources.rest_api.auth import HttpBasicAuth
 
 
 ConfigTest = namedtuple("ConfigTest", ["expected_message", "exception", "config"])
@@ -90,5 +91,13 @@ VALID_CONFIGS = [
                 },
             },
         ],
+    },
+    {
+        "client": {
+            "base_url": "https://example.com",
+            "paginator": "header_links",
+            "auth": HttpBasicAuth("my-secret", ""),
+        },
+        "resources": ["users"],
     },
 ]
