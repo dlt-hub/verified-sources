@@ -39,6 +39,7 @@ endpoints_data = [
 ]
 
 
+@pytest.mark.skip("We don't have a Personio test account.")
 @pytest.mark.parametrize("endpoint, params, offset_by_page", endpoints_data)
 def test_client(endpoint, params, offset_by_page, client):
     headers = {"Authorization": f"Bearer {client.access_token}"}

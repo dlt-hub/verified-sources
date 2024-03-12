@@ -15,7 +15,7 @@
 </div>
 <br>
 
-This repository contains verified dlt sources and demo pipelines for each source that you can use as a starting point for your project. 
+This repository contains verified dlt sources and demo pipelines for each source that you can use as a starting point for your project.
 
 ## How to add a verified source to your dlt project
 `dlt` offers an `init` command that will clone and inject any source with an example pipeline from this repository into your project, setup the credentials and python dependencies. Please follow the step by step instructions in our [docs](https://dlthub.com/docs/walkthroughs/add-a-verified-source).
@@ -29,7 +29,7 @@ Join our slack by following the [invitation link](https://dlthub.com/community)
 Follow this link: [bug report template](https://github.com/dlt-hub/verified-sources/issues/new?template=bug-report.md)
 
 ## Requesting a source implementation
-Follow this link: [source request template](https://github.com/dlt-hub/verified-sources/issues/new?template=source-request.md)
+Follow this link: [source request template](https://github.com/dlt-hub/verified-sources/issues/new?template=request-new-source.md)
 
 ## How to contribute
 Find step by step instruction as well as troubleshooting help in [CONTRIBUTING.md](CONTRIBUTING.md).
