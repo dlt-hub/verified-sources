@@ -1,3 +1,5 @@
+"""Replicates postgres tables in batch using logical decoding."""
+
 from typing import Optional, Sequence, Dict, Iterable
 
 import dlt
