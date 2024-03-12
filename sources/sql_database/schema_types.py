@@ -36,6 +36,12 @@ def sqla_col_to_column_schema(sql_col: ColumnAny) -> Optional[TColumnSchema]:
             precision=sql_t.precision,
             scale=sql_t.scale,
         )
+    elif isinstance(sql_t, sqltypes.Float):
+        col = dict(name=sql_col.name, data_type="double")
+    elif isinstance(sql_t, sqltypes.Boolean):
+        col = dict(name=sql_col.name, data_type="bool")
+    elif isinstance(sql_t, sqltypes.JSON):
+        col = dict(name=sql_col.name, data_type="complex")
     elif isinstance(sql_t, sqltypes.String):
         col = dict(name=sql_col.name, data_type="text", precision=sql_t.length)
     elif isinstance(sql_t, sqltypes._Binary):
