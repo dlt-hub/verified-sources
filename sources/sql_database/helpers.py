@@ -108,9 +108,9 @@ def table_rows(
         if table_adapter_callback:
             table_adapter_callback(table)
         # set the primary_key in the incremental
-        if incremental and not incremental.primary_key:
+        if incremental and incremental.primary_key is None:
             primary_key = get_primary_key(table)
-            if primary_key:
+            if primary_key is not None:
                 incremental.primary_key = primary_key
         # yield empty record to set hints
         yield dlt.mark.with_hints(
@@ -138,7 +138,7 @@ def engine_from_credentials(
 def get_primary_key(table: Table) -> List[str]:
     """Create primary key or return None if no key defined"""
     primary_key = [c.name for c in table.primary_key]
-    return primary_key if len(primary_key) > 0  else None
+    return primary_key if len(primary_key) > 0 else None
 
 
 @configspec

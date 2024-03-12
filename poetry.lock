@@ -1010,13 +1010,13 @@ files = [
 
 [[package]]
 name = "dlt"
-version = "0.4.6"
+version = "0.4.7a0"
 description = "dlt is an open-source python-first scalable data loading library that does not require any backend to run."
 optional = false
 python-versions = ">=3.8.1,<3.13"
 files = [
-    {file = "dlt-0.4.6-py3-none-any.whl", hash = "sha256:ab1f9f4cdb645316a9e66170e8d2dec0571426d781253456ff90d2238894adab"},
-    {file = "dlt-0.4.6.tar.gz", hash = "sha256:320d4f34c304eb20f3b0eec2b7ee78415bb8605d540528131ccfa67fba5fb59a"},
+    {file = "dlt-0.4.7a0-py3-none-any.whl", hash = "sha256:e5a485b8314e87dbba846ec998b664602874e4910c7e32a575144c2b81fb6eb0"},
+    {file = "dlt-0.4.7a0.tar.gz", hash = "sha256:a75fb6dcb2be680d1650a658a6ee27d0e94294b1f015bfa9c6afd2a739730be1"},
 ]
 
 [package.dependencies]
@@ -6302,4 +6302,4 @@ cffi = ["cffi (>=1.11)"]
 [metadata]
 lock-version = "2.0"
 python-versions = ">=3.8.1,<3.13"
-content-hash = "fed9bc10a9bdd2ca13faac510a97bb55ff19462b39f4c71f2c217babe036dc48"
+content-hash = "985bd349d0f9e7bd25c401cad22349fa5b4607de1ff5bcdd1238dce4cfa4ee1b"

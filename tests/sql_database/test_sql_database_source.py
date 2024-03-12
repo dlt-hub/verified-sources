@@ -348,7 +348,7 @@ def test_set_primary_key_deferred_incremental(
     resource.apply_hints(incremental=None if upfront_incremental else updated_at)
 
     # nothing set for deferred reflect
-    assert resource.incremental.primary_key == []
+    assert resource.incremental.primary_key is None
 
     def _assert_incremental(item):
         # for all the items, all keys must be present
@@ -356,7 +356,7 @@ def test_set_primary_key_deferred_incremental(
         # assert _r.incremental._incremental is updated_at
         if len(item) == 0:
             # not yet propagated
-            assert _r.incremental.primary_key == []
+            assert _r.incremental.primary_key == ["id"]
         else:
             assert _r.incremental.primary_key == ["id"]
         assert _r.incremental._incremental.primary_key == ["id"]
