@@ -4,13 +4,14 @@ When extraction starts, partitions length is checked -
 data is read only up to it, overriding the default Kafka's
 behavior of waiting for new messages in endless loop.
 """
+
 from contextlib import closing
 from typing import Any, Callable, Dict, Iterable, List, Optional, Union
 
 from confluent_kafka import Consumer, Message  # type: ignore
 
 import dlt
-from dlt.common import logger
+from dlt.common import logger, pendulum
 from dlt.common.time import ensure_pendulum_datetime
 from dlt.common.typing import TDataItem, TAnyDateTime
 from .helpers import (
@@ -80,12 +81,24 @@ def kafka_consumer(
     tracker = OffsetTracker(consumer, topics, dlt.current.resource_state(), start_from)
     consumer.subscribe(topics)
 
+    hanged_at = None
+
     # read messages up to the maximum offsets,
     # not waiting for new messages
     with closing(consumer):
         while tracker.has_unread:
+            messages = consumer.consume(batch_size, timeout=batch_timeout)
+
+            if messages:
+                hanged_at = None
+            else:
+                if hanged_at is None:
+                    hanged_at = pendulum.now()  # timestamp of the hanging start
+                elif pendulum.now() - hanged_at > pendulum.duration(minutes=5):
+                    break
+
             batch = []
-            for msg in consumer.consume(batch_size, timeout=batch_timeout):
+            for msg in messages:
                 if msg.error():
                     err = msg.error()
                     if err.retriable() or not err.fatal():
