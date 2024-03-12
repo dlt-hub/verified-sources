@@ -157,9 +157,6 @@ def rest_api_source(
             },
         })
     """
-    # import pdb
-
-    # pdb.set_trace()
     decorated = dlt.source(
         rest_api_resources,
         name,
