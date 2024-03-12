@@ -1,8 +1,9 @@
 import json
-from typing import Optional, Any
+from typing import Optional, Any, Dict
 
 import pypgoutput  # type: ignore[import-untyped]
 
+from dlt.common import Decimal
 from dlt.common.data_types.typing import TDataType
 from dlt.common.data_types.type_helpers import coerce_value
 from dlt.common.schema.typing import TColumnSchema, TColumnType
@@ -10,8 +11,22 @@ from dlt.destinations.impl.postgres import capabilities
 from dlt.destinations.impl.postgres.postgres import PostgresTypeMapper
 
 
+_DUMMY_VALS: Dict[TDataType, Any] = {
+    "bigint": 0,
+    "binary": b" ",
+    "bool": True,
+    "complex": [0],
+    "date": "2000-01-01",
+    "decimal": Decimal(0),
+    "double": 0.0,
+    "text": "",
+    "time": "00:00:00",
+    "timestamp": "2000-01-01T00:00:00",
+    "wei": 0,
+}
+
 # maps postgres type OID to type string
-_PG_TYPES = {
+_PG_TYPES: Dict[int, str] = {
     16: "boolean",
     17: "bytea",
     20: "bigint",
@@ -28,7 +43,8 @@ _PG_TYPES = {
 
 
 def _get_precision(type_id: int, atttypmod: int) -> Optional[int]:
-    # get precision from postgres type attributes: https://stackoverflow.com/a/3351120
+    """Get precision from postgres type attributes."""
+    # https://stackoverflow.com/a/3351120
     if type_id == 21:  # smallint
         return 16
     elif type_id == 23:  # integer
@@ -49,7 +65,8 @@ def _get_precision(type_id: int, atttypmod: int) -> Optional[int]:
 
 
 def _get_scale(type_id: int, atttypmod: int) -> Optional[int]:
-    # get scale from postgres type attributes: https://stackoverflow.com/a/3351120
+    """Get scale from postgres type attributes."""
+    # https://stackoverflow.com/a/3351120
     if atttypmod != -1:
         if type_id in (21, 23, 20):  # smallint, integer, bigint
             return 0
@@ -59,7 +76,7 @@ def _get_scale(type_id: int, atttypmod: int) -> Optional[int]:
 
 
 def _to_dlt_column_type(type_id: int, atttypmod: int) -> TColumnType:
-    # converts postgres type to dlt column type
+    """Converts postgres type to dlt column type."""
     pg_type = _PG_TYPES[type_id]
     precision = _get_precision(type_id, atttypmod)
     scale = _get_scale(type_id, atttypmod)
@@ -68,19 +85,22 @@ def _to_dlt_column_type(type_id: int, atttypmod: int) -> TColumnType:
 
 
 def _to_dlt_column_schema(col: pypgoutput.decoders.ColumnType) -> TColumnSchema:
-    # converts pypgoutput ColumnType to dlt column schema
+    """Converts pypgoutput ColumnType to dlt column schema."""
     dlt_column_type = _to_dlt_column_type(col.type_id, col.atttypmod)
     partial_column_schema = {
         "name": col.name,
         "primary_key": bool(col.part_of_pkey),
-        "nullable": not bool(col.part_of_pkey),
+        # "nullable": not bool(col.part_of_pkey),
     }
     return {**dlt_column_type, **partial_column_schema}  # type: ignore[typeddict-item]
 
 
-def _to_dlt_val(val: str, data_type: TDataType, byte1: str) -> Any:
-    # converts pgoutput's text-formatted value into dlt-compatible data value
+def _to_dlt_val(val: str, data_type: TDataType, byte1: str, for_delete: bool) -> Any:
+    """Converts pgoutput's text-formatted value into dlt-compatible data value."""
     if byte1 == "n":
+        if for_delete:
+            # replace None with dummy value to prevent NOT NULL violations in staging table
+            return _DUMMY_VALS[data_type]
         return None
     elif byte1 == "t":
         if data_type == "binary":

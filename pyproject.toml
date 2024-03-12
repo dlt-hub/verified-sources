@@ -36,6 +36,9 @@ types-psycopg2 = "^2.9.0"
 [tool.poetry.group.sql_database.dependencies]
 sqlalchemy = ">=1.4"
 pymysql = "^1.0.3"
+
+[tool.poetry.group.pg_replication.dependencies]
+psycopg2 = ">=2.9.9"
 pypgoutput = "0.0.3"
 
 [tool.poetry.group.google_sheets.dependencies]

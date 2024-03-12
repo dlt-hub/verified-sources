@@ -1,0 +1,2 @@
+class NoPrimaryKeyException(Exception):
+    pass

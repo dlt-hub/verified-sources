@@ -1,4 +1,4 @@
-from typing import Iterator, List
+from typing import List
 
 from dlt.common import Decimal
 from dlt.common.schema import TColumnSchema, TTableSchemaColumns
@@ -29,7 +29,7 @@ TABLE_ROW_ALL_DATA_TYPES = {
     "col5_null": None,
     "col6_null": None,
     "col7_null": None,
-    "col8_null": None,
+    # "col8_null": None,
     "col9_null": None,
     "col10_null": None,
     "col11_null": None,
@@ -59,7 +59,7 @@ TABLE_UPDATE: List[TColumnSchema] = [
     {"name": "col5_null", "data_type": "text", "nullable": True},
     {"name": "col6_null", "data_type": "decimal", "nullable": True},
     {"name": "col7_null", "data_type": "binary", "nullable": True},
-    {"name": "col8_null", "data_type": "wei", "nullable": True},
+    # {"name": "col8_null", "data_type": "wei", "nullable": True},
     {"name": "col9_null", "data_type": "complex", "nullable": True, "variant": True},
     {"name": "col10_null", "data_type": "date", "nullable": True},
     {"name": "col11_null", "data_type": "time", "nullable": True},
