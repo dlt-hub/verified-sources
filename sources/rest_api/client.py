@@ -6,7 +6,6 @@ from typing import (
     Any,
     TypeVar,
     Iterable,
-    Callable,
     cast,
 )
 import copy

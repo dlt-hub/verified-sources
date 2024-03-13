@@ -1,6 +1,6 @@
 from functools import reduce
 from operator import getitem
-from typing import Any, Dict, Mapping, Sequence, Union
+from typing import Any, Sequence, Union
 
 
 def join_url(base_url: str, path: str) -> str:
