@@ -1,7 +1,7 @@
 import json
 from typing import Optional, Any, Dict
 
-import pypgoutput  # type: ignore[import-untyped]
+from pypgoutput.decoders import ColumnType  # type: ignore[import-untyped]
 
 from dlt.common import Decimal
 from dlt.common.data_types.typing import TDataType
@@ -84,7 +84,7 @@ def _to_dlt_column_type(type_id: int, atttypmod: int) -> TColumnType:
     return mapper.from_db_type(pg_type, precision, scale)
 
 
-def _to_dlt_column_schema(col: pypgoutput.decoders.ColumnType) -> TColumnSchema:
+def _to_dlt_column_schema(col: ColumnType) -> TColumnSchema:
     """Converts pypgoutput ColumnType to dlt column schema."""
     dlt_column_type = _to_dlt_column_type(col.type_id, col.atttypmod)
     partial_column_schema = {
