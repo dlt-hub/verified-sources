@@ -197,10 +197,6 @@ class RESTClient:
         data_selector = data_selector or self.data_selector
         hooks = hooks or {}
 
-        if response_actions:
-            hook = self._create_response_actions_hook(response_actions)
-            hooks.setdefault("response", []).append(hook)
-
         request = self._create_request(
             path=path, method=method, params=params, json=json, auth=auth, hooks=hooks
         )
@@ -257,54 +253,3 @@ class RESTClient:
             )
         logger.info(f"Detected paginator: {paginator.__class__.__name__}")
         return paginator
-
-    def _create_response_actions_hook(
-        self, response_actions: List[Dict[str, Any]]
-    ) -> Callable[[Response, Any, Any], None]:
-        def response_actions_hook(
-            response: Response, *args: Any, **kwargs: Any
-        ) -> None:
-            action_type = self._handle_response_actions(response, response_actions)
-            if action_type == "ignore":
-                logger.info(
-                    f"Ignoring response with code {response.status_code} "
-                    f"and content '{response.json()}'."
-                )
-                raise IgnoreResponseException
-
-        return response_actions_hook
-
-    def _handle_response_actions(
-        self, response: Response, actions: List[Dict[str, Any]]
-    ) -> Optional[str]:
-        """Handle response actions based on the response and the provided actions.
-
-        Example:
-        response_actions = [
-            {"status_code": 404, "action": "ignore"},
-            {"content": "Not found", "action": "ignore"},
-            {"status_code": 429, "action": "retry"},
-            {"status_code": 200, "content": "some text", "action": "retry"},
-        ]
-        action_type = client.handle_response_actions(response, response_actions)
-        """
-        content = response.text
-
-        for action in actions:
-            status_code = action.get("status_code")
-            content_substr: str = action.get("content")
-            action_type: str = action.get("action")
-
-            if status_code is not None and content_substr is not None:
-                if response.status_code == status_code and content_substr in content:
-                    return action_type
-
-            elif status_code is not None:
-                if response.status_code == status_code:
-                    return action_type
-
-            elif content_substr is not None:
-                if content_substr in content:
-                    return action_type
-
-        return None

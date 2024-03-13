@@ -39,6 +39,7 @@ from .config_setup import (
     build_resource_dependency_graph,
     make_parent_key_name,
     setup_incremental_object,
+    create_response_hooks,
 )
 
 
@@ -207,7 +208,7 @@ def create_resources(
             request_params, endpoint_resource.get("incremental")
         )
 
-        response_actions = endpoint_config.get("response_actions")
+        hooks = create_response_hooks(endpoint_config.get("response_actions"))
 
         # try to guess if list of entities or just single entity is returned
         if single_entity_path(endpoint_config["path"]):
@@ -223,7 +224,7 @@ def create_resources(
                 params: Dict[str, Any],
                 paginator: Optional[BasePaginator],
                 data_selector: Optional[jsonpath.TJsonPath],
-                response_actions: Optional[List[Dict[str, Any]]],
+                hooks: Optional[Dict[str, Any]],
                 incremental_object: Optional[Incremental[Any]] = incremental_object,
                 incremental_param: str = incremental_param,
             ) -> Generator[Any, None, None]:
@@ -236,7 +237,7 @@ def create_resources(
                     params=params,
                     paginator=paginator,
                     data_selector=data_selector,
-                    response_actions=response_actions,
+                    hooks=hooks,
                 )
 
             resources[resource_name] = dlt.resource(  # type: ignore[call-overload]
@@ -248,7 +249,7 @@ def create_resources(
                 params=request_params,
                 paginator=paginator,
                 data_selector=endpoint_config.get("data_selector") or data_selector,
-                response_actions=response_actions,
+                hooks=hooks,
             )
 
         else:
@@ -263,7 +264,7 @@ def create_resources(
                 params: Dict[str, Any],
                 paginator: Optional[BasePaginator],
                 data_selector: Optional[jsonpath.TJsonPath],
-                response_actions: Optional[List[Dict[str, Any]]],
+                hooks: Optional[Dict[str, Any]],
                 resolved_param: ResolvedParam = resolved_param,
                 include_from_parent: List[str] = include_from_parent,
             ) -> Generator[Any, None, None]:
@@ -291,7 +292,7 @@ def create_resources(
                         params=params,
                         paginator=paginator,
                         data_selector=data_selector,
-                        response_actions=response_actions,
+                        hooks=hooks,
                     ):
                         if parent_record:
                             for child_record in child_page:
@@ -308,7 +309,7 @@ def create_resources(
                 params=request_params,
                 paginator=paginator,
                 data_selector=endpoint_config.get("data_selector") or data_selector,
-                response_actions=response_actions,
+                hooks=hooks,
             )
 
     return resources

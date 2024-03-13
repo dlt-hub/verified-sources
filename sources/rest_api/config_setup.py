@@ -7,14 +7,17 @@ from typing import (
     List,
     Optional,
     Union,
+    Callable,
     cast,
 )
 import graphlib  # type: ignore[import,unused-ignore]
 
 import dlt
 from dlt.extract.incremental import Incremental
+from dlt.common import logger
 from dlt.common.utils import update_dict_nested
 from dlt.common.typing import TSecretStrValue
+from dlt.sources.helpers.requests import Response
 
 from .auth import BearerTokenAuth, AuthConfigBase
 from .paginators import (
@@ -30,10 +33,13 @@ from .typing import (
     PaginatorType,
     ResolveConfig,
     ResolvedParam,
+    ResponseAction,
     Endpoint,
     EndpointResource,
     DefaultEndpointResource,
 )
+from .exceptions import IgnoreResponseException
+
 
 PAGINATOR_MAP: Dict[str, Type[BasePaginator]] = {
     "json_links": JSONResponsePaginator,
@@ -210,3 +216,62 @@ def find_resolved_params(endpoint_config: Endpoint) -> List[ResolvedParam]:
         if isinstance(value, ResolveConfig)
         or (isinstance(value, dict) and value.get("type") == "resolve")
     ]
+
+
+def _handle_response_actions(
+    response: Response, actions: List[ResponseAction]
+) -> Optional[str]:
+    """Handle response actions based on the response and the provided actions.
+
+    Example:
+    response_actions = [
+        {"status_code": 404, "action": "ignore"},
+        {"content": "Not found", "action": "ignore"},
+        {"status_code": 429, "action": "retry"},
+        {"status_code": 200, "content": "some text", "action": "retry"},
+    ]
+    action_type = client.handle_response_actions(response, response_actions)
+    """
+    content = response.text
+
+    for action in actions:
+        status_code = action.get("status_code")
+        content_substr: str = action.get("content")
+        action_type: str = action.get("action")
+
+        if status_code is not None and content_substr is not None:
+            if response.status_code == status_code and content_substr in content:
+                return action_type
+
+        elif status_code is not None:
+            if response.status_code == status_code:
+                return action_type
+
+        elif content_substr is not None:
+            if content_substr in content:
+                return action_type
+
+    return None
+
+
+def _create_response_actions_hook(
+    response_actions: List[ResponseAction],
+) -> Callable[[Response, Any, Any], None]:
+    def response_actions_hook(response: Response, *args: Any, **kwargs: Any) -> None:
+        action_type = _handle_response_actions(response, response_actions)
+        if action_type == "ignore":
+            logger.info(
+                f"Ignoring response with code {response.status_code} "
+                f"and content '{response.json()}'."
+            )
+            raise IgnoreResponseException
+
+    return response_actions_hook
+
+
+def create_response_hooks(
+    response_actions: Optional[List[ResponseAction]],
+) -> Optional[Dict[str, Any]]:
+    if response_actions:
+        return {"response": [_create_response_actions_hook(response_actions)]}
+    return None

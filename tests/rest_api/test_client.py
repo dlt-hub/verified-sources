@@ -1,5 +1,6 @@
 import os
 import pytest
+from typing import Any
 from dlt.sources.helpers.requests import Response, Request
 
 from sources.rest_api.client import RESTClient
@@ -11,6 +12,7 @@ from sources.rest_api.auth import (
     HttpBasicAuth,
     OAuthJWTAuth,
 )
+from sources.rest_api.exceptions import IgnoreResponseException
 
 
 def load_private_key(name="private_key.pem"):
@@ -74,13 +76,19 @@ class TestRESTClient:
 
         self._assert_pagination(pages)
 
-    def test_paginate_with_response_actions(self, rest_client: RESTClient):
+    def test_paginate_with_hooks(self, rest_client: RESTClient):
+        def response_hook(response: Response, *args: Any, **kwargs: Any) -> None:
+            if response.status_code == 404:
+                raise IgnoreResponseException
+
+        hooks = {
+            "response": response_hook,
+        }
+
         pages_iter = rest_client.paginate(
             "/posts",
             paginator=JSONResponsePaginator(next_key="next_page"),
-            response_actions=[
-                {"status_code": 404, "action": "ignore"},
-            ],
+            hooks=hooks,
         )
 
         pages = list(pages_iter)
@@ -90,9 +98,7 @@ class TestRESTClient:
         pages_iter = rest_client.paginate(
             "/posts/1/some_details_404",
             paginator=JSONResponsePaginator(),
-            response_actions=[
-                {"status_code": 404, "action": "ignore"},
-            ],
+            hooks=hooks,
         )
 
         pages = list(pages_iter)
