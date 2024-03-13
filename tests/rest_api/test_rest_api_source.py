@@ -1,7 +1,8 @@
 import dlt
 import pytest
 
-from sources.rest_api import SinglePagePaginator, rest_api_source
+from sources.rest_api import rest_api_source
+from sources.rest_api.paginators import SinglePagePaginator
 from tests.utils import ALL_DESTINATIONS, assert_load_info, load_table_counts
 
 
