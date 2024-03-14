@@ -128,12 +128,12 @@ def header_links_detector(response: Response) -> Optional[HeaderLinkPaginator]:
 
 def json_links_detector(response: Response) -> Optional[JSONResponsePaginator]:
     dictionary = response.json()
-    next_key = find_next_page_key(dictionary)
+    next_path_parts = find_next_page_key(dictionary)
 
-    if not next_key:
+    if not next_path_parts:
         return None
 
-    return JSONResponsePaginator(next_key=next_key)
+    return JSONResponsePaginator(next_url_path=".".join(next_path_parts))
 
 
 def single_page_detector(response: Response) -> Optional[SinglePagePaginator]:

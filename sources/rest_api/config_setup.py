@@ -25,6 +25,7 @@ from .paginators import (
     HeaderLinkPaginator,
     JSONResponsePaginator,
     SinglePagePaginator,
+    JSONResponseCursorPaginator,
 )
 from .typing import (
     AuthConfig,
@@ -46,6 +47,7 @@ PAGINATOR_MAP: Dict[str, Type[BasePaginator]] = {
     "header_links": HeaderLinkPaginator,
     "auto": None,
     "single_page": SinglePagePaginator,
+    "cursor": JSONResponseCursorPaginator,
 }
 
 

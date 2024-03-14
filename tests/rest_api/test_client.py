@@ -48,7 +48,7 @@ class TestRESTClient:
     def test_pagination(self, rest_client: RESTClient):
         pages_iter = rest_client.paginate(
             "/posts",
-            paginator=JSONResponsePaginator(next_key="next_page"),
+            paginator=JSONResponsePaginator(next_url_path="next_page"),
         )
 
         pages = list(pages_iter)
@@ -58,7 +58,7 @@ class TestRESTClient:
     def test_page_context(self, rest_client: RESTClient) -> None:
         for page in rest_client.paginate(
             "/posts",
-            paginator=JSONResponsePaginator(next_key="next_page"),
+            paginator=JSONResponsePaginator(next_url_path="next_page"),
             auth=AuthConfigBase(),
         ):
             # response that produced data
@@ -87,7 +87,7 @@ class TestRESTClient:
 
         pages_iter = rest_client.paginate(
             "/posts",
-            paginator=JSONResponsePaginator(next_key="next_page"),
+            paginator=JSONResponsePaginator(next_url_path="next_page"),
             hooks=hooks,
         )
 
