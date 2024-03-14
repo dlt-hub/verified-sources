@@ -6,6 +6,8 @@ from typing import (
     Any,
     TypeVar,
     Iterable,
+    Union,
+    Callable,
     cast,
 )
 import copy
@@ -28,6 +30,9 @@ from .utils import join_url
 
 
 _T = TypeVar("_T")
+HookFunction = Callable[[Response, Any, Any], None]
+HookEvent = Union[HookFunction, List[HookFunction]]
+Hooks = Dict[str, HookEvent]
 
 
 class PageData(List[_T]):
@@ -107,7 +112,7 @@ class RESTClient:
         params: Dict[str, Any],
         json: Optional[Dict[str, Any]] = None,
         auth: Optional[AuthConfigBase] = None,
-        hooks: Optional[Dict[str, Any]] = None,
+        hooks: Optional[Hooks] = None,
     ) -> Request:
         parsed_url = urlparse(path)
         if parsed_url.scheme in ("http", "https"):
@@ -164,8 +169,7 @@ class RESTClient:
         auth: Optional[AuthConfigBase] = None,
         paginator: Optional[BasePaginator] = None,
         data_selector: Optional[jsonpath.TJsonPath] = None,
-        response_actions: Optional[List[Dict[str, Any]]] = None,
-        hooks: Optional[Dict[str, Any]] = None,
+        hooks: Optional[Hooks] = None,
     ) -> Iterator[PageData[Any]]:
         """Iterates over paginated API responses, yielding pages of data.
 
@@ -179,9 +183,7 @@ class RESTClient:
                 pagination logic.
             data_selector (Optional[jsonpath.TJsonPath]): JSONPath selector for
                 extracting data from the response.
-            response_actions (Optional[List[Dict[str, Any]]]): Actions to take based on
-                response content or status codes.
-            hooks (Optional[Dict[str, Any]]): Hooks to modify request/response objects.
+            hooks (Optional[Hooks]): Hooks to modify request/response objects.
 
         Yields:
             PageData[Any]: A page of data from the paginated API response, along with request and response context.
