@@ -103,7 +103,7 @@ class OffsetPaginator(BasePaginator):
 
 class BaseNextUrlPaginator(BasePaginator):
     def update_request(self, request: Request) -> None:
-        request.url = self._next_reference
+        request.url = self.next_reference
 
 
 class HeaderLinkPaginator(BaseNextUrlPaginator):
@@ -146,7 +146,7 @@ class JSONResponsePaginator(BaseNextUrlPaginator):
 
     def update_state(self, response: Response) -> None:
         values = jsonpath.find_values(self.next_url_path, response.json())
-        self._next_reference = values[0] if values else None
+        self.next_reference = values[0] if values else None
 
 
 class JSONResponseCursorPaginator(BasePaginator):
@@ -170,7 +170,7 @@ class JSONResponseCursorPaginator(BasePaginator):
 
     def update_state(self, response: Response) -> None:
         values = jsonpath.find_values(self.cursor_path, response.json())
-        self._next_reference = values[0] if values else None
+        self.next_reference = values[0] if values else None
 
     def update_request(self, request: Request) -> None:
         if request.params is None:
