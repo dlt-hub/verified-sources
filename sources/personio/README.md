@@ -54,7 +54,7 @@ To grab Personio credentials and configure the verified source, please refer to 
 1. Replace the value of `client_id` and `client_secret`. This will ensure that you can access
    Personio API securely.
 
-1. Next, follow the instructions in [Destinations](../destinations/duckdb) to add credentials for
+1. Next, follow the instructions in [Destinations](https://dlthub.com/docs/dlt-ecosystem/destinations/) to add credentials for
    your chosen destination. This will ensure that your data is properly routed to its final
    destination.
 
