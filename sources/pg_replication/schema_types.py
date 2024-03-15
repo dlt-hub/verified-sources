@@ -90,7 +90,6 @@ def _to_dlt_column_schema(col: ColumnType) -> TColumnSchema:
     partial_column_schema = {
         "name": col.name,
         "primary_key": bool(col.part_of_pkey),
-        # "nullable": not bool(col.part_of_pkey),
     }
     return {**dlt_column_type, **partial_column_schema}  # type: ignore[typeddict-item]
 
