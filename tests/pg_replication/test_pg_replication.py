@@ -247,12 +247,14 @@ def test_insert_only(src_pl: dlt.Pipeline) -> None:
 @pytest.mark.parametrize("destination_name", ALL_DESTINATIONS)
 @pytest.mark.parametrize("give_hints", [True, False])
 @pytest.mark.parametrize("init_load", [True, False])
-def test_all_data_types(
+def test_mapped_data_types(
     src_pl: dlt.Pipeline,
     destination_name: str,
     give_hints: bool,
     init_load: bool,
 ) -> None:
+    """Assert common data types (the ones mapped in PostgresTypeMapper) are properly handled."""
+
     data = deepcopy(TABLE_ROW_ALL_DATA_TYPES)
     column_schema = deepcopy(TABLE_UPDATE_COLUMNS_SCHEMA)
 
@@ -352,6 +354,47 @@ def test_all_data_types(
     assert_loaded_data(
         dest_pl, "items", ["col1", "col2", "col3"], exp, "col1", "col1 = 2"
     )
+
+
+@pytest.mark.parametrize("destination_name", ALL_DESTINATIONS)
+def test_unmapped_data_types(src_pl: dlt.Pipeline, destination_name: str) -> None:
+    """Assert postgres data types that aren't explicitly mapped default to "text" type."""
+
+    # create postgres table with some unmapped types
+    with src_pl.sql_client() as c:
+        c.create_dataset()
+        c.execute_sql(
+            "CREATE TABLE data_types (bit_col bit(1), box_col box, uuid_col uuid);"
+        )
+
+    # initialize replication and create resource
+    slot_name = "test_slot"
+    pub_name = "test_pub"
+    init_replication(
+        slot_name=slot_name,
+        pub_name=pub_name,
+        schema_name=src_pl.dataset_name,
+        table_names="data_types",
+        publish="insert",
+    )
+    changes = replication_resource(slot_name, pub_name)
+
+    # insert record in source table to create replication item
+    with src_pl.sql_client() as c:
+        c.execute_sql(
+            "INSERT INTO data_types VALUES (B'1', box '((1,1), (0,0))', gen_random_uuid());"
+        )
+
+    # run destination pipeline and assert resulting data types
+    dest_pl = dlt.pipeline(
+        pipeline_name="dest_pl", destination=destination_name, full_refresh=True
+    )
+    dest_pl.extract(changes)
+    dest_pl.normalize()
+    columns = dest_pl.default_schema.get_table_columns("data_types")
+    assert columns["bit_col"]["data_type"] == "text"
+    assert columns["box_col"]["data_type"] == "text"
+    assert columns["uuid_col"]["data_type"] == "text"
 
 
 @pytest.mark.parametrize("publish", ["insert", "insert, update, delete"])

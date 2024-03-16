@@ -24,8 +24,9 @@ _DUMMY_VALS: Dict[TDataType, Any] = {
     "timestamp": "2000-01-01T00:00:00",
     "wei": 0,
 }
+"""Dummy values used to replace NULLs in NOT NULL colums in key-only delete records."""
 
-# maps postgres type OID to type string
+
 _PG_TYPES: Dict[int, str] = {
     16: "boolean",
     17: "bytea",
@@ -40,6 +41,7 @@ _PG_TYPES: Dict[int, str] = {
     1700: "numeric",
     3802: "jsonb",
 }
+"""Maps postgres type OID to type string. Only includes types present in PostgresTypeMapper."""
 
 
 def _get_precision(type_id: int, atttypmod: int) -> Optional[int]:
@@ -76,8 +78,11 @@ def _get_scale(type_id: int, atttypmod: int) -> Optional[int]:
 
 
 def _to_dlt_column_type(type_id: int, atttypmod: int) -> TColumnType:
-    """Converts postgres type to dlt column type."""
-    pg_type = _PG_TYPES[type_id]
+    """Converts postgres type OID to dlt column type.
+
+    Type OIDs not in _PG_TYPES mapping default to "text" type.
+    """
+    pg_type = _PG_TYPES.get(type_id)
     precision = _get_precision(type_id, atttypmod)
     scale = _get_scale(type_id, atttypmod)
     mapper = PostgresTypeMapper(capabilities())
