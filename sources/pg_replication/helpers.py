@@ -57,10 +57,10 @@ from .schema_types import _to_dlt_column_schema, _to_dlt_val
 
 @dlt.sources.config.with_config(sections=("sources", "pg_replication"))
 def init_replication(
-    table_names: Union[str, Sequence[str]],
-    schema_name: str,
     slot_name: str,
     pub_name: str,
+    schema_name: str,
+    table_names: Union[str, Sequence[str]] = None,
     credentials: ConnectionStringCredentials = dlt.secrets.value,
     publish: str = "insert, update, delete",
     persist_snapshots: bool = False,
@@ -75,7 +75,10 @@ def init_replication(
         drop_replication_slot(slot_name, cur)
         drop_publication(pub_name, cur)
     create_publication(pub_name, cur, publish)
-    add_tables_to_publication(table_names, schema_name, pub_name, cur)
+    if table_names is None:
+        add_schema_to_publication(schema_name, pub_name, cur)
+    else:
+        add_tables_to_publication(table_names, schema_name, pub_name, cur)
     slot = create_replication_slot(slot_name, cur)
     if persist_snapshots:
         if slot is None:
@@ -176,8 +179,10 @@ def add_table_to_publication(
         logger.info(
             f"Successfully added table {qual_name} to publication {esc_pub_name}."
         )
-    except psycopg2.errors.DuplicateObject:  # table is already member of publication
-        pass
+    except psycopg2.errors.DuplicateObject:
+        logger.info(
+            f"Table {qual_name} is already a member of publication {esc_pub_name}."
+        )
 
 
 def add_tables_to_publication(
@@ -190,6 +195,30 @@ def add_tables_to_publication(
         table_names = table_names
     for table_name in table_names:
         add_table_to_publication(table_name, schema_name, pub_name, cur)
+
+
+def add_schema_to_publication(
+    schema_name: str,
+    pub_name: str,
+    cur: cursor,
+) -> None:
+    """Adds a schema to a publication for logical replication if the schema is not a member yet.
+
+    Raises error if the user is not a superuser.
+    """
+    esc_schema_name = escape_postgres_identifier(schema_name)
+    esc_pub_name = escape_postgres_identifier(pub_name)
+    try:
+        cur.execute(
+            f"ALTER PUBLICATION {esc_pub_name} ADD TABLES IN SCHEMA {esc_schema_name};"
+        )
+        logger.info(
+            f"Successfully added schema {esc_schema_name} to publication {esc_pub_name}."
+        )
+    except psycopg2.errors.DuplicateObject:
+        logger.info(
+            f"Schema {esc_schema_name} is already a member of publication {esc_pub_name}."
+        )
 
 
 def create_replication_slot(  # type: ignore[return]

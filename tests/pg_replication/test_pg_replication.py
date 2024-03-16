@@ -40,10 +40,10 @@ def test_core_functionality(src_pl: dlt.Pipeline, destination_name: str) -> None
     pub_name = "test_pub"
 
     snapshots = init_replication(
-        table_names=("tbl_x", "tbl_y"),
-        schema_name=src_pl.dataset_name,
         slot_name=slot_name,
         pub_name=pub_name,
+        schema_name=src_pl.dataset_name,
+        table_names=("tbl_x", "tbl_y"),
         persist_snapshots=True,
     )
 
@@ -165,10 +165,10 @@ def test_without_init_load(src_pl: dlt.Pipeline, destination_name: str) -> None:
     slot_name = "test_slot"
     pub_name = "test_pub"
     init_replication(
-        table_names=("tbl_x", "tbl_y"),
-        schema_name=src_pl.dataset_name,
         slot_name=slot_name,
         pub_name=pub_name,
+        schema_name=src_pl.dataset_name,
+        table_names=("tbl_x", "tbl_y"),
     )
     changes = replication_resource(slot_name, pub_name)
 
@@ -219,10 +219,10 @@ def test_insert_only(src_pl: dlt.Pipeline) -> None:
     slot_name = "test_slot"
     pub_name = "test_pub"
     init_replication(
-        table_names="items",
-        schema_name=src_pl.dataset_name,
         slot_name=slot_name,
         pub_name=pub_name,
+        schema_name=src_pl.dataset_name,
+        table_names="items",
         publish="insert",
     )
     changes = replication_resource(slot_name, pub_name)
@@ -269,10 +269,10 @@ def test_all_data_types(
     slot_name = "test_slot"
     pub_name = "test_pub"
     snapshots = init_replication(
-        table_names="items",
-        schema_name=src_pl.dataset_name,
         slot_name=slot_name,
         pub_name=pub_name,
+        schema_name=src_pl.dataset_name,
+        table_names="items",
         persist_snapshots=init_load,
         columns={"items": column_schema} if give_hints else None,
     )
@@ -367,10 +367,10 @@ def test_write_disposition(src_pl: dlt.Pipeline, publish: str) -> None:
     slot_name = "test_slot"
     pub_name = "test_pub"
     snapshots = init_replication(
-        table_names="items",
-        schema_name=src_pl.dataset_name,
         slot_name=slot_name,
         pub_name=pub_name,
+        schema_name=src_pl.dataset_name,
+        table_names="items",
         publish=publish,
         persist_snapshots=True,
     )
@@ -426,10 +426,10 @@ def test_include_columns(
         # tbl_z is not specified, hence all columns should be included
     }
     snapshots = init_replication(
-        table_names=("tbl_x", "tbl_y", "tbl_z"),
-        schema_name=src_pl.dataset_name,
         slot_name=slot_name,
         pub_name=pub_name,
+        schema_name=src_pl.dataset_name,
+        table_names=("tbl_x", "tbl_y", "tbl_z"),
         publish="insert",
         persist_snapshots=init_load,
         include_columns=include_columns,
@@ -467,15 +467,6 @@ def test_include_columns(
 def test_column_hints(
     src_pl: dlt.Pipeline, destination_name: str, init_load: bool
 ) -> None:
-    def get_cols(pipeline: dlt.Pipeline, table_name: str) -> set:
-        with pipeline.destination_client(pipeline.default_schema_name) as client:
-            client: SqlJobClientBase
-            return {
-                k
-                for k in client.get_storage_table(table_name)[1].keys()
-                if not k.startswith("_dlt_")
-            }
-
     @dlt.resource
     def tbl_x(data):
         yield data
@@ -506,10 +497,10 @@ def test_column_hints(
         # tbl_z is not specified, hence all columns should be included
     }
     snapshots = init_replication(
-        table_names=("tbl_x", "tbl_y", "tbl_z"),
-        schema_name=src_pl.dataset_name,
         slot_name=slot_name,
         pub_name=pub_name,
+        schema_name=src_pl.dataset_name,
+        table_names=("tbl_x", "tbl_y", "tbl_z"),
         publish="insert",
         persist_snapshots=init_load,
         columns=column_hints,
@@ -589,10 +580,10 @@ def test_batching(src_pl: dlt.Pipeline) -> None:
     slot_name = "test_slot"
     pub_name = "test_pub"
     init_replication(
-        table_names="items",
-        schema_name=src_pl.dataset_name,
         slot_name=slot_name,
         pub_name=pub_name,
+        schema_name=src_pl.dataset_name,
+        table_names="items",
     )
     changes = replication_resource(slot_name, pub_name, target_batch_size=50)
 
@@ -618,3 +609,58 @@ def test_batching(src_pl: dlt.Pipeline) -> None:
     src_pl.run(batch, table_name="items")
     extract_info = dest_pl.extract(changes)
     assert extract_info.asdict()["job_metrics"][0]["items_count"] == 100
+
+
+def test_replicate_schema(src_pl: dlt.Pipeline) -> None:
+    @dlt.resource
+    def tbl_x(data):
+        yield data
+
+    @dlt.resource
+    def tbl_y(data):
+        yield data
+
+    @dlt.resource
+    def tbl_z(data):
+        yield data
+
+    # create two postgres tables
+    src_pl.run(
+        [
+            tbl_x({"id_x": 1, "val_x": "foo"}),
+            tbl_y({"id_y": 1, "val_y": "foo"}),
+        ]
+    )
+
+    # initialize replication and create resource
+    slot_name = "test_slot"
+    pub_name = "test_pub"
+    init_replication(
+        slot_name=slot_name,
+        pub_name=pub_name,
+        schema_name=src_pl.dataset_name,  # we only specify `schema_name`, not `table_names`
+        publish="insert",
+    )
+    changes = replication_resource(slot_name, pub_name)
+
+    # change source tables and load to destination
+    src_pl.run(
+        [
+            tbl_x({"id_x": 2, "val_x": "foo"}),
+            tbl_y({"id_y": 2, "val_y": "foo"}),
+        ]
+    )
+    dest_pl = dlt.pipeline(pipeline_name="dest_pl", full_refresh=True)
+    dest_pl.extract(changes)
+    assert set(dest_pl.default_schema.data_table_names()) == {"tbl_x", "tbl_y"}
+
+    # introduce new table in source and assert it gets included in the replication
+    src_pl.run(
+        [
+            tbl_x({"id_x": 3, "val_x": "foo"}),
+            tbl_y({"id_y": 3, "val_y": "foo"}),
+            tbl_z({"id_z": 1, "val_z": "foo"}),
+        ]
+    )
+    dest_pl.extract(changes)
+    assert set(dest_pl.default_schema.data_table_names()) == {"tbl_x", "tbl_y", "tbl_z"}
