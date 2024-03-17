@@ -1,5 +1,6 @@
 import pytest
 
+from typing import Set
 from copy import deepcopy
 
 import dlt
@@ -611,47 +612,77 @@ def test_column_hints(
     )
 
 
-def test_batching(src_pl: dlt.Pipeline) -> None:
-    # this test asserts the number of data items yielded by the replication resource
-    # is not affected by `target_batch_size` and the number of replication messages per transaction
+def test_init_replication(src_pl: dlt.Pipeline) -> None:
+    def get_table_names_in_pub() -> Set[str]:
+        with src_pl.sql_client() as c:
+            result = c.execute_sql(
+                f"SELECT tablename FROM pg_publication_tables WHERE pubname = '{pub_name}';"
+            )
+            return {tup[0] for tup in result}
 
-    # create postgres table with single record
-    data = {"id": 1000, "val": True}
-    src_pl.run([data], table_name="items")
+    @dlt.resource
+    def tbl_x(data):
+        yield data
 
-    # initialize replication and create resource for changes
+    @dlt.resource
+    def tbl_y(data):
+        yield data
+
+    @dlt.resource
+    def tbl_z(data):
+        yield data
+
+    # create three postgres tables
+    src_pl.run(
+        [
+            tbl_x({"id_x": 1, "val_x": "foo"}),
+            tbl_y({"id_y": 1, "val_y": "foo"}),
+            tbl_z({"id_z": 1, "val_z": "foo"}),
+        ]
+    )
+
+    # initialize replication with a single table
     slot_name = "test_slot"
     pub_name = "test_pub"
+    snapshots = init_replication(
+        slot_name=slot_name,
+        pub_name=pub_name,
+        schema_name=src_pl.dataset_name,
+        table_names="tbl_x",
+        persist_snapshots=True,
+    )
+    assert len(snapshots) == 1
+    assert get_table_names_in_pub() == {"tbl_x"}
+
+    # adding another table is supported, but snapshot tables won't be persisted
+    snapshots = init_replication(
+        slot_name=slot_name,
+        pub_name=pub_name,
+        schema_name=src_pl.dataset_name,
+        table_names=("tbl_x", "tbl_y"),
+        persist_snapshots=True,
+    )
+    assert snapshots is None
+    assert get_table_names_in_pub() == {"tbl_x", "tbl_y"}
+
+    # removing a table is not supported
     init_replication(
         slot_name=slot_name,
         pub_name=pub_name,
         schema_name=src_pl.dataset_name,
-        table_names="items",
+        table_names="tbl_x",  # "tbl_y" is no longer provided
     )
-    changes = replication_resource(slot_name, pub_name, target_batch_size=50)
+    # "tbl_y" is still in the publication
+    assert get_table_names_in_pub() == {"tbl_x", "tbl_y"}
 
-    # create destination pipeline and resource
-    dest_pl = dlt.pipeline(pipeline_name="dest_pl", full_refresh=True)
-
-    # insert 100 records into source table in one transaction
-    batch = [{**r, **{"id": key}} for r in [data] for key in range(1, 101)]
-    src_pl.run(batch, table_name="items")
-    extract_info = dest_pl.extract(changes)
-    assert extract_info.asdict()["job_metrics"][0]["items_count"] == 100
-
-    # insert 100 records into source table in 5 transactions
-    batch = [{**r, **{"id": key}} for r in [data] for key in range(101, 121)]
-    src_pl.run(batch, table_name="items")
-    batch = [{**r, **{"id": key}} for r in [data] for key in range(121, 141)]
-    src_pl.run(batch, table_name="items")
-    batch = [{**r, **{"id": key}} for r in [data] for key in range(141, 161)]
-    src_pl.run(batch, table_name="items")
-    batch = [{**r, **{"id": key}} for r in [data] for key in range(161, 181)]
-    src_pl.run(batch, table_name="items")
-    batch = [{**r, **{"id": key}} for r in [data] for key in range(181, 201)]
-    src_pl.run(batch, table_name="items")
-    extract_info = dest_pl.extract(changes)
-    assert extract_info.asdict()["job_metrics"][0]["items_count"] == 100
+    # switching to whole schema replication is supported by omitting `table_names`
+    init_replication(
+        slot_name=slot_name,
+        pub_name=pub_name,
+        schema_name=src_pl.dataset_name,
+    )
+    # includes dlt system tables
+    assert get_table_names_in_pub() >= {"tbl_x", "tbl_y", "tbl_z"}
 
 
 def test_replicate_schema(src_pl: dlt.Pipeline) -> None:
@@ -707,3 +738,46 @@ def test_replicate_schema(src_pl: dlt.Pipeline) -> None:
     )
     dest_pl.extract(changes)
     assert set(dest_pl.default_schema.data_table_names()) == {"tbl_x", "tbl_y", "tbl_z"}
+
+
+def test_batching(src_pl: dlt.Pipeline) -> None:
+    # this test asserts the number of data items yielded by the replication resource
+    # is not affected by `target_batch_size` and the number of replication messages per transaction
+
+    # create postgres table with single record
+    data = {"id": 1000, "val": True}
+    src_pl.run([data], table_name="items")
+
+    # initialize replication and create resource for changes
+    slot_name = "test_slot"
+    pub_name = "test_pub"
+    init_replication(
+        slot_name=slot_name,
+        pub_name=pub_name,
+        schema_name=src_pl.dataset_name,
+        table_names="items",
+    )
+    changes = replication_resource(slot_name, pub_name, target_batch_size=50)
+
+    # create destination pipeline and resource
+    dest_pl = dlt.pipeline(pipeline_name="dest_pl", full_refresh=True)
+
+    # insert 100 records into source table in one transaction
+    batch = [{**r, **{"id": key}} for r in [data] for key in range(1, 101)]
+    src_pl.run(batch, table_name="items")
+    extract_info = dest_pl.extract(changes)
+    assert extract_info.asdict()["job_metrics"][0]["items_count"] == 100
+
+    # insert 100 records into source table in 5 transactions
+    batch = [{**r, **{"id": key}} for r in [data] for key in range(101, 121)]
+    src_pl.run(batch, table_name="items")
+    batch = [{**r, **{"id": key}} for r in [data] for key in range(121, 141)]
+    src_pl.run(batch, table_name="items")
+    batch = [{**r, **{"id": key}} for r in [data] for key in range(141, 161)]
+    src_pl.run(batch, table_name="items")
+    batch = [{**r, **{"id": key}} for r in [data] for key in range(161, 181)]
+    src_pl.run(batch, table_name="items")
+    batch = [{**r, **{"id": key}} for r in [data] for key in range(181, 201)]
+    src_pl.run(batch, table_name="items")
+    extract_info = dest_pl.extract(changes)
+    assert extract_info.asdict()["job_metrics"][0]["items_count"] == 100
