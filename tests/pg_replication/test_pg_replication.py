@@ -271,7 +271,7 @@ def test_mapped_data_types(
     # initialize replication and create resources
     slot_name = "test_slot"
     pub_name = "test_pub"
-    snapshots = init_replication(
+    snapshot = init_replication(
         slot_name=slot_name,
         pub_name=pub_name,
         schema_name=src_pl.dataset_name,
@@ -291,7 +291,7 @@ def test_mapped_data_types(
         pipeline_name="dest_pl", destination=destination_name, full_refresh=True
     )
     if init_load:
-        info = dest_pl.run(snapshots[0])
+        info = dest_pl.run(snapshot)
         assert_load_info(info)
         assert load_table_counts(dest_pl, "items")["items"] == 1
 
@@ -410,7 +410,7 @@ def test_write_disposition(src_pl: dlt.Pipeline, publish: str) -> None:
     # create resources
     slot_name = "test_slot"
     pub_name = "test_pub"
-    snapshots = init_replication(
+    snapshot = init_replication(
         slot_name=slot_name,
         pub_name=pub_name,
         schema_name=src_pl.dataset_name,
@@ -422,7 +422,7 @@ def test_write_disposition(src_pl: dlt.Pipeline, publish: str) -> None:
 
     # assert write dispositions
     expected_write_disposition = "append" if publish == "insert" else "merge"
-    assert snapshots[0].write_disposition == expected_write_disposition
+    assert snapshot.write_disposition == expected_write_disposition
     assert changes.write_disposition == expected_write_disposition
 
 
@@ -644,14 +644,14 @@ def test_init_replication(src_pl: dlt.Pipeline) -> None:
     # initialize replication with a single table
     slot_name = "test_slot"
     pub_name = "test_pub"
-    snapshots = init_replication(
+    snapshot = init_replication(
         slot_name=slot_name,
         pub_name=pub_name,
         schema_name=src_pl.dataset_name,
         table_names="tbl_x",
         persist_snapshots=True,
     )
-    assert len(snapshots) == 1
+    assert snapshot is not None
     assert get_table_names_in_pub() == {"tbl_x"}
 
     # adding another table is supported, but snapshot tables won't be persisted

@@ -67,7 +67,7 @@ def init_replication(
     include_columns: Optional[Dict[str, Sequence[str]]] = None,
     columns: Optional[Dict[str, TTableHintTemplate[TAnySchemaColumns]]] = None,
     reset: bool = False,
-) -> Optional[List[DltResource]]:
+) -> Optional[Union[DltResource, List[DltResource]]]:
     """Initializes replication for one, several, or all tables within a schema.
 
     Can be called repeatedly with the same `slot_name` and `pub_name`:
@@ -127,9 +127,9 @@ def init_replication(
           names do not yet exist.
 
     Returns:
-        None if `persist_snapshots` is `False`. A list of `DltResource` objects for
-        the snapshot tables if `persist_snapshots` is `True` and the replication
-        slot did not yet exist.
+        - None if `persist_snapshots` is `False`
+        - a `DltResource` object or a list of `DltResource` objects for the snapshot
+          table(s) if `persist_snapshots` is `True` and the replication slot did not yet exist
     """
     if isinstance(table_names, str):
         table_names = [table_names]
@@ -177,6 +177,8 @@ def init_replication(
                     table_names, snapshot_table_names
                 )
             ]
+            if len(snapshot_table_resources) == 1:
+                return snapshot_table_resources[0]
             return snapshot_table_resources
     return None
 
