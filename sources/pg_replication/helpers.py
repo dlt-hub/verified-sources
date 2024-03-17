@@ -60,7 +60,7 @@ def init_replication(
     slot_name: str,
     pub_name: str,
     schema_name: str,
-    table_names: Union[str, Sequence[str]] = None,
+    table_names: Optional[Union[str, Sequence[str]]] = None,
     credentials: ConnectionStringCredentials = dlt.secrets.value,
     publish: str = "insert, update, delete",
     persist_snapshots: bool = False,
@@ -68,6 +68,69 @@ def init_replication(
     columns: Optional[Dict[str, TTableHintTemplate[TAnySchemaColumns]]] = None,
     reset: bool = False,
 ) -> Optional[List[DltResource]]:
+    """Initializes replication for one, several, or all tables within a schema.
+
+    Can be called repeatedly with the same `slot_name` and `pub_name`:
+    - creates a replication slot and publication with provided names if they do not exist yet
+    - skips creation of slot and publication if they already exist (unless`reset` is set to `False`)
+    - supports addition of new tables by extending `table_names`
+    - removing tables is not supported, i.e. exluding a table from `table_names`
+      will not remove it from the publication
+    - switching from a table selection to an entire schema is possible by omitting
+      the `table_names` argument
+    - changing `publish` has no effect (altering the published DML operations is not supported)
+    - table snapshots can only be persisted on the first call (because the snapshot
+      is exported when the slot is created)
+
+    Args:
+        slot_name (str): Name of the replication slot to create if it does not exist yet.
+        pub_name (str): Name of the publication to create if it does not exist yet.
+        schema_name (str): Name of the schema to replicate tables from.
+        table_names (Optional[Union[str, Sequence[str]]]):  Name(s) of the table(s)
+          to include in the publication. If not provided, all tables in the schema
+          are included (also tables added to the schema after the publication was created).
+        credentials (ConnectionStringCredentials): Postgres database credentials.
+        publish (str): Comma-separated string of DML operations. Can be used to
+          control which changes are included in the publication. Allowed operations
+          are `insert`, `update`, and `delete`. `truncate` is currently not
+          supported—messages of that type are ignored.
+          E.g. `publish="insert"` will create a publication that only publishes insert operations.
+        persist_snapshots (bool): Whether the table states in the snapshot exported
+          during replication slot creation are persisted to tables. If true, a
+          snapshot table is created in Postgres for all included tables, and corresponding
+          resources (`DltResource` objects) for these tables are created and returned.
+          The resources can be used to perform an initial load of all data present
+          in the tables at the moment the replication slot got created.
+        include_columns (Optional[Dict[str, Sequence[str]]]): Maps table name(s) to
+          sequence of names of columns to include in the snapshot table(s).
+          Any column not in the sequence is excluded. If not provided, all columns
+          are included. For example:
+          ```
+          include_columns={
+              "table_x": ["col_a", "col_c"],
+              "table_y": ["col_x", "col_y", "col_z"],
+          }
+          ```
+          Argument is only used if `persist_snapshots` is `True`.
+        columns (Optional[Dict[str, TTableHintTemplate[TAnySchemaColumns]]]): Maps
+          table name(s) to column hints to apply on the snapshot table resource(s).
+          For example:
+          ```
+          columns={
+              "table_x": {"col_a": {"data_type": "complex"}},
+              "table_y": {"col_y": {"precision": 32}},
+          }
+          ```
+          Argument is only used if `persist_snapshots` is `True`.
+        reset (bool): If set to True, the existing slot and publication are dropped
+          and recreated. Has no effect if a slot and publication with the provided
+          names do not yet exist.
+
+    Returns:
+        None if `persist_snapshots` is `False`. A list of `DltResource` objects for
+        the snapshot tables if `persist_snapshots` is `True` and the replication
+        slot did not yet exist.
+    """
     if isinstance(table_names, str):
         table_names = [table_names]
     cur = _get_rep_conn(credentials).cursor()
@@ -118,30 +181,6 @@ def init_replication(
     return None
 
 
-def snapshot_table_resource(
-    snapshot_table_name: str,
-    schema_name: str,
-    table_name: str,
-    write_disposition: TWriteDisposition,
-    columns: TTableHintTemplate[TAnySchemaColumns] = None,
-    credentials: ConnectionStringCredentials = dlt.secrets.value,
-) -> DltResource:
-    resource: DltResource = sql_table(
-        credentials=credentials,
-        table=snapshot_table_name,
-        schema=schema_name,
-        detect_precision_hints=True,
-    )
-    primary_key = _get_pk(table_name, schema_name, credentials)
-    resource.apply_hints(
-        table_name=table_name,
-        write_disposition=write_disposition,
-        columns=columns,
-        primary_key=primary_key,
-    )
-    return resource
-
-
 def create_publication(
     name: str,
     cur: cursor,
@@ -168,8 +207,9 @@ def add_table_to_publication(
     pub_name: str,
     cur: cursor,
 ) -> None:
-    """Adds a table to a publication for logical replication if the table is not a member yet.
+    """Adds a table to a publication for logical replication.
 
+    Does nothing if the table is already a member of the publication.
     Raises error if the user is not owner of the table.
     """
     qual_name = _make_qualified_table_name(table_name, schema_name)
@@ -191,6 +231,10 @@ def add_tables_to_publication(
     pub_name: str,
     cur: cursor,
 ) -> None:
+    """Adds one or multiple tables to a publication for logical replication.
+
+    Calls `add_table_to_publication` for each table in `table_names`.
+    """
     if isinstance(table_names, str):
         table_names = table_names
     for table_name in table_names:
@@ -294,6 +338,35 @@ def persist_snapshot_table(
     return snapshot_table_name
 
 
+def snapshot_table_resource(
+    snapshot_table_name: str,
+    schema_name: str,
+    table_name: str,
+    write_disposition: TWriteDisposition,
+    columns: TTableHintTemplate[TAnySchemaColumns] = None,
+    credentials: ConnectionStringCredentials = dlt.secrets.value,
+) -> DltResource:
+    """Returns a resource for a persisted snapshot table.
+
+    Can be used to perform an initial load of the table, so all data that
+    existed in the table prior to initializing replication is also captured.
+    """
+    resource: DltResource = sql_table(
+        credentials=credentials,
+        table=snapshot_table_name,
+        schema=schema_name,
+        detect_precision_hints=True,
+    )
+    primary_key = _get_pk(table_name, schema_name, credentials)
+    resource.apply_hints(
+        table_name=table_name,
+        write_disposition=write_disposition,
+        columns=columns,
+        primary_key=primary_key,
+    )
+    return resource
+
+
 def get_max_lsn(
     slot_name: str,
     options: Dict[str, str],
@@ -323,6 +396,7 @@ def get_pub_ops(
     pub_name: str,
     credentials: ConnectionStringCredentials,
 ) -> Dict[str, bool]:
+    """Returns dictionary of DML operations and their publish status."""
     cur = _get_conn(credentials).cursor()
     cur.execute(
         f"""
@@ -449,6 +523,10 @@ def _make_qualified_table_name(table_name: str, schema_name: str) -> str:
 
 
 def _gen_replication_resource_name(slot_name: str, pub_name: str) -> str:
+    """Generates name for a resource used for replication.
+
+    Based on names of replication slot and publication the resource consumes from.
+    """
     return slot_name + "_" + pub_name
 
 
@@ -497,10 +575,11 @@ class ItemGenerator:
     write_disposition: TWriteDisposition = "append"  # TODO: remove after https://github.com/dlt-hub/dlt/issues/1031 has been released
 
     def __iter__(self) -> Iterator[Union[TDataItem, DataItemWithMeta]]:
-        """Consumes messages from replication slot and generates data items.
+        """Yields replication messages from MessageConsumer.
 
-        Does not advance the slot.
+        Starts replication of messages published by the publication from the replication slot.
         Maintains LSN of last consumed Commit message in object state.
+        Does not advance the slot.
         """
         try:
             cur = _get_rep_conn(self.credentials).cursor()
@@ -533,7 +612,12 @@ class ItemGenerator:
 
 
 class MessageConsumer:
-    """Consumes messages from a ReplicationCursor."""
+    """Consumes messages from a ReplicationCursor sequentially.
+
+    Generates data item for each `insert`, `update`, and `delete` message.
+    Processes in batches to limit memory usage.
+    Maintains message data needed by subsequent messages in internal state.
+    """
 
     def __init__(
         self,
@@ -558,10 +642,7 @@ class MessageConsumer:
         self.last_commit_lsn = None
 
     def __call__(self, msg: ReplicationMessage) -> None:
-        """Processes message received from stream.
-
-        Breaks out of stream when `upto_lsn` is reached.
-        """
+        """Processes message received from stream."""
         self.process_msg(msg)
 
     def process_msg(self, msg: ReplicationMessage) -> None:
@@ -569,6 +650,7 @@ class MessageConsumer:
 
         Identifies message type and decodes accordingly.
         Message treatment is different for various message types.
+        Breaks out of stream when `upto_lsn` or `target_batch_size` is reached.
         """
         op = (msg.payload[:1]).decode("utf-8")
         if op == "B":
