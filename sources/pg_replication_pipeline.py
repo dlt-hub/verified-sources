@@ -15,13 +15,13 @@ def replicate_single_table() -> None:
     """
     # create source and destination pipelines
     src_pl = dlt.pipeline(
-        pipeline_name="replicate_single_table_src_pl",
+        pipeline_name="source_pipeline",
         destination="postgres",
         dataset_name="replicate_single_table",
         full_refresh=True,
     )
     dest_pl = dlt.pipeline(
-        pipeline_name="replicate_single_table_dest_pl",
+        pipeline_name="pg_replication_pipeline",
         destination="duckdb",
         dataset_name="replicate_single_table",
         full_refresh=True,
@@ -72,13 +72,13 @@ def replicate_with_initial_load() -> None:
     """
     # create source and destination pipelines
     src_pl = dlt.pipeline(
-        pipeline_name="replicate_with_initial_load_src_pl",
+        pipeline_name="source_pipeline",
         destination="postgres",
         dataset_name="replicate_with_initial_load",
         full_refresh=True,
     )
     dest_pl = dlt.pipeline(
-        pipeline_name="replicate_with_initial_load_dest_pl",
+        pipeline_name="pg_replication_pipeline",
         destination="duckdb",
         dataset_name="replicate_with_initial_load",
         full_refresh=True,
@@ -121,13 +121,13 @@ def replicate_entire_schema() -> None:
     """Demonstrates setup and usage of schema replication."""
     # create source and destination pipelines
     src_pl = dlt.pipeline(
-        pipeline_name="replicate_entire_schema_src_pl",
+        pipeline_name="source_pipeline",
         destination="postgres",
         dataset_name="replicate_entire_schema",
         full_refresh=True,
     )
     dest_pl = dlt.pipeline(
-        pipeline_name="replicate_entire_schema_dest_pl",
+        pipeline_name="pg_replication_pipeline",
         destination="duckdb",
         dataset_name="replicate_entire_schema",
         full_refresh=True,
@@ -185,13 +185,13 @@ def replicate_with_column_selection() -> None:
     """
     # create source and destination pipelines
     src_pl = dlt.pipeline(
-        pipeline_name="replicate_with_column_selection_src_pl",
+        pipeline_name="source_pipeline",
         destination="postgres",
         dataset_name="replicate_with_column_selection",
         full_refresh=True,
     )
     dest_pl = dlt.pipeline(
-        pipeline_name="replicate_with_column_selection_dest_pl",
+        pipeline_name="pg_replication_pipeline",
         destination="duckdb",
         dataset_name="replicate_with_column_selection",
         full_refresh=True,
