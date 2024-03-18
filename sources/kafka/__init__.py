@@ -53,7 +53,7 @@ def kafka_consumer(
             before it's transfered to the destination.
         batch_size (Optional[int]): Messages batch size to read at once.
         batch_timeout (Optional[int]): Maximum time to wait for a batch
-            consume.
+            consume, in seconds.
         start_from (Optional[TAnyDateTime]): A timestamp, at which to start
             reading. Older messages are ignored.
 
@@ -81,21 +81,13 @@ def kafka_consumer(
     tracker = OffsetTracker(consumer, topics, dlt.current.resource_state(), start_from)
     consumer.subscribe(topics)
 
-    hanged_at = None
-
     # read messages up to the maximum offsets,
     # not waiting for new messages
     with closing(consumer):
         while tracker.has_unread:
             messages = consumer.consume(batch_size, timeout=batch_timeout)
-
-            if messages:
-                hanged_at = None
-            else:
-                if hanged_at is None:
-                    hanged_at = pendulum.now()  # timestamp of the hanging start
-                elif pendulum.now() - hanged_at > pendulum.duration(minutes=5):
-                    break
+            if not messages:
+                break
 
             batch = []
             for msg in messages:
