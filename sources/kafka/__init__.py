@@ -11,7 +11,7 @@ from typing import Any, Callable, Dict, Iterable, List, Optional, Union
 from confluent_kafka import Consumer, Message  # type: ignore
 
 import dlt
-from dlt.common import logger, pendulum
+from dlt.common import logger
 from dlt.common.time import ensure_pendulum_datetime
 from dlt.common.typing import TDataItem, TAnyDateTime
 from .helpers import (
