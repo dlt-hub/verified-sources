@@ -511,7 +511,10 @@ def _get_conn(
 def _get_rep_conn(
     credentials: ConnectionStringCredentials,
 ) -> LogicalReplicationConnection:
-    """Returns a psycopg2 LogicalReplicationConnection to interact with postgres replication functionality."""
+    """Returns a psycopg2 LogicalReplicationConnection to interact with postgres replication functionality.
+
+    Raises error if the user does not have the REPLICATION attribute assigned.
+    """
     return _get_conn(credentials, LogicalReplicationConnection)  # type: ignore[return-value]
 
 
