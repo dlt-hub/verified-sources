@@ -15,6 +15,13 @@ dlt init pg_replication duckdb
 
 This uses `duckdb` as destination, but you can choose any of the supported [destinations](https://dlthub.com/docs/dlt-ecosystem/destinations/).
 
+## Add `sql_database` source
+
+```bash
+dlt init sql_database duckdb
+```
+
+This source depends on the [sql_database](../sql_database/README.md) verified source internally to perform initial loads. This step can be skipped if you don't do initial loads.
 ## Set up user
 
 The Postgres user needs to have the `LOGIN` and `REPLICATION` attributes assigned:
