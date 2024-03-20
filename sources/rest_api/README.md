@@ -7,10 +7,12 @@ A declarative way to define dlt sources for REST APIs.
 >
 >    \- E. T. Lev Tolstoy, Senior Data Engineer
 
-This is not a standard dlt source, this is a configurable source which will behave differently depending of the config object passed. Most of the REST APIs that we encounter behave in similar way, the REST API Generic Source attempts to provide a declarative way to define a dlt source for those APIs.
+This is a generic source which you can use to create a dlt source from a REST API using a declarative configuration. The majority of the REST APIs behave in a similar way, this dlt source attempts to provide a declarative way to define a dlt source for those APIs.
+
 
 ## How to use it
-Probably the easier way is to show you how a source for the Pokemon APIs would look like:
+Let's see how a source for the [Pokemon API](https://pokeapi.co/) would look like:
+
 
 ```python
 pokemon_config = {
