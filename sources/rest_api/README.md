@@ -48,7 +48,8 @@ Here a short summary:
 - The `client` node contains the base URL of the endpoints that we want to collect.
 - The `resources` which correspond to the API endpoints.
 
-We have a couple of simple resources (`berry` and `location`). The API endpoint is also the name of the dlt resource, and the name of the destination table. They don't need additional configuration.
+We have a couple of simple resources (`berry` and `location`). For them, the API endpoint is also the name of the dlt resource, and the name of the destination table. They don't need additional configuration.
+
 
 The next resource leverages some additional configuration. The endpoint `pokemon/` returns a list of pokemons, but it can be used also as `pokemon/{id or name}` to return a single pokemon. In this case we want the list, so we decided to rename the resource to `pokemon_list`, while the endpoint stays `pokemon/`. We do not specify the name of the destination table, so it will match the resource name.
 
@@ -91,7 +92,8 @@ The configuration with smallers scope will overwrite the one with the wider one:
 ### `client`
 
 #### `auth` [optional]
-Use the auth property to pass a token or a `HTTPBasicAuth` object for more complex authentication methods. Here some practical examples:
+Use the auth property to pass a token or a `HTTPBasicAuth` object for more complex authentication methods. Here are some practical examples:
+
 
 1. Simple token (read from the `.dlt/secrets.toml` file):
 ```python
