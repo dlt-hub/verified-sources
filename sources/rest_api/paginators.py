@@ -65,15 +65,15 @@ class OffsetPaginator(BasePaginator):
 
     def __init__(
         self,
-        initial_offset: int,
         initial_limit: int,
-        offset_key: str = "offset",
-        limit_key: str = "limit",
+        initial_offset: int = 0,
+        offset_param: str = "offset",
+        limit_param: str = "limit",
         total_key: str = "total",
     ) -> None:
         super().__init__()
-        self.offset_key = offset_key
-        self.limit_key = limit_key
+        self.offset_param = offset_param
+        self.limit_param = limit_param
         self._total_accessor = create_nested_accessor(total_key)
 
         self.offset = initial_offset
@@ -96,8 +96,8 @@ class OffsetPaginator(BasePaginator):
         if request.params is None:
             request.params = {}
 
-        request.params[self.offset_key] = self.offset
-        request.params[self.limit_key] = self.limit
+        request.params[self.offset_param] = self.offset
+        request.params[self.limit_param] = self.limit
 
 
 class BaseNextUrlPaginator(BasePaginator):
