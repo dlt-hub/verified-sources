@@ -93,7 +93,7 @@ def rest_api_resources(config: RESTAPIConfig) -> List[DltResource]:
     Creates and configures a REST API source for data extraction.
 
     Example:
-        github_source = rest_api_resources_v3({
+        github_source = rest_api_resources({
             "client": {
                 "base_url": "https://api.github.com/repos/dlt-hub/dlt/",
                 "auth": {

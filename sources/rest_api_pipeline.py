@@ -4,7 +4,7 @@ from rest_api import RESTAPIConfig, check_connection, rest_api_source
 
 def load_github() -> None:
     pipeline = dlt.pipeline(
-        pipeline_name="rest_api_github_v3",
+        pipeline_name="rest_api_github",
         destination="duckdb",
         dataset_name="rest_api_data",
     )
