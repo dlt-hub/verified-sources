@@ -146,11 +146,6 @@ def rest_api_resources(config: RESTAPIConfig) -> List[DltResource]:
     validate_dict(RESTAPIConfig, config, path=".")
 
     client_config = config["client"]
-    client = RESTClient(
-        base_url=client_config["base_url"],
-        auth=create_auth(client_config.get("auth")),
-        paginator=create_paginator(client_config.get("paginator")),
-    )
 
     resource_defaults = config.get("resource_defaults", {})
 
@@ -169,7 +164,7 @@ def rest_api_resources(config: RESTAPIConfig) -> List[DltResource]:
     )
 
     resources = create_resources(
-        client,
+        client_config,
         dependency_graph,
         endpoint_resource_map,
         resolved_param_map,
@@ -179,7 +174,7 @@ def rest_api_resources(config: RESTAPIConfig) -> List[DltResource]:
 
 
 def create_resources(
-    client: RESTClient,
+    client_config: ClientConfig,
     dependency_graph: graphlib.TopologicalSorter,
     endpoint_resource_map: Dict[str, EndpointResource],
     resolved_param_map: Dict[str, Optional[ResolvedParam]],
@@ -208,6 +203,12 @@ def create_resources(
             request_params, endpoint_resource.get("incremental")
         )
 
+        client = RESTClient(
+            base_url=client_config["base_url"],
+            auth=create_auth(client_config.get("auth")),
+            paginator=create_paginator(client_config.get("paginator")),
+        )
+
         hooks = create_response_hooks(endpoint_config.get("response_actions"))
 
         # try to guess if list of entities or just single entity is returned
@@ -225,6 +226,7 @@ def create_resources(
                 paginator: Optional[BasePaginator],
                 data_selector: Optional[jsonpath.TJsonPath],
                 hooks: Optional[Dict[str, Any]],
+                client: RESTClient = client,
                 incremental_object: Optional[Incremental[Any]] = incremental_object,
                 incremental_param: str = incremental_param,
             ) -> Generator[Any, None, None]:
@@ -265,6 +267,7 @@ def create_resources(
                 paginator: Optional[BasePaginator],
                 data_selector: Optional[jsonpath.TJsonPath],
                 hooks: Optional[Dict[str, Any]],
+                client: RESTClient = client,
                 resolved_param: ResolvedParam = resolved_param,
                 include_from_parent: List[str] = include_from_parent,
             ) -> Generator[Any, None, None]:
