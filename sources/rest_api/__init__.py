@@ -273,7 +273,6 @@ def create_resources(
             ) -> Generator[Any, None, None]:
                 field_path = resolved_param.resolve_config.field_path
 
-                items = items or []
                 for item in items:
                     formatted_path = path.format(
                         **{resolved_param.param_name: item[field_path]}
