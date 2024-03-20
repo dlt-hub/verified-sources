@@ -2,7 +2,7 @@ from typing import Any, Sequence, Tuple
 
 import dlt
 from dlt.common import pendulum
-from dlt.common.typing import DictStrStr, StrStr
+from dlt.common.typing import DictStrAny, StrAny, StrStr
 
 
 def get_shard_iterator(
@@ -11,7 +11,7 @@ def get_shard_iterator(
     shard_id: str,
     last_msg: dlt.sources.incremental[StrStr],
     initial_at_timestamp: pendulum.DateTime,
-) -> Tuple[str, StrStr]:
+) -> Tuple[str, StrAny]:
     """Gets shard `shard_id` of `stream_name` iterator. If `last_msg` incremental is present it may
     contain last message sequence for shard_id. in that case AFTER_SEQUENCE_NUMBER is created.
     If no message sequence is present, `initial_at_timestamp` is used for AT_TIMESTAMP or LATEST.
@@ -20,7 +20,7 @@ def get_shard_iterator(
     sequence_state = (
         {} if last_msg is None else last_msg.last_value or last_msg.initial_value or {}
     )
-    iterator_params: DictStrStr
+    iterator_params: DictStrAny
     msg_sequence = sequence_state.get(shard_id, None)
     if msg_sequence:
         iterator_params = dict(

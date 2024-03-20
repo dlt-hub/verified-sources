@@ -15,8 +15,8 @@ Before running this script you must:
 10. Add your own email as a test user."""
 
 import dlt
-from dlt.common.configuration.inject import with_config
 from dlt.common.configuration.exceptions import ConfigFieldMissingException
+from dlt.common.configuration.inject import with_config
 from dlt.sources.credentials import GcpOAuthCredentials
 
 

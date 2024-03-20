@@ -25,9 +25,9 @@ def load_airflow_events() -> None:
     )
     data = github_repo_events("apache", "airflow", access_token="")
     print(pipeline.run(data))
-    # does not load same events again
-    data = github_repo_events("apache", "airflow", access_token="")
-    print(pipeline.run(data))
+    # if you uncomment this, it does not load the same events again
+    # data = github_repo_events("apache", "airflow", access_token="")
+    # print(pipeline.run(data))
 
 
 def load_dlthub_dlt_all_data() -> None:
@@ -43,6 +43,6 @@ def load_dlthub_dlt_all_data() -> None:
 
 
 if __name__ == "__main__":
-    # load_duckdb_repo_reactions_issues_only()
+    load_duckdb_repo_reactions_issues_only()
     load_airflow_events()
-    # load_dlthub_dlt_all_data()
+    load_dlthub_dlt_all_data()

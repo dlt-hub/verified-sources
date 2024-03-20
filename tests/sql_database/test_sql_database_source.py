@@ -1,9 +1,10 @@
 import pytest
 import os
-from typing import List, Optional
+from typing import List, Optional, Set
 
 import dlt
 from dlt.common.utils import uniq_id
+from dlt.common.schema.typing import TTableSchemaColumns
 from dlt.sources import DltResource
 from dlt.sources.credentials import ConnectionStringCredentials
 
@@ -150,7 +151,7 @@ def test_load_sql_table_resource_loads_data(
 
 
 @pytest.mark.parametrize("destination_name", ALL_DESTINATIONS)
-def test_load_sql_table_resource__incremental(
+def test_load_sql_table_resource_incremental(
     sql_source_db: SQLAlchemySourceDB, destination_name: str
 ) -> None:
     @dlt.source
@@ -175,7 +176,7 @@ def test_load_sql_table_resource__incremental(
 
 
 @pytest.mark.parametrize("destination_name", ALL_DESTINATIONS)
-def test_load_sql_table_resource__incremental_initial_value(
+def test_load_sql_table_resource_incremental_initial_value(
     sql_source_db: SQLAlchemySourceDB, destination_name: str
 ) -> None:
     @dlt.source
@@ -198,6 +199,53 @@ def test_load_sql_table_resource__incremental_initial_value(
     assert_row_counts(pipeline, sql_source_db, ["chat_message"])
 
 
+@pytest.mark.parametrize("defer_table_reflect", (False, True))
+def test_load_sql_table_resource_select_columns(
+    sql_source_db: SQLAlchemySourceDB, defer_table_reflect: bool
+) -> None:
+    # get chat messages with content column removed
+    chat_messages = sql_table(
+        credentials=sql_source_db.credentials,
+        schema=sql_source_db.schema,
+        table="chat_message",
+        defer_table_reflect=defer_table_reflect,
+        table_adapter_callback=lambda table: table._columns.remove(
+            table.columns["content"]
+        ),
+    )
+    pipeline = make_pipeline("duckdb")
+    load_info = pipeline.run(chat_messages)
+    assert_load_info(load_info)
+    assert_row_counts(pipeline, sql_source_db, ["chat_message"])
+    assert "content" not in pipeline.default_schema.tables["chat_message"]["columns"]
+
+
+@pytest.mark.parametrize("defer_table_reflect", (False, True))
+def test_load_sql_table_source_select_columns(
+    sql_source_db: SQLAlchemySourceDB, defer_table_reflect: bool
+) -> None:
+    mod_tables: Set[str] = set()
+
+    def adapt(table) -> None:
+        mod_tables.add(table)
+        if table.name == "chat_message":
+            table._columns.remove(table.columns["content"])
+
+    # get chat messages with content column removed
+    all_tables = sql_database(
+        credentials=sql_source_db.credentials,
+        schema=sql_source_db.schema,
+        defer_table_reflect=defer_table_reflect,
+        table_names=sql_source_db.table_infos.keys() if defer_table_reflect else None,
+        table_adapter_callback=adapt,
+    )
+    pipeline = make_pipeline("duckdb")
+    load_info = pipeline.run(all_tables)
+    assert_load_info(load_info)
+    assert_row_counts(pipeline, sql_source_db)
+    assert "content" not in pipeline.default_schema.tables["chat_message"]["columns"]
+
+
 def test_detect_precision_hints(sql_source_db: SQLAlchemySourceDB) -> None:
     source = sql_database(
         credentials=sql_source_db.credentials,
@@ -212,8 +260,106 @@ def test_detect_precision_hints(sql_source_db: SQLAlchemySourceDB) -> None:
 
     schema = pipeline.default_schema
     table = schema.tables["has_precision"]
-    columns = table["columns"]
+    assert_precision_columns(table["columns"])
 
+
+def test_incremental_composite_primary_key_from_table(
+    sql_source_db: SQLAlchemySourceDB,
+) -> None:
+    resource = sql_table(
+        credentials=sql_source_db.credentials,
+        table="has_composite_key",
+        schema=sql_source_db.schema,
+    )
+
+    assert resource.incremental.primary_key == ["a", "b", "c"]
+
+
+@pytest.mark.parametrize("upfront_incremental", (True, False))
+def test_set_primary_key_deferred_incremental(
+    sql_source_db: SQLAlchemySourceDB,
+    upfront_incremental: bool,
+) -> None:
+    # this tests dynamically adds primary key to resource and as consequence to incremental
+    updated_at = dlt.sources.incremental("updated_at")
+    resource = sql_table(
+        credentials=sql_source_db.credentials,
+        table="chat_message",
+        schema=sql_source_db.schema,
+        defer_table_reflect=True,
+        incremental=updated_at if upfront_incremental else None,
+    )
+
+    resource.apply_hints(incremental=None if upfront_incremental else updated_at)
+
+    # nothing set for deferred reflect
+    assert resource.incremental.primary_key == []
+
+    def _assert_incremental(item):
+        # for all the items, all keys must be present
+        _r = dlt.current.source().resources[dlt.current.resource_name()]
+        # assert _r.incremental._incremental is updated_at
+        if len(item) == 0:
+            # not yet propagated
+            assert _r.incremental.primary_key == []
+        else:
+            assert _r.incremental.primary_key == ["id"]
+        assert _r.incremental._incremental.primary_key == ["id"]
+        assert _r.incremental._incremental._transformers["json"].primary_key == ["id"]
+        return item
+
+    pipeline = make_pipeline("duckdb")
+    # must evaluate resource for primary key to be set
+    pipeline.extract(resource.add_step(_assert_incremental))
+
+    assert resource.incremental.primary_key == ["id"]
+    assert resource.incremental._incremental.primary_key == ["id"]
+    assert resource.incremental._incremental._transformers["json"].primary_key == ["id"]
+
+
+def test_deferred_reflect_in_source(sql_source_db: SQLAlchemySourceDB) -> None:
+    source = sql_database(
+        credentials=sql_source_db.credentials,
+        table_names=["has_precision", "chat_message"],
+        schema=sql_source_db.schema,
+        detect_precision_hints=True,
+        defer_table_reflect=True,
+    )
+
+    # no columns in both tables
+    assert source.has_precision.columns == {}
+    assert source.chat_message.columns == {}
+
+    pipeline = make_pipeline("duckdb")
+    pipeline.extract(source)
+    assert_precision_columns(source.has_precision.columns)
+    assert len(source.chat_message.columns) > 0
+    assert (
+        source.chat_message.compute_table_schema()["columns"]["id"]["primary_key"]
+        is True
+    )
+
+
+def test_deferred_reflect_in_resource(sql_source_db: SQLAlchemySourceDB) -> None:
+    table = sql_table(
+        credentials=sql_source_db.credentials,
+        table="has_precision",
+        schema=sql_source_db.schema,
+        detect_precision_hints=True,
+        defer_table_reflect=True,
+    )
+
+    # no columns in both tables
+    assert table.columns == {}
+
+    pipeline = make_pipeline("duckdb")
+    pipeline.extract(table)
+    assert_precision_columns(
+        pipeline.default_schema.get_table("has_precision")["columns"]
+    )
+
+
+def assert_precision_columns(columns: TTableSchemaColumns) -> None:
     assert columns["bigint_col"] == {
         "data_type": "bigint",
         "precision": 64,
@@ -248,15 +394,3 @@ def test_detect_precision_hints(sql_source_db: SQLAlchemySourceDB) -> None:
         "data_type": "text",
         "name": "string_default_col",
     }
-
-
-def test_incremental_composite_primary_key_from_table(
-    sql_source_db: SQLAlchemySourceDB,
-) -> None:
-    resource = sql_table(
-        credentials=sql_source_db.credentials,
-        table="has_composite_key",
-        schema=sql_source_db.schema,
-    )
-
-    assert resource.incremental.primary_key == ["a", "b", "c"]

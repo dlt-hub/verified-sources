@@ -362,7 +362,7 @@ def test_inconsistent_types(destination_name) -> None:
         "test2__v_text",
         "_dlt_load_id",
         "_dlt_id",
-        "date_test__v_bool",
+        # "date_test__v_bool", # pipeline doesn't have this type any more
         "redi2__v_double",
         "date_test",
     }
@@ -373,7 +373,7 @@ def test_inconsistent_types(destination_name) -> None:
             "test2__v_text is not Null "
             "OR redi2__v_double is not Null "
             "OR date_test__v_text is not Null "
-            "OR date_test__v_bool is not Null "
+            # "OR date_test__v_bool is not Null" pipeline doesn't have this type any more
             "OR bool_test__v_text is not Null;"
         )
         with c.execute_query(sql_query) as cur:

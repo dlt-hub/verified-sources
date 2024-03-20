@@ -5,6 +5,7 @@ from sources.personio import personio_source
 from tests.utils import ALL_DESTINATIONS, assert_load_info, load_table_counts
 
 
+@pytest.mark.skip("We don't have a Personio test account.")
 @pytest.mark.parametrize("destination_name", ALL_DESTINATIONS)
 def test_all_resources(destination_name: str) -> None:
     pipeline = dlt.pipeline(
@@ -26,6 +27,7 @@ def test_all_resources(destination_name: str) -> None:
     assert table_counts["absences"] > 1000
 
 
+@pytest.mark.skip("We don't have a Personio test account.")
 @pytest.mark.parametrize("destination_name", ALL_DESTINATIONS)
 def test_incremental_endpoints(destination_name: str) -> None:
     # do the initial load

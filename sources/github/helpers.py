@@ -1,9 +1,11 @@
 """Github source helpers"""
 
 from typing import Iterator, List, Tuple
+
 from dlt.common.typing import DictStrAny, StrAny
 from dlt.common.utils import chunks
 from dlt.sources.helpers import requests
+
 from .queries import COMMENT_REACTIONS_QUERY, ISSUES_QUERY, RATE_LIMIT
 from .settings import GRAPHQL_API_BASE_URL, REST_API_BASE_URL
 
@@ -52,7 +54,6 @@ def get_reactions_data(
     access_token: str,
     items_per_page: int,
     max_items: int,
-    max_item_age_seconds: float = None,
 ) -> Iterator[Iterator[StrAny]]:
     variables = {
         "owner": owner,

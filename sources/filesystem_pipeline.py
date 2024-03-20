@@ -166,8 +166,8 @@ def copy_files_resource(local_folder: str) -> None:
 
     # NOTE: you do not need to load any data to execute extract, below we obtain
     # a list of files in a bucket and also copy them locally
-    listing = list(downloader)
-    print(listing)
+    # listing = list(downloader)
+    # print(listing)
 
     # download to table "listing"
     # downloader = filesystem(TESTS_BUCKET_URL, file_glob="**").add_map(_copy)

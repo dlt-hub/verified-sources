@@ -1,5 +1,10 @@
 # Personio
 
+> **Warning!**
+>
+> This source is a Community source and was tested only once. Currently, we **don't test** it on a regular basis.
+> If you have any problem with this source, ask for help in our [Slack Community](https://dlthub.com/community).
+
 [Personio](https://personio.de/) is a human resources management software that helps businesses
 streamline HR processes, including recruitment, employee data management, and payroll, in one
 platform.

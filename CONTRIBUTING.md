@@ -57,7 +57,7 @@ for that source. It is helpful to also read through the above section to see all
 part of source development.
 
 1. Before starting development on a new source, please open a ticket
-   [here](https://github.com/dlt-hub/verified-sources/issues/new?assignees=&labels=verified+source&projects=&template=new-verified-source.md&title=%25source+name%5D+verified+source)
+   [here](https://github.com/dlt-hub/verified-sources/issues/new?assignees=&labels=verified+source&projects=&template=build-new-verified-source.md&title=%25source+name%5D+verified+source)
    and let us know what you have planned.
 2. We will acknowledge your ticket and figure out how to proceed. **This mostly has to do with
    creating a test account for the desired source and providing you with the needed credentials**. We

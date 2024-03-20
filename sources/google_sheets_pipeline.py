@@ -130,8 +130,8 @@ if __name__ == "__main__":
     url_or_id = "1HhWHjqouQnnCIZAFa2rL6vT91YRN8aIhts22SUUR580"
     range_names = ["hidden_columns_merged_cells", "Blank Columns"]
 
-    # load_pipeline_with_ranges(url_or_id, range_names)
-    # load_pipeline_with_sheets(url_or_id)
-    # load_pipeline_with_named_ranges(url_or_id)
-    # load_pipeline_with_sheets_and_ranges(url_or_id)
+    load_pipeline_with_ranges(url_or_id, range_names)
+    load_pipeline_with_sheets(url_or_id)
+    load_pipeline_with_named_ranges(url_or_id)
+    load_pipeline_with_sheets_and_ranges(url_or_id)
     load_with_table_rename_and_multiple_spreadsheets(url_or_id, range_names)

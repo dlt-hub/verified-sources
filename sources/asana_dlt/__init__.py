@@ -7,33 +7,30 @@ functions are meant to be used as part of a data loading pipeline.
 """
 
 import typing as t
-from typing import Iterable, Any
+from typing import Any, Iterable
+
 import dlt
 from dlt.common.typing import TDataItem
 
+from .helpers import get_client
 from .settings import (
-    PROJECT_FIELDS,
-    USER_FIELDS,
     DEFAULT_START_DATE,
+    PROJECT_FIELDS,
     REQUEST_TIMEOUT,
     SECTION_FIELDS,
+    STORY_FIELDS,
     TAG_FIELDS,
     TASK_FIELDS,
-    STORY_FIELDS,
     TEAMS_FIELD,
+    USER_FIELDS,
     WORKSPACE_FIELDS,
 )
-from .helpers import get_client
 
 
 @dlt.source
-def asana_source(
-    access_token: str = dlt.secrets.value,
-) -> Any:  # should be Sequence[DltResource]:
+def asana_source() -> Any:  # should be Sequence[DltResource]:
     """
     The main function that runs all the other functions to fetch data from Asana.
-    Args:
-        access_token (str): The access token to authenticate the Asana API client, provided in the secrets file
     Returns:
         Sequence[DltResource]: A sequence of DltResource objects containing the fetched data.
     """
@@ -57,6 +54,7 @@ def workspaces(
     Fetches and returns a list of workspaces from Asana.
     Args:
         access_token (str): The access token to authenticate the Asana API client, provided in the secrets file
+        fields (Iterable[str]): The list of workspace fields to be retrieved from Asana API.
     Yields:
         dict: The workspace data.
     """
@@ -78,6 +76,7 @@ def projects(
     Args:
         workspace (dict): The workspace data.
         access_token (str): The access token to authenticate the Asana API client, provided in the secrets file
+        fields (Iterable[str]): The list of workspace fields to be retrieved from Asana API.
     Returns:
         list[dict]: The project data for the given workspace.
     """
@@ -105,6 +104,7 @@ def sections(
     Args:
         project_array (list): The project data.
         access_token (str): The access token to authenticate the Asana API client, provided in the secrets file
+        fields (Iterable[str]): The list of workspace fields to be retrieved from Asana API.
     Returns:
         list[dict]: The sections data for the given project.
     """
@@ -131,6 +131,7 @@ def tags(
     Args:
         workspace (dict): The workspace data.
         access_token (str): The access token to authenticate the Asana API client, provided in the secrets file
+        fields (Iterable[str]): The list of workspace fields to be retrieved from Asana API.
     Returns:
         list[dict]: The tags data for the given workspace.
     """
@@ -160,6 +161,7 @@ def tasks(
         access_token (str): The access token to authenticate the Asana API client, provided in the secrets file
 
         modified_at (str): The date from which to fetch modified tasks.
+        fields (Iterable[str]): The list of workspace fields to be retrieved from Asana API.
     Yields:
         dict: The task data for the given project.
     """
@@ -190,6 +192,7 @@ def stories(
     Args:
         task (dict): The task data.
         access_token (str): The access token to authenticate the Asana API client, provided in the secrets file
+        fields (Iterable[str]): The list of workspace fields to be retrieved from Asana API.
     Returns:
         list[dict]: The stories data for the given task.
     """
@@ -218,6 +221,7 @@ def teams(
     Args:
         workspace (dict): The workspace data.
         access_token (str): The access token to authenticate the Asana API client, provided in the secrets file
+        fields (Iterable[str]): The list of workspace fields to be retrieved from Asana API.
     Returns:
         list[dict]: The teams data for the given workspace.
     """
@@ -246,6 +250,7 @@ def users(
     Args:
         workspace (dict): The workspace data.
         access_token (str): The access token to authenticate the Asana API client, provided in the secrets file
+        fields (Iterable[str]): The list of workspace fields to be retrieved from Asana API.
     Returns:
         list[dict]: The user data for the given workspace.
     """
