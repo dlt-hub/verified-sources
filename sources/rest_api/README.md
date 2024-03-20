@@ -112,7 +112,7 @@ my_api_config: RESTAPIConfig = {
 ```python
 from requests.auth import HTTPBasicAuth
 
-basic_auth = HTTPBasicAuth(dlt.secrets["sources.my_api.access_token"], "")
+basic_auth = HTTPBasicAuth(dlt.secrets["sources.my_api.api_key"], dlt.secrets["sources.my_api.api_secret"])
 
 my_api_config: RESTAPIConfig = {
     "client": {
