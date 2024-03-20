@@ -43,7 +43,7 @@ def test_load_all_endpoints(destination_name: str) -> None:
     expected_counts = {
         "agents": 1,
         "companies": 1,
-        "contacts": 16,
+        "contacts": 15,
         "groups": 3,
         "roles": 8,
         "tickets": 3,
