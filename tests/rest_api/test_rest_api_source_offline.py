@@ -1,6 +1,7 @@
 import pytest
 
 import dlt
+from dlt.pipeline.exceptions import PipelineStepFailed
 from tests.utils import assert_load_info, load_table_counts, assert_query_data
 
 from sources.rest_api import rest_api_source
@@ -131,6 +132,28 @@ def test_ignoring_endpoint_returning_404(mock_api_server):
         {"id": 2, "title": "Post 2"},
         {"id": 3, "title": "Post 3"},
     ]
+
+
+def test_unauthorized_access_to_protected_endpoint(mock_api_server):
+    pipeline = dlt.pipeline(
+        pipeline_name="rest_api_mock",
+        destination="duckdb",
+        dataset_name="rest_api_mock",
+        full_refresh=True,
+    )
+
+    mock_source = rest_api_source(
+        {
+            "client": {"base_url": "https://api.example.com"},
+            "resources": [
+                "/protected/posts/bearer-token-plain-text-error",
+            ],
+        }
+    )
+
+    # TODO: Check if it's specically a 401 error
+    with pytest.raises(PipelineStepFailed):
+        pipeline.run(mock_source)
 
 
 def test_posts_under_results_key(mock_api_server):

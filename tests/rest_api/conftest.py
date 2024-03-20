@@ -151,6 +151,14 @@ def mock_api_server():
             context.status_code = 401
             return json.dumps({"error": "Unauthorized"})
 
+        @router.get("/protected/posts/bearer-token-plain-text-error")
+        def protected_bearer_token_plain_text_erorr(request, context):
+            auth = request.headers.get("Authorization")
+            if auth == "Bearer test-token":
+                return paginate_response(request, generate_posts())
+            context.status_code = 401
+            return "Unauthorized"
+
         @router.get("/protected/posts/api-key")
         def protected_api_key(request, context):
             api_key = request.headers.get("x-api-key")

@@ -221,17 +221,7 @@ def find_resolved_params(endpoint_config: Endpoint) -> List[ResolvedParam]:
 def _handle_response_actions(
     response: Response, actions: List[ResponseAction]
 ) -> Optional[str]:
-    """Handle response actions based on the response and the provided actions.
-
-    Example:
-    response_actions = [
-        {"status_code": 404, "action": "ignore"},
-        {"content": "Not found", "action": "ignore"},
-        {"status_code": 429, "action": "retry"},
-        {"status_code": 200, "content": "some text", "action": "retry"},
-    ]
-    action_type = client.handle_response_actions(response, response_actions)
-    """
+    """Handle response actions based on the response and the provided actions."""
     content = response.text
 
     for action in actions:
@@ -266,12 +256,30 @@ def _create_response_actions_hook(
             )
             raise IgnoreResponseException
 
+        # If no action has been taken and the status code indicates an error,
+        # raise an HTTP error based on the response status
+        if not action_type and response.status_code >= 400:
+            response.raise_for_status()
+
     return response_actions_hook
 
 
 def create_response_hooks(
     response_actions: Optional[List[ResponseAction]],
 ) -> Optional[Dict[str, Any]]:
+    """Create response hooks based on the provided response actions. Note
+    that if the error status code is not handled by the response actions,
+    the default behavior is to raise an HTTP error.
+
+    Example:
+        response_actions = [
+            {"status_code": 404, "action": "ignore"},
+            {"content": "Not found", "action": "ignore"},
+            {"status_code": 429, "action": "retry"},
+            {"status_code": 200, "content": "some text", "action": "retry"},
+        ]
+        hooks = create_response_hooks(response_actions)
+    """
     if response_actions:
         return {"response": [_create_response_actions_hook(response_actions)]}
     return None

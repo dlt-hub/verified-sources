@@ -183,20 +183,33 @@ class RESTClient:
                 pagination logic.
             data_selector (Optional[jsonpath.TJsonPath]): JSONPath selector for
                 extracting data from the response.
-            hooks (Optional[Hooks]): Hooks to modify request/response objects.
+            hooks (Optional[Hooks]): Hooks to modify request/response objects. Note that
+                when hooks are not provided, the default behavior is to raise an exception
+                on error status codes.
 
         Yields:
             PageData[Any]: A page of data from the paginated API response, along with request and response context.
+
+        Raises:
+            HTTPError: If the response status code is not a success code. This is raised
+                by default when hooks are not provided.
 
         Example:
             >>> client = RESTClient(base_url="https://api.example.com")
             >>> for page in client.paginate("/search", method="post", json={"query": "foo"}):
             >>>     print(page)
         """
+
         paginator = paginator if paginator else copy.deepcopy(self.paginator)
         auth = auth or self.auth
         data_selector = data_selector or self.data_selector
         hooks = hooks or {}
+
+        def raise_for_status(response: Response, *args: Any, **kwargs: Any) -> None:
+            response.raise_for_status()
+
+        if "response" not in hooks:
+            hooks["response"] = [raise_for_status]
 
         request = self._create_request(
             path=path, method=method, params=params, json=json, auth=auth, hooks=hooks
