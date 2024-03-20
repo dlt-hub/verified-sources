@@ -19,7 +19,6 @@ from .auth import AuthConfigBase
 
 from dlt.common.schema.typing import (
     TColumnNames,
-    # TSchemaContract,
     TTableFormat,
     TTableSchemaColumns,
     TWriteDisposition,
