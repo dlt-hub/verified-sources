@@ -133,21 +133,22 @@ The base URL that will be prepended to the endpoints specified in the `resources
 #### `paginator` [optional]
 The paginator property specify the default paginator to be used for the endpoint responses.
 
-//TODO describe paginators, the possible strings, and the disctionary to be used 
-
 Possible paginators are:
-- BasePaginator - 
-- HeaderLinkPaginator - String alias `"header_links"` -
-- JSONResponsePaginator -  String alias `"json_links"` - The pagination metainformation are in a node of the JSON response. 
+| Paginator | String Alias | Note |
+| --------- | ------------ | ---- |
+| BasePaginator | | | 
+| HeaderLinkPaginator | `header_links` | | 
+| JSONResponsePaginator | `json_links` | The pagination metainformation are in a node of the JSON response (see example below) |
+| SinglePagePaginator | `single_page` | The response will be interepreted as a single page response, ignoring possible pagination metadata |
+| UnspecifiedPaginator | `auto` | |
 
-    Usage example for a response with the url of the next page located at `paging.next`:
-    ```python
-    "paginator": JSONResponsePaginator(
-                        next_key=["paging", "next"]
-                    )
-    ```
-- SinglePagePaginator -  String alias `"single_page"` - The response will be interepreted as a single page response, ignoring possible pagination metadata.
-- UnspecifiedPaginator - String alias `"auto"` - 
+  Usage example of the `JSONResponsePaginator`, for a response with the url of the next page located at `paging.next`:
+  ```python
+  "paginator": JSONResponsePaginator(
+                      next_key=["paging", "next"]
+                  )
+  ```
+ 
 
 
 #### `request_client` [optional]
