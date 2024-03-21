@@ -133,7 +133,6 @@ Possible paginators are:
 | HeaderLinkPaginator | `header_links` | |
 | JSONResponsePaginator | `json_links` | The pagination metainformation is in a node of the JSON response (see example below) |
 | SinglePagePaginator | `single_page` | The response will be interpreted as a single-page response, ignoring possible pagination metadata |
-| UnspecifiedPaginator | `auto` | |
 
   Usage example of the `JSONResponsePaginator`, for a response with the URL of the next page located at `paging.next`:
   ```python
