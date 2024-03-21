@@ -194,8 +194,6 @@ An example of use:
         },
     },
 ```
-#### `parent`
-// TODO
 
 #### `path`
 The url of the endpoint. If you need to include URL parameters, they can be included using `{}`, for example:
