@@ -134,12 +134,12 @@ Possible paginators are:
 | JSONResponsePaginator | `json_links` | The pagination metainformation is in a node of the JSON response (see example below) |
 | SinglePagePaginator | `single_page` | The response will be interpreted as a single-page response, ignoring possible pagination metadata |
 
-  Usage example of the `JSONResponsePaginator`, for a response with the URL of the next page located at `paging.next`:
-  ```python
-  "paginator": JSONResponsePaginator(
-                      next_key=["paging", "next"]
-                  )
-  ```
+Usage example of the `JSONResponsePaginator`, for a response with the URL of the next page located at `paging.next`:
+```python
+"paginator": JSONResponsePaginator(
+    next_key=["paging", "next"]
+)
+```
 
 
 #### `session` [optional]
