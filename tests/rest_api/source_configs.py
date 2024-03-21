@@ -100,4 +100,45 @@ VALID_CONFIGS = [
         },
         "resources": ["users"],
     },
+    {
+        "client": {"base_url": "https://api.example.com"},
+        "resources": [
+            {
+                "name": "posts",
+                "endpoint": {
+                    "path": "posts",
+                    "params": {
+                        "limit": 100,
+                        "since": {
+                            "type": "incremental",
+                            "cursor_path": "updated_at",
+                            "initial_value": "2024-01-25T11:21:28Z",
+                        },
+                    },
+                    "paginator": "json_links",
+                },
+            },
+        ],
+    },
+    {
+        "client": {"base_url": "https://api.example.com"},
+        "resources": [
+            {
+                "name": "posts",
+                "endpoint": {
+                    "path": "posts",
+                    "params": {
+                        "limit": 100,
+                    },
+                    "paginator": "json_links",
+                    "incremental": {
+                        "start_param": "since",
+                        "end_param": "until",
+                        "cursor_path": "updated_at",
+                        "initial_value": "2024-01-25T11:21:28Z",
+                    },
+                },
+            },
+        ],
+    },
 ]

@@ -45,14 +45,15 @@ class ClientConfig(TypedDict, total=False):
 class IncrementalArgs(TypedDict, total=False):
     cursor_path: str
     initial_value: Optional[str]
-    last_value_func: LastValueFunc[str]
+    last_value_func: Optional[LastValueFunc[str]]
     primary_key: Optional[TTableHintTemplate[TColumnNames]]
     end_value: Optional[str]
     row_order: Optional[TSortOrder]
 
 
 class IncrementalConfig(IncrementalArgs, total=False):
-    param: str
+    start_param: str
+    end_param: Optional[str]
 
 
 class ResolveConfig(NamedTuple):
@@ -79,6 +80,7 @@ class Endpoint(TypedDict, total=False):
     paginator: Optional[PaginatorType]
     data_selector: Optional[jsonpath.TJsonPath]
     response_actions: Optional[List[ResponseAction]]
+    incremental: Optional[IncrementalConfig]
 
 
 class EndpointResourceBase(TypedDict, total=False):
@@ -88,7 +90,6 @@ class EndpointResourceBase(TypedDict, total=False):
     columns: Optional[TTableHintTemplate[TTableSchemaColumns]]
     primary_key: Optional[TTableHintTemplate[TColumnNames]]
     merge_key: Optional[TTableHintTemplate[TColumnNames]]
-    incremental: Optional[IncrementalConfig]
     table_format: Optional[TTableHintTemplate[TTableFormat]]
     include_from_parent: Optional[List[str]]
     selected: Optional[bool]
