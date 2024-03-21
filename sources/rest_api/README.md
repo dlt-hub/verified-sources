@@ -151,7 +151,8 @@ Possible paginators are:
  
 
 
-#### `request_client` [optional]
+#### `session` [optional]
+
 This property allows to pass a custom `Session` object.
 
 
