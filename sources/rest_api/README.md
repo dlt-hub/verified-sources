@@ -152,7 +152,8 @@ Possible paginators are:
 
 
 #### `request_client` [optional]
-This property allows to passa a custom `requests` client.
+This property allows to pass a custom `Session` object.
+
 
 ### `resource_defaults`
 This property allows to pass default properties and behaviour to the dlt resources created by the REST API Generic Source. Beside the properties mentioned in this documentation, a resource accepts all the arguments that usually are passed to a [dlt resource](https://dlthub.com/docs/general-usage/resource).
