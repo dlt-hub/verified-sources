@@ -36,14 +36,12 @@ from dlt.common.pendulum import pendulum
 from dlt.common.schema.typing import (
     TTableSchema,
     TTableSchemaColumns,
-    TAnySchemaColumns,
     TColumnNames,
     TWriteDisposition,
 )
-from dlt.common.schema.utils import get_columns_names_with_prop
+from dlt.common.schema.utils import merge_column
 from dlt.common.data_writers.escape import escape_postgres_identifier
-from dlt.common.configuration.specs import BaseConfiguration, configspec
-from dlt.extract.typing import DataItemWithMeta, TTableHintTemplate
+from dlt.extract.items import DataItemWithMeta
 from dlt.extract.resource import DltResource
 from dlt.sources.credentials import ConnectionStringCredentials
 
@@ -65,7 +63,7 @@ def init_replication(
     publish: str = "insert, update, delete",
     persist_snapshots: bool = False,
     include_columns: Optional[Dict[str, Sequence[str]]] = None,
-    columns: Optional[Dict[str, TTableHintTemplate[TAnySchemaColumns]]] = None,
+    columns: Optional[Dict[str, TTableSchemaColumns]] = None,
     reset: bool = False,
 ) -> Optional[Union[DltResource, List[DltResource]]]:
     """Initializes replication for one, several, or all tables within a schema.
@@ -112,7 +110,7 @@ def init_replication(
           }
           ```
           Argument is only used if `persist_snapshots` is `True`.
-        columns (Optional[Dict[str, TTableHintTemplate[TAnySchemaColumns]]]): Maps
+        columns (Optional[Dict[str, TTableSchemaColumns]]): Maps
           table name(s) to column hints to apply on the snapshot table resource(s).
           For example:
           ```
@@ -345,7 +343,7 @@ def snapshot_table_resource(
     schema_name: str,
     table_name: str,
     write_disposition: TWriteDisposition,
-    columns: TTableHintTemplate[TAnySchemaColumns] = None,
+    columns: TTableSchemaColumns = None,
     credentials: ConnectionStringCredentials = dlt.secrets.value,
 ) -> DltResource:
     """Returns a resource for a persisted snapshot table.
@@ -448,10 +446,9 @@ def replication_items(
     slot_name: str,
     pub_name: str,
     include_columns: Optional[Dict[str, Sequence[str]]] = None,
-    columns: Optional[Dict[str, TTableHintTemplate[TAnySchemaColumns]]] = None,
+    columns: Optional[Dict[str, TTableSchemaColumns]] = None,
     target_batch_size: int = 1000,
     flush_slot: bool = True,
-    write_disposition: TWriteDisposition = "append",  # TODO: remove after https://github.com/dlt-hub/dlt/issues/1031 has been released
 ) -> Iterator[Union[TDataItem, DataItemWithMeta]]:
     """Yields data items from generator.
 
@@ -482,7 +479,6 @@ def replication_items(
             target_batch_size=target_batch_size,
             include_columns=include_columns,
             columns=columns,
-            write_disposition=write_disposition,  # TODO: remove after https://github.com/dlt-hub/dlt/issues/1031 has been released
         )
         yield from gen
         if gen.generated_all:
@@ -574,10 +570,9 @@ class ItemGenerator:
     start_lsn: int = 0
     target_batch_size: int = 1000
     include_columns: Optional[Dict[str, Sequence[str]]] = (None,)  # type: ignore[assignment]
-    columns: Optional[Dict[str, TTableHintTemplate[TAnySchemaColumns]]] = (None,)  # type: ignore[assignment]
+    columns: Optional[Dict[str, TTableSchemaColumns]] = (None,)  # type: ignore[assignment]
     last_commit_lsn: Optional[int] = field(default=None, init=False)
     generated_all: bool = False
-    write_disposition: TWriteDisposition = "append"  # TODO: remove after https://github.com/dlt-hub/dlt/issues/1031 has been released
 
     def __iter__(self) -> Iterator[Union[TDataItem, DataItemWithMeta]]:
         """Yields replication messages from MessageConsumer.
@@ -606,13 +601,10 @@ class ItemGenerator:
         finally:
             cur.connection.close()
             self.last_commit_lsn = consumer.last_commit_lsn
-            for i in consumer.data_items:
-                i.meta.hints[
-                    "write_disposition"
-                ] = (
-                    self.write_disposition
-                )  # TODO: remove after https://github.com/dlt-hub/dlt/issues/1031 has been released
-                yield i
+            for rel_id, data_items in consumer.data_items.items():
+                table_name = consumer.last_table_schema[rel_id]["name"]
+                yield data_items[0]  # meta item with column hints only, no data
+                yield dlt.mark.with_table_name(data_items[1:], table_name)
             self.generated_all = consumer.consumed_all
 
 
@@ -629,7 +621,7 @@ class MessageConsumer:
         upto_lsn: int,
         target_batch_size: int = 1000,
         include_columns: Optional[Dict[str, Sequence[str]]] = None,
-        columns: Optional[Dict[str, TTableHintTemplate[TAnySchemaColumns]]] = None,
+        columns: Optional[Dict[str, TTableSchemaColumns]] = None,
     ) -> None:
         self.upto_lsn = upto_lsn
         self.target_batch_size = target_batch_size
@@ -638,7 +630,9 @@ class MessageConsumer:
 
         self.consumed_all: bool = False
         # data_items attribute maintains all data items
-        self.data_items: List[Union[TDataItem, DataItemWithMeta]] = []
+        self.data_items: Dict[
+            int, List[Union[TDataItem, DataItemWithMeta]]
+        ] = dict()  # maps relation_id to list of data items
         # other attributes only maintain last-seen values
         self.last_table_schema: Dict[
             int, TTableSchema
@@ -664,7 +658,10 @@ class MessageConsumer:
             self.last_commit_lsn = msg.data_start
             if msg.data_start >= self.upto_lsn:
                 self.consumed_all = True
-            if self.consumed_all or len(self.data_items) >= self.target_batch_size:
+            n_items = sum(
+                [len(items) for items in self.data_items.values()]
+            )  # combine items for all tables
+            if self.consumed_all or n_items >= self.target_batch_size:
                 raise StopReplication
         elif op == "R":
             self.process_relation(Relation(msg.payload))
@@ -683,14 +680,42 @@ class MessageConsumer:
     def process_relation(self, decoded_msg: Relation) -> None:
         """Processes a replication message of type Relation.
 
-        Stores table schema information from Relation message in object state.
+        Stores table schema in object state.
+        Creates meta item to emit column hints while yielding data.
         """
-        # store table schema information
-        columns = {c.name: _to_dlt_column_schema(c) for c in decoded_msg.columns}
+        # get table schema information from source and store in object state
+        table_name = decoded_msg.relation_name
+        columns: TTableSchemaColumns = {
+            c.name: _to_dlt_column_schema(c) for c in decoded_msg.columns
+        }
         self.last_table_schema[decoded_msg.relation_id] = {
-            "name": decoded_msg.relation_name,
+            "name": table_name,
             "columns": columns,
         }
+
+        # apply user input
+        # 1) exclude columns
+        include_columns = (
+            None
+            if self.include_columns is None
+            else self.include_columns.get(table_name)
+        )
+        if include_columns is not None:
+            columns = {k: v for k, v in columns.items() if k in include_columns}
+        # 2) override source hints
+        column_hints: TTableSchemaColumns = (
+            dict() if self.columns is None else self.columns.get(table_name, dict())
+        )
+        for column_name, column_val in column_hints.items():
+            columns[column_name] = merge_column(columns[column_name], column_val)
+
+        # include meta item to emit hints while yielding data
+        meta_item = dlt.mark.with_hints(
+            [],
+            dlt.mark.make_hints(table_name=table_name, columns=columns),
+            create_table_variant=True,
+        )
+        self.data_items[decoded_msg.relation_id] = [meta_item]
 
     def process_change(
         self, decoded_msg: Union[Insert, Update, Delete], msg_start_lsn: int
@@ -705,7 +730,6 @@ class MessageConsumer:
             column_data = decoded_msg.old_tuple.column_data
         table_name = self.last_table_schema[decoded_msg.relation_id]["name"]
         data_item = self.gen_data_item(
-            table_name=self.last_table_schema[decoded_msg.relation_id]["name"],
             data=column_data,
             column_schema=self.last_table_schema[decoded_msg.relation_id]["columns"],
             lsn=msg_start_lsn,
@@ -714,25 +738,19 @@ class MessageConsumer:
             include_columns=None
             if self.include_columns is None
             else self.include_columns.get(table_name),
-            column_hints=None if self.columns is None else self.columns.get(table_name),
         )
-        self.data_items.append(data_item)
+        self.data_items[decoded_msg.relation_id].append(data_item)
 
     @staticmethod
     def gen_data_item(
-        table_name: str,
         data: List[ColumnData],
         column_schema: TTableSchemaColumns,
         lsn: int,
         commit_ts: pendulum.DateTime,
         for_delete: bool,
         include_columns: Optional[Sequence[str]] = None,
-        column_hints: TTableHintTemplate[TAnySchemaColumns] = None,
     ) -> TDataItem:
         """Generates data item from replication message data and corresponding metadata."""
-        pairs = zip(column_schema.values(), data)
-        if include_columns is not None:
-            pairs = [(schema, data) for (schema, data) in pairs if schema["name"] in include_columns]  # type: ignore[assignment]
         data_item = {
             schema["name"]: _to_dlt_val(
                 val=data.col_data,
@@ -740,18 +758,10 @@ class MessageConsumer:
                 byte1=data.col_data_category,
                 for_delete=for_delete,
             )
-            for (schema, data) in pairs
+            for (schema, data) in zip(column_schema.values(), data)
+            if (True if include_columns is None else schema["name"] in include_columns)
         }
         data_item["lsn"] = lsn
         if for_delete:
             data_item["deleted_ts"] = commit_ts
-        return dlt.mark.with_hints(
-            data_item,
-            dlt.mark.make_hints(
-                table_name=table_name,
-                primary_key=get_columns_names_with_prop(
-                    {"columns": column_schema}, "primary_key"
-                ),
-                columns=column_hints,
-            ),
-        )
+        return data_item

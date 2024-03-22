@@ -4,14 +4,9 @@ from typing import Dict, Sequence, Optional
 
 import dlt
 
-from dlt.common.schema.typing import (
-    TTableSchemaColumns,
-    TAnySchemaColumns,
-    TWriteDisposition,
-)
+from dlt.common.schema.typing import TTableSchemaColumns, TWriteDisposition
 from dlt.sources.credentials import ConnectionStringCredentials
 from dlt.extract.resource import DltResource
-from dlt.extract.typing import TTableHintTemplate
 
 from .helpers import _gen_replication_resource_name, get_pub_ops, replication_items
 
@@ -22,7 +17,7 @@ def replication_resource(
     pub_name: str,
     credentials: ConnectionStringCredentials = dlt.secrets.value,
     include_columns: Optional[Dict[str, Sequence[str]]] = None,
-    columns: Optional[Dict[str, TTableHintTemplate[TAnySchemaColumns]]] = None,
+    columns: Optional[Dict[str, TTableSchemaColumns]] = None,
     target_batch_size: int = 1000,
     flush_slot: bool = True,
 ) -> DltResource:
@@ -49,7 +44,7 @@ def replication_resource(
               "table_y": ["col_x", "col_y", "col_z"],
           }
           ```
-        columns (Optional[Dict[str, TTableHintTemplate[TAnySchemaColumns]]]): Maps
+        columns (Optional[Dict[str, TTableSchemaColumns]]): Maps
           table name(s) to column hints to apply on the replicated table(s). For example:
           ```
           columns={
@@ -102,5 +97,4 @@ def replication_resource(
         columns=columns,
         target_batch_size=target_batch_size,
         flush_slot=flush_slot,
-        write_disposition=write_disposition,
     )
