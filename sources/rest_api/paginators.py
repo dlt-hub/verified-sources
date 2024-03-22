@@ -1,5 +1,5 @@
 from abc import ABC, abstractmethod
-from typing import Optional, Sequence, Union, Any
+from typing import Optional
 
 from dlt.sources.helpers.requests import Response, Request
 from dlt.common import jsonpath
