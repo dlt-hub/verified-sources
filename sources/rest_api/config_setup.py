@@ -9,6 +9,7 @@ from typing import (
     Union,
     Callable,
     cast,
+    NamedTuple,
 )
 import graphlib  # type: ignore[import,unused-ignore]
 
@@ -47,6 +48,11 @@ PAGINATOR_MAP: Dict[str, Type[BasePaginator]] = {
     "auto": None,
     "single_page": SinglePagePaginator,
 }
+
+
+class IncrementalParam(NamedTuple):
+    start: str
+    end: Optional[str]
 
 
 def get_paginator_class(paginator_type: str) -> Type[BasePaginator]:
@@ -91,24 +97,26 @@ def create_auth(
 def setup_incremental_object(
     request_params: Dict[str, Any],
     incremental_config: Optional[IncrementalConfig] = None,
-) -> Tuple[Optional[Incremental[Any]], Optional[str], Optional[str]]:
+) -> Tuple[Optional[Incremental[Any]], Optional[IncrementalParam]]:
     for key, value in request_params.items():
         if isinstance(value, dlt.sources.incremental):
-            return value, key, None
+            return value, IncrementalParam(start=key, end=None)
         if isinstance(value, dict):
             param_type = value.pop("type")
             if param_type == "incremental":
-                return (dlt.sources.incremental(**value), key, None)
+                return (
+                    dlt.sources.incremental(**value),
+                    IncrementalParam(start=key, end=None),
+                )
     if incremental_config:
         start_param = incremental_config.pop("start_param")
         end_param = incremental_config.pop("end_param", None)
         return (
             dlt.sources.incremental(**cast(IncrementalArgs, incremental_config)),
-            start_param,
-            end_param,
+            IncrementalParam(start=start_param, end=end_param),
         )
 
-    return None, None, None
+    return None, None
 
 
 def make_parent_key_name(resource_name: str, field_name: str) -> str:

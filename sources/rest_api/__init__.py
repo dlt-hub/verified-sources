@@ -34,6 +34,7 @@ from .typing import (
     HTTPMethodBasic,
 )
 from .config_setup import (
+    IncrementalParam,
     create_auth,
     create_paginator,
     build_resource_dependency_graph,
@@ -201,8 +202,7 @@ def create_resources(
 
         (
             incremental_object,
-            incremental_start_param,
-            incremental_end_param,
+            incremental_param,
         ) = setup_incremental_object(request_params, endpoint_config.get("incremental"))
 
         client = RESTClient(
@@ -230,13 +230,12 @@ def create_resources(
                 hooks: Optional[Dict[str, Any]],
                 client: RESTClient = client,
                 incremental_object: Optional[Incremental[Any]] = incremental_object,
-                incremental_start_param: str = incremental_start_param,
-                incremental_end_param: str = incremental_end_param,
+                incremental_param: IncrementalParam = incremental_param,
             ) -> Generator[Any, None, None]:
                 if incremental_object:
-                    params[incremental_start_param] = incremental_object.last_value
-                    if incremental_end_param:
-                        params[incremental_end_param] = incremental_object.end_value
+                    params[incremental_param.start] = incremental_object.last_value
+                    if incremental_param.end:
+                        params[incremental_param.end] = incremental_object.end_value
 
                 yield from client.paginate(
                     method=method,
