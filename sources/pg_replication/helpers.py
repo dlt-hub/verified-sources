@@ -591,6 +591,9 @@ class ItemGenerator:
             )
             consumer = MessageConsumer(
                 upto_lsn=self.upto_lsn,
+                pub_ops=get_pub_ops(
+                    self.options["publication_names"], self.credentials
+                ),
                 target_batch_size=self.target_batch_size,
                 include_columns=self.include_columns,
                 columns=self.columns,
@@ -619,11 +622,13 @@ class MessageConsumer:
     def __init__(
         self,
         upto_lsn: int,
+        pub_ops: Dict[str, bool],
         target_batch_size: int = 1000,
         include_columns: Optional[Dict[str, Sequence[str]]] = None,
         columns: Optional[Dict[str, TTableSchemaColumns]] = None,
     ) -> None:
         self.upto_lsn = upto_lsn
+        self.pub_ops = pub_ops
         self.target_batch_size = target_batch_size
         self.include_columns = include_columns
         self.columns = columns
@@ -708,6 +713,17 @@ class MessageConsumer:
         )
         for column_name, column_val in column_hints.items():
             columns[column_name] = merge_column(columns[column_name], column_val)
+
+        # add hints for replication columns
+        columns["lsn"] = {"data_type": "bigint", "nullable": True}
+        if self.pub_ops["update"] or self.pub_ops["delete"]:
+            columns["lsn"]["dedup_sort"] = "desc"
+        if self.pub_ops["delete"]:
+            columns["deleted_ts"] = {
+                "hard_delete": True,
+                "data_type": "timestamp",
+                "nullable": True,
+            }
 
         # include meta item to emit hints while yielding data
         meta_item = dlt.mark.with_hints(
