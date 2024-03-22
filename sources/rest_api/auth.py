@@ -10,9 +10,8 @@ from cryptography.hazmat.backends import default_backend
 from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric.types import PrivateKeyTypes
 
-
+from dlt import config, secrets
 from dlt.common import logger
-
 from dlt.common.configuration.specs.base_configuration import configspec
 from dlt.common.configuration.specs import CredentialsConfiguration
 from dlt.common.configuration.specs.exceptions import NativeValueError
@@ -38,8 +37,8 @@ class BearerTokenAuth(AuthConfigBase):
     scheme: Literal["bearer"] = "bearer"
     token: TSecretStrValue
 
-    # def __init__(self, token: TSecretStrValue) -> None:
-    #     self.token = token
+    def __init__(self, token: TSecretStrValue = secrets.value) -> None:
+        self.token = token
 
     def parse_native_representation(self, value: Any) -> None:
         if isinstance(value, str):
@@ -59,16 +58,19 @@ class BearerTokenAuth(AuthConfigBase):
 @configspec
 class APIKeyAuth(AuthConfigBase):
     type: Final[Literal["apiKey"]] = "apiKey"  # noqa: A003
-    location: TApiKeyLocation = "header"
     name: str = "Authorization"
     api_key: TSecretStrValue
+    location: TApiKeyLocation = "header"
 
-    # def __init__(
-    #     self, name: str, api_key: TSecretStrValue, location: TApiKeyLocation = "header"
-    # ) -> None:
-    #     self.name = name
-    #     self.api_key = api_key
-    #     self.location = location
+    def __init__(
+        self,
+        name: str = config.value,
+        api_key: TSecretStrValue = secrets.value,
+        location: TApiKeyLocation = "header",
+    ) -> None:
+        self.name = name
+        self.api_key = api_key
+        self.location = location
 
     def parse_native_representation(self, value: Any) -> None:
         if isinstance(value, str):
@@ -97,9 +99,11 @@ class HttpBasicAuth(AuthConfigBase):
     username: str
     password: TSecretStrValue
 
-    # def __init__(self, username: str, password: TSecretStrValue) -> None:
-    #     self.username = username
-    #     self.password = password
+    def __init__(
+        self, username: str = config.value, password: TSecretStrValue = secrets.value
+    ) -> None:
+        self.username = username
+        self.password = password
 
     def parse_native_representation(self, value: Any) -> None:
         if isinstance(value, Iterable) and not isinstance(value, str):
@@ -127,8 +131,8 @@ class OAuth2AuthBase(AuthConfigBase):
     type: Final[Literal["oauth2"]] = "oauth2"  # noqa: A003
     access_token: TSecretStrValue
 
-    # def __init__(self, access_token: TSecretStrValue) -> None:
-    #     self.access_token = access_token
+    def __init__(self, access_token: TSecretStrValue = secrets.value) -> None:
+        self.access_token = access_token
 
     def parse_native_representation(self, value: Any) -> None:
         if isinstance(value, str):
@@ -156,13 +160,14 @@ class OAuthJWTAuth(BearerTokenAuth):
     scopes: Optional[str] = None
     headers: Optional[Dict[str, str]] = None
     private_key_passphrase: Optional[TSecretStrValue] = None
+    default_token_expiration: int = 3600
 
     def __init__(
         self,
-        client_id: str,
-        private_key: TSecretStrValue,
-        auth_endpoint: str,
-        scopes: str,
+        client_id: str = config.value,
+        private_key: TSecretStrValue = secrets.value,
+        auth_endpoint: str = config.value,
+        scopes: str = None,
         headers: Optional[Dict[str, str]] = None,
         private_key_passphrase: Optional[TSecretStrValue] = None,
         default_token_expiration: int = 3600,
