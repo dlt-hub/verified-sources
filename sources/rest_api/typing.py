@@ -27,8 +27,8 @@ from dlt.common.schema.typing import (
 PaginatorConfigDict = Dict[str, Any]
 PaginatorType = Union[BasePaginator, str, PaginatorConfigDict]
 
-HTTPMethodBasic = Literal["get", "post"]
-HTTPMethodExtended = Literal["put", "patch", "delete", "head", "options"]
+HTTPMethodBasic = Literal["GET", "POST"]
+HTTPMethodExtended = Literal["PUT", "PATCH", "DELETE", "HEAD", "OPTIONS"]
 HTTPMethod = Union[HTTPMethodBasic, HTTPMethodExtended]
 
 

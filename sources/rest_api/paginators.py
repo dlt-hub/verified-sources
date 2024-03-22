@@ -1,7 +1,8 @@
 from abc import ABC, abstractmethod
-from typing import Optional, Sequence, Union
+from typing import Optional, Sequence, Union, Any
 
 from dlt.sources.helpers.requests import Response, Request
+from dlt.common import jsonpath
 
 from .utils import create_nested_accessor
 
@@ -102,7 +103,7 @@ class OffsetPaginator(BasePaginator):
 
 class BaseNextUrlPaginator(BasePaginator):
     def update_request(self, request: Request) -> None:
-        request.url = self._next_reference
+        request.url = self.next_reference
 
 
 class HeaderLinkPaginator(BaseNextUrlPaginator):
@@ -133,19 +134,46 @@ class JSONResponsePaginator(BaseNextUrlPaginator):
 
     def __init__(
         self,
-        next_key: Union[str, Sequence[str]] = "next",
+        next_url_path: jsonpath.TJsonPath = "next",
     ):
         """
         Args:
-            next_key (str, optional): The key in the JSON response that
-                contains the next page URL. Defaults to 'next'.
+            next_url_path: The JSON path to the key that contains the next page URL in the response.
+                Defaults to 'next'.
         """
         super().__init__()
-        self.next_key = next_key
-        self._next_key_accessor = create_nested_accessor(next_key)
+        self.next_url_path = jsonpath.compile_path(next_url_path)
 
     def update_state(self, response: Response) -> None:
-        try:
-            self.next_reference = self._next_key_accessor(response.json())
-        except KeyError:
-            self.next_reference = None
+        values = jsonpath.find_values(self.next_url_path, response.json())
+        self.next_reference = values[0] if values else None
+
+
+class JSONResponseCursorPaginator(BasePaginator):
+    """A paginator that uses a cursor query param to paginate. The cursor for the
+    next page is found in the JSON response.
+    """
+
+    def __init__(
+        self,
+        cursor_path: jsonpath.TJsonPath = "cursors.next",
+        cursor_param: str = "after",
+    ):
+        """
+        Args:
+            cursor_path: The JSON path to the key that contains the cursor in the response.
+            cursor_param: The name of the query parameter to be used in the request to get the next page.
+        """
+        super().__init__()
+        self.cursor_path = jsonpath.compile_path(cursor_path)
+        self.cursor_param = cursor_param
+
+    def update_state(self, response: Response) -> None:
+        values = jsonpath.find_values(self.cursor_path, response.json())
+        self.next_reference = values[0] if values else None
+
+    def update_request(self, request: Request) -> None:
+        if request.params is None:
+            request.params = {}
+
+        request.params[self.cursor_param] = self._next_reference
