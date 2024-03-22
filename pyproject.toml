@@ -13,6 +13,7 @@ packages = [{include = "sources"}]
 [tool.poetry.dependencies]
 python = ">=3.8.1,<3.13"
 dlt = {version = "0.4.7", allow-prereleases = true, extras = ["redshift", "bigquery", "postgres", "duckdb", "s3", "gs"]}
+graphlib-backport = {version = "*", python = "<3.9"}
 
 [tool.poetry.group.dev.dependencies]
 mypy = "1.6.1"
