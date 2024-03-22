@@ -41,9 +41,13 @@ class TableLoader:
                     f"Cursor column '{incremental.cursor_path}' does not exist in table '{table.name}'"
                 ) from e
             self.last_value = incremental.last_value
+            self.end_value = incremental.end_value
+            self.row_order = getattr(self.incremental, "row_order", None)
         else:
             self.cursor_column = None
             self.last_value = None
+            self.end_value = None
+            self.row_order = None
 
     def make_query(self) -> SelectAny:
         table = self.table
@@ -51,20 +55,34 @@ class TableLoader:
         if not self.incremental:
             return query
         last_value_func = self.incremental.last_value_func
+
+        # generate where
         if (
             last_value_func is max
         ):  # Query ordered and filtered according to last_value function
-            order_by = self.cursor_column.asc()
             filter_op = operator.ge
+            filter_op_end = operator.lt
         elif last_value_func is min:
-            order_by = self.cursor_column.desc()
             filter_op = operator.le
+            filter_op_end = operator.gt
         else:  # Custom last_value, load everything and let incremental handle filtering
             return query
-        query = query.order_by(order_by)
-        if self.last_value is None:
-            return query
-        return query.where(filter_op(self.cursor_column, self.last_value))
+
+        if self.last_value is not None:
+            query = query.where(filter_op(self.cursor_column, self.last_value))
+            if self.end_value is not None:
+                query = query.where(filter_op_end(self.cursor_column, self.end_value))
+
+        # generate order by from declared row order
+        order_by = None
+        if self.row_order == "asc":
+            order_by = self.cursor_column.asc()
+        elif self.row_order == "desc":
+            order_by = self.cursor_column.desc()
+        if order_by is not None:
+            query = query.order_by(order_by)
+
+        return query
 
     def load_rows(self) -> Iterator[List[TDataItem]]:
         query = self.make_query()
@@ -90,9 +108,9 @@ def table_rows(
         if table_adapter_callback:
             table_adapter_callback(table)
         # set the primary_key in the incremental
-        if incremental and not incremental.primary_key:
+        if incremental and incremental.primary_key is None:
             primary_key = get_primary_key(table)
-            if primary_key:
+            if primary_key is not None:
                 incremental.primary_key = primary_key
         # yield empty record to set hints
         yield dlt.mark.with_hints(
@@ -118,7 +136,9 @@ def engine_from_credentials(
 
 
 def get_primary_key(table: Table) -> List[str]:
-    return [c.name for c in table.primary_key]
+    """Create primary key or return None if no key defined"""
+    primary_key = [c.name for c in table.primary_key]
+    return primary_key if len(primary_key) > 0 else None
 
 
 @configspec
