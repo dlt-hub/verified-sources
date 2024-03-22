@@ -4,6 +4,7 @@ When extraction starts, partitions length is checked -
 data is read only up to it, overriding the default Kafka's
 behavior of waiting for new messages in endless loop.
 """
+
 from contextlib import closing
 from typing import Any, Callable, Dict, Iterable, List, Optional, Union
 
@@ -52,7 +53,7 @@ def kafka_consumer(
             before it's transfered to the destination.
         batch_size (Optional[int]): Messages batch size to read at once.
         batch_timeout (Optional[int]): Maximum time to wait for a batch
-            consume.
+            consume, in seconds.
         start_from (Optional[TAnyDateTime]): A timestamp, at which to start
             reading. Older messages are ignored.
 
@@ -84,8 +85,12 @@ def kafka_consumer(
     # not waiting for new messages
     with closing(consumer):
         while tracker.has_unread:
+            messages = consumer.consume(batch_size, timeout=batch_timeout)
+            if not messages:
+                break
+
             batch = []
-            for msg in consumer.consume(batch_size, timeout=batch_timeout):
+            for msg in messages:
                 if msg.error():
                     err = msg.error()
                     if err.retriable() or not err.fatal():
