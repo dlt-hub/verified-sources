@@ -113,6 +113,7 @@ def kafka_timed_messages(kafka_admin, kafka_producer):
     _await(kafka_admin.delete_topics([topic]))
 
 
+@pytest.mark.skip("We don't have a Kafka instance to test this source.")
 def test_kafka_read(kafka_topics, kafka_messages):
     """Test simple messages reading."""
     pipeline = dlt.pipeline(
@@ -143,6 +144,7 @@ def test_kafka_read(kafka_topics, kafka_messages):
         )
 
 
+@pytest.mark.skip("We don't have a Kafka instance to test this source.")
 def test_kafka_read_custom_msg_processor(kafka_topics, kafka_messages):
     """
     Test messages reading and processing with a
@@ -178,6 +180,7 @@ def test_kafka_read_custom_msg_processor(kafka_topics, kafka_messages):
         )
 
 
+@pytest.mark.skip("We don't have a Kafka instance to test this source.")
 def test_kafka_read_with_timestamp(kafka_timed_messages):
     """Test if offset is set correctly from a timestamp."""
     topic, ts = kafka_timed_messages
@@ -215,6 +218,7 @@ def test_kafka_read_now():
     assert tracker["topic1"]["0"] == {"cur": 9, "max": 10}
 
 
+@pytest.mark.skip("We don't have a Kafka instance to test this source.")
 def test_kafka_incremental_read(kafka_producer, kafka_topics):
     """Test incremental messages reading.
 
