@@ -4,7 +4,6 @@ from typing import (
     Type,
     Any,
     Dict,
-    Tuple,
     List,
     Optional,
     Generator,
@@ -17,7 +16,7 @@ import dlt
 from dlt.common.validation import validate_dict
 from dlt.extract.incremental import Incremental
 from dlt.extract.source import DltResource, DltSource
-from dlt.common import logger, jsonpath
+from dlt.common import jsonpath
 from dlt.common.schema.schema import Schema
 from dlt.common.schema.typing import TSchemaContract
 from dlt.common.configuration.specs import BaseConfiguration
@@ -42,6 +41,7 @@ from .config_setup import (
     setup_incremental_object,
     create_response_hooks,
 )
+from .utils import check_connection  # noqa: F401
 
 
 def rest_api_source(
@@ -319,18 +319,6 @@ def create_resources(
             )
 
     return resources
-
-
-def check_connection(
-    source: DltSource,
-    *resource_names: str,
-) -> Tuple[bool, str]:
-    try:
-        list(source.with_resources(*resource_names).add_limit(1))
-        return (True, "")
-    except Exception as e:
-        logger.error(f"Error checking connection: {e}")
-        return (False, str(e))
 
 
 # XXX: This is a workaround pass test_dlt_init.py
