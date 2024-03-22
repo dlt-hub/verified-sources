@@ -32,13 +32,13 @@ HTTPMethodExtended = Literal["put", "patch", "delete", "head", "options"]
 HTTPMethod = Union[HTTPMethodBasic, HTTPMethodExtended]
 
 
-class AuthConfig(TypedDict, total=False):
+class SimpleTokenAuthConfig(TypedDict, total=False):
     token: str
 
 
 class ClientConfig(TypedDict, total=False):
     base_url: str
-    auth: Optional[Union[AuthConfig, AuthConfigBase]]
+    auth: Optional[Union[SimpleTokenAuthConfig, AuthConfigBase]]
     paginator: Optional[PaginatorType]
 
 

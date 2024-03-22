@@ -20,7 +20,13 @@ from dlt.common.utils import update_dict_nested
 from dlt.common.typing import TSecretStrValue
 from dlt.sources.helpers.requests import Response
 
-from .auth import BearerTokenAuth, AuthConfigBase
+from .auth import (
+    AuthConfigBase,
+    HttpBasicAuth,
+    BearerTokenAuth,
+    APIKeyAuth,
+    OAuthJWTAuth,
+)
 from .paginators import (
     BasePaginator,
     HeaderLinkPaginator,
@@ -28,7 +34,7 @@ from .paginators import (
     SinglePagePaginator,
 )
 from .typing import (
-    AuthConfig,
+    SimpleTokenAuthConfig,
     IncrementalArgs,
     IncrementalConfig,
     PaginatorType,
@@ -83,15 +89,50 @@ def create_paginator(paginator_config: PaginatorType) -> Optional[BasePaginator]
 
 
 def create_auth(
-    auth_config: Optional[Union[AuthConfig, AuthConfigBase]],
+    auth_config: Optional[Union[SimpleTokenAuthConfig, AuthConfigBase]],
 ) -> Optional[AuthConfigBase]:
     if isinstance(auth_config, AuthConfigBase):
         return auth_config
-    return (
-        BearerTokenAuth(cast(TSecretStrValue, auth_config.get("token")))
-        if auth_config
-        else None
-    )
+
+    if isinstance(auth_config, dict):
+        # Handle a shorthand auth configuration
+        if "token" in auth_config and len(auth_config) == 1:
+            return BearerTokenAuth(cast(TSecretStrValue, auth_config["token"]))
+
+        # Handle full auth configurations
+        auth_config = cast(AuthConfigBase, auth_config)
+        if auth_config.get("type") == "http":
+            if auth_config.get("scheme") == "basic":
+                return HttpBasicAuth(
+                    username=auth_config["username"], password=auth_config["password"]
+                )
+            elif auth_config.get("scheme") == "bearer":
+                return BearerTokenAuth(cast(TSecretStrValue, auth_config["token"]))
+            else:
+                raise ValueError(f"Invalid auth scheme: {auth_config['scheme']}")
+        elif auth_config.get("type") == "apiKey":
+            return APIKeyAuth(
+                name=auth_config["name"],
+                api_key=cast(TSecretStrValue, auth_config["api_key"]),
+                location=auth_config.get("location"),
+            )
+        elif auth_config.get("type") == "oauth2":
+            return OAuthJWTAuth(
+                client_id=auth_config["client_id"],
+                private_key=cast(TSecretStrValue, auth_config["private_key"]),
+                auth_endpoint=auth_config["auth_endpoint"],
+                scopes=auth_config["scopes"],
+                headers=auth_config.get("headers"),
+                private_key_passphrase=auth_config.get("private_key_passphrase"),
+                default_token_expiration=auth_config.get("default_token_expiration"),
+            )
+        else:
+            raise ValueError(f"Invalid auth type: {auth_config['type']}")
+
+    if auth_config:
+        raise ValueError(f"Invalid auth config: {auth_config}")
+
+    return None
 
 
 def setup_incremental_object(
