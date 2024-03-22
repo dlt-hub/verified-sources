@@ -4,8 +4,6 @@ from typing import Optional
 from dlt.sources.helpers.requests import Response, Request
 from dlt.common import jsonpath
 
-from .utils import create_nested_accessor
-
 
 class BasePaginator(ABC):
     def __init__(self) -> None:
@@ -70,18 +68,19 @@ class OffsetPaginator(BasePaginator):
         initial_offset: int = 0,
         offset_param: str = "offset",
         limit_param: str = "limit",
-        total_key: str = "total",
+        total_path: jsonpath.TJsonPath = "total",
     ) -> None:
         super().__init__()
         self.offset_param = offset_param
         self.limit_param = limit_param
-        self._total_accessor = create_nested_accessor(total_key)
+        self.total_path = jsonpath.compile_path(total_path)
 
         self.offset = initial_offset
         self.limit = initial_limit
 
     def update_state(self, response: Response) -> None:
-        total = self._total_accessor(response.json())
+        values = jsonpath.find_values(self.total_path, response.json())
+        total = values[0] if values else None
 
         if total is None:
             raise ValueError(

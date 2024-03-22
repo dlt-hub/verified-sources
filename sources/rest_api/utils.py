@@ -12,12 +12,6 @@ def join_url(base_url: str, path: str) -> str:
     return base_url + path.lstrip("/")
 
 
-def create_nested_accessor(path: Union[str, Sequence[str]]) -> Any:
-    if isinstance(path, (list, tuple)):
-        return lambda d: reduce(getitem, path, d)
-    return lambda d: d.get(path)
-
-
 def check_connection(
     source: DltSource,
     *resource_names: str,

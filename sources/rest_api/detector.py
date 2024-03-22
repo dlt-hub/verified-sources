@@ -93,7 +93,7 @@ def matches_any_pattern(key: str, patterns: Iterable[str]) -> bool:
     return any(pattern in normalized_key for pattern in patterns)
 
 
-def find_next_page_key(
+def find_next_page_path(
     dictionary: Dict[str, Any], path: Optional[List[str]] = None
 ) -> Optional[List[str]]:
     if not isinstance(dictionary, dict):
@@ -111,7 +111,7 @@ def find_next_page_key(
             return [*path, key]
 
         if isinstance(value, dict):
-            result = find_next_page_key(value, [*path, key])
+            result = find_next_page_path(value, [*path, key])
             if result:
                 return result
 
@@ -128,7 +128,7 @@ def header_links_detector(response: Response) -> Optional[HeaderLinkPaginator]:
 
 def json_links_detector(response: Response) -> Optional[JSONResponsePaginator]:
     dictionary = response.json()
-    next_path_parts = find_next_page_key(dictionary)
+    next_path_parts = find_next_page_path(dictionary)
 
     if not next_path_parts:
         return None

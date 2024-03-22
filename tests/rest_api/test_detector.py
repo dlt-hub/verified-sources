@@ -1,10 +1,11 @@
 import pytest
+from dlt.common import jsonpath
+
 from sources.rest_api.detector import (
     find_records,
-    find_next_page_key,
+    find_next_page_path,
     single_entity_path,
 )
-from sources.rest_api.utils import create_nested_accessor
 
 
 TEST_RESPONSES = [
@@ -15,7 +16,7 @@ TEST_RESPONSES = [
         },
         "expected": {
             "type": "offset_limit",
-            "records_key": ["data"],
+            "records_path": "data",
         },
     },
     {
@@ -28,7 +29,7 @@ TEST_RESPONSES = [
         },
         "expected": {
             "type": "page_number",
-            "records_key": ["items"],
+            "records_path": "items",
         },
     },
     {
@@ -41,8 +42,8 @@ TEST_RESPONSES = [
         },
         "expected": {
             "type": "cursor",
-            "records_key": ["products"],
-            "next_key": ["next_cursor"],
+            "records_path": "products",
+            "next_path": ["next_cursor"],
         },
     },
     {
@@ -55,8 +56,8 @@ TEST_RESPONSES = [
         },
         "expected": {
             "type": "cursor",
-            "records_key": ["results"],
-            "next_key": ["cursors", "next"],
+            "records_path": "results",
+            "next_path": ["cursors", "next"],
         },
     },
     {
@@ -67,8 +68,8 @@ TEST_RESPONSES = [
         },
         "expected": {
             "type": "cursor",
-            "records_key": ["entries"],
-            "next_key": ["next_id"],
+            "records_path": "entries",
+            "next_path": ["next_id"],
         },
     },
     {
@@ -82,7 +83,7 @@ TEST_RESPONSES = [
         },
         "expected": {
             "type": "page_number",
-            "records_key": ["comments"],
+            "records_path": "comments",
         },
     },
     {
@@ -94,8 +95,8 @@ TEST_RESPONSES = [
         },
         "expected": {
             "type": "json_link",
-            "records_key": ["results"],
-            "next_key": ["next"],
+            "records_path": "results",
+            "next_path": ["next"],
         },
     },
     {
@@ -113,8 +114,8 @@ TEST_RESPONSES = [
         },
         "expected": {
             "type": "json_link",
-            "records_key": ["_embedded", "items"],
-            "next_key": ["_links", "next", "href"],
+            "records_path": "_embedded.items",
+            "next_path": ["_links", "next", "href"],
         },
     },
     {
@@ -135,8 +136,8 @@ TEST_RESPONSES = [
         },
         "expected": {
             "type": "json_link",
-            "records_key": ["items"],
-            "next_key": ["links", "nextPage"],
+            "records_path": "items",
+            "next_path": ["links", "nextPage"],
         },
     },
     {
@@ -151,7 +152,7 @@ TEST_RESPONSES = [
         },
         "expected": {
             "type": "page_number",
-            "records_key": ["data"],
+            "records_path": "data",
         },
     },
     {
@@ -161,7 +162,7 @@ TEST_RESPONSES = [
         },
         "expected": {
             "type": "page_number",
-            "records_key": ["items"],
+            "records_path": "items",
         },
     },
     {
@@ -185,8 +186,8 @@ TEST_RESPONSES = [
         },
         "expected": {
             "type": "json_link",
-            "records_key": ["data"],
-            "next_key": ["links", "next"],
+            "records_path": "data",
+            "next_path": ["links", "next"],
         },
     },
     {
@@ -199,7 +200,7 @@ TEST_RESPONSES = [
         },
         "expected": {
             "type": "page_number",
-            "records_key": ["data"],
+            "records_path": "data",
         },
     },
     {
@@ -212,7 +213,7 @@ TEST_RESPONSES = [
         },
         "expected": {
             "type": "page_number",
-            "records_key": ["items"],
+            "records_path": "items",
         },
     },
     {
@@ -225,7 +226,7 @@ TEST_RESPONSES = [
         },
         "expected": {
             "type": "page_number",
-            "records_key": ["articles"],
+            "records_path": "articles",
         },
     },
     {
@@ -240,7 +241,7 @@ TEST_RESPONSES = [
         },
         "expected": {
             "type": "offset_limit",
-            "records_key": ["feed"],
+            "records_path": "feed",
         },
     },
     {
@@ -258,7 +259,7 @@ TEST_RESPONSES = [
         },
         "expected": {
             "type": "page_number",
-            "records_key": ["query_results"],
+            "records_path": "query_results",
         },
     },
     {
@@ -276,7 +277,7 @@ TEST_RESPONSES = [
         },
         "expected": {
             "type": "page_number",
-            "records_key": ["posts"],
+            "records_path": "posts",
         },
     },
     {
@@ -294,29 +295,30 @@ TEST_RESPONSES = [
         },
         "expected": {
             "type": "page_number",
-            "records_key": ["catalog"],
+            "records_path": "catalog",
         },
     },
 ]
 
 
 @pytest.mark.parametrize("test_case", TEST_RESPONSES)
-def test_find_records_key(test_case):
+def test_find_records(test_case):
     response = test_case["response"]
-    expected = test_case["expected"]["records_key"]
+    expected = test_case["expected"]["records_path"]
     r = find_records(response)
     # all of them look fine mostly because those are simple cases...
     # case 7 fails because it is nested but in fact we select a right response
-    assert r is create_nested_accessor(expected)(response)
+    # assert r is create_nested_accessor(expected)(response)
+    assert r == jsonpath.find_values(expected, response)[0]
 
 
 @pytest.mark.parametrize("test_case", TEST_RESPONSES)
 def test_find_next_page_key(test_case):
     response = test_case["response"]
     expected = test_case.get("expected").get(
-        "next_key", None
-    )  # Some cases may not have next_key
-    assert find_next_page_key(response) == expected
+        "next_path", None
+    )  # Some cases may not have next_path
+    assert find_next_page_path(response) == expected
 
 
 @pytest.mark.skip
