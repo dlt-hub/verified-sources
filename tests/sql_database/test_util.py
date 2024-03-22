@@ -28,6 +28,8 @@ class TestTableLoader:
             last_value = dlt.common.pendulum.now()
             last_value_func = max
             cursor_path = "created_at"
+            row_order = "asc"
+            end_value = None
 
         table = sql_source_db.get_table("chat_message")
         loader = TableLoader(sql_source_db.engine, table, incremental=MockIncremental())
@@ -48,15 +50,43 @@ class TestTableLoader:
             last_value = dlt.common.pendulum.now()
             last_value_func = min
             cursor_path = "created_at"
+            row_order = "desc"
+            end_value = None
 
         table = sql_source_db.get_table("chat_message")
         loader = TableLoader(sql_source_db.engine, table, incremental=MockIncremental())
 
         query = loader.make_query()
+        print(query)
         expected = (
             table.select()
             .order_by(table.c.created_at.desc())
             .where(table.c.created_at <= MockIncremental.last_value)
+        )
+
+        assert query.compare(expected)
+
+    def test_make_query_incremental_end_value(
+        self, sql_source_db: SQLAlchemySourceDB
+    ) -> None:
+        now = dlt.common.pendulum.now()
+
+        class MockIncremental:
+            last_value = now
+            last_value_func = min
+            cursor_path = "created_at"
+            end_value = now.add(hours=1)
+            row_order = None
+
+        table = sql_source_db.get_table("chat_message")
+        loader = TableLoader(sql_source_db.engine, table, incremental=MockIncremental())
+
+        query = loader.make_query()
+        print(query)
+        expected = (
+            table.select()
+            .where(table.c.created_at <= MockIncremental.last_value)
+            .where(table.c.created_at > MockIncremental.end_value)
         )
 
         assert query.compare(expected)
@@ -68,6 +98,8 @@ class TestTableLoader:
             last_value = dlt.common.pendulum.now()
             last_value_func = lambda x: x[-1]
             cursor_path = "created_at"
+            row_order = "asc"
+            end_value = dlt.common.pendulum.now()
 
         table = sql_source_db.get_table("chat_message")
         loader = TableLoader(sql_source_db.engine, table, incremental=MockIncremental())

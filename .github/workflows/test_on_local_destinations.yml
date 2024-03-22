@@ -6,6 +6,7 @@ on:
     branches:
       - master
       - devel
+      - enh/api_helper
   workflow_dispatch:
 
 env:

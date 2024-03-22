@@ -54,6 +54,7 @@ THubspotObjectType = Literal["company", "contact", "deal", "ticket", "product", 
 def hubspot(
     api_key: str = dlt.secrets.value,
     include_history: bool = False,
+    include_custom_props: bool = True,
 ) -> Sequence[DltResource]:
     """
     A DLT source that retrieves data from the HubSpot API using the
@@ -86,7 +87,7 @@ def hubspot(
         api_key: str = api_key,
         include_history: bool = include_history,
         props: Sequence[str] = DEFAULT_COMPANY_PROPS,
-        include_custom_props: bool = True,
+        include_custom_props: bool = include_custom_props,
     ) -> Iterator[TDataItems]:
         """Hubspot companies resource"""
         yield from crm_objects(
@@ -102,7 +103,7 @@ def hubspot(
         api_key: str = api_key,
         include_history: bool = include_history,
         props: Sequence[str] = DEFAULT_CONTACT_PROPS,
-        include_custom_props: bool = True,
+        include_custom_props: bool = include_custom_props,
     ) -> Iterator[TDataItems]:
         """Hubspot contacts resource"""
         yield from crm_objects(
@@ -118,7 +119,7 @@ def hubspot(
         api_key: str = api_key,
         include_history: bool = include_history,
         props: Sequence[str] = DEFAULT_DEAL_PROPS,
-        include_custom_props: bool = True,
+        include_custom_props: bool = include_custom_props,
     ) -> Iterator[TDataItems]:
         """Hubspot deals resource"""
         yield from crm_objects(
@@ -134,7 +135,7 @@ def hubspot(
         api_key: str = api_key,
         include_history: bool = include_history,
         props: Sequence[str] = DEFAULT_TICKET_PROPS,
-        include_custom_props: bool = True,
+        include_custom_props: bool = include_custom_props,
     ) -> Iterator[TDataItems]:
         """Hubspot tickets resource"""
         yield from crm_objects(
@@ -150,7 +151,7 @@ def hubspot(
         api_key: str = api_key,
         include_history: bool = include_history,
         props: Sequence[str] = DEFAULT_PRODUCT_PROPS,
-        include_custom_props: bool = True,
+        include_custom_props: bool = include_custom_props,
     ) -> Iterator[TDataItems]:
         """Hubspot products resource"""
         yield from crm_objects(
@@ -166,7 +167,7 @@ def hubspot(
         api_key: str = api_key,
         include_history: bool = include_history,
         props: Sequence[str] = DEFAULT_QUOTE_PROPS,
-        include_custom_props: bool = True,
+        include_custom_props: bool = include_custom_props,
     ) -> Iterator[TDataItems]:
         """Hubspot quotes resource"""
         yield from crm_objects(
