@@ -441,54 +441,6 @@ def advance_slot(
         cur.connection.close()
 
 
-def replication_items(
-    credentials: ConnectionStringCredentials,
-    slot_name: str,
-    pub_name: str,
-    include_columns: Optional[Dict[str, Sequence[str]]] = None,
-    columns: Optional[Dict[str, TTableSchemaColumns]] = None,
-    target_batch_size: int = 1000,
-    flush_slot: bool = True,
-) -> Iterator[Union[TDataItem, DataItemWithMeta]]:
-    """Yields data items from generator.
-
-    Maintains LSN of last consumed message in state to track progress.
-    At start of the run, advances the slot upto last consumed message in previous run.
-    Processes in batches to limit memory usage.
-    """
-    # start where we left off in previous run
-    resource_name = _gen_replication_resource_name(slot_name, pub_name)
-    start_lsn = dlt.current.resource_state(resource_name).get("last_commit_lsn", 0)
-    if flush_slot:
-        advance_slot(start_lsn, slot_name, credentials)
-
-    # continue until last message in replication slot
-    options = {"publication_names": pub_name, "proto_version": "1"}
-    upto_lsn = get_max_lsn(slot_name, options, credentials)
-    if upto_lsn is None:
-        return "Replication slot is empty."
-
-    # generate items in batches
-    while True:
-        gen = ItemGenerator(
-            credentials=credentials,
-            slot_name=slot_name,
-            options=options,
-            upto_lsn=upto_lsn,
-            start_lsn=start_lsn,
-            target_batch_size=target_batch_size,
-            include_columns=include_columns,
-            columns=columns,
-        )
-        yield from gen
-        if gen.generated_all:
-            dlt.current.resource_state(resource_name)[
-                "last_commit_lsn"
-            ] = gen.last_commit_lsn
-            break
-        start_lsn = gen.last_commit_lsn
-
-
 def _get_conn(
     credentials: ConnectionStringCredentials,
     connection_factory: Optional[Any] = None,
@@ -521,14 +473,6 @@ def _make_qualified_table_name(table_name: str, schema_name: str) -> str:
         + "."
         + escape_postgres_identifier(table_name)
     )
-
-
-def _gen_replication_resource_name(slot_name: str, pub_name: str) -> str:
-    """Generates name for a resource used for replication.
-
-    Based on names of replication slot and publication the resource consumes from.
-    """
-    return slot_name + "_" + pub_name
 
 
 def _get_pk(
@@ -725,10 +669,19 @@ class MessageConsumer:
                 "nullable": True,
             }
 
+        # determine write disposition
+        write_disposition: TWriteDisposition = "append"
+        if self.pub_ops["update"] or self.pub_ops["delete"]:
+            write_disposition = "merge"
+
         # include meta item to emit hints while yielding data
         meta_item = dlt.mark.with_hints(
             [],
-            dlt.mark.make_hints(table_name=table_name, columns=columns),
+            dlt.mark.make_hints(
+                table_name=table_name,
+                write_disposition=write_disposition,
+                columns=columns,
+            ),
             create_table_variant=True,
         )
         self.data_items[decoded_msg.relation_id] = [meta_item]

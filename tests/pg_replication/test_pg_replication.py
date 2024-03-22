@@ -418,12 +418,20 @@ def test_write_disposition(src_pl: dlt.Pipeline, publish: str) -> None:
         publish=publish,
         persist_snapshots=True,
     )
-    changes = replication_resource(slot_name, pub_name)
 
-    # assert write dispositions
+    # assert write disposition on snapshot resource
     expected_write_disposition = "append" if publish == "insert" else "merge"
     assert snapshot.write_disposition == expected_write_disposition
-    assert changes.write_disposition == expected_write_disposition
+
+    # assert write disposition on tables dispatched by changes resource
+    changes = replication_resource(slot_name, pub_name)
+    src_pl.run(items({"id": 2, "val": True}))
+    dest_pl = dlt.pipeline(pipeline_name="dest_pl", full_refresh=True)
+    dest_pl.extract(changes)
+    assert (
+        dest_pl.default_schema.get_table("items")["write_disposition"]
+        == expected_write_disposition
+    )
 
 
 @pytest.mark.parametrize("destination_name", ALL_DESTINATIONS)

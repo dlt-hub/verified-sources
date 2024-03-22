@@ -1,17 +1,21 @@
 """Replicates postgres tables in batch using logical decoding."""
 
-from typing import Dict, Sequence, Optional
+from typing import Dict, Sequence, Optional, Iterable, Union
 
 import dlt
 
-from dlt.common.schema.typing import TTableSchemaColumns, TWriteDisposition
+from dlt.common.typing import TDataItem
+from dlt.common.schema.typing import TTableSchemaColumns
+from dlt.extract.items import DataItemWithMeta
 from dlt.sources.credentials import ConnectionStringCredentials
-from dlt.extract.resource import DltResource
 
-from .helpers import _gen_replication_resource_name, get_pub_ops, replication_items
+from .helpers import advance_slot, get_max_lsn, ItemGenerator
 
 
-@dlt.sources.config.with_config(sections=("sources", "pg_replication"))
+@dlt.resource(
+    name=lambda args: args["slot_name"] + "_" + args["pub_name"],
+    standalone=True,
+)
 def replication_resource(
     slot_name: str,
     pub_name: str,
@@ -20,15 +24,15 @@ def replication_resource(
     columns: Optional[Dict[str, TTableSchemaColumns]] = None,
     target_batch_size: int = 1000,
     flush_slot: bool = True,
-) -> DltResource:
-    """Returns a dlt resource that yields data items for changes in one or more postgres tables.
+) -> Iterable[Union[TDataItem, DataItemWithMeta]]:
+    """Resource yielding data items for changes in one or more postgres tables.
 
-    Relies on a replication slot and publication that publishes DML operations
+    - Relies on a replication slot and publication that publishes DML operations
     (i.e. `insert`, `update`, and/or `delete`). Helper `init_replication` can be
     used to set this up.
-
-    Uses `append` write disposition when the publication only publishes `insert`
-    operations, `merge` otherwise.
+    - Maintains LSN of last consumed message in state to track progress.
+    - At start of the run, advances the slot upto last consumed message in previous run.
+    - Processes in batches to limit memory usage.
 
     Args:
         slot_name (str): Name of the replication slot to consume replication messages from.
@@ -44,7 +48,7 @@ def replication_resource(
               "table_y": ["col_x", "col_y", "col_z"],
           }
           ```
-        columns (Optional[Dict[str, TTableSchemaColumns]]): Maps
+        columns (Optional[Dict[str, TTableHintTemplate[TAnySchemaColumns]]]): Maps
           table name(s) to column hints to apply on the replicated table(s). For example:
           ```
           columns={
@@ -66,26 +70,34 @@ def replication_resource(
           the server retains all the WAL segments that might be needed to stream
           the changes via all of the currently open replication slots.
 
-        Returns:
-            DltResource that yields data items for changes published in the publication.
+        Yields:
+            Data items for changes published in the publication.
     """
-    write_disposition: TWriteDisposition = "append"
-    resource_name = _gen_replication_resource_name(slot_name, pub_name)
+    # start where we left off in previous run
+    start_lsn = dlt.current.resource_state().get("last_commit_lsn", 0)
+    if flush_slot:
+        advance_slot(start_lsn, slot_name, credentials)
 
-    pub_ops = get_pub_ops(pub_name, credentials)
-    if pub_ops["update"] or pub_ops["delete"]:
-        write_disposition = "merge"
+    # continue until last message in replication slot
+    options = {"publication_names": pub_name, "proto_version": "1"}
+    upto_lsn = get_max_lsn(slot_name, options, credentials)
+    if upto_lsn is None:
+        return "Replication slot is empty."
 
-    return dlt.resource(
-        replication_items,
-        name=resource_name,
-        write_disposition=write_disposition,
-    )(
-        credentials=credentials,
-        slot_name=slot_name,
-        pub_name=pub_name,
-        include_columns=include_columns,
-        columns=columns,
-        target_batch_size=target_batch_size,
-        flush_slot=flush_slot,
-    )
+    # generate items in batches
+    while True:
+        gen = ItemGenerator(
+            credentials=credentials,
+            slot_name=slot_name,
+            options=options,
+            upto_lsn=upto_lsn,
+            start_lsn=start_lsn,
+            target_batch_size=target_batch_size,
+            include_columns=include_columns,
+            columns=columns,
+        )
+        yield from gen
+        if gen.generated_all:
+            dlt.current.resource_state()["last_commit_lsn"] = gen.last_commit_lsn
+            break
+        start_lsn = gen.last_commit_lsn
