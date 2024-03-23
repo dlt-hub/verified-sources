@@ -598,20 +598,16 @@ class MessageConsumer:
 
         Identifies message type and decodes accordingly.
         Message treatment is different for various message types.
-        Breaks out of stream when `upto_lsn` or `target_batch_size` is reached.
+        Breaks out of stream with StopReplication exception when
+        - `upto_lsn` is reached
+        - `target_batch_size` is reached
+        - a table's schema has changed
         """
         op = (msg.payload[:1]).decode("utf-8")
         if op == "B":
             self.last_commit_ts = Begin(msg.payload).commit_ts
         elif op == "C":
-            self.last_commit_lsn = msg.data_start
-            if msg.data_start >= self.upto_lsn:
-                self.consumed_all = True
-            n_items = sum(
-                [len(items) for items in self.data_items.values()]
-            )  # combine items for all tables
-            if self.consumed_all or n_items >= self.target_batch_size:
-                raise StopReplication
+            self.process_commit(msg)
         elif op == "R":
             self.process_relation(Relation(msg.payload))
         elif op == "I":
@@ -626,12 +622,32 @@ class MessageConsumer:
                 "Truncate replication messages are ignored."
             )
 
+    def process_commit(self, msg: ReplicationMessage) -> None:
+        """Updates object state when Commit message is observed.
+
+        Raises StopReplication when `upto_lsn` or `target_batch_size` is reached.
+        """
+        self.last_commit_lsn = msg.data_start
+        if msg.data_start >= self.upto_lsn:
+            self.consumed_all = True
+        n_items = sum(
+            [len(items) for items in self.data_items.values()]
+        )  # combine items for all tables
+        if self.consumed_all or n_items >= self.target_batch_size:
+            raise StopReplication
+
     def process_relation(self, decoded_msg: Relation) -> None:
         """Processes a replication message of type Relation.
 
         Stores table schema in object state.
         Creates meta item to emit column hints while yielding data.
+
+        Raises StopReplication when a table's schema changes.
         """
+        if (
+            self.data_items.get(decoded_msg.relation_id) is not None
+        ):  # table schema change
+            raise StopReplication
         # get table schema information from source and store in object state
         table_name = decoded_msg.relation_name
         columns: TTableSchemaColumns = {

@@ -620,6 +620,51 @@ def test_column_hints(
     )
 
 
+@pytest.mark.parametrize("destination_name", ALL_DESTINATIONS)
+def test_table_schema_change(src_pl: dlt.Pipeline, destination_name: str) -> None:
+    # create postgres table
+    src_pl.run([{"c1": 1, "c2": 1}], table_name="items")
+
+    # initialize replication
+    slot_name = "test_slot"
+    pub_name = "test_pub"
+    init_replication(
+        slot_name=slot_name,
+        pub_name=pub_name,
+        schema_name=src_pl.dataset_name,
+        table_names="items",
+        publish="insert",
+    )
+
+    # create resource and pipeline
+    changes = replication_resource(slot_name, pub_name)
+    dest_pl = dlt.pipeline(
+        pipeline_name="dest_pl", destination=destination_name, full_refresh=True
+    )
+
+    # add a column in one commit, this will create one Relation message
+    src_pl.run([{"c1": 2, "c2": 1}, {"c1": 3, "c2": 1, "c3": 1}], table_name="items")
+    info = dest_pl.run(changes)
+    assert_load_info(info)
+    assert load_table_counts(dest_pl, "items") == {"items": 2}
+    exp = [{"c1": 2, "c2": 1, "c3": None}, {"c1": 3, "c2": 1, "c3": 1}]
+    assert_loaded_data(dest_pl, "items", ["c1", "c2", "c3"], exp, "c1")
+
+    # add a column in two commits, this will create two Relation messages
+    src_pl.run([{"c1": 4, "c2": 1, "c3": 1}], table_name="items")
+    src_pl.run([{"c1": 5, "c2": 1, "c3": 1, "c4": 1}], table_name="items")
+    dest_pl.run(changes)
+    assert_load_info(info)
+    assert load_table_counts(dest_pl, "items") == {"items": 4}
+    exp = [
+        {"c1": 4, "c2": 1, "c3": 1, "c4": None},
+        {"c1": 5, "c2": 1, "c3": 1, "c4": 1},
+    ]
+    assert_loaded_data(
+        dest_pl, "items", ["c1", "c2", "c3", "c4"], exp, "c1", "c1 IN ('4', '5')"
+    )
+
+
 def test_init_replication(src_pl: dlt.Pipeline) -> None:
     def get_table_names_in_pub() -> Set[str]:
         with src_pl.sql_client() as c:
