@@ -1,7 +1,7 @@
 import os
 import platform
 import pytest
-from typing import Any, Iterator, List
+from typing import Any, Iterator, List, Sequence
 from os import environ
 from unittest.mock import patch
 
@@ -222,3 +222,12 @@ def load_table_distinct_counts(
         with c.execute_query(query) as cur:
             rows = list(cur.fetchall())
             return {r[0]: r[1] for r in rows}
+
+
+def select_data(
+    p: dlt.Pipeline, sql: str, schema_name: str = None
+) -> List[Sequence[Any]]:
+    """Returns select `sql` results as list."""
+    with p.sql_client(schema_name=schema_name) as c:
+        with c.execute_query(sql) as cur:
+            return list(cur.fetchall())
