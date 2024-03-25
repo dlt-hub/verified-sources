@@ -1,0 +1,60 @@
+---
+name: Extend a source
+description: Request extension of existing source
+labels: ["source new feature"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        If you want existing source to be extended, please fill out the sections below.
+        If you are not sure, please join our [Slack](https://dlthub.com/community)
+        and ask in the #3-technical-help channel.
+    validations:
+      required: true
+  - type: input
+    attributes:
+      label: Source name
+      description: Name of the affected source as displayed by `dlt init` or present in `sources` folder of this repo.
+    validations:
+      required: true
+  - type: textarea
+    attributes:
+      label: Describe the data you'd like to see
+      description: Describe the data you want to be added to dlt source. Please, be specific, link the docs.
+      placeholder: >
+        Provide the description of data you want to be added.
+    validations:
+      required: true
+  - type: dropdown
+    attributes:
+      label: Are you a dlt user?
+      description: Please tell us how you use dlt and how this impacts your need for this additional data.
+      multiple: false
+      options:
+        - "Yes, I'm already a dlt user."
+        - "Yes, I run dlt in production."
+        - "Yes, I use it for fun."
+        - "I'm considering using dlt, but this bug is preventing this."
+    validations:
+      required: true
+  - type: dropdown
+    attributes:
+      label: Do you ready to contribute this extension?
+      description: Please tell if you are ready to contribute code to verified sources.
+      multiple: false
+      options:
+        - "Yes, I'm ready."
+        - "Yes, but I need help."
+        - "No."
+    validations:
+      required: true
+  - type: input
+    attributes:
+      label: dlt destination
+      description: What type of destination are you using?
+  - type: textarea
+    attributes:
+      label: Additional information
+      description: Is there anything else you'd like us to know?
+      placeholder: >
+        E.g. issue frequency, workarounds, related issues, suggestions on how to fix, etc.
