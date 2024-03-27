@@ -1,6 +1,4 @@
-"""Github source helpers"""
-
-from typing import Iterator, List, Tuple
+from typing import Iterator, List, Optional, Tuple
 
 from dlt.common.typing import DictStrAny, StrAny
 from dlt.common.utils import chunks
@@ -13,7 +11,7 @@ from .settings import GRAPHQL_API_BASE_URL, REST_API_BASE_URL
 #
 # Shared
 #
-def _get_auth_header(access_token: str) -> StrAny:
+def _get_auth_header(access_token: Optional[str]) -> StrAny:
     if access_token:
         return {"Authorization": f"Bearer {access_token}"}
     else:
@@ -24,7 +22,7 @@ def _get_auth_header(access_token: str) -> StrAny:
 #
 # Rest API helpers
 #
-def get_rest_pages(access_token: str, query: str) -> Iterator[List[StrAny]]:
+def get_rest_pages(access_token: Optional[str], query: str) -> Iterator[List[StrAny]]:
     def _request(page_url: str) -> requests.Response:
         r = requests.get(page_url, headers=_get_auth_header(access_token))
         print(
@@ -53,7 +51,7 @@ def get_reactions_data(
     name: str,
     access_token: str,
     items_per_page: int,
-    max_items: int,
+    max_items: Optional[int],
 ) -> Iterator[Iterator[StrAny]]:
     variables = {
         "owner": owner,
@@ -96,8 +94,7 @@ def _extract_top_connection(data: StrAny, node_type: str) -> StrAny:
 
 
 def _extract_nested_nodes(item: DictStrAny) -> DictStrAny:
-    """Recursively moves `nodes` and `totalCount` to reduce nesting"""
-
+    """Recursively moves `nodes` and `totalCount` to reduce nesting."""
     item["reactions_totalCount"] = item["reactions"].get("totalCount", 0)
     item["reactions"] = item["reactions"]["nodes"]
     comments = item["comments"]
@@ -155,7 +152,7 @@ def _get_graphql_pages(
 
 
 def _get_comment_reaction(comment_ids: List[str], access_token: str) -> StrAny:
-    """Builds a query from a list of comment nodes and returns associated reactions"""
+    """Builds a query from a list of comment nodes and returns associated reactions."""
     idx = 0
     data: DictStrAny = {}
     for page_chunk in chunks(comment_ids, 50):
