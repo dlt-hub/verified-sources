@@ -65,18 +65,6 @@ def load_github() -> None:
         ],
     }
 
-    not_connecting_config: RESTAPIConfig = {
-        **github_config,
-        "client": {
-            "base_url": "https://api.github.com/repos/dlt-hub/dlt/",
-            "auth": {"token": "invalid token"},
-        },
-    }
-
-    not_connecting_gh_source = rest_api_source(not_connecting_config)
-    (can_connect, error_msg) = check_connection(not_connecting_gh_source, "issues")
-    assert not can_connect, "A miracle happened. Token should be invalid"
-
     github_source = rest_api_source(github_config)
 
     load_info = pipeline.run(github_source)
