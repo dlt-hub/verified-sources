@@ -117,6 +117,9 @@ class BaseNextUrlPaginator(BasePaginator):
             if not parsed_url.scheme:
                 self.next_reference = urljoin(request.url, self.next_reference)
 
+            # XXX: Temp fix to avoid duplicate query params
+            request.params = {}
+
         request.url = self.next_reference
 
 
