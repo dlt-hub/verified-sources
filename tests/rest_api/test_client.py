@@ -1,10 +1,12 @@
 import os
 import pytest
-from typing import Any
+from typing import Any, cast
+from dlt.common.typing import TSecretStrValue
 from dlt.sources.helpers.requests import Response, Request
-
 from sources.rest_api.client import RESTClient
+from sources.rest_api.client import Hooks
 from sources.rest_api.paginators import JSONResponsePaginator
+
 from sources.rest_api.auth import AuthConfigBase
 from sources.rest_api.auth import (
     BearerTokenAuth,
@@ -13,6 +15,8 @@ from sources.rest_api.auth import (
     OAuthJWTAuth,
 )
 from sources.rest_api.exceptions import IgnoreResponseException
+
+from .conftest import assert_pagination
 
 
 def load_private_key(name="private_key.pem"):
@@ -34,12 +38,6 @@ def rest_client() -> RESTClient:
 
 @pytest.mark.usefixtures("mock_api_server")
 class TestRESTClient:
-    def _assert_pagination(self, pages):
-        for i, page in enumerate(pages):
-            assert page == [
-                {"id": i, "title": f"Post {i}"} for i in range(i * 10, (i + 1) * 10)
-            ]
-
     def test_get_single_resource(self, rest_client):
         response = rest_client.get("/posts/1")
         assert response.status_code == 200
@@ -53,7 +51,7 @@ class TestRESTClient:
 
         pages = list(pages_iter)
 
-        self._assert_pagination(pages)
+        assert_pagination(pages)
 
     def test_page_context(self, rest_client: RESTClient) -> None:
         for page in rest_client.paginate(
@@ -74,14 +72,31 @@ class TestRESTClient:
 
         pages = list(pages_iter)
 
-        self._assert_pagination(pages)
+        assert_pagination(pages)
+
+    def test_excplicit_paginator(self, rest_client: RESTClient):
+        pages_iter = rest_client.paginate(
+            "/posts", paginator=JSONResponsePaginator(next_url_path="next_page")
+        )
+        pages = list(pages_iter)
+
+        assert_pagination(pages)
+
+    def test_excplicit_paginator_relative_next_url(self, rest_client: RESTClient):
+        pages_iter = rest_client.paginate(
+            "/posts_relative_next_url",
+            paginator=JSONResponsePaginator(next_url_path="next_page"),
+        )
+        pages = list(pages_iter)
+
+        assert_pagination(pages)
 
     def test_paginate_with_hooks(self, rest_client: RESTClient):
         def response_hook(response: Response, *args: Any, **kwargs: Any) -> None:
             if response.status_code == 404:
                 raise IgnoreResponseException
 
-        hooks = {
+        hooks: Hooks = {
             "response": response_hook,
         }
 
@@ -93,7 +108,7 @@ class TestRESTClient:
 
         pages = list(pages_iter)
 
-        self._assert_pagination(pages)
+        assert_pagination(pages)
 
         pages_iter = rest_client.paginate(
             "/posts/1/some_details_404",
@@ -107,39 +122,41 @@ class TestRESTClient:
     def test_basic_auth_success(self, rest_client: RESTClient):
         response = rest_client.get(
             "/protected/posts/basic-auth",
-            auth=HttpBasicAuth("user", "password"),
+            auth=HttpBasicAuth("user", cast(TSecretStrValue, "password")),
         )
         assert response.status_code == 200
         assert response.json()["data"][0] == {"id": 0, "title": "Post 0"}
 
         pages_iter = rest_client.paginate(
             "/protected/posts/basic-auth",
-            auth=HttpBasicAuth("user", "password"),
+            auth=HttpBasicAuth("user", cast(TSecretStrValue, "password")),
         )
 
         pages = list(pages_iter)
-        self._assert_pagination(pages)
+        assert_pagination(pages)
 
     def test_bearer_token_auth_success(self, rest_client: RESTClient):
         response = rest_client.get(
             "/protected/posts/bearer-token",
-            auth=BearerTokenAuth("test-token"),
+            auth=BearerTokenAuth(cast(TSecretStrValue, "test-token")),
         )
         assert response.status_code == 200
         assert response.json()["data"][0] == {"id": 0, "title": "Post 0"}
 
         pages_iter = rest_client.paginate(
             "/protected/posts/bearer-token",
-            auth=BearerTokenAuth("test-token"),
+            auth=BearerTokenAuth(cast(TSecretStrValue, "test-token")),
         )
 
         pages = list(pages_iter)
-        self._assert_pagination(pages)
+        assert_pagination(pages)
 
     def test_api_key_auth_success(self, rest_client: RESTClient):
         response = rest_client.get(
             "/protected/posts/api-key",
-            auth=APIKeyAuth(name="x-api-key", api_key="test-api-key"),
+            auth=APIKeyAuth(
+                name="x-api-key", api_key=cast(TSecretStrValue, "test-api-key")
+            ),
         )
         assert response.status_code == 200
         assert response.json()["data"][0] == {"id": 0, "title": "Post 0"}
@@ -166,4 +183,4 @@ class TestRESTClient:
             auth=auth,
         )
 
-        self._assert_pagination(list(pages_iter))
+        assert_pagination(list(pages_iter))
