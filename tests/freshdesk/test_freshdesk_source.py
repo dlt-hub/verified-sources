@@ -59,7 +59,7 @@ def test_load_all_endpoints(destination_name: str) -> None:
     # counts remain unchanged.
     data = freshdesk_source()
     info = pipeline.run(data)
-    assert_load_info(info, expected_load_packages=0)
+    assert_load_info(info, 0)
     assert (
         load_table_counts(
             pipeline, *[t["name"] for t in pipeline.default_schema.data_tables()]
