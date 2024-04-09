@@ -53,7 +53,7 @@ def freshdesk_source(
 
         # Endpoint and last updated timestamp.
         print(
-            f"Fetching data from endpoint: {endpoint} and and the last `updated_at` is: {updated_at}"
+            f"Fetching data from endpoint: {endpoint} and the last `updated_at` is: {updated_at}"
         )
 
         # Use the FreshdeskClient instance to fetch paginated responses
