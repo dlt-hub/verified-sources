@@ -32,7 +32,7 @@ def test_load_all_endpoints(destination_name: str) -> None:
         pipeline_name="test_pipeline_name",
         destination=destination_name,
         dataset_name="test_dataset_name",
-        full_refresh=false,
+        full_refresh=False,
     )
     all_endpoints = freshdesk_source()
     all_endpoints.max_table_nesting = 0
