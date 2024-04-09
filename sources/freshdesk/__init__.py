@@ -14,7 +14,7 @@ from .settings import DEFAULT_ENDPOINTS
 def freshdesk_source(
     endpoints: Optional[List[str]] = None,
     per_page: int = 100,
-    domain: str = dlt.config.value,
+    domain: str = dlt.secrets.value,
     api_secret_key: str = dlt.secrets.value,
 ) -> Iterable[DltResource]:
     """
