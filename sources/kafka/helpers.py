@@ -3,6 +3,7 @@ from typing import Any, Dict, List
 from confluent_kafka import Consumer, Message, TopicPartition  # type: ignore
 from confluent_kafka.admin import AdminClient, TopicMetadata  # type: ignore
 
+from dlt import config, secrets
 from dlt.common import pendulum
 from dlt.common.configuration import configspec
 from dlt.common.configuration.specs import CredentialsConfiguration
@@ -196,12 +197,12 @@ class KafkaCredentials(CredentialsConfiguration):
     use underscore symbols instead, e.g. bootstrap_servers.
     """
 
-    bootstrap_servers: str
-    group_id: str
-    security_protocol: str
-    sasl_mechanisms: str
-    sasl_username: str
-    sasl_password: TSecretValue
+    bootstrap_servers: str = config.value
+    group_id: str = config.value
+    security_protocol: str = config.value
+    sasl_mechanisms: str = config.value
+    sasl_username: str = config.value
+    sasl_password: TSecretValue = secrets.value
 
     def init_consumer(self) -> Consumer:
         """Init a Kafka consumer from this credentials.
