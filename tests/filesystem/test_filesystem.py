@@ -1,4 +1,5 @@
 import os
+import platform
 from typing import Any, Dict, List
 
 import dlt
@@ -8,6 +9,7 @@ from dlt.common import pendulum
 from sources.filesystem import (
     filesystem,
     readers,
+    read_csv,
     FileItem,
     FileItemDict,
 )
@@ -255,3 +257,24 @@ def test_file_chunking() -> None:
         assert len(pipe_item.item) == 2
         # no need to test more chunks
         break
+
+
+@pytest.mark.skipif(platform.system() != "Windows", reason="Test it only on Windows")
+def test_windows_unc_path() -> None:
+    bucket_url = r"\\localhost\\" + os.path.abspath(
+        "tests/filesystem/samples/csv"
+    ).replace(":", "$")
+
+    pipeline = dlt.pipeline(
+        pipeline_name="unc_path_test", destination="duckdb", full_refresh=True
+    )
+
+    data_file = (
+        filesystem(bucket_url=bucket_url, file_glob="freshman_kgs.csv") | read_csv()
+    )
+
+    load_info = pipeline.run(data_file)
+    assert_load_info(load_info)
+
+    table_counts = load_table_counts(pipeline, "_read_csv")
+    assert table_counts["_read_csv"] == 67
