@@ -19,7 +19,7 @@ from .settings import DEFAULT_CHUNK_SIZE
 
 @configspec
 class FilesystemConfigurationResource(FilesystemConfiguration):
-    credentials: Union[FileSystemCredentials, AbstractFileSystem]
+    credentials: Union[FileSystemCredentials, AbstractFileSystem] = None
     file_glob: Optional[str] = "*"
     files_per_page: int = DEFAULT_CHUNK_SIZE
     extract_content: bool = False

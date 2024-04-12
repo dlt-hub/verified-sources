@@ -240,13 +240,44 @@ def reflect_and_connector_x() -> None:
     print(info)
 
 
+def test_backends_speed() -> None:
+    import os
+
+    # from dlt.destinations import filesystem
+
+    unsw_table = sql_table(
+        "postgresql://loader:loader@localhost:5432/dlt_data",
+        "unsw_flow_7",
+        "speed_test",
+        chunk_size=100000,
+        backend="connectorx",
+        detect_precision_hints=True,
+    )
+    pipeline = dlt.pipeline(
+        pipeline_name="unsw_download",
+        pipelines_dir="../_storage/.pipelines",
+        destination="filesystem",
+        # destination=filesystem(os.path.abspath("../_storage/unsw")),
+        progress="log",
+        full_refresh=True,
+    )
+
+    info = pipeline.run(
+        unsw_table,
+        dataset_name="speed_test",
+        table_name="unsw_flow",
+        loader_file_format="parquet",
+    )
+    print(info)
+
+
 if __name__ == "__main__":
     # Load selected tables with different settings
     # load_select_tables_from_database()
-
+    test_backends_speed()
     # load a table and select columns
     # select_columns()
-    load_entire_database()
+    # load_entire_database()
     # select_with_end_value_and_row_order()
 
     # Load tables with the standalone table resource
