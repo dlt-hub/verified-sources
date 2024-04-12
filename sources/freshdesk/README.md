@@ -1,5 +1,10 @@
 # Freshdesk
 
+> **Warning!**
+>
+> This source is a Community source and was tested only once. Currently, we **don't test** it on a regular basis.
+> If you have any problem with this source, ask for help in our [Slack Community](https://dlthub.com/community).
+
 This verified source enables data loading from the Freshdesk API to your preferred destination. It supports loading data from various endpoints, providing flexibility in the data you can retrieve.
 
 Resources that can be loaded using this verified source are:
