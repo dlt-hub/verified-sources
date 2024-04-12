@@ -34,7 +34,7 @@ lint-code:
 	poetry run mypy --config-file mypy.ini ./tools
 	poetry run flake8 --max-line-length=200 --extend-ignore=W503 sources init --show-source
 	poetry run flake8 --max-line-length=200 --extend-ignore=W503 tests --show-source
-	poetry run black ./ --check
+	poetry run black ./ --diff
 
 lint: lint-code lint-dlt-init
 
