@@ -29,9 +29,9 @@ def test_load_all_endpoints(destination_name: str) -> None:
     """
     # Set up and run the DLT pipeline for a full refresh load.
     pipeline = dlt.pipeline(
-        pipeline_name="test_pipeline",
+        pipeline_name="test_pipeline_name",
         destination=destination_name,
-        dataset_name="test_dataset",
+        dataset_name="test_dataset_name",
         full_refresh=True,
     )
     all_endpoints = freshdesk_source()
