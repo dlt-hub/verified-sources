@@ -1,5 +1,5 @@
 """Helpers for the filesystem resource."""
-from typing import TYPE_CHECKING, Any, Dict, Iterable, List, Optional, Type, Union
+from typing import Any, Dict, Iterable, List, Optional, Type, Union
 from fsspec import AbstractFileSystem  # type: ignore
 
 from dlt.common.configuration import resolve_type
@@ -19,7 +19,7 @@ from .settings import DEFAULT_CHUNK_SIZE
 
 @configspec
 class FilesystemConfigurationResource(FilesystemConfiguration):
-    credentials: Union[FileSystemCredentials, AbstractFileSystem]
+    credentials: Union[FileSystemCredentials, AbstractFileSystem] = None
     file_glob: Optional[str] = "*"
     files_per_page: int = DEFAULT_CHUNK_SIZE
     extract_content: bool = False
