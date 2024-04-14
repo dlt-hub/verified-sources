@@ -47,7 +47,7 @@ class AuthConfigBase(AuthBase, CredentialsConfiguration):
 class BearerTokenAuth(AuthConfigBase):
     type: Final[Literal["http"]] = "http"  # noqa: A003
     scheme: Literal["bearer"] = "bearer"
-    token: TSecretStrValue
+    token: TSecretStrValue = secrets.value
 
     def __init__(self, token: TSecretStrValue = secrets.value) -> None:
         self.token = token
@@ -71,7 +71,7 @@ class BearerTokenAuth(AuthConfigBase):
 class APIKeyAuth(AuthConfigBase):
     type: Final[Literal["apiKey"]] = "apiKey"  # noqa: A003
     name: str = "Authorization"
-    api_key: TSecretStrValue
+    api_key: TSecretStrValue = secrets.value
     location: TApiKeyLocation = "header"
 
     def __init__(
@@ -108,8 +108,8 @@ class APIKeyAuth(AuthConfigBase):
 class HttpBasicAuth(AuthConfigBase):
     type: Final[Literal["http"]] = "http"  # noqa: A003
     scheme: Literal["basic"] = "basic"
-    username: str
-    password: TSecretStrValue
+    username: str = config.value
+    password: TSecretStrValue = secrets.value
 
     def __init__(
         self, username: str = config.value, password: TSecretStrValue = secrets.value
@@ -141,7 +141,7 @@ class OAuth2AuthBase(AuthConfigBase):
 
     # TODO: Separate class for flows (implicit, authorization_code, client_credentials, etc)
     type: Final[Literal["oauth2"]] = "oauth2"  # noqa: A003
-    access_token: TSecretStrValue
+    access_token: TSecretStrValue = secrets.value
 
     def __init__(self, access_token: TSecretStrValue = secrets.value) -> None:
         self.access_token = access_token
@@ -166,9 +166,9 @@ class OAuthJWTAuth(BearerTokenAuth):
     """This is a form of Bearer auth, actually there's not standard way to declare it in openAPI"""
 
     format: Final[Literal["JWT"]] = "JWT"  # noqa: A003
-    client_id: str
-    private_key: TSecretStrValue
-    auth_endpoint: str
+    client_id: str = config.value
+    private_key: TSecretStrValue = secrets.value
+    auth_endpoint: str = config.value
     scopes: Optional[str] = None
     headers: Optional[Dict[str, str]] = None
     private_key_passphrase: Optional[TSecretStrValue] = None
