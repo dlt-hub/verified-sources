@@ -36,7 +36,7 @@ def sql_database(
     backend_kwargs: Dict[str, Any] = None,
 ) -> Iterable[DltResource]:
     """
-    A DLT source which loads data from an SQL database using SQLAlchemy.
+    A dlt source which loads data from an SQL database using SQLAlchemy.
     Resources are automatically created for each table in the schema or from the given list of tables.
 
     Args:

@@ -109,7 +109,6 @@ class TableLoader:
 
         if self.backend == "pyarrow":
             arrow_schema = columns_to_arrow(columns_schema, tz=backend_kwargs.get("tz"))
-            print(arrow_schema)
 
         with self.engine.connect() as conn:
             result = conn.execution_options(yield_per=self.chunk_size).execute(query)

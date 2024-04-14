@@ -1,4 +1,4 @@
-from typing import Iterator, Any
+import sqlalchemy as sa
 import humanize
 
 import dlt
@@ -169,78 +169,71 @@ def select_with_end_value_and_row_order() -> None:
     print(pipeline.last_trace.last_normalize_info)
 
 
-def reflect_and_connector_x() -> None:
-    """Uses sql_database to reflect the table schema and then connectorx to load it. Connectorx has rudimentary type support ie.
-    is not able to use decimal types and is not providing length information for text and binary types.
-
-    NOTE: mind that for DECIMAL/NUMERIC the data is converted into float64 and then back into decimal Python type. Do not use it
-    when decimal representation is important ie. when you process currency.
-    """
+def my_sql_via_pyarrow() -> None:
+    """Uses pyarrow backend to load tables from mysql"""
 
     # uncomment line below to get load_id into your data (slows pyarrow loading down)
-    dlt.config["normalize.parquet_normalizer.add_dlt_load_id"] = True
+    # dlt.config["normalize.parquet_normalizer.add_dlt_load_id"] = True
 
     # Create a pipeline
     pipeline = dlt.pipeline(
-        pipeline_name="rfam_cx", destination="postgres", dataset_name="rfam_data_cx"
+        pipeline_name="rfam_cx",
+        destination="postgres",
+        dataset_name="rfam_data_arrow_4",
     )
 
-    # Credentials for the sample database.
-    credentials = ConnectionStringCredentials(
-        "mysql+pymysql://rfamro@mysql-rfam-public.ebi.ac.uk:4497/Rfam"
-    )
+    def _double_as_decimal_adapter(table: sa.Table) -> None:
+        """Return double as double, not decimals"""
+        for column in table.columns.values():
+            if isinstance(column.type, sa.Double):
+                column.type.asdecimal = False
 
-    # below we reflect family and genome tables. detect_precision_hints is set to True to emit
-    # full metadata
     sql_alchemy_source = sql_database(
-        credentials, detect_precision_hints=True
+        "mysql+pymysql://rfamro@mysql-rfam-public.ebi.ac.uk:4497/Rfam?&binary_prefix=true",
+        backend="pyarrow",
+        table_adapter_callback=_double_as_decimal_adapter,
     ).with_resources("family", "genome")
 
-    # display metadata
-    print(sql_alchemy_source.family.columns)
-    print(sql_alchemy_source.genome.columns)
-
-    # define a resource that will be used to read data from connectorx
-    @dlt.resource
-    def read_sql_x(
-        conn_str: str,
-        query: str,
-    ) -> Iterator[Any]:
-        import connectorx as cx  # type: ignore
-
-        yield cx.read_sql(
-            conn_str,
-            query,
-            return_type="arrow2",
-            protocol="binary",
-        )
-
-    # Option 1: use columns from sql_alchemy source to define columns for connectorx
-    genome_cx = read_sql_x(
-        "mysql://rfamro@mysql-rfam-public.ebi.ac.uk:4497/Rfam",
-        "SELECT * FROM genome LIMIT 100",
-    ).with_name("genome")
-    family_cx = read_sql_x(
-        "mysql://rfamro@mysql-rfam-public.ebi.ac.uk:4497/Rfam",
-        "SELECT * FROM family LIMIT 100",
-    ).with_name("family")
-
-    # Option 1: use columns from sql_alchemy source to define columns for connectorx
-    genome_cx.apply_hints(columns=sql_alchemy_source.genome.columns)
-    family_cx.apply_hints(columns=sql_alchemy_source.family.columns)
-
-    info = pipeline.run([genome_cx, family_cx])
-    print(info)
-    print(pipeline.default_schema.to_pretty_yaml())
-
-    # Option 2: replace sql alchemy date generator with connectorx data generator (this is hacky)
-    sql_alchemy_source.genome._pipe.replace_gen(genome_cx._pipe.gen)
-    sql_alchemy_source.family._pipe.replace_gen(family_cx._pipe.gen)
     info = pipeline.run(sql_alchemy_source)
     print(info)
 
 
-def test_backends_speed() -> None:
+def create_unsw_flow() -> None:
+    """Uploads UNSW_Flow dataset to postgres via csv stream skipping dlt normalizer.
+    You need to download the dataset from https://github.com/rdpahalavan/nids-datasets
+    """
+    from pyarrow.parquet import ParquetFile
+
+    # from dlt.destinations import postgres
+
+    # use those config to get 3x speedup on parallelism
+    # [sources.data_writer]
+    # file_max_bytes=3000000
+    # buffer_max_items=200000
+
+    # [normalize]
+    # workers=3
+
+    data_iter = ParquetFile("UNSW-NB15/Network-Flows/UNSW_Flow.parquet").iter_batches(
+        batch_size=128 * 1024
+    )
+
+    pipeline = dlt.pipeline(
+        pipeline_name="unsw_upload",
+        # destination=postgres("postgres://loader:loader@localhost:5432/dlt_data"),
+        destination="postgres",
+        progress="log",
+    )
+    pipeline.run(
+        data_iter,
+        dataset_name="speed_test",
+        table_name="unsw_flow_7",
+        loader_file_format="csv",
+    )
+
+
+def test_connectorx_speed() -> None:
+    """Uses unsw_flow dataset (~2mln rows, 25+ columns) to test connectorx speed"""
     import os
 
     # from dlt.destinations import filesystem
@@ -249,13 +242,17 @@ def test_backends_speed() -> None:
         "postgresql://loader:loader@localhost:5432/dlt_data",
         "unsw_flow_7",
         "speed_test",
+        # this is ignored by connectorx
         chunk_size=100000,
         backend="connectorx",
+        # keep source data types
         detect_precision_hints=True,
+        # just to demonstrate how to setup a separate connection string for connectorx
+        backend_kwargs={"conn": "postgresql://loader:loader@localhost:5432/dlt_data"},
     )
+
     pipeline = dlt.pipeline(
         pipeline_name="unsw_download",
-        pipelines_dir="../_storage/.pipelines",
         destination="filesystem",
         # destination=filesystem(os.path.abspath("../_storage/unsw")),
         progress="log",
@@ -271,12 +268,41 @@ def test_backends_speed() -> None:
     print(info)
 
 
+def test_pandas_backend_verbatim_decimals() -> None:
+    pipeline = dlt.pipeline(
+        pipeline_name="rfam_cx",
+        destination="postgres",
+        dataset_name="rfam_data_pandas_2",
+    )
+
+    def _double_as_decimal_adapter(table: sa.Table) -> None:
+        """Emits decimals instead of floats."""
+        for column in table.columns.values():
+            if isinstance(column.type, sa.Float):
+                column.type.asdecimal = True
+
+    sql_alchemy_source = sql_database(
+        "mysql+pymysql://rfamro@mysql-rfam-public.ebi.ac.uk:4497/Rfam?&binary_prefix=true",
+        backend="pandas",
+        table_adapter_callback=_double_as_decimal_adapter,
+        chunk_size=100000,
+        # set coerce_float to False to represent them as string
+        backend_kwargs={"coerce_float": False, "dtype_backend": "numpy_nullable"},
+        # preserve full typing info. this will parse
+        detect_precision_hints=True,
+    ).with_resources("family", "genome")
+
+    info = pipeline.run(sql_alchemy_source)
+    print(info)
+
+
 if __name__ == "__main__":
     # Load selected tables with different settings
-    # load_select_tables_from_database()
-    test_backends_speed()
+    load_select_tables_from_database()
+
     # load a table and select columns
     # select_columns()
+
     # load_entire_database()
     # select_with_end_value_and_row_order()
 
