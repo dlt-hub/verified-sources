@@ -36,6 +36,18 @@ It also needs `CREATE` privilege on the database:
 GRANT CREATE ON DATABASE dlt_data TO replication_user;
 ```
 
+### Set up RDS
+1. You must enable replication for RDS Postgres instance via **Parameter Group**: https://docs.aws.amazon.com/AmazonRDS/latest/UserGuide/USER_PostgreSQL.Replication.ReadReplicas.html
+2. `WITH LOGIN REPLICATION;` does not work on RDS, instead do:
+```sql
+GRANT rds_replication TO replication_user;
+```
+3. Do not fallback to non SSL connection by setting connection parameters:
+```toml
+sources.pg_replication.credentials="postgresql://loader:password@host.rds.amazonaws.com:5432/dlt_data?sslmode=require&connect_timeout=300"
+```
+
+
 ## Add credentials
 1. Open `.dlt/secrets.toml`.
 2. Enter your Postgres credentials:

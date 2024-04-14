@@ -446,13 +446,14 @@ def _get_conn(
     connection_factory: Optional[Any] = None,
 ) -> Union[psycopg2.extensions.connection, LogicalReplicationConnection]:
     """Returns a psycopg2 connection to interact with postgres."""
-    return psycopg2.connect(  # type: ignore[no-any-return]
+    return psycopg2.connect(  # type: ignore[call-overload,no-any-return]
         database=credentials.database,
         user=credentials.username,
         password=credentials.password,
         host=credentials.host,
         port=credentials.port,
         connection_factory=connection_factory,
+        **credentials.query,
     )
 
 
