@@ -51,6 +51,7 @@ except Exception:
     from sql_database import sql_table
 
 from .schema_types import _to_dlt_column_schema, _to_dlt_val
+from .exceptions import IncompatiblePostgresVersionException
 
 
 @dlt.sources.config.with_config(sections=("sources", "pg_replication"))
@@ -181,6 +182,17 @@ def init_replication(
     return None
 
 
+@dlt.sources.config.with_config(sections=("sources", "pg_replication"))
+def get_pg_version(
+    cur: cursor = None,
+    credentials: ConnectionStringCredentials = dlt.secrets.value,
+) -> int:
+    """Returns Postgres server version as int."""
+    if cur is not None:
+        return cur.connection.server_version
+    return _get_conn(credentials).server_version
+
+
 def create_publication(
     name: str,
     cur: cursor,
@@ -250,6 +262,12 @@ def add_schema_to_publication(
 
     Raises error if the user is not a superuser.
     """
+    if (version := get_pg_version(cur)) < 150000:
+        raise IncompatiblePostgresVersionException(
+            f"Cannot add schema to publication because the Postgres server version {version} is too low."
+            " Adding schemas to a publication is only supported for Postgres version 15 or higher."
+            " Upgrade your Postgres server version or set the `table_names` argument to explicitly specify table names."
+        )
     esc_schema_name = escape_postgres_identifier(schema_name)
     esc_pub_name = escape_postgres_identifier(pub_name)
     try:

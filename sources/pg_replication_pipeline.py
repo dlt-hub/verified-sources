@@ -118,7 +118,11 @@ def replicate_with_initial_load() -> None:
 
 
 def replicate_entire_schema() -> None:
-    """Demonstrates setup and usage of schema replication."""
+    """Demonstrates setup and usage of schema replication.
+    
+    Schema replication requires a Postgres server version of 15 or higher. An
+    exception is raised if that's not the case.
+    """
     # create source and destination pipelines
     src_pl = dlt.pipeline(
         pipeline_name="source_pipeline",

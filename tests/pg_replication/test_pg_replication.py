@@ -13,7 +13,8 @@ from tests.utils import (
     get_table_metrics,
 )
 from sources.pg_replication import replication_resource
-from sources.pg_replication.helpers import init_replication
+from sources.pg_replication.helpers import init_replication, get_pg_version
+from sources.pg_replication.exceptions import IncompatiblePostgresVersionException
 
 from .cases import TABLE_ROW_ALL_DATA_TYPES, TABLE_UPDATE_COLUMNS_SCHEMA
 from .utils import add_pk, assert_loaded_data
@@ -739,17 +740,29 @@ def test_init_replication(src_config: Tuple[dlt.Pipeline, str, str]) -> None:
     # "tbl_y" is still in the publication
     assert get_table_names_in_pub() == {"tbl_x", "tbl_y"}
 
-    # switching to whole schema replication is supported by omitting `table_names`
-    init_replication(
-        slot_name=slot_name,
-        pub_name=pub_name,
-        schema_name=src_pl.dataset_name,
-    )
-    # includes dlt system tables
-    assert get_table_names_in_pub() >= {"tbl_x", "tbl_y", "tbl_z"}
+    # switching to whole schema replication is supported by omitting `table_names`,
+    # but only for Postgres server versions 15 or higher
+    if get_pg_version() >= 150000:
+        init_replication(
+            slot_name=slot_name,
+            pub_name=pub_name,
+            schema_name=src_pl.dataset_name,
+        )
+        # includes dlt system tables
+        assert get_table_names_in_pub() >= {"tbl_x", "tbl_y", "tbl_z"}
+    else:
+        with pytest.raises(IncompatiblePostgresVersionException):
+            init_replication(
+                slot_name=slot_name,
+                pub_name=pub_name,
+                schema_name=src_pl.dataset_name,
+            )
 
 
 def test_replicate_schema(src_config: Tuple[dlt.Pipeline, str, str]) -> None:
+    if get_pg_version() < 150000:
+        pytest.skip("incompatible Postgres server version")
+
     @dlt.resource
     def tbl_x(data):
         yield data
