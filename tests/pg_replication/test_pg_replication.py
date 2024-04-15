@@ -10,6 +10,7 @@ from tests.utils import (
     ALL_DESTINATIONS,
     assert_load_info,
     load_table_counts,
+    get_table_metrics,
 )
 from sources.pg_replication import replication_resource
 from sources.pg_replication.helpers import init_replication
@@ -237,7 +238,7 @@ def test_insert_only(src_config: Tuple[dlt.Pipeline, str, str]) -> None:
     # extract items from resource
     dest_pl = dlt.pipeline(pipeline_name="dest_pl", full_refresh=True)
     extract_info = dest_pl.extract(changes)
-    assert extract_info.asdict()["job_metrics"][0]["items_count"] == 1
+    assert get_table_metrics(extract_info, "items")["items_count"] == 1
 
     # do an update and a delete—these operations should not lead to items in the resource
     with src_pl.sql_client() as c:
@@ -245,7 +246,9 @@ def test_insert_only(src_config: Tuple[dlt.Pipeline, str, str]) -> None:
         c.execute_sql(f"UPDATE {qual_name} SET foo = 'baz' WHERE id = 2;")
         c.execute_sql(f"DELETE FROM {qual_name} WHERE id = 2;")
     extract_info = dest_pl.extract(changes)
-    assert extract_info.asdict()["job_metrics"] == []
+    assert (
+        get_table_metrics(extract_info, "items") is None
+    )  # there should be no metrics for the "items" table
 
 
 @pytest.mark.parametrize("destination_name", ALL_DESTINATIONS)

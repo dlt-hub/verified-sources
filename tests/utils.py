@@ -1,7 +1,7 @@
 import os
 import platform
 import pytest
-from typing import Any, Iterator, List, Sequence
+from typing import Any, Iterator, List, Sequence, Dict, Optional
 from os import environ
 from unittest.mock import patch
 
@@ -16,7 +16,7 @@ from dlt.common.configuration.providers import (
     ConfigTomlProvider,
     SecretsTomlProvider,
 )
-from dlt.common.pipeline import LoadInfo, PipelineContext
+from dlt.common.pipeline import LoadInfo, PipelineContext, ExtractInfo
 from dlt.common.storages import FileStorage
 
 from dlt.pipeline.exceptions import SqlClientNotAvailable
@@ -231,3 +231,15 @@ def select_data(
     with p.sql_client(schema_name=schema_name) as c:
         with c.execute_query(sql) as cur:
             return list(cur.fetchall())
+
+
+def get_table_metrics(
+    extract_info: ExtractInfo, table_name: str
+) -> Optional[Dict[str, Any]]:
+    """Returns table metrics from ExtractInfo object."""
+    table_metrics_list = [
+        d
+        for d in extract_info.asdict()["table_metrics"]
+        if d["table_name"] == table_name
+    ]
+    return None if len(table_metrics_list) == 0 else table_metrics_list[0]
