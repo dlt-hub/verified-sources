@@ -28,7 +28,7 @@ def sql_database(
     schema: Optional[str] = dlt.config.value,
     metadata: Optional[MetaData] = None,
     table_names: Optional[List[str]] = dlt.config.value,
-    chunk_size: int = 1000,
+    chunk_size: int = 50000,
     backend: TableBackend = "sqlalchemy",
     detect_precision_hints: Optional[bool] = dlt.config.value,
     defer_table_reflect: Optional[bool] = dlt.config.value,
