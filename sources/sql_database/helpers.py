@@ -112,7 +112,10 @@ class TableLoader:
 
         with self.engine.connect() as conn:
             result = conn.execution_options(yield_per=self.chunk_size).execute(query)
-            columns = [c[0] for c in result.cursor.description]
+            # NOTE: cursor returns not normalized column names! may be quite useful in case of Oracle dialect
+            # that normalizes columns
+            # columns = [c[0] for c in result.cursor.description]
+            columns = list(result.keys())
             for partition in result.partitions(size=self.chunk_size):
                 if self.backend == "sqlalchemy":
                     yield [dict(row._mapping) for row in partition]
