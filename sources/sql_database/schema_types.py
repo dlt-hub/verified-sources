@@ -17,88 +17,71 @@ else:
     ColumnAny: TypeAlias = Type[Any]
 
 
-def sqla_col_to_column_schema(sql_col: ColumnAny) -> Optional[TColumnSchema]:
+def sqla_col_to_column_schema(
+    sql_col: ColumnAny, add_precision: bool = False
+) -> Optional[TColumnSchema]:
     """Infer dlt schema column type from an sqlalchemy type.
 
-    Precision and scale is inferred from that types that support it,
-    such as numeric, varchar, int, bigint
+    If `add_precision` is set, precision and scale is inferred from that types that support it,
+    such as numeric, varchar, int, bigint. Numeric (decimal) types have always precision added.
     """
     sql_t = sql_col.type
-    col = None
+    col: TColumnSchema = {
+        "name": sql_col.name,
+        "data_type": None,  # set that later
+        "nullable": sql_col.nullable,
+    }
 
-    if isinstance(sql_t, sqltypes.BigInteger):
-        col = dict(
-            name=sql_col.name,
-            data_type="bigint",
-            precision=64,
-            nullable=sql_col.nullable,
-        )
-    elif isinstance(sql_t, sqltypes.SmallInteger):
-        col = dict(
-            name=sql_col.name,
-            data_type="bigint",
-            precision=16,
-            nullable=sql_col.nullable,
-        )
+    if isinstance(sql_t, sqltypes.SmallInteger):
+        col["data_type"] = "bigint"
+        if add_precision:
+            col["precision"] = 32
     elif isinstance(sql_t, sqltypes.Integer):
-        col = dict(
-            name=sql_col.name,
-            data_type="bigint",
-            precision=32,
-            nullable=sql_col.nullable,
-        )
+        col["data_type"] = "bigint"
     elif isinstance(sql_t, sqltypes.Numeric):
         if isinstance(sql_t, sqltypes.Float):
-            col = dict(name=sql_col.name, data_type="double", nullable=sql_col.nullable)
+            col["data_type"] = "double"
         else:
-            col = dict(
-                name=sql_col.name,
-                data_type="decimal",
-                nullable=sql_col.nullable,
-                precision=sql_t.precision,
-                scale=sql_t.scale,
-            )
+            col["data_type"] = "decimal"
+            # always emit precision for decimals
+            col["precision"] = sql_t.precision
+            col["scale"] = sql_t.scale
     elif isinstance(sql_t, sqltypes.String):
-        col = dict(
-            name=sql_col.name,
-            data_type="text",
-            precision=sql_t.length,
-            nullable=sql_col.nullable,
-        )
+        col["data_type"] = "text"
+        if add_precision and sql_t.length:
+            col["precision"] = sql_t.length
     elif isinstance(sql_t, sqltypes._Binary):
-        col = dict(
-            name=sql_col.name,
-            data_type="binary",
-            precision=sql_t.length,
-            nullable=sql_col.nullable,
-        )
+        col["data_type"] = "binary"
+        if add_precision and sql_t.length:
+            col["precision"] = sql_t.length
     elif isinstance(sql_t, sqltypes.DateTime):
-        col = dict(name=sql_col.name, data_type="timestamp", nullable=sql_col.nullable)
+        col["data_type"] = "timestamp"
     elif isinstance(sql_t, sqltypes.Date):
-        col = dict(name=sql_col.name, data_type="date", nullable=sql_col.nullable)
+        col["data_type"] = "date"
     elif isinstance(sql_t, sqltypes.Time):
-        col = dict(name=sql_col.name, data_type="time", nullable=sql_col.nullable)
+        col["data_type"] = "time"
     elif isinstance(sql_t, sqltypes.JSON):
-        col = dict(name=sql_col.name, data_type="complex", nullable=sql_col.nullable)
+        col["data_type"] = "complex"
     elif isinstance(sql_t, sqltypes.Boolean):
-        col = dict(name=sql_col.name, data_type="bool", nullable=sql_col.nullable)
+        col["data_type"] = "bool"
     else:
         logger.warning(
             f"A column with name {sql_col.name} contains unknown data type {sql_t} which cannot be mapped to `dlt` data type. When using sqlalchemy backend such data will be passed to the normalizer. In case of `pyarrow` backend such data will be ignored. In case of other backends, the behavior is backend-specific."
         )
+        col = None
     if col:
         return {key: value for key, value in col.items() if value is not None}  # type: ignore[return-value]
     return None
 
 
-def table_to_columns(table: Table) -> TTableSchemaColumns:
+def table_to_columns(table: Table, add_precision: bool = False) -> TTableSchemaColumns:
     """Convert an sqlalchemy table to a dlt table schema.
 
-    Only columns types supporting precision/scale are included in result.
+    Adds precision to columns when `add_precision` is set.
     """
     return {
         col["name"]: col
-        for col in (sqla_col_to_column_schema(c) for c in table.columns)
+        for col in (sqla_col_to_column_schema(c, add_precision) for c in table.columns)
         if col is not None
     }
 

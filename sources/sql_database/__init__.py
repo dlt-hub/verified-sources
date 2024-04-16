@@ -84,7 +84,7 @@ def sql_database(
             name=table.name,
             primary_key=get_primary_key(table),
             spec=SqlDatabaseTableConfiguration,
-            columns=table_to_columns(table) if detect_precision_hints else None,
+            columns=table_to_columns(table, detect_precision_hints),
         )(
             engine,
             table,
@@ -153,7 +153,7 @@ def sql_table(
         table_rows,
         name=table_obj.name,
         primary_key=get_primary_key(table_obj),
-        columns=table_to_columns(table_obj) if detect_precision_hints else None,
+        columns=table_to_columns(table_obj, detect_precision_hints),
     )(
         engine,
         table_obj,

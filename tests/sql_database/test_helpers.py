@@ -3,6 +3,8 @@ import pytest
 import dlt
 
 from sources.sql_database.helpers import TableLoader, TableBackend
+from sources.sql_database.schema_types import table_to_columns
+
 from tests.sql_database.sql_source import SQLAlchemySourceDB
 
 
@@ -17,6 +19,7 @@ def test_cursor_or_unique_column_not_in_table(
             sql_source_db.engine,
             backend,
             table,
+            table_to_columns(table),
             incremental=dlt.sources.incremental("not_a_column"),
         )
 
@@ -36,7 +39,11 @@ def test_make_query_incremental_max(
 
     table = sql_source_db.get_table("chat_message")
     loader = TableLoader(
-        sql_source_db.engine, backend, table, incremental=MockIncremental()
+        sql_source_db.engine,
+        backend,
+        table,
+        table_to_columns(table),
+        incremental=MockIncremental(),
     )
 
     query = loader.make_query()
@@ -62,7 +69,11 @@ def test_make_query_incremental_min(
 
     table = sql_source_db.get_table("chat_message")
     loader = TableLoader(
-        sql_source_db.engine, backend, table, incremental=MockIncremental()
+        sql_source_db.engine,
+        backend,
+        table,
+        table_to_columns(table),
+        incremental=MockIncremental(),
     )
 
     query = loader.make_query()
@@ -91,7 +102,11 @@ def test_make_query_incremental_end_value(
 
     table = sql_source_db.get_table("chat_message")
     loader = TableLoader(
-        sql_source_db.engine, backend, table, incremental=MockIncremental()
+        sql_source_db.engine,
+        backend,
+        table,
+        table_to_columns(table),
+        incremental=MockIncremental(),
     )
 
     query = loader.make_query()
@@ -118,7 +133,11 @@ def test_make_query_incremental_any_fun(
 
     table = sql_source_db.get_table("chat_message")
     loader = TableLoader(
-        sql_source_db.engine, backend, table, incremental=MockIncremental()
+        sql_source_db.engine,
+        backend,
+        table,
+        table_to_columns(table),
+        incremental=MockIncremental(),
     )
 
     query = loader.make_query()

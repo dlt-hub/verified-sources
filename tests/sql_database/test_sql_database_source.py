@@ -701,10 +701,11 @@ def convert_connectorx_types(columns: List[TColumnSchema]) -> List[TColumnSchema
     """
     for column in columns:
         if column["data_type"] == "bigint" and column.get("precision"):
-            if column["precision"] == 64:
-                del column["precision"]
-            elif column["precision"] == 16:
+            if column["name"] == "int_col":
                 column["precision"] = 32  # only int and bigint in connectorx
+        #         del column["precision"]
+        #     elif column["precision"] == 16:
+        #         column["precision"] = 32  # only int and bigint in connectorx
         if column["data_type"] == "decimal":
             column["data_type"] = "double"
             column.pop("precision", None)
@@ -725,17 +726,15 @@ def add_default_decimal_precision(columns: List[TColumnSchema]) -> List[TColumnS
 PRECISION_COLUMNS = [
     {
         "data_type": "bigint",
-        "precision": 32,
         "name": "int_col",
     },
     {
         "data_type": "bigint",
-        "precision": 64,
         "name": "bigint_col",
     },
     {
         "data_type": "bigint",
-        "precision": 16,
+        "precision": 32,
         "name": "smallint_col",
     },
     {

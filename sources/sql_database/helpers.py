@@ -16,6 +16,7 @@ import dlt
 from dlt.common import logger
 from dlt.common.configuration.specs import BaseConfiguration, configspec
 from dlt.common.exceptions import MissingDependencyException
+from dlt.common.schema import TTableSchemaColumns
 from dlt.common.typing import TDataItem
 
 from dlt.sources.credentials import ConnectionStringCredentials
@@ -35,12 +36,14 @@ class TableLoader:
         engine: Engine,
         backend: TableBackend,
         table: Table,
+        columns: TTableSchemaColumns,
         chunk_size: int = 1000,
         incremental: Optional[dlt.sources.incremental[Any]] = None,
     ) -> None:
         self.engine = engine
         self.backend = backend
         self.table = table
+        self.columns = columns
         self.chunk_size = chunk_size
         self.incremental = incremental
         if incremental:
@@ -105,10 +108,9 @@ class TableLoader:
 
     def _load_rows(self, query: SelectAny, backend_kwargs: Dict[str, Any]) -> TDataItem:
         arrow_schema: Any = None
-        columns_schema = table_to_columns(self.table)
 
         if self.backend == "pyarrow":
-            arrow_schema = columns_to_arrow(columns_schema, tz=backend_kwargs.get("tz"))
+            arrow_schema = columns_to_arrow(self.columns, tz=backend_kwargs.get("tz"))
 
         with self.engine.connect() as conn:
             result = conn.execution_options(yield_per=self.chunk_size).execute(query)
@@ -192,12 +194,15 @@ def table_rows(
     table_adapter_callback: Callable[[Table], None] = None,
     backend_kwargs: Dict[str, Any] = None,
 ) -> Iterator[TDataItem]:
+    columns: TTableSchemaColumns = None
     if defer_table_reflect:
         table = Table(
             table.name, table.metadata, autoload_with=engine, extend_existing=True
         )
         if table_adapter_callback:
             table_adapter_callback(table)
+        columns = table_to_columns(table, detect_precision_hints)
+
         # set the primary_key in the incremental
         if incremental and incremental.primary_key is None:
             primary_key = get_primary_key(table)
@@ -208,11 +213,15 @@ def table_rows(
             [],
             dlt.mark.make_hints(
                 primary_key=get_primary_key(table),
-                columns=table_to_columns(table) if detect_precision_hints else None,
+                columns=columns,
             ),
         )
+    else:
+        # table was already reflected
+        columns = table_to_columns(table, detect_precision_hints)
+
     loader = TableLoader(
-        engine, backend, table, incremental=incremental, chunk_size=chunk_size
+        engine, backend, table, columns, incremental=incremental, chunk_size=chunk_size
     )
     yield from loader.load_rows(backend_kwargs)
 
