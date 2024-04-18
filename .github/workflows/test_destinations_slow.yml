@@ -14,13 +14,15 @@ env:
   RUNTIME__LOG_LEVEL: ERROR
 
 jobs:
-  get_changed_pipelines:
-    uses: ./.github/workflows/get_changed_pipelines.yml
+  get_changed_sources:
+    uses: ./.github/workflows/get_changed_sources.yml
+    # Tests that require credentials do not run in forks
+    if: ${{ !github.event.pull_request.head.repo.fork }}
 
   run_loader:
     name: test destinations bigquery and redshift
-    needs: get_changed_pipelines
-    if: needs.get_changed_pipelines.outputs.pipelines_list != ''
+    needs: get_changed_sources
+    if: needs.get_changed_sources.outputs.sources_list != ''
 
     # strategy:
     #   fail-fast: false
@@ -61,17 +63,17 @@ jobs:
         run: poetry install --no-interaction --all-extras
 
       - name: create secrets.toml
-        run: pwd && echo "$DLT_SECRETS_TOML" > pipelines/.dlt/secrets.toml
+        run: pwd && echo "$DLT_SECRETS_TOML" > sources/.dlt/secrets.toml
       # - name: Setup upterm session
       #   uses: lhotari/action-upterm@v1
       - run: |
-          pipelines_list="${{ needs.get_changed_pipelines.outputs.pipelines_list }}"
-          test_paths=$(echo "$pipelines_list" | awk '{for(i=1;i<=NF;i++) printf "tests/%s ", $i}')
+          sources_list="${{ needs.get_changed_sources.outputs.sources_list }}"
+          test_paths=$(echo "$sources_list" | awk '{for(i=1;i<=NF;i++) printf "tests/%s ", $i}')
           poetry run pytest $test_paths
         if: runner.os != 'Windows'
         name: Run tests on Linux/macOS
       - run: |
-          FOR %%i IN (${{ needs.get_changed_pipelines.outputs.pipelines_list }}) DO (
+          FOR %%i IN (${{ needs.get_changed_sources.outputs.sources_list }}) DO (
             echo Running tests for: %%i
             poetry run pytest tests/%%i
           )

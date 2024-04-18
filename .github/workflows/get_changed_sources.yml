@@ -1,0 +1,47 @@
+
+name: get changed sources
+
+on:
+  workflow_call:
+    outputs:
+      sources_list:
+        description: "List of changed sources"
+        value: ${{ jobs.get_changed_sources.outputs.sources_list }}
+
+jobs:
+  get_changed_sources:
+    runs-on: ubuntu-latest
+    outputs:
+      sources_list: ${{ steps.get_changed_sources.outputs.sources_list }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.ref }}
+          fetch-depth: 0
+
+      - name: Get changed sources
+        id: get_changed_sources
+        run: |
+          echo "base.sha: ${{ github.event.pull_request.base.sha }}"
+          echo "head.sha: ${{ github.event.pull_request.head.sha }}"
+
+          raw_changed_sources=$(
+            git diff --name-only ${{ github.event.pull_request.base.sha }} ${{ github.event.pull_request.head.sha }} \
+              | grep -E '^sources/[^._]|^tests/[^._]' || true
+          )
+
+          echo $raw_changed_sources
+
+          if [ -z "$raw_changed_sources" ]; then
+            echo "No changed sources. Skipping tests."
+          else
+            changed_sources=$(echo "$raw_changed_sources" \
+              | sed -nE 's/^sources\/([^/]+)\/.*$/\1/p; s/^sources\/(.*)_pipeline\.py$/\1/p; s/^tests\/([^/]+)\/.*$/\1/p' \
+              | sort -u \
+              | tr '\n' ' '
+            )
+            echo "Changed sources or sources tests: $changed_sources"
+          fi
+
+          echo "sources_list=$changed_sources" >> $GITHUB_OUTPUT

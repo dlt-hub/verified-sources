@@ -5,12 +5,17 @@ on:
   pull_request:
     branches:
       - master
+      - enh/api_helper
   workflow_dispatch:
 
 jobs:
 
   run_lint:
     name: Runs mypy, flake and bandit
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.8.x", "3.9.x", "3.10.x", "3.11.x"]
     runs-on: ubuntu-latest
 
     steps:
@@ -21,7 +26,7 @@ jobs:
       - name: Setup Python
         uses: actions/setup-python@v1
         with:
-          python-version: "3.8.x"
+          python-version: ${{ matrix.python-version }}
 
       - name: Install Poetry
         uses: snok/install-poetry@v1
@@ -35,10 +40,21 @@ jobs:
         uses: actions/cache@v2
         with:
           path: dlt-pipelines/.venv
-          key: venv-${{ runner.os }}-${{ steps.setup-python.outputs.python-version }}-${{ hashFiles('**/poetry.lock') }}
+          key: venv-${{ runner.os }}-${{ matrix.python-version }}-${{ hashFiles('**/poetry.lock') }}
 
       - name: Install dependencies
-        run: poetry install --no-interaction --all-extras
+        run: make dev
 
       - name: Run lint
         run: make lint
+
+  matrix_job_required_check:
+    name: Runs mypy, flake and bandit
+    needs: run_lint
+    runs-on: ubuntu-latest
+    if: always()
+    steps:
+      - name: Check matrix job results
+        if: contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled')
+        run: |
+          echo "One or more matrix job tests failed or were cancelled. You may need to re-run them." && exit 1

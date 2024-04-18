@@ -9,11 +9,12 @@ from dlt.extract.decorators import _SOURCES
 from dlt.common.utils import set_working_dir
 
 from dlt.cli import init_command, echo
-from dlt.cli.init_command import PIPELINES_MODULE_NAME, utils as cli_utils, files_ops
+from dlt.cli.init_command import SOURCES_MODULE_NAME, utils as cli_utils, files_ops
 from dlt.reflection import names as n
 
 from tests.utils import TEST_STORAGE_ROOT
 
+# todo change in core
 
 INIT_REPO_LOCATION = os.path.abspath(".")  # scan this very repo
 PROJECT_DIR = os.path.join(TEST_STORAGE_ROOT, "project")
@@ -27,21 +28,21 @@ def echo_default_choice() -> None:
     echo.ALWAYS_CHOOSE_DEFAULT = False
 
 
-@pytest.fixture(autouse=True)
-def unload_modules() -> None:
-    """Unload all modules inspected in this tests"""
-    prev_modules = dict(sys.modules)
-    yield
-    mod_diff = set(sys.modules.keys()) - set(prev_modules.keys())
-    for mod in mod_diff:
-        del sys.modules[mod]
+# @pytest.fixture(autouse=True)
+# def unload_modules() -> None:
+#     """Unload all modules inspected in this tests"""
+#     prev_modules = dict(sys.modules)
+#     yield
+#     mod_diff = set(sys.modules.keys()) - set(prev_modules.keys())
+#     for mod in mod_diff:
+#         del sys.modules[mod]
 
 
 def get_pipeline_candidates() -> List[str]:
-    """Get all pipelines in `pipelines` folder"""
-    pipelines_storage = FileStorage(os.path.join(".", PIPELINES_MODULE_NAME))
+    """Get all pipelines in `sources` folder"""
+    pipelines_storage = FileStorage(os.path.join(".", SOURCES_MODULE_NAME))
     # enumerate all candidate pipelines
-    return files_ops.get_pipeline_names(pipelines_storage)
+    return files_ops.get_verified_source_names(pipelines_storage)
 
 
 def get_project_files() -> FileStorage:
@@ -60,12 +61,14 @@ def test_init_all_pipelines(candidate: str) -> None:
 
 
 def test_init_list_pipelines() -> None:
-    pipelines = init_command._list_pipelines(INIT_REPO_LOCATION)
+    pipelines = init_command._list_verified_sources(INIT_REPO_LOCATION)
     # a few known pipelines must be there
     assert set(get_pipeline_candidates()) == set(pipelines.keys())
     # check docstrings
     for k_p in pipelines:
-        assert pipelines[k_p].doc, f"Please provide module docstring in the __init__.py of {k_p} pipeline"
+        assert pipelines[
+            k_p
+        ].doc, f"Please provide module docstring in the __init__.py of {k_p} pipeline"
 
 
 def assert_requests_txt(project_files: FileStorage) -> None:
@@ -74,10 +77,14 @@ def assert_requests_txt(project_files: FileStorage) -> None:
     assert "dlt" in project_files.load(cli_utils.REQUIREMENTS_TXT)
 
 
-def assert_pipeline_files(project_files: FileStorage, pipeline_name: str, destination_name: str) -> None:
+def assert_pipeline_files(
+    project_files: FileStorage, pipeline_name: str, destination_name: str
+) -> None:
     # inspect script
     pipeline_script = pipeline_name + "_pipeline.py"
-    visitor = cli_utils.parse_init_script("test", project_files.load(pipeline_script), pipeline_script)
+    visitor = cli_utils.parse_init_script(
+        "test", project_files.load(pipeline_script), pipeline_script
+    )
     # check destinations
     for args in visitor.known_calls[n.PIPELINE]:
         assert args.arguments["destination"].value == destination_name

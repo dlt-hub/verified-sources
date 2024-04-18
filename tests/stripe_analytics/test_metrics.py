@@ -1,4 +1,4 @@
-from pipelines.stripe_analytics.metrics import calculate_mrr, churn_rate
+from sources.stripe_analytics.metrics import calculate_mrr, churn_rate
 
 
 class TestMetrics:

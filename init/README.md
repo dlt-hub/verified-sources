@@ -1,5 +1,5 @@
 # The `init` structure
-This folder contains files that `dlt init` uses to generate pipeline templates. The template is generated when in `dlt init <source> <destination>` the `<source>` pipeline is not found in `pipelines` folder.
+This folder contains files that `dlt init` uses to generate pipeline templates. The template is generated when in `dlt init <source> <destination>` the `<source>` pipeline is not found in `sources` folder.
 
 The files are used as follows:
 1. `pipeline.py` will be used as a default pipeline script template.

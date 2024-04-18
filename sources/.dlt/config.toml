@@ -1,0 +1,71 @@
+### Global & dlt components
+# progress="log"
+# [data_writer]
+# buffer_max_items=100
+
+[runtime]
+log_level="WARNING"
+
+### Destinations
+
+# nothing to configure...
+
+### Sources
+
+## chess
+dlthub_telemetry = false
+
+# the section below defines config values for "chess_dlt_config_example" source in chess/__init__.py
+[sources.chess]
+config_int=123
+
+# chess pipeline uses @dlt.defer decorator to parallelize extraction. below we limit the concurrency to not get blocked by api server
+[sources.chess.extract]  # you can specify config up to source.resource level
+max_parallel_items = 5  # how many items max in the futures pool
+workers = 2  # how many items processed in parallel
+
+
+# Google Analytics config
+[sources.google_analytics.google_analytics]
+queries = [{resource_name = "sample_analytics_data1", dimensions = ["browser", "city", "dateHour" ,"date"], metrics = ["totalUsers", "transactions"]},
+            {resource_name = "sample_analytics_data2", dimensions = ["browser", "city"], metrics = ["totalUsers", "transactions"]}]
+property_id = 293833391
+
+# Matomo config
+[sources.matomo]
+queries = [
+    {resource_name = "sample_analytics_data1", methods = ["VisitsSummary.get", "API.getReportMetadata"], date = "2020-01-01", period = "day", extra_params = {}},
+    {resource_name = "sample_analytics_data2", methods = ["VisitsSummary.get", "API.getReportMetadata"], date = "2022-03-02", period = "month"}
+]
+site_id = 2
+live_events_site_id = 2
+url = "https://dlthub.matomo.cloud/"
+
+## sql_database
+[sources.sql_database.data_writer]
+buffer_max_items=5000
+
+
+[sources.google_sheets.google_spreadsheet]
+range_names = []
+spreadsheet_identifier = "https://docs.google.com/spreadsheets/d/1HhWHjqouQnnCIZAFa2rL6vT91YRN8aIhts22SUUR580/edit#gid=0"
+
+[sources.shopify_dlt]
+shop_url="https://dlthub-test.myshopify.com"
+api_version="2023-10"
+
+[sources.facebook_ads]
+account_id="10150974068878324"
+access_token_expires_at=1688821881
+
+[sources.workable]
+subdomain="dlthub-test"
+
+[sources.scraping]
+batch_size = 100
+queue_size = 3000
+queue_result_timeout = 3.0
+start_urls_file="/path/to/urls.txt"
+start_urls = [
+    "https://quotes.toscrape.com/page/1/"
+]

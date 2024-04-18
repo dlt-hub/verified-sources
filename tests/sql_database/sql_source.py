@@ -17,6 +17,11 @@ from sqlalchemy import (
     text,
     schema as sqla_schema,
     ForeignKey,
+    BigInteger,
+    Numeric,
+    SmallInteger,
+    String,
+    DateTime,
 )
 
 from dlt.common.utils import chunks, uniq_id
@@ -25,10 +30,12 @@ from dlt.common.pendulum import pendulum, timedelta
 
 
 class SQLAlchemySourceDB:
-    def __init__(self, credentials: ConnectionStringCredentials) -> None:
+    def __init__(
+        self, credentials: ConnectionStringCredentials, schema: str = None
+    ) -> None:
         self.credentials = credentials
         self.database_url = credentials.to_native_representation()
-        self.schema = "my_dlt_source" + uniq_id()
+        self.schema = schema or "my_dlt_source" + uniq_id()
         self.engine = create_engine(self.database_url)
         self.metadata = MetaData(schema=self.schema)
         self.table_infos: Dict[str, TableInfo] = {}
@@ -60,11 +67,11 @@ class SQLAlchemySourceDB:
                 server_default=func.now(),
             ),
             Column(
-                'updated_at',
+                "updated_at",
                 DateTime(timezone=True),
                 nullable=False,
                 server_default=func.now(),
-            )
+            ),
         )
         Table(
             "chat_channel",
@@ -79,11 +86,11 @@ class SQLAlchemySourceDB:
             Column("name", Text(), nullable=False),
             Column("active", Boolean(), nullable=False, server_default=text("true")),
             Column(
-                'updated_at',
+                "updated_at",
                 DateTime(timezone=True),
                 nullable=False,
                 server_default=func.now(),
-            )
+            ),
         )
         Table(
             "chat_message",
@@ -111,17 +118,30 @@ class SQLAlchemySourceDB:
                 index=True,
             ),
             Column(
-                'updated_at',
+                "updated_at",
                 DateTime(timezone=True),
                 nullable=False,
                 server_default=func.now(),
-            )
+            ),
         )
-        Table('has_composite_key',
-              self.metadata,
-              Column('a', Integer(), primary_key=True),
-              Column('b', Integer(), primary_key=True),
-              Column('c', Integer(), primary_key=True))
+        Table(
+            "has_composite_key",
+            self.metadata,
+            Column("a", Integer(), primary_key=True),
+            Column("b", Integer(), primary_key=True),
+            Column("c", Integer(), primary_key=True),
+        )
+        Table(
+            "has_precision",
+            self.metadata,
+            Column("int_col", Integer()),
+            Column("bigint_col", BigInteger()),
+            Column("smallint_col", SmallInteger()),
+            Column("numeric_col", Numeric(precision=10, scale=2)),
+            Column("numeric_default_col", Numeric()),
+            Column("string_col", String(length=10)),
+            Column("string_default_col", String()),
+        )
 
         self.metadata.create_all(bind=self.engine)
 
@@ -129,19 +149,25 @@ class SQLAlchemySourceDB:
         person = mimesis.Person()
         user_ids: List[int] = []
         table = self.metadata.tables[f"{self.schema}.app_user"]
-        info = self.table_infos.setdefault('app_user', dict(row_count=0, ids=[], created_at=IncrementingDate()))
-        dt = info['created_at']
+        info = self.table_infos.setdefault(
+            "app_user", dict(row_count=0, ids=[], created_at=IncrementingDate())
+        )
+        dt = info["created_at"]
         for chunk in chunks(range(n), 5000):
-
             rows = [
-                dict(email=person.email(unique=True), display_name=person.name(), created_at=next(dt), updated_at=next(dt))
+                dict(
+                    email=person.email(unique=True),
+                    display_name=person.name(),
+                    created_at=next(dt),
+                    updated_at=next(dt),
+                )
                 for i in chunk
             ]
             with self.engine.begin() as conn:
                 result = conn.execute(table.insert().values(rows).returning(table.c.id))  # type: ignore
                 user_ids.extend(result.scalars())
-        info['row_count'] += n
-        info['ids'] += user_ids
+        info["row_count"] += n
+        info["ids"] += user_ids
         return user_ids
 
     def _fake_channels(self, n: int = 500) -> List[int]:
@@ -149,28 +175,38 @@ class SQLAlchemySourceDB:
         dev = mimesis.Development()
         table = self.metadata.tables[f"{self.schema}.chat_channel"]
         channel_ids: List[int] = []
-        info = self.table_infos.setdefault('chat_channel', dict(row_count=0, ids=[], created_at=IncrementingDate()))
-        dt = info['created_at']
+        info = self.table_infos.setdefault(
+            "chat_channel", dict(row_count=0, ids=[], created_at=IncrementingDate())
+        )
+        dt = info["created_at"]
         for chunk in chunks(range(n), 5000):
             rows = [
-                dict(name=" ".join(_text.words()), active=dev.boolean(), created_at=next(dt), updated_at=next(dt)) for i in chunk
+                dict(
+                    name=" ".join(_text.words()),
+                    active=dev.boolean(),
+                    created_at=next(dt),
+                    updated_at=next(dt),
+                )
+                for i in chunk
             ]
             with self.engine.begin() as conn:
                 result = conn.execute(table.insert().values(rows).returning(table.c.id))  # type: ignore
                 channel_ids.extend(result.scalars())
-        info['row_count'] += n
-        info['ids'] += channel_ids
+        info["row_count"] += n
+        info["ids"] += channel_ids
         return channel_ids
 
-    def fake_messages(self, n: int=9402) -> List[int]:
-        user_ids = self.table_infos['app_user']['ids']
-        channel_ids = self.table_infos['chat_channel']['ids']
+    def fake_messages(self, n: int = 9402) -> List[int]:
+        user_ids = self.table_infos["app_user"]["ids"]
+        channel_ids = self.table_infos["chat_channel"]["ids"]
         _text = mimesis.Text()
         choice = mimesis.Choice()
         table = self.metadata.tables[f"{self.schema}.chat_message"]
         message_ids: List[int] = []
-        info = self.table_infos.setdefault('chat_message', dict(row_count=0, ids=[], created_at=IncrementingDate()))
-        dt = info['created_at']
+        info = self.table_infos.setdefault(
+            "chat_message", dict(row_count=0, ids=[], created_at=IncrementingDate())
+        )
+        dt = info["created_at"]
         for chunk in chunks(range(n), 5000):
             rows = [
                 dict(
@@ -178,16 +214,33 @@ class SQLAlchemySourceDB:
                     user_id=choice(user_ids),
                     channel_id=choice(channel_ids),
                     created_at=next(dt),
-                    updated_at=next(dt)
+                    updated_at=next(dt),
                 )
                 for i in chunk
             ]
             with self.engine.begin() as conn:
                 result = conn.execute(table.insert().values(rows).returning(table.c.id))
                 message_ids.extend(result.scalars())
-        info['row_count'] += len(message_ids)
-        info['ids'].extend(message_ids)
+        info["row_count"] += len(message_ids)
+        info["ids"].extend(message_ids)
         return message_ids
+
+    def _fake_precision_data(self, n: int = 100) -> None:
+        table = self.metadata.tables[f"{self.schema}.has_precision"]
+        rows = [
+            dict(
+                int_col=random.randrange(-2147483648, 2147483647),
+                bigint_col=random.randrange(-9223372036854775808, 9223372036854775807),
+                smallint_col=random.randrange(-32768, 32767),
+                numeric_col=random.randrange(-9999999999, 9999999999) / 100,
+                numeric_default_col=random.randrange(-9999999999, 9999999999) / 100,
+                string_col=mimesis.Text().word()[:10],
+                string_default_col=mimesis.Text().word(),
+            )
+            for i in range(n)
+        ]
+        with self.engine.begin() as conn:
+            conn.execute(table.insert().values(rows))
 
     def _fake_chat_data(self, n: int = 9402) -> None:
         self._fake_users()
@@ -196,6 +249,7 @@ class SQLAlchemySourceDB:
 
     def insert_data(self) -> None:
         self._fake_chat_data()
+        self._fake_precision_data()
 
 
 class IncrementingDate:
