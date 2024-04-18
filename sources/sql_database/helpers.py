@@ -21,7 +21,13 @@ from dlt.common.typing import TDataItem
 
 from dlt.sources.credentials import ConnectionStringCredentials
 
-from .schema_types import table_to_columns, columns_to_arrow, Table, SelectAny
+from .schema_types import (
+    table_to_columns,
+    columns_to_arrow,
+    row_tuples_to_arrow,
+    Table,
+    SelectAny,
+)
 
 from sqlalchemy import Table, create_engine
 from sqlalchemy.engine import Engine
@@ -107,11 +113,6 @@ class TableLoader:
             yield from self._load_rows(query, backend_kwargs)
 
     def _load_rows(self, query: SelectAny, backend_kwargs: Dict[str, Any]) -> TDataItem:
-        arrow_schema: Any = None
-
-        if self.backend == "pyarrow":
-            arrow_schema = columns_to_arrow(self.columns, tz=backend_kwargs.get("tz"))
-
         with self.engine.connect() as conn:
             result = conn.execution_options(yield_per=self.chunk_size).execute(query)
             # NOTE: cursor returns not normalized column names! may be quite useful in case of Oracle dialect
@@ -130,28 +131,9 @@ class TableLoader:
                         **{"dtype_backend": "pyarrow", **backend_kwargs},
                     )
                 elif self.backend == "pyarrow":
-                    from dlt.common.libs.pyarrow import pyarrow as pa
-                    import numpy as np
-
-                    try:
-                        from pandas._libs import lib
-
-                        pivoted_partition = lib.to_object_array_tuples(partition).T  # type: ignore[attr-defined]
-                    except ImportError:
-                        logger.info(
-                            "Pandas not installed, reverting to numpy.asarray to create a table which is slower"
-                        )
-                        pivoted_partition = np.asarray(  # type: ignore[call-overload]
-                            partition, dtype="object", order="k"
-                        ).T
-
-                    columnar = {
-                        col: dat.ravel()
-                        for col, dat in zip(
-                            columns, np.vsplit(pivoted_partition, len(columns))
-                        )
-                    }
-                    yield pa.Table.from_pydict(columnar, schema=arrow_schema)
+                    yield row_tuples_to_arrow(
+                        partition, self.columns, tz=backend_kwargs.get("tz")
+                    )
 
     def _load_rows_connectorx(
         self, query: SelectAny, backend_kwargs: Dict[str, Any]

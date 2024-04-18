@@ -182,6 +182,24 @@ print(info)
 ```
 With dataset above and local postgres instance, connectorx is 2x faster than pyarrow backend.
 
+## Notes on source databases
+
+### Oracle
+1. When using **oracledb** dialect in thin mode we are getting protocol error. Use thick mode or **cx_oracle** (old) client.
+2. Mind that **sqlalchemy** translates Oracle identifiers into lower case! Keep the default `dlt` naming convention (`snake_case`) when loading data. We'll support more naming conventions soon.
+3. Connectorx is for some reason slower for Oracle than `pyarrow` backend.
+
+### DB2
+1. Mind that **sqlalchemy** translates DB2 identifiers into lower case! Keep the default `dlt` naming convention (`snake_case`) when loading data. We'll support more naming conventions soon.
+2. DB2 `DOUBLE` type is mapped to `Numeric` SqlAlchemy type with default precision, still `float` python types are returned. That requires `dlt` to perform additional casts. The cost of the cast however is minuscule compared to the cost of reading rows from database
+
+### MySQL
+1. SqlAlchemy dialect converts doubles to decimals, we disable that behavior via table adapter in our demo pipeline
+
+### Postgres / MSSQL
+No issues found.
+
+
 ## Learn more
 💡 To explore additional customizations for this pipeline, we recommend referring to the official DLT SQL Database verified documentation. It provides comprehensive information and guidance on how to further customize and tailor the pipeline to suit your specific needs. You can find the DLT SQL Database documentation in [Setup Guide: SQL Database.](https://dlthub.com/docs/dlt-ecosystem/verified-sources/sql_database)
 

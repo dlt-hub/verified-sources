@@ -149,10 +149,11 @@ def test_load_mysql_data_load(destination_name: str, backend: TableBackend) -> N
     else:
         backend_kwargs = {}
 
-    def _double_as_decimal_adapter(table: sa.Table) -> sa.Table:
-        for column in table.columns.values():
-            if isinstance(column.type, sa.Double):
-                column.type.asdecimal = False
+    # no longer needed: asdecimal used to infer decimal or not
+    # def _double_as_decimal_adapter(table: sa.Table) -> sa.Table:
+    #     for column in table.columns.values():
+    #         if isinstance(column.type, sa.Double):
+    #             column.type.asdecimal = False
 
     # load a single table
     family_table = sql_table(
@@ -160,7 +161,7 @@ def test_load_mysql_data_load(destination_name: str, backend: TableBackend) -> N
         table="family",
         backend=backend,
         backend_kwargs=backend_kwargs,
-        table_adapter_callback=_double_as_decimal_adapter,
+        # table_adapter_callback=_double_as_decimal_adapter,
     )
 
     pipeline = make_pipeline(destination_name)
@@ -175,7 +176,7 @@ def test_load_mysql_data_load(destination_name: str, backend: TableBackend) -> N
         backend=backend,
         # we also try to remove dialect automatically
         backend_kwargs={},
-        table_adapter_callback=_double_as_decimal_adapter,
+        # table_adapter_callback=_double_as_decimal_adapter,
     )
     load_info = pipeline.run(family_table, write_disposition="merge")
     assert_load_info(load_info)
@@ -530,6 +531,38 @@ def test_deferred_reflect_in_source(
         source.chat_message.compute_table_schema()["columns"]["id"]["primary_key"]
         is True
     )
+
+
+@pytest.mark.parametrize("backend", ["sqlalchemy", "pyarrow", "pandas", "connectorx"])
+def test_deferred_reflect_no_source_connect(backend: TableBackend) -> None:
+    source = sql_database(
+        credentials="mysql+pymysql://test@test/test",
+        table_names=["has_precision", "chat_message"],
+        schema="schema",
+        detect_precision_hints=True,
+        defer_table_reflect=True,
+        backend=backend,
+    )
+
+    # no columns in both tables
+    assert source.has_precision.columns == {}
+    assert source.chat_message.columns == {}
+
+    # pipeline = make_pipeline("duckdb")
+    # pipeline.extract(source)
+    # # use insert values to convert parquet into INSERT
+    # pipeline.normalize(loader_file_format="insert_values")
+    # pipeline.load().raise_on_failed_jobs()
+    # assert_precision_columns(
+    #     pipeline.default_schema.get_table("has_precision")["columns"],
+    #     backend,
+    #     nullable=False,
+    # )
+    # assert len(source.chat_message.columns) > 0
+    # assert (
+    #     source.chat_message.compute_table_schema()["columns"]["id"]["primary_key"]
+    #     is True
+    # )
 
 
 @pytest.mark.parametrize("backend", ["sqlalchemy", "pyarrow", "pandas", "connectorx"])

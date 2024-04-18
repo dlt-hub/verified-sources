@@ -1,6 +1,7 @@
-from typing import Optional, Any, Type, TYPE_CHECKING
+from typing import Optional, Any, Sequence, Type, TYPE_CHECKING
 from typing_extensions import TypeAlias
 from sqlalchemy import Table, Column
+from sqlalchemy import Row
 from sqlalchemy.sql import sqltypes, Select
 
 from dlt.common import logger
@@ -39,13 +40,21 @@ def sqla_col_to_column_schema(
     elif isinstance(sql_t, sqltypes.Integer):
         col["data_type"] = "bigint"
     elif isinstance(sql_t, sqltypes.Numeric):
-        if isinstance(sql_t, sqltypes.Float):
+        # dlt column type depends on the data returned by the sql alchemy dialect
+        # and not on the metadata reflected in the database. all Numeric types
+        # that are returned as floats will assume "double" type
+        # and returned as decimals will assume "decimal" type
+        if sql_t.asdecimal is False:
             col["data_type"] = "double"
         else:
             col["data_type"] = "decimal"
-            # always emit precision for decimals
-            col["precision"] = sql_t.precision
-            col["scale"] = sql_t.scale
+            if sql_t.precision is not None:
+                col["precision"] = sql_t.precision
+                # must have a precision for any meaningful scale
+                if sql_t.scale is not None:
+                    col["scale"] = sql_t.scale
+                elif sql_t.decimal_return_scale is not None:
+                    col["scale"] = sql_t.decimal_return_scale
     elif isinstance(sql_t, sqltypes.String):
         col["data_type"] = "text"
         if add_precision and sql_t.length:
@@ -113,3 +122,38 @@ def columns_to_arrow(
             for name, schema_item in columns_schema.items()
         ]
     )
+
+
+def row_tuples_to_arrow(
+    rows: Sequence[Row[Any]], columns: TTableSchemaColumns, tz: str
+) -> Any:
+    from dlt.common.libs.pyarrow import pyarrow as pa
+    import numpy as np
+
+    arrow_schema = columns_to_arrow(columns, tz=tz)
+
+    try:
+        from pandas._libs import lib
+
+        pivoted_rows = lib.to_object_array_tuples(rows).T  # type: ignore[attr-defined]
+    except ImportError:
+        logger.info(
+            "Pandas not installed, reverting to numpy.asarray to create a table which is slower"
+        )
+        pivoted_rows = np.asarray(rows, dtype="object", order="k").T  # type: ignore[call-overload]
+
+    columnar = {
+        col: dat.ravel()
+        for col, dat in zip(columns, np.vsplit(pivoted_rows, len(columns)))
+    }
+    for idx in range(0, len(arrow_schema.names)):
+        field = arrow_schema.field(idx)
+        py_type = type(rows[0][idx])
+        # cast double / float ndarrays to decimals if type mismatch, looks like decimals and floats are often mixed up in dialects
+        if pa.types.is_decimal(field.type) and issubclass(py_type, (str, float)):
+            logger.warning(
+                f"Field {field.name} was reflected as decimal type, but rows contains {py_type.__name__}. Additional cast is required which may slow down arrow table generation."
+            )
+            float_array = pa.array(columnar[field.name], type=pa.float64())
+            columnar[field.name] = float_array.cast(field.type, safe=False)
+    return pa.Table.from_pydict(columnar, schema=arrow_schema)
