@@ -1010,17 +1010,18 @@ files = [
 
 [[package]]
 name = "dlt"
-version = "0.4.9a1"
+version = "0.4.9a2"
 description = "dlt is an open-source python-first scalable data loading library that does not require any backend to run."
 optional = false
 python-versions = "<3.13,>=3.8.1"
 files = [
-    {file = "dlt-0.4.9a1-py3-none-any.whl", hash = "sha256:3c7840a9a9ac83c4974eff2b6e6aee245a1a7db5ead339dc13078f0881af8350"},
-    {file = "dlt-0.4.9a1.tar.gz", hash = "sha256:94fba09dfb9f5a91520edee1e85e8d8a56e9dfbd409099311703b58a89d63bff"},
+    {file = "dlt-0.4.9a2-py3-none-any.whl", hash = "sha256:622f61c3e779ddaa9d068624ef0ad03cca4076cf0ffb4da4b5227795fc876f72"},
+    {file = "dlt-0.4.9a2.tar.gz", hash = "sha256:e6ab3d40cc9ebba3e7cd5ea4b2c06e0ca3a3ee9a8b89b7a53caa6ecd5537a751"},
 ]
 
 [package.dependencies]
 astunparse = ">=1.6.3"
+black = "23.9.1"
 botocore = {version = ">=1.28", optional = true, markers = "extra == \"filesystem\" or extra == \"s3\" or extra == \"athena\""}
 click = ">=7.1"
 duckdb = [
@@ -6303,4 +6304,4 @@ cffi = ["cffi (>=1.11)"]
 [metadata]
 lock-version = "2.0"
 python-versions = ">=3.8.1,<3.13"
-content-hash = "1a52b0da1f8e82e2820504dadeeafd5ba245f73744aa8324f8f211a9cf299a5a"
+content-hash = "57c4d7d9d1c7d839c2cf24b6ac3458f561d5f5b5c3438fbd4173f216ad95c717"

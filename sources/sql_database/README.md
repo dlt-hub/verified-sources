@@ -95,14 +95,17 @@ print(info)
 
 **pandas** backend yield data as data frames using the `pandas.io.sql` module. `dlt` use **pyarrow** dtypes by default as they generate more stable typing.
 
-With default settings, several database types will not be mapped:
+With default settings, several database types will be coerced to dtypes in a data frame:
 * **decimal** are mapped to doubles so it is possible to lose precision.
 * **date** and **time** are mapped to strings
 * all types are nullable.
 
-You can use `detect_precision_hints` to preserve source types in the destination. Please note that you' still lose precision on decimals with default settings.
+Note: `dlt` will still use the reflected source database types to create destination tables. It is up to the destination to reconcile / parse
+type differences. Most of the destinations will be able to parse date/time strings and convert doubles into decimals (Please note that you' still lose precision on decimals with default settings.). **However we strongly suggest
+not to use pandas backend if your source tables contain date, time or decimal columns**
 
-Use `backend_kwargs` to pass [backend-specific settings](https://pandas.pydata.org/docs/reference/api/pandas.read_sql_table.html) ie. `coerce_float`. Internally dlt uses `pandas.io.sql._wrap_result` to generate panda frames.
+
+Example: Use `backend_kwargs` to pass [backend-specific settings](https://pandas.pydata.org/docs/reference/api/pandas.read_sql_table.html) ie. `coerce_float`. Internally dlt uses `pandas.io.sql._wrap_result` to generate panda frames.
 
 ```py
 import sqlalchemy as sa
@@ -123,7 +126,7 @@ sql_alchemy_source = sql_database(
     chunk_size=100000,
     # set coerce_float to False to represent them as string
     backend_kwargs={"coerce_float": False, "dtype_backend": "numpy_nullable"},
-    # preserve full typing info. this will parse
+    # preserve full typing info
     detect_precision_hints=True,
 ).with_resources("family", "genome")
 
@@ -132,20 +135,20 @@ print(info)
 ```
 
 ### **connectorx** backend
-[connectorx]() backend completely skips **sqlalchemy** when reading table rows, in favor of doing that in rust. This is (typically) significantly faster than what the other backend do. With the default settings it will emit **pyarrow** tables, but you can configure it via **backend_kwargs**.
+[connectorx](https://sfu-db.github.io/connector-x/intro.html) backend completely skips **sqlalchemy** when reading table rows, in favor of doing that in rust. This is claimed to be significantly faster than what the other backends do (but see next chapter). With the default settings it will emit **pyarrow** tables, but you can configure it via **backend_kwargs**.
 
 There are certain limitations when using this backend:
 * it will ignore `chunk_size`. **connectorx** cannot yield data in batches.
 * in many cases it requires a connection string that differs from **sqlalchemy** connection string. Use `conn` argument in **backend_kwargs** to set it up.
 * it will convert **decimals** to **doubles** so you'll will loose precision.
-* it uses different database type mappings for each database type. [check here for more details]()
+* it uses different database type mappings for each database type. [check here for more details](https://sfu-db.github.io/connector-x/databases.html)
 * JSON fields (at least those coming from postgres) are double wrapped in strings. Here's a transform to be added with `add_map` that will unwrap it:
 
 ```py
 from sources.sql_database.helpers import unwrap_json_connector_x
 ```
 
-You can use `detect_precision_hints` to preserve source types in the destination. Please note that you' still lose precision on decimals with default settings.
+Note: dlt will still use the reflected source database types to create destination tables. It is up to the destination to reconcile / parse type differences. Please note that you' still lose precision on decimals with default settings.
 
 ```py
 """Uses unsw_flow dataset (~2mln rows, 25+ columns) to test connectorx speed"""
@@ -185,7 +188,7 @@ With dataset above and local postgres instance, connectorx is 2x faster than pya
 ## Notes on source databases
 
 ### Oracle
-1. When using **oracledb** dialect in thin mode we are getting protocol error. Use thick mode or **cx_oracle** (old) client.
+1. When using **oracledb** dialect in thin mode we are getting protocol errors. Use thick mode or **cx_oracle** (old) client.
 2. Mind that **sqlalchemy** translates Oracle identifiers into lower case! Keep the default `dlt` naming convention (`snake_case`) when loading data. We'll support more naming conventions soon.
 3. Connectorx is for some reason slower for Oracle than `pyarrow` backend.
 
@@ -197,8 +200,7 @@ With dataset above and local postgres instance, connectorx is 2x faster than pya
 1. SqlAlchemy dialect converts doubles to decimals, we disable that behavior via table adapter in our demo pipeline
 
 ### Postgres / MSSQL
-No issues found.
-
+No issues found. Postgres is the only backend where we observed 2x speedup with connector x. On other db systems it performs same as `pyarrrow` backend or slower.
 
 ## Learn more
 💡 To explore additional customizations for this pipeline, we recommend referring to the official DLT SQL Database verified documentation. It provides comprehensive information and guidance on how to further customize and tailor the pipeline to suit your specific needs. You can find the DLT SQL Database documentation in [Setup Guide: SQL Database.](https://dlthub.com/docs/dlt-ecosystem/verified-sources/sql_database)

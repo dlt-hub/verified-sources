@@ -511,6 +511,9 @@ def test_deferred_reflect_in_source(
         defer_table_reflect=True,
         backend=backend,
     )
+    # add JSON unwrap for connectorx
+    if backend == "connectorx":
+        source.resources["has_precision"].add_map(unwrap_json_connector_x("json_col"))
 
     # no columns in both tables
     assert source.has_precision.columns == {}
@@ -521,10 +524,16 @@ def test_deferred_reflect_in_source(
     # use insert values to convert parquet into INSERT
     pipeline.normalize(loader_file_format="insert_values")
     pipeline.load().raise_on_failed_jobs()
+    precision_table = pipeline.default_schema.get_table("has_precision")
     assert_precision_columns(
-        pipeline.default_schema.get_table("has_precision")["columns"],
+        precision_table["columns"],
         backend,
         nullable=False,
+    )
+    assert_schema_on_data(
+        precision_table,
+        load_tables_to_dicts(pipeline, "has_precision")["has_precision"],
+        True,
     )
     assert len(source.chat_message.columns) > 0
     assert (
@@ -548,22 +557,6 @@ def test_deferred_reflect_no_source_connect(backend: TableBackend) -> None:
     assert source.has_precision.columns == {}
     assert source.chat_message.columns == {}
 
-    # pipeline = make_pipeline("duckdb")
-    # pipeline.extract(source)
-    # # use insert values to convert parquet into INSERT
-    # pipeline.normalize(loader_file_format="insert_values")
-    # pipeline.load().raise_on_failed_jobs()
-    # assert_precision_columns(
-    #     pipeline.default_schema.get_table("has_precision")["columns"],
-    #     backend,
-    #     nullable=False,
-    # )
-    # assert len(source.chat_message.columns) > 0
-    # assert (
-    #     source.chat_message.compute_table_schema()["columns"]["id"]["primary_key"]
-    #     is True
-    # )
-
 
 @pytest.mark.parametrize("backend", ["sqlalchemy", "pyarrow", "pandas", "connectorx"])
 def test_deferred_reflect_in_resource(
@@ -577,6 +570,9 @@ def test_deferred_reflect_in_resource(
         defer_table_reflect=True,
         backend=backend,
     )
+    # add JSON unwrap for connectorx
+    if backend == "connectorx":
+        table.add_map(unwrap_json_connector_x("json_col"))
 
     # no columns in both tables
     assert table.columns == {}
@@ -586,10 +582,16 @@ def test_deferred_reflect_in_resource(
     # use insert values to convert parquet into INSERT
     pipeline.normalize(loader_file_format="insert_values")
     pipeline.load().raise_on_failed_jobs()
+    precision_table = pipeline.default_schema.get_table("has_precision")
     assert_precision_columns(
-        pipeline.default_schema.get_table("has_precision")["columns"],
+        precision_table["columns"],
         backend,
         nullable=False,
+    )
+    assert_schema_on_data(
+        precision_table,
+        load_tables_to_dicts(pipeline, "has_precision")["has_precision"],
+        True,
     )
 
 
@@ -651,6 +653,9 @@ def assert_precision_columns(
         expected = add_default_decimal_precision(expected)
     if backend == "pandas":
         expected = remove_timestamp_precision(expected, with_timestamps=False)
+    if backend == "connectorx":
+        # connector x emits 32 precision which gets merged with sql alchemy schema
+        del columns["int_col"]["precision"]
     assert actual == expected
 
 
@@ -659,44 +664,39 @@ def assert_no_precision_columns(
 ) -> None:
     actual = list(columns.values())
 
+    # we always infer and emit nullability
+    expected = deepcopy(
+        NULL_NO_PRECISION_COLUMNS if nullable else NOT_NULL_NO_PRECISION_COLUMNS
+    )
     if backend == "pyarrow":
-        expected = NULL_PRECISION_COLUMNS if nullable else NOT_NULL_PRECISION_COLUMNS
+        expected = deepcopy(
+            NULL_PRECISION_COLUMNS if nullable else NOT_NULL_PRECISION_COLUMNS
+        )
         # always has nullability set and always has hints
-        expected = deepcopy(expected)
         # default precision is not set
         expected = remove_default_precision(expected)
         expected = add_default_decimal_precision(expected)
     elif backend == "sqlalchemy":
         # no precision, no nullability, all hints inferred
-        expected = deepcopy(NULL_NO_PRECISION_COLUMNS)
         # remove dlt columns
         actual = remove_dlt_columns(actual)
     elif backend == "pandas":
         # no precision, no nullability, all hints inferred
-        expected = deepcopy(NULL_NO_PRECISION_COLUMNS)
         # pandas destroys decimals
         expected = convert_non_pandas_types(expected)
     elif backend == "connectorx":
-        expected = deepcopy(NULL_PRECISION_COLUMNS)
+        expected = deepcopy(
+            NULL_PRECISION_COLUMNS if nullable else NOT_NULL_PRECISION_COLUMNS
+        )
         expected = convert_connectorx_types(expected)
 
-    # that json is complex is not known
-    assert expected[-2]["data_type"] == "complex"
-    expected[-2]["data_type"] = "text"
     assert actual == expected
 
 
 def convert_non_pandas_types(columns: List[TColumnSchema]) -> List[TColumnSchema]:
     for column in columns:
-        if column["data_type"] == "decimal":
-            column["data_type"] = "double"
-            column.pop("precision", None)
-            column.pop("scale", None)
         if column["data_type"] == "timestamp":
             column["precision"] = 6
-        if column["data_type"] in ("date", "time"):
-            column["data_type"] = "text"
-            column.pop("precision", None)
     return columns
 
 
@@ -706,7 +706,7 @@ def remove_dlt_columns(columns: List[TColumnSchema]) -> List[TColumnSchema]:
 
 def remove_default_precision(columns: List[TColumnSchema]) -> List[TColumnSchema]:
     for column in columns:
-        if column["data_type"] == "bigint" and column["precision"] == 64:
+        if column["data_type"] == "bigint" and column.get("precision") == 32:
             del column["precision"]
         if column["data_type"] == "text" and column.get("precision"):
             del column["precision"]
@@ -733,16 +733,9 @@ def convert_connectorx_types(columns: List[TColumnSchema]) -> List[TColumnSchema
     nullability is not kept, string precision is not kept
     """
     for column in columns:
-        if column["data_type"] == "bigint" and column.get("precision"):
+        if column["data_type"] == "bigint":
             if column["name"] == "int_col":
                 column["precision"] = 32  # only int and bigint in connectorx
-        #         del column["precision"]
-        #     elif column["precision"] == 16:
-        #         column["precision"] = 32  # only int and bigint in connectorx
-        if column["data_type"] == "decimal":
-            column["data_type"] = "double"
-            column.pop("precision", None)
-            column.pop("scale", None)
         if column["data_type"] == "text" and column.get("precision"):
             del column["precision"]
     return columns
@@ -827,10 +820,14 @@ NOT_NULL_PRECISION_COLUMNS = [
 ]
 NULL_PRECISION_COLUMNS = [{"nullable": True, **column} for column in PRECISION_COLUMNS]
 
+# but keep decimal precision
 NO_PRECISION_COLUMNS = [
     {"name": column["name"], "data_type": column["data_type"]}
+    if column["data_type"] != "decimal"
+    else dict(column)
     for column in PRECISION_COLUMNS
 ]
+
 NOT_NULL_NO_PRECISION_COLUMNS = [
     {"nullable": False, **column} for column in NO_PRECISION_COLUMNS
 ]

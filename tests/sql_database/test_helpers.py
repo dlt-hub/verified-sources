@@ -77,7 +77,6 @@ def test_make_query_incremental_min(
     )
 
     query = loader.make_query()
-    print(query)
     expected = (
         table.select()
         .order_by(table.c.created_at.desc())
@@ -110,7 +109,6 @@ def test_make_query_incremental_end_value(
     )
 
     query = loader.make_query()
-    print(query)
     expected = (
         table.select()
         .where(table.c.created_at <= MockIncremental.last_value)
