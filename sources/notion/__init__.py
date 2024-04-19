@@ -18,19 +18,17 @@ def notion_pages(
     Retrieves pages from Notion.
 
     Args:
-        page_ids (List[str], optional): A list of page ids.
+        page_ids (Optional[List[str]]): A list of page ids.
             Defaults to None. If None, the function will generate all pages
             in the workspace that are accessible to the integration.
         api_key (str): The Notion API secret key.
 
     Yields:
-        Dict: Pages from Notion.
+        Iterator[TDataItems]: Pages from Notion.
     """
-    notion_client = NotionClient(api_key)
-    search_results = notion_client.search(
-        filter_criteria={"value": "page", "property": "object"}
-    )
-    for page in search_results:
+    client = NotionClient(api_key)
+    pages = client.search(filter_criteria={"value": "page", "property": "object"})
+    for page in pages:
         if page_ids and page["id"] not in page_ids:
             continue
         yield page
