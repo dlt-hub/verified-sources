@@ -13,9 +13,11 @@ from dlt.common.destination import DestinationCapabilitiesContext
 if TYPE_CHECKING:
     SelectAny: TypeAlias = Select[Any]
     ColumnAny: TypeAlias = Column[Any]
+    RowAny: TypeAlias = Row[Any]
 else:
     SelectAny: TypeAlias = Type[Any]
     ColumnAny: TypeAlias = Type[Any]
+    RowAny: TypeAlias = Type[Any]
 
 
 def sqla_col_to_column_schema(
@@ -125,7 +127,7 @@ def columns_to_arrow(
 
 
 def row_tuples_to_arrow(
-    rows: Sequence[Row[Any]], columns: TTableSchemaColumns, tz: str
+    rows: Sequence[RowAny], columns: TTableSchemaColumns, tz: str
 ) -> Any:
     from dlt.common.libs.pyarrow import pyarrow as pa
     import numpy as np
