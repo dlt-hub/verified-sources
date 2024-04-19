@@ -6,7 +6,7 @@ from tests.utils import ALL_DESTINATIONS, assert_load_info, load_table_counts
 
 
 @pytest.mark.parametrize("destination_name", ALL_DESTINATIONS)
-def test_load_all_notion_databases(destination_name: str):
+def test_load_all_pages(destination_name: str):
     pipeline = dlt.pipeline(
         pipeline_name="notion",
         destination=destination_name,
@@ -32,3 +32,24 @@ def test_load_all_notion_databases(destination_name: str):
 
     assert loaded_tables == expected_tables
     assert all(c > 0 for c in load_table_counts(pipeline, *expected_tables).values())
+
+
+@pytest.mark.parametrize("destination_name", ALL_DESTINATIONS)
+def test_load_selected_pages(destination_name: str):
+    pipeline = dlt.pipeline(
+        pipeline_name="notion",
+        destination=destination_name,
+        dataset_name="notion_data",
+        full_refresh=True,
+    )
+
+    requested_pages = ["06e48554-9585-415b-bffe-aad4b2244f20"]
+
+    info = pipeline.run(notion_pages(requested_pages))
+    assert_load_info(info)
+
+    assert load_table_counts(pipeline, "notion_pages")["notion_pages"] == 1
+
+    with pipeline.sql_client() as client:
+        with client.execute_query("SELECT * FROM notion_pages") as cur:
+            assert cur.fetchone()[1] in requested_pages

@@ -3,6 +3,7 @@
 from typing import List, Dict, Optional, Iterator
 
 import dlt
+from dlt.common.typing import TDataItems
 from dlt.sources import DltResource
 
 from .helpers.client import NotionClient
@@ -10,12 +11,28 @@ from .helpers.database import NotionDatabase
 
 
 @dlt.resource
-def notion_pages(api_key: str = dlt.secrets.value):
+def notion_pages(
+    page_ids: Optional[List[str]] = None, api_key: str = dlt.secrets.value
+) -> Iterator[TDataItems]:
+    """
+    Retrieves pages from Notion.
+
+    Args:
+        page_ids (List[str], optional): A list of page ids.
+            Defaults to None. If None, the function will generate all pages
+            in the workspace that are accessible to the integration.
+        api_key (str): The Notion API secret key.
+
+    Yields:
+        Dict: Pages from Notion.
+    """
     notion_client = NotionClient(api_key)
     search_results = notion_client.search(
         filter_criteria={"value": "page", "property": "object"}
     )
     for page in search_results:
+        if page_ids and page["id"] not in page_ids:
+            continue
         yield page
 
 
