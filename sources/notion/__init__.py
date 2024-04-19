@@ -9,6 +9,16 @@ from .helpers.client import NotionClient
 from .helpers.database import NotionDatabase
 
 
+@dlt.resource
+def notion_pages(api_key: str = dlt.secrets.value):
+    notion_client = NotionClient(api_key)
+    search_results = notion_client.search(
+        filter_criteria={"value": "page", "property": "object"}
+    )
+    for page in search_results:
+        yield page
+
+
 @dlt.source
 def notion_databases(
     database_ids: Optional[List[Dict[str, str]]] = None,
