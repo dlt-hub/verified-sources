@@ -135,6 +135,7 @@ def sql_table(
         defer_table_reflect (bool): Will connect and reflect table schema only when yielding data. Enable this option when running on Airflow. Available
             on dlt 0.4.4 and later
         table_adapter_callback: (Callable): Receives each reflected table. May be used to modify the list of columns that will be selected.
+        backend_kwargs (**kwargs): kwargs passed to table backend ie. "conn" is used to pass specialized connection string to connectorx.
 
     Returns:
         DltResource: The dlt resource for loading data from the SQL database table.

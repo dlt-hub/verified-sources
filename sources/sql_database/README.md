@@ -51,11 +51,11 @@ To setup the SQL Database Verified Source read the [full documentation here.](ht
     For example, the pipeline_name for the above pipeline example is `rfam`, you can use any custom name instead.
 
 
-## Pick right table backend for your data
-Table backends process stream of rows from database tables into batches in various formats. The default backend **sqlalchemy** is following standard `dlt` behavior of
-extracting and normalizing Python dictionaries. This is a safe bet for a smaller tables, initial development work and sampling of large datasets. It is also the slowest.
+## Pick the right table backend
+Table backends convert stream of rows from database tables into batches in various formats. The default backend **sqlalchemy** is following standard `dlt` behavior of
+extracting and normalizing Python dictionaries. We recommend it for smaller tables, initial development work and when minimal dependencies or pure Python environment is required. It is also the slowest.
 Database tables are structured data and other backends speed up dealing with such data significantly. The **pyarrow** will convert rows into `arrow` tables, has
-good performance, preserves exact database types and we recommend it to.
+good performance, preserves exact database types and we recommend it for large tables.
 
 ### **sqlalchemy** backend
 
@@ -67,7 +67,7 @@ and normalize steps and does not require additional dependencies to be installed
 **pyarrow** yields data as Arrow tables. It uses **SqlAlchemy** to read rows in batches but then immediately converts them into `ndarray`, transposes it and uses to set columns in an arrow table. This backend always fully
 reflects the database table and preserves original types ie. **decimal** / **numeric** will be extracted without loss of precision. If the destination loads parquet files, this backend will skip `dlt` normalizer and you can gain two orders of magnitude (20x - 30x) speed increase.
 
-Note that if **pandas** is installed, we'll use it convert SqlAlchemy tuples into **ndarray** as it seems to be 20-30% faster than using **numpy** directly.
+Note that if **pandas** is installed, we'll use it to convert SqlAlchemy tuples into **ndarray** as it seems to be 20-30% faster than using **numpy** directly.
 
 ```py
 import sqlalchemy as sa
@@ -95,7 +95,7 @@ print(info)
 
 **pandas** backend yield data as data frames using the `pandas.io.sql` module. `dlt` use **pyarrow** dtypes by default as they generate more stable typing.
 
-With default settings, several database types will be coerced to dtypes in a data frame:
+With default settings, several database types will be coerced to dtypes in yielded data frame:
 * **decimal** are mapped to doubles so it is possible to lose precision.
 * **date** and **time** are mapped to strings
 * all types are nullable.
@@ -126,8 +126,6 @@ sql_alchemy_source = sql_database(
     chunk_size=100000,
     # set coerce_float to False to represent them as string
     backend_kwargs={"coerce_float": False, "dtype_backend": "numpy_nullable"},
-    # preserve full typing info
-    detect_precision_hints=True,
 ).with_resources("family", "genome")
 
 info = pipeline.run(sql_alchemy_source)
@@ -135,12 +133,13 @@ print(info)
 ```
 
 ### **connectorx** backend
-[connectorx](https://sfu-db.github.io/connector-x/intro.html) backend completely skips **sqlalchemy** when reading table rows, in favor of doing that in rust. This is claimed to be significantly faster than what the other backends do (but see next chapter). With the default settings it will emit **pyarrow** tables, but you can configure it via **backend_kwargs**.
+[connectorx](https://sfu-db.github.io/connector-x/intro.html) backend completely skips **sqlalchemy** when reading table rows, in favor of doing that in rust. This is claimed to be significantly faster than any other method (confirmed only on postgres - see next chapter). With the default settings it will emit **pyarrow** tables, but you can configure it via **backend_kwargs**.
 
 There are certain limitations when using this backend:
 * it will ignore `chunk_size`. **connectorx** cannot yield data in batches.
 * in many cases it requires a connection string that differs from **sqlalchemy** connection string. Use `conn` argument in **backend_kwargs** to set it up.
 * it will convert **decimals** to **doubles** so you'll will loose precision.
+* nullability of the columns is ignored (always true)
 * it uses different database type mappings for each database type. [check here for more details](https://sfu-db.github.io/connector-x/databases.html)
 * JSON fields (at least those coming from postgres) are double wrapped in strings. Here's a transform to be added with `add_map` that will unwrap it:
 
