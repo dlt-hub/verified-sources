@@ -48,7 +48,6 @@ class FreshdeskClient:
                 return response
             except requests.HTTPError as e:
                 if e.response.status_code == 429:
-
                     # Get the 'Retry-After' header to know how long to wait
                     # Fallback to 60 seconds if header is missing
                     seconds_to_wait = int(e.response.headers.get("Retry-After", 60))
