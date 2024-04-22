@@ -10,7 +10,7 @@ from dlt.common.typing import TDataItem
 from dlt.sources import DltResource
 from dlt.sources.credentials import GcpOAuthCredentials, GcpServiceAccountCredentials
 import json
-from .helpers.data_processing import to_dict  # type: ignore
+from .helpers.data_processing import to_dict
 
 from apiclient.discovery import Resource
 
