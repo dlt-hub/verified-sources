@@ -2,7 +2,7 @@
 Preliminary implementation of Google Ads pipeline.
 """
 
-from typing import Any, Dict, Iterator, List, Union
+from typing import Iterator, List, Union
 import dlt
 import tempfile
 from dlt.common.exceptions import MissingDependencyException
@@ -10,7 +10,7 @@ from dlt.common.typing import TDataItem
 from dlt.sources import DltResource
 from dlt.sources.credentials import GcpOAuthCredentials, GcpServiceAccountCredentials
 import json
-from sources.google_ads.helpers.data_processing import to_dict  # type: ignore
+from .helpers.data_processing import to_dict  # type: ignore
 
 from apiclient.discovery import Resource
 
