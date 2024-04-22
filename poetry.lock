@@ -899,6 +899,31 @@ protobuf = ["protobuf", "requests"]
 schema-registry = ["requests"]
 
 [[package]]
+name = "connectorx"
+version = "0.3.2"
+description = ""
+optional = false
+python-versions = "*"
+files = [
+    {file = "connectorx-0.3.2-cp310-cp310-macosx_10_7_x86_64.whl", hash = "sha256:98274242c64a2831a8b1c86e0fa2c46a557dd8cbcf00c3adcf5a602455fb02d7"},
+    {file = "connectorx-0.3.2-cp310-cp310-macosx_11_0_arm64.whl", hash = "sha256:e2b11ba49efd330a7348bef3ce09c98218eea21d92a12dd75cd8f0ade5c99ffc"},
+    {file = "connectorx-0.3.2-cp310-cp310-manylinux_2_28_x86_64.whl", hash = "sha256:3f6431a30304271f9137bd7854d2850231041f95164c6b749d9ede4c0d92d10c"},
+    {file = "connectorx-0.3.2-cp310-none-win_amd64.whl", hash = "sha256:b370ebe8f44d2049254dd506f17c62322cc2db1b782a57f22cce01ddcdcc8fed"},
+    {file = "connectorx-0.3.2-cp311-cp311-macosx_10_7_x86_64.whl", hash = "sha256:d5277fc936a80da3d1dcf889020e45da3493179070d9be8a47500c7001fab967"},
+    {file = "connectorx-0.3.2-cp311-cp311-macosx_11_0_arm64.whl", hash = "sha256:8cc6c963237c3d3b02f7dcd47e1be9fc6e8b93ef0aeed8694f65c62b3c4688a1"},
+    {file = "connectorx-0.3.2-cp311-cp311-manylinux_2_28_x86_64.whl", hash = "sha256:9403902685b3423cba786db01a36f36efef90ae3d429e45b74dadb4ae9e328dc"},
+    {file = "connectorx-0.3.2-cp311-none-win_amd64.whl", hash = "sha256:6b5f518194a2cf12d5ad031d488ded4e4678eff3b63551856f2a6f1a83197bb8"},
+    {file = "connectorx-0.3.2-cp38-cp38-macosx_10_7_x86_64.whl", hash = "sha256:a5602ae0531e55c58af8cfca92b8e9454fc1ccd82c801cff8ee0f17c728b4988"},
+    {file = "connectorx-0.3.2-cp38-cp38-macosx_11_0_arm64.whl", hash = "sha256:7c5959bfb4a049bb8ce1f590b5824cd1105460b6552ffec336c4bd740eebd5bd"},
+    {file = "connectorx-0.3.2-cp38-cp38-manylinux_2_28_x86_64.whl", hash = "sha256:c4387bb27ba3acde0ab6921fdafa3811e09fce0db3d1f1ede8547d9de3aab685"},
+    {file = "connectorx-0.3.2-cp38-none-win_amd64.whl", hash = "sha256:4b1920c191be9a372629c31c92d5f71fc63f49f283e5adfc4111169de40427d9"},
+    {file = "connectorx-0.3.2-cp39-cp39-macosx_10_7_x86_64.whl", hash = "sha256:4473fc06ac3618c673cea63a7050e721fe536782d5c1b6e433589c37a63de704"},
+    {file = "connectorx-0.3.2-cp39-cp39-macosx_11_0_arm64.whl", hash = "sha256:4009b16399457340326137a223921a24e3e166b45db4dbf3ef637b9981914dc2"},
+    {file = "connectorx-0.3.2-cp39-cp39-manylinux_2_28_x86_64.whl", hash = "sha256:74f5b93535663cf47f9fc3d7964f93e652c07003fa71c38d7a68f42167f54bba"},
+    {file = "connectorx-0.3.2-cp39-none-win_amd64.whl", hash = "sha256:0b80acca13326856c14ee726b47699011ab1baa10897180240c8783423ca5e8c"},
+]
+
+[[package]]
 name = "constantly"
 version = "23.10.4"
 description = "Symbolic constants in Python"
@@ -1010,17 +1035,18 @@ files = [
 
 [[package]]
 name = "dlt"
-version = "0.4.7"
+version = "0.4.9a2"
 description = "dlt is an open-source python-first scalable data loading library that does not require any backend to run."
 optional = false
 python-versions = "<3.13,>=3.8.1"
 files = [
-    {file = "dlt-0.4.7-py3-none-any.whl", hash = "sha256:73ae8edabca97ceb7d4a9fb114c525646d390cd5da01c367c998703504a2a4d1"},
-    {file = "dlt-0.4.7.tar.gz", hash = "sha256:692ad0f4abfce728ff59f75de4743f6c48ce843e89ef467ff8aeee260012c8a4"},
+    {file = "dlt-0.4.9a2-py3-none-any.whl", hash = "sha256:622f61c3e779ddaa9d068624ef0ad03cca4076cf0ffb4da4b5227795fc876f72"},
+    {file = "dlt-0.4.9a2.tar.gz", hash = "sha256:e6ab3d40cc9ebba3e7cd5ea4b2c06e0ca3a3ee9a8b89b7a53caa6ecd5537a751"},
 ]
 
 [package.dependencies]
 astunparse = ">=1.6.3"
+black = "23.9.1"
 botocore = {version = ">=1.28", optional = true, markers = "extra == \"filesystem\" or extra == \"s3\" or extra == \"athena\""}
 click = ">=7.1"
 duckdb = [
@@ -1043,7 +1069,7 @@ pathvalidate = ">=2.5.2"
 pendulum = ">=2.1.2"
 psycopg2-binary = {version = ">=2.9.1", optional = true, markers = "extra == \"postgres\" or extra == \"redshift\""}
 psycopg2cffi = {version = ">=2.9.0", optional = true, markers = "platform_python_implementation == \"PyPy\" and (extra == \"postgres\" or extra == \"redshift\")"}
-pyarrow = {version = ">=12.0.0", optional = true, markers = "extra == \"bigquery\" or extra == \"parquet\" or extra == \"motherduck\" or extra == \"athena\" or extra == \"synapse\""}
+pyarrow = {version = ">=12.0.0", optional = true, markers = "extra == \"bigquery\" or extra == \"parquet\" or extra == \"motherduck\" or extra == \"athena\" or extra == \"synapse\" or extra == \"dremio\""}
 pytz = ">=2022.6"
 PyYAML = ">=5.4.1"
 requests = ">=2.26.0"
@@ -1065,6 +1091,7 @@ bigquery = ["gcsfs (>=2022.4.0)", "google-cloud-bigquery (>=2.26.0)", "grpcio (>
 cli = ["cron-descriptor (>=1.2.32)", "pipdeptree (>=2.9.0,<2.10)"]
 databricks = ["databricks-sql-connector (>=2.9.3,<3.0.0)"]
 dbt = ["dbt-athena-community (>=1.2.0)", "dbt-bigquery (>=1.2.0)", "dbt-core (>=1.2.0)", "dbt-databricks (>=1.7.3,<2.0.0)", "dbt-duckdb (>=1.2.0)", "dbt-redshift (>=1.2.0)", "dbt-snowflake (>=1.2.0)"]
+dremio = ["pyarrow (>=12.0.0)"]
 duckdb = ["duckdb (>=0.10.0,<0.11.0)", "duckdb (>=0.6.1,<0.10.0)"]
 filesystem = ["botocore (>=1.28)", "s3fs (>=2022.4.0)"]
 gcp = ["gcsfs (>=2022.4.0)", "google-cloud-bigquery (>=2.26.0)", "grpcio (>=1.50.0)"]
@@ -6327,4 +6354,4 @@ cffi = ["cffi (>=1.11)"]
 [metadata]
 lock-version = "2.0"
 python-versions = ">=3.8.1,<3.13"
-content-hash = "ee903d892a71f5191e5ebe58003de98a18b02e9d50d9c7caac9421f76b030e55"
+content-hash = "fe5a842decde198ce7b6c79a3a042d11d94dc5cd3d69c161a8adb23efb8641de"

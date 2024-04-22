@@ -1,7 +1,6 @@
-from typing import Generator, List, TypedDict, Dict
+from typing import List, TypedDict, Dict
 import random
 
-import pytest
 import mimesis
 from sqlalchemy import (
     create_engine,
@@ -22,6 +21,10 @@ from sqlalchemy import (
     SmallInteger,
     String,
     DateTime,
+    Double,
+    Date,
+    Time,
+    JSON,
 )
 
 from dlt.common.utils import chunks, uniq_id
@@ -131,17 +134,31 @@ class SQLAlchemySourceDB:
             Column("b", Integer(), primary_key=True),
             Column("c", Integer(), primary_key=True),
         )
-        Table(
-            "has_precision",
-            self.metadata,
-            Column("int_col", Integer()),
-            Column("bigint_col", BigInteger()),
-            Column("smallint_col", SmallInteger()),
-            Column("numeric_col", Numeric(precision=10, scale=2)),
-            Column("numeric_default_col", Numeric()),
-            Column("string_col", String(length=10)),
-            Column("string_default_col", String()),
-        )
+
+        def _make_precision_table(table_name: str, nullable: bool) -> Table:
+            Table(
+                table_name,
+                self.metadata,
+                Column("int_col", Integer(), nullable=nullable),
+                Column("bigint_col", BigInteger(), nullable=nullable),
+                Column("smallint_col", SmallInteger(), nullable=nullable),
+                Column(
+                    "numeric_col", Numeric(precision=10, scale=2), nullable=nullable
+                ),
+                Column("numeric_default_col", Numeric(), nullable=nullable),
+                Column("string_col", String(length=10), nullable=nullable),
+                Column("string_default_col", String(), nullable=nullable),
+                Column("datetime_tz_col", DateTime(timezone=True), nullable=nullable),
+                Column("datetime_ntz_col", DateTime(timezone=False), nullable=nullable),
+                Column("date_col", Date, nullable=nullable),
+                Column("time_col", Time, nullable=nullable),
+                Column("float_col", Double, nullable=nullable),
+                Column("json_col", JSON, nullable=nullable),
+                Column("bool_col", Boolean, nullable=nullable),
+            )
+
+        _make_precision_table("has_precision", False)
+        _make_precision_table("has_precision_nullable", True)
 
         self.metadata.create_all(bind=self.engine)
 
@@ -225,8 +242,11 @@ class SQLAlchemySourceDB:
         info["ids"].extend(message_ids)
         return message_ids
 
-    def _fake_precision_data(self, n: int = 100) -> None:
-        table = self.metadata.tables[f"{self.schema}.has_precision"]
+    def _fake_precision_data(
+        self, table_name: str, n: int = 100, null_n: int = 0
+    ) -> None:
+        table = self.metadata.tables[f"{self.schema}.{table_name}"]
+        self.table_infos.setdefault(table_name, dict(row_count=n + null_n))
         rows = [
             dict(
                 int_col=random.randrange(-2147483648, 2147483647),
@@ -236,9 +256,20 @@ class SQLAlchemySourceDB:
                 numeric_default_col=random.randrange(-9999999999, 9999999999) / 100,
                 string_col=mimesis.Text().word()[:10],
                 string_default_col=mimesis.Text().word(),
+                datetime_tz_col=mimesis.Datetime().datetime(timezone="UTC"),
+                datetime_ntz_col=mimesis.Datetime().datetime(),  # no timezone
+                date_col=mimesis.Datetime().date(),
+                time_col=mimesis.Datetime().time(),
+                float_col=random.random(),
+                json_col="[1, 2, 3]",
+                bool_col=random.randint(0, 1) == 1,
             )
-            for i in range(n)
+            for _ in range(n + null_n)
         ]
+        for row in rows[n:]:
+            # all fields to None
+            for field in row:
+                row[field] = None
         with self.engine.begin() as conn:
             conn.execute(table.insert().values(rows))
 
@@ -249,7 +280,8 @@ class SQLAlchemySourceDB:
 
     def insert_data(self) -> None:
         self._fake_chat_data()
-        self._fake_precision_data()
+        self._fake_precision_data("has_precision")
+        self._fake_precision_data("has_precision_nullable", null_n=10)
 
 
 class IncrementingDate:

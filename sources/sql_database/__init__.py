@@ -1,6 +1,6 @@
 """Source that loads tables form any SQLAlchemy supported database, supports batching requests and incremental loads."""
 
-from typing import Callable, List, Optional, Union, Iterable, Any
+from typing import Callable, Dict, List, Optional, Union, Iterable, Any
 from sqlalchemy import MetaData, Table
 from sqlalchemy.engine import Engine
 
@@ -15,6 +15,7 @@ from .helpers import (
     table_rows,
     engine_from_credentials,
     get_primary_key,
+    TableBackend,
     SqlDatabaseTableConfiguration,
     SqlTableResourceConfiguration,
 )
@@ -27,13 +28,15 @@ def sql_database(
     schema: Optional[str] = dlt.config.value,
     metadata: Optional[MetaData] = None,
     table_names: Optional[List[str]] = dlt.config.value,
-    chunk_size: int = 1000,
+    chunk_size: int = 50000,
+    backend: TableBackend = "sqlalchemy",
     detect_precision_hints: Optional[bool] = dlt.config.value,
     defer_table_reflect: Optional[bool] = dlt.config.value,
     table_adapter_callback: Callable[[Table], None] = None,
+    backend_kwargs: Dict[str, Any] = None,
 ) -> Iterable[DltResource]:
     """
-    A DLT source which loads data from an SQL database using SQLAlchemy.
+    A dlt source which loads data from an SQL database using SQLAlchemy.
     Resources are automatically created for each table in the schema or from the given list of tables.
 
     Args:
@@ -42,11 +45,16 @@ def sql_database(
         metadata (Optional[MetaData]): Optional `sqlalchemy.MetaData` instance. `schema` argument is ignored when this is used.
         table_names (Optional[List[str]]): A list of table names to load. By default, all tables in the schema are loaded.
         chunk_size (int): Number of rows yielded in one batch. SQL Alchemy will create additional internal rows buffer twice the chunk size.
+        backend (TableBackend): Type of backend to generate table data. One of: "sqlalchemy", "pyarrow", "pandas" and "connectorx".
+            "sqlalchemy" yields batches as lists of Python dictionaries, "pyarrow" and "connectorx" yield batches as arrow tables, "pandas" yields panda frames.
+            "sqlalchemy" is the default and does not require additional dependencies, "pyarrow" creates stable destination schemas with correct data types,
+            "connectorx" is typically the fastest but ignores the "chunk_size" so you must deal with large tables yourself.
         detect_precision_hints (bool): Set column precision and scale hints for supported data types in the target schema based on the columns in the source tables.
             This is disabled by default.
         defer_table_reflect (bool): Will connect and reflect table schema only when yielding data. Requires table_names to be explicitly passed.
             Enable this option when running on Airflow. Available on dlt 0.4.4 and later.
         table_adapter_callback: (Callable): Receives each reflected table. May be used to modify the list of columns that will be selected.
+        backend_kwargs (**kwargs): kwargs passed to table backend ie. "conn" is used to pass specialized connection string to connectorx.
     Returns:
         Iterable[DltResource]: A list of DLT resources for each table to be loaded.
     """
@@ -76,14 +84,16 @@ def sql_database(
             name=table.name,
             primary_key=get_primary_key(table),
             spec=SqlDatabaseTableConfiguration,
-            columns=table_to_columns(table) if detect_precision_hints else None,
+            columns=table_to_columns(table, detect_precision_hints),
         )(
             engine,
             table,
             chunk_size,
+            backend,
             detect_precision_hints=detect_precision_hints,
             defer_table_reflect=defer_table_reflect,
             table_adapter_callback=table_adapter_callback,
+            backend_kwargs=backend_kwargs,
         )
 
 
@@ -99,9 +109,11 @@ def sql_table(
     metadata: Optional[MetaData] = None,
     incremental: Optional[dlt.sources.incremental[Any]] = None,
     chunk_size: int = 1000,
+    backend: TableBackend = "sqlalchemy",
     detect_precision_hints: Optional[bool] = dlt.config.value,
     defer_table_reflect: Optional[bool] = dlt.config.value,
     table_adapter_callback: Callable[[Table], None] = None,
+    backend_kwargs: Dict[str, Any] = None,
 ) -> DltResource:
     """
     A dlt resource which loads data from an SQL database table using SQLAlchemy.
@@ -114,11 +126,16 @@ def sql_table(
         incremental (Optional[dlt.sources.incremental[Any]]): Option to enable incremental loading for the table.
             E.g., `incremental=dlt.sources.incremental('updated_at', pendulum.parse('2022-01-01T00:00:00Z'))`
         chunk_size (int): Number of rows yielded in one batch. SQL Alchemy will create additional internal rows buffer twice the chunk size.
+        backend (TableBackend): Type of backend to generate table data. One of: "sqlalchemy", "pyarrow", "pandas" and "connectorx".
+            "sqlalchemy" yields batches as lists of Python dictionaries, "pyarrow" and "connectorx" yield batches as arrow tables, "pandas" yields panda frames.
+            "sqlalchemy" is the default and does not require additional dependencies, "pyarrow" creates stable destination schemas with correct data types,
+            "connectorx" is typically the fastest but ignores the "chunk_size" so you must deal with large tables yourself.
         detect_precision_hints (bool): Set column precision and scale hints for supported data types in the target schema based on the columns in the source tables.
             This is disabled by default.
         defer_table_reflect (bool): Will connect and reflect table schema only when yielding data. Enable this option when running on Airflow. Available
             on dlt 0.4.4 and later
         table_adapter_callback: (Callable): Receives each reflected table. May be used to modify the list of columns that will be selected.
+        backend_kwargs (**kwargs): kwargs passed to table backend ie. "conn" is used to pass specialized connection string to connectorx.
 
     Returns:
         DltResource: The dlt resource for loading data from the SQL database table.
@@ -137,13 +154,15 @@ def sql_table(
         table_rows,
         name=table_obj.name,
         primary_key=get_primary_key(table_obj),
-        columns=table_to_columns(table_obj) if detect_precision_hints else None,
+        columns=table_to_columns(table_obj, detect_precision_hints),
     )(
         engine,
         table_obj,
         chunk_size,
+        backend,
         incremental=incremental,
         detect_precision_hints=detect_precision_hints,
         defer_table_reflect=defer_table_reflect,
         table_adapter_callback=table_adapter_callback,
+        backend_kwargs=backend_kwargs,
     )

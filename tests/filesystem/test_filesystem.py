@@ -248,7 +248,7 @@ def test_file_chunking() -> None:
         files_per_page=2,
     )
 
-    from dlt.extract.pipe import PipeIterator
+    from dlt.extract.pipe_iterator import PipeIterator
 
     # use pipe iterator to get items as they go through pipe
     for pipe_item in PipeIterator.from_pipe(resource._pipe):

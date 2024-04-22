@@ -1,11 +1,13 @@
 import os
 import platform
 import pytest
-from typing import Any, Iterator, List
+from typing import Any, Dict, Iterator, List, Set
 from os import environ
 from unittest.mock import patch
 
 import dlt
+from dlt.common import json
+from dlt.common.data_types import py_type_to_sc_type
 from dlt.common.typing import DictStrAny
 from dlt.common.configuration.container import Container
 from dlt.common.configuration.specs.config_providers_context import (
@@ -18,6 +20,7 @@ from dlt.common.configuration.providers import (
 )
 from dlt.common.pipeline import LoadInfo, PipelineContext
 from dlt.common.storages import FileStorage
+from dlt.common.schema.typing import TTableSchema
 
 from dlt.pipeline.exceptions import SqlClientNotAvailable
 
@@ -222,3 +225,66 @@ def load_table_distinct_counts(
         with c.execute_query(query) as cur:
             rows = list(cur.fetchall())
             return {r[0]: r[1] for r in rows}
+
+
+def load_data_table_counts(p: dlt.Pipeline) -> DictStrAny:
+    """Returns counts for all the data tables in default schema of `p` (excluding dlt tables)"""
+    tables = [table["name"] for table in p.default_schema.data_tables()]
+    return load_table_counts(p, *tables)
+
+
+def load_tables_to_dicts(
+    p: dlt.Pipeline, *table_names: str
+) -> Dict[str, List[Dict[str, Any]]]:
+    """Loads tables as rows into lists of python dicts"""
+    result = {}
+    for table_name in table_names:
+        table_rows = []
+        columns = p.default_schema.get_table_columns(table_name).keys()
+
+        with p.sql_client() as c:
+            query_columns = ",".join(map(c.escape_column_name, columns))
+            f_q_table_name = c.make_qualified_table_name(table_name)
+            query = f"SELECT {query_columns} FROM {f_q_table_name}"
+            with c.execute_query(query) as cur:
+                for row in list(cur.fetchall()):
+                    table_rows.append(dict(zip(columns, row)))
+        result[table_name] = table_rows
+    return result
+
+
+def assert_schema_on_data(
+    table_schema: TTableSchema, rows: List[Dict[str, Any]], requires_nulls: bool
+) -> None:
+    """Asserts that `rows` conform to `table_schema`. Fields and their order must conform to columns. Null values and
+    python data types are checked.
+    """
+    table_columns = table_schema["columns"]
+    columns_with_nulls: Set[str] = set()
+    for row in rows:
+        # check columns
+        assert set(table_schema["columns"].keys()) == set(row.keys())
+        # check column order
+        assert list(table_schema["columns"].keys()) == list(row.keys())
+        # check data types
+        for key, value in row.items():
+            if value is None:
+                assert table_columns[key][
+                    "nullable"
+                ], f"column {key} must be nullable: value is None"
+                # next value. we cannot validate data type
+                columns_with_nulls.add(key)
+                continue
+            expected_dt = table_columns[key]["data_type"]
+            # allow complex strings
+            if expected_dt == "complex":
+                value = json.loads(value)
+            actual_dt = py_type_to_sc_type(type(value))
+            assert actual_dt == expected_dt
+
+    if requires_nulls:
+        # make sure that all nullable columns in table received nulls
+        assert (
+            set(col["name"] for col in table_columns.values() if col["nullable"])
+            == columns_with_nulls
+        ), "Some columns didn't receive NULLs which is required"
