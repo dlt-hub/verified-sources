@@ -1,6 +1,6 @@
 import pytest
 import dlt
-from pipelines.google_ads import google_ads
+from sources.google_ads import google_ads
 from tests.utils import ALL_DESTINATIONS, assert_load_info, load_table_counts
 
 QUERIES = []
