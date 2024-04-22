@@ -1637,6 +1637,31 @@ files = [
 ]
 
 [[package]]
+name = "google-ads"
+version = "21.3.0"
+description = "Client library for the Google Ads API"
+optional = false
+python-versions = ">=3.7"
+files = [
+    {file = "google-ads-21.3.0.tar.gz", hash = "sha256:bd4fcb6bd5e55bace413e889e82012d48578aa28f7b4d726c86e2d594c753c6c"},
+    {file = "google_ads-21.3.0-py3-none-any.whl", hash = "sha256:961943fc737941a38f1a826681f7974448df7c60e6c8db2ac7168b26d66738a7"},
+]
+
+[package.dependencies]
+google-api-core = ">=2.8.0,<=3.0.0"
+google-auth-oauthlib = ">=0.3.0,<2.0.0"
+googleapis-common-protos = ">=1.56.0,<2.0.0"
+grpcio = ">=1.38.1,<2.0.0"
+grpcio-status = ">=1.38.1,<2.0.0"
+proto-plus = ">=1.19.6,<2.0.0"
+protobuf = ">=3.12.0,<3.18.dev0 || >=3.20.dev0,<5.0.0dev"
+PyYAML = ">=5.1,<7.0"
+setuptools = ">=40.3.0"
+
+[package.extras]
+tests = ["nox (>=2020.12.31,<2022.6)"]
+
+[[package]]
 name = "google-analytics-data"
 version = "0.16.3"
 description = "Google Analytics Data API client library"
@@ -6329,4 +6354,4 @@ cffi = ["cffi (>=1.11)"]
 [metadata]
 lock-version = "2.0"
 python-versions = ">=3.8.1,<3.13"
-content-hash = "54e6c935fa881cae78aa1d33d77b09a7c5ec427632cece7291e7e9d20ec661bd"
+content-hash = "fe5a842decde198ce7b6c79a3a042d11d94dc5cd3d69c161a8adb23efb8641de"
