@@ -1,7 +1,9 @@
 from typing import Sequence, List, Dict, Any, Optional
 
+import dlt
 from dlt import Pipeline
 from dlt.common.data_writers.escape import escape_postgres_identifier
+from dlt.common.configuration.specs import ConnectionStringCredentials
 
 from tests.utils import select_data
 
@@ -36,3 +38,14 @@ def assert_loaded_data(
         for row in select_data(pipeline, qry)
     ]
     assert sorted(observation, key=lambda d: d[sort_column_name]) == expectation
+
+
+def is_super_user(sql_client) -> bool:
+    """Returns True if Postgres user is superuser, False otherwise."""
+    username = dlt.secrets.get(
+        "sources.pg_replication.credentials", ConnectionStringCredentials
+    ).username
+    with sql_client() as c:
+        return c.execute_sql(
+            f"SELECT rolsuper FROM pg_roles WHERE rolname = '{username}';"
+        )[0][0]

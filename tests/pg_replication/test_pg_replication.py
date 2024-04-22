@@ -2,6 +2,7 @@ import pytest
 
 from typing import Set, Tuple
 from copy import deepcopy
+from psycopg2.errors import InsufficientPrivilege
 
 import dlt
 from dlt.destinations.job_client_impl import SqlJobClientBase
@@ -17,7 +18,7 @@ from sources.pg_replication.helpers import init_replication, get_pg_version
 from sources.pg_replication.exceptions import IncompatiblePostgresVersionException
 
 from .cases import TABLE_ROW_ALL_DATA_TYPES, TABLE_UPDATE_COLUMNS_SCHEMA
-from .utils import add_pk, assert_loaded_data
+from .utils import add_pk, assert_loaded_data, is_super_user
 
 
 @pytest.mark.parametrize("destination_name", ALL_DESTINATIONS)
@@ -741,8 +742,9 @@ def test_init_replication(src_config: Tuple[dlt.Pipeline, str, str]) -> None:
     assert get_table_names_in_pub() == {"tbl_x", "tbl_y"}
 
     # switching to whole schema replication is supported by omitting `table_names`,
-    # but only for Postgres server versions 15 or higher
-    if get_pg_version() >= 150000:
+    # but only for Postgres server versions 15 or higher and with superuser privileges
+    is_su = is_super_user(src_pl.sql_client)
+    if get_pg_version() >= 150000 and is_su:
         init_replication(
             slot_name=slot_name,
             pub_name=pub_name,
@@ -751,7 +753,10 @@ def test_init_replication(src_config: Tuple[dlt.Pipeline, str, str]) -> None:
         # includes dlt system tables
         assert get_table_names_in_pub() >= {"tbl_x", "tbl_y", "tbl_z"}
     else:
-        with pytest.raises(IncompatiblePostgresVersionException):
+        exp_err = (
+            InsufficientPrivilege if not is_su else IncompatiblePostgresVersionException
+        )
+        with pytest.raises(exp_err):
             init_replication(
                 slot_name=slot_name,
                 pub_name=pub_name,
@@ -762,6 +767,8 @@ def test_init_replication(src_config: Tuple[dlt.Pipeline, str, str]) -> None:
 def test_replicate_schema(src_config: Tuple[dlt.Pipeline, str, str]) -> None:
     if get_pg_version() < 150000:
         pytest.skip("incompatible Postgres server version")
+    if not is_super_user(src_config[0].sql_client):
+        pytest.skip("Postgres user needs to be superuser")
 
     @dlt.resource
     def tbl_x(data):
