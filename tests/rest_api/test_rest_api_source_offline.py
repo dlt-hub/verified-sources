@@ -11,6 +11,7 @@ from sources.rest_api import (
     EndpointResource,
     Endpoint,
 )
+from sources.rest_api.paginators import BasePaginator
 
 from .source_configs import VALID_CONFIGS, INVALID_CONFIGS
 
@@ -132,6 +133,40 @@ def test_ignoring_endpoint_returning_404(mock_api_server):
         {"id": 2, "title": "Post 2"},
         {"id": 3, "title": "Post 3"},
     ]
+
+
+def test_source_with_post_request(mock_api_server):
+    class JSONBodyPageCursorPaginator(BasePaginator):
+        def update_state(self, response):
+            self.next_reference = response.json().get("next_page")
+
+        def update_request(self, request):
+            if request.json is None:
+                request.json = {}
+
+            request.json["page"] = self.next_reference
+
+    mock_source = rest_api_source(
+        {
+            "client": {"base_url": "https://api.example.com"},
+            "resources": [
+                {
+                    "name": "search_posts",
+                    "endpoint": {
+                        "path": "/posts/search",
+                        "method": "POST",
+                        "json": {"ids_greater_than": 50},
+                        "paginator": JSONBodyPageCursorPaginator(),
+                    },
+                }
+            ],
+        }
+    )
+
+    res = list(mock_source.with_resources("search_posts"))
+
+    for i in range(49):
+        assert res[i] == {"id": 51 + i, "title": f"Post {51 + i}"}
 
 
 def test_unauthorized_access_to_protected_endpoint(mock_api_server):

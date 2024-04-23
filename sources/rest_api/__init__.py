@@ -187,6 +187,7 @@ def create_resources(
         endpoint_resource = endpoint_resource_map[resource_name]
         endpoint_config = cast(Endpoint, endpoint_resource.pop("endpoint"))
         request_params = endpoint_config.get("params", {})
+        request_json = endpoint_config.get("json", None)
         paginator = create_paginator(endpoint_config.get("paginator"))
 
         resolved_param: ResolvedParam = resolved_param_map[resource_name]
@@ -225,6 +226,7 @@ def create_resources(
                 method: HTTPMethodBasic,
                 path: str,
                 params: Dict[str, Any],
+                json: Optional[Dict[str, Any]],
                 paginator: Optional[BasePaginator],
                 data_selector: Optional[jsonpath.TJsonPath],
                 hooks: Optional[Dict[str, Any]],
@@ -241,6 +243,7 @@ def create_resources(
                     method=method,
                     path=path,
                     params=params,
+                    json=json,
                     paginator=paginator,
                     data_selector=data_selector,
                     hooks=hooks,
@@ -253,6 +256,7 @@ def create_resources(
                 method=endpoint_config.get("method", "get"),
                 path=endpoint_config.get("path"),
                 params=request_params,
+                json=request_json,
                 paginator=paginator,
                 data_selector=endpoint_config.get("data_selector") or data_selector,
                 hooks=hooks,
