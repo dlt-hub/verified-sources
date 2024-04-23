@@ -208,6 +208,7 @@ def create_resources(
 
         client = RESTClient(
             base_url=client_config["base_url"],
+            headers=client_config.get("headers"),
             auth=create_auth(client_config.get("auth")),
             paginator=create_paginator(client_config.get("paginator")),
         )
