@@ -141,4 +141,13 @@ VALID_CONFIGS = [
             },
         ],
     },
+    {
+        "client": {
+            "base_url": "https://api.example.com",
+            "headers": {
+                "X-Test-Header": "test42",
+            },
+        },
+        "resources": ["users"],
+    },
 ]
