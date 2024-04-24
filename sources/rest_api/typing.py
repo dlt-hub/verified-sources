@@ -38,6 +38,7 @@ class SimpleTokenAuthConfig(TypedDict, total=False):
 
 class ClientConfig(TypedDict, total=False):
     base_url: str
+    headers: Optional[Dict[str, str]]
     auth: Optional[Union[SimpleTokenAuthConfig, AuthConfigBase]]
     paginator: Optional[PaginatorType]
 
