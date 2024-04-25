@@ -1,6 +1,7 @@
 from collections import namedtuple
 from dlt.common.exceptions import DictValidationException
-from sources.rest_api.paginators import SinglePagePaginator
+from dlt.sources.helpers.rest_client.paginators import SinglePagePaginator
+
 from sources.rest_api.auth import HttpBasicAuth
 
 

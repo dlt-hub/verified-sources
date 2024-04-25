@@ -19,6 +19,13 @@ from dlt.common import logger
 from dlt.common.utils import update_dict_nested
 from dlt.common.typing import TSecretStrValue
 from dlt.sources.helpers.requests import Response
+from dlt.sources.helpers.rest_client.paginators import (
+    BasePaginator,
+    HeaderLinkPaginator,
+    JSONResponsePaginator,
+    SinglePagePaginator,
+    JSONResponseCursorPaginator,
+)
 
 from .auth import (
     AuthConfigBase,
@@ -27,13 +34,7 @@ from .auth import (
     APIKeyAuth,
     OAuthJWTAuth,
 )
-from .paginators import (
-    BasePaginator,
-    HeaderLinkPaginator,
-    JSONResponsePaginator,
-    SinglePagePaginator,
-    JSONResponseCursorPaginator,
-)
+
 from .typing import (
     SimpleTokenAuthConfig,
     IncrementalArgs,
