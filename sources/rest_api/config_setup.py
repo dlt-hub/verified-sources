@@ -26,6 +26,7 @@ from dlt.sources.helpers.rest_client.paginators import (
     SinglePagePaginator,
     JSONResponseCursorPaginator,
 )
+from dlt.sources.helpers.rest_client.exceptions import IgnoreResponseException
 
 from .auth import (
     AuthConfigBase,
@@ -47,7 +48,6 @@ from .typing import (
     EndpointResource,
     DefaultEndpointResource,
 )
-from .exceptions import IgnoreResponseException
 
 
 PAGINATOR_MAP: Dict[str, Type[BasePaginator]] = {
