@@ -3,6 +3,7 @@ import pytest
 from sources.rest_api import rest_api_source
 from .source_configs import VALID_CONFIGS, INVALID_CONFIGS
 
+
 @pytest.mark.parametrize("expected_message, exception, invalid_config", INVALID_CONFIGS)
 def test_invalid_configurations(expected_message, exception, invalid_config):
     with pytest.raises(exception, match=expected_message):

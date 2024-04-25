@@ -15,7 +15,7 @@ from dlt.extract.incremental.typing import LastValueFunc
 
 from dlt.sources.helpers.rest_client.paginators import BasePaginator
 from dlt.sources.helpers.rest_client.typing import HTTPMethodBasic
-from .auth import AuthConfigBase
+from dlt.sources.helpers.rest_client.auth import AuthConfigBase
 
 from dlt.common.schema.typing import (
     TColumnNames,
