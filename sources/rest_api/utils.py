@@ -1,6 +1,4 @@
-from functools import reduce
-from operator import getitem
-from typing import Any, Sequence, Union, Tuple
+from typing import Tuple
 
 from dlt.common import logger
 from dlt.extract.source import DltSource

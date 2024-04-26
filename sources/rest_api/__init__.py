@@ -21,16 +21,16 @@ from dlt.common.schema.schema import Schema
 from dlt.common.schema.typing import TSchemaContract
 from dlt.common.configuration.specs import BaseConfiguration
 
-from .client import RESTClient
-from .detector import single_entity_path
-from .paginators import BasePaginator
+from dlt.sources.helpers.rest_client import RESTClient
+from dlt.sources.helpers.rest_client.detector import single_entity_path
+from dlt.sources.helpers.rest_client.paginators import BasePaginator
+from dlt.sources.helpers.rest_client.typing import HTTPMethodBasic
 from .typing import (
     ClientConfig,
     ResolvedParam,
     Endpoint,
     EndpointResource,
     RESTAPIConfig,
-    HTTPMethodBasic,
 )
 from .config_setup import (
     IncrementalParam,

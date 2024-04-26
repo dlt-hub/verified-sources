@@ -2,6 +2,8 @@ import pytest
 
 import dlt
 from dlt.pipeline.exceptions import PipelineStepFailed
+from dlt.sources.helpers.rest_client.paginators import BasePaginator
+
 from tests.utils import assert_load_info, load_table_counts, assert_query_data
 
 from sources.rest_api import rest_api_source
@@ -11,8 +13,6 @@ from sources.rest_api import (
     EndpointResource,
     Endpoint,
 )
-from sources.rest_api.paginators import BasePaginator
-
 
 
 def test_load_mock_api(mock_api_server):
