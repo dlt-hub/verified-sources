@@ -27,8 +27,8 @@ from dlt.sources.helpers.rest_client.paginators import (
     JSONResponseCursorPaginator,
 )
 from dlt.sources.helpers.rest_client.exceptions import IgnoreResponseException
-from dlt.sources.helpers.rest_client.auth import AuthConfigBase
-from .auth import (
+from dlt.sources.helpers.rest_client.auth import (
+    AuthConfigBase,
     HttpBasicAuth,
     BearerTokenAuth,
     APIKeyAuth,
