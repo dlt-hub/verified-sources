@@ -21,10 +21,11 @@ from dlt.common.typing import TSecretStrValue
 from dlt.sources.helpers.requests import Response
 from dlt.sources.helpers.rest_client.paginators import (
     BasePaginator,
+    SinglePagePaginator,
     HeaderLinkPaginator,
     JSONResponsePaginator,
-    SinglePagePaginator,
     JSONResponseCursorPaginator,
+    OffsetPaginator,
 )
 from dlt.sources.helpers.rest_client.exceptions import IgnoreResponseException
 from dlt.sources.helpers.rest_client.auth import (
@@ -55,6 +56,7 @@ PAGINATOR_MAP: Dict[str, Type[BasePaginator]] = {
     "auto": None,
     "single_page": SinglePagePaginator,
     "cursor": JSONResponseCursorPaginator,
+    "offset": OffsetPaginator,
 }
 
 
