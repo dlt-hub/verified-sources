@@ -21,7 +21,7 @@ from sqlalchemy import (
     SmallInteger,
     String,
     DateTime,
-    Double,
+    Float,
     Date,
     Time,
     JSON,
@@ -152,7 +152,7 @@ class SQLAlchemySourceDB:
                 Column("datetime_ntz_col", DateTime(timezone=False), nullable=nullable),
                 Column("date_col", Date, nullable=nullable),
                 Column("time_col", Time, nullable=nullable),
-                Column("float_col", Double, nullable=nullable),
+                Column("float_col", Float, nullable=nullable),
                 Column("json_col", JSON, nullable=nullable),
                 Column("bool_col", Boolean, nullable=nullable),
             )
