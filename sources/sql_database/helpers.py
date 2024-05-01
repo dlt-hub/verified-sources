@@ -13,7 +13,6 @@ from typing import (
 import operator
 
 import dlt
-from dlt.common import logger
 from dlt.common.configuration.specs import BaseConfiguration, configspec
 from dlt.common.exceptions import MissingDependencyException
 from dlt.common.schema import TTableSchemaColumns
@@ -31,6 +30,7 @@ from .schema_types import (
 
 from sqlalchemy import Table, create_engine
 from sqlalchemy.engine import Engine
+from sqlalchemy.exc import CompileError
 
 
 TableBackend = Literal["sqlalchemy", "pyarrow", "pandas", "connectorx"]
@@ -157,11 +157,15 @@ class TableLoader:
                 drivername=self.engine.url.get_backend_name()
             ).render_as_string(hide_password=False),
         )
-        df = cx.read_sql(
-            conn,
-            str(query.compile(self.engine, compile_kwargs={"literal_binds": True})),
-            **backend_kwargs,
-        )
+        try:
+            query_str = str(
+                query.compile(self.engine, compile_kwargs={"literal_binds": True})
+            )
+        except CompileError as ex:
+            raise NotImplementedError(
+                f"Query for table {self.table.name} could not be compiled to string to execute it on ConnectorX. If you are on SQLAlchemy 1.4.x the causing exception is due to literals that cannot be rendered, upgrade to 2.x: {str(ex)}"
+            ) from ex
+        df = cx.read_sql(conn, query_str, **backend_kwargs)
         yield df
 
 

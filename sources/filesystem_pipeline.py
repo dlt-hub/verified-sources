@@ -153,7 +153,7 @@ def copy_files_resource(local_folder: str) -> None:
     # a step that copies files into test storage
     def _copy(item: FileItemDict) -> FileItemDict:
         # instantiate fsspec and copy file
-        dest_file = os.path.join(local_folder, item["file_name"])
+        dest_file = os.path.join(local_folder, item["relative_path"])
         # create dest folder
         os.makedirs(os.path.dirname(dest_file), exist_ok=True)
         # download file

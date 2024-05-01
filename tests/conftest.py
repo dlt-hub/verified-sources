@@ -33,9 +33,8 @@ def pytest_configure(config):
     # push telemetry to CI
     os.environ["RUNTIME__DLTHUB_TELEMETRY"] = "False"
     os.environ[
-        "RUNTIME__DLTHUB_TELEMETRY_SEGMENT_WRITE_KEY"
-    ] = "TLJiyRkGVZGCi2TtjClamXpFcxAA1rSB"
-
+        "RUNTIME__DLTHUB_TELEMETRY_ENDPOINT"
+    ] = "https://telemetry-tracker.services4758.workers.dev"
     # path pipeline instance id up to millisecond
     from dlt.common import pendulum
     from dlt.pipeline.pipeline import Pipeline

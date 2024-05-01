@@ -1,7 +1,7 @@
 from typing import Optional, Any, Sequence, Type, TYPE_CHECKING
 from typing_extensions import TypeAlias
 from sqlalchemy import Table, Column
-from sqlalchemy import Row
+from sqlalchemy.engine import Row
 from sqlalchemy.sql import sqltypes, Select
 
 from dlt.common import logger
