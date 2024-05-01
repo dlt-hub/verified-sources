@@ -11,11 +11,11 @@ TESTS_BUCKET_URLS = [
 GLOB_RESULTS = [
     {
         "glob": None,
-        "file_names": ["sample.txt"],
+        "relative_paths": ["sample.txt"],
     },
     {
         "glob": "*/*",
-        "file_names": [
+        "relative_paths": [
             "csv/freshman_kgs.csv",
             "csv/freshman_lbs.csv",
             "csv/mlb_players.csv",
@@ -27,7 +27,7 @@ GLOB_RESULTS = [
     },
     {
         "glob": "**/*.csv",
-        "file_names": [
+        "relative_paths": [
             "csv/freshman_kgs.csv",
             "csv/freshman_lbs.csv",
             "csv/mlb_players.csv",
@@ -39,7 +39,7 @@ GLOB_RESULTS = [
     },
     {
         "glob": "*/*.csv",
-        "file_names": [
+        "relative_paths": [
             "csv/freshman_kgs.csv",
             "csv/freshman_lbs.csv",
             "csv/mlb_players.csv",
@@ -48,7 +48,7 @@ GLOB_RESULTS = [
     },
     {
         "glob": "csv/*",
-        "file_names": [
+        "relative_paths": [
             "csv/freshman_kgs.csv",
             "csv/freshman_lbs.csv",
             "csv/mlb_players.csv",
@@ -57,13 +57,13 @@ GLOB_RESULTS = [
     },
     {
         "glob": "csv/mlb*",
-        "file_names": [
+        "relative_paths": [
             "csv/mlb_players.csv",
             "csv/mlb_teams_2012.csv",
         ],
     },
     {
         "glob": "*",
-        "file_names": ["sample.txt"],
+        "relative_paths": ["sample.txt"],
     },
 ]

@@ -112,14 +112,14 @@ def generate_comments(post_id, count=50):
     return [{"id": i, "body": f"Comment {i} for post {post_id}"} for i in range(count)]
 
 
-def get_page_number(qs, key="page", default=1):
+def get_page_number_from_query(qs, key="page", default=1):
     return int(qs.get(key, [default])[0])
 
 
 def paginate_response(
     request, records, page_size=10, records_key="data", use_absolute_url=True
 ):
-    page_number = get_page_number(request.qs)
+    page_number = get_page_number_from_query(request.qs)
     total_records = len(records)
     total_pages = (total_records + page_size - 1) // page_size
     start_index = (page_number - 1) * 10
@@ -176,6 +176,28 @@ def mock_api_server():
             return paginate_response(
                 request, generate_posts(), records_key="many-results"
             )
+
+        @router.post(r"/posts/search$")
+        def search_posts(request, context):
+            body = request.json()
+            page_size = body.get("page_size", 10)
+            page_number = body.get("page", 1)
+
+            # Simulate a search with filtering
+            records = generate_posts()
+            ids_greater_than = body.get("ids_greater_than", 0)
+            records = [r for r in records if r["id"] > ids_greater_than]
+
+            total_records = len(records)
+            total_pages = (total_records + page_size - 1) // page_size
+            start_index = (page_number - 1) * page_size
+            end_index = start_index + page_size
+            records_slice = records[start_index:end_index]
+
+            return {
+                "data": records_slice,
+                "next_page": page_number + 1 if page_number < total_pages else None,
+            }
 
         @router.get("/protected/posts/basic-auth")
         def protected_basic_auth(request, context):

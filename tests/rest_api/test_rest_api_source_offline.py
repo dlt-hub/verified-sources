@@ -2,6 +2,8 @@ import pytest
 
 import dlt
 from dlt.pipeline.exceptions import PipelineStepFailed
+from dlt.sources.helpers.rest_client.paginators import BasePaginator
+
 from tests.utils import assert_load_info, load_table_counts, assert_query_data
 
 from sources.rest_api import rest_api_source
@@ -11,8 +13,6 @@ from sources.rest_api import (
     EndpointResource,
     Endpoint,
 )
-
-from .source_configs import VALID_CONFIGS, INVALID_CONFIGS
 
 
 def test_load_mock_api(mock_api_server):
@@ -132,6 +132,40 @@ def test_ignoring_endpoint_returning_404(mock_api_server):
         {"id": 2, "title": "Post 2"},
         {"id": 3, "title": "Post 3"},
     ]
+
+
+def test_source_with_post_request(mock_api_server):
+    class JSONBodyPageCursorPaginator(BasePaginator):
+        def update_state(self, response):
+            self.next_reference = response.json().get("next_page")
+
+        def update_request(self, request):
+            if request.json is None:
+                request.json = {}
+
+            request.json["page"] = self.next_reference
+
+    mock_source = rest_api_source(
+        {
+            "client": {"base_url": "https://api.example.com"},
+            "resources": [
+                {
+                    "name": "search_posts",
+                    "endpoint": {
+                        "path": "/posts/search",
+                        "method": "POST",
+                        "json": {"ids_greater_than": 50},
+                        "paginator": JSONBodyPageCursorPaginator(),
+                    },
+                }
+            ],
+        }
+    )
+
+    res = list(mock_source.with_resources("search_posts"))
+
+    for i in range(49):
+        assert res[i] == {"id": 51 + i, "title": f"Post {51 + i}"}
 
 
 def test_unauthorized_access_to_protected_endpoint(mock_api_server):
@@ -254,14 +288,3 @@ def test_load_mock_api_typeddict_config(mock_api_server):
 
     assert table_counts["posts"] == 100
     assert table_counts["post_comments"] == 5000
-
-
-@pytest.mark.parametrize("expected_message, exception, invalid_config", INVALID_CONFIGS)
-def test_invalid_configurations(expected_message, exception, invalid_config):
-    with pytest.raises(exception, match=expected_message):
-        rest_api_source(invalid_config)
-
-
-@pytest.mark.parametrize("valid_config", VALID_CONFIGS)
-def test_valid_configurations(valid_config):
-    rest_api_source(valid_config)

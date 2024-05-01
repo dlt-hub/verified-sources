@@ -6,7 +6,6 @@ from typing import (
     Optional,
     TypedDict,
     Union,
-    Literal,
 )
 
 from dlt.common import jsonpath
@@ -14,8 +13,9 @@ from dlt.common.typing import TSortOrder
 from dlt.extract.items import TTableHintTemplate
 from dlt.extract.incremental.typing import LastValueFunc
 
-from .paginators import BasePaginator
-from .auth import AuthConfigBase
+from dlt.sources.helpers.rest_client.paginators import BasePaginator
+from dlt.sources.helpers.rest_client.typing import HTTPMethodBasic
+from dlt.sources.helpers.rest_client.auth import AuthConfigBase
 
 from dlt.common.schema.typing import (
     TColumnNames,
@@ -27,10 +27,6 @@ from dlt.common.schema.typing import (
 PaginatorConfigDict = Dict[str, Any]
 PaginatorType = Union[BasePaginator, str, PaginatorConfigDict]
 
-HTTPMethodBasic = Literal["GET", "POST"]
-HTTPMethodExtended = Literal["PUT", "PATCH", "DELETE", "HEAD", "OPTIONS"]
-HTTPMethod = Union[HTTPMethodBasic, HTTPMethodExtended]
-
 
 class SimpleTokenAuthConfig(TypedDict, total=False):
     token: str
@@ -38,6 +34,7 @@ class SimpleTokenAuthConfig(TypedDict, total=False):
 
 class ClientConfig(TypedDict, total=False):
     base_url: str
+    headers: Optional[Dict[str, str]]
     auth: Optional[Union[SimpleTokenAuthConfig, AuthConfigBase]]
     paginator: Optional[PaginatorType]
 

@@ -19,21 +19,23 @@ from dlt.common import logger
 from dlt.common.utils import update_dict_nested
 from dlt.common.typing import TSecretStrValue
 from dlt.sources.helpers.requests import Response
-
-from .auth import (
+from dlt.sources.helpers.rest_client.paginators import (
+    BasePaginator,
+    SinglePagePaginator,
+    HeaderLinkPaginator,
+    JSONResponsePaginator,
+    JSONResponseCursorPaginator,
+    OffsetPaginator,
+)
+from dlt.sources.helpers.rest_client.exceptions import IgnoreResponseException
+from dlt.sources.helpers.rest_client.auth import (
     AuthConfigBase,
     HttpBasicAuth,
     BearerTokenAuth,
     APIKeyAuth,
     OAuthJWTAuth,
 )
-from .paginators import (
-    BasePaginator,
-    HeaderLinkPaginator,
-    JSONResponsePaginator,
-    SinglePagePaginator,
-    JSONResponseCursorPaginator,
-)
+
 from .typing import (
     SimpleTokenAuthConfig,
     IncrementalArgs,
@@ -46,7 +48,6 @@ from .typing import (
     EndpointResource,
     DefaultEndpointResource,
 )
-from .exceptions import IgnoreResponseException
 
 
 PAGINATOR_MAP: Dict[str, Type[BasePaginator]] = {
@@ -55,6 +56,7 @@ PAGINATOR_MAP: Dict[str, Type[BasePaginator]] = {
     "auto": None,
     "single_page": SinglePagePaginator,
     "cursor": JSONResponseCursorPaginator,
+    "offset": OffsetPaginator,
 }
 
 

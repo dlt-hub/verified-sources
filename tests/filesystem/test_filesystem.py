@@ -37,9 +37,9 @@ def test_file_list(bucket_url: str, glob_params: Dict[str, Any]) -> None:
 
     all_files = list(filesystem_res)
     file_count = len(all_files)
-    file_names = [item["file_name"] for item in all_files]
-    assert file_count == len(glob_params["file_names"])
-    assert file_names == glob_params["file_names"]
+    relative_paths = [item["relative_path"] for item in all_files]
+    assert file_count == len(glob_params["relative_paths"])
+    assert set(relative_paths) == set(glob_params["relative_paths"])
 
 
 @pytest.mark.parametrize("extract_content", [True, False])
@@ -77,7 +77,7 @@ def test_load_content_resources(bucket_url: str, extract_content: bool) -> None:
     def assert_csv_file(item: FileItem):
         # on windows when checking out, git will convert lf into cr+lf so we have more bytes (+ number of lines: 25)
         assert item["size_in_bytes"] in (742, 767)
-        assert item["file_name"] == "met_csv/A801/A881_20230920.csv"
+        assert item["relative_path"] == "met_csv/A801/A881_20230920.csv"
         assert item["file_url"].endswith("/samples/met_csv/A801/A881_20230920.csv")
         assert item["mime_type"] == "text/csv"
         # print(item)
@@ -153,7 +153,7 @@ def test_standard_readers(bucket_url: str) -> None:
     # a step that copies files into test storage
     def _copy(item: FileItemDict):
         # instantiate fsspec and copy file
-        dest_file = os.path.join(TEST_STORAGE_ROOT, item["file_name"])
+        dest_file = os.path.join(TEST_STORAGE_ROOT, item["relative_path"])
         # create dest folder
         os.makedirs(os.path.dirname(dest_file), exist_ok=True)
         # download file
@@ -248,7 +248,7 @@ def test_file_chunking() -> None:
         files_per_page=2,
     )
 
-    from dlt.extract.pipe import PipeIterator
+    from dlt.extract.pipe_iterator import PipeIterator
 
     # use pipe iterator to get items as they go through pipe
     for pipe_item in PipeIterator.from_pipe(resource._pipe):
