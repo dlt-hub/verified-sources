@@ -1,7 +1,7 @@
 import os
 import platform
 import pytest
-from typing import Any, Dict, Iterator, List, Set
+from typing import Any, Iterator, List, Sequence, Dict, Optional, Set
 from os import environ
 from unittest.mock import patch
 
@@ -18,7 +18,7 @@ from dlt.common.configuration.providers import (
     ConfigTomlProvider,
     SecretsTomlProvider,
 )
-from dlt.common.pipeline import LoadInfo, PipelineContext
+from dlt.common.pipeline import LoadInfo, PipelineContext, ExtractInfo
 from dlt.common.storages import FileStorage
 from dlt.common.schema.typing import TTableSchema
 
@@ -225,6 +225,27 @@ def load_table_distinct_counts(
         with c.execute_query(query) as cur:
             rows = list(cur.fetchall())
             return {r[0]: r[1] for r in rows}
+
+
+def select_data(
+    p: dlt.Pipeline, sql: str, schema_name: str = None
+) -> List[Sequence[Any]]:
+    """Returns select `sql` results as list."""
+    with p.sql_client(schema_name=schema_name) as c:
+        with c.execute_query(sql) as cur:
+            return list(cur.fetchall())
+
+
+def get_table_metrics(
+    extract_info: ExtractInfo, table_name: str
+) -> Optional[Dict[str, Any]]:
+    """Returns table metrics from ExtractInfo object."""
+    table_metrics_list = [
+        d
+        for d in extract_info.asdict()["table_metrics"]
+        if d["table_name"] == table_name
+    ]
+    return None if len(table_metrics_list) == 0 else table_metrics_list[0]
 
 
 def load_data_table_counts(p: dlt.Pipeline) -> DictStrAny:

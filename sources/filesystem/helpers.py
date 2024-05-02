@@ -1,5 +1,5 @@
 """Helpers for the filesystem resource."""
-from typing import TYPE_CHECKING, Any, Dict, Iterable, List, Optional, Type, Union
+from typing import Any, Dict, Iterable, List, Optional, Type, Union
 from fsspec import AbstractFileSystem  # type: ignore
 
 from dlt.common.configuration import resolve_type
