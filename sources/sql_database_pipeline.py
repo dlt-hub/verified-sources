@@ -23,6 +23,8 @@ def load_select_tables_from_database() -> None:
     credentials = ConnectionStringCredentials(
         "mysql+pymysql://rfamro@mysql-rfam-public.ebi.ac.uk:4497/Rfam"
     )
+    # To pass the credentials from `secrets.toml`, comment out the above credentials.
+    # And the credentials will be automatically read from `secrets.toml`.
 
     # Configure the source to load a few select tables incrementally
     source_1 = sql_database(credentials).with_resources("family", "clan")
