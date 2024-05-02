@@ -93,7 +93,7 @@ def create_paginator(paginator_config: PaginatorType) -> Optional[BasePaginator]
 
 
 def create_auth(
-    auth_config: Optional[Union[SimpleTokenAuthConfig, AuthConfigBase]],
+    auth_config: Optional[Union[SimpleTokenAuthConfig, AuthConfigBase, Dict[str, str]]],
 ) -> Optional[AuthConfigBase]:
     if isinstance(auth_config, AuthConfigBase):
         return auth_config
