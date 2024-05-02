@@ -29,7 +29,8 @@ def assert_loaded_data(
 ) -> None:
     """Asserts loaded data meets expectation."""
     qual_name = pipeline.sql_client().make_qualified_table_name(table_name)
-    column_str = ", ".join(map(escape_postgres_identifier, column_names))
+    escape_id = pipeline.destination_client().capabilities.escape_identifier
+    column_str = ", ".join(map(escape_id, column_names))
     qry = f"SELECT {column_str} FROM {qual_name}"
     if where_clause is not None:
         qry += " WHERE " + where_clause
