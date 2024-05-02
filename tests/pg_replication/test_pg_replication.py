@@ -674,7 +674,7 @@ def test_table_schema_change(
         {"c1": 5, "c2": 1, "c3": 1, "c4": 1},
     ]
     assert_loaded_data(
-        dest_pl, "items", ["c1", "c2", "c3", "c4"], exp, "c1", "c1 IN ('4', '5')"
+        dest_pl, "items", ["c1", "c2", "c3", "c4"], exp, "c1", "c1 IN (4, 5)"
     )
 
 
