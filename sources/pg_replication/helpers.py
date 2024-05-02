@@ -17,16 +17,6 @@ from psycopg2.extras import (
     ReplicationMessage,
     StopReplication,
 )
-from pypgoutput.decoders import (  # type: ignore[import-untyped]
-    Begin,
-    Commit,
-    Relation,
-    Insert,
-    Update,
-    Delete,
-    Truncate,
-    ColumnData,
-)
 
 import dlt
 
@@ -52,6 +42,14 @@ except Exception:
 
 from .schema_types import _to_dlt_column_schema, _to_dlt_val
 from .exceptions import IncompatiblePostgresVersionException
+from .decoders import (
+    Begin,
+    Relation,
+    Insert,
+    Update,
+    Delete,
+    ColumnData,
+)
 
 
 @dlt.sources.config.with_config(sections=("sources", "pg_replication"))
@@ -630,7 +628,7 @@ class MessageConsumer:
         elif op == b"D":
             self.process_change(Delete(msg.payload), msg.data_start)
         elif op == b"B":
-            self.last_commit_ts = Begin(msg.payload).commit_ts
+            self.last_commit_ts = Begin(msg.payload).commit_ts  # type: ignore[assignment]
         elif op == b"C":
             self.process_commit(msg)
         elif op == b"R":

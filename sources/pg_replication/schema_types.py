@@ -1,14 +1,14 @@
 import json
 from typing import Optional, Any, Dict
 
-from pypgoutput.decoders import ColumnType  # type: ignore[import-untyped]
-
 from dlt.common import Decimal
 from dlt.common.data_types.typing import TDataType
 from dlt.common.data_types.type_helpers import coerce_value
 from dlt.common.schema.typing import TColumnSchema, TColumnType
 from dlt.destinations.impl.postgres import capabilities
 from dlt.destinations.impl.postgres.postgres import PostgresTypeMapper
+
+from .decoders import ColumnType
 
 
 _DUMMY_VALS: Dict[TDataType, Any] = {

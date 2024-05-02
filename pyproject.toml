@@ -44,7 +44,6 @@ connectorx = ">=0.3.1"
 
 [tool.poetry.group.pg_replication.dependencies]
 psycopg2-binary = ">=2.9.9"
-pypgoutput = "0.0.3"
 
 [tool.poetry.group.google_sheets.dependencies]
 google-api-python-client = "^2.78.0"
