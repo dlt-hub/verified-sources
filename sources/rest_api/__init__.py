@@ -91,7 +91,7 @@ def rest_api_source(
 
 def rest_api_resources(config: RESTAPIConfig) -> List[DltResource]:
     """
-    Creates and configures a REST API source for data extraction.
+    Creates a list of resources from a REST API configuration.
 
     Example:
         github_source = rest_api_resources({
