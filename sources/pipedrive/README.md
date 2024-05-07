@@ -22,7 +22,7 @@ tuple represents a mapping for a particular entity. Here's an explanation of eac
 These entities map the fields associated with them. To get more information, please read the
 [Pipedrive documentation.](https://developers.pipedrive.com/docs/api/v1)
 
-> Note, the `deals_flow` and `deals_participants` resources are built based on the "deals" resource. Therefore, it’s a good practice to load them together in one source.
+> Note that `deals_flow` and `deals_participants` resources are built based on the `deals` resource. Therefore, loading them together in one source is a good practice.
 
 ## Initialize the pipeline
 
