@@ -1,11 +1,7 @@
 import dlt
-from dlt.sources.helpers import requests
 
-
-def _create_auth_headers(api_secret_key):
-    """Constructs Bearer type authorization header which is the most common authorization method"""
-    headers = {"Authorization": f"Bearer {api_secret_key}"}
-    return headers
+from dlt.sources.helpers.rest_client.client import RESTClient
+from dlt.sources.helpers.rest_client.auth import BearerTokenAuth
 
 
 @dlt.source
@@ -25,19 +21,22 @@ def source(
 def resource_1(
     explicit_arg, api_url=dlt.config.value, api_secret_key=dlt.secrets.value
 ):
-    headers = _create_auth_headers(api_secret_key)
-
     # uncomment line below to see if your headers are correct (ie. include valid api_key)
     # print(headers)
     # print(api_url)
 
-    # make a call to the endpoint with request library
-    resp = requests.get("%s?query=%s" % (api_url, explicit_arg), headers=headers)
-    resp.raise_for_status()
-    # yield the data from the resource
-    data = resp.json()
+    # Build rest client instance
+    client = RESTClient(
+        base_url=api_url,
+        auth=BearerTokenAuth(api_secret_key),
+    )
+    response = client.get(
+        "/",
+        params={"query": explicit_arg},
+    )
 
     # yield a list of items
+    data = response.json()
     yield data["items"]
 
 
@@ -45,15 +44,18 @@ def resource_1(
 def resource_2(
     api_url=dlt.config.value, api_secret_key=dlt.secrets.value, default_arg="default"
 ):
-    headers = _create_auth_headers(api_secret_key)
-
-    # make a call to the endpoint with request library
-    resp = requests.get("%s?last_value=%s" % (api_url, default_arg), headers=headers)
-    resp.raise_for_status()
-    # yield the data from the resource
-    data = resp.json()
+    # Build rest client instance
+    client = RESTClient(
+        base_url=api_url,
+        auth=BearerTokenAuth(api_secret_key),
+    )
+    response = client.get(
+        "/",
+        params={"last_value": default_arg},
+    )
 
     # yield item by item
+    data = response.json()
     for value in data["data"]:
         yield value
 
