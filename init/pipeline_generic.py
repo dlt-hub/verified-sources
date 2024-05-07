@@ -1,7 +1,8 @@
 import dlt
 
-from dlt.sources.helpers.rest_client.client import RESTClient
 from dlt.sources.helpers.rest_client.auth import BearerTokenAuth
+from dlt.sources.helpers.rest_client.client import RESTClient
+from dlt.sources.helpers.rest_client.paginators import JSONResponsePaginator
 
 
 @dlt.source
@@ -29,6 +30,7 @@ def resource_1(
     client = RESTClient(
         base_url=api_url,
         auth=BearerTokenAuth(api_secret_key),
+        paginator=JSONResponsePaginator(next_url_path="next"),
     )
 
     # yield page by page
