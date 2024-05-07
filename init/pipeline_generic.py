@@ -30,14 +30,10 @@ def resource_1(
         base_url=api_url,
         auth=BearerTokenAuth(api_secret_key),
     )
-    response = client.get(
-        "/",
-        params={"query": explicit_arg},
-    )
 
-    # yield a list of items
-    data = response.json()
-    yield data["items"]
+    # yield page by page
+    for page in client.paginate(params={"query": explicit_arg}):
+        yield page["items"]
 
 
 @dlt.resource
@@ -49,15 +45,10 @@ def resource_2(
         base_url=api_url,
         auth=BearerTokenAuth(api_secret_key),
     )
-    response = client.get(
-        "/",
-        params={"last_value": default_arg},
-    )
 
     # yield item by item
-    data = response.json()
-    for value in data["data"]:
-        yield value
+    for page in client.paginate(params={"query": default_arg}):
+        yield page["data"]
 
 
 if __name__ == "__main__":
