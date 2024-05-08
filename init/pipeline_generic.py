@@ -2,8 +2,8 @@ from typing import Any, Dict, Optional
 
 import dlt
 
+from dlt.sources.helpers.rest_client import paginate
 from dlt.sources.helpers.rest_client.auth import BearerTokenAuth
-from dlt.sources.helpers.rest_client.client import RESTClient
 from dlt.sources.helpers.rest_client.paginators import HeaderLinkPaginator
 
 # This pipeline demonstrates how to build a simple REST client for interacting with GitHub's API.
@@ -41,16 +41,15 @@ def my_repo_issues(
     """
     # repository url should be in the format `OWNER/REPO`
 
-    # Build rest client instance
-    client = RESTClient(
-        base_url=f"{api_url}/repos",
+    # paginate issues and yield every page
+    url = f"{api_url}/repos/{repository}/issues"
+    for page in paginate(
+        url,
+        params=params,
         auth=BearerTokenAuth(api_secret_key),
         paginator=HeaderLinkPaginator(),
-    )
-
-    # paginate issues and yield every page
-    url = f"/{repository}/issues"
-    for page in client.paginate(url, params=params):
+    ):
+        print(page)
         yield page
 
 
@@ -63,16 +62,15 @@ def my_repo_pulls(
 ):
     # repository url should be in the format `OWNER/REPO`
 
-    # Build rest client instance
-    client = RESTClient(
-        base_url=f"{api_url}/repos",
+    # paginate pull requests and yield every page
+    url = f"{api_url}/repos/{repository}/pulls"
+    for page in paginate(
+        url,
+        params=params,
         auth=BearerTokenAuth(api_secret_key),
         paginator=HeaderLinkPaginator(),
-    )
-
-    # paginate pull requests and yield every page
-    url = f"/{repository}/pulls"
-    for page in client.paginate(url, params=params):
+    ):
+        print(page)
         yield page
 
 

@@ -25,7 +25,7 @@ def my_repo_pulls(
     # repository url should be in the format `OWNER/REPO`
 
     # paginate pull requests and yield every page
-    url = f"{api_url}/{repository}/pulls"
+    url = f"{api_url}/repos/{repository}/pulls"
     for page in paginate(
         url,
         auth=BearerTokenAuth(api_secret_key),
