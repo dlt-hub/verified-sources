@@ -12,14 +12,18 @@ from dlt.sources.helpers.rest_client.paginators import HeaderLinkPaginator
 
 
 @dlt.source
-def source(api_url: str = dlt.config.value, api_secret_key: str = dlt.secrets.value):
-    return my_repo_pulls(api_url, api_secret_key)
+def source(
+    api_url: str = dlt.config.value,
+    api_secret_key: str = dlt.secrets.value,
+    repository: str = dlt.config.value,
+):
+    return my_repo_pulls(api_url, api_secret_key, repository)
 
 
 @dlt.resource(write_disposition="append")
 def my_repo_pulls(
     api_url: str = dlt.config.value,
-    api_secret_key=dlt.secrets.value,
+    api_secret_key: str = dlt.secrets.value,
     repository: str = dlt.config.value,
 ):
     # repository url should be in the format `OWNER/REPO`
