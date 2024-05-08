@@ -42,7 +42,7 @@ if __name__ == "__main__":
     # otherwise the defaults will be used that are derived from the current script name
     pipeline = dlt.pipeline(
         pipeline_name="pipeline",
-        destination="bigquery",
+        destination="duckdb",
         dataset_name="pipeline_data",
     )
 
