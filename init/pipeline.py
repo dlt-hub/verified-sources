@@ -4,6 +4,12 @@ from dlt.sources.helpers.rest_client.auth import BearerTokenAuth
 from dlt.sources.helpers.rest_client.client import RESTClient
 from dlt.sources.helpers.rest_client.paginators import HeaderLinkPaginator
 
+# This pipeline demonstrates how to build a simple REST client for interacting with GitHub's API.
+# It showcases the use of authentication via bearer tokens and pagination for navigating through
+# GitHub issues and pull requests within a repository.
+
+# Note: Ensure the API key (Bearer token) is set up correctly in secrets or environment variables.
+
 
 @dlt.source
 def source(api_url: str = dlt.config.value, api_secret_key: str = dlt.secrets.value):
