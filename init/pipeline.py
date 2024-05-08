@@ -1,43 +1,46 @@
 import dlt
-from dlt.sources.helpers import requests
+
+from dlt.sources.helpers.rest_client.auth import BearerTokenAuth
+from dlt.sources.helpers.rest_client.client import RESTClient
+from dlt.sources.helpers.rest_client.paginators import HeaderLinkPaginator
 
 
 @dlt.source
-def source(api_secret_key=dlt.secrets.value):
-    return resource(api_secret_key)
-
-
-def _create_auth_headers(api_secret_key):
-    """Constructs Bearer type authorization header which is the most common authorization method"""
-    headers = {"Authorization": f"Bearer {api_secret_key}"}
-    return headers
+def source(api_url: str = dlt.config.value, api_secret_key: str = dlt.secrets.value):
+    return my_repo_pulls(api_url, api_secret_key)
 
 
 @dlt.resource(write_disposition="append")
-def resource(api_secret_key=dlt.secrets.value):
-    headers = _create_auth_headers(api_secret_key)
+def my_repo_pulls(
+    api_url: str = dlt.config.value,
+    api_secret_key=dlt.secrets.value,
+    repository: str = dlt.config.value,
+):
+    # repository url should be in the format `OWNER/REPO`
 
-    # check if authentication headers look fine
-    print(headers)
+    # Build rest client instance
+    client = RESTClient(
+        base_url=f"{api_url}/repos",
+        auth=BearerTokenAuth(api_secret_key),
+        paginator=HeaderLinkPaginator(),
+    )
 
-    # make an api call here
-    # response = requests.get(url, headers=headers, params=params)
-    # response.raise_for_status()
-    # yield response.json()
-
-    # test data for loading validation, delete it once you yield actual data
-    test_data = [{"id": 0}, {"id": 1}]
-    yield test_data
+    # paginate pull requests and yield every page
+    url = f"/{repository}/pulls"
+    for page in client.paginate(url):
+        yield page
 
 
 if __name__ == "__main__":
-    # configure the pipeline with your destination details
+    # specify the pipeline name, destination and dataset name when configuring pipeline,
+    # otherwise the defaults will be used that are derived from the current script name
     pipeline = dlt.pipeline(
-        pipeline_name="pipeline", destination="bigquery", dataset_name="pipeline_data"
+        pipeline_name="pipeline",
+        destination="bigquery",
+        dataset_name="pipeline_data",
     )
 
-    # print credentials by running the resource
-    data = list(resource())
+    data = list(my_repo_pulls())
 
     # print the data yielded from resource
     print(data)

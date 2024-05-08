@@ -1,4 +1,5 @@
 from typing import Any, Dict, Optional
+
 import dlt
 
 from dlt.sources.helpers.rest_client.auth import BearerTokenAuth
@@ -23,13 +24,13 @@ def source(
     # Ensure that both the API URL and secret key are provided for GitHub
     # either via secrets.toml or via environment variables.
     return [
-        dlt_repo_issues(api_url, api_secret_key, params=issues_params),
-        dlt_repo_pulls(api_url, api_secret_key, params=pulls_params),
+        my_repo_issues(api_url, api_secret_key, params=issues_params),
+        my_repo_pulls(api_url, api_secret_key, params=pulls_params),
     ]
 
 
 @dlt.resource
-def dlt_repo_issues(
+def my_repo_issues(
     api_url: str = dlt.config.value,
     api_secret_key: str = dlt.secrets.value,
     repository: str = dlt.config.value,
@@ -54,7 +55,7 @@ def dlt_repo_issues(
 
 
 @dlt.resource
-def dlt_repo_pulls(
+def my_repo_pulls(
     api_url: str = dlt.config.value,
     api_secret_key: str = dlt.secrets.value,
     repository: str = dlt.config.value,
