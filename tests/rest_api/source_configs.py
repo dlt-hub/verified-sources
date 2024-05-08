@@ -18,7 +18,7 @@ INVALID_CONFIGS = [
         config={"resources": []},
     ),
     ConfigTest(
-        expected_message="In ./client: following fields are unexpected {'invalid_key'}",
+        expected_message="In path ./client: following fields are unexpected {'invalid_key'}",
         exception=DictValidationException,
         config={
             "client": {

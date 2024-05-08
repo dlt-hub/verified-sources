@@ -21,7 +21,8 @@ from dlt.common.schema.typing import (
     TColumnNames,
     TTableFormat,
     TTableSchemaColumns,
-    TWriteDisposition,
+    TWriteDispositionConfig,
+    TSchemaContract,
 )
 
 PaginatorConfigDict = Dict[str, Any]
@@ -80,16 +81,25 @@ class Endpoint(TypedDict, total=False):
     incremental: Optional[IncrementalConfig]
 
 
-class EndpointResourceBase(TypedDict, total=False):
-    endpoint: Optional[Union[str, Endpoint]]
-    write_disposition: Optional[TTableHintTemplate[TWriteDisposition]]
+class ResourceBase(TypedDict, total=False):
+    """Defines hints that may be passed to `dlt.resource` decorator"""
+
+    table_name: Optional[TTableHintTemplate[str]]
+    max_table_nesting: Optional[int]
+    write_disposition: Optional[TTableHintTemplate[TWriteDispositionConfig]]
     parent: Optional[TTableHintTemplate[str]]
     columns: Optional[TTableHintTemplate[TTableSchemaColumns]]
     primary_key: Optional[TTableHintTemplate[TColumnNames]]
     merge_key: Optional[TTableHintTemplate[TColumnNames]]
+    schema_contract: Optional[TTableHintTemplate[TSchemaContract]]
     table_format: Optional[TTableHintTemplate[TTableFormat]]
-    include_from_parent: Optional[List[str]]
     selected: Optional[bool]
+    parallelized: Optional[bool]
+
+
+class EndpointResourceBase(ResourceBase, total=False):
+    endpoint: Optional[Union[str, Endpoint]]
+    include_from_parent: Optional[List[str]]
 
 
 # NOTE: redefining properties of TypedDict is not allowed
