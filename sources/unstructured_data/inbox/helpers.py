@@ -58,8 +58,8 @@ def get_email_body(msg: Message) -> str:
         for part in msg.walk():
             content_type = part.get_content_type()
             if content_type == "text/plain":
-                body += part.get_payload(decode=True).decode(errors="ignore")
+                body += part.get_payload(decode=True).decode(errors="ignore")  # type: ignore[union-attr]
     else:
-        body = msg.get_payload(decode=True).decode(errors="ignore")
+        body = msg.get_payload(decode=True).decode(errors="ignore")  # type: ignore[union-attr]
 
     return body

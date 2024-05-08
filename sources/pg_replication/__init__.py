@@ -82,7 +82,7 @@ def replication_resource(
     options = {"publication_names": pub_name, "proto_version": "1"}
     upto_lsn = get_max_lsn(slot_name, options, credentials)
     if upto_lsn is None:
-        return "Replication slot is empty."
+        return
 
     # generate items in batches
     while True:

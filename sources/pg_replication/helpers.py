@@ -396,7 +396,7 @@ def get_max_lsn(
     """
     # comma-separated value string
     options_str = ", ".join(
-        f"'{x}'" for xs in list(map(list, options.items())) for x in xs  # type: ignore[arg-type]
+        f"'{x}'" for xs in list(map(list, options.items())) for x in xs
     )
     cur = _get_conn(credentials).cursor()
     cur.execute(

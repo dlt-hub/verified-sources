@@ -153,7 +153,7 @@ def extract_attachments(
         file_md = ImapFileItem(  # type: ignore
             file_name=part.get_filename(),
             mime_type=content_type,
-            file_content=part.get_payload(decode=True),
+            file_content=part.get_payload(decode=True),  # type: ignore[typeddict-item]
         )
         file_md["file_hash"] = hashlib.sha256(file_md["file_content"]).hexdigest()
         file_md["size_in_bytes"] = len(file_md["file_content"])
@@ -176,8 +176,8 @@ def get_email_body(msg: Message) -> str:
         for part in msg.walk():
             content_type = part.get_content_type()
             if content_type == "text/plain":
-                body += part.get_payload(decode=True).decode(errors="ignore")
+                body += part.get_payload(decode=True).decode(errors="ignore")  # type: ignore[union-attr]
     else:
-        body = msg.get_payload(decode=True).decode(errors="ignore")
+        body = msg.get_payload(decode=True).decode(errors="ignore")  # type: ignore[union-attr]
 
     return body
