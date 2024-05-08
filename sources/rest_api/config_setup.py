@@ -48,6 +48,7 @@ from .typing import (
     EndpointResource,
     DefaultEndpointResource,
 )
+from .utils import exclude_keys
 
 
 PAGINATOR_MAP: Dict[str, Type[BasePaginator]] = {
@@ -85,9 +86,9 @@ def create_paginator(paginator_config: PaginatorType) -> Optional[BasePaginator]
         return paginator_class()
 
     if isinstance(paginator_config, dict):
-        paginator_type = paginator_config.pop("type", "auto")
+        paginator_type = paginator_config.get("type", "auto")
         paginator_class = get_paginator_class(paginator_type)
-        return paginator_class(**paginator_config)
+        return paginator_class(**exclude_keys(paginator_config, {"type"}))
 
     return None
 
@@ -146,19 +147,20 @@ def setup_incremental_object(
     for key, value in request_params.items():
         if isinstance(value, dlt.sources.incremental):
             return value, IncrementalParam(start=key, end=None)
-        if isinstance(value, dict):
-            param_type = value.pop("type")
-            if param_type == "incremental":
-                return (
-                    dlt.sources.incremental(**value),
-                    IncrementalParam(start=key, end=None),
-                )
+        if isinstance(value, dict) and value.get("type") == "incremental":
+            config = exclude_keys(value, {"type"})
+            return (
+                dlt.sources.incremental(**config),
+                IncrementalParam(start=key, end=None),
+            )
     if incremental_config:
-        start_param = incremental_config.pop("start_param")
-        end_param = incremental_config.pop("end_param", None)
+        config = exclude_keys(incremental_config, {"start_param", "end_param"})
         return (
-            dlt.sources.incremental(**cast(IncrementalArgs, incremental_config)),
-            IncrementalParam(start=start_param, end=end_param),
+            dlt.sources.incremental(**cast(IncrementalArgs, config)),
+            IncrementalParam(
+                start=incremental_config["start_param"],
+                end=incremental_config.get("end_param"),
+            ),
         )
 
     return None, None
