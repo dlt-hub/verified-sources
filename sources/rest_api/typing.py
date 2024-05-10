@@ -2,6 +2,7 @@ from typing import (
     Any,
     Dict,
     List,
+    Literal,
     NamedTuple,
     Optional,
     TypedDict,
@@ -25,8 +26,72 @@ from dlt.common.schema.typing import (
     TSchemaContract,
 )
 
-PaginatorConfigDict = Dict[str, Any]
-PaginatorType = Union[BasePaginator, str, PaginatorConfigDict]
+PaginatorType = Literal[
+    "json_response",
+    "header_link",
+    "auto",
+    "single_page",
+    "cursor",
+    "offset",
+    "page_number",
+]
+
+
+class PaginatorTypeConfig(TypedDict, total=True):
+    type: PaginatorType  # noqa
+
+
+class PageNumberPaginatorConfig(PaginatorTypeConfig, total=False):
+    """A paginator that uses page number-based pagination strategy."""
+
+    initial_page: Optional[int]
+    page_param: Optional[str]
+    total_path: Optional[jsonpath.TJsonPath]
+    maximum_page: Optional[int]
+
+
+class OffsetPaginatorConfig(PaginatorTypeConfig, total=False):
+    """A paginator that uses offset-based pagination strategy."""
+
+    limit: Optional[int]
+    offset: Optional[int]
+    offset_param: Optional[str]
+    limit_param: Optional[str]
+    total_path: Optional[jsonpath.TJsonPath]
+    maximum_offset: Optional[int]
+
+
+class HeaderLinkPaginatorConfig(PaginatorTypeConfig, total=False):
+    """A paginator that uses the 'Link' header in HTTP responses
+    for pagination."""
+
+    links_next_key: Optional[str]
+
+
+class JSONResponsePaginatorConfig(PaginatorTypeConfig, total=False):
+    """Locates the next page URL within the JSON response body. The key
+    containing the URL can be specified using a JSON path."""
+
+    next_url_path: Optional[jsonpath.TJsonPath]
+
+
+class JSONResponseCursorPaginator(PaginatorTypeConfig, total=False):
+    """Uses a cursor parameter for pagination, with the cursor value found in
+    the JSON response body."""
+
+    cursor_path: Optional[jsonpath.TJsonPath]
+    cursor_param: Optional[str]
+
+
+PaginatorConfig = Union[
+    BasePaginator,
+    PaginatorType,
+    PageNumberPaginatorConfig,
+    OffsetPaginatorConfig,
+    HeaderLinkPaginatorConfig,
+    JSONResponsePaginatorConfig,
+    JSONResponseCursorPaginator,
+]
 
 
 class SimpleTokenAuthConfig(TypedDict, total=False):
@@ -37,7 +102,7 @@ class ClientConfig(TypedDict, total=False):
     base_url: str
     headers: Optional[Dict[str, str]]
     auth: Optional[Union[SimpleTokenAuthConfig, AuthConfigBase, Dict[str, str]]]
-    paginator: Optional[PaginatorType]
+    paginator: Optional[PaginatorConfig]
 
 
 class IncrementalArgs(TypedDict, total=False):
@@ -75,7 +140,7 @@ class Endpoint(TypedDict, total=False):
     method: Optional[HTTPMethodBasic]
     params: Optional[Dict[str, Any]]
     json: Optional[Dict[str, Any]]
-    paginator: Optional[PaginatorType]
+    paginator: Optional[PaginatorConfig]
     data_selector: Optional[jsonpath.TJsonPath]
     response_actions: Optional[List[ResponseAction]]
     incremental: Optional[IncrementalConfig]
@@ -102,16 +167,11 @@ class EndpointResourceBase(ResourceBase, total=False):
     include_from_parent: Optional[List[str]]
 
 
-# NOTE: redefining properties of TypedDict is not allowed
 class EndpointResource(EndpointResourceBase, total=False):
     name: TTableHintTemplate[str]
 
 
-class DefaultEndpointResource(EndpointResourceBase, total=False):
-    name: Optional[TTableHintTemplate[str]]
-
-
 class RESTAPIConfig(TypedDict):
     client: ClientConfig
-    resource_defaults: Optional[DefaultEndpointResource]
+    resource_defaults: Optional[EndpointResourceBase]
     resources: List[Union[str, EndpointResource]]
