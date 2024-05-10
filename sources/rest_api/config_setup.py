@@ -16,7 +16,6 @@ import graphlib  # type: ignore[import,unused-ignore]
 import dlt
 from dlt.extract.incremental import Incremental
 from dlt.common import logger
-from dlt.common.utils import update_dict_nested
 from dlt.common.typing import TSecretStrValue
 from dlt.sources.helpers.requests import Response
 from dlt.sources.helpers.rest_client.paginators import (
@@ -26,6 +25,7 @@ from dlt.sources.helpers.rest_client.paginators import (
     JSONResponsePaginator,
     JSONResponseCursorPaginator,
     OffsetPaginator,
+    PageNumberPaginator,
 )
 from dlt.sources.helpers.rest_client.exceptions import IgnoreResponseException
 from dlt.sources.helpers.rest_client.auth import (
@@ -37,27 +37,29 @@ from dlt.sources.helpers.rest_client.auth import (
 )
 
 from .typing import (
+    EndpointResourceBase,
+    PaginatorType,
     SimpleTokenAuthConfig,
     IncrementalArgs,
     IncrementalConfig,
-    PaginatorType,
+    PaginatorConfig,
     ResolveConfig,
     ResolvedParam,
     ResponseAction,
     Endpoint,
     EndpointResource,
-    DefaultEndpointResource,
 )
 from .utils import exclude_keys
 
 
-PAGINATOR_MAP: Dict[str, Type[BasePaginator]] = {
-    "json_links": JSONResponsePaginator,
-    "header_links": HeaderLinkPaginator,
+PAGINATOR_MAP: Dict[PaginatorType, Type[BasePaginator]] = {
+    "json_response": JSONResponsePaginator,
+    "header_link": HeaderLinkPaginator,
     "auto": None,
     "single_page": SinglePagePaginator,
     "cursor": JSONResponseCursorPaginator,
     "offset": OffsetPaginator,
+    "page_number": PageNumberPaginator,
 }
 
 
@@ -66,7 +68,7 @@ class IncrementalParam(NamedTuple):
     end: Optional[str]
 
 
-def get_paginator_class(paginator_type: str) -> Type[BasePaginator]:
+def get_paginator_class(paginator_type: PaginatorType) -> Type[BasePaginator]:
     try:
         return PAGINATOR_MAP[paginator_type]
     except KeyError:
@@ -77,7 +79,7 @@ def get_paginator_class(paginator_type: str) -> Type[BasePaginator]:
         )
 
 
-def create_paginator(paginator_config: PaginatorType) -> Optional[BasePaginator]:
+def create_paginator(paginator_config: PaginatorConfig) -> Optional[BasePaginator]:
     if isinstance(paginator_config, BasePaginator):
         return paginator_config
 
@@ -171,7 +173,7 @@ def make_parent_key_name(resource_name: str, field_name: str) -> str:
 
 
 def build_resource_dependency_graph(
-    resource_defaults: DefaultEndpointResource,
+    resource_defaults: EndpointResourceBase,
     resource_list: List[Union[str, EndpointResource]],
 ) -> Tuple[Any, Dict[str, EndpointResource], Dict[str, Optional[ResolvedParam]]]:
     dependency_graph = graphlib.TopologicalSorter()
@@ -213,7 +215,7 @@ def build_resource_dependency_graph(
 
 
 def make_endpoint_resource(
-    resource: Union[str, EndpointResource], default_config: EndpointResource
+    resource: Union[str, EndpointResource], default_config: EndpointResourceBase
 ) -> EndpointResource:
     """
     Creates an EndpointResource object based on the provided resource
@@ -229,7 +231,7 @@ def make_endpoint_resource(
     """
     if isinstance(resource, str):
         resource = {"name": resource, "endpoint": {"path": resource}}
-        return update_dict_nested(copy.deepcopy(default_config), resource)  # type: ignore[type-var]
+        return _merge_resource_endpoints(default_config, resource)
 
     if "endpoint" in resource and isinstance(resource["endpoint"], str):
         resource["endpoint"] = {"path": resource["endpoint"]}
@@ -239,8 +241,7 @@ def make_endpoint_resource(
 
     if "path" not in resource["endpoint"]:
         resource["endpoint"]["path"] = resource["name"]  # type: ignore
-
-    return update_dict_nested(copy.deepcopy(default_config), resource)  # type: ignore[type-var]
+    return _merge_resource_endpoints(default_config, resource)
 
 
 def make_resolved_param(
@@ -337,3 +338,39 @@ def create_response_hooks(
     if response_actions:
         return {"response": [_create_response_actions_hook(response_actions)]}
     return None
+
+
+def _merge_resource_endpoints(
+    default_config: EndpointResourceBase, config: EndpointResource
+) -> EndpointResource:
+    """Merges `default_config` and `config`, returns new instance of EndpointResource"""
+    # merge endpoint, only params and json are allowed to deep merge
+    # NOTE: config is normalized and always has "endpoint" field which is a dict
+    # NOTE: we could deep merge paginators and auths of the same type
+
+    default_endpoint = default_config.get("endpoint", Endpoint())
+    assert isinstance(default_endpoint, dict)
+    config_endpoint = config["endpoint"]
+    assert isinstance(config_endpoint, dict)
+
+    merged_endpoint: Endpoint = {
+        **default_endpoint,
+        **{k: v for k, v in config_endpoint.items() if k not in ("json", "params")},  # type: ignore[typeddict-item]
+    }
+    if "json" in config_endpoint:
+        merged_endpoint["json"] = {
+            **(merged_endpoint.get("json", {})),
+            **config_endpoint["json"],
+        }
+    if "params" in config_endpoint:
+        merged_endpoint["params"] = {
+            **(merged_endpoint.get("json", {})),
+            **config_endpoint["params"],
+        }
+    # no need to deep merge resources
+    merged_resource: EndpointResource = {
+        **default_config,
+        **config,
+        "endpoint": merged_endpoint,
+    }
+    return merged_resource
