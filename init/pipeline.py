@@ -4,7 +4,7 @@ from dlt.sources.helpers.rest_client import paginate
 from dlt.sources.helpers.rest_client.auth import BearerTokenAuth
 from dlt.sources.helpers.rest_client.paginators import HeaderLinkPaginator
 
-# This pipeline demonstrates how to build a simple REST client for interacting with GitHub's API.
+# This pipeline demonstrates how to use the dlt REST client for extracting data from the GitHub API.
 # It showcases the use of authentication via bearer tokens and pagination for navigating through
 # GitHub issues and pull requests within a repository.
 
