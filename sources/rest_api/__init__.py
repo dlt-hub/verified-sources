@@ -54,8 +54,30 @@ def rest_api_source(
     schema_contract: TSchemaContract = None,
     spec: Type[BaseConfiguration] = None,
 ) -> DltSource:
-    """
-    Creates and configures a REST API source for data extraction.
+    """Creates and configures a REST API source for data extraction.
+
+    Args:
+        config (RESTAPIConfig): Configuration for the REST API source.
+        name (str, optional): Name of the source.
+        section (str, optional): Section of the configuration file.
+        max_table_nesting (int, optional): Maximum depth of nested table above which
+            the remaining nodes are loaded as structs or JSON.
+        root_key (bool, optional): Enables merging on all resources by propagating
+            root foreign key to child tables. This option is most useful if you
+            plan to change write disposition of a resource to disable/enable merge.
+            Defaults to False.
+        schema (Schema, optional): An explicit `Schema` instance to be associated
+            with the source. If not present, `dlt` creates a new `Schema` object
+            with provided `name`. If such `Schema` already exists in the same
+            folder as the module containing the decorated function, such schema
+            will be loaded from file.
+        schema_contract (TSchemaContract, optional): Schema contract settings
+            that will be applied to this resource.
+        spec (Type[BaseConfiguration], optional): A specification of configuration
+            and secret values required by the source.
+
+    Returns:
+        DltSource: A configured dlt source.
 
     Example:
         pokemon_source = rest_api_source({
@@ -90,8 +112,13 @@ def rest_api_source(
 
 
 def rest_api_resources(config: RESTAPIConfig) -> List[DltResource]:
-    """
-    Creates a list of resources from a REST API configuration.
+    """Creates a list of resources from a REST API configuration.
+
+    Args:
+        config (RESTAPIConfig): Configuration for the REST API source.
+
+    Returns:
+        List[DltResource]: List of dlt resources.
 
     Example:
         github_source = rest_api_resources({
