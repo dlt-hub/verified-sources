@@ -200,7 +200,7 @@ def test_posts_under_results_key(mock_api_server):
                     "endpoint": {
                         "path": "posts_under_a_different_key",
                         "data_selector": "many-results",
-                        "paginator": "json_links",
+                        "paginator": "json_response",
                     },
                 },
             ],
@@ -223,7 +223,7 @@ def test_posts_without_key(mock_api_server):
         {
             "client": {
                 "base_url": "https://api.example.com",
-                "paginator": "header_links",
+                "paginator": "header_link",
             },
             "resources": [
                 {

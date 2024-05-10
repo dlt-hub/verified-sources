@@ -52,7 +52,7 @@ def test_valid_configurations(valid_config):
                                 "initial_value": "2024-01-25T11:21:28Z",
                             },
                         },
-                        "paginator": "json_links",
+                        "paginator": "json_response",
                     },
                 },
             ],
@@ -67,7 +67,7 @@ def test_valid_configurations(valid_config):
                         "params": {
                             "limit": 100,
                         },
-                        "paginator": "json_links",
+                        "paginator": "json_response",
                         "incremental": {
                             "start_param": "since",
                             "end_param": "until",

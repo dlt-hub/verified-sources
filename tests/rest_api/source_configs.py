@@ -29,8 +29,8 @@ INVALID_CONFIGS = [
         },
     ),
     ConfigTest(
-        expected_message="Invalid paginator: invalid_paginator. Available options: json_links, header_links, auto, single_page",
-        exception=ValueError,
+        expected_message="field 'paginator' with value invalid_paginator is not one of:",
+        exception=DictValidationException,
         config={
             "client": {
                 "base_url": "https://api.example.com",
@@ -72,7 +72,7 @@ VALID_CONFIGS = [
                     "params": {
                         "limit": 100,
                     },
-                    "paginator": "json_links",
+                    "paginator": "json_response",
                 },
             },
         ],
@@ -95,7 +95,7 @@ VALID_CONFIGS = [
     {
         "client": {
             "base_url": "https://example.com",
-            "paginator": "header_links",
+            "paginator": "header_link",
             "auth": HttpBasicAuth("my-secret", ""),
         },
         "resources": ["users"],
@@ -115,7 +115,7 @@ VALID_CONFIGS = [
                             "initial_value": "2024-01-25T11:21:28Z",
                         },
                     },
-                    "paginator": "json_links",
+                    "paginator": "json_response",
                 },
             },
         ],
@@ -130,7 +130,7 @@ VALID_CONFIGS = [
                     "params": {
                         "limit": 100,
                     },
-                    "paginator": "json_links",
+                    "paginator": "json_response",
                     "incremental": {
                         "start_param": "since",
                         "end_param": "until",
