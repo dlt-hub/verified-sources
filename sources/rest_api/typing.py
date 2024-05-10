@@ -16,7 +16,7 @@ from dlt.extract.incremental.typing import LastValueFunc
 
 from dlt.sources.helpers.rest_client.paginators import BasePaginator
 from dlt.sources.helpers.rest_client.typing import HTTPMethodBasic
-from dlt.sources.helpers.rest_client.auth import AuthConfigBase
+from dlt.sources.helpers.rest_client.auth import AuthConfigBase, TApiKeyLocation
 
 from dlt.common.schema.typing import (
     TColumnNames,
@@ -94,14 +94,51 @@ PaginatorConfig = Union[
 ]
 
 
-class SimpleTokenAuthConfig(TypedDict, total=False):
+AuthType = Literal["bearer", "api_key", "http_basic"]
+
+
+class AuthTypeConfig(TypedDict, total=True):
+    type: AuthType  # noqa
+
+
+class BearerTokenAuthConfig(AuthTypeConfig, total=True):
+    """Uses `token` for Bearer authentication in "Authorization" header."""
+
     token: str
+
+
+class ApiKeyAuthConfig(AuthTypeConfig, total=False):
+    """Uses provided `api_key` to create authorization data in the specified `location` (query, param, header, cookie) under specified `name`"""
+
+    name: Optional[str]
+    api_key: str
+    location: Optional[TApiKeyLocation]
+
+
+class HttpBasicAuthConfig(AuthTypeConfig, total=True):
+    """Uses HTTP basic authentication"""
+
+    username: str
+    password: str
+
+
+# TODO: add later
+# class OAuthJWTAuthConfig(AuthTypeConfig, total=True):
+
+
+AuthConfig = Union[
+    AuthConfigBase,
+    AuthType,
+    BearerTokenAuthConfig,
+    ApiKeyAuthConfig,
+    HttpBasicAuthConfig,
+]
 
 
 class ClientConfig(TypedDict, total=False):
     base_url: str
     headers: Optional[Dict[str, str]]
-    auth: Optional[Union[SimpleTokenAuthConfig, AuthConfigBase, Dict[str, str]]]
+    auth: Optional[AuthConfig]
     paginator: Optional[PaginatorConfig]
 
 

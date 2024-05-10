@@ -13,6 +13,7 @@ def load_github() -> None:
         "client": {
             "base_url": "https://api.github.com/repos/dlt-hub/dlt/",
             "auth": {
+                "type": "bearer",
                 "token": dlt.secrets["github_token"],
             },
         },
