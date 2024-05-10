@@ -33,6 +33,7 @@ def my_repo_pulls(
     for page in paginate(
         url,
         auth=BearerTokenAuth(api_secret_key),
+        # Note: for more paginators please see: https://dlthub.com/devel/general-usage/http/rest-client#paginators
         paginator=HeaderLinkPaginator(),
     ):
         print(page)
