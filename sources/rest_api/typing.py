@@ -53,7 +53,7 @@ class PageNumberPaginatorConfig(PaginatorTypeConfig, total=False):
 class OffsetPaginatorConfig(PaginatorTypeConfig, total=False):
     """A paginator that uses offset-based pagination strategy."""
 
-    limit: Optional[int]
+    limit: int
     offset: Optional[int]
     offset_param: Optional[str]
     limit_param: Optional[str]

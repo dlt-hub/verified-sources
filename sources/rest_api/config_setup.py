@@ -94,12 +94,22 @@ def create_paginator(
 
     if isinstance(paginator_config, str):
         paginator_class = get_paginator_class(paginator_config)
-        return paginator_class()
+        try:
+            # auto has no associated class
+            return paginator_class() if paginator_class else None
+        except TypeError:
+            raise ValueError(
+                f"Paginator {paginator_config} requires arguments to create and instance. Use {paginator_class} instance instead."
+            )
 
     if isinstance(paginator_config, dict):
         paginator_type = paginator_config.get("type", "auto")
         paginator_class = get_paginator_class(paginator_type)
-        return paginator_class(**exclude_keys(paginator_config, {"type"}))
+        return (
+            paginator_class(**exclude_keys(paginator_config, {"type"}))
+            if paginator_class
+            else None
+        )
 
     return None
 
