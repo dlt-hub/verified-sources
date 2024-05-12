@@ -1,10 +1,16 @@
 from collections import namedtuple
 from typing import List
+
+import dlt
 from dlt.common.exceptions import DictValidationException
+from dlt.common.configuration.specs import configspec
+from dlt.sources.helpers.rest_client.paginators import HeaderLinkPaginator
+from dlt.sources.helpers.rest_client.auth import OAuth2AuthBase
+
 from dlt.sources.helpers.rest_client.paginators import SinglePagePaginator
 from dlt.sources.helpers.rest_client.auth import HttpBasicAuth
 
-from sources.rest_api.typing import PaginatorTypeConfig
+from sources.rest_api.typing import AuthTypeConfig, PaginatorTypeConfig, RESTAPIConfig
 
 
 ConfigTest = namedtuple("ConfigTest", ["expected_message", "exception", "config"])
@@ -45,7 +51,17 @@ INVALID_CONFIGS = [
 ]
 
 
-VALID_CONFIGS = [
+class CustomPaginator(HeaderLinkPaginator):
+    def __init__(self) -> None:
+        super().__init__(links_next_key="prev")
+
+
+@configspec
+class CustomOAuthAuth(OAuth2AuthBase):
+    pass
+
+
+VALID_CONFIGS: List[RESTAPIConfig] = [
     {
         "client": {"base_url": "https://api.example.com"},
         "resources": [
@@ -93,6 +109,29 @@ VALID_CONFIGS = [
                     "paginator": SinglePagePaginator(),
                 },
             },
+        ],
+    },
+    {
+        "client": {
+            "base_url": "https://example.com",
+            "paginator": CustomPaginator(),
+            "auth": CustomOAuthAuth(access_token="X"),
+        },
+        "resource_defaults": {
+            "table_name": lambda event: event["type"],
+            "endpoint": {
+                "paginator": CustomPaginator(),
+                "params": {"since": dlt.sources.incremental[str]("user_id")},
+            },
+        },
+        "resources": [
+            {
+                "name": "users",
+                "endpoint": {
+                    "paginator": CustomPaginator(),
+                    "params": {"since": dlt.sources.incremental[str]("user_id")},
+                },
+            }
         ],
     },
     {
@@ -151,7 +190,11 @@ VALID_CONFIGS = [
                 "X-Test-Header": "test42",
             },
         },
-        "resources": ["users"],
+        "resources": [
+            "users",
+            {"name": "users_2"},
+            {"name": "users_list", "endpoint": "users_list"},
+        ],
     },
     {
         "client": {"base_url": "https://api.example.com"},
@@ -159,6 +202,7 @@ VALID_CONFIGS = [
             "posts",
             {
                 "name": "post_comments",
+                "table_name": lambda item: item["type"],
                 "endpoint": {
                     "path": "posts/{post_id}/comments",
                     "params": {
@@ -175,7 +219,7 @@ VALID_CONFIGS = [
 ]
 
 
-# NOTE: leaves some parameters as defaults to test them
+# NOTE: leaves some parameters as defaults to test if they are set correctly
 PAGINATOR_TYPE_CONFIGS: List[PaginatorTypeConfig] = [
     {"type": "auto"},
     {"type": "single_page"},
@@ -184,4 +228,12 @@ PAGINATOR_TYPE_CONFIGS: List[PaginatorTypeConfig] = [
     {"type": "header_link", "links_next_key": "next_page"},
     {"type": "json_response", "next_url_path": "response.nex_page_link"},
     {"type": "cursor", "cursor_param": "cursor"},
+]
+
+
+# NOTE: leaves some required parameters to inject them from config
+AUTH_TYPE_CONFIGS: List[AuthTypeConfig] = [
+    {"type": "bearer", "token": "token"},
+    {"type": "api_key", "location": "cookie"},
+    {"type": "http_basic", "username": "username"},
 ]
