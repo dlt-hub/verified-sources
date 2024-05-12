@@ -11,6 +11,14 @@ from typing import (
 
 from dlt.common import jsonpath
 from dlt.common.typing import TSortOrder
+from dlt.common.schema.typing import (
+    TColumnNames,
+    TTableFormat,
+    TAnySchemaColumns,
+    TWriteDispositionConfig,
+    TSchemaContract,
+)
+
 from dlt.extract.items import TTableHintTemplate
 from dlt.extract.incremental.typing import LastValueFunc
 
@@ -18,12 +26,21 @@ from dlt.sources.helpers.rest_client.paginators import BasePaginator
 from dlt.sources.helpers.rest_client.typing import HTTPMethodBasic
 from dlt.sources.helpers.rest_client.auth import AuthConfigBase, TApiKeyLocation
 
-from dlt.common.schema.typing import (
-    TColumnNames,
-    TTableFormat,
-    TTableSchemaColumns,
-    TWriteDispositionConfig,
-    TSchemaContract,
+from dlt.sources.helpers.rest_client.paginators import (
+    SinglePagePaginator,
+    HeaderLinkPaginator,
+    JSONResponsePaginator,
+    JSONResponseCursorPaginator,
+    OffsetPaginator,
+    PageNumberPaginator,
+)
+from dlt.sources.helpers.rest_client.exceptions import IgnoreResponseException
+from dlt.sources.helpers.rest_client.auth import (
+    AuthConfigBase,
+    HttpBasicAuth,
+    BearerTokenAuth,
+    APIKeyAuth,
+    OAuthJWTAuth,
 )
 
 PaginatorType = Literal[
@@ -75,7 +92,7 @@ class JSONResponsePaginatorConfig(PaginatorTypeConfig, total=False):
     next_url_path: Optional[jsonpath.TJsonPath]
 
 
-class JSONResponseCursorPaginator(PaginatorTypeConfig, total=False):
+class JSONResponseCursorPaginatorConfig(PaginatorTypeConfig, total=False):
     """Uses a cursor parameter for pagination, with the cursor value found in
     the JSON response body."""
 
@@ -84,13 +101,19 @@ class JSONResponseCursorPaginator(PaginatorTypeConfig, total=False):
 
 
 PaginatorConfig = Union[
-    BasePaginator,
     PaginatorType,
     PageNumberPaginatorConfig,
     OffsetPaginatorConfig,
     HeaderLinkPaginatorConfig,
     JSONResponsePaginatorConfig,
+    JSONResponseCursorPaginatorConfig,
+    BasePaginator,
+    SinglePagePaginator,
+    HeaderLinkPaginator,
+    JSONResponsePaginator,
     JSONResponseCursorPaginator,
+    OffsetPaginator,
+    PageNumberPaginator,
 ]
 
 
@@ -132,6 +155,9 @@ AuthConfig = Union[
     BearerTokenAuthConfig,
     ApiKeyAuthConfig,
     HttpBasicAuthConfig,
+    BearerTokenAuth,
+    APIKeyAuth,
+    HttpBasicAuth,
 ]
 
 
@@ -156,14 +182,27 @@ class IncrementalConfig(IncrementalArgs, total=False):
     end_param: Optional[str]
 
 
-class ResolveConfig(NamedTuple):
-    resource_name: str
-    field_path: str
+ParamBindType = Literal["resolve", "incremental"]
+
+
+class ParamBindConfig(TypedDict):
+    type: ParamBindType  # noqa
+
+
+class ResolveParamConfig(ParamBindConfig):
+    resource: str
+    field: str
+
+
+class IncrementalParamConfig(ParamBindConfig, IncrementalArgs):
+    pass
+    # TODO: implement param type to bind incremental to
+    # param_type: Optional[Literal["start_param", "end_param"]]
 
 
 class ResolvedParam(NamedTuple):
     param_name: str
-    resolve_config: ResolveConfig
+    resolve_config: ResolveParamConfig
 
 
 class ResponseAction(TypedDict, total=False):
@@ -175,7 +214,7 @@ class ResponseAction(TypedDict, total=False):
 class Endpoint(TypedDict, total=False):
     path: Optional[str]
     method: Optional[HTTPMethodBasic]
-    params: Optional[Dict[str, Any]]
+    params: Optional[Dict[str, Union[ResolveParamConfig, IncrementalParamConfig, Any]]]
     json: Optional[Dict[str, Any]]
     paginator: Optional[PaginatorConfig]
     data_selector: Optional[jsonpath.TJsonPath]
@@ -190,7 +229,7 @@ class ResourceBase(TypedDict, total=False):
     max_table_nesting: Optional[int]
     write_disposition: Optional[TTableHintTemplate[TWriteDispositionConfig]]
     parent: Optional[TTableHintTemplate[str]]
-    columns: Optional[TTableHintTemplate[TTableSchemaColumns]]
+    columns: Optional[TTableHintTemplate[TAnySchemaColumns]]
     primary_key: Optional[TTableHintTemplate[TColumnNames]]
     merge_key: Optional[TTableHintTemplate[TColumnNames]]
     schema_contract: Optional[TTableHintTemplate[TSchemaContract]]
