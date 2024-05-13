@@ -21,6 +21,7 @@ def resource(
     org: str = "dlt-hub",
     repository: str = "dlt",
 ):
+    # this is the test data for loading validation, delete it once you yield actual data
     yield [
         {
             "id": 1,
