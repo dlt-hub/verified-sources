@@ -10,12 +10,9 @@ from dlt.sources.helpers.rest_client.paginators import HeaderLinkPaginator
 
 
 @dlt.source
-def source(
-    api_url: str = dlt.config.value,
-    api_secret_key: str = dlt.secrets.value,
-    repository: str = dlt.config.value,
-):
-    return resource(api_url, api_secret_key, repository)
+def source(api_secret_key: str = dlt.secrets.value):
+    # print(f"api_secret_key={api_secret_key}")
+    return resource(api_secret_key)
 
 
 @dlt.resource(write_disposition="append")

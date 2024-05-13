@@ -18,8 +18,9 @@ def source(
     """This source function aggregates data from two GitHub endpoints: issues and pull requests."""
     # Ensure that secret key is provided for GitHub
     # either via secrets.toml or via environment variables.
+    # print(f"api_secret_key={api_secret_key}")
+
     api_url = f"https://api.github.com/repos/{org}/{repository}/pulls"
-    print(f"api_secret_key={api_secret_key}")
     return [
         resource_1(api_url, api_secret_key).add_limit(1),
         resource_2(api_url, api_secret_key).add_limit(1),
