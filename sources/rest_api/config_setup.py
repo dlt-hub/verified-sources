@@ -106,7 +106,7 @@ def create_paginator(
             return paginator_class() if paginator_class else None
         except TypeError:
             raise ValueError(
-                f"Paginator {paginator_config} requires arguments to create and instance. Use {paginator_class} instance instead."
+                f"Paginator {paginator_config} requires arguments to create an instance. Use {paginator_class} instance instead."
             )
 
     if isinstance(paginator_config, dict):
