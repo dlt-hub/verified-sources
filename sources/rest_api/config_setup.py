@@ -102,7 +102,7 @@ def create_paginator(
     if isinstance(paginator_config, str):
         paginator_class = get_paginator_class(paginator_config)
         try:
-            # auto has no associated class
+            # `auto` has no associated class in `PAGINATOR_MAP`
             return paginator_class() if paginator_class else None
         except TypeError:
             raise ValueError(
