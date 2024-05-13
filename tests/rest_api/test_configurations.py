@@ -206,6 +206,12 @@ def test_auth_instance_config(section: str) -> None:
             assert auth.name == "session-cookie"
 
 
+def test_bearer_token_fallback() -> None:
+    auth = create_auth({"token": "secret"})
+    assert isinstance(auth, BearerTokenAuth)
+    assert auth.token == "secret"
+
+
 def test_resource_expand() -> None:
     # convert str into name / path
     assert _make_endpoint_resource("path", {}) == {
