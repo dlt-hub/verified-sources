@@ -21,17 +21,37 @@ def resource(
     org: str = "dlt-hub",
     repository: str = "dlt",
 ):
+    yield [
+        {
+            "id": 1,
+            "node_id": "MDU6SXNzdWUx",
+            "number": 1347,
+            "state": "open",
+            "title": "Found a bug",
+            "body": "I'm having a problem with this.",
+            "user": {"login": "octocat", "id": 1},
+            "created_at": "2011-04-22T13:33:48Z",
+            "updated_at": "2011-04-22T13:33:48Z",
+            "repository": {
+                "id": 1296269,
+                "node_id": "MDEwOlJlcG9zaXRvcnkxMjk2MjY5",
+                "name": "Hello-World",
+                "full_name": "octocat/Hello-World",
+            },
+        }
+    ]
+
     # paginate issues and yield every page
-    api_url = f"https://api.github.com/repos/{org}/{repository}/issues"
-    for page in paginate(
-        api_url,
-        auth=BearerTokenAuth(api_secret_key),
-        # Note: for more paginators please see:
-        # https://dlthub.com/devel/general-usage/http/rest-client#paginators
-        paginator=HeaderLinkPaginator(),
-    ):
-        print(page)
-        yield page
+    # api_url = f"https://api.github.com/repos/{org}/{repository}/issues"
+    # for page in paginate(
+    #     api_url,
+    #     auth=BearerTokenAuth(api_secret_key),
+    #     # Note: for more paginators please see:
+    #     # https://dlthub.com/devel/general-usage/http/rest-client#paginators
+    #     paginator=HeaderLinkPaginator(),
+    # ):
+    #     # print(page)
+    #     yield page
 
 
 if __name__ == "__main__":
