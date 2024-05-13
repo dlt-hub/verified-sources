@@ -20,7 +20,7 @@ def source(
     # either via secrets.toml or via environment variables.
     # print(f"api_secret_key={api_secret_key}")
 
-    api_url = f"https://api.github.com/repos/{org}/{repository}/pulls"
+    api_url = f"https://api.github.com/repos/{org}/{repository}"
     return [
         resource_1(api_url, api_secret_key).add_limit(1),
         resource_2(api_url, api_secret_key).add_limit(1),
@@ -34,7 +34,7 @@ def resource_1(api_url: str, api_secret_key: str = dlt.secrets.value):
     """
     # paginate issues and yield every page
     for page in paginate(
-        api_url,
+        f"{api_url}/issues",
         auth=BearerTokenAuth(api_secret_key),
         paginator=HeaderLinkPaginator(),
     ):
@@ -45,7 +45,7 @@ def resource_1(api_url: str, api_secret_key: str = dlt.secrets.value):
 @dlt.resource
 def resource_2(api_url: str, api_secret_key: str = dlt.secrets.value):
     for page in paginate(
-        api_url,
+        f"{api_url}/pulls",
         auth=BearerTokenAuth(api_secret_key),
         paginator=HeaderLinkPaginator(),
     ):
