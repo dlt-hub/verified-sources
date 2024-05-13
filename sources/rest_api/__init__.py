@@ -41,7 +41,7 @@ from .config_setup import (
     setup_incremental_object,
     create_response_hooks,
 )
-from .utils import check_connection  # noqa: F401
+from .utils import check_connection, exclude_keys  # noqa: F401
 
 
 def rest_api_source(
@@ -54,8 +54,30 @@ def rest_api_source(
     schema_contract: TSchemaContract = None,
     spec: Type[BaseConfiguration] = None,
 ) -> DltSource:
-    """
-    Creates and configures a REST API source for data extraction.
+    """Creates and configures a REST API source for data extraction.
+
+    Args:
+        config (RESTAPIConfig): Configuration for the REST API source.
+        name (str, optional): Name of the source.
+        section (str, optional): Section of the configuration file.
+        max_table_nesting (int, optional): Maximum depth of nested table above which
+            the remaining nodes are loaded as structs or JSON.
+        root_key (bool, optional): Enables merging on all resources by propagating
+            root foreign key to child tables. This option is most useful if you
+            plan to change write disposition of a resource to disable/enable merge.
+            Defaults to False.
+        schema (Schema, optional): An explicit `Schema` instance to be associated
+            with the source. If not present, `dlt` creates a new `Schema` object
+            with provided `name`. If such `Schema` already exists in the same
+            folder as the module containing the decorated function, such schema
+            will be loaded from file.
+        schema_contract (TSchemaContract, optional): Schema contract settings
+            that will be applied to this resource.
+        spec (Type[BaseConfiguration], optional): A specification of configuration
+            and secret values required by the source.
+
+    Returns:
+        DltSource: A configured dlt source.
 
     Example:
         pokemon_source = rest_api_source({
@@ -90,8 +112,13 @@ def rest_api_source(
 
 
 def rest_api_resources(config: RESTAPIConfig) -> List[DltResource]:
-    """
-    Creates a list of resources from a REST API configuration.
+    """Creates a list of resources from a REST API configuration.
+
+    Args:
+        config (RESTAPIConfig): Configuration for the REST API source.
+
+    Returns:
+        List[DltResource]: List of dlt resources.
 
     Example:
         github_source = rest_api_resources({
@@ -185,14 +212,14 @@ def create_resources(
     for resource_name in dependency_graph.static_order():
         resource_name = cast(str, resource_name)
         endpoint_resource = endpoint_resource_map[resource_name]
-        endpoint_config = cast(Endpoint, endpoint_resource.pop("endpoint"))
+        endpoint_config = cast(Endpoint, endpoint_resource["endpoint"])
         request_params = endpoint_config.get("params", {})
         request_json = endpoint_config.get("json", None)
         paginator = create_paginator(endpoint_config.get("paginator"))
 
         resolved_param: ResolvedParam = resolved_param_map[resource_name]
 
-        include_from_parent: List[str] = endpoint_resource.pop(
+        include_from_parent: List[str] = endpoint_resource.get(
             "include_from_parent", []
         )
         if not resolved_param and include_from_parent:
@@ -220,6 +247,10 @@ def create_resources(
             data_selector = "$"
         else:
             data_selector = None
+
+        resource_kwargs = exclude_keys(
+            endpoint_resource, {"endpoint", "include_from_parent"}
+        )
 
         if resolved_param is None:
 
@@ -250,9 +281,9 @@ def create_resources(
                     hooks=hooks,
                 )
 
-            resources[resource_name] = dlt.resource(  # type: ignore[call-overload]
+            resources[resource_name] = dlt.resource(
                 paginate_resource,
-                **endpoint_resource,  # TODO: implement typing.Unpack
+                **resource_kwargs,  # TODO: implement typing.Unpack
             )(
                 method=endpoint_config.get("method", "get"),
                 path=endpoint_config.get("path"),
@@ -266,7 +297,7 @@ def create_resources(
         else:
             predecessor = resources[resolved_param.resolve_config.resource_name]
 
-            request_params.pop(resolved_param.param_name, None)
+            base_params = exclude_keys(request_params, {resolved_param.param_name})
 
             def paginate_dependent_resource(
                 items: List[Dict[str, Any]],
@@ -313,11 +344,11 @@ def create_resources(
             resources[resource_name] = dlt.resource(  # type: ignore[call-overload]
                 paginate_dependent_resource,
                 data_from=predecessor,
-                **endpoint_resource,  # TODO: implement typing.Unpack
+                **resource_kwargs,  # TODO: implement typing.Unpack
             )(
                 method=endpoint_config.get("method", "get"),
                 path=endpoint_config.get("path"),
-                params=request_params,
+                params=base_params,
                 paginator=paginator,
                 data_selector=endpoint_config.get("data_selector") or data_selector,
                 hooks=hooks,
