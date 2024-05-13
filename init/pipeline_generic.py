@@ -22,8 +22,8 @@ def source(
 
     api_url = f"https://api.github.com/repos/{org}/{repository}"
     return [
-        resource_1(api_url, api_secret_key).add_limit(1),
-        resource_2(api_url, api_secret_key).add_limit(1),
+        resource_1(api_url, api_secret_key),
+        resource_2(api_url, api_secret_key),
     ]
 
 
