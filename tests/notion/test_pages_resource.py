@@ -20,14 +20,9 @@ def test_load_all_pages(destination_name: str):
     loaded_tables = set(t["name"] for t in pipeline.default_schema.data_tables())
 
     expected_tables = {
-        "notion_pages__properties__second_db_related__relation",
-        "notion_pages__properties__second_db__relation",
-        "notion_pages__properties__account_owner__people",
-        "notion_pages__properties__title__title",
         "notion_pages",
-        "notion_pages__properties__text_property__rich_text",
-        "notion_pages__properties__name__title",
-        "notion_pages__properties__company__rich_text",
+        "notion_pages__heading_1__rich_text",
+        "notion_pages__bulleted_list_item__rich_text",
     }
 
     assert loaded_tables == expected_tables
@@ -36,6 +31,8 @@ def test_load_all_pages(destination_name: str):
 
 @pytest.mark.parametrize("destination_name", ALL_DESTINATIONS)
 def test_load_selected_pages(destination_name: str):
+    page_id = "29298248-6067-4332-b6db-ca516d4d9af3"
+
     pipeline = dlt.pipeline(
         pipeline_name="notion",
         destination=destination_name,
@@ -43,13 +40,20 @@ def test_load_selected_pages(destination_name: str):
         full_refresh=True,
     )
 
-    requested_pages = ["06e48554-9585-415b-bffe-aad4b2244f20"]
-
-    info = pipeline.run(notion_pages(requested_pages))
+    info = pipeline.run(notion_pages(page_ids=[page_id]))
     assert_load_info(info)
 
-    assert load_table_counts(pipeline, "notion_pages")["notion_pages"] == 1
+    loaded_tables = set(t["name"] for t in pipeline.default_schema.data_tables())
+    expected_tables = {
+        "notion_pages",
+        "notion_pages__heading_1__rich_text",
+        "notion_pages__bulleted_list_item__rich_text",
+    }
+
+    assert loaded_tables == expected_tables
 
     with pipeline.sql_client() as client:
         with client.execute_query("SELECT * FROM notion_pages") as cur:
-            assert cur.fetchone()[1] in requested_pages
+            row = cur.fetchone()
+            assert row[0] == "block"
+            assert row[3] == page_id

@@ -28,10 +28,14 @@ def notion_pages(
     """
     client = NotionClient(api_key)
     pages = client.search(filter_criteria={"value": "page", "property": "object"})
+
     for page in pages:
+        blocks = client.fetch_resource("blocks", page["id"], "children")["results"]
         if page_ids and page["id"] not in page_ids:
             continue
-        yield page
+
+        if blocks:
+            yield blocks
 
 
 @dlt.source
