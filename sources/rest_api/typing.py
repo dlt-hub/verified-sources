@@ -124,16 +124,11 @@ class AuthTypeConfig(TypedDict, total=True):
     type: AuthType  # noqa
 
 
-class BearerTokenAuthConfig(AuthTypeConfig, total=True):
+class BearerTokenAuthConfig(TypedDict, total=False):
     """Uses `token` for Bearer authentication in "Authorization" header."""
 
-    token: str
-
-
-class BearerTokenAuthConfigShorthand(TypedDict, total=True):
-    """Uses `token` for Bearer authentication in "Authorization" header.
-    Shorthand for `BearerTokenAuthConfig`.
-    """
+    # we allow for a shorthand form of bearer auth, without a type
+    type: Optional[AuthType]  # noqa
     token: str
 
 
@@ -160,7 +155,6 @@ AuthConfig = Union[
     AuthConfigBase,
     AuthType,
     BearerTokenAuthConfig,
-    BearerTokenAuthConfigShorthand,
     ApiKeyAuthConfig,
     HttpBasicAuthConfig,
     BearerTokenAuth,

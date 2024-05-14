@@ -27,13 +27,11 @@ def load_github() -> None:
             # This is a simple resource definition,
             # that uses the endpoint path as a resource name:
             # "pulls",
-
             # Alternatively, you can define the endpoint as a dictionary
             # {
             #     "name": "pulls", # <- Name of the resource
             #     "endpoint": "pulls",  # <- This is the endpoint path
             # }
-
             # Or use a more detailed configuration:
             {
                 "name": "issues",
