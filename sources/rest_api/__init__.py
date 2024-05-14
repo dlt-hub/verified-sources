@@ -37,7 +37,7 @@ from .config_setup import (
     create_auth,
     create_paginator,
     build_resource_dependency_graph,
-    make_parent_key_name,
+    process_parent_data_item,
     setup_incremental_object,
     create_response_hooks,
 )
@@ -299,22 +299,17 @@ def create_resources(
                 client: RESTClient = client,
                 resolved_param: ResolvedParam = resolved_param,
                 include_from_parent: List[str] = include_from_parent,
+                incremental_object: Optional[Incremental[Any]] = incremental_object,
+                incremental_param: IncrementalParam = incremental_param,
             ) -> Generator[Any, None, None]:
-                field_path = resolved_param.resolve_config["field"]
+                if incremental_object:
+                    params[incremental_param.start] = incremental_object.last_value
+                    if incremental_param.end:
+                        params[incremental_param.end] = incremental_object.end_value
 
                 for item in items:
-                    formatted_path = path.format(
-                        **{resolved_param.param_name: item[field_path]}
-                    )
-                    parent_resource_name = resolved_param.resolve_config["resource"]
-
-                    parent_record = (
-                        {
-                            make_parent_key_name(parent_resource_name, key): item[key]
-                            for key in include_from_parent
-                        }
-                        if include_from_parent
-                        else None
+                    formatted_path, parent_record = process_parent_data_item(
+                        path, item, resolved_param, include_from_parent
                     )
 
                     for child_page in client.paginate(

@@ -12,6 +12,7 @@ from typing import (
     NamedTuple,
 )
 import graphlib  # type: ignore[import,unused-ignore]
+import string
 
 import dlt
 from dlt.common import logger
@@ -193,6 +194,7 @@ def build_resource_dependency_graph(
     endpoint_resource_map: Dict[str, EndpointResource] = {}
     resolved_param_map: Dict[str, ResolvedParam] = {}
 
+    # expand all resources and index them
     for resource_kwargs in resource_list:
         if isinstance(resource_kwargs, dict):
             # clone resource here, otherwise it needs to be cloned in several other places
@@ -202,6 +204,7 @@ def build_resource_dependency_graph(
         endpoint_resource = _make_endpoint_resource(resource_kwargs, resource_defaults)
         assert isinstance(endpoint_resource["endpoint"], dict)
         _setup_single_entity_endpoint(endpoint_resource["endpoint"])
+        _bind_path_params(endpoint_resource)
 
         resource_name = endpoint_resource["name"]
         assert isinstance(
@@ -210,22 +213,29 @@ def build_resource_dependency_graph(
 
         if resource_name in endpoint_resource_map:
             raise ValueError(f"Resource {resource_name} has already been defined")
+        endpoint_resource_map[resource_name] = endpoint_resource
 
+    # create dependency graph
+    for resource_name, endpoint_resource in endpoint_resource_map.items():
+        assert isinstance(endpoint_resource["endpoint"], dict)
         # connect transformers to resources via resolved params
         resolved_params = _find_resolved_params(endpoint_resource["endpoint"])
         if len(resolved_params) > 1:
             raise ValueError(
                 f"Multiple resolved params for resource {resource_name}: {resolved_params}"
             )
-
-        predecessors = set(x.resolve_config["resource"] for x in resolved_params)
-
-        dependency_graph.add(resource_name, *predecessors)
-
-        endpoint_resource_map[resource_name] = endpoint_resource
-        resolved_param_map[resource_name] = (
-            resolved_params[0] if resolved_params else None
-        )
+        elif len(resolved_params) == 1:
+            resolved_param = resolved_params[0]
+            predecessor = resolved_param.resolve_config["resource"]
+            if predecessor not in endpoint_resource_map:
+                raise ValueError(
+                    f"A transformer resource {resource_name} refers to non existing parent resource {predecessor} on {resolved_param}"
+                )
+            dependency_graph.add(resource_name, predecessor)
+            resolved_param_map[resource_name] = resolved_param
+        else:
+            dependency_graph.add(resource_name)
+            resolved_param_map[resource_name] = None
 
     return dependency_graph, endpoint_resource_map, resolved_param_map
 
@@ -260,6 +270,46 @@ def _make_endpoint_resource(
         resource["endpoint"]["path"] = resource["name"]  # type: ignore
 
     return _merge_resource_endpoints(default_config, resource)
+
+
+def _bind_path_params(resource: EndpointResource) -> None:
+    """Binds params declared in path to params available in `params`. Pops the
+    bound params but. Params of type `resolve` and `incremental` are skipped
+    and bound later.
+    """
+    path_params: Dict[str, Any] = {}
+    assert isinstance(resource["endpoint"], dict)  # type guard
+    resolve_params = [r.param_name for r in _find_resolved_params(resource["endpoint"])]
+    path = resource["endpoint"]["path"]
+    for format_ in string.Formatter().parse(path):
+        name = format_[1]
+        if name:
+            params = resource["endpoint"].get("params", {})
+            if name not in params and name not in path_params:
+                raise ValueError(
+                    f"The path {path} defined in resource {resource['name']} requires param with name {name} but it is not found in {params}"
+                )
+            if name in resolve_params:
+                resolve_params.remove(name)
+            if name in params:
+                if not isinstance(params[name], dict):
+                    # bind resolved param and pop it from endpoint
+                    path_params[name] = params.pop(name)
+                else:
+                    param_type = params[name].get("type")
+                    if param_type != "resolve":
+                        raise ValueError(
+                            f"The path {path} defined in resource {resource['name']} tries to bind param {name} with type {param_type}. Paths can only bind 'resource' type params."
+                        )
+                    # resolved params are bound later
+                    path_params[name] = "{" + name + "}"
+
+    if len(resolve_params) > 0:
+        raise NotImplementedError(
+            f"Resource {resource['name']} defines resolve params {resolve_params} that are not bound in path {path}. Resolve query params not supported yet."
+        )
+
+    resource["endpoint"]["path"] = path.format(**path_params)
 
 
 def _setup_single_entity_endpoint(endpoint: Endpoint) -> Endpoint:
@@ -357,6 +407,33 @@ def create_response_hooks(
     if response_actions:
         return {"response": [_create_response_actions_hook(response_actions)]}
     return None
+
+
+def process_parent_data_item(
+    path: str,
+    item: Dict[str, Any],
+    resolved_param: ResolvedParam,
+    include_from_parent: List[str],
+) -> Tuple[str, Dict[str, Any]]:
+    parent_resource_name = resolved_param.resolve_config["resource"]
+    field_path = resolved_param.resolve_config["field"]
+    if resolved_param.resolve_config["field"] not in item:
+        raise ValueError(
+            f"Transformer expects a field '{field_path}' to be present in the incoming data from resource {parent_resource_name} in order to bind it to path param {resolved_param.param_name}. Available parent fields are {', '.join(item.keys())}"
+        )
+    bound_path = path.format(**{resolved_param.param_name: item[field_path]})
+
+    parent_record: Dict[str, Any] = {}
+    if include_from_parent:
+        for parent_key in include_from_parent:
+            child_key = make_parent_key_name(parent_resource_name, parent_key)
+            if parent_key not in item:
+                raise ValueError(
+                    f"Transformer expects a field '{parent_key}' to be present in the incoming data from resource {parent_resource_name} in order to include it in child records under {child_key}. Available parent fields are {', '.join(item.keys())}"
+                )
+            parent_record[child_key] = item[parent_key]
+
+    return bound_path, parent_record
 
 
 def _merge_resource_endpoints(

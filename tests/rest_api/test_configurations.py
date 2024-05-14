@@ -1,5 +1,5 @@
 import pytest
-from copy import copy
+from copy import copy, deepcopy
 from typing import get_args
 
 import dlt
@@ -16,17 +16,21 @@ from sources.rest_api import rest_api_source, rest_api_resources
 from sources.rest_api.config_setup import (
     AUTH_MAP,
     PAGINATOR_MAP,
+    _bind_path_params,
     _setup_single_entity_endpoint,
     create_auth,
     create_paginator,
     _make_endpoint_resource,
+    process_parent_data_item,
 )
 from sources.rest_api.typing import (
     AuthType,
     AuthTypeConfig,
+    EndpointResource,
     PaginatorType,
     PaginatorTypeConfig,
     RESTAPIConfig,
+    ResolvedParam,
 )
 from dlt.sources.helpers.rest_client.paginators import (
     HeaderLinkPaginator,
@@ -391,23 +395,129 @@ def test_setup_for_single_item_endpoint() -> None:
     assert isinstance(endpoint["paginator"], SinglePagePaginator)
 
 
+def test_bind_path_param() -> None:
+    three_params: EndpointResource = {
+        "name": "comments",
+        "endpoint": {
+            "path": "{org}/{repo}/issues/{id}/comments",
+            "params": {
+                "org": "dlt-hub",
+                "repo": "dlt",
+                "id": {
+                    "type": "resolve",
+                    "field": "id",
+                    "resource": "issues",
+                },
+            },
+        },
+    }
+    tp_1 = deepcopy(three_params)
+    _bind_path_params(tp_1)
+    # do not replace resolved params
+    assert tp_1["endpoint"]["path"] == "dlt-hub/dlt/issues/{id}/comments"
+    # bound params popped
+    assert len(tp_1["endpoint"]["params"]) == 1
+    assert "id" in tp_1["endpoint"]["params"]
+
+    tp_2 = deepcopy(three_params)
+    tp_2["endpoint"]["params"]["id"] = 12345
+    _bind_path_params(tp_2)
+    assert tp_2["endpoint"]["path"] == "dlt-hub/dlt/issues/12345/comments"
+    assert len(tp_2["endpoint"]["params"]) == 0
+
+    # param missing
+    tp_3 = deepcopy(three_params)
+    with pytest.raises(ValueError) as val_ex:
+        del tp_3["endpoint"]["params"]["id"]
+        _bind_path_params(tp_3)
+    # path is a part of an exception
+    assert tp_3["endpoint"]["path"] in str(val_ex.value)
+
+    # path without params
+    tp_4 = deepcopy(three_params)
+    tp_4["endpoint"]["path"] = "comments"
+    # no unbound params
+    del tp_4["endpoint"]["params"]["id"]
+    tp_5 = deepcopy(tp_4)
+    _bind_path_params(tp_4)
+    assert tp_4 == tp_5
+
+    # resolved param will remain unbounded and
+    tp_6 = deepcopy(three_params)
+    tp_6["endpoint"]["path"] = "{org}/{repo}/issues/1234/comments"
+    with pytest.raises(NotImplementedError):
+        _bind_path_params(tp_6)
+
+
+def test_process_parent_data_item():
+    resolve_param = ResolvedParam(
+        "id", {"field": "obj_id", "resource": "issues", "type": "resolve"}
+    )
+    bound_path, parent_record = process_parent_data_item(
+        "dlt-hub/dlt/issues/{id}/comments", {"obj_id": 12345}, resolve_param, None
+    )
+    assert bound_path == "dlt-hub/dlt/issues/12345/comments"
+    assert parent_record == {}
+
+    bound_path, parent_record = process_parent_data_item(
+        "dlt-hub/dlt/issues/{id}/comments", {"obj_id": 12345}, resolve_param, ["obj_id"]
+    )
+    assert parent_record == {"_issues_obj_id": 12345}
+
+    bound_path, parent_record = process_parent_data_item(
+        "dlt-hub/dlt/issues/{id}/comments",
+        {"obj_id": 12345, "obj_node": "node_1"},
+        resolve_param,
+        ["obj_id", "obj_node"],
+    )
+    assert parent_record == {"_issues_obj_id": 12345, "_issues_obj_node": "node_1"}
+
+    # param path not found
+    with pytest.raises(ValueError) as val_ex:
+        bound_path, parent_record = process_parent_data_item(
+            "dlt-hub/dlt/issues/{id}/comments", {"_id": 12345}, resolve_param, None
+        )
+    assert "Transformer expects a field 'obj_id'" in str(val_ex.value)
+
+    # included path not found
+    with pytest.raises(ValueError) as val_ex:
+        bound_path, parent_record = process_parent_data_item(
+            "dlt-hub/dlt/issues/{id}/comments",
+            {"obj_id": 12345, "obj_node": "node_1"},
+            resolve_param,
+            ["obj_id", "node"],
+        )
+    assert "in order to include it in child records under _issues_node" in str(
+        val_ex.value
+    )
+
+
 def test_resource_schema() -> None:
     config: RESTAPIConfig = {
         "client": {
             "base_url": "https://api.example.com",
         },
         "resources": [
+            "users",
             {
-                "name": "resource",
+                "name": "user",
                 "endpoint": {
                     "path": "user/{id}",
                     "paginator": None,
                     "data_selector": None,
+                    "params": {
+                        "id": {
+                            "type": "resolve",
+                            "field": "id",
+                            "resource": "users",
+                        },
+                    },
                 },
-            }
+            },
         ],
     }
     resources = rest_api_resources(config)
-    assert len(resources) == 1
+    assert len(resources) == 2
     resource = resources[0]
-    assert resource.name == "resource"
+    assert resource.name == "users"
+    assert resources[1].name == "user"
