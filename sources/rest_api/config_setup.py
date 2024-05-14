@@ -1,4 +1,4 @@
-import copy
+from copy import copy
 from typing import (
     Type,
     Any,
@@ -14,10 +14,14 @@ from typing import (
 import graphlib  # type: ignore[import,unused-ignore]
 
 import dlt
-from dlt.extract.incremental import Incremental
 from dlt.common import logger
+from dlt.common.configuration import resolve_configuration
+from dlt.common.schema.utils import merge_columns
 from dlt.common.utils import update_dict_nested
-from dlt.common.typing import TSecretStrValue
+
+from dlt.extract.incremental import Incremental
+from dlt.extract.utils import ensure_table_schema_columns
+
 from dlt.sources.helpers.requests import Response
 from dlt.sources.helpers.rest_client.paginators import (
     BasePaginator,
@@ -26,7 +30,9 @@ from dlt.sources.helpers.rest_client.paginators import (
     JSONResponsePaginator,
     JSONResponseCursorPaginator,
     OffsetPaginator,
+    PageNumberPaginator,
 )
+from dlt.sources.helpers.rest_client.detector import single_entity_path
 from dlt.sources.helpers.rest_client.exceptions import IgnoreResponseException
 from dlt.sources.helpers.rest_client.auth import (
     AuthConfigBase,
@@ -37,27 +43,37 @@ from dlt.sources.helpers.rest_client.auth import (
 )
 
 from .typing import (
-    SimpleTokenAuthConfig,
+    EndpointResourceBase,
+    PaginatorType,
+    AuthType,
+    AuthConfig,
     IncrementalArgs,
     IncrementalConfig,
-    PaginatorType,
-    ResolveConfig,
+    PaginatorConfig,
+    ParamBindConfig,
+    ResolveParamConfig,
     ResolvedParam,
     ResponseAction,
     Endpoint,
     EndpointResource,
-    DefaultEndpointResource,
 )
 from .utils import exclude_keys
 
 
-PAGINATOR_MAP: Dict[str, Type[BasePaginator]] = {
-    "json_links": JSONResponsePaginator,
-    "header_links": HeaderLinkPaginator,
+PAGINATOR_MAP: Dict[PaginatorType, Type[BasePaginator]] = {
+    "json_response": JSONResponsePaginator,
+    "header_link": HeaderLinkPaginator,
     "auto": None,
     "single_page": SinglePagePaginator,
     "cursor": JSONResponseCursorPaginator,
     "offset": OffsetPaginator,
+    "page_number": PageNumberPaginator,
+}
+
+AUTH_MAP: Dict[AuthType, Type[AuthConfigBase]] = {
+    "bearer": BearerTokenAuth,
+    "api_key": APIKeyAuth,
+    "http_basic": HttpBasicAuth,
 }
 
 
@@ -66,7 +82,7 @@ class IncrementalParam(NamedTuple):
     end: Optional[str]
 
 
-def get_paginator_class(paginator_type: str) -> Type[BasePaginator]:
+def get_paginator_class(paginator_type: PaginatorType) -> Type[BasePaginator]:
     try:
         return PAGINATOR_MAP[paginator_type]
     except KeyError:
@@ -77,65 +93,63 @@ def get_paginator_class(paginator_type: str) -> Type[BasePaginator]:
         )
 
 
-def create_paginator(paginator_config: PaginatorType) -> Optional[BasePaginator]:
+def create_paginator(
+    paginator_config: Optional[PaginatorConfig],
+) -> Optional[BasePaginator]:
     if isinstance(paginator_config, BasePaginator):
         return paginator_config
 
     if isinstance(paginator_config, str):
         paginator_class = get_paginator_class(paginator_config)
-        return paginator_class()
+        try:
+            # `auto` has no associated class in `PAGINATOR_MAP`
+            return paginator_class() if paginator_class else None
+        except TypeError:
+            raise ValueError(
+                f"Paginator {paginator_config} requires arguments to create an instance. Use {paginator_class} instance instead."
+            )
 
     if isinstance(paginator_config, dict):
         paginator_type = paginator_config.get("type", "auto")
         paginator_class = get_paginator_class(paginator_type)
-        return paginator_class(**exclude_keys(paginator_config, {"type"}))
+        return (
+            paginator_class(**exclude_keys(paginator_config, {"type"}))
+            if paginator_class
+            else None
+        )
 
     return None
 
 
-def create_auth(
-    auth_config: Optional[Union[SimpleTokenAuthConfig, AuthConfigBase, Dict[str, str]]],
-) -> Optional[AuthConfigBase]:
+def get_auth_class(auth_type: AuthType) -> Type[AuthConfigBase]:
+    try:
+        return AUTH_MAP[auth_type]
+    except KeyError:
+        available_options = ", ".join(AUTH_MAP.keys())
+        raise ValueError(
+            f"Invalid paginator: {auth_type}. "
+            f"Available options: {available_options}"
+        )
+
+
+def create_auth(auth_config: Optional[AuthConfig]) -> Optional[AuthConfigBase]:
+    auth: AuthConfigBase = None
     if isinstance(auth_config, AuthConfigBase):
-        return auth_config
+        auth = auth_config
+
+    if isinstance(auth_config, str):
+        auth_class = get_auth_class(auth_config)
+        auth = auth_class()
 
     if isinstance(auth_config, dict):
-        # Handle a shorthand auth configuration
-        if "token" in auth_config and len(auth_config) == 1:
-            return BearerTokenAuth(cast(TSecretStrValue, auth_config["token"]))
+        auth_type = auth_config.get("type", "bearer")
+        auth_class = get_auth_class(auth_type)
+        auth = auth_class(**exclude_keys(auth_config, {"type"}))
 
-        # Handle full auth configurations
-        auth_config = cast(AuthConfigBase, auth_config)
-        if auth_config.get("type") == "http":
-            if auth_config.get("scheme") == "basic":
-                return HttpBasicAuth(
-                    username=auth_config["username"], password=auth_config["password"]
-                )
-            elif auth_config.get("scheme") == "bearer":
-                return BearerTokenAuth(cast(TSecretStrValue, auth_config["token"]))
-            else:
-                raise ValueError(f"Invalid auth scheme: {auth_config['scheme']}")
-        elif auth_config.get("type") == "apiKey":
-            return APIKeyAuth(
-                name=auth_config["name"],
-                api_key=cast(TSecretStrValue, auth_config["api_key"]),
-                location=auth_config.get("location"),
-            )
-        elif auth_config.get("type") == "oauth2":
-            return OAuthJWTAuth(
-                client_id=auth_config["client_id"],
-                private_key=cast(TSecretStrValue, auth_config["private_key"]),
-                auth_endpoint=auth_config["auth_endpoint"],
-                scopes=auth_config["scopes"],
-                headers=auth_config.get("headers"),
-                private_key_passphrase=auth_config.get("private_key_passphrase"),
-                default_token_expiration=auth_config.get("default_token_expiration"),
-            )
-        else:
-            raise ValueError(f"Invalid auth type: {auth_config['type']}")
-
-    if auth_config:
-        raise ValueError(f"Invalid auth config: {auth_config}")
+    if auth:
+        # TODO: provide explicitly (non-default) values as explicit explicit_value=dict(auth)
+        # this will resolve auth which is a configuration using current section context
+        return resolve_configuration(auth)
 
     return None
 
@@ -149,6 +163,7 @@ def setup_incremental_object(
             return value, IncrementalParam(start=key, end=None)
         if isinstance(value, dict) and value.get("type") == "incremental":
             config = exclude_keys(value, {"type"})
+            # TODO: implement param type to bind incremental to
             return (
                 dlt.sources.incremental(**config),
                 IncrementalParam(start=key, end=None),
@@ -171,7 +186,7 @@ def make_parent_key_name(resource_name: str, field_name: str) -> str:
 
 
 def build_resource_dependency_graph(
-    resource_defaults: DefaultEndpointResource,
+    resource_defaults: EndpointResourceBase,
     resource_list: List[Union[str, EndpointResource]],
 ) -> Tuple[Any, Dict[str, EndpointResource], Dict[str, Optional[ResolvedParam]]]:
     dependency_graph = graphlib.TopologicalSorter()
@@ -179,28 +194,31 @@ def build_resource_dependency_graph(
     resolved_param_map: Dict[str, ResolvedParam] = {}
 
     for resource_kwargs in resource_list:
-        endpoint_resource = make_endpoint_resource(resource_kwargs, resource_defaults)
+        if isinstance(resource_kwargs, dict):
+            # clone resource here, otherwise it needs to be cloned in several other places
+            # note that this clones only dict structure, keeping all instances without deepcopy
+            resource_kwargs = update_dict_nested({}, resource_kwargs)  # type: ignore[assignment]
+
+        endpoint_resource = _make_endpoint_resource(resource_kwargs, resource_defaults)
+        assert isinstance(endpoint_resource["endpoint"], dict)
+        _setup_single_entity_endpoint(endpoint_resource["endpoint"])
 
         resource_name = endpoint_resource["name"]
-
-        if not isinstance(resource_name, str):
-            raise ValueError(
-                f"Resource name must be a string, got {type(resource_name)}"
-            )
+        assert isinstance(
+            resource_name, str
+        ), f"Resource name must be a string, got {type(resource_name)}"
 
         if resource_name in endpoint_resource_map:
             raise ValueError(f"Resource {resource_name} has already been defined")
 
-        resolved_params = find_resolved_params(
-            cast(Endpoint, endpoint_resource["endpoint"])
-        )
-
+        # connect transformers to resources via resolved params
+        resolved_params = _find_resolved_params(endpoint_resource["endpoint"])
         if len(resolved_params) > 1:
             raise ValueError(
                 f"Multiple resolved params for resource {resource_name}: {resolved_params}"
             )
 
-        predecessors = set(x.resolve_config.resource_name for x in resolved_params)
+        predecessors = set(x.resolve_config["resource"] for x in resolved_params)
 
         dependency_graph.add(resource_name, *predecessors)
 
@@ -212,8 +230,8 @@ def build_resource_dependency_graph(
     return dependency_graph, endpoint_resource_map, resolved_param_map
 
 
-def make_endpoint_resource(
-    resource: Union[str, EndpointResource], default_config: EndpointResource
+def _make_endpoint_resource(
+    resource: Union[str, EndpointResource], default_config: EndpointResourceBase
 ) -> EndpointResource:
     """
     Creates an EndpointResource object based on the provided resource
@@ -229,46 +247,48 @@ def make_endpoint_resource(
     """
     if isinstance(resource, str):
         resource = {"name": resource, "endpoint": {"path": resource}}
-        return update_dict_nested(copy.deepcopy(default_config), resource)  # type: ignore[type-var]
+        return _merge_resource_endpoints(default_config, resource)
 
-    if "endpoint" in resource and isinstance(resource["endpoint"], str):
-        resource["endpoint"] = {"path": resource["endpoint"]}
-
-    if "name" not in resource:
-        raise ValueError("Resource must have a name")
+    if "endpoint" in resource:
+        if isinstance(resource["endpoint"], str):
+            resource["endpoint"] = {"path": resource["endpoint"]}
+    else:
+        # endpoint is optional
+        resource["endpoint"] = {}
 
     if "path" not in resource["endpoint"]:
         resource["endpoint"]["path"] = resource["name"]  # type: ignore
 
-    return update_dict_nested(copy.deepcopy(default_config), resource)  # type: ignore[type-var]
+    return _merge_resource_endpoints(default_config, resource)
 
 
-def make_resolved_param(
-    key: str, value: Union[ResolveConfig, Dict[str, Any]]
-) -> Optional[ResolvedParam]:
-    if isinstance(value, ResolveConfig):
-        return ResolvedParam(key, value)
-    if isinstance(value, dict) and value.get("type") == "resolve":
-        return ResolvedParam(
-            key,
-            ResolveConfig(resource_name=value["resource"], field_path=value["field"]),
-        )
-    return None
+def _setup_single_entity_endpoint(endpoint: Endpoint) -> Endpoint:
+    """Tries to guess if the endpoint refers to a single entity and when detected:
+    * if `data_selector` was not specified (or is None), "$" is selected
+    * if `paginator` was not specified (or is None), SinglePagePaginator is selected
+
+    Endpoint is modified in place and returned
+    """
+    # try to guess if list of entities or just single entity is returned
+    if single_entity_path(endpoint["path"]):
+        if endpoint.get("data_selector") is None:
+            endpoint["data_selector"] = "$"
+        if endpoint.get("paginator") is None:
+            endpoint["paginator"] = SinglePagePaginator()
+    return endpoint
 
 
-def find_resolved_params(endpoint_config: Endpoint) -> List[ResolvedParam]:
+def _find_resolved_params(endpoint_config: Endpoint) -> List[ResolvedParam]:
     """
     Find all resolved params in the endpoint configuration and return
     a list of ResolvedParam objects.
 
-    Resolved params are either of type ResolveConfig or are dictionaries
-    with a key "type" set to "resolve".
+    Resolved params are of type ResolveParamConfig (bound param with a key "type" set to "resolve".)
     """
     return [
-        make_resolved_param(key, value)
+        ResolvedParam(key, value)  # type: ignore[arg-type]
         for key, value in endpoint_config.get("params", {}).items()
-        if isinstance(value, ResolveConfig)
-        or (isinstance(value, dict) and value.get("type") == "resolve")
+        if (isinstance(value, dict) and value.get("type") == "resolve")
     ]
 
 
@@ -337,3 +357,55 @@ def create_response_hooks(
     if response_actions:
         return {"response": [_create_response_actions_hook(response_actions)]}
     return None
+
+
+def _merge_resource_endpoints(
+    default_config: EndpointResourceBase, config: EndpointResource
+) -> EndpointResource:
+    """Merges `default_config` and `config`, returns new instance of EndpointResource"""
+    # NOTE: config is normalized and always has "endpoint" field which is a dict
+    # TODO: could deep merge paginators and auths of the same type
+
+    default_endpoint = default_config.get("endpoint", Endpoint())
+    assert isinstance(default_endpoint, dict)
+    config_endpoint = config["endpoint"]
+    assert isinstance(config_endpoint, dict)
+
+    merged_endpoint: Endpoint = {
+        **default_endpoint,
+        **{k: v for k, v in config_endpoint.items() if k not in ("json", "params")},  # type: ignore[typeddict-item]
+    }
+    # merge endpoint, only params and json are allowed to deep merge
+    if "json" in config_endpoint:
+        merged_endpoint["json"] = {
+            **(merged_endpoint.get("json", {})),
+            **config_endpoint["json"],
+        }
+    if "params" in config_endpoint:
+        merged_endpoint["params"] = {
+            **(merged_endpoint.get("json", {})),
+            **config_endpoint["params"],
+        }
+    # merge columns
+    if (default_columns := default_config.get("columns")) and (
+        columns := config.get("columns")
+    ):
+        # merge only native dlt formats, skip pydantic and others
+        if isinstance(columns, (list, dict)) and isinstance(
+            default_columns, (list, dict)
+        ):
+            # normalize columns
+            columns = ensure_table_schema_columns(columns)
+            default_columns = ensure_table_schema_columns(default_columns)
+            # merge columns with deep merging hints
+            config["columns"] = merge_columns(
+                copy(default_columns), columns, merge_columns=True
+            )
+
+    # no need to deep merge resources
+    merged_resource: EndpointResource = {
+        **default_config,
+        **config,
+        "endpoint": merged_endpoint,
+    }
+    return merged_resource

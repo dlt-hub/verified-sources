@@ -13,6 +13,7 @@ def load_github() -> None:
         "client": {
             "base_url": "https://api.github.com/repos/dlt-hub/dlt/",
             "auth": {
+                "type": "bearer",
                 "token": dlt.secrets["github_token"],
             },
         },
@@ -83,7 +84,7 @@ def load_pokemon() -> None:
             "client": {
                 "base_url": "https://pokeapi.co/api/v2/",
                 # If you leave out the paginator, it will be inferred from the API:
-                # paginator: "json_links",
+                # paginator: "json_response",
             },
             "resource_defaults": {
                 "endpoint": {

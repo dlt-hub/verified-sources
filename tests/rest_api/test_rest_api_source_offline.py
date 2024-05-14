@@ -2,7 +2,7 @@ import pytest
 
 import dlt
 from dlt.pipeline.exceptions import PipelineStepFailed
-from dlt.sources.helpers.rest_client.paginators import BasePaginator
+from dlt.sources.helpers.rest_client.paginators import BaseReferencePaginator
 
 from tests.utils import assert_load_info, load_table_counts, assert_query_data
 
@@ -135,15 +135,15 @@ def test_ignoring_endpoint_returning_404(mock_api_server):
 
 
 def test_source_with_post_request(mock_api_server):
-    class JSONBodyPageCursorPaginator(BasePaginator):
+    class JSONBodyPageCursorPaginator(BaseReferencePaginator):
         def update_state(self, response):
-            self.next_reference = response.json().get("next_page")
+            self._next_reference = response.json().get("next_page")
 
         def update_request(self, request):
             if request.json is None:
                 request.json = {}
 
-            request.json["page"] = self.next_reference
+            request.json["page"] = self._next_reference
 
     mock_source = rest_api_source(
         {
@@ -200,7 +200,7 @@ def test_posts_under_results_key(mock_api_server):
                     "endpoint": {
                         "path": "posts_under_a_different_key",
                         "data_selector": "many-results",
-                        "paginator": "json_links",
+                        "paginator": "json_response",
                     },
                 },
             ],
@@ -223,7 +223,7 @@ def test_posts_without_key(mock_api_server):
         {
             "client": {
                 "base_url": "https://api.example.com",
-                "paginator": "header_links",
+                "paginator": "header_link",
             },
             "resources": [
                 {

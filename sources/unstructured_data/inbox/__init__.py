@@ -216,7 +216,7 @@ def get_attachments_by_uid(
                             os.makedirs(os.path.dirname(attachment_path), exist_ok=True)
 
                             with open(attachment_path, "wb") as f:
-                                f.write(attachment_data)
+                                f.write(attachment_data)  # type: ignore[arg-type]
 
                             result = deepcopy(item)
                             result.update(email_info)

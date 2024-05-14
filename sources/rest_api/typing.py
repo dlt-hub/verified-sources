@@ -2,6 +2,7 @@ from typing import (
     Any,
     Dict,
     List,
+    Literal,
     NamedTuple,
     Optional,
     TypedDict,
@@ -10,33 +11,161 @@ from typing import (
 
 from dlt.common import jsonpath
 from dlt.common.typing import TSortOrder
+from dlt.common.schema.typing import (
+    TColumnNames,
+    TTableFormat,
+    TAnySchemaColumns,
+    TWriteDispositionConfig,
+    TSchemaContract,
+)
+
 from dlt.extract.items import TTableHintTemplate
 from dlt.extract.incremental.typing import LastValueFunc
 
 from dlt.sources.helpers.rest_client.paginators import BasePaginator
 from dlt.sources.helpers.rest_client.typing import HTTPMethodBasic
-from dlt.sources.helpers.rest_client.auth import AuthConfigBase
+from dlt.sources.helpers.rest_client.auth import AuthConfigBase, TApiKeyLocation
 
-from dlt.common.schema.typing import (
-    TColumnNames,
-    TTableFormat,
-    TTableSchemaColumns,
-    TWriteDisposition,
+from dlt.sources.helpers.rest_client.paginators import (
+    SinglePagePaginator,
+    HeaderLinkPaginator,
+    JSONResponsePaginator,
+    JSONResponseCursorPaginator,
+    OffsetPaginator,
+    PageNumberPaginator,
+)
+from dlt.sources.helpers.rest_client.exceptions import IgnoreResponseException
+from dlt.sources.helpers.rest_client.auth import (
+    AuthConfigBase,
+    HttpBasicAuth,
+    BearerTokenAuth,
+    APIKeyAuth,
+    OAuthJWTAuth,
 )
 
-PaginatorConfigDict = Dict[str, Any]
-PaginatorType = Union[BasePaginator, str, PaginatorConfigDict]
+PaginatorType = Literal[
+    "json_response",
+    "header_link",
+    "auto",
+    "single_page",
+    "cursor",
+    "offset",
+    "page_number",
+]
 
 
-class SimpleTokenAuthConfig(TypedDict, total=False):
+class PaginatorTypeConfig(TypedDict, total=True):
+    type: PaginatorType  # noqa
+
+
+class PageNumberPaginatorConfig(PaginatorTypeConfig, total=False):
+    """A paginator that uses page number-based pagination strategy."""
+
+    initial_page: Optional[int]
+    page_param: Optional[str]
+    total_path: Optional[jsonpath.TJsonPath]
+    maximum_page: Optional[int]
+
+
+class OffsetPaginatorConfig(PaginatorTypeConfig, total=False):
+    """A paginator that uses offset-based pagination strategy."""
+
+    limit: int
+    offset: Optional[int]
+    offset_param: Optional[str]
+    limit_param: Optional[str]
+    total_path: Optional[jsonpath.TJsonPath]
+    maximum_offset: Optional[int]
+
+
+class HeaderLinkPaginatorConfig(PaginatorTypeConfig, total=False):
+    """A paginator that uses the 'Link' header in HTTP responses
+    for pagination."""
+
+    links_next_key: Optional[str]
+
+
+class JSONResponsePaginatorConfig(PaginatorTypeConfig, total=False):
+    """Locates the next page URL within the JSON response body. The key
+    containing the URL can be specified using a JSON path."""
+
+    next_url_path: Optional[jsonpath.TJsonPath]
+
+
+class JSONResponseCursorPaginatorConfig(PaginatorTypeConfig, total=False):
+    """Uses a cursor parameter for pagination, with the cursor value found in
+    the JSON response body."""
+
+    cursor_path: Optional[jsonpath.TJsonPath]
+    cursor_param: Optional[str]
+
+
+PaginatorConfig = Union[
+    PaginatorType,
+    PageNumberPaginatorConfig,
+    OffsetPaginatorConfig,
+    HeaderLinkPaginatorConfig,
+    JSONResponsePaginatorConfig,
+    JSONResponseCursorPaginatorConfig,
+    BasePaginator,
+    SinglePagePaginator,
+    HeaderLinkPaginator,
+    JSONResponsePaginator,
+    JSONResponseCursorPaginator,
+    OffsetPaginator,
+    PageNumberPaginator,
+]
+
+
+AuthType = Literal["bearer", "api_key", "http_basic"]
+
+
+class AuthTypeConfig(TypedDict, total=True):
+    type: AuthType  # noqa
+
+
+class BearerTokenAuthConfig(AuthTypeConfig, total=True):
+    """Uses `token` for Bearer authentication in "Authorization" header."""
+
     token: str
+
+
+class ApiKeyAuthConfig(AuthTypeConfig, total=False):
+    """Uses provided `api_key` to create authorization data in the specified `location` (query, param, header, cookie) under specified `name`"""
+
+    name: Optional[str]
+    api_key: str
+    location: Optional[TApiKeyLocation]
+
+
+class HttpBasicAuthConfig(AuthTypeConfig, total=True):
+    """Uses HTTP basic authentication"""
+
+    username: str
+    password: str
+
+
+# TODO: add later
+# class OAuthJWTAuthConfig(AuthTypeConfig, total=True):
+
+
+AuthConfig = Union[
+    AuthConfigBase,
+    AuthType,
+    BearerTokenAuthConfig,
+    ApiKeyAuthConfig,
+    HttpBasicAuthConfig,
+    BearerTokenAuth,
+    APIKeyAuth,
+    HttpBasicAuth,
+]
 
 
 class ClientConfig(TypedDict, total=False):
     base_url: str
     headers: Optional[Dict[str, str]]
-    auth: Optional[Union[SimpleTokenAuthConfig, AuthConfigBase, Dict[str, str]]]
-    paginator: Optional[PaginatorType]
+    auth: Optional[AuthConfig]
+    paginator: Optional[PaginatorConfig]
 
 
 class IncrementalArgs(TypedDict, total=False):
@@ -53,14 +182,27 @@ class IncrementalConfig(IncrementalArgs, total=False):
     end_param: Optional[str]
 
 
-class ResolveConfig(NamedTuple):
-    resource_name: str
-    field_path: str
+ParamBindType = Literal["resolve", "incremental"]
+
+
+class ParamBindConfig(TypedDict):
+    type: ParamBindType  # noqa
+
+
+class ResolveParamConfig(ParamBindConfig):
+    resource: str
+    field: str
+
+
+class IncrementalParamConfig(ParamBindConfig, IncrementalArgs):
+    pass
+    # TODO: implement param type to bind incremental to
+    # param_type: Optional[Literal["start_param", "end_param"]]
 
 
 class ResolvedParam(NamedTuple):
     param_name: str
-    resolve_config: ResolveConfig
+    resolve_config: ResolveParamConfig
 
 
 class ResponseAction(TypedDict, total=False):
@@ -72,36 +214,40 @@ class ResponseAction(TypedDict, total=False):
 class Endpoint(TypedDict, total=False):
     path: Optional[str]
     method: Optional[HTTPMethodBasic]
-    params: Optional[Dict[str, Any]]
+    params: Optional[Dict[str, Union[ResolveParamConfig, IncrementalParamConfig, Any]]]
     json: Optional[Dict[str, Any]]
-    paginator: Optional[PaginatorType]
+    paginator: Optional[PaginatorConfig]
     data_selector: Optional[jsonpath.TJsonPath]
     response_actions: Optional[List[ResponseAction]]
     incremental: Optional[IncrementalConfig]
 
 
-class EndpointResourceBase(TypedDict, total=False):
-    endpoint: Optional[Union[str, Endpoint]]
-    write_disposition: Optional[TTableHintTemplate[TWriteDisposition]]
+class ResourceBase(TypedDict, total=False):
+    """Defines hints that may be passed to `dlt.resource` decorator"""
+
+    table_name: Optional[TTableHintTemplate[str]]
+    max_table_nesting: Optional[int]
+    write_disposition: Optional[TTableHintTemplate[TWriteDispositionConfig]]
     parent: Optional[TTableHintTemplate[str]]
-    columns: Optional[TTableHintTemplate[TTableSchemaColumns]]
+    columns: Optional[TTableHintTemplate[TAnySchemaColumns]]
     primary_key: Optional[TTableHintTemplate[TColumnNames]]
     merge_key: Optional[TTableHintTemplate[TColumnNames]]
+    schema_contract: Optional[TTableHintTemplate[TSchemaContract]]
     table_format: Optional[TTableHintTemplate[TTableFormat]]
-    include_from_parent: Optional[List[str]]
     selected: Optional[bool]
+    parallelized: Optional[bool]
 
 
-# NOTE: redefining properties of TypedDict is not allowed
+class EndpointResourceBase(ResourceBase, total=False):
+    endpoint: Optional[Union[str, Endpoint]]
+    include_from_parent: Optional[List[str]]
+
+
 class EndpointResource(EndpointResourceBase, total=False):
     name: TTableHintTemplate[str]
 
 
-class DefaultEndpointResource(EndpointResourceBase, total=False):
-    name: Optional[TTableHintTemplate[str]]
-
-
 class RESTAPIConfig(TypedDict):
     client: ClientConfig
-    resource_defaults: Optional[DefaultEndpointResource]
+    resource_defaults: Optional[EndpointResourceBase]
     resources: List[Union[str, EndpointResource]]

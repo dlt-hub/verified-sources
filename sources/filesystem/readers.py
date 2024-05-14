@@ -28,7 +28,7 @@ def _read_csv(
         # Here we use pandas chunksize to read the file in chunks and avoid loading the whole file
         # in memory.
         with file_obj.open() as file:
-            for df in pd.read_csv(file, **kwargs):  # type: ignore[arg-type]
+            for df in pd.read_csv(file, **kwargs):
                 yield df.to_dict(orient="records")
 
 
