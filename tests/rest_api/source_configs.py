@@ -48,6 +48,52 @@ INVALID_CONFIGS = [
             "resources": ["posts"],
         },
     ),
+    ConfigTest(
+        expected_message="issuess",
+        exception=ValueError,
+        config={
+            "client": {"base_url": "https://github.com/api/v2"},
+            "resources": [
+                "issues",
+                {
+                    "name": "comments",
+                    "endpoint": {
+                        "path": "issues/{id}/comments",
+                        "params": {
+                            "id": {
+                                "type": "resolve",
+                                "resource": "issuess",
+                                "field": "id",
+                            },
+                        },
+                    },
+                },
+            ],
+        },
+    ),
+    ConfigTest(
+        expected_message="{org}/{repo}/issues/",
+        exception=ValueError,
+        config={
+            "client": {"base_url": "https://github.com/api/v2"},
+            "resources": [
+                {"name": "issues", "endpoint": {"path": "{org}/{repo}/issues/"}},
+                {
+                    "name": "comments",
+                    "endpoint": {
+                        "path": "{org}/{repo}/issues/{id}/comments",
+                        "params": {
+                            "id": {
+                                "type": "resolve",
+                                "resource": "issues",
+                                "field": "id",
+                            },
+                        },
+                    },
+                },
+            ],
+        },
+    ),
 ]
 
 
@@ -209,6 +255,33 @@ VALID_CONFIGS: List[RESTAPIConfig] = [
                         "post_id": {
                             "type": "resolve",
                             "resource": "posts",
+                            "field": "id",
+                        },
+                    },
+                },
+            },
+        ],
+    },
+    {
+        "client": {"base_url": "https://github.com/api/v2"},
+        "resources": [
+            {
+                "name": "issues",
+                "endpoint": {
+                    "path": "{org}/{repo}/issues/",
+                    "params": {"org": "dlt-hub", "repo": "dlt"},
+                },
+            },
+            {
+                "name": "comments",
+                "endpoint": {
+                    "path": "{org}/{repo}/issues/{id}/comments",
+                    "params": {
+                        "org": "dlt-hub",
+                        "repo": "dlt",
+                        "id": {
+                            "type": "resolve",
+                            "resource": "issues",
                             "field": "id",
                         },
                     },
