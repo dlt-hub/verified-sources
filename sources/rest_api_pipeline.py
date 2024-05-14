@@ -1,16 +1,16 @@
 import dlt
-from rest_api import RESTAPIConfig, check_connection, rest_api_source
+from rest_api import RESTAPIConfig, check_connection, rest_api_source, rest_api_resources
 
-
-def load_github() -> None:
+@dlt.source
+def github_source(github_token=dlt.secrets.value):
     # Create a REST API configuration for the GitHub API
     # Use RESTAPIConfig to get autocompletion and type checking
-    github_config: RESTAPIConfig = {
+    config: RESTAPIConfig = {
         "client": {
             "base_url": "https://api.github.com/repos/dlt-hub/dlt/",
             "auth": {
                 "type": "bearer",
-                "token": dlt.secrets["github_token"],
+                "token": github_token,
             },
         },
         # The default configuration for all resources and their endpoints
@@ -82,15 +82,17 @@ def load_github() -> None:
         ],
     }
 
-    github_source = rest_api_source(github_config)
+    yield from rest_api_resources(config)
 
+
+def load_github() -> None:
     pipeline = dlt.pipeline(
         pipeline_name="rest_api_github",
         destination="duckdb",
         dataset_name="rest_api_data",
     )
 
-    load_info = pipeline.run(github_source)
+    load_info = pipeline.run(github_source())
     print(load_info)
 
 
