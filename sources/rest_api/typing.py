@@ -130,6 +130,13 @@ class BearerTokenAuthConfig(AuthTypeConfig, total=True):
     token: str
 
 
+class BearerTokenAuthConfigShorthand(TypedDict, total=True):
+    """Uses `token` for Bearer authentication in "Authorization" header.
+    Shorthand for `BearerTokenAuthConfig`.
+    """
+    token: str
+
+
 class ApiKeyAuthConfig(AuthTypeConfig, total=False):
     """Uses provided `api_key` to create authorization data in the specified `location` (query, param, header, cookie) under specified `name`"""
 
@@ -153,6 +160,7 @@ AuthConfig = Union[
     AuthConfigBase,
     AuthType,
     BearerTokenAuthConfig,
+    BearerTokenAuthConfigShorthand,
     ApiKeyAuthConfig,
     HttpBasicAuthConfig,
     BearerTokenAuth,
