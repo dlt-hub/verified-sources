@@ -1,8 +1,16 @@
+from typing import Any
+
 import dlt
-from rest_api import RESTAPIConfig, check_connection, rest_api_source, rest_api_resources
+from rest_api import (
+    RESTAPIConfig,
+    check_connection,
+    rest_api_source,
+    rest_api_resources,
+)
+
 
 @dlt.source
-def github_source(github_token=dlt.secrets.value):
+def github_source(github_token: str = dlt.secrets.value) -> Any:
     # Create a REST API configuration for the GitHub API
     # Use RESTAPIConfig to get autocompletion and type checking
     config: RESTAPIConfig = {
