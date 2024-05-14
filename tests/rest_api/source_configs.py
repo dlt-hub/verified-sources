@@ -114,6 +114,20 @@ VALID_CONFIGS: List[RESTAPIConfig] = [
     {
         "client": {
             "base_url": "https://example.com",
+            "auth": {"type": "bearer", "token": "X"},
+        },
+        "resources": ["users"],
+    },
+    {
+        "client": {
+            "base_url": "https://example.com",
+            "auth": {"token": "X"},
+        },
+        "resources": ["users"],
+    },
+    {
+        "client": {
+            "base_url": "https://example.com",
             "paginator": CustomPaginator(),
             "auth": CustomOAuthAuth(access_token="X"),
         },
