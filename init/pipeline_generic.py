@@ -1,76 +1,69 @@
 import dlt
-from dlt.sources.helpers import requests
 
+from dlt.sources.helpers.rest_client import paginate
+from dlt.sources.helpers.rest_client.auth import BearerTokenAuth
+from dlt.sources.helpers.rest_client.paginators import HeaderLinkPaginator
 
-def _create_auth_headers(api_secret_key):
-    """Constructs Bearer type authorization header which is the most common authorization method"""
-    headers = {"Authorization": f"Bearer {api_secret_key}"}
-    return headers
+# This is a generic pipeline example and demonstrates
+# how to use the dlt REST client for extracting data from APIs.
+# It showcases the use of authentication via bearer tokens and pagination.
 
 
 @dlt.source
 def source(
-    explicit_arg,
-    api_url=dlt.config.value,
-    api_secret_key=dlt.secrets.value,
-    default_arg="default",
+    api_secret_key: str = dlt.secrets.value,
+    org: str = "dlt-hub",
+    repository: str = "dlt",
 ):
-    # as an example this source groups two resources that will be loaded together
-    return resource_1(explicit_arg, api_url, api_secret_key), resource_2(
-        api_url, api_secret_key, default_arg=default_arg
-    )
+    """This source function aggregates data from two GitHub endpoints: issues and pull requests."""
+    # Ensure that secret key is provided for GitHub
+    # either via secrets.toml or via environment variables.
+    # print(f"api_secret_key={api_secret_key}")
+
+    api_url = f"https://api.github.com/repos/{org}/{repository}"
+    return [
+        resource_1(api_url, api_secret_key),
+        resource_2(api_url, api_secret_key),
+    ]
 
 
 @dlt.resource
-def resource_1(
-    explicit_arg, api_url=dlt.config.value, api_secret_key=dlt.secrets.value
-):
-    headers = _create_auth_headers(api_secret_key)
-
-    # uncomment line below to see if your headers are correct (ie. include valid api_key)
-    # print(headers)
-    # print(api_url)
-
-    # make a call to the endpoint with request library
-    resp = requests.get("%s?query=%s" % (api_url, explicit_arg), headers=headers)
-    resp.raise_for_status()
-    # yield the data from the resource
-    data = resp.json()
-
-    # yield a list of items
-    yield data["items"]
+def resource_1(api_url: str, api_secret_key: str = dlt.secrets.value):
+    """
+    Fetches issues from a specified repository on GitHub using Bearer Token Authentication.
+    """
+    # paginate issues and yield every page
+    for page in paginate(
+        f"{api_url}/issues",
+        auth=BearerTokenAuth(api_secret_key),
+        paginator=HeaderLinkPaginator(),
+    ):
+        # print(page)
+        yield page
 
 
 @dlt.resource
-def resource_2(
-    api_url=dlt.config.value, api_secret_key=dlt.secrets.value, default_arg="default"
-):
-    headers = _create_auth_headers(api_secret_key)
-
-    # make a call to the endpoint with request library
-    resp = requests.get("%s?last_value=%s" % (api_url, default_arg), headers=headers)
-    resp.raise_for_status()
-    # yield the data from the resource
-    data = resp.json()
-
-    # yield item by item
-    for value in data["data"]:
-        yield value
+def resource_2(api_url: str, api_secret_key: str = dlt.secrets.value):
+    for page in paginate(
+        f"{api_url}/pulls",
+        auth=BearerTokenAuth(api_secret_key),
+        paginator=HeaderLinkPaginator(),
+    ):
+        # print(page)
+        yield page
 
 
 if __name__ == "__main__":
-    # specify the pipeline name, destination and dataset name when configuring pipeline, otherwise the defaults will be used that are derived from the current script name
+    # specify the pipeline name, destination and dataset name when configuring pipeline,
+    # otherwise the defaults will be used that are derived from the current script name
     p = dlt.pipeline(
         pipeline_name="generic",
-        destination="bigquery",
+        destination="duckdb",
         dataset_name="generic_data",
         full_refresh=False,
     )
 
-    # uncomment line below to execute the resource function and see the returned data
-    # print(list(resource_1("term")))
+    load_info = p.run(source())
 
-    # explain that api_key will be automatically loaded from secrets.toml or environment variable below
-    load_info = p.run(source("term", default_arg="last_value"))
     # pretty print the information on data that was loaded
     print(load_info)

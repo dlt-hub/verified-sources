@@ -1,50 +1,76 @@
 import dlt
-from dlt.sources.helpers import requests
+
+from dlt.sources.helpers.rest_client import paginate
+from dlt.sources.helpers.rest_client.auth import BearerTokenAuth
+from dlt.sources.helpers.rest_client.paginators import HeaderLinkPaginator
+
+# This is a generic pipeline example and demonstrates
+# how to use the dlt REST client for extracting data from APIs.
+# It showcases the use of authentication via bearer tokens and pagination.
 
 
 @dlt.source
-def source(api_secret_key=dlt.secrets.value):
+def source(api_secret_key: str = dlt.secrets.value):
+    # print(f"api_secret_key={api_secret_key}")
     return resource(api_secret_key)
 
 
-def _create_auth_headers(api_secret_key):
-    """Constructs Bearer type authorization header which is the most common authorization method"""
-    headers = {"Authorization": f"Bearer {api_secret_key}"}
-    return headers
-
-
 @dlt.resource(write_disposition="append")
-def resource(api_secret_key=dlt.secrets.value):
-    headers = _create_auth_headers(api_secret_key)
+def resource(
+    api_secret_key: str = dlt.secrets.value,
+    org: str = "dlt-hub",
+    repository: str = "dlt",
+):
+    # this is the test data for loading validation, delete it once you yield actual data
+    yield [
+        {
+            "id": 1,
+            "node_id": "MDU6SXNzdWUx",
+            "number": 1347,
+            "state": "open",
+            "title": "Found a bug",
+            "body": "I'm having a problem with this.",
+            "user": {"login": "octocat", "id": 1},
+            "created_at": "2011-04-22T13:33:48Z",
+            "updated_at": "2011-04-22T13:33:48Z",
+            "repository": {
+                "id": 1296269,
+                "node_id": "MDEwOlJlcG9zaXRvcnkxMjk2MjY5",
+                "name": "Hello-World",
+                "full_name": "octocat/Hello-World",
+            },
+        }
+    ]
 
-    # check if authentication headers look fine
-    print(headers)
-
-    # make an api call here
-    # response = requests.get(url, headers=headers, params=params)
-    # response.raise_for_status()
-    # yield response.json()
-
-    # test data for loading validation, delete it once you yield actual data
-    test_data = [{"id": 0}, {"id": 1}]
-    yield test_data
+    # paginate issues and yield every page
+    # api_url = f"https://api.github.com/repos/{org}/{repository}/issues"
+    # for page in paginate(
+    #     api_url,
+    #     auth=BearerTokenAuth(api_secret_key),
+    #     # Note: for more paginators please see:
+    #     # https://dlthub.com/devel/general-usage/http/rest-client#paginators
+    #     paginator=HeaderLinkPaginator(),
+    # ):
+    #     # print(page)
+    #     yield page
 
 
 if __name__ == "__main__":
-    # configure the pipeline with your destination details
+    # specify the pipeline name, destination and dataset name when configuring pipeline,
+    # otherwise the defaults will be used that are derived from the current script name
     pipeline = dlt.pipeline(
-        pipeline_name="pipeline", destination="bigquery", dataset_name="pipeline_data"
+        pipeline_name="pipeline",
+        destination="duckdb",
+        dataset_name="pipeline_data",
     )
 
-    # print credentials by running the resource
     data = list(resource())
 
     # print the data yielded from resource
     print(data)
-    exit()
 
     # run the pipeline with your parameters
-    load_info = pipeline.run(source())
+    # load_info = pipeline.run(source())
 
     # pretty print the information on data that was loaded
-    print(load_info)
+    # print(load_info)
