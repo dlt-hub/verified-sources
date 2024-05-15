@@ -22,6 +22,8 @@ tuple represents a mapping for a particular entity. Here's an explanation of eac
 These entities map the fields associated with them. To get more information, please read the
 [Pipedrive documentation.](https://developers.pipedrive.com/docs/api/v1)
 
+> Note that `deals_flow` and `deals_participants` resources are built based on the `deals` resource. Therefore, loading them together in one source is a good practice. If you are using orchestrators, make sure they are requested in one task.
+
 ## Initialize the pipeline
 
 ```bash
