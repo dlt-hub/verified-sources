@@ -10,12 +10,14 @@ def load_pipedrive() -> None:
     )
     load_info = pipeline.run(pipedrive_source())
     print(load_info)
+    print(pipeline.last_trace.last_normalize_info)
+
 
 
 def load_selected_data() -> None:
     """Shows how to load just selected tables using `with_resources`"""
     pipeline = dlt.pipeline(
-        pipeline_name="pipedrive", destination="postgres", dataset_name="pipedrive_data"
+        pipeline_name="pipedrive", destination="duckdb", dataset_name="pipedrive_data"
     )
     # Use with_resources to select which entities to load
     # Note: `custom_fields_mapping` must be included to translate custom field hashes to corresponding names
@@ -62,8 +64,8 @@ def load_from_start_date() -> None:
 
 if __name__ == "__main__":
     # run our main example
-    # load_pipedrive()
+    load_pipedrive()
     # load selected tables and display resource info
     # load_selected_data()
     # load activities updated since given date
-    load_from_start_date()
+    # load_from_start_date()
