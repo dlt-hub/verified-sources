@@ -278,8 +278,13 @@ def test_read_after_state_dropped(kafka_topics, kafka_messages):
 
         assert set(table_counts.keys()) == set(kafka_topics)
 
-        for tab in table_counts:
-            assert table_counts[tab] == 3
+        with pipeline.sql_client() as c:
+            for tab in table_counts:
+                with c.execute_query(f"SELECT _kafka__key FROM {tab}") as cur:
+                    keys = [key[0] for key in cur.fetchall()]
+                    assert sorted(keys) == sorted(
+                        kafka_messages[tab]  # compare to the keys from the fixture
+                    )
 
     pipeline = dlt.pipeline(
         pipeline_name="kafka_test",
