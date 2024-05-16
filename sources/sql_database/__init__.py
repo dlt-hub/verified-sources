@@ -34,6 +34,7 @@ def sql_database(
     defer_table_reflect: Optional[bool] = dlt.config.value,
     table_adapter_callback: Callable[[Table], None] = None,
     backend_kwargs: Dict[str, Any] = None,
+    include_views: bool = False,
 ) -> Iterable[DltResource]:
     """
     A dlt source which loads data from an SQL database using SQLAlchemy.
@@ -55,6 +56,7 @@ def sql_database(
             Enable this option when running on Airflow. Available on dlt 0.4.4 and later.
         table_adapter_callback: (Callable): Receives each reflected table. May be used to modify the list of columns that will be selected.
         backend_kwargs (**kwargs): kwargs passed to table backend ie. "conn" is used to pass specialized connection string to connectorx.
+        include_views (bool): Reflect views as well as tables. Note view names included in `table_names` are always included regardless of this setting.
     Returns:
         Iterable[DltResource]: A list of DLT resources for each table to be loaded.
     """
@@ -73,7 +75,7 @@ def sql_database(
     else:
         if defer_table_reflect:
             raise ValueError("You must pass table names to defer table reflection")
-        metadata.reflect(bind=engine)
+        metadata.reflect(bind=engine, views=include_views)
         tables = list(metadata.tables.values())
 
     for table in tables:
@@ -120,7 +122,7 @@ def sql_table(
 
     Args:
         credentials (Union[ConnectionStringCredentials, Engine, str]): Database credentials or an `Engine` instance representing the database connection.
-        table (str): Name of the table to load.
+        table (str): Name of the table or view to load.
         schema (Optional[str]): Optional name of the schema the table belongs to.
         metadata (Optional[MetaData]): Optional `sqlalchemy.MetaData` instance. If provided, the `schema` argument is ignored.
         incremental (Optional[dlt.sources.incremental[Any]]): Option to enable incremental loading for the table.
