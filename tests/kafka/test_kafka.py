@@ -302,7 +302,7 @@ def test_read_after_state_dropped(kafka_topics, kafka_messages):
     with pipeline.sql_client() as c:
         c.drop_tables(*table_names)
 
-    pipeline = pipeline.drop(pipeline.dataset_name + "_2")
+    pipeline = pipeline.drop()
 
     pipeline.run(resource)
     make_assertions(pipeline)
