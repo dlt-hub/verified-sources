@@ -67,6 +67,7 @@ facebook-business = "^17.0.2"
 
 [tool.poetry.group.google_ads.dependencies]
 google-ads = "^21.1.0"
+google-api-python-client = "^2.129.0"
 
 [tool.poetry.group.salesforce.dependencies]
 simple-salesforce = "^1.12.4"
