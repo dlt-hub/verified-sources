@@ -1,2 +1,3 @@
 dlt>=0.3.25
 google-ads
+google-api-python-client
