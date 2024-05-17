@@ -265,7 +265,9 @@ class SQLAlchemySourceDB:
         # View is the same number of rows as the table
         view_info = deepcopy(info)
         view_info["is_view"] = True
-        self.table_infos.setdefault("chat_message_view", view_info)
+        view_info = self.table_infos.setdefault("chat_message_view", view_info)
+        view_info["row_count"] = info["row_count"]
+        view_info["ids"] = info["ids"]
         return message_ids
 
     def _fake_precision_data(
