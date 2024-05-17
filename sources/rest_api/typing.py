@@ -3,11 +3,11 @@ from typing import (
     Dict,
     List,
     Literal,
-    NamedTuple,
     Optional,
     TypedDict,
     Union,
 )
+from dataclasses import dataclass, field
 
 from dlt.common import jsonpath
 from dlt.common.typing import TSortOrder
@@ -202,9 +202,14 @@ class IncrementalParamConfig(ParamBindConfig, IncrementalArgs):
     # param_type: Optional[Literal["start_param", "end_param"]]
 
 
-class ResolvedParam(NamedTuple):
+@dataclass
+class ResolvedParam:
     param_name: str
     resolve_config: ResolveParamConfig
+    field_path: jsonpath.TJsonPath = field(init=False)
+
+    def __post_init__(self) -> None:
+        self.field_path = jsonpath.compile_path(self.resolve_config["field"])
 
 
 class ResponseAction(TypedDict, total=False):

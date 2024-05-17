@@ -472,6 +472,16 @@ def test_process_parent_data_item():
     )
     assert parent_record == {"_issues_obj_id": 12345, "_issues_obj_node": "node_1"}
 
+    # test nested data
+    resolve_param_nested = ResolvedParam(
+        "id", {"field": "some_results.obj_id", "resource": "issues", "type": "resolve"}
+    )
+    item = {"some_results": {"obj_id": 12345}}
+    bound_path, parent_record = process_parent_data_item(
+        "dlt-hub/dlt/issues/{id}/comments", item, resolve_param_nested, None
+    )
+    assert bound_path == "dlt-hub/dlt/issues/12345/comments"
+
     # param path not found
     with pytest.raises(ValueError) as val_ex:
         bound_path, parent_record = process_parent_data_item(
