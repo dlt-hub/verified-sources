@@ -19,6 +19,7 @@ from dlt.common import logger
 from dlt.common.configuration import resolve_configuration
 from dlt.common.schema.utils import merge_columns
 from dlt.common.utils import update_dict_nested
+from dlt.common import jsonpath
 
 from dlt.extract.incremental import Incremental
 from dlt.extract.utils import ensure_table_schema_columns
@@ -416,12 +417,15 @@ def process_parent_data_item(
     include_from_parent: List[str],
 ) -> Tuple[str, Dict[str, Any]]:
     parent_resource_name = resolved_param.resolve_config["resource"]
-    field_path = resolved_param.resolve_config["field"]
-    if resolved_param.resolve_config["field"] not in item:
+
+    field_values = jsonpath.find_values(resolved_param.field_path, item)
+
+    if not field_values:
+        field_path = resolved_param.resolve_config["field"]
         raise ValueError(
             f"Transformer expects a field '{field_path}' to be present in the incoming data from resource {parent_resource_name} in order to bind it to path param {resolved_param.param_name}. Available parent fields are {', '.join(item.keys())}"
         )
-    bound_path = path.format(**{resolved_param.param_name: item[field_path]})
+    bound_path = path.format(**{resolved_param.param_name: field_values[0]})
 
     parent_record: Dict[str, Any] = {}
     if include_from_parent:
