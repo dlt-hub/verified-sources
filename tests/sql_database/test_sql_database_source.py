@@ -40,13 +40,17 @@ def test_load_sql_schema_loads_all_tables(
     sql_source_db: SQLAlchemySourceDB, destination_name: str, backend: TableBackend
 ) -> None:
     pipeline = make_pipeline(destination_name)
-    load_info = pipeline.run(
-        sql_database(
-            credentials=sql_source_db.credentials,
-            schema=sql_source_db.schema,
-            backend=backend,
-        )
+    source = sql_database(
+        credentials=sql_source_db.credentials,
+        schema=sql_source_db.schema,
+        backend=backend,
     )
+
+    assert (
+        "chat_message_view" not in source.resources
+    )  # Views are not reflected by default
+
+    load_info = pipeline.run(source)
     print(
         humanize.precisedelta(
             pipeline.last_trace.finished_at - pipeline.last_trace.started_at
@@ -626,13 +630,79 @@ def test_destination_caps_context(
     pipeline.destination = None
 
 
+@pytest.mark.parametrize("backend", ["sqlalchemy", "pyarrow", "pandas", "connectorx"])
+def test_sql_table_from_view(
+    sql_source_db: SQLAlchemySourceDB, backend: TableBackend
+) -> None:
+    """View can be extract by sql_table without any reflect flags"""
+    table = sql_table(
+        credentials=sql_source_db.credentials,
+        table="chat_message_view",
+        schema=sql_source_db.schema,
+    )
+
+    pipeline = make_pipeline("duckdb")
+    pipeline.run(table)
+
+    assert_row_counts(pipeline, sql_source_db, ["chat_message_view"])
+    assert "content" in pipeline.default_schema.tables["chat_message_view"]["columns"]
+    assert (
+        "content"
+        in load_tables_to_dicts(pipeline, "chat_message_view")["chat_message_view"][0]
+    )
+
+
+@pytest.mark.parametrize("backend", ["sqlalchemy", "pyarrow", "pandas", "connectorx"])
+def test_sql_database_include_views(
+    sql_source_db: SQLAlchemySourceDB, backend: TableBackend
+) -> None:
+    """include_view flag reflects and extracts views as tables"""
+    source = sql_database(
+        credentials=sql_source_db.credentials,
+        schema=sql_source_db.schema,
+        include_views=True,
+        backend=backend,
+    )
+
+    pipeline = make_pipeline("duckdb")
+    pipeline.run(source)
+
+    assert_row_counts(pipeline, sql_source_db, include_views=True)
+
+
+@pytest.mark.parametrize("backend", ["sqlalchemy", "pyarrow", "pandas", "connectorx"])
+def test_sql_database_include_view_in_table_names(
+    sql_source_db: SQLAlchemySourceDB, backend: TableBackend
+) -> None:
+    """Passing a view explicitly in table_names should reflect it, regardless of include_views flag"""
+    source = sql_database(
+        credentials=sql_source_db.credentials,
+        schema=sql_source_db.schema,
+        table_names=["app_user", "chat_message_view"],
+        include_views=False,
+        backend=backend,
+    )
+
+    pipeline = make_pipeline("duckdb")
+    pipeline.run(source)
+
+    assert_row_counts(pipeline, sql_source_db, ["app_user", "chat_message_view"])
+
+
 def assert_row_counts(
     pipeline: dlt.Pipeline,
     sql_source_db: SQLAlchemySourceDB,
     tables: Optional[List[str]] = None,
+    include_views: bool = False,
 ) -> None:
     with pipeline.sql_client() as c:
-        for table in tables or sql_source_db.table_infos.keys():
+        if not tables:
+            tables = [
+                tbl_name
+                for tbl_name, info in sql_source_db.table_infos.items()
+                if include_views or not info["is_view"]
+            ]
+        for table in tables:
             info = sql_source_db.table_infos[table]
             with c.execute_query(f"SELECT count(*) FROM {table}") as cur:
                 row = cur.fetchone()

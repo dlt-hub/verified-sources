@@ -1,5 +1,6 @@
 from typing import List, TypedDict, Dict
 import random
+from copy import deepcopy
 
 import mimesis
 from sqlalchemy import (
@@ -162,12 +163,31 @@ class SQLAlchemySourceDB:
 
         self.metadata.create_all(bind=self.engine)
 
+        # Create a view
+        q = f"""
+        CREATE VIEW {self.schema}.chat_message_view AS
+        SELECT
+            cm.id,
+            cm.content,
+            cm.created_at,
+            cm.updated_at,
+            au.email as user_email,
+            au.display_name as user_display_name,
+            cc.name as channel_name
+        FROM {self.schema}.chat_message cm
+        JOIN {self.schema}.app_user au ON cm.user_id = au.id
+        JOIN {self.schema}.chat_channel cc ON cm.channel_id = cc.id
+        """
+        with self.engine.begin() as conn:
+            conn.execute(text(q))
+
     def _fake_users(self, n: int = 8594) -> List[int]:
         person = mimesis.Person()
         user_ids: List[int] = []
         table = self.metadata.tables[f"{self.schema}.app_user"]
         info = self.table_infos.setdefault(
-            "app_user", dict(row_count=0, ids=[], created_at=IncrementingDate())
+            "app_user",
+            dict(row_count=0, ids=[], created_at=IncrementingDate(), is_view=False),
         )
         dt = info["created_at"]
         for chunk in chunks(range(n), 5000):
@@ -193,7 +213,8 @@ class SQLAlchemySourceDB:
         table = self.metadata.tables[f"{self.schema}.chat_channel"]
         channel_ids: List[int] = []
         info = self.table_infos.setdefault(
-            "chat_channel", dict(row_count=0, ids=[], created_at=IncrementingDate())
+            "chat_channel",
+            dict(row_count=0, ids=[], created_at=IncrementingDate(), is_view=False),
         )
         dt = info["created_at"]
         for chunk in chunks(range(n), 5000):
@@ -221,7 +242,8 @@ class SQLAlchemySourceDB:
         table = self.metadata.tables[f"{self.schema}.chat_message"]
         message_ids: List[int] = []
         info = self.table_infos.setdefault(
-            "chat_message", dict(row_count=0, ids=[], created_at=IncrementingDate())
+            "chat_message",
+            dict(row_count=0, ids=[], created_at=IncrementingDate(), is_view=False),
         )
         dt = info["created_at"]
         for chunk in chunks(range(n), 5000):
@@ -240,13 +262,21 @@ class SQLAlchemySourceDB:
                 message_ids.extend(result.scalars())
         info["row_count"] += len(message_ids)
         info["ids"].extend(message_ids)
+        # View is the same number of rows as the table
+        view_info = deepcopy(info)
+        view_info["is_view"] = True
+        view_info = self.table_infos.setdefault("chat_message_view", view_info)
+        view_info["row_count"] = info["row_count"]
+        view_info["ids"] = info["ids"]
         return message_ids
 
     def _fake_precision_data(
         self, table_name: str, n: int = 100, null_n: int = 0
     ) -> None:
         table = self.metadata.tables[f"{self.schema}.{table_name}"]
-        self.table_infos.setdefault(table_name, dict(row_count=n + null_n))
+        self.table_infos.setdefault(
+            table_name, dict(row_count=n + null_n, is_view=False)
+        )
         rows = [
             dict(
                 int_col=random.randrange(-2147483648, 2147483647),
@@ -302,3 +332,4 @@ class TableInfo(TypedDict):
     row_count: int
     ids: List[int]
     created_at: IncrementingDate
+    is_view: bool
