@@ -2,7 +2,7 @@ import json
 
 import dlt
 import pytest
-from pendulum import DateTime
+from pendulum import DateTime, Timezone
 
 from sources.mongodb import mongodb_collection
 from sources.mongodb_pipeline import (
@@ -62,6 +62,42 @@ def test_nested_documents():
     doc_str = json.dumps(document)
     # Confirm that we are using the right object with nested fields
     assert json.loads(doc_str)["_id"] == "651c075367e4e330ec801dac"
+
+
+@pytest.mark.parametrize("order", ["asc", "desc"])
+def test_order(order):
+    comments = list(
+        mongodb_collection(
+            collection="comments",
+            incremental=dlt.sources.incremental("date", row_order=order),
+        ),
+    )
+
+    for i, c in enumerate(comments[1:], start=1):
+        if order == "desc":
+            assert c["date"] <= comments[i - 1]["date"]
+        else:
+            assert c["date"] >= comments[i - 1]["date"]
+
+    assert len(comments) == 50304
+
+
+def test_start_end():
+    start = DateTime(2005, 1, 1, tzinfo=Timezone("UTC"))
+    end = DateTime(2005, 12, 31, tzinfo=Timezone("UTC"))
+
+    comments = list(
+        mongodb_collection(
+            collection="comments",
+            incremental=dlt.sources.incremental(
+                "date", initial_value=start, end_value=end
+            ),
+        ),
+    )
+    for c in comments:
+        assert start <= c["date"] <= end
+
+    assert len(comments) == 1119
 
 
 def test_parallel_loading():

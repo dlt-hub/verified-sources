@@ -37,40 +37,62 @@ class CollectionLoader:
         self.client = client
         self.collection = collection
         self.incremental = incremental
+
         if incremental:
             self.cursor_field = incremental.cursor_path
-            self.last_value = incremental.last_value
         else:
-            self.cursor_column = None
-            self.last_value = None
+            self.cursor_field = None
 
     @property
     def _filter_op(self) -> Dict[str, Any]:
-        if not self.incremental or not self.last_value:
+        """Build a filter operator.
+
+        Describes what logical statement to apply to which field.
+
+        Returns:
+            Dict[str, Any]: The filter operator.
+        """
+        if not self.incremental:
             return {}
-        if self.incremental.last_value_func is max:
-            return {self.cursor_field: {"$gte": self.last_value}}
-        elif self.incremental.last_value_func is min:
-            return {self.cursor_field: {"$lt": self.last_value}}
+
+        if self.incremental.start_value:
+            return {self.cursor_field: {"$gte": self.incremental.start_value}}
+
+        if self.incremental.end_value:
+            return {self.cursor_field: {"$lte": self.incremental.end_value}}
+
         return {}
+
+    @property
+    def _sort_op(self) -> List[Optional[Tuple[str, int]]]:
+        """Build a sorting operator.
+
+        Describes what sorting to apply to which field.
+
+        Returns:
+            List[Optional[Tuple[str, int]]]: The sorting operator.
+        """
+        if not (self.incremental and self.incremental.row_order):
+            return []
+
+        if self.incremental.row_order == "asc":
+            return [(self.cursor_field, ASCENDING)]
+
+        if self.incremental.row_order == "desc":
+            return [(self.cursor_field, DESCENDING)]
+
+        return []
 
     def load_documents(self) -> Iterator[TDataItem]:
         cursor = self.collection.find(self._filter_op)
+        if self._sort_op:
+            cursor = cursor.sort(self._sort_op)
+
         while docs_slice := list(islice(cursor, CHUNK_SIZE)):
             yield map_nested_in_place(convert_mongo_objs, docs_slice)
 
 
 class CollectionLoaderParallell(CollectionLoader):
-    @property
-    def _sort_op(self) -> List[Optional[Tuple[str, int]]]:
-        if not self.incremental or not self.last_value:
-            return []
-        if self.incremental.last_value_func is max:
-            return [(self.cursor_field, ASCENDING)]
-        elif self.incremental.last_value_func is min:
-            return [(self.cursor_field, DESCENDING)]
-        return []
-
     def _get_document_count(self) -> int:
         return self.collection.count_documents(filter=self._filter_op)
 
