@@ -2,7 +2,7 @@ import json
 
 import dlt
 import pytest
-from pendulum import DateTime, Timezone
+from pendulum import DateTime, timezone
 
 from sources.mongodb import mongodb_collection
 from sources.mongodb_pipeline import (
@@ -83,8 +83,8 @@ def test_order(order):
 
 
 def test_start_end():
-    start = DateTime(2005, 1, 1, tzinfo=Timezone("UTC"))
-    end = DateTime(2005, 12, 31, tzinfo=Timezone("UTC"))
+    start = DateTime(2005, 1, 1, tzinfo=timezone("UTC"))
+    end = DateTime(2005, 12, 31, tzinfo=timezone("UTC"))
 
     comments = list(
         mongodb_collection(
