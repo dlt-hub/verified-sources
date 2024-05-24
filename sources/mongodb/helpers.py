@@ -45,23 +45,6 @@ class CollectionLoader:
             self.last_value = None
 
     @property
-    def _filter_op(self) -> Dict[str, Any]:
-        if not self.incremental or not self.last_value:
-            return {}
-        if self.incremental.last_value_func is max:
-            return {self.cursor_field: {"$gte": self.last_value}}
-        elif self.incremental.last_value_func is min:
-            return {self.cursor_field: {"$lt": self.last_value}}
-        return {}
-
-    def load_documents(self) -> Iterator[TDataItem]:
-        cursor = self.collection.find(self._filter_op)
-        while docs_slice := list(islice(cursor, CHUNK_SIZE)):
-            yield map_nested_in_place(convert_mongo_objs, docs_slice)
-
-
-class CollectionLoaderParallell(CollectionLoader):
-    @property
     def _sort_op(self) -> List[Optional[Tuple[str, int]]]:
         if not self.incremental or not self.last_value:
             return []
@@ -71,6 +54,44 @@ class CollectionLoaderParallell(CollectionLoader):
             return [(self.cursor_field, DESCENDING)]
         return []
 
+    @property
+    def _filter_op(self) -> Dict[str, Any]:
+        """Build a filtering operator.
+
+        Includes a field and the filtering condition for it.
+
+        Returns:
+            Dict[str, Any]: A dictionary with the filter operator.
+        """
+        if not (self.incremental and self.last_value):
+            return {}
+
+        if self.incremental.last_value_func is max:
+            filt = {self.cursor_field: {"$gte": self.last_value}}
+            if self.incremental.end_value:
+                filt[self.cursor_field]["$lt"] = self.incremental.end_value
+
+            return filt
+
+        elif self.incremental.last_value_func is min:
+            filt = {self.cursor_field: {"$lte": self.last_value}}
+            if self.incremental.end_value:
+                filt[self.cursor_field]["$gt"] = self.incremental.end_value
+
+            return filt
+
+        return {}
+
+    def load_documents(self) -> Iterator[TDataItem]:
+        cursor = self.collection.find(self._filter_op)
+        if self._sort_op:
+            cursor = cursor.sort(self._sort_op)
+
+        while docs_slice := list(islice(cursor, CHUNK_SIZE)):
+            yield map_nested_in_place(convert_mongo_objs, docs_slice)
+
+
+class CollectionLoaderParallel(CollectionLoader):
     def _get_document_count(self) -> int:
         return self.collection.count_documents(filter=self._filter_op)
 
@@ -126,7 +147,7 @@ def collection_documents(
     Returns:
         Iterable[DltResource]: A list of DLT resources for each collection to be loaded.
     """
-    LoaderClass = CollectionLoaderParallell if parallel else CollectionLoader
+    LoaderClass = CollectionLoaderParallel if parallel else CollectionLoader
 
     loader = LoaderClass(client, collection, incremental=incremental)
     for data in loader.load_documents():
