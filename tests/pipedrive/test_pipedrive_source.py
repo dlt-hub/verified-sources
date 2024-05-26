@@ -56,7 +56,10 @@ ALL_RESOURCES = {
 #     }
 # )
 
-TESTED_RESOURCES = {"custom_fields_mapping", "leads", }
+TESTED_RESOURCES = {
+    "custom_fields_mapping",
+    "leads",
+}
 
 
 @pytest.mark.parametrize("destination_name", ALL_DESTINATIONS)
