@@ -8,7 +8,7 @@ from unittest.mock import patch
 import dlt
 from dlt.common import json
 from dlt.common.data_types import py_type_to_sc_type
-from dlt.common.typing import DictStrAny
+from dlt.common.typing import DictStrAny, TDataItem
 from dlt.common.configuration.container import Container
 from dlt.common.configuration.specs.config_providers_context import (
     ConfigProvidersContext,
@@ -309,3 +309,25 @@ def assert_schema_on_data(
             set(col["name"] for col in table_columns.values() if col["nullable"])
             == columns_with_nulls
         ), "Some columns didn't receive NULLs which is required"
+
+
+def data_item_length(data: TDataItem) -> int:
+    import pandas as pd
+    from dlt.common.libs.pyarrow import pyarrow as pa
+
+    if isinstance(data, list):
+        # If data is a list, check if it's a list of supported data types
+        if all(
+            isinstance(item, (list, pd.DataFrame, pa.Table, pa.RecordBatch))
+            for item in data
+        ):
+            return sum(data_item_length(item) for item in data)
+        # If it's a list but not a list of supported types, treat it as a single list object
+        else:
+            return len(data)
+    elif isinstance(data, pd.DataFrame):
+        return len(data.index)
+    elif isinstance(data, pa.Table) or isinstance(data, pa.RecordBatch):
+        return data.num_rows
+    else:
+        raise TypeError("Unsupported data type.")
