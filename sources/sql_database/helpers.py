@@ -16,7 +16,7 @@ import dlt
 from dlt.common.configuration.specs import BaseConfiguration, configspec
 from dlt.common.exceptions import MissingDependencyException
 from dlt.common.schema import TTableSchemaColumns
-from dlt.common.typing import TDataItem
+from dlt.common.typing import TDataItem, TSortOrder
 
 from dlt.sources.credentials import ConnectionStringCredentials
 
@@ -61,7 +61,7 @@ class TableLoader:
                 ) from e
             self.last_value = incremental.last_value
             self.end_value = incremental.end_value
-            self.row_order = getattr(self.incremental, "row_order", None)
+            self.row_order: TSortOrder = self.incremental.row_order
         else:
             self.cursor_column = None
             self.last_value = None
@@ -94,9 +94,13 @@ class TableLoader:
 
         # generate order by from declared row order
         order_by = None
-        if self.row_order == "asc":
+        if (self.row_order == "asc" and last_value_func is max) or (
+            self.row_order == "desc" and last_value_func is min
+        ):
             order_by = self.cursor_column.asc()
-        elif self.row_order == "desc":
+        elif (self.row_order == "asc" and last_value_func is min) or (
+            self.row_order == "desc" and last_value_func is max
+        ):
             order_by = self.cursor_column.desc()
         if order_by is not None:
             query = query.order_by(order_by)

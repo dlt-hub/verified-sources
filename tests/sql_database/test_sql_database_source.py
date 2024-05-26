@@ -7,7 +7,7 @@ import sqlalchemy as sa
 
 import dlt
 from dlt.common.utils import uniq_id
-from dlt.common.schema.typing import TTableSchemaColumns, TColumnSchema
+from dlt.common.schema.typing import TTableSchemaColumns, TColumnSchema, TSortOrder
 
 from dlt.sources import DltResource
 from dlt.sources.credentials import ConnectionStringCredentials
@@ -18,6 +18,7 @@ from sources.sql_database.helpers import unwrap_json_connector_x
 from tests.utils import (
     ALL_DESTINATIONS,
     assert_load_info,
+    data_item_length,
     load_table_counts,
     load_tables_to_dicts,
     assert_schema_on_data,
@@ -265,13 +266,20 @@ def test_load_sql_table_resource_incremental_initial_value(
     assert_row_counts(pipeline, sql_source_db, ["chat_message"])
 
 
-@pytest.mark.parametrize("destination_name", ALL_DESTINATIONS)
 @pytest.mark.parametrize("backend", ["sqlalchemy", "pandas", "pyarrow", "connectorx"])
+@pytest.mark.parametrize("row_order", ["asc", "desc", None])
+@pytest.mark.parametrize("last_value_func", [min, max, lambda x: max(x)])
 def test_load_sql_table_resource_incremental_end_value(
-    sql_source_db: SQLAlchemySourceDB, destination_name: str, backend: TableBackend
+    sql_source_db: SQLAlchemySourceDB,
+    backend: TableBackend,
+    row_order: TSortOrder,
+    last_value_func: Any,
 ) -> None:
     start_id = sql_source_db.table_infos["chat_message"]["ids"][0]
     end_id = sql_source_db.table_infos["chat_message"]["ids"][-1] // 2
+
+    if last_value_func is min:
+        start_id, end_id = end_id, start_id
 
     @dlt.source
     def sql_table_source() -> List[DltResource]:
@@ -282,19 +290,40 @@ def test_load_sql_table_resource_incremental_end_value(
                 table="chat_message",
                 backend=backend,
                 incremental=dlt.sources.incremental(
-                    "id", initial_value=start_id, end_value=end_id, row_order="asc"
+                    "id",
+                    initial_value=start_id,
+                    end_value=end_id,
+                    row_order=row_order,
+                    last_value_func=last_value_func,
                 ),
             )
         ]
 
-    pipeline = make_pipeline(destination_name)
-    load_info = pipeline.run(sql_table_source())
-    assert_load_info(load_info)
+    try:
+        rows = list(sql_table_source())
+    except Exception as exc:
+        if isinstance(exc.__context__, NotImplementedError):
+            pytest.skip("Test skipped due to: " + str(exc.__context__))
     # half of the records loaded -1 record. end values is non inclusive
-    assert (
-        pipeline.last_trace.last_normalize_info.row_counts["chat_message"]
-        == end_id - start_id
-    )
+    assert data_item_length(rows) == abs(end_id - start_id)
+    # check first and last id to see if order was applied
+    if backend == "sqlalchemy":
+        if row_order == "asc" and last_value_func is max:
+            assert rows[0]["id"] == start_id
+            assert rows[-1]["id"] == end_id - 1  # non inclusive
+        if row_order == "desc" and last_value_func is max:
+            assert rows[0]["id"] == end_id - 1  # non inclusive
+            assert rows[-1]["id"] == start_id
+        if row_order == "asc" and last_value_func is min:
+            assert rows[0]["id"] == start_id
+            assert (
+                rows[-1]["id"] == end_id + 1
+            )  # non inclusive, but + 1 because last value func is min
+        if row_order == "desc" and last_value_func is min:
+            assert (
+                rows[0]["id"] == end_id + 1
+            )  # non inclusive, but + 1 because last value func is min
+            assert rows[-1]["id"] == start_id
 
 
 @pytest.mark.parametrize("backend", ["sqlalchemy", "pyarrow", "pandas", "connectorx"])
