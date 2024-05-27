@@ -418,7 +418,7 @@ def test_rename_fields_with_enum() -> None:
 
 
 def test_rename_fields_with_set() -> None:
-    data_item = {"random_hash_1": "42,44,23", "id": 44, "name": "asdf"}
+    data_item = {"random_hash_1": [42, 44, 23], "id": 44, "name": "asdf"}
     mapping = {
         "random_hash_1": {
             "name": "custom_field_1",

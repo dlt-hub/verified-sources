@@ -94,8 +94,7 @@ def rename_fields(data: TDataPage, fields_mapping: Dict[str, Any]) -> TDataPage:
             # Get label instead of ID for 'enum' and 'set' fields
             if field_value and field["field_type"] == "set":  # Multiple choice
                 field_value = [
-                    options_map.get(str(enum_id), enum_id)
-                    for enum_id in field_value.split(",")
+                    options_map.get(str(enum_id), enum_id) for enum_id in field_value
                 ]
             elif field_value and field["field_type"] == "enum":
                 field_value = options_map.get(str(field_value), field_value)
