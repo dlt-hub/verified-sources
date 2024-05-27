@@ -66,21 +66,18 @@ class CollectionLoader:
         if not (self.incremental and self.last_value):
             return {}
 
+        filt = {}
         if self.incremental.last_value_func is max:
             filt = {self.cursor_field: {"$gte": self.last_value}}
             if self.incremental.end_value:
                 filt[self.cursor_field]["$lt"] = self.incremental.end_value
-
-            return filt
 
         elif self.incremental.last_value_func is min:
             filt = {self.cursor_field: {"$lte": self.last_value}}
             if self.incremental.end_value:
                 filt[self.cursor_field]["$gt"] = self.incremental.end_value
 
-            return filt
-
-        return {}
+        return filt
 
     def load_documents(self) -> Iterator[TDataItem]:
         cursor = self.collection.find(self._filter_op)
