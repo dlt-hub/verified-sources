@@ -13,7 +13,6 @@ def load_pipedrive() -> None:
     print(pipeline.last_trace.last_normalize_info)
 
 
-
 def load_selected_data() -> None:
     """Shows how to load just selected tables using `with_resources`"""
     pipeline = dlt.pipeline(

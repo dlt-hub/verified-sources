@@ -79,7 +79,7 @@ def test_make_query_incremental_min(
     query = loader.make_query()
     expected = (
         table.select()
-        .order_by(table.c.created_at.desc())
+        .order_by(table.c.created_at.asc())  # `min` func swaps order
         .where(table.c.created_at <= MockIncremental.last_value)
     )
 
