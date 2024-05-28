@@ -80,7 +80,7 @@ class CollectionLoader:
 
         return filt
 
-    def _limit(self, cursor: Cursor, limit: Optional[int] = None) -> Cursor:
+    def _limit(self, cursor: Cursor, limit: Optional[int] = None) -> Cursor:  # type: ignore
         """Apply a limit to the cursor, if needed.
 
         Args:
