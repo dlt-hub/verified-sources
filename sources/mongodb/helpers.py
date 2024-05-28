@@ -115,10 +115,19 @@ class CollectionLoaderParallel(CollectionLoader):
             dict(skip=sk, limit=CHUNK_SIZE) for sk in range(0, doc_count, CHUNK_SIZE)
         ]
 
-    def _get_cursor(self) -> TCursor:
+    def _get_cursor(self, limit: int) -> TCursor:
         cursor = self.collection.find(filter=self._filter_op)
         if self._sort_op:
             cursor = cursor.sort(self._sort_op)
+
+        if (limit or 0) > 0:
+            if self.incremental is None or self.incremental.last_value_func is None:
+                logger.warning(
+                    "Using limit without ordering - results may be inconsistent."
+                )
+
+            cursor = cursor.limit(limit)
+
         return cursor
 
     @dlt.defer
@@ -130,15 +139,23 @@ class CollectionLoaderParallel(CollectionLoader):
             data.append(map_nested_in_place(convert_mongo_objs, document))
         return data
 
-    def _get_all_batches(self) -> Iterator[TDataItem]:
+    def _get_all_batches(self, limit: int) -> Iterator[TDataItem]:
         batches = self._create_batches()
-        cursor = self._get_cursor()
+        cursor = self._get_cursor(limit)
 
         for batch in batches:
             yield self._run_batch(cursor=cursor, batch=batch)
 
-    def load_documents(self) -> Iterator[TDataItem]:
-        for document in self._get_all_batches():
+    def load_documents(self, limit: Optional[int] = None) -> Iterator[TDataItem]:
+        """Load documents from the collection in parallel.
+
+        Args:
+            limit (Optional[int]): The number of documents to load.
+
+        Yields:
+            Iterator[TDataItem]: An iterator of the loaded documents.
+        """
+        for document in self._get_all_batches(limit):
             yield document
 
 
