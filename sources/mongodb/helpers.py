@@ -97,7 +97,7 @@ class CollectionLoader:
                     "Using limit without ordering - results may be inconsistent."
                 )
 
-            cursor = cursor.limit(limit)
+            cursor = cursor.limit(abs(limit))
 
         return cursor
 
