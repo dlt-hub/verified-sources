@@ -91,7 +91,7 @@ class CollectionLoader:
         Returns:
             Cursor: The cursor with the limit applied (if given).
         """
-        if (limit or 0) != 0:
+        if limit != 0:
             if self.incremental is None or self.incremental.last_value_func is None:
                 logger.warning(
                     "Using limit without ordering - results may be inconsistent."
@@ -124,10 +124,10 @@ class CollectionLoaderParallel(CollectionLoader):
     def _get_document_count(self) -> int:
         return self.collection.count_documents(filter=self._filter_op)
 
-    def _create_batches(self, limit: int) -> List[Dict[str, int]]:
+    def _create_batches(self, limit: Optional[int] = None) -> List[Dict[str, int]]:
         doc_count = self._get_document_count()
         if limit:
-            doc_count = min(doc_count, limit)
+            doc_count = min(doc_count, abs(limit))
 
         batches = []
         left_to_load = doc_count
@@ -155,11 +155,11 @@ class CollectionLoaderParallel(CollectionLoader):
 
         return data
 
-    def _get_all_batches(self, limit: int) -> Iterator[TDataItem]:
+    def _get_all_batches(self, limit: Optional[int] = None) -> Iterator[TDataItem]:
         """Load all documents from the collection in parallel batches.
 
         Args:
-            limit (int): The maximum number of documents to load.
+            limit (Optional[int]): The maximum number of documents to load.
 
         Yields:
             Iterator[TDataItem]: An iterator of the loaded documents.
