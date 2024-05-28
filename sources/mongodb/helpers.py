@@ -93,7 +93,7 @@ class CollectionLoader:
         if self._sort_op:
             cursor = cursor.sort(self._sort_op)
 
-        if (limit or 0) > 0:
+        if limit != 0:
             if self.incremental is None or self.incremental.last_value_func is None:
                 logger.warning(
                     "Using limit without ordering - results may be inconsistent."
@@ -120,7 +120,7 @@ class CollectionLoaderParallel(CollectionLoader):
         if self._sort_op:
             cursor = cursor.sort(self._sort_op)
 
-        if (limit or 0) > 0:
+        if limit != 0:
             if self.incremental is None or self.incremental.last_value_func is None:
                 logger.warning(
                     "Using limit without ordering - results may be inconsistent."
