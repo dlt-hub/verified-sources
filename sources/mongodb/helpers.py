@@ -80,6 +80,26 @@ class CollectionLoader:
 
         return filt
 
+    def _limit(self, cursor: Cursor, limit: Optional[int] = None) -> Cursor:
+        """Apply a limit to the cursor, if needed.
+
+        Args:
+            cursor (Cursor): The cursor to apply the limit.
+            limit (Optional[int]): The number of documents to load.
+
+        Returns:
+            Cursor: The cursor with the limit applied (if given).
+        """
+        if (limit or 0) != 0:
+            if self.incremental is None or self.incremental.last_value_func is None:
+                logger.warning(
+                    "Using limit without ordering - results may be inconsistent."
+                )
+
+            cursor = cursor.limit(limit)
+
+        return cursor
+
     def load_documents(self, limit: Optional[int] = None) -> Iterator[TDataItem]:
         """Construct the query and load the documents from the collection.
 
@@ -93,13 +113,7 @@ class CollectionLoader:
         if self._sort_op:
             cursor = cursor.sort(self._sort_op)
 
-        if limit != 0:
-            if self.incremental is None or self.incremental.last_value_func is None:
-                logger.warning(
-                    "Using limit without ordering - results may be inconsistent."
-                )
-
-            cursor = cursor.limit(limit)
+        cursor = self._limit(cursor, limit)
 
         while docs_slice := list(islice(cursor, CHUNK_SIZE)):
             yield map_nested_in_place(convert_mongo_objs, docs_slice)
@@ -120,14 +134,7 @@ class CollectionLoaderParallel(CollectionLoader):
         if self._sort_op:
             cursor = cursor.sort(self._sort_op)
 
-        if limit != 0:
-            if self.incremental is None or self.incremental.last_value_func is None:
-                logger.warning(
-                    "Using limit without ordering - results may be inconsistent."
-                )
-
-            cursor = cursor.limit(limit)
-
+        cursor = self._limit(cursor, limit)
         return cursor
 
     @dlt.defer

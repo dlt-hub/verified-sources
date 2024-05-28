@@ -84,7 +84,7 @@ def mongodb_collection(
             E.g., `incremental=dlt.sources.incremental('updated_at', pendulum.parse('2022-01-01T00:00:00Z'))`
         write_disposition (str): Write disposition of the resource.
         parallel (Optional[bool]): Option to enable parallel loading for the collection. Default is False.
-        limit (Optional[int]): Limit the number of documents to be loaded.
+        limit (Optional[int]): The number of documents to be loaded.
 
     Returns:
         Iterable[DltResource]: A list of DLT resources for each collection to be loaded.
