@@ -91,7 +91,7 @@ class CollectionLoader:
         Returns:
             Cursor: The cursor with the limit applied (if given).
         """
-        if limit != 0:
+        if limit not in (0, None):
             if self.incremental is None or self.incremental.last_value_func is None:
                 logger.warning(
                     "Using limit without ordering - results may be inconsistent."
