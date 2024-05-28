@@ -129,7 +129,7 @@ class CollectionLoaderParallel(CollectionLoader):
         if limit:
             doc_count = min(doc_count, limit)
 
-        batches = []f
+        batches = []
         left_to_load = doc_count
 
         for sk in range(0, doc_count, self.chunk_size):
