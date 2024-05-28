@@ -1,4 +1,5 @@
 import json
+from unittest import mock
 
 import dlt
 import pytest
@@ -142,3 +143,36 @@ def test_parallel_loading():
     st_records = load_select_collection_db_items(parallel=False)
     parallel_records = load_select_collection_db_items(parallel=True)
     assert len(st_records) == len(parallel_records)
+
+
+@pytest.mark.parametrize("destination_name", ALL_DESTINATIONS)
+def test_limit(destination_name):
+    pipeline = dlt.pipeline(
+        pipeline_name="mongodb_test",
+        destination=destination_name,
+        dataset_name="mongodb_test_data",
+        full_refresh=True,
+    )
+    comments = mongodb_collection(collection="comments", limit=10)
+    pipeline.run(comments)
+
+    table_counts = load_table_counts(pipeline, "comments")
+    assert table_counts["comments"] == 10
+
+
+@pytest.mark.parametrize("destination", ALL_DESTINATIONS)
+def test_limit_warning(destination):
+    pipeline = dlt.pipeline(
+        pipeline_name="mongodb_test",
+        destination=destination,
+        dataset_name="mongodb_test_data",
+        full_refresh=True,
+    )
+    comments = mongodb_collection(collection="comments", limit=10)
+
+    with mock.patch("dlt.common.logger.warning") as warn_mock:
+        pipeline.run(comments)
+
+        warn_mock.assert_called_once_with(
+            "Using limit without ordering - results may be inconsistent."
+        )

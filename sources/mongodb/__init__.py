@@ -71,6 +71,7 @@ def mongodb_collection(
     incremental: Optional[dlt.sources.incremental] = None,  # type: ignore[type-arg]
     write_disposition: Optional[str] = dlt.config.value,
     parallel: Optional[bool] = False,
+    limit: Optional[int] = None,
 ) -> Any:
     """
     A DLT source which loads a collection from a mongo database using PyMongo.
@@ -83,6 +84,8 @@ def mongodb_collection(
             E.g., `incremental=dlt.sources.incremental('updated_at', pendulum.parse('2022-01-01T00:00:00Z'))`
         write_disposition (str): Write disposition of the resource.
         parallel (Optional[bool]): Option to enable parallel loading for the collection. Default is False.
+        limit (Optional[int]): Limit the number of documents to be loaded.
+
     Returns:
         Iterable[DltResource]: A list of DLT resources for each collection to be loaded.
     """
@@ -100,4 +103,4 @@ def mongodb_collection(
         name=collection_obj.name,
         primary_key="_id",
         write_disposition=write_disposition,
-    )(client, collection_obj, incremental=incremental, parallel=parallel)
+    )(client, collection_obj, incremental=incremental, parallel=parallel, limit=limit)

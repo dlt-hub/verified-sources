@@ -6,6 +6,7 @@ from typing import TYPE_CHECKING, Any, Dict, Iterator, List, Optional, Tuple
 import dlt
 from bson.decimal128 import Decimal128
 from bson.objectid import ObjectId
+from dlt.common import logger
 from dlt.common.configuration.specs import BaseConfiguration, configspec
 from dlt.common.time import ensure_pendulum_datetime
 from dlt.common.typing import TDataItem
@@ -79,10 +80,26 @@ class CollectionLoader:
 
         return filt
 
-    def load_documents(self) -> Iterator[TDataItem]:
+    def load_documents(self, limit: Optional[int] = None) -> Iterator[TDataItem]:
+        """Construct the query and load the documents from the collection.
+
+        Args:
+            limit (Optional[int]): The number of documents to load.
+
+        Yields:
+            Iterator[TDataItem]: An iterator of the loaded documents.
+        """
         cursor = self.collection.find(self._filter_op)
         if self._sort_op:
             cursor = cursor.sort(self._sort_op)
+
+        if (limit or 0) > 0:
+            if self.incremental is None or self.incremental.last_value_func is None:
+                logger.warning(
+                    "Using limit without ordering - results may be inconsistent."
+                )
+
+            cursor = cursor.limit(limit)
 
         while docs_slice := list(islice(cursor, CHUNK_SIZE)):
             yield map_nested_in_place(convert_mongo_objs, docs_slice)
@@ -130,6 +147,7 @@ def collection_documents(
     collection: TCollection,
     incremental: Optional[dlt.sources.incremental[Any]] = None,
     parallel: bool = False,
+    limit: Optional[int] = None,
 ) -> Iterator[TDataItem]:
     """
     A DLT source which loads data from a Mongo database using PyMongo.
@@ -140,6 +158,7 @@ def collection_documents(
         collection (Collection): The collection `pymongo.collection.Collection` to load.
         incremental (Optional[dlt.sources.incremental[Any]]): The incremental configuration.
         parallel (bool): Option to enable parallel loading for the collection. Default is False.
+        limit (Optional[int]): The maximum number of documents to load.
 
     Returns:
         Iterable[DltResource]: A list of DLT resources for each collection to be loaded.
@@ -147,7 +166,7 @@ def collection_documents(
     LoaderClass = CollectionLoaderParallel if parallel else CollectionLoader
 
     loader = LoaderClass(client, collection, incremental=incremental)
-    for data in loader.load_documents():
+    for data in loader.load_documents(limit=limit):
         yield data
 
 
