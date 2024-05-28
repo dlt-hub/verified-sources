@@ -81,6 +81,7 @@ def sql_database(
     for table in tables:
         if table_adapter_callback and not defer_table_reflect:
             table_adapter_callback(table)
+
         yield dlt.resource(
             table_rows,
             name=table.name,
@@ -99,10 +100,8 @@ def sql_database(
         )
 
 
-@dlt.sources.config.with_config(
-    sections=("sources", "sql_database"),
-    spec=SqlTableResourceConfiguration,
-    sections_merge_style=ConfigSectionContext.resource_merge_style,
+@dlt.resource(
+    name=lambda args: args["table"], standalone=True, spec=SqlTableResourceConfiguration
 )
 def sql_table(
     credentials: Union[ConnectionStringCredentials, Engine, str] = dlt.secrets.value,
@@ -110,7 +109,7 @@ def sql_table(
     schema: Optional[str] = dlt.config.value,
     metadata: Optional[MetaData] = None,
     incremental: Optional[dlt.sources.incremental[Any]] = None,
-    chunk_size: int = 1000,
+    chunk_size: int = 50000,
     backend: TableBackend = "sqlalchemy",
     detect_precision_hints: Optional[bool] = dlt.config.value,
     defer_table_reflect: Optional[bool] = dlt.config.value,

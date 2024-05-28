@@ -28,6 +28,7 @@ def load_select_tables_from_database() -> None:
 
     # Configure the source to load a few select tables incrementally
     source_1 = sql_database(credentials).with_resources("family", "clan")
+    return
     # Add incremental config to the resources. "updated" is a timestamp column in these tables that gets used as a cursor
     source_1.family.apply_hints(incremental=dlt.sources.incremental("updated"))
     source_1.clan.apply_hints(incremental=dlt.sources.incremental("updated"))
@@ -86,7 +87,9 @@ def load_standalone_table_resource() -> None:
     # we also use `detect_precision_hints` to get detailed column schema
     # and defer_table_reflect to reflect schema only during execution
     family = sql_table(
-        credentials="mysql+pymysql://rfamro@mysql-rfam-public.ebi.ac.uk:4497/Rfam",
+        credentials=ConnectionStringCredentials(
+            "mysql+pymysql://rfamro@mysql-rfam-public.ebi.ac.uk:4497/Rfam"
+        ),
         table="family",
         incremental=dlt.sources.incremental(
             "updated",
@@ -96,7 +99,7 @@ def load_standalone_table_resource() -> None:
     )
     # columns will be empty here due to defer_table_reflect set to True
     print(family.compute_table_schema())
-
+    return
     # Load all data from another table
     genome = sql_table(
         credentials="mysql+pymysql://rfamro@mysql-rfam-public.ebi.ac.uk:4497/Rfam",
@@ -300,7 +303,7 @@ def test_pandas_backend_verbatim_decimals() -> None:
 
 if __name__ == "__main__":
     # Load selected tables with different settings
-    load_select_tables_from_database()
+    # load_select_tables_from_database()
 
     # load a table and select columns
     # select_columns()
@@ -309,7 +312,7 @@ if __name__ == "__main__":
     # select_with_end_value_and_row_order()
 
     # Load tables with the standalone table resource
-    # load_standalone_table_resource()
+    load_standalone_table_resource()
 
     # Load all tables from the database.
     # Warning: The sample database is very large
