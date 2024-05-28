@@ -72,6 +72,7 @@ def mongodb_collection(
     write_disposition: Optional[str] = dlt.config.value,
     parallel: Optional[bool] = False,
     limit: Optional[int] = None,
+    chunk_size: Optional[int] = 10000,
 ) -> Any:
     """
     A DLT source which loads a collection from a mongo database using PyMongo.
@@ -85,6 +86,7 @@ def mongodb_collection(
         write_disposition (str): Write disposition of the resource.
         parallel (Optional[bool]): Option to enable parallel loading for the collection. Default is False.
         limit (Optional[int]): The number of documents to be loaded.
+        chunk_size (Optional[int]): The number of documents to be loaded in each batch.
 
     Returns:
         Iterable[DltResource]: A list of DLT resources for each collection to be loaded.
@@ -103,4 +105,11 @@ def mongodb_collection(
         name=collection_obj.name,
         primary_key="_id",
         write_disposition=write_disposition,
-    )(client, collection_obj, incremental=incremental, parallel=parallel, limit=limit)
+    )(
+        client,
+        collection_obj,
+        incremental=incremental,
+        parallel=parallel,
+        limit=limit,
+        chunk_size=chunk_size,
+    )

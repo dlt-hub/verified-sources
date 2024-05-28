@@ -176,3 +176,24 @@ def test_limit_warning(destination):
         warn_mock.assert_called_once_with(
             "Using limit without ordering - results may be inconsistent."
         )
+
+
+@pytest.mark.parametrize("destination_name", ALL_DESTINATIONS)
+def test_limit_chunk_size(destination_name):
+    pipeline = dlt.pipeline(
+        pipeline_name="mongodb_test",
+        destination=destination_name,
+        dataset_name="mongodb_test_data",
+        full_refresh=True,
+    )
+    comments = mongodb_collection(
+        collection="comments",
+        limit=15,
+        parallel=True,
+        chunk_size=2,
+        incremental=dlt.sources.incremental("date"),
+    )
+    pipeline.run(comments)
+
+    table_counts = load_table_counts(pipeline, "comments")
+    assert table_counts["comments"] == 15

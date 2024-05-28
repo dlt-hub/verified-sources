@@ -25,19 +25,20 @@ else:
     TCollection = Any
     TCursor = Any
 
-CHUNK_SIZE = 10000
-
 
 class CollectionLoader:
     def __init__(
         self,
         client: TMongoClient,
         collection: TCollection,
+        chunk_size: int,
         incremental: Optional[dlt.sources.incremental[Any]] = None,
     ) -> None:
         self.client = client
         self.collection = collection
         self.incremental = incremental
+        self.chunk_size = chunk_size
+
         if incremental:
             self.cursor_field = incremental.cursor_path
             self.last_value = incremental.last_value
@@ -115,7 +116,7 @@ class CollectionLoader:
 
         cursor = self._limit(cursor, limit)
 
-        while docs_slice := list(islice(cursor, CHUNK_SIZE)):
+        while docs_slice := list(islice(cursor, self.chunk_size)):
             yield map_nested_in_place(convert_mongo_objs, docs_slice)
 
 
@@ -123,18 +124,25 @@ class CollectionLoaderParallel(CollectionLoader):
     def _get_document_count(self) -> int:
         return self.collection.count_documents(filter=self._filter_op)
 
-    def _create_batches(self) -> List[Dict[str, int]]:
+    def _create_batches(self, limit: int) -> List[Dict[str, int]]:
         doc_count = self._get_document_count()
-        return [
-            dict(skip=sk, limit=CHUNK_SIZE) for sk in range(0, doc_count, CHUNK_SIZE)
-        ]
+        if limit:
+            doc_count = min(doc_count, limit)
 
-    def _get_cursor(self, limit: int) -> TCursor:
+        batches = []f
+        left_to_load = doc_count
+
+        for sk in range(0, doc_count, self.chunk_size):
+            batches.append(dict(skip=sk, limit=min(self.chunk_size, left_to_load)))
+            left_to_load -= self.chunk_size
+
+        return batches
+
+    def _get_cursor(self) -> TCursor:
         cursor = self.collection.find(filter=self._filter_op)
         if self._sort_op:
             cursor = cursor.sort(self._sort_op)
 
-        cursor = self._limit(cursor, limit)
         return cursor
 
     @dlt.defer
@@ -144,11 +152,20 @@ class CollectionLoaderParallel(CollectionLoader):
         data = []
         for document in cursor.skip(batch["skip"]).limit(batch["limit"]):
             data.append(map_nested_in_place(convert_mongo_objs, document))
+
         return data
 
     def _get_all_batches(self, limit: int) -> Iterator[TDataItem]:
-        batches = self._create_batches()
-        cursor = self._get_cursor(limit)
+        """Load all documents from the collection in parallel batches.
+
+        Args:
+            limit (int): The maximum number of documents to load.
+
+        Yields:
+            Iterator[TDataItem]: An iterator of the loaded documents.
+        """
+        batches = self._create_batches(limit)
+        cursor = self._get_cursor()
 
         for batch in batches:
             yield self._run_batch(cursor=cursor, batch=batch)
@@ -172,6 +189,7 @@ def collection_documents(
     incremental: Optional[dlt.sources.incremental[Any]] = None,
     parallel: bool = False,
     limit: Optional[int] = None,
+    chunk_size: Optional[int] = 10000,
 ) -> Iterator[TDataItem]:
     """
     A DLT source which loads data from a Mongo database using PyMongo.
@@ -183,13 +201,16 @@ def collection_documents(
         incremental (Optional[dlt.sources.incremental[Any]]): The incremental configuration.
         parallel (bool): Option to enable parallel loading for the collection. Default is False.
         limit (Optional[int]): The maximum number of documents to load.
+        chunk_size (Optional[int]): The number of documents to load in each batch.
 
     Returns:
         Iterable[DltResource]: A list of DLT resources for each collection to be loaded.
     """
     LoaderClass = CollectionLoaderParallel if parallel else CollectionLoader
 
-    loader = LoaderClass(client, collection, incremental=incremental)
+    loader = LoaderClass(
+        client, collection, incremental=incremental, chunk_size=chunk_size
+    )
     for data in loader.load_documents(limit=limit):
         yield data
 
