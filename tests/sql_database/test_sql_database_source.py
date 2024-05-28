@@ -8,6 +8,9 @@ import sqlalchemy as sa
 import dlt
 from dlt.common.utils import uniq_id
 from dlt.common.schema.typing import TTableSchemaColumns, TColumnSchema, TSortOrder
+from dlt.common.configuration.exceptions import ConfigFieldMissingException
+
+from dlt.extract.exceptions import ResourceExtractionError
 
 from dlt.sources import DltResource
 from dlt.sources.credentials import ConnectionStringCredentials
@@ -716,6 +719,96 @@ def test_sql_database_include_view_in_table_names(
     pipeline.run(source)
 
     assert_row_counts(pipeline, sql_source_db, ["app_user", "chat_message_view"])
+
+
+def test_pass_engine_credentials(sql_source_db: SQLAlchemySourceDB) -> None:
+    # verify database
+    database = sql_database(
+        sql_source_db.engine, schema=sql_source_db.schema, table_names=["chat_message"]
+    )
+    assert len(list(database)) == sql_source_db.table_infos["chat_message"]["row_count"]
+
+    # verify table
+    table = sql_table(
+        sql_source_db.engine, table="chat_message", schema=sql_source_db.schema
+    )
+    assert len(list(table)) == sql_source_db.table_infos["chat_message"]["row_count"]
+
+
+def test_named_sql_table_config(sql_source_db: SQLAlchemySourceDB) -> None:
+    # set the credentials per table name
+    os.environ[
+        "SOURCES__SQL_DATABASE__CHAT_MESSAGE__CREDENTIALS"
+    ] = sql_source_db.engine.url.render_as_string(False)
+    table = sql_table(table="chat_message", schema=sql_source_db.schema)
+    assert table.name == "chat_message"
+    assert len(list(table)) == sql_source_db.table_infos["chat_message"]["row_count"]
+
+    with pytest.raises(ConfigFieldMissingException):
+        sql_table(table="has_composite_key", schema=sql_source_db.schema)
+
+    # set backend
+    os.environ["SOURCES__SQL_DATABASE__CHAT_MESSAGE__BACKEND"] = "pandas"
+    table = sql_table(table="chat_message", schema=sql_source_db.schema)
+    # just one frame here
+    assert len(list(table)) == 1
+
+    os.environ["SOURCES__SQL_DATABASE__CHAT_MESSAGE__CHUNK_SIZE"] = "1000"
+    table = sql_table(table="chat_message", schema=sql_source_db.schema)
+    # now 10 frames with chunk size of 1000
+    assert len(list(table)) == 10
+
+    # make it fail on cursor
+    os.environ[
+        "SOURCES__SQL_DATABASE__CHAT_MESSAGE__INCREMENTAL__CURSOR_PATH"
+    ] = "updated_at_x"
+    table = sql_table(table="chat_message", schema=sql_source_db.schema)
+    with pytest.raises(ResourceExtractionError) as ext_ex:
+        len(list(table))
+    assert "'updated_at_x'" in str(ext_ex.value)
+
+
+def test_general_sql_database_config(sql_source_db: SQLAlchemySourceDB) -> None:
+    # set the credentials per table name
+    os.environ[
+        "SOURCES__SQL_DATABASE__CREDENTIALS"
+    ] = sql_source_db.engine.url.render_as_string(False)
+    # applies to both sql table and sql database
+    table = sql_table(table="chat_message", schema=sql_source_db.schema)
+    assert len(list(table)) == sql_source_db.table_infos["chat_message"]["row_count"]
+    database = sql_database(schema=sql_source_db.schema).with_resources("chat_message")
+    assert len(list(database)) == sql_source_db.table_infos["chat_message"]["row_count"]
+
+    # set backend
+    os.environ["SOURCES__SQL_DATABASE__BACKEND"] = "pandas"
+    table = sql_table(table="chat_message", schema=sql_source_db.schema)
+    # just one frame here
+    assert len(list(table)) == 1
+    database = sql_database(schema=sql_source_db.schema).with_resources("chat_message")
+    assert len(list(database)) == 1
+
+    os.environ["SOURCES__SQL_DATABASE__CHUNK_SIZE"] = "1000"
+    table = sql_table(table="chat_message", schema=sql_source_db.schema)
+    # now 10 frames with chunk size of 1000
+    assert len(list(table)) == 10
+    database = sql_database(schema=sql_source_db.schema).with_resources("chat_message")
+    assert len(list(database)) == 10
+
+    # make it fail on cursor
+    os.environ[
+        "SOURCES__SQL_DATABASE__CHAT_MESSAGE__INCREMENTAL__CURSOR_PATH"
+    ] = "updated_at_x"
+    table = sql_table(table="chat_message", schema=sql_source_db.schema)
+    with pytest.raises(ResourceExtractionError) as ext_ex:
+        len(list(table))
+    assert "'updated_at_x'" in str(ext_ex.value)
+    with pytest.raises(ResourceExtractionError) as ext_ex:
+        list(sql_database(schema=sql_source_db.schema).with_resources("chat_message"))
+    # other resources will be loaded, incremental is selective
+    assert (
+        len(list(sql_database(schema=sql_source_db.schema).with_resources("app_user")))
+        > 0
+    )
 
 
 def assert_row_counts(
