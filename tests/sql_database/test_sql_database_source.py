@@ -12,7 +12,7 @@ from dlt.common.schema.typing import TTableSchemaColumns, TColumnSchema, TSortOr
 from dlt.sources import DltResource
 from dlt.sources.credentials import ConnectionStringCredentials
 
-from sources.sql_database import sql_database, sql_table, TableBackend
+from sources.sql_database import sql_database, sql_table, TableBackend, ReflectionLevel
 from sources.sql_database.helpers import unwrap_json_connector_x
 
 from tests.utils import (
@@ -133,7 +133,7 @@ def test_load_sql_table_incremental(
     pipeline = make_pipeline(destination_name)
     tables = ["chat_message"]
 
-    def make_source():  # type: ignore
+    def make_source():
         return sql_database(
             credentials=sql_source_db.credentials,
             schema=sql_source_db.schema,
@@ -343,7 +343,7 @@ def test_load_sql_table_resource_incremental_end_value(
 @pytest.mark.parametrize("backend", ["sqlalchemy", "pyarrow", "pandas", "connectorx"])
 @pytest.mark.parametrize("defer_table_reflect", (False, True))
 def test_load_sql_table_resource_select_columns(
-    sql_source_db: SQLAlchemySourceDB, defer_table_reflect: bool, backend: str
+    sql_source_db: SQLAlchemySourceDB, defer_table_reflect: bool, backend: TableBackend
 ) -> None:
     # get chat messages with content column removed
     chat_messages = sql_table(
@@ -380,7 +380,9 @@ def test_load_sql_table_source_select_columns(
         credentials=sql_source_db.credentials,
         schema=sql_source_db.schema,
         defer_table_reflect=defer_table_reflect,
-        table_names=sql_source_db.table_infos.keys() if defer_table_reflect else None,
+        table_names=list(sql_source_db.table_infos.keys())
+        if defer_table_reflect
+        else None,
         table_adapter_callback=adapt,
         backend=backend,
     )
@@ -392,12 +394,12 @@ def test_load_sql_table_source_select_columns(
 
 
 @pytest.mark.parametrize("backend", ["sqlalchemy", "pyarrow", "pandas", "connectorx"])
-@pytest.mark.parametrize("with_precision", [True, False])
+@pytest.mark.parametrize("reflection_level", ["full", "full_with_precision"])
 @pytest.mark.parametrize("with_defer", [True, False])
 def test_extract_without_pipeline(
     sql_source_db: SQLAlchemySourceDB,
     backend: TableBackend,
-    with_precision: bool,
+    reflection_level: ReflectionLevel,
     with_defer: bool,
 ) -> None:
     # make sure that we can evaluate tables without pipeline
@@ -405,7 +407,7 @@ def test_extract_without_pipeline(
         credentials=sql_source_db.credentials,
         table_names=["has_precision", "app_user", "chat_message", "chat_channel"],
         schema=sql_source_db.schema,
-        detect_precision_hints=with_precision,
+        reflection_level=reflection_level,
         defer_table_reflect=with_defer,
         backend=backend,
     )
@@ -425,7 +427,7 @@ def test_all_types_with_precision_hints(
     source = sql_database(
         credentials=sql_source_db.credentials,
         schema=sql_source_db.schema,
-        detect_precision_hints=True,
+        reflection_level="full_with_precision",
         backend=backend,
     )
 
@@ -460,7 +462,7 @@ def test_all_types_no_precision_hints(
     source = sql_database(
         credentials=sql_source_db.credentials,
         schema=sql_source_db.schema,
-        detect_precision_hints=False,
+        reflection_level="full",
         backend=backend,
     )
 
@@ -505,7 +507,7 @@ def test_set_primary_key_deferred_incremental(
     backend: TableBackend,
 ) -> None:
     # this tests dynamically adds primary key to resource and as consequence to incremental
-    updated_at = dlt.sources.incremental("updated_at")
+    updated_at = dlt.sources.incremental("updated_at")  # type: ignore[var-annotated]
     resource = sql_table(
         credentials=sql_source_db.credentials,
         table="chat_message",
@@ -536,7 +538,7 @@ def test_set_primary_key_deferred_incremental(
 
     pipeline = make_pipeline("duckdb")
     # must evaluate resource for primary key to be set
-    pipeline.extract(resource.add_step(_assert_incremental))
+    pipeline.extract(resource.add_step(_assert_incremental))  # type: ignore[arg-type]
 
     assert resource.incremental.primary_key == ["id"]
     assert resource.incremental._incremental.primary_key == ["id"]
@@ -582,7 +584,7 @@ def test_deferred_reflect_in_source(
         load_tables_to_dicts(pipeline, "has_precision")["has_precision"],
         True,
     )
-    assert len(source.chat_message.columns) > 0
+    assert len(source.chat_message.columns) > 0  # type: ignore[arg-type]
     assert (
         source.chat_message.compute_table_schema()["columns"]["id"]["primary_key"]
         is True
@@ -778,7 +780,7 @@ def assert_no_precision_columns(
     actual = list(columns.values())
 
     # we always infer and emit nullability
-    expected = deepcopy(
+    expected: List[TColumnSchema] = deepcopy(
         NULL_NO_PRECISION_COLUMNS if nullable else NOT_NULL_NO_PRECISION_COLUMNS
     )
     if backend == "pyarrow":
@@ -862,7 +864,7 @@ def add_default_decimal_precision(columns: List[TColumnSchema]) -> List[TColumnS
     return columns
 
 
-PRECISION_COLUMNS = [
+PRECISION_COLUMNS: List[TColumnSchema] = [
     {
         "data_type": "bigint",
         "name": "int_col",
@@ -931,19 +933,21 @@ PRECISION_COLUMNS = [
 NOT_NULL_PRECISION_COLUMNS = [
     {"nullable": False, **column} for column in PRECISION_COLUMNS
 ]
-NULL_PRECISION_COLUMNS = [{"nullable": True, **column} for column in PRECISION_COLUMNS]
+NULL_PRECISION_COLUMNS: List[TColumnSchema] = [
+    {"nullable": True, **column} for column in PRECISION_COLUMNS
+]
 
 # but keep decimal precision
-NO_PRECISION_COLUMNS = [
-    {"name": column["name"], "data_type": column["data_type"]}
+NO_PRECISION_COLUMNS: List[TColumnSchema] = [
+    {"name": column["name"], "data_type": column["data_type"]}  # type: ignore[misc]
     if column["data_type"] != "decimal"
     else dict(column)
     for column in PRECISION_COLUMNS
 ]
 
-NOT_NULL_NO_PRECISION_COLUMNS = [
+NOT_NULL_NO_PRECISION_COLUMNS: List[TColumnSchema] = [
     {"nullable": False, **column} for column in NO_PRECISION_COLUMNS
 ]
-NULL_NO_PRECISION_COLUMNS = [
+NULL_NO_PRECISION_COLUMNS: List[TColumnSchema] = [
     {"nullable": True, **column} for column in NO_PRECISION_COLUMNS
 ]
