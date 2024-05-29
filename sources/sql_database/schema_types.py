@@ -31,13 +31,11 @@ def sqla_col_to_column_schema(
     such as numeric, varchar, int, bigint. Numeric (decimal) types have always precision added.
     """
     sql_t = sql_col.type
-    col: TColumnSchema = {
-        "name": sql_col.name,
-        # "data_type": None,  # set that later
-        # "nullable": sql_col.nullable,
-    }
+    col: TColumnSchema = {"name": sql_col.name}
     if reflection_level == "minimal":
         return col
+
+    col["nullable"] = sql_col.nullable
 
     add_precision = reflection_level == "full_with_precision"
 
