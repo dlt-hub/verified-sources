@@ -22,10 +22,12 @@ from dlt.sources.credentials import ConnectionStringCredentials
 
 from .schema_types import (
     table_to_columns,
+    get_primary_key,
     columns_to_arrow,
     row_tuples_to_arrow,
     Table,
     SelectAny,
+    ReflectionLevel,
 )
 
 from sqlalchemy import Table, create_engine
@@ -129,11 +131,12 @@ class TableLoader:
                 elif self.backend == "pandas":
                     from dlt.common.libs.pandas_sql import _wrap_result
 
-                    yield _wrap_result(
+                    df = _wrap_result(
                         partition,
                         columns,
                         **{"dtype_backend": "pyarrow", **backend_kwargs},
                     )
+                    yield df
                 elif self.backend == "pyarrow":
                     yield row_tuples_to_arrow(
                         partition, self.columns, tz=backend_kwargs.get("tz", "UTC")
@@ -179,9 +182,9 @@ def table_rows(
     chunk_size: int,
     backend: TableBackend,
     incremental: Optional[dlt.sources.incremental[Any]] = None,
-    detect_precision_hints: bool = False,
     defer_table_reflect: bool = False,
     table_adapter_callback: Callable[[Table], None] = None,
+    reflection_level: ReflectionLevel = "full",
     backend_kwargs: Dict[str, Any] = None,
 ) -> Iterator[TDataItem]:
     columns: TTableSchemaColumns = None
@@ -191,24 +194,24 @@ def table_rows(
         )
         if table_adapter_callback:
             table_adapter_callback(table)
-        columns = table_to_columns(table, detect_precision_hints)
+        columns = table_to_columns(table, reflection_level)
 
         # set the primary_key in the incremental
         if incremental and incremental.primary_key is None:
-            primary_key = get_primary_key(table)
+            primary_key = get_primary_key(table, reflection_level)
             if primary_key is not None:
                 incremental.primary_key = primary_key
         # yield empty record to set hints
         yield dlt.mark.with_hints(
             [],
             dlt.mark.make_hints(
-                primary_key=get_primary_key(table),
+                primary_key=get_primary_key(table, reflection_level),
                 columns=columns,
             ),
         )
     else:
         # table was already reflected
-        columns = table_to_columns(table, detect_precision_hints)
+        columns = table_to_columns(table, reflection_level)
 
     loader = TableLoader(
         engine, backend, table, columns, incremental=incremental, chunk_size=chunk_size
@@ -217,19 +220,13 @@ def table_rows(
 
 
 def engine_from_credentials(
-    credentials: Union[ConnectionStringCredentials, Engine, str]
+    credentials: Union[ConnectionStringCredentials, Engine, str], **backend_kwargs: Any
 ) -> Engine:
     if isinstance(credentials, Engine):
         return credentials
     if isinstance(credentials, ConnectionStringCredentials):
         credentials = credentials.to_native_representation()
-    return create_engine(credentials)
-
-
-def get_primary_key(table: Table) -> List[str]:
-    """Create primary key or return None if no key defined"""
-    primary_key = [c.name for c in table.primary_key]
-    return primary_key if len(primary_key) > 0 else None
+    return create_engine(credentials, **backend_kwargs)
 
 
 def unwrap_json_connector_x(field: str) -> TDataItem:

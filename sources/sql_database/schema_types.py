@@ -1,4 +1,4 @@
-from typing import Optional, Any, Sequence, Type, TYPE_CHECKING
+from typing import Optional, Any, Sequence, Type, TYPE_CHECKING, Literal, List
 from typing_extensions import TypeAlias
 from sqlalchemy import Table, Column
 from sqlalchemy.engine import Row
@@ -8,6 +8,8 @@ from dlt.common import logger
 from dlt.common.schema.typing import TColumnSchema, TTableSchemaColumns
 from dlt.common.configuration import with_config
 from dlt.common.destination import DestinationCapabilitiesContext
+
+ReflectionLevel = Literal["minimal", "full", "full_with_precision"]
 
 # optionally create generics with any so they can be imported by dlt importer
 if TYPE_CHECKING:
@@ -21,7 +23,7 @@ else:
 
 
 def sqla_col_to_column_schema(
-    sql_col: ColumnAny, add_precision: bool = False
+    sql_col: ColumnAny, reflection_level: ReflectionLevel
 ) -> Optional[TColumnSchema]:
     """Infer dlt schema column type from an sqlalchemy type.
 
@@ -31,9 +33,13 @@ def sqla_col_to_column_schema(
     sql_t = sql_col.type
     col: TColumnSchema = {
         "name": sql_col.name,
-        "data_type": None,  # set that later
-        "nullable": sql_col.nullable,
+        # "data_type": None,  # set that later
+        # "nullable": sql_col.nullable,
     }
+    if reflection_level == "minimal":
+        return col
+
+    add_precision = reflection_level == "full_with_precision"
 
     if isinstance(sql_t, sqltypes.SmallInteger):
         col["data_type"] = "bigint"
@@ -85,14 +91,25 @@ def sqla_col_to_column_schema(
     return None
 
 
-def table_to_columns(table: Table, add_precision: bool = False) -> TTableSchemaColumns:
-    """Convert an sqlalchemy table to a dlt table schema.
+def get_primary_key(
+    table: Table, reflection_level: ReflectionLevel
+) -> Optional[List[str]]:
+    """Create primary key or return None if no key defined"""
+    if reflection_level == "minimal":
+        return None
+    primary_key = [c.name for c in table.primary_key]
+    return primary_key if len(primary_key) > 0 else None
 
-    Adds precision to columns when `add_precision` is set.
-    """
+
+def table_to_columns(
+    table: Table, reflection_level: ReflectionLevel = "full"
+) -> TTableSchemaColumns:
+    """Convert an sqlalchemy table to a dlt table schema."""
     return {
         col["name"]: col
-        for col in (sqla_col_to_column_schema(c, add_precision) for c in table.columns)
+        for col in (
+            sqla_col_to_column_schema(c, reflection_level) for c in table.columns
+        )
         if col is not None
     }
 

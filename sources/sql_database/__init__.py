@@ -14,12 +14,11 @@ from dlt.common.configuration.specs.config_section_context import ConfigSectionC
 from .helpers import (
     table_rows,
     engine_from_credentials,
-    get_primary_key,
     TableBackend,
     SqlDatabaseTableConfiguration,
     SqlTableResourceConfiguration,
 )
-from .schema_types import table_to_columns
+from .schema_types import table_to_columns, get_primary_key, ReflectionLevel
 
 
 @dlt.source
@@ -30,7 +29,7 @@ def sql_database(
     table_names: Optional[List[str]] = dlt.config.value,
     chunk_size: int = 50000,
     backend: TableBackend = "sqlalchemy",
-    detect_precision_hints: Optional[bool] = dlt.config.value,
+    reflection_level: ReflectionLevel = "full",
     defer_table_reflect: Optional[bool] = dlt.config.value,
     table_adapter_callback: Callable[[Table], None] = None,
     backend_kwargs: Dict[str, Any] = None,
@@ -84,15 +83,14 @@ def sql_database(
         yield dlt.resource(
             table_rows,
             name=table.name,
-            primary_key=get_primary_key(table),
+            primary_key=get_primary_key(table, reflection_level),
             spec=SqlDatabaseTableConfiguration,
-            columns=table_to_columns(table, detect_precision_hints),
+            columns=table_to_columns(table, reflection_level),
         )(
             engine,
             table,
             chunk_size,
             backend,
-            detect_precision_hints=detect_precision_hints,
             defer_table_reflect=defer_table_reflect,
             table_adapter_callback=table_adapter_callback,
             backend_kwargs=backend_kwargs,
