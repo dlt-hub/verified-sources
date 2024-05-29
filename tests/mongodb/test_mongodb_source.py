@@ -5,7 +5,7 @@ import dlt
 import pytest
 from pendulum import DateTime, timezone
 
-from sources.mongodb import mongodb_collection
+from sources.mongodb import mongodb, mongodb_collection
 from sources.mongodb_pipeline import (
     load_entire_database,
     load_select_collection_db,
@@ -158,6 +158,25 @@ def test_limit(destination_name):
 
     table_counts = load_table_counts(pipeline, "comments")
     assert table_counts["comments"] == 10
+
+
+@pytest.mark.parametrize("destination_name", ALL_DESTINATIONS)
+def test_limit_on_source(destination_name):
+    collections = ("comments", "movies")
+    limit = 8
+
+    pipeline = dlt.pipeline(
+        pipeline_name="mongodb_test",
+        destination=destination_name,
+        dataset_name="mongodb_test_data",
+        full_refresh=True,
+    )
+    comments = mongodb(collection_names=collections, limit=limit)
+    pipeline.run(comments)
+
+    table_counts = load_table_counts(pipeline, *collections)
+    for col_name in collections:
+        assert table_counts[col_name] == limit
 
 
 @pytest.mark.parametrize("destination", ALL_DESTINATIONS)
