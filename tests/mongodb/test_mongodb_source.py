@@ -102,6 +102,7 @@ def test_incremental(start, end, count1, count2, last_value_func, destination_na
                 initial_value=start,
                 end_value=end,
                 last_value_func=last_value_func,
+                row_order="asc",
             ),
         )
     )
