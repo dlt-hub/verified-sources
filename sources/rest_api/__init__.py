@@ -308,22 +308,23 @@ def create_resources(
                         params[incremental_param.end] = incremental_object.end_value
 
                 for item in items:
-                    formatted_path, parent_record = process_parent_data_item(
+                    formatted_paths, parent_record = process_parent_data_item(
                         path, item, resolved_param, include_from_parent
                     )
 
-                    for child_page in client.paginate(
-                        method=method,
-                        path=formatted_path,
-                        params=params,
-                        paginator=paginator,
-                        data_selector=data_selector,
-                        hooks=hooks,
-                    ):
-                        if parent_record:
-                            for child_record in child_page:
-                                child_record.update(parent_record)
-                        yield child_page
+                    for formatted_path in formatted_paths:
+                        for child_page in client.paginate(
+                            method=method,
+                            path=formatted_path,
+                            params=params,
+                            paginator=paginator,
+                            data_selector=data_selector,
+                            hooks=hooks,
+                        ):
+                            if parent_record:
+                                for child_record in child_page:
+                                    child_record.update(parent_record)
+                            yield child_page
 
             resources[resource_name] = dlt.resource(  # type: ignore[call-overload]
                 paginate_dependent_resource,
