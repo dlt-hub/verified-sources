@@ -415,10 +415,12 @@ def process_parent_data_item(
     item: Dict[str, Any],
     resolved_param: ResolvedParam,
     include_from_parent: List[str],
-) -> Tuple[str, Dict[str, Any]]:
+) -> Tuple[List[str], Dict[str, Any]]:
 
 
-    def to_list(s):
+    def to_list(
+        s: str,
+    ) -> List[str]:
         try:
             # Attempt to parse the string as a Python literal
             parsed = ast.literal_eval(s)
