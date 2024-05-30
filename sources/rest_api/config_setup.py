@@ -442,7 +442,7 @@ def process_parent_data_item(
         raise ValueError(
             f"Transformer expects a field '{field_path}' to be present in the incoming data from resource {parent_resource_name} in order to bind it to path param {resolved_param.param_name}. Available parent fields are {', '.join(item.keys())}"
         )
-    
+
     bound_path = [path.format(**{resolved_param.param_name: field_value}) for field_value in to_list(field_values[0])]
 
     # bound_path = path.format(**{resolved_param.param_name: field_values[0]})
