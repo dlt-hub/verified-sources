@@ -50,10 +50,25 @@ class CollectionLoader:
     def _sort_op(self) -> List[Optional[Tuple[str, int]]]:
         if not self.incremental or not self.last_value:
             return []
-        if self.incremental.last_value_func is max:
+
+        if (
+            self.incremental.row_order == "asc"
+            and self.incremental.last_value_func is max
+        ) or (
+            self.incremental.row_order == "desc"
+            and self.incremental.last_value_func is min
+        ):
             return [(self.cursor_field, ASCENDING)]
-        elif self.incremental.last_value_func is min:
+
+        elif (
+            self.incremental.row_order == "asc"
+            and self.incremental.last_value_func is min
+        ) or (
+            self.incremental.row_order == "desc"
+            and self.incremental.last_value_func is max
+        ):
             return [(self.cursor_field, DESCENDING)]
+
         return []
 
     @property

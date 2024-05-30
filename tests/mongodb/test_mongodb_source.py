@@ -216,3 +216,29 @@ def test_limit_chunk_size(destination_name):
 
     table_counts = load_table_counts(pipeline, "comments")
     assert table_counts["comments"] == 15
+
+
+@pytest.mark.parametrize("row_order", ["asc", "desc", None])
+@pytest.mark.parametrize("last_value_func", [min, max, lambda x: max(x)])
+def test_order(row_order, last_value_func):
+    comments = list(
+        mongodb_collection(
+            collection="comments",
+            incremental=dlt.sources.incremental(
+                "date",
+                initial_value=DateTime(2005, 1, 1, tzinfo=timezone("UTC")),
+                last_value_func=last_value_func,
+                row_order=row_order,
+            ),
+        )
+    )
+    for i, c in enumerate(comments[1:], start=1):
+        if (last_value_func is max and row_order == "asc") or (
+            last_value_func is min and row_order == "desc"
+        ):
+            assert c["date"] >= comments[i - 1]["date"]
+
+        if (last_value_func is min and row_order == "asc") or (
+            last_value_func is max and row_order == "desc"
+        ):
+            assert c["date"] <= comments[i - 1]["date"]
