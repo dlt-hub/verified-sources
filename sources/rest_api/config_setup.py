@@ -13,6 +13,7 @@ from typing import (
 )
 import graphlib  # type: ignore[import,unused-ignore]
 import string
+import json
 
 import dlt
 from dlt.common import logger
@@ -423,11 +424,11 @@ def process_parent_data_item(
     ) -> List[str]:
         try:
             # Attempt to parse the string as a Python literal
-            parsed = ast.literal_eval(s)
+            parsed = json.loads(s)
             # Check if the parsed object is a list
             if isinstance(parsed, list):
                 return parsed
-        except (ValueError, SyntaxError):
+        except (ValueError, json.JSONDecodeError):
             pass
         # If parsing fails or the parsed object is not a list, return the string in a list
         return [s]
