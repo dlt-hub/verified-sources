@@ -7,7 +7,7 @@ import dlt
 from dlt.common.typing import TDataItems
 from dlt.sources import DltResource
 
-from .helpers import get_reactions_data, get_rest_pages
+from .helpers import get_reactions_data, get_rest_pages, get_stargazers
 
 
 @dlt.source
@@ -108,3 +108,42 @@ def github_repo_events(
                 break
 
     return repo_events
+
+
+@dlt.source
+def github_stargazers(
+    owner: str,
+    name: str,
+    access_token: str = dlt.secrets.value,
+    items_per_page: int = 100,
+    max_items: Optional[int] = None,
+) -> Sequence[DltResource]:
+    """Get stargazers in the repo `name` with owner `owner`.
+
+    This source uses graphql to retrieve all staragars with the associated starred date,
+    Internally graphql is used to retrieve data. It is cost optimized and you are able to retrieve the
+    data for fairly large repos quickly and cheaply.
+
+    Args:
+        owner (str): The repository owner
+        name (str): The repository name
+        access_token (str): The classic access token. Will be injected from secrets if not provided.
+        items_per_page (int, optional): How many issues/pull requests to get in single page. Defaults to 100.
+        max_items (int, optional): How many issues/pull requests to get in total. None means All.
+
+    Returns:
+        Sequence[DltResource]: Two DltResources: `issues` with issues and `pull_requests` with pull requests
+    """
+    return (
+        dlt.resource(
+            get_stargazers(
+                owner,
+                name,
+                access_token,
+                items_per_page,
+                max_items,
+            ),
+            name="stargazers",
+            write_disposition="replace",
+        ),
+    )

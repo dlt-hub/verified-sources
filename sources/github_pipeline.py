@@ -1,6 +1,6 @@
 import dlt
 
-from github import github_reactions, github_repo_events
+from github import github_reactions, github_repo_events, github_stargazers
 
 
 def load_duckdb_repo_reactions_issues_only() -> None:
@@ -42,7 +42,20 @@ def load_dlthub_dlt_all_data() -> None:
     print(pipeline.run(data))
 
 
+def load_dlthub_dlt_stargazers() -> None:
+    """Loads all stargazers for dlthub dlt repo"""
+    pipeline = dlt.pipeline(
+        "github_staragarzers",
+        destination="duckdb",
+        dataset_name="dlthub_staragarzers",
+        full_refresh=True,
+    )
+    data = github_stargazers("dlt-hub", "dlt")
+    print(pipeline.run(data))
+
+
 if __name__ == "__main__":
     load_duckdb_repo_reactions_issues_only()
     load_airflow_events()
     load_dlthub_dlt_all_data()
+    load_dlthub_dlt_stargazers()
