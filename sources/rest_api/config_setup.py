@@ -13,7 +13,6 @@ from typing import (
 )
 import graphlib  # type: ignore[import,unused-ignore]
 import string
-import json
 
 import dlt
 from dlt.common import logger
@@ -418,19 +417,11 @@ def process_parent_data_item(
     include_from_parent: List[str],
 ) -> Tuple[List[str], Dict[str, Any]]:
 
-
     def to_list(
-        s: str,
-    ) -> List[str]:
-        try:
-            # Attempt to parse the string as a Python literal
-            parsed = json.loads(s)
-            # Check if the parsed object is a list
-            if isinstance(parsed, list):
-                return parsed
-        except (ValueError, json.JSONDecodeError):
-            pass
-        # If parsing fails or the parsed object is not a list, return the string in a list
+            s: Any,
+        ) -> List[Any]:
+        if isinstance(s, list):
+            return s
         return [s]
 
     parent_resource_name = resolved_param.resolve_config["resource"]
