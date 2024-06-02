@@ -5,7 +5,7 @@ import dlt
 import pytest
 from pendulum import DateTime, timezone
 
-from sources.mongodb import mongodb_collection
+from sources.mongodb import mongodb, mongodb_collection
 from sources.mongodb_pipeline import (
     load_entire_database,
     load_select_collection_db,
@@ -102,6 +102,7 @@ def test_incremental(start, end, count1, count2, last_value_func, destination_na
                 initial_value=start,
                 end_value=end,
                 last_value_func=last_value_func,
+                row_order="asc",
             ),
         )
     )
@@ -160,6 +161,25 @@ def test_limit(destination_name):
     assert table_counts["comments"] == 10
 
 
+@pytest.mark.parametrize("destination_name", ALL_DESTINATIONS)
+def test_limit_on_source(destination_name):
+    collections = ("comments", "movies")
+    limit = 8
+
+    pipeline = dlt.pipeline(
+        pipeline_name="mongodb_test",
+        destination=destination_name,
+        dataset_name="mongodb_test_data",
+        full_refresh=True,
+    )
+    comments = mongodb(collection_names=collections, limit=limit)
+    pipeline.run(comments)
+
+    table_counts = load_table_counts(pipeline, *collections)
+    for col_name in collections:
+        assert table_counts[col_name] == limit
+
+
 @pytest.mark.parametrize("destination", ALL_DESTINATIONS)
 def test_limit_warning(destination):
     pipeline = dlt.pipeline(
@@ -197,3 +217,29 @@ def test_limit_chunk_size(destination_name):
 
     table_counts = load_table_counts(pipeline, "comments")
     assert table_counts["comments"] == 15
+
+
+@pytest.mark.parametrize("row_order", ["asc", "desc", None])
+@pytest.mark.parametrize("last_value_func", [min, max, lambda x: max(x)])
+def test_order(row_order, last_value_func):
+    comments = list(
+        mongodb_collection(
+            collection="comments",
+            incremental=dlt.sources.incremental(
+                "date",
+                initial_value=DateTime(2005, 1, 1, tzinfo=timezone("UTC")),
+                last_value_func=last_value_func,
+                row_order=row_order,
+            ),
+        )
+    )
+    for i, c in enumerate(comments[1:], start=1):
+        if (last_value_func is max and row_order == "asc") or (
+            last_value_func is min and row_order == "desc"
+        ):
+            assert c["date"] >= comments[i - 1]["date"]
+
+        if (last_value_func is min and row_order == "asc") or (
+            last_value_func is max and row_order == "desc"
+        ):
+            assert c["date"] <= comments[i - 1]["date"]
