@@ -4,7 +4,7 @@ from dlt.common.typing import DictStrAny, StrAny
 from dlt.common.utils import chunks
 from dlt.sources.helpers import requests
 
-from .queries import COMMENT_REACTIONS_QUERY, ISSUES_QUERY, RATE_LIMIT
+from .queries import COMMENT_REACTIONS_QUERY, ISSUES_QUERY, STARGAZERS_QUERY, RATE_LIMIT
 from .settings import GRAPHQL_API_BASE_URL, REST_API_BASE_URL
 
 
@@ -45,6 +45,23 @@ def get_rest_pages(access_token: Optional[str], query: str) -> Iterator[List[Str
 #
 # GraphQL API helpers
 #
+def get_stargazers(
+    owner: str,
+    name: str,
+    access_token: str,
+    items_per_page: int,
+    max_items: Optional[int],
+) -> Iterator[Iterator[StrAny]]:
+    variables = {"owner": owner, "name": name, "items_per_page": items_per_page}
+    for page_items in _get_graphql_pages(
+        access_token, STARGAZERS_QUERY, variables, "stargazers", max_items
+    ):
+        yield map(
+            lambda item: {"starredAt": item["starredAt"], "user": item["node"]},
+            page_items,
+        )
+
+
 def get_reactions_data(
     node_type: str,
     owner: str,
@@ -133,7 +150,12 @@ def _get_graphql_pages(
     items_count = 0
     while True:
         data, rate_limit = _run_graphql_query(access_token, query, variables)
-        data_items = _extract_top_connection(data, node_type)["nodes"]
+        top_connection = _extract_top_connection(data, node_type)
+        data_items = (
+            top_connection["nodes"]
+            if "nodes" in top_connection
+            else top_connection["edges"]
+        )
         items_count += len(data_items)
         print(
             f'Got {len(data_items)}/{items_count} {node_type}s, query cost {rate_limit["cost"]}, remaining credits: {rate_limit["remaining"]}'

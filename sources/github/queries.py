@@ -86,3 +86,30 @@ node_%s: node(id:"%s") {
     }
   }
 """
+
+STARGAZERS_QUERY = """
+query($owner: String!, $name: String!, $items_per_page: Int!, $page_after: String) {
+  repository(owner: $owner, name: $name) {
+    stargazers(first: $items_per_page, orderBy: {field: STARRED_AT, direction: DESC}, after: $page_after) {
+      pageInfo {
+        endCursor
+        startCursor
+      }
+      edges {
+        starredAt
+        node {
+          login
+          avatarUrl
+          url
+        }
+      }
+    }
+  }
+  rateLimit {
+    limit
+    cost
+    remaining
+    resetAt
+  }
+}
+"""
