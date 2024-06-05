@@ -432,6 +432,105 @@ def test_extract_without_pipeline(
 
 
 @pytest.mark.parametrize("backend", ["sqlalchemy", "pyarrow", "pandas", "connectorx"])
+@pytest.mark.parametrize("reflection_level", ["minimal", "full", "full_with_precision"])
+@pytest.mark.parametrize("with_defer", [False, True])
+@pytest.mark.parametrize("standalone_resource", [True, False])
+def test_source_reflection_levels(
+    sql_source_db: SQLAlchemySourceDB,
+    backend: TableBackend,
+    reflection_level: ReflectionLevel,
+    with_defer: bool,
+    standalone_resource: bool,
+) -> None:
+    """Test all reflection, correct schema is inferred"""
+
+    def prepare_source():
+        if standalone_resource:
+
+            @dlt.source
+            def dummy_source():
+                yield sql_table(
+                    credentials=sql_source_db.credentials,
+                    schema=sql_source_db.schema,
+                    table="has_precision",
+                    backend=backend,
+                    defer_table_reflect=with_defer,
+                    reflection_level=reflection_level,
+                )
+                yield sql_table(
+                    credentials=sql_source_db.credentials,
+                    schema=sql_source_db.schema,
+                    table="app_user",
+                    backend=backend,
+                    defer_table_reflect=with_defer,
+                    reflection_level=reflection_level,
+                )
+
+            return dummy_source()
+
+        return sql_database(
+            credentials=sql_source_db.credentials,
+            table_names=["has_precision", "app_user"],
+            schema=sql_source_db.schema,
+            reflection_level=reflection_level,
+            defer_table_reflect=with_defer,
+            backend=backend,
+        )
+
+    if backend == "pyarrow" and reflection_level == "minimal":
+        # Arrow requires reflection
+        with pytest.raises(ValueError) as exinfo:
+            source = prepare_source()
+        assert str(exinfo.value).startswith("pyarrow backend requires reflection_level")
+        return
+    else:
+        source = prepare_source()
+
+    pipeline = make_pipeline("duckdb")
+    pipeline.extract(source)
+
+    schema = pipeline.default_schema
+    assert "has_precision" in schema.tables
+
+    col_names = [
+        col["name"] for col in schema.tables["has_precision"]["columns"].values()
+    ]
+    expected_col_names = [col["name"] for col in PRECISION_COLUMNS]
+
+    assert col_names == expected_col_names
+
+    # Pk col is always reflected
+    pk_col = schema.tables["app_user"]["columns"]["id"]
+    assert pk_col["primary_key"] is True
+
+    if reflection_level == "minimal":
+        resource_cols = source.resources["has_precision"].compute_table_schema()[
+            "columns"
+        ]
+        schema_cols = pipeline.default_schema.tables["has_precision"]["columns"]
+        # We should have all column names on resource hints after extract but no data type or precision
+        for col, schema_col in zip(resource_cols.values(), schema_cols.values()):
+            assert col.get("data_type") is None
+            assert col.get("precision") is None
+            assert col.get("scale") is None
+            if (
+                backend == "sqlalchemy"
+            ):  # Data types are inferred from pandas/arrow during extract
+                assert schema_col.get("data_type") is None
+
+    pipeline.normalize()
+    # Check with/out precision after normalize
+    schema_cols = pipeline.default_schema.tables["has_precision"]["columns"]
+    if reflection_level == "full":
+        # Columns have data type set
+        assert_no_precision_columns(schema_cols, backend, False)
+
+    elif reflection_level == "full_with_precision":
+        # Columns have data type and precision scale set
+        assert_precision_columns(schema_cols, backend, False)
+
+
+@pytest.mark.parametrize("backend", ["sqlalchemy", "pyarrow", "pandas", "connectorx"])
 @pytest.mark.parametrize(
     "table_name,nullable", (("has_precision", False), ("has_precision_nullable", True))
 )
