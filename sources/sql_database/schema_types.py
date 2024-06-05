@@ -1,4 +1,4 @@
-from typing import Optional, Any, Sequence, Type, TYPE_CHECKING, Literal, List, Callable
+from typing import Optional, Any, Sequence, Type, TYPE_CHECKING, Literal, List, Callable, Union
 from typing_extensions import TypeAlias
 from sqlalchemy import Table, Column
 from sqlalchemy.engine import Row
@@ -24,7 +24,7 @@ else:
 
 
 TTypeConversionCallback = Callable[
-    [sqltypes.TypeEngine[Any]], Optional[sqltypes.TypeEngine[Any]]
+    [sqltypes.TypeEngine[Any]], Optional[Union[sqltypes.TypeEngine[Any], Type[sqltypes.TypeEngine[Any]]]]
 ]
 
 

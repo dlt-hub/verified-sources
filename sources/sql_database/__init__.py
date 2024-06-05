@@ -63,7 +63,10 @@ def sql_database(
         table_adapter_callback: (Callable): Receives each reflected table. May be used to modify the list of columns that will be selected.
         backend_kwargs (**kwargs): kwargs passed to table backend ie. "conn" is used to pass specialized connection string to connectorx.
         include_views (bool): Reflect views as well as tables. Note view names included in `table_names` are always included regardless of this setting.
+        type_conversion_callback(Optional[Callable]): Callable to override type inference when reflecting columns.
+            Argument is a single sqlalchemy data type (`TypeEngine` instance) and it should return another sqlalchemy data type, or `None` (type will be inferred from data)
     Returns:
+
         Iterable[DltResource]: A list of DLT resources for each table to be loaded.
     """
     reflection_level = validate_reflection_level(reflection_level, backend)
@@ -124,6 +127,7 @@ def sql_table(
     defer_table_reflect: Optional[bool] = dlt.config.value,
     table_adapter_callback: Callable[[Table], None] = None,
     backend_kwargs: Dict[str, Any] = None,
+    type_conversion_callback: Optional[TTypeConversionCallback] = None,
 ) -> DltResource:
     """
     A dlt resource which loads data from an SQL database table using SQLAlchemy.
@@ -146,6 +150,8 @@ def sql_table(
             on dlt 0.4.4 and later
         table_adapter_callback: (Callable): Receives each reflected table. May be used to modify the list of columns that will be selected.
         backend_kwargs (**kwargs): kwargs passed to table backend ie. "conn" is used to pass specialized connection string to connectorx.
+        type_conversion_callback(Optional[Callable]): Callable to override type inference when reflecting columns.
+            Argument is a single sqlalchemy data type (`TypeEngine` instance) and it should return another sqlalchemy data type, or `None` (type will be inferred from data)
 
     Returns:
         DltResource: The dlt resource for loading data from the SQL database table.
@@ -166,7 +172,7 @@ def sql_table(
         table_rows,
         name=table_obj.name,
         primary_key=get_primary_key(table_obj),
-        columns=table_to_columns(table_obj, reflection_level),
+        columns=table_to_columns(table_obj, reflection_level, type_conversion_callback),
     )(
         engine,
         table_obj,
@@ -177,4 +183,5 @@ def sql_table(
         defer_table_reflect=defer_table_reflect,
         table_adapter_callback=table_adapter_callback,
         backend_kwargs=backend_kwargs,
+        type_conversion_callback=type_conversion_callback,
     )

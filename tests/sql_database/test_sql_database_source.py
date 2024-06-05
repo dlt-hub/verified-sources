@@ -435,7 +435,7 @@ def test_extract_without_pipeline(
 @pytest.mark.parametrize("reflection_level", ["minimal", "full", "full_with_precision"])
 @pytest.mark.parametrize("with_defer", [False, True])
 @pytest.mark.parametrize("standalone_resource", [True, False])
-def test_source_reflection_levels(
+def test_reflection_levels(
     sql_source_db: SQLAlchemySourceDB,
     backend: TableBackend,
     reflection_level: ReflectionLevel,
@@ -528,6 +528,46 @@ def test_source_reflection_levels(
     elif reflection_level == "full_with_precision":
         # Columns have data type and precision scale set
         assert_precision_columns(schema_cols, backend, False)
+
+
+@pytest.mark.parametrize("backend", ["sqlalchemy", "pyarrow", "pandas", "connectorx"])
+@pytest.mark.parametrize("standalone_resource", [True, False])
+def test_type_conversion_callback(
+    sql_source_db: SQLAlchemySourceDB, backend: TableBackend, standalone_resource: bool
+) -> None:
+    def conversion_callback(t):
+        if isinstance(t, sa.JSON):
+            return sa.Text
+        elif isinstance(t, sa.Double):
+            return sa.BIGINT
+        return t
+
+    common_kwargs = dict(
+        credentials=sql_source_db.credentials,
+        schema=sql_source_db.schema,
+        backend=backend,
+        type_conversion_callback=conversion_callback,
+        reflection_level="full",
+    )
+
+    if standalone_resource:
+        source = sql_table(
+            table="has_precision",
+            **common_kwargs,  # type: ignore[arg-type]
+        )
+    else:
+        source = sql_database(  # type: ignore[assignment]
+            table_names=["has_precision"],
+            **common_kwargs,  # type: ignore[arg-type]
+        )
+
+    pipeline = make_pipeline("duckdb")
+    pipeline.extract(source)
+
+    schema = pipeline.default_schema
+    table = schema.tables["has_precision"]
+    assert table["columns"]["json_col"]["data_type"] == "text"
+    assert table["columns"]["float_col"]["data_type"] == "bigint"
 
 
 @pytest.mark.parametrize("backend", ["sqlalchemy", "pyarrow", "pandas", "connectorx"])

@@ -28,6 +28,7 @@ from .schema_types import (
     Table,
     SelectAny,
     ReflectionLevel,
+    TTypeConversionCallback,
 )
 
 from sqlalchemy import Table, create_engine
@@ -186,7 +187,7 @@ def table_rows(
     table_adapter_callback: Callable[[Table], None] = None,
     reflection_level: ReflectionLevel = "minimal",
     backend_kwargs: Dict[str, Any] = None,
-    type_conversion_callback=None,
+    type_conversion_callback: Optional[TTypeConversionCallback] = None,
 ) -> Iterator[TDataItem]:
     columns: TTableSchemaColumns = None
     if defer_table_reflect:
