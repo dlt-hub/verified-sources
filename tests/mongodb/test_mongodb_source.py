@@ -85,7 +85,10 @@ def test_nested_documents():
     ],
 )
 @pytest.mark.parametrize("destination_name", ALL_DESTINATIONS)
-def test_incremental(start, end, count1, count2, last_value_func, destination_name):
+@pytest.mark.parametrize("processor", [None, "arrow"])
+def test_incremental(
+    start, end, count1, count2, last_value_func, destination_name, processor
+):
     pipeline = dlt.pipeline(
         pipeline_name="mongodb_test",
         destination=destination_name,
@@ -104,6 +107,7 @@ def test_incremental(start, end, count1, count2, last_value_func, destination_na
                 last_value_func=last_value_func,
                 row_order="asc",
             ),
+            data_processor=processor,
         )
     )
     for i, c in enumerate(comments[1:], start=1):
@@ -146,15 +150,18 @@ def test_parallel_loading():
     assert len(st_records) == len(parallel_records)
 
 
+@pytest.mark.parametrize("processor", [None, "arrow"])
 @pytest.mark.parametrize("destination_name", ALL_DESTINATIONS)
-def test_limit(destination_name):
+def test_limit(destination_name, processor):
     pipeline = dlt.pipeline(
         pipeline_name="mongodb_test",
         destination=destination_name,
         dataset_name="mongodb_test_data",
         full_refresh=True,
     )
-    comments = mongodb_collection(collection="comments", limit=10)
+    comments = mongodb_collection(
+        collection="comments", limit=10, data_processor=processor
+    )
     pipeline.run(comments)
 
     table_counts = load_table_counts(pipeline, "comments")
@@ -198,8 +205,9 @@ def test_limit_warning(destination):
         )
 
 
+@pytest.mark.parametrize("processor", [None, "arrow"])
 @pytest.mark.parametrize("destination_name", ALL_DESTINATIONS)
-def test_limit_chunk_size(destination_name):
+def test_limit_chunk_size(destination_name, processor):
     pipeline = dlt.pipeline(
         pipeline_name="mongodb_test",
         destination=destination_name,
@@ -212,6 +220,7 @@ def test_limit_chunk_size(destination_name):
         parallel=True,
         chunk_size=2,
         incremental=dlt.sources.incremental("date"),
+        data_processor=processor,
     )
     pipeline.run(comments)
 
@@ -221,7 +230,8 @@ def test_limit_chunk_size(destination_name):
 
 @pytest.mark.parametrize("row_order", ["asc", "desc", None])
 @pytest.mark.parametrize("last_value_func", [min, max, lambda x: max(x)])
-def test_order(row_order, last_value_func):
+@pytest.mark.parametrize("processor", [None, "arrow"])
+def test_order(row_order, last_value_func, processor):
     comments = list(
         mongodb_collection(
             collection="comments",
@@ -231,6 +241,7 @@ def test_order(row_order, last_value_func):
                 last_value_func=last_value_func,
                 row_order=row_order,
             ),
+            data_processor=processor,
         )
     )
     for i, c in enumerate(comments[1:], start=1):

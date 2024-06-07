@@ -116,6 +116,37 @@ def load_entire_database(pipeline: Pipeline = None) -> LoadInfo:
     return info
 
 
+def load_collection_with_arrow(pipeline: Pipeline = None) -> LoadInfo:
+    """
+    Load a MongoDB collection, using Apache
+    Error as the data processor.
+    """
+    if pipeline is None:
+        # Create a pipeline
+        pipeline = dlt.pipeline(
+            pipeline_name="local_mongo",
+            destination="postgres",
+            dataset_name="mongo_select_incremental",
+            full_refresh=True,
+        )
+
+    # Configure the source to load data with Arrow
+    comments = mongodb_collection(
+        collection="comments",
+        incremental=dlt.sources.incremental(
+            "date",
+            initial_value=pendulum.DateTime(
+                2005, 1, 1, tzinfo=pendulum.timezone("UTC")
+            ),
+            end_value=pendulum.DateTime(2005, 6, 1, tzinfo=pendulum.timezone("UTC")),
+        ),
+        data_processor="arrow",
+    )
+
+    info = pipeline.run(comments)
+    return info
+
+
 if __name__ == "__main__":
     # Credentials for the sample database.
     # Load selected tables with different settings
@@ -125,3 +156,6 @@ if __name__ == "__main__":
     # Load all tables from the database.
     # Warning: The sample database is large
     # print(load_entire_database())
+
+    # Load data with Apache Arrow.
+    # print(load_collection_with_arrow())

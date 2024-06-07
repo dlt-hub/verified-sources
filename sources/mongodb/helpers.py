@@ -1,7 +1,7 @@
 """Mongo database source helpers"""
 
 from itertools import islice
-from typing import TYPE_CHECKING, Any, Dict, Iterator, List, Optional, Tuple
+from typing import TYPE_CHECKING, Any, Dict, Iterator, List, Literal, Optional, Tuple
 
 import dlt
 from bson.decimal128 import Decimal128
@@ -15,6 +15,10 @@ from pendulum import _datetime
 from pymongo import ASCENDING, DESCENDING, MongoClient
 from pymongo.collection import Collection
 from pymongo.cursor import Cursor
+
+from pymongoarrow.context import PyMongoArrowContext
+from pymongoarrow.lib import process_bson_stream
+
 
 if TYPE_CHECKING:
     TMongoClient = MongoClient[Any]
@@ -198,6 +202,42 @@ class CollectionLoaderParallel(CollectionLoader):
             yield document
 
 
+class CollectionArrowLoader(CollectionLoader):
+    """
+    Mongo DB collection loader, which uses
+    Apache Arrow for data processing.
+    """
+
+    def load_documents(self, limit: Optional[int] = None) -> Iterator[Any]:
+        """
+        Load documents from the collection in Apache Arrow format.
+
+        Args:
+            limit (Optional[int]): The number of documents to load.
+
+        Yields:
+            Iterator[Any]: An iterator of the loaded documents.
+        """
+        context = PyMongoArrowContext.from_schema(
+            None, codec_options=self.collection.codec_options
+        )
+
+        cursor = self.collection.find_raw_batches(
+            self._filter_op, batch_size=self.chunk_size
+        )
+        if self._sort_op:
+            cursor = cursor.sort(self._sort_op)
+
+        cursor = self._limit(cursor, limit)
+
+        for batch in cursor:
+            process_bson_stream(batch, context)
+
+            table = context.finish().to_pylist()
+
+            yield map_nested_in_place(convert_mongo_objs, table)
+
+
 def collection_documents(
     client: TMongoClient,
     collection: TCollection,
@@ -205,6 +245,7 @@ def collection_documents(
     parallel: bool = False,
     limit: Optional[int] = None,
     chunk_size: Optional[int] = 10000,
+    data_processor: Literal["arrow"] = None,
 ) -> Iterator[TDataItem]:
     """
     A DLT source which loads data from a Mongo database using PyMongo.
@@ -217,11 +258,19 @@ def collection_documents(
         parallel (bool): Option to enable parallel loading for the collection. Default is False.
         limit (Optional[int]): The maximum number of documents to load.
         chunk_size (Optional[int]): The number of documents to load in each batch.
+        data_processor (Literal["arrow"]): The data processor to use for loading.
+            Supported processors:
+                arrow - Apache Arrow
 
     Returns:
         Iterable[DltResource]: A list of DLT resources for each collection to be loaded.
     """
-    LoaderClass = CollectionLoaderParallel if parallel else CollectionLoader
+    if data_processor == "arrow":
+        LoaderClass = CollectionArrowLoader
+    elif parallel:
+        LoaderClass = CollectionLoaderParallel
+    else:
+        LoaderClass = CollectionLoader
 
     loader = LoaderClass(
         client, collection, incremental=incremental, chunk_size=chunk_size
