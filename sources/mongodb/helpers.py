@@ -16,8 +16,8 @@ from pymongo import ASCENDING, DESCENDING, MongoClient
 from pymongo.collection import Collection
 from pymongo.cursor import Cursor
 
-from pymongoarrow.context import PyMongoArrowContext
-from pymongoarrow.lib import process_bson_stream
+from pymongoarrow.context import PyMongoArrowContext  # type: ignore
+from pymongoarrow.lib import process_bson_stream  # type: ignore
 
 
 if TYPE_CHECKING:
@@ -226,9 +226,9 @@ class CollectionArrowLoader(CollectionLoader):
             self._filter_op, batch_size=self.chunk_size
         )
         if self._sort_op:
-            cursor = cursor.sort(self._sort_op)
+            cursor = cursor.sort(self._sort_op)  # type: ignore
 
-        cursor = self._limit(cursor, limit)
+        cursor = self._limit(cursor, limit)  # type: ignore
 
         for batch in cursor:
             process_bson_stream(batch, context)
