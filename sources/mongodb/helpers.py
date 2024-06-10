@@ -238,6 +238,37 @@ class CollectionArrowLoader(CollectionLoader):
             yield map_nested_in_place(convert_mongo_objs, table)
 
 
+class CollectionArrowLoaderParallel(CollectionLoaderParallel):
+    """
+    Mongo DB collection parallel loader, which uses
+    Apache Arrow for data processing.
+    """
+
+    def _get_cursor(self) -> TCursor:
+        cursor = self.collection.find_raw_batches(
+            filter=self._filter_op, batch_size=self.chunk_size
+        )
+        if self._sort_op:
+            cursor = cursor.sort(self._sort_op)
+
+        return cursor
+
+    @dlt.defer
+    def _run_batch(self, cursor: TCursor, batch: Dict[str, int]) -> TDataItem:
+        cursor = cursor.clone()
+
+        context = PyMongoArrowContext.from_schema(
+            None, codec_options=self.collection.codec_options
+        )
+
+        for batch in cursor.skip(batch["skip"]).limit(batch["limit"]):
+            process_bson_stream(batch, context)
+
+            table = context.finish().to_pylist()
+
+            yield map_nested_in_place(convert_mongo_objs, table)
+
+
 def collection_documents(
     client: TMongoClient,
     collection: TCollection,
@@ -265,12 +296,16 @@ def collection_documents(
     Returns:
         Iterable[DltResource]: A list of DLT resources for each collection to be loaded.
     """
-    if data_processor == "arrow":
-        LoaderClass = CollectionArrowLoader
-    elif parallel:
-        LoaderClass = CollectionLoaderParallel
+    if parallel:
+        if data_processor == "arrow":
+            LoaderClass = CollectionArrowLoaderParallel
+        else:
+            LoaderClass = CollectionLoaderParallel
     else:
-        LoaderClass = CollectionLoader
+        if data_processor == "arrow":
+            LoaderClass = CollectionArrowLoader
+        else:
+            LoaderClass = CollectionLoader
 
     loader = LoaderClass(
         client, collection, incremental=incremental, chunk_size=chunk_size

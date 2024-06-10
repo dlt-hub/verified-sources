@@ -10,7 +10,7 @@ from sources.mongodb_pipeline import (
     load_entire_database,
     load_select_collection_db,
     load_select_collection_db_filtered,
-    load_select_collection_db_items,
+    load_select_collection_db_items_parallel,
 )
 from tests.utils import ALL_DESTINATIONS, assert_load_info, load_table_counts
 
@@ -144,9 +144,12 @@ def test_incremental(
     assert load_info.loads_ids == []
 
 
-def test_parallel_loading():
-    st_records = load_select_collection_db_items(parallel=False)
-    parallel_records = load_select_collection_db_items(parallel=True)
+@pytest.mark.parametrize("processor", [None, "arrow"])
+def test_parallel_loading(processor):
+    st_records = load_select_collection_db_items_parallel(processor, parallel=False)
+    parallel_records = load_select_collection_db_items_parallel(
+        processor, parallel=True
+    )
     assert len(st_records) == len(parallel_records)
 
 

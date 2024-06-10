@@ -45,6 +45,18 @@ def load_select_collection_db_items(parallel: bool = False) -> TDataItems:
     return list(comments)
 
 
+def load_select_collection_db_items_parallel(
+    processor, parallel: bool = False
+) -> TDataItems:
+    comments = mongodb_collection(
+        incremental=dlt.sources.incremental("date"),
+        parallel=parallel,
+        data_processor=processor,
+        collection="comments",
+    )
+    return list(comments)
+
+
 def load_select_collection_db_filtered(pipeline: Pipeline = None) -> LoadInfo:
     """Use the mongodb source to reflect an entire database schema and load select tables from it.
 
