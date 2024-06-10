@@ -249,7 +249,7 @@ class CollectionArrowLoaderParallel(CollectionLoaderParallel):
             filter=self._filter_op, batch_size=self.chunk_size
         )
         if self._sort_op:
-            cursor = cursor.sort(self._sort_op)
+            cursor = cursor.sort(self._sort_op)  # type: ignore
 
         return cursor
 
@@ -298,14 +298,14 @@ def collection_documents(
     """
     if parallel:
         if data_processor == "arrow":
-            LoaderClass = CollectionArrowLoaderParallel
+            LoaderClass = CollectionArrowLoaderParallel  # type: ignore
         else:
-            LoaderClass = CollectionLoaderParallel
+            LoaderClass = CollectionLoaderParallel  # type: ignore
     else:
         if data_processor == "arrow":
-            LoaderClass = CollectionArrowLoader
+            LoaderClass = CollectionArrowLoader  # type: ignore
         else:
-            LoaderClass = CollectionLoader
+            LoaderClass = CollectionLoader  # type: ignore
 
     loader = LoaderClass(
         client, collection, incremental=incremental, chunk_size=chunk_size

@@ -1,4 +1,4 @@
-from typing import List
+from typing import Literal
 
 import dlt
 from dlt.common import pendulum
@@ -46,7 +46,7 @@ def load_select_collection_db_items(parallel: bool = False) -> TDataItems:
 
 
 def load_select_collection_db_items_parallel(
-    processor, parallel: bool = False
+    processor: Literal["arrow"], parallel: bool = False
 ) -> TDataItems:
     comments = mongodb_collection(
         incremental=dlt.sources.incremental("date"),
