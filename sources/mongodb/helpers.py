@@ -261,8 +261,8 @@ class CollectionArrowLoaderParallel(CollectionLoaderParallel):
             None, codec_options=self.collection.codec_options
         )
 
-        for batch in cursor.skip(batch["skip"]).limit(batch["limit"]):
-            process_bson_stream(batch, context)
+        for chunk in cursor.skip(batch["skip"]).limit(batch["limit"]):
+            process_bson_stream(chunk, context)
 
             table = context.finish().to_pylist()
 
