@@ -303,9 +303,9 @@ def collection_documents(
             LoaderClass = CollectionLoaderParallel
     else:
         if data_processor == "arrow":
-            LoaderClass = CollectionArrowLoader
+            LoaderClass = CollectionArrowLoader  # type: ignore
         else:
-            LoaderClass = CollectionLoader  # type: ignore
+            LoaderClass = CollectionLoader
 
     loader = LoaderClass(
         client, collection, incremental=incremental, chunk_size=chunk_size
