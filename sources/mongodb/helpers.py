@@ -298,12 +298,12 @@ def collection_documents(
     """
     if parallel:
         if data_processor == "arrow":
-            LoaderClass = CollectionArrowLoaderParallel  # type: ignore
+            LoaderClass = CollectionArrowLoaderParallel
         else:
-            LoaderClass = CollectionLoaderParallel  # type: ignore
+            LoaderClass = CollectionLoaderParallel
     else:
         if data_processor == "arrow":
-            LoaderClass = CollectionArrowLoader  # type: ignore
+            LoaderClass = CollectionArrowLoader
         else:
             LoaderClass = CollectionLoader  # type: ignore
 
