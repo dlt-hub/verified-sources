@@ -1,5 +1,6 @@
 from typing import (
     Any,
+    Callable,
     Dict,
     List,
     Literal,
@@ -243,9 +244,9 @@ class ResourceBase(TypedDict, total=False):
     table_format: Optional[TTableHintTemplate[TTableFormat]]
     selected: Optional[bool]
     parallelized: Optional[bool]
-    filter: Optional[Any]
+    filter: Optional[Callable]
     exclude_columns: Optional[List[str]]
-    transform: Optional[Any]
+    transform: Optional[Callable]
 
 
 class EndpointResourceBase(ResourceBase, total=False):
