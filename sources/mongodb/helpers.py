@@ -3,6 +3,7 @@
 from itertools import islice
 from typing import TYPE_CHECKING, Any, Dict, Iterator, List, Literal, Optional, Tuple
 
+import bson
 import dlt
 from bson.decimal128 import Decimal128
 from bson.objectid import ObjectId
@@ -12,10 +13,12 @@ from dlt.common.time import ensure_pendulum_datetime
 from dlt.common.typing import TDataItem
 from dlt.common.utils import map_nested_in_place
 from pendulum import _datetime
+import pyarrow
 from pymongo import ASCENDING, DESCENDING, MongoClient
 from pymongo.collection import Collection
 from pymongo.cursor import Cursor
 
+import pymongoarrow
 from pymongoarrow.context import PyMongoArrowContext  # type: ignore
 from pymongoarrow.lib import process_bson_stream  # type: ignore
 
@@ -233,9 +236,17 @@ class CollectionArrowLoader(CollectionLoader):
         for batch in cursor:
             process_bson_stream(batch, context)
 
-            table = context.finish().to_pylist()
+            table = context.finish()
+            new_schema = table.schema
+            for i, field in enumerate(table.schema):
+                if pymongoarrow.types._is_objectid(field.type):
+                    new_schema = new_schema.set(
+                        i, pyarrow.field(field.name, pyarrow.binary())
+                    )
 
-            yield map_nested_in_place(convert_mongo_objs, table)
+            table = table.cast(new_schema)
+
+            yield table
 
 
 class CollectionArrowLoaderParallel(CollectionLoaderParallel):
