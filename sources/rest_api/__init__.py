@@ -211,7 +211,7 @@ def create_resources(
         request_params = endpoint_config.get("params", {})
         request_json = endpoint_config.get("json", None)
         paginator = create_paginator(endpoint_config.get("paginator"))
-        row_filter = endpoint_resource.pop("filter", None)
+        row_filter = endpoint_resource.pop("row_filter", None)
         transform = endpoint_resource.pop("transform", None)
         exclude_columns = endpoint_resource.pop("exclude_columns", [])
 
@@ -261,8 +261,8 @@ def create_resources(
                 transform: Any = transform,
                 exclude_columns: List[str] = exclude_columns,
             ) -> Generator[Any, None, None]:
-                def exclude_elements(item: Any, exclude_columns: List[str]) -> Any:
-                    for key in exclude_columns:
+                def exclude_elements(item: Any) -> Any:
+                    for key in exclude_columns:  # noqa: B023
                         del item[key]
                     return item
 
@@ -284,7 +284,7 @@ def create_resources(
                         map(transform, filtered_page) if transform else filtered_page
                     )
                     final_page = (
-                        map(exclude_elements, transformed_page, exclude_columns)
+                        map(exclude_elements, transformed_page)
                         if exclude_elements
                         else transformed_page
                     )
