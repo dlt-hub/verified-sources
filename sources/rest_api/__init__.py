@@ -261,7 +261,7 @@ def create_resources(
                 transform: Any = transform,
                 exclude_columns: List[str] = exclude_columns,
             ) -> Generator[Any, None, None]:
-                def exclude_elements(item: Any) -> Any:
+                def exclude_elements(item: Any, exclude_columns: List[str]) -> Any:
                     for key in exclude_columns:
                         del item[key]
                     return item
@@ -284,7 +284,7 @@ def create_resources(
                         map(transform, filtered_page) if transform else filtered_page
                     )
                     final_page = (
-                        map(exclude_elements, transformed_page)
+                        map(exclude_elements, transformed_page, exclude_columns)
                         if exclude_elements
                         else transformed_page
                     )

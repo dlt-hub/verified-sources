@@ -244,7 +244,7 @@ class ResourceBase(TypedDict, total=False):
     table_format: Optional[TTableHintTemplate[TTableFormat]]
     selected: Optional[bool]
     parallelized: Optional[bool]
-    filter: Optional[Callable[[Any], None]]
+    row_filter: Optional[Callable[[Any], None]]
     exclude_columns: Optional[List[str]]
     transform: Optional[Callable[[Any], None]]
 
