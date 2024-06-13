@@ -1,4 +1,14 @@
-from typing import Optional, Any, Sequence, Type, TYPE_CHECKING, Literal, List, Callable, Union
+from typing import (
+    Optional,
+    Any,
+    Sequence,
+    Type,
+    TYPE_CHECKING,
+    Literal,
+    List,
+    Callable,
+    Union,
+)
 from typing_extensions import TypeAlias
 from sqlalchemy import Table, Column
 from sqlalchemy.engine import Row
@@ -24,7 +34,8 @@ else:
 
 
 TTypeConversionCallback = Callable[
-    [sqltypes.TypeEngine[Any]], Optional[Union[sqltypes.TypeEngine[Any], Type[sqltypes.TypeEngine[Any]]]]
+    [sqltypes.TypeEngine[Any]],
+    Optional[Union[sqltypes.TypeEngine[Any], Type[sqltypes.TypeEngine[Any]]]],
 ]
 
 
@@ -41,6 +52,7 @@ def sqla_col_to_column_schema(
     col: TColumnSchema = {
         "name": sql_col.name,
         "nullable": sql_col.nullable,
+        "data_type": None,
     }
     if reflection_level == "minimal":
         return col
@@ -56,7 +68,7 @@ def sqla_col_to_column_schema(
 
     if sql_t is None:
         # Column ignored by callback
-        return None
+        return col
 
     add_precision = reflection_level == "full_with_precision"
 
@@ -104,10 +116,8 @@ def sqla_col_to_column_schema(
         logger.warning(
             f"A column with name {sql_col.name} contains unknown data type {sql_t} which cannot be mapped to `dlt` data type. When using sqlalchemy backend such data will be passed to the normalizer. In case of `pyarrow` backend such data will be ignored. In case of other backends, the behavior is backend-specific."
         )
-        col = None
-    if col:
-        return {key: value for key, value in col.items() if value is not None}  # type: ignore[return-value]
-    return None
+
+    return {key: value for key, value in col.items() if value is not None}  # type: ignore[return-value]
 
 
 def get_primary_key(table: Table) -> Optional[List[str]]:
@@ -157,6 +167,7 @@ def columns_to_arrow(
                 nullable=schema_item.get("nullable", True),
             )
             for name, schema_item in columns_schema.items()
+            if schema_item.get("data_type") is not None
         ]
     )
 
@@ -168,6 +179,12 @@ def row_tuples_to_arrow(
     import numpy as np
 
     arrow_schema = columns_to_arrow(columns, tz=tz)
+
+    columns_list = list(columns.values())
+    included_columns_idx = [
+        idx for idx, col in enumerate(columns_list) if col.get("data_type")
+    ]
+    included_column_names = [columns_list[idx]["name"] for idx in included_columns_idx]
 
     try:
         from pandas._libs import lib
@@ -181,7 +198,10 @@ def row_tuples_to_arrow(
 
     columnar = {
         col: dat.ravel()
-        for col, dat in zip(columns, np.vsplit(pivoted_rows, len(columns)))
+        for col, dat in zip(
+            included_column_names,
+            np.vsplit(pivoted_rows[included_columns_idx], len(included_columns_idx)),
+        )
     }
     for idx in range(0, len(arrow_schema.names)):
         field = arrow_schema.field(idx)
