@@ -18,6 +18,7 @@ from .helpers import (
     SqlDatabaseTableConfiguration,
     SqlTableResourceConfiguration,
     validate_reflection_level,
+    _detect_precision_hints_deprecated,
 )
 from .schema_types import (
     table_to_columns,
@@ -35,6 +36,7 @@ def sql_database(
     table_names: Optional[List[str]] = dlt.config.value,
     chunk_size: int = 50000,
     backend: TableBackend = "sqlalchemy",
+    detect_precision_hints: Optional[bool] = dlt.config.value,
     reflection_level: Optional[ReflectionLevel] = dlt.config.value,
     defer_table_reflect: Optional[bool] = dlt.config.value,
     table_adapter_callback: Callable[[Table], None] = None,
@@ -69,7 +71,13 @@ def sql_database(
 
         Iterable[DltResource]: A list of DLT resources for each table to be loaded.
     """
-    reflection_level = validate_reflection_level(reflection_level, backend)
+    # detect precision hints is deprecated
+    _detect_precision_hints_deprecated(detect_precision_hints)
+
+    if detect_precision_hints:
+        reflection_level = "full_with_precision"
+    else:
+        reflection_level = validate_reflection_level(reflection_level, backend)
 
     # set up alchemy engine
     engine = engine_from_credentials(credentials)
@@ -123,6 +131,7 @@ def sql_table(
     incremental: Optional[dlt.sources.incremental[Any]] = None,
     chunk_size: int = 1000,
     backend: TableBackend = "sqlalchemy",
+    detect_precision_hints: Optional[bool] = dlt.config.value,
     reflection_level: Optional[ReflectionLevel] = dlt.config.value,
     defer_table_reflect: Optional[bool] = dlt.config.value,
     table_adapter_callback: Callable[[Table], None] = None,
@@ -156,7 +165,12 @@ def sql_table(
     Returns:
         DltResource: The dlt resource for loading data from the SQL database table.
     """
-    reflection_level = validate_reflection_level(reflection_level, backend)
+    _detect_precision_hints_deprecated(detect_precision_hints)
+
+    if detect_precision_hints:
+        reflection_level = "full_with_precision"
+    else:
+        reflection_level = validate_reflection_level(reflection_level, backend)
 
     engine = engine_from_credentials(credentials)
     engine.execution_options(stream_results=True, max_row_buffer=2 * chunk_size)

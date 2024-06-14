@@ -1,5 +1,6 @@
 """SQL database source helpers"""
 
+import warnings
 from typing import (
     Callable,
     Any,
@@ -267,6 +268,20 @@ def validate_reflection_level(
                 )
             )
     return reflection_level or "minimal"
+
+
+def _detect_precision_hints_deprecated(value: Optional[bool]) -> None:
+    if value is None:
+        return
+
+    msg = "`detect_precision_hints` argument is deprecated and will be removed in a future release. "
+    if value:
+        msg += "Use `reflection_level='full_with_precision'` which has the same effect instead."
+
+    warnings.warn(
+        msg,
+        DeprecationWarning,
+    )
 
 
 @configspec
