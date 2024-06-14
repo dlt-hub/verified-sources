@@ -36,7 +36,10 @@ from dlt.common.pendulum import pendulum, timedelta
 
 class SQLAlchemySourceDB:
     def __init__(
-        self, credentials: ConnectionStringCredentials, schema: str = None
+        self,
+        credentials: ConnectionStringCredentials,
+        schema: str = None,
+        with_unsupported_types: bool = False,
     ) -> None:
         self.credentials = credentials
         self.database_url = credentials.to_native_representation()
@@ -44,6 +47,7 @@ class SQLAlchemySourceDB:
         self.engine = create_engine(self.database_url)
         self.metadata = MetaData(schema=self.schema)
         self.table_infos: Dict[str, TableInfo] = {}
+        self.with_unsupported_types = with_unsupported_types
 
     def create_schema(self) -> None:
         with self.engine.begin() as conn:
@@ -162,15 +166,16 @@ class SQLAlchemySourceDB:
         _make_precision_table("has_precision", False)
         _make_precision_table("has_precision_nullable", True)
 
-        Table(
-            "has_unsupported_types",
-            self.metadata,
-            Column("unsupported_daterange_1", DATERANGE, nullable=False),
-            Column("supported_text", Text, nullable=False),
-            Column("supported_int", Integer, nullable=False),
-            Column("unsupported_daterange_2", DATERANGE, nullable=False),
-            Column("supported_datetime", DateTime(timezone=True), nullable=False),
-        )
+        if self.with_unsupported_types:
+            Table(
+                "has_unsupported_types",
+                self.metadata,
+                Column("unsupported_daterange_1", DATERANGE, nullable=False),
+                Column("supported_text", Text, nullable=False),
+                Column("supported_int", Integer, nullable=False),
+                Column("unsupported_daterange_2", DATERANGE, nullable=False),
+                Column("supported_datetime", DateTime(timezone=True), nullable=False),
+            )
 
         self.metadata.create_all(bind=self.engine)
 
@@ -343,7 +348,8 @@ class SQLAlchemySourceDB:
         self._fake_chat_data()
         self._fake_precision_data("has_precision")
         self._fake_precision_data("has_precision_nullable", null_n=10)
-        self._fake_unsupported_data()
+        if self.with_unsupported_types:
+            self._fake_unsupported_data()
 
 
 class IncrementingDate:

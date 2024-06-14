@@ -897,7 +897,7 @@ def test_sql_database_include_view_in_table_names(
 @pytest.mark.parametrize("standalone_resource", [True, False])
 @pytest.mark.parametrize("reflection_level", ["minimal", "full", "full_with_precision"])
 def test_ignore_unsupported_types(
-    sql_source_db: SQLAlchemySourceDB,
+    sql_source_db_unsupported_types: SQLAlchemySourceDB,
     backend: TableBackend,
     reflection_level: ReflectionLevel,
     standalone_resource: bool,
@@ -906,8 +906,8 @@ def test_ignore_unsupported_types(
         pytest.skip("Arrow requires full reflection")
 
     common_kwargs = dict(
-        credentials=sql_source_db.credentials,
-        schema=sql_source_db.schema,
+        credentials=sql_source_db_unsupported_types.credentials,
+        schema=sql_source_db_unsupported_types.schema,
         reflection_level=reflection_level,
         backend=backend,
     )
@@ -945,7 +945,9 @@ def test_ignore_unsupported_types(
     pipeline.normalize()
     pipeline.load()
 
-    assert_row_counts(pipeline, sql_source_db, ["has_unsupported_types"])
+    assert_row_counts(
+        pipeline, sql_source_db_unsupported_types, ["has_unsupported_types"]
+    )
 
     schema = pipeline.default_schema
     assert "has_unsupported_types" in schema.tables
