@@ -2,6 +2,7 @@
 from typing import Any, Dict, Iterable, List, Optional, Type, Union
 from fsspec import AbstractFileSystem  # type: ignore
 
+import dlt
 from dlt.common.configuration import resolve_type
 from dlt.common.typing import TDataItem
 
@@ -38,14 +39,13 @@ def fsspec_from_resource(filesystem_instance: DltResource) -> AbstractFileSystem
         sections=("sources", filesystem_instance.section, filesystem_instance.name),
     )
     def _get_fsspec(
-        bucket_url: str, credentials: FileSystemCredentials
+        bucket_url: str, credentials: Optional[FileSystemCredentials]
     ) -> AbstractFileSystem:
-        print(bucket_url)
         return fsspec_filesystem(bucket_url, credentials)[0]
 
     return _get_fsspec(
-        filesystem_instance.explicit_args.get("bucket_url", None),
-        filesystem_instance.explicit_args.get("credentials", None),
+        filesystem_instance.explicit_args.get("bucket_url", dlt.config.value),
+        filesystem_instance.explicit_args.get("credentials", dlt.secrets.value),
     )
 
 
