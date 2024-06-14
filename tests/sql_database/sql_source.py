@@ -27,6 +27,7 @@ from sqlalchemy import (
     Time,
     JSON,
 )
+from sqlalchemy.dialects.postgresql import DATERANGE
 
 from dlt.common.utils import chunks, uniq_id
 from dlt.sources.credentials import ConnectionStringCredentials
@@ -161,6 +162,16 @@ class SQLAlchemySourceDB:
         _make_precision_table("has_precision", False)
         _make_precision_table("has_precision_nullable", True)
 
+        Table(
+            "has_unsupported_types",
+            self.metadata,
+            Column("unsupported_daterange_1", DATERANGE, nullable=False),
+            Column("supported_text", Text, nullable=False),
+            Column("supported_int", Integer, nullable=False),
+            Column("unsupported_daterange_2", DATERANGE, nullable=False),
+            Column("supported_datetime", DateTime(timezone=True), nullable=False),
+        )
+
         self.metadata.create_all(bind=self.engine)
 
         # Create a view
@@ -277,6 +288,7 @@ class SQLAlchemySourceDB:
         self.table_infos.setdefault(
             table_name, dict(row_count=n + null_n, is_view=False)
         )
+
         rows = [
             dict(
                 int_col=random.randrange(-2147483648, 2147483647),
@@ -308,10 +320,30 @@ class SQLAlchemySourceDB:
         self._fake_channels()
         self.fake_messages()
 
+    def _fake_unsupported_data(self, n: int = 100) -> None:
+        table = self.metadata.tables[f"{self.schema}.has_unsupported_types"]
+        self.table_infos.setdefault(
+            "has_unsupported_types", dict(row_count=n, is_view=False)
+        )
+
+        rows = [
+            dict(
+                unsupported_daterange_1="[2020-01-01, 2020-09-01)",
+                supported_text=mimesis.Text().word(),
+                supported_int=random.randint(0, 100),
+                unsupported_daterange_2="[2021-01-01, 2021-09-01)",
+                supported_datetime=mimesis.Datetime().datetime(timezone="UTC"),
+            )
+            for _ in range(n)
+        ]
+        with self.engine.begin() as conn:
+            conn.execute(table.insert().values(rows))
+
     def insert_data(self) -> None:
         self._fake_chat_data()
         self._fake_precision_data("has_precision")
         self._fake_precision_data("has_precision_nullable", null_n=10)
+        self._fake_unsupported_data()
 
 
 class IncrementingDate:

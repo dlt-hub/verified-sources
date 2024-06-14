@@ -52,7 +52,6 @@ def sqla_col_to_column_schema(
     col: TColumnSchema = {
         "name": sql_col.name,
         "nullable": sql_col.nullable,
-        "data_type": None,
     }
     if reflection_level == "minimal":
         return col

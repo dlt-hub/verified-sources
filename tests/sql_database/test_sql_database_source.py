@@ -4,10 +4,13 @@ import os
 from typing import Any, List, Optional, Set, Callable
 import humanize
 import sqlalchemy as sa
+import re
+from datetime import datetime  # noqa: I251
 
 import dlt
 from dlt.common.utils import uniq_id
 from dlt.common.schema.typing import TTableSchemaColumns, TColumnSchema, TSortOrder
+from dlt.common import json
 
 from dlt.sources import DltResource
 from dlt.sources.credentials import ConnectionStringCredentials
@@ -888,6 +891,92 @@ def test_sql_database_include_view_in_table_names(
     pipeline.run(source)
 
     assert_row_counts(pipeline, sql_source_db, ["app_user", "chat_message_view"])
+
+
+@pytest.mark.parametrize("backend", ["sqlalchemy", "pyarrow", "pandas"])
+@pytest.mark.parametrize("standalone_resource", [True, False])
+@pytest.mark.parametrize("reflection_level", ["minimal", "full", "full_with_precision"])
+def test_ignore_unsupported_types(
+    sql_source_db: SQLAlchemySourceDB,
+    backend: TableBackend,
+    reflection_level: ReflectionLevel,
+    standalone_resource: bool,
+) -> None:
+    if backend == "pyarrow" and reflection_level == "minimal":
+        pytest.skip("Arrow requires full reflection")
+
+    common_kwargs = dict(
+        credentials=sql_source_db.credentials,
+        schema=sql_source_db.schema,
+        reflection_level=reflection_level,
+        backend=backend,
+    )
+    if standalone_resource:
+
+        @dlt.source
+        def dummy_source():
+            yield sql_table(
+                **common_kwargs,  # type: ignore[arg-type]
+                table="has_unsupported_types",
+            )
+
+        source = dummy_source()
+        source.max_table_nesting = 0
+    else:
+        source = sql_database(
+            **common_kwargs,  # type: ignore[arg-type]
+            table_names=["has_unsupported_types"],
+        )
+        source.max_table_nesting = 0
+
+    pipeline = make_pipeline("duckdb")
+    pipeline.extract(source)
+
+    columns = pipeline.default_schema.tables["has_unsupported_types"]["columns"]
+
+    # unsupported columns have unknown data type here
+    assert "unsupported_daterange_1" in columns
+    if backend != "pandas":
+        assert "data_type" not in columns["unsupported_daterange_1"]
+    else:
+        # Pandas infers types in extract
+        assert columns["unsupported_daterange_1"]["data_type"] == "text"
+
+    pipeline.normalize()
+    pipeline.load()
+
+    assert_row_counts(pipeline, sql_source_db, ["has_unsupported_types"])
+
+    schema = pipeline.default_schema
+    assert "has_unsupported_types" in schema.tables
+    columns = schema.tables["has_unsupported_types"]["columns"]
+
+    rows = load_tables_to_dicts(pipeline, "has_unsupported_types")[
+        "has_unsupported_types"
+    ]
+
+    if backend == "pyarrow":
+        # arrow does not infer types
+        assert "data_type" not in columns["unsupported_daterange_1"]
+        # Column is not loaded
+        assert "unsupported_daterange_1" not in rows[0]
+        # Other columns are loaded
+        assert isinstance(rows[0]["supported_text"], str)
+        assert isinstance(rows[0]["supported_datetime"], datetime)
+        assert isinstance(rows[0]["supported_int"], int)
+    elif backend == "sqlalchemy":
+        # sqla value is a dataclass and is inferred as complex
+        assert columns["unsupported_daterange_1"]["data_type"] == "complex"
+        value = rows[0]["unsupported_daterange_1"]
+        assert set(json.loads(value).keys()) == {"lower", "upper", "bounds", "empty"}
+    elif backend == "pandas":
+        # pandas parses it as string
+        assert columns["unsupported_daterange_1"]["data_type"] == "text"
+        # Regex that matches daterange [2021-01-01, 2021-01-02)
+        assert re.match(
+            r"\[\d{4}-\d{2}-\d{2},\d{4}-\d{2}-\d{2}\)",
+            rows[0]["unsupported_daterange_1"],
+        )
 
 
 def assert_row_counts(
