@@ -244,9 +244,9 @@ class ResourceBase(TypedDict, total=False):
     table_format: Optional[TTableHintTemplate[TTableFormat]]
     selected: Optional[bool]
     parallelized: Optional[bool]
-    row_filter: Optional[Callable[[Any], None]]
-    exclude_columns: Optional[List[str]]
-    transform: Optional[Callable[[Any], None]]
+    row_filter: Optional[Callable]
+    exclude_columns: Optional[List[jsonpath.TJsonPath]]
+    transform: Optional[Callable]
 
 
 class EndpointResourceBase(ResourceBase, total=False):

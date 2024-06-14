@@ -211,8 +211,8 @@ def create_resources(
         request_params = endpoint_config.get("params", {})
         request_json = endpoint_config.get("json", None)
         paginator = create_paginator(endpoint_config.get("paginator"))
-        row_filter = endpoint_resource.pop("row_filter", None)
-        transform = endpoint_resource.pop("transform", None)
+        row_filter = endpoint_resource.pop("row_filter", lambda x: True)
+        transform = endpoint_resource.pop("transform", lambda x: x)
         exclude_columns = endpoint_resource.pop("exclude_columns", [])
 
         resolved_param: ResolvedParam = resolved_param_map[resource_name]
@@ -257,13 +257,15 @@ def create_resources(
                 client: RESTClient = client,
                 incremental_object: Optional[Incremental[Any]] = incremental_object,
                 incremental_param: IncrementalParam = incremental_param,
-                row_filter: Any = row_filter,
-                transform: Any = transform,
-                exclude_columns: List[str] = exclude_columns,
+                row_filter: Callable = row_filter,
+                transform: Callable = transform,
+                exclude_columns: List[jsonpath.TJsonPath] = exclude_columns,
             ) -> Generator[Any, None, None]:
-                def exclude_elements(item: Any) -> Any:
-                    for key in exclude_columns:  # noqa: B023
-                        del item[key]
+                def exclude_elements(item: Any):
+                    for exclude_path in exclude_columns:
+                        item = jsonpath.compile_path(exclude_path).filter(
+                            lambda x: True, item
+                        )
                     return item
 
                 if incremental_object:
@@ -279,17 +281,10 @@ def create_resources(
                     data_selector=data_selector,
                     hooks=hooks,
                 ):
-                    filtered_page = filter(row_filter, page) if row_filter else page
-                    transformed_page = (
-                        map(transform, filtered_page) if transform else filtered_page
+                    yield map(
+                        exclude_elements,
+                        map(transform, filter(row_filter, page)),
                     )
-                    final_page = (
-                        map(exclude_elements, transformed_page)
-                        if exclude_elements
-                        else transformed_page
-                    )
-
-                    yield final_page
 
             resources[resource_name] = dlt.resource(
                 paginate_resource,
