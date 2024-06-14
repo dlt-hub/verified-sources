@@ -257,12 +257,12 @@ def create_resources(
                 client: RESTClient = client,
                 incremental_object: Optional[Incremental[Any]] = incremental_object,
                 incremental_param: IncrementalParam = incremental_param,
-                row_filter: Callable = row_filter,
-                transform: Callable = transform,
+                row_filter: Callable[[Any], bool] = row_filter,
+                transform: Callable[[Any], Any] = transform,
                 exclude_columns: List[jsonpath.TJsonPath] = exclude_columns,
             ) -> Generator[Any, None, None]:
-                def exclude_elements(item: Any):
-                    for exclude_path in exclude_columns:
+                def exclude_elements(item: Any) -> Any:
+                    for exclude_path in exclude_columns:  # noqa: B023
                         item = jsonpath.compile_path(exclude_path).filter(
                             lambda x: True, item
                         )
