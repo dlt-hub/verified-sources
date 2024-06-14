@@ -1,15 +1,16 @@
-from typing import Optional, Any, Sequence, Type, TYPE_CHECKING, Literal, List
+from typing import Optional, Any, Sequence, Type, TYPE_CHECKING, Literal, List, Callable
 from typing_extensions import TypeAlias
 from sqlalchemy import Table, Column
 from sqlalchemy.engine import Row
 from sqlalchemy.sql import sqltypes, Select
 
 from dlt.common import logger
-from dlt.common.schema.typing import TColumnSchema, TTableSchemaColumns
+from dlt.common.schema.typing import TColumnSchema, TTableSchemaColumns, TDataType
 from dlt.common.configuration import with_config
 from dlt.common.destination import DestinationCapabilitiesContext
 
 ReflectionLevel = Literal["minimal", "full", "full_with_precision"]
+
 
 # optionally create generics with any so they can be imported by dlt importer
 if TYPE_CHECKING:
@@ -22,20 +23,40 @@ else:
     RowAny: TypeAlias = Type[Any]
 
 
+TTypeConversionCallback = Callable[
+    [sqltypes.TypeEngine[Any]], Optional[sqltypes.TypeEngine[Any]]
+]
+
+
 def sqla_col_to_column_schema(
-    sql_col: ColumnAny, reflection_level: ReflectionLevel
+    sql_col: ColumnAny,
+    reflection_level: ReflectionLevel,
+    type_conversion_callback: Optional[TTypeConversionCallback] = None,
 ) -> Optional[TColumnSchema]:
     """Infer dlt schema column type from an sqlalchemy type.
 
     If `add_precision` is set, precision and scale is inferred from that types that support it,
     such as numeric, varchar, int, bigint. Numeric (decimal) types have always precision added.
     """
-    sql_t = sql_col.type
-    col: TColumnSchema = {"name": sql_col.name}
+    col: TColumnSchema = {
+        "name": sql_col.name,
+        "nullable": sql_col.nullable,
+    }
     if reflection_level == "minimal":
         return col
 
-    col["nullable"] = sql_col.nullable
+    sql_t = sql_col.type
+
+    sql_t = type_conversion_callback(sql_t) if type_conversion_callback else sql_t
+    if type_conversion_callback:
+        sql_t = type_conversion_callback(sql_t)
+        # Check if sqla type class rather than instance is returned
+        if sql_t is not None and isinstance(sql_t, type):
+            sql_t = sql_t()
+
+    if sql_t is None:
+        # Column ignored by callback
+        return None
 
     add_precision = reflection_level == "full_with_precision"
 
@@ -89,24 +110,23 @@ def sqla_col_to_column_schema(
     return None
 
 
-def get_primary_key(
-    table: Table, reflection_level: ReflectionLevel
-) -> Optional[List[str]]:
+def get_primary_key(table: Table) -> Optional[List[str]]:
     """Create primary key or return None if no key defined"""
-    if reflection_level == "minimal":
-        return None
     primary_key = [c.name for c in table.primary_key]
     return primary_key if len(primary_key) > 0 else None
 
 
 def table_to_columns(
-    table: Table, reflection_level: ReflectionLevel = "full"
+    table: Table,
+    reflection_level: ReflectionLevel = "full",
+    type_conversion_fallback: Optional[TTypeConversionCallback] = None,
 ) -> TTableSchemaColumns:
     """Convert an sqlalchemy table to a dlt table schema."""
     return {
         col["name"]: col
         for col in (
-            sqla_col_to_column_schema(c, reflection_level) for c in table.columns
+            sqla_col_to_column_schema(c, reflection_level, type_conversion_fallback)
+            for c in table.columns
         )
         if col is not None
     }

@@ -1,7 +1,7 @@
 from copy import deepcopy
 import pytest
 import os
-from typing import Any, List, Optional, Set
+from typing import Any, List, Optional, Set, Callable
 import humanize
 import sqlalchemy as sa
 
@@ -49,16 +49,32 @@ def test_pass_engine_credentials(sql_source_db: SQLAlchemySourceDB) -> None:
     assert len(list(table)) == sql_source_db.table_infos["chat_message"]["row_count"]
 
 
+def convert_json_to_text(t):
+    if isinstance(t, sa.JSON):
+        return sa.Text
+    return t
+
+
+def default_test_callback(
+    destination_name: str, backend: TableBackend
+) -> Optional[Callable[[sa.types.TypeEngine], sa.types.TypeEngine]]:
+    if backend == "pyarrow" and destination_name == "bigquery":
+        return convert_json_to_text
+    return None
+
+
 @pytest.mark.parametrize("destination_name", ALL_DESTINATIONS)
 @pytest.mark.parametrize("backend", ["sqlalchemy", "pandas", "pyarrow", "connectorx"])
 def test_load_sql_schema_loads_all_tables(
     sql_source_db: SQLAlchemySourceDB, destination_name: str, backend: TableBackend
 ) -> None:
     pipeline = make_pipeline(destination_name)
+
     source = sql_database(
         credentials=sql_source_db.credentials,
         schema=sql_source_db.schema,
         backend=backend,
+        type_conversion_callback=default_test_callback(destination_name, backend),
     )
 
     assert (
@@ -86,6 +102,7 @@ def test_load_sql_schema_loads_all_tables_parallel(
         credentials=sql_source_db.credentials,
         schema=sql_source_db.schema,
         backend=backend,
+        type_conversion_callback=default_test_callback(destination_name, backend),
     ).parallelize()
     load_info = pipeline.run(source)
     print(
@@ -126,9 +143,9 @@ def test_load_sql_table_incremental(
     """Run pipeline twice. Insert more rows after first run
     and ensure only those rows are stored after the second run.
     """
-    os.environ[
-        "SOURCES__SQL_DATABASE__CHAT_MESSAGE__INCREMENTAL__CURSOR_PATH"
-    ] = "updated_at"
+    os.environ["SOURCES__SQL_DATABASE__CHAT_MESSAGE__INCREMENTAL__CURSOR_PATH"] = (
+        "updated_at"
+    )
 
     pipeline = make_pipeline(destination_name)
     tables = ["chat_message"]
@@ -380,9 +397,9 @@ def test_load_sql_table_source_select_columns(
         credentials=sql_source_db.credentials,
         schema=sql_source_db.schema,
         defer_table_reflect=defer_table_reflect,
-        table_names=list(sql_source_db.table_infos.keys())
-        if defer_table_reflect
-        else None,
+        table_names=(
+            list(sql_source_db.table_infos.keys()) if defer_table_reflect else None
+        ),
         table_adapter_callback=adapt,
         backend=backend,
     )
@@ -556,7 +573,7 @@ def test_deferred_reflect_in_source(
         credentials=sql_source_db.credentials,
         table_names=["has_precision", "chat_message"],
         schema=sql_source_db.schema,
-        detect_precision_hints=True,
+        reflection_level="full_with_precision",
         defer_table_reflect=True,
         backend=backend,
     )
@@ -597,7 +614,7 @@ def test_deferred_reflect_no_source_connect(backend: TableBackend) -> None:
         credentials="mysql+pymysql://test@test/test",
         table_names=["has_precision", "chat_message"],
         schema="schema",
-        detect_precision_hints=True,
+        reflection_level="full_with_precision",
         defer_table_reflect=True,
         backend=backend,
     )
@@ -615,7 +632,7 @@ def test_deferred_reflect_in_resource(
         credentials=sql_source_db.credentials,
         table="has_precision",
         schema=sql_source_db.schema,
-        detect_precision_hints=True,
+        reflection_level="full_with_precision",
         defer_table_reflect=True,
         backend=backend,
     )
@@ -653,7 +670,7 @@ def test_destination_caps_context(
         credentials=sql_source_db.credentials,
         table="has_precision",
         schema=sql_source_db.schema,
-        detect_precision_hints=True,
+        reflection_level="full_with_precision",
         defer_table_reflect=True,
         backend=backend,
     )
@@ -939,9 +956,11 @@ NULL_PRECISION_COLUMNS: List[TColumnSchema] = [
 
 # but keep decimal precision
 NO_PRECISION_COLUMNS: List[TColumnSchema] = [
-    {"name": column["name"], "data_type": column["data_type"]}  # type: ignore[misc]
-    if column["data_type"] != "decimal"
-    else dict(column)
+    (
+        {"name": column["name"], "data_type": column["data_type"]}  # type: ignore[misc]
+        if column["data_type"] != "decimal"
+        else dict(column)
+    )
     for column in PRECISION_COLUMNS
 ]
 

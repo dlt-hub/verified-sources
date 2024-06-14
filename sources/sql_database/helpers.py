@@ -184,8 +184,9 @@ def table_rows(
     incremental: Optional[dlt.sources.incremental[Any]] = None,
     defer_table_reflect: bool = False,
     table_adapter_callback: Callable[[Table], None] = None,
-    reflection_level: ReflectionLevel = "full",
+    reflection_level: ReflectionLevel = "minimal",
     backend_kwargs: Dict[str, Any] = None,
+    type_conversion_callback=None,
 ) -> Iterator[TDataItem]:
     columns: TTableSchemaColumns = None
     if defer_table_reflect:
@@ -194,24 +195,24 @@ def table_rows(
         )
         if table_adapter_callback:
             table_adapter_callback(table)
-        columns = table_to_columns(table, reflection_level)
+        columns = table_to_columns(table, reflection_level, type_conversion_callback)
 
         # set the primary_key in the incremental
         if incremental and incremental.primary_key is None:
-            primary_key = get_primary_key(table, reflection_level)
+            primary_key = get_primary_key(table)
             if primary_key is not None:
                 incremental.primary_key = primary_key
         # yield empty record to set hints
         yield dlt.mark.with_hints(
             [],
             dlt.mark.make_hints(
-                primary_key=get_primary_key(table, reflection_level),
+                primary_key=get_primary_key(table),
                 columns=columns,
             ),
         )
     else:
         # table was already reflected
-        columns = table_to_columns(table, reflection_level)
+        columns = table_to_columns(table, reflection_level, type_conversion_callback)
 
     loader = TableLoader(
         engine, backend, table, columns, incremental=incremental, chunk_size=chunk_size
@@ -249,6 +250,22 @@ def unwrap_json_connector_x(field: str) -> TDataItem:
         return table.set_column(col_index, table.schema.field(col_index), column)
 
     return _unwrap
+
+
+def validate_reflection_level(
+    reflection_level: Optional[ReflectionLevel], backend: TableBackend
+) -> ReflectionLevel:
+    if backend == "pyarrow":
+        if reflection_level is None:
+            return "full"
+        if reflection_level == "minimal":
+            raise ValueError(
+                (
+                    "pyarrow backend requires reflection_level to be 'full' or 'full_with_precision' to infer schema. "
+                    "Either set reflection_level or change to another backend."
+                )
+            )
+    return reflection_level or "minimal"
 
 
 @configspec

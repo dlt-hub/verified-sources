@@ -17,8 +17,14 @@ from .helpers import (
     TableBackend,
     SqlDatabaseTableConfiguration,
     SqlTableResourceConfiguration,
+    validate_reflection_level,
 )
-from .schema_types import table_to_columns, get_primary_key, ReflectionLevel
+from .schema_types import (
+    table_to_columns,
+    get_primary_key,
+    ReflectionLevel,
+    TTypeConversionCallback,
+)
 
 
 @dlt.source
@@ -29,11 +35,12 @@ def sql_database(
     table_names: Optional[List[str]] = dlt.config.value,
     chunk_size: int = 50000,
     backend: TableBackend = "sqlalchemy",
-    reflection_level: ReflectionLevel = "full",
+    reflection_level: Optional[ReflectionLevel] = dlt.config.value,
     defer_table_reflect: Optional[bool] = dlt.config.value,
     table_adapter_callback: Callable[[Table], None] = None,
     backend_kwargs: Dict[str, Any] = None,
     include_views: bool = False,
+    type_conversion_callback: Optional[TTypeConversionCallback] = None,
 ) -> Iterable[DltResource]:
     """
     A dlt source which loads data from an SQL database using SQLAlchemy.
@@ -59,6 +66,7 @@ def sql_database(
     Returns:
         Iterable[DltResource]: A list of DLT resources for each table to be loaded.
     """
+    reflection_level = validate_reflection_level(reflection_level, backend)
 
     # set up alchemy engine
     engine = engine_from_credentials(credentials)
@@ -83,9 +91,9 @@ def sql_database(
         yield dlt.resource(
             table_rows,
             name=table.name,
-            primary_key=get_primary_key(table, reflection_level),
+            primary_key=get_primary_key(table),
             spec=SqlDatabaseTableConfiguration,
-            columns=table_to_columns(table, reflection_level),
+            columns=table_to_columns(table, reflection_level, type_conversion_callback),
         )(
             engine,
             table,
@@ -95,6 +103,7 @@ def sql_database(
             defer_table_reflect=defer_table_reflect,
             table_adapter_callback=table_adapter_callback,
             backend_kwargs=backend_kwargs,
+            type_conversion_callback=type_conversion_callback,
         )
 
 
@@ -111,7 +120,7 @@ def sql_table(
     incremental: Optional[dlt.sources.incremental[Any]] = None,
     chunk_size: int = 1000,
     backend: TableBackend = "sqlalchemy",
-    reflection_level: ReflectionLevel = "full",
+    reflection_level: Optional[ReflectionLevel] = dlt.config.value,
     defer_table_reflect: Optional[bool] = dlt.config.value,
     table_adapter_callback: Callable[[Table], None] = None,
     backend_kwargs: Dict[str, Any] = None,
@@ -141,6 +150,8 @@ def sql_table(
     Returns:
         DltResource: The dlt resource for loading data from the SQL database table.
     """
+    reflection_level = validate_reflection_level(reflection_level, backend)
+
     engine = engine_from_credentials(credentials)
     engine.execution_options(stream_results=True, max_row_buffer=2 * chunk_size)
     metadata = metadata or MetaData(schema=schema)
@@ -154,7 +165,7 @@ def sql_table(
     return dlt.resource(
         table_rows,
         name=table_obj.name,
-        primary_key=get_primary_key(table_obj, reflection_level),
+        primary_key=get_primary_key(table_obj),
         columns=table_to_columns(table_obj, reflection_level),
     )(
         engine,
