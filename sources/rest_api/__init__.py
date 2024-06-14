@@ -255,6 +255,15 @@ def create_resources(
                 incremental_object: Optional[Incremental[Any]] = incremental_object,
                 incremental_param: IncrementalParam = incremental_param,
             ) -> Generator[Any, None, None]:
+
+                formatted_path = path.format(
+                    **{
+                        k: v
+                        for k, v in params.items()
+                        if isinstance(v, (int, float, str))
+                    }
+                )
+                
                 if incremental_object:
                     params[incremental_param.start] = incremental_object.last_value
                     if incremental_param.end:
@@ -262,7 +271,7 @@ def create_resources(
 
                 yield from client.paginate(
                     method=method,
-                    path=path,
+                    path=formatted_path,
                     params=params,
                     json=json,
                     paginator=paginator,
