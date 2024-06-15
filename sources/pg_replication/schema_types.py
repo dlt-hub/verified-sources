@@ -1,3 +1,4 @@
+from functools import lru_cache
 import json
 from typing import Optional, Any, Dict
 
@@ -5,8 +6,6 @@ from dlt.common import Decimal
 from dlt.common.data_types.typing import TDataType
 from dlt.common.data_types.type_helpers import coerce_value
 from dlt.common.schema.typing import TColumnSchema, TColumnType
-from dlt.destinations.impl.postgres import capabilities
-from dlt.destinations.impl.postgres.postgres import PostgresTypeMapper
 
 from .decoders import ColumnType
 
@@ -24,7 +23,7 @@ _DUMMY_VALS: Dict[TDataType, Any] = {
     "timestamp": "2000-01-01T00:00:00",
     "wei": 0,
 }
-"""Dummy values used to replace NULLs in NOT NULL colums in key-only delete records."""
+"""Dummy values used to replace NULLs in NOT NULL columns in key-only delete records."""
 
 
 _PG_TYPES: Dict[int, str] = {
@@ -77,6 +76,14 @@ def _get_scale(type_id: int, atttypmod: int) -> Optional[int]:
     return None
 
 
+@lru_cache(maxsize=None)
+def _type_mapper() -> Any:
+    from dlt.destinations import postgres
+    from dlt.destinations.impl.postgres.postgres import PostgresTypeMapper
+
+    return PostgresTypeMapper(postgres().capabilities())
+
+
 def _to_dlt_column_type(type_id: int, atttypmod: int) -> TColumnType:
     """Converts postgres type OID to dlt column type.
 
@@ -85,8 +92,7 @@ def _to_dlt_column_type(type_id: int, atttypmod: int) -> TColumnType:
     pg_type = _PG_TYPES.get(type_id)
     precision = _get_precision(type_id, atttypmod)
     scale = _get_scale(type_id, atttypmod)
-    mapper = PostgresTypeMapper(capabilities())
-    return mapper.from_db_type(pg_type, precision, scale)
+    return _type_mapper().from_db_type(pg_type, precision, scale)  # type: ignore[no-any-return]
 
 
 def _to_dlt_column_schema(col: ColumnType) -> TColumnSchema:
