@@ -29,7 +29,7 @@ from .schema_types import (
     Table,
     SelectAny,
     ReflectionLevel,
-    TTypeConversionCallback,
+    TTypeAdapter,
 )
 
 from sqlalchemy import Table, create_engine
@@ -188,7 +188,7 @@ def table_rows(
     table_adapter_callback: Callable[[Table], None] = None,
     reflection_level: ReflectionLevel = "minimal",
     backend_kwargs: Dict[str, Any] = None,
-    type_conversion_callback: Optional[TTypeConversionCallback] = None,
+    type_adapter_callback: Optional[TTypeAdapter] = None,
 ) -> Iterator[TDataItem]:
     columns: TTableSchemaColumns = None
     if defer_table_reflect:
@@ -197,7 +197,7 @@ def table_rows(
         )
         if table_adapter_callback:
             table_adapter_callback(table)
-        columns = table_to_columns(table, reflection_level, type_conversion_callback)
+        columns = table_to_columns(table, reflection_level, type_adapter_callback)
 
         # set the primary_key in the incremental
         if incremental and incremental.primary_key is None:
@@ -214,7 +214,7 @@ def table_rows(
         )
     else:
         # table was already reflected
-        columns = table_to_columns(table, reflection_level, type_conversion_callback)
+        columns = table_to_columns(table, reflection_level, type_adapter_callback)
 
     loader = TableLoader(
         engine, backend, table, columns, incremental=incremental, chunk_size=chunk_size

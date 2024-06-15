@@ -33,7 +33,7 @@ else:
     RowAny: TypeAlias = Type[Any]
 
 
-TTypeConversionCallback = Callable[
+TTypeAdapter = Callable[
     [sqltypes.TypeEngine[Any]],
     Optional[Union[sqltypes.TypeEngine[Any], Type[sqltypes.TypeEngine[Any]]]],
 ]
@@ -42,7 +42,7 @@ TTypeConversionCallback = Callable[
 def sqla_col_to_column_schema(
     sql_col: ColumnAny,
     reflection_level: ReflectionLevel,
-    type_conversion_callback: Optional[TTypeConversionCallback] = None,
+    type_adapter_callback: Optional[TTypeAdapter] = None,
 ) -> Optional[TColumnSchema]:
     """Infer dlt schema column type from an sqlalchemy type.
 
@@ -58,9 +58,9 @@ def sqla_col_to_column_schema(
 
     sql_t = sql_col.type
 
-    sql_t = type_conversion_callback(sql_t) if type_conversion_callback else sql_t
-    if type_conversion_callback:
-        sql_t = type_conversion_callback(sql_t)
+    sql_t = type_adapter_callback(sql_t) if type_adapter_callback else sql_t
+    if type_adapter_callback:
+        sql_t = type_adapter_callback(sql_t)
         # Check if sqla type class rather than instance is returned
         if sql_t is not None and isinstance(sql_t, type):
             sql_t = sql_t()
@@ -128,7 +128,7 @@ def get_primary_key(table: Table) -> Optional[List[str]]:
 def table_to_columns(
     table: Table,
     reflection_level: ReflectionLevel = "full",
-    type_conversion_fallback: Optional[TTypeConversionCallback] = None,
+    type_conversion_fallback: Optional[TTypeAdapter] = None,
 ) -> TTableSchemaColumns:
     """Convert an sqlalchemy table to a dlt table schema."""
     return {
@@ -212,4 +212,4 @@ def row_tuples_to_arrow(
             )
             float_array = pa.array(columnar[field.name], type=pa.float64())
             columnar[field.name] = float_array.cast(field.type, safe=False)
-    return pa.Table.from_pydict(columnar, schema=arrow_schema)
+    return pa.Table.from_pydict(columnar)

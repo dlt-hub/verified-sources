@@ -4,6 +4,7 @@ import os
 from typing import Any, List, Optional, Set, Callable
 import humanize
 import sqlalchemy as sa
+from sqlalchemy.dialects.postgresql import DATERANGE
 import re
 from datetime import datetime  # noqa: I251
 
@@ -77,7 +78,7 @@ def test_load_sql_schema_loads_all_tables(
         credentials=sql_source_db.credentials,
         schema=sql_source_db.schema,
         backend=backend,
-        type_conversion_callback=default_test_callback(destination_name, backend),
+        type_adapter_callback=default_test_callback(destination_name, backend),
     )
 
     assert (
@@ -105,7 +106,7 @@ def test_load_sql_schema_loads_all_tables_parallel(
         credentials=sql_source_db.credentials,
         schema=sql_source_db.schema,
         backend=backend,
-        type_conversion_callback=default_test_callback(destination_name, backend),
+        type_adapter_callback=default_test_callback(destination_name, backend),
     ).parallelize()
     load_info = pipeline.run(source)
     print(
@@ -535,7 +536,7 @@ def test_reflection_levels(
 
 @pytest.mark.parametrize("backend", ["sqlalchemy", "pyarrow", "pandas", "connectorx"])
 @pytest.mark.parametrize("standalone_resource", [True, False])
-def test_type_conversion_callback(
+def test_type_adapter_callback(
     sql_source_db: SQLAlchemySourceDB, backend: TableBackend, standalone_resource: bool
 ) -> None:
     def conversion_callback(t):
@@ -549,7 +550,7 @@ def test_type_conversion_callback(
         credentials=sql_source_db.credentials,
         schema=sql_source_db.schema,
         backend=backend,
-        type_conversion_callback=conversion_callback,
+        type_adapter_callback=conversion_callback,
         reflection_level="full",
     )
 
@@ -896,13 +897,22 @@ def test_sql_database_include_view_in_table_names(
 @pytest.mark.parametrize("backend", ["sqlalchemy", "pyarrow", "pandas"])
 @pytest.mark.parametrize("standalone_resource", [True, False])
 @pytest.mark.parametrize("reflection_level", ["minimal", "full", "full_with_precision"])
-def test_ignore_unsupported_types(
+@pytest.mark.parametrize("type_adapter", [True, False])
+def test_infer_unsupported_types(
     sql_source_db_unsupported_types: SQLAlchemySourceDB,
     backend: TableBackend,
     reflection_level: ReflectionLevel,
     standalone_resource: bool,
+    type_adapter: bool,
 ) -> None:
-    if backend == "pyarrow" and reflection_level == "minimal":
+    def type_adapter_callback(t):
+        if isinstance(t, DATERANGE):
+            return sa.TEXT
+        return t
+
+    if backend == "pyarrow" and (
+        reflection_level == "minimal" or type_adapter
+    ):  # Arrow cannot load dataclass object
         pytest.skip("Arrow requires full reflection")
 
     common_kwargs = dict(
@@ -910,6 +920,7 @@ def test_ignore_unsupported_types(
         schema=sql_source_db_unsupported_types.schema,
         reflection_level=reflection_level,
         backend=backend,
+        type_adapter_callback=type_adapter_callback if type_adapter else None,
     )
     if standalone_resource:
 
@@ -936,10 +947,15 @@ def test_ignore_unsupported_types(
 
     # unsupported columns have unknown data type here
     assert "unsupported_daterange_1" in columns
-    if backend != "pandas":
-        assert "data_type" not in columns["unsupported_daterange_1"]
+
+    if not type_adapter or reflection_level == "minimal":
+        if backend != "pandas":
+            assert "data_type" not in columns["unsupported_daterange_1"]
+        else:
+            # Pandas infers types in extract
+            assert columns["unsupported_daterange_1"]["data_type"] == "text"
+
     else:
-        # Pandas infers types in extract
         assert columns["unsupported_daterange_1"]["data_type"] == "text"
 
     pipeline.normalize()
@@ -968,7 +984,10 @@ def test_ignore_unsupported_types(
         assert isinstance(rows[0]["supported_int"], int)
     elif backend == "sqlalchemy":
         # sqla value is a dataclass and is inferred as complex
-        assert columns["unsupported_daterange_1"]["data_type"] == "complex"
+        if type_adapter and reflection_level != "minimal":
+            assert columns["unsupported_daterange_1"]["data_type"] == "text"
+        else:
+            assert columns["unsupported_daterange_1"]["data_type"] == "complex"
         value = rows[0]["unsupported_daterange_1"]
         assert set(json.loads(value).keys()) == {"lower", "upper", "bounds", "empty"}
     elif backend == "pandas":
