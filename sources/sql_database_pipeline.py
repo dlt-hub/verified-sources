@@ -5,6 +5,9 @@ import dlt
 from dlt.common import pendulum
 from dlt.sources.credentials import ConnectionStringCredentials
 
+from sqlalchemy.sql.sqltypes import TypeEngine
+import sqlalchemy as sa
+
 from sql_database import sql_database, sql_table, Table
 
 
@@ -293,6 +296,30 @@ def test_pandas_backend_verbatim_decimals() -> None:
         # preserve full typing info. this will parse
         reflection_level="full_with_precision",
     ).with_resources("family", "genome")
+
+    info = pipeline.run(sql_alchemy_source)
+    print(info)
+
+
+def use_type_adapter() -> None:
+    """Example use of type adapter to coerce unknown data types"""
+    pipeline = dlt.pipeline(
+        pipeline_name="dummy",
+        destination="postgres",
+        dataset_name="dummy",
+    )
+
+    def type_adapter(sql_type: TypeEngine) -> TypeEngine:
+        if isinstance(sql_type, sa.ARRAY):
+            return sa.JSON()  # Load arrays as JSON
+        return sql_type
+
+    sql_alchemy_source = sql_database(
+        "postgresql://loader:loader@localhost:5432/dlt_data",
+        backend="pyarrow",
+        type_adapter_callback=type_adapter,
+        reflection_level="full_with_precision",
+    ).with_resources("table_with_array_column")
 
     info = pipeline.run(sql_alchemy_source)
     print(info)
