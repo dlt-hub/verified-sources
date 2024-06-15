@@ -1,12 +1,12 @@
 import sqlalchemy as sa
 import humanize
+from typing import Any
 
 import dlt
 from dlt.common import pendulum
 from dlt.sources.credentials import ConnectionStringCredentials
 
 from sqlalchemy.sql.sqltypes import TypeEngine
-import sqlalchemy as sa
 
 from sql_database import sql_database, sql_table, Table
 
@@ -309,7 +309,7 @@ def use_type_adapter() -> None:
         dataset_name="dummy",
     )
 
-    def type_adapter(sql_type: TypeEngine) -> TypeEngine:
+    def type_adapter(sql_type: TypeEngine[Any]) -> TypeEngine[Any]:
         if isinstance(sql_type, sa.ARRAY):
             return sa.JSON()  # Load arrays as JSON
         return sql_type
