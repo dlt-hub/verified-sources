@@ -906,13 +906,11 @@ def test_infer_unsupported_types(
     type_adapter: bool,
 ) -> None:
     def type_adapter_callback(t):
-        if isinstance(t, DATERANGE):
-            return sa.TEXT
+        if isinstance(t, sa.ARRAY):
+            return sa.JSON
         return t
 
-    if backend == "pyarrow" and (
-        reflection_level == "minimal" or type_adapter
-    ):  # Arrow cannot load dataclass object
+    if backend == "pyarrow" and reflection_level == "minimal":
         pytest.skip("Arrow requires full reflection")
 
     common_kwargs = dict(
@@ -948,14 +946,10 @@ def test_infer_unsupported_types(
     # unsupported columns have unknown data type here
     assert "unsupported_daterange_1" in columns
 
-    if not type_adapter or reflection_level == "minimal":
-        if backend != "pandas":
-            assert "data_type" not in columns["unsupported_daterange_1"]
-        else:
-            # Pandas infers types in extract
-            assert columns["unsupported_daterange_1"]["data_type"] == "text"
-
+    if backend != "pandas":
+        assert "data_type" not in columns["unsupported_daterange_1"]
     else:
+        # Pandas infers types in extract
         assert columns["unsupported_daterange_1"]["data_type"] == "text"
 
     pipeline.normalize()
@@ -978,16 +972,24 @@ def test_infer_unsupported_types(
         assert "data_type" not in columns["unsupported_daterange_1"]
         # Column is not loaded
         assert "unsupported_daterange_1" not in rows[0]
+        if not type_adapter:
+            # Column is not loaded
+            assert "unsupported_array_1" not in rows[0]
+            assert "data_type" not in columns["unsupported_array_1"]
+        else:
+            # Column is loaded
+            assert isinstance(json.loads(rows[0]["unsupported_array_1"]), list)
+            assert columns["unsupported_array_1"]["data_type"] == "complex"
         # Other columns are loaded
         assert isinstance(rows[0]["supported_text"], str)
         assert isinstance(rows[0]["supported_datetime"], datetime)
         assert isinstance(rows[0]["supported_int"], int)
     elif backend == "sqlalchemy":
         # sqla value is a dataclass and is inferred as complex
-        if type_adapter and reflection_level != "minimal":
-            assert columns["unsupported_daterange_1"]["data_type"] == "text"
-        else:
-            assert columns["unsupported_daterange_1"]["data_type"] == "complex"
+        assert columns["unsupported_daterange_1"]["data_type"] == "complex"
+
+        assert columns["unsupported_array_1"]["data_type"] == "complex"
+
         value = rows[0]["unsupported_daterange_1"]
         assert set(json.loads(value).keys()) == {"lower", "upper", "bounds", "empty"}
     elif backend == "pandas":
@@ -998,6 +1000,11 @@ def test_infer_unsupported_types(
             r"\[\d{4}-\d{2}-\d{2},\d{4}-\d{2}-\d{2}\)",
             rows[0]["unsupported_daterange_1"],
         )
+
+        if type_adapter and reflection_level != "minimal":
+            assert columns["unsupported_array_1"]["data_type"] == "complex"
+
+            assert isinstance(json.loads(rows[0]["unsupported_array_1"]), list)
 
 
 def assert_row_counts(

@@ -26,6 +26,7 @@ from sqlalchemy import (
     Date,
     Time,
     JSON,
+    ARRAY,
 )
 from sqlalchemy.dialects.postgresql import DATERANGE
 
@@ -173,7 +174,7 @@ class SQLAlchemySourceDB:
                 Column("unsupported_daterange_1", DATERANGE, nullable=False),
                 Column("supported_text", Text, nullable=False),
                 Column("supported_int", Integer, nullable=False),
-                Column("unsupported_daterange_2", DATERANGE, nullable=False),
+                Column("unsupported_array_1", ARRAY(Integer), nullable=False),
                 Column("supported_datetime", DateTime(timezone=True), nullable=False),
             )
 
@@ -336,7 +337,7 @@ class SQLAlchemySourceDB:
                 unsupported_daterange_1="[2020-01-01, 2020-09-01)",
                 supported_text=mimesis.Text().word(),
                 supported_int=random.randint(0, 100),
-                unsupported_daterange_2="[2021-01-01, 2021-09-01)",
+                unsupported_array_1=[1, 2, 3],
                 supported_datetime=mimesis.Datetime().datetime(timezone="UTC"),
             )
             for _ in range(n)
