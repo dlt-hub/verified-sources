@@ -58,9 +58,8 @@ def sqla_col_to_column_schema(
 
     sql_t = sql_col.type
 
-    sql_t = type_adapter_callback(sql_t) if type_adapter_callback else sql_t
     if type_adapter_callback:
-        sql_t = type_adapter_callback(sql_t)
+        sql_t = type_adapter_callback(sql_t)  # type: ignore[assignment]
         # Check if sqla type class rather than instance is returned
         if sql_t is not None and isinstance(sql_t, type):
             sql_t = sql_t()
