@@ -255,8 +255,8 @@ class CollectionArrowLoaderParallel(CollectionLoaderParallel):
 
     @dlt.defer
     def _run_batch(self, cursor: TCursor, batch: Dict[str, int]) -> TDataItem:
-        from pymongoarrow.context import PyMongoArrowContext  # type: ignore
-        from pymongoarrow.lib import process_bson_stream  # type: ignore
+        from pymongoarrow.context import PyMongoArrowContext
+        from pymongoarrow.lib import process_bson_stream
 
         cursor = cursor.clone()
 
@@ -303,12 +303,12 @@ def collection_documents(
         if data_item_format == "arrow":
             LoaderClass = CollectionArrowLoaderParallel
         elif data_item_format == "object":
-            LoaderClass = CollectionLoaderParallel
+            LoaderClass = CollectionLoaderParallel  # type: ignore
     else:
         if data_item_format == "arrow":
             LoaderClass = CollectionArrowLoader  # type: ignore
         elif data_item_format == "object":
-            LoaderClass = CollectionLoader
+            LoaderClass = CollectionLoader  # type: ignore
 
     loader = LoaderClass(
         client, collection, incremental=incremental, chunk_size=chunk_size
@@ -334,7 +334,7 @@ def convert_arrow_columns(table: Any) -> Any:
     Returns:
         pyarrow.lib.Table: The table with the columns converted.
     """
-    import pymongoarrow
+    import pymongoarrow  # type: ignore
     from dlt.common.libs.pyarrow import pyarrow
 
     for i, field in enumerate(table.schema):
