@@ -3,6 +3,7 @@
 from typing import Any, Iterable, List, Optional
 
 import dlt
+from dlt.common.data_writers import TDataItemFormat
 from dlt.sources import DltResource
 
 from .helpers import (
@@ -78,7 +79,7 @@ def mongodb_collection(
     parallel: Optional[bool] = False,
     limit: Optional[int] = None,
     chunk_size: Optional[int] = 10000,
-    data_processor: Optional[str] = None,
+    data_item_format: Optional[TDataItemFormat] = "object",
 ) -> Any:
     """
     A DLT source which loads a collection from a mongo database using PyMongo.
@@ -93,9 +94,10 @@ def mongodb_collection(
         parallel (Optional[bool]): Option to enable parallel loading for the collection. Default is False.
         limit (Optional[int]): The number of documents load.
         chunk_size (Optional[int]): The number of documents load in each batch.
-        data_processor (Literal["arrow"]): The data processor to use for loading.
-            Supported processors:
-                arrow - Apache Arrow
+        data_item_format (Optional[TDataItemFormat]): The data format to use for loading.
+            Supported formats:
+                object - Python objects (dicts, lists).
+                arrow - Apache Arrow tables.
 
     Returns:
         Iterable[DltResource]: A list of DLT resources for each collection to be loaded.
@@ -121,5 +123,5 @@ def mongodb_collection(
         parallel=parallel,
         limit=limit,
         chunk_size=chunk_size,
-        data_processor=data_processor,
+        data_item_format=data_item_format,
     )

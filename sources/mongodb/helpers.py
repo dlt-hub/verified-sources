@@ -3,24 +3,19 @@
 from itertools import islice
 from typing import TYPE_CHECKING, Any, Dict, Iterator, List, Literal, Optional, Tuple
 
-import bson
 import dlt
 from bson.decimal128 import Decimal128
 from bson.objectid import ObjectId
 from dlt.common import logger
 from dlt.common.configuration.specs import BaseConfiguration, configspec
+from dlt.common.data_writers import TDataItemFormat
 from dlt.common.time import ensure_pendulum_datetime
 from dlt.common.typing import TDataItem
 from dlt.common.utils import map_nested_in_place
 from pendulum import _datetime
-import pyarrow
 from pymongo import ASCENDING, DESCENDING, MongoClient
 from pymongo.collection import Collection
 from pymongo.cursor import Cursor
-
-import pymongoarrow
-from pymongoarrow.context import PyMongoArrowContext  # type: ignore
-from pymongoarrow.lib import process_bson_stream  # type: ignore
 
 
 if TYPE_CHECKING:
@@ -221,6 +216,9 @@ class CollectionArrowLoader(CollectionLoader):
         Yields:
             Iterator[Any]: An iterator of the loaded documents.
         """
+        from pymongoarrow.context import PyMongoArrowContext  # type: ignore
+        from pymongoarrow.lib import process_bson_stream  # type: ignore
+
         context = PyMongoArrowContext.from_schema(
             None, codec_options=self.collection.codec_options
         )
@@ -237,16 +235,7 @@ class CollectionArrowLoader(CollectionLoader):
             process_bson_stream(batch, context)
 
             table = context.finish()
-            new_schema = table.schema
-            for i, field in enumerate(table.schema):
-                if pymongoarrow.types._is_objectid(field.type):
-                    new_schema = new_schema.set(
-                        i, pyarrow.field(field.name, pyarrow.binary())
-                    )
-
-            table = table.cast(new_schema)
-
-            yield table
+            yield convert_arrow_columns(table)
 
 
 class CollectionArrowLoaderParallel(CollectionLoaderParallel):
@@ -266,6 +255,9 @@ class CollectionArrowLoaderParallel(CollectionLoaderParallel):
 
     @dlt.defer
     def _run_batch(self, cursor: TCursor, batch: Dict[str, int]) -> TDataItem:
+        from pymongoarrow.context import PyMongoArrowContext  # type: ignore
+        from pymongoarrow.lib import process_bson_stream  # type: ignore
+
         cursor = cursor.clone()
 
         context = PyMongoArrowContext.from_schema(
@@ -275,9 +267,8 @@ class CollectionArrowLoaderParallel(CollectionLoaderParallel):
         for chunk in cursor.skip(batch["skip"]).limit(batch["limit"]):
             process_bson_stream(chunk, context)
 
-            table = context.finish().to_pylist()
-
-            yield map_nested_in_place(convert_mongo_objs, table)
+            table = context.finish()
+            yield convert_arrow_columns(table)
 
 
 def collection_documents(
@@ -287,7 +278,7 @@ def collection_documents(
     parallel: bool = False,
     limit: Optional[int] = None,
     chunk_size: Optional[int] = 10000,
-    data_processor: Literal["arrow"] = None,
+    data_item_format: Optional[TDataItemFormat] = "object",
 ) -> Iterator[TDataItem]:
     """
     A DLT source which loads data from a Mongo database using PyMongo.
@@ -300,22 +291,23 @@ def collection_documents(
         parallel (bool): Option to enable parallel loading for the collection. Default is False.
         limit (Optional[int]): The maximum number of documents to load.
         chunk_size (Optional[int]): The number of documents to load in each batch.
-        data_processor (Literal["arrow"]): The data processor to use for loading.
-            Supported processors:
-                arrow - Apache Arrow
+        data_item_format (Optional[TDataItemFormat]): The data format to use for loading.
+            Supported formats:
+                object - Python objects (dicts, lists).
+                arrow - Apache Arrow tables.
 
     Returns:
         Iterable[DltResource]: A list of DLT resources for each collection to be loaded.
     """
     if parallel:
-        if data_processor == "arrow":
+        if data_item_format == "arrow":
             LoaderClass = CollectionArrowLoaderParallel
-        else:
+        elif data_item_format == "object":
             LoaderClass = CollectionLoaderParallel
     else:
-        if data_processor == "arrow":
+        if data_item_format == "arrow":
             LoaderClass = CollectionArrowLoader  # type: ignore
-        else:
+        elif data_item_format == "object":
             LoaderClass = CollectionLoader
 
     loader = LoaderClass(
@@ -331,6 +323,29 @@ def convert_mongo_objs(value: Any) -> Any:
     if isinstance(value, _datetime.datetime):
         return ensure_pendulum_datetime(value)
     return value
+
+
+def convert_arrow_columns(table: Any) -> Any:
+    """Convert the given table columns to Python types.
+
+    Args:
+        table (pyarrow.lib.Table): The table to convert.
+
+    Returns:
+        pyarrow.lib.Table: The table with the columns converted.
+    """
+    import pymongoarrow
+    from dlt.common.libs.pyarrow import pyarrow
+
+    for i, field in enumerate(table.schema):
+        if pymongoarrow.types._is_objectid(field.type):
+            col_values = [str(value) for value in table[field.name]]
+            table = table.set_column(
+                i,
+                pyarrow.field(field.name, pyarrow.string()),
+                pyarrow.array(col_values, type=pyarrow.string()),
+            )
+    return table
 
 
 def client_from_credentials(connection_url: str) -> TMongoClient:

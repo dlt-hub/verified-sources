@@ -1,7 +1,6 @@
-from typing import Literal
-
 import dlt
 from dlt.common import pendulum
+from dlt.common.data_writers import TDataItemFormat
 from dlt.common.pipeline import LoadInfo
 from dlt.common.typing import TDataItems
 from dlt.pipeline.pipeline import Pipeline
@@ -46,12 +45,12 @@ def load_select_collection_db_items(parallel: bool = False) -> TDataItems:
 
 
 def load_select_collection_db_items_parallel(
-    processor: Literal["arrow"], parallel: bool = False
+    data_item_format: TDataItemFormat, parallel: bool = False
 ) -> TDataItems:
     comments = mongodb_collection(
         incremental=dlt.sources.incremental("date"),
         parallel=parallel,
-        data_processor=processor,
+        data_item_format=data_item_format,
         collection="comments",
     )
     return list(comments)
@@ -152,7 +151,7 @@ def load_collection_with_arrow(pipeline: Pipeline = None) -> LoadInfo:
             ),
             end_value=pendulum.DateTime(2005, 6, 1, tzinfo=pendulum.timezone("UTC")),
         ),
-        data_processor="arrow",
+        data_item_format="arrow",
     )
 
     info = pipeline.run(comments)
