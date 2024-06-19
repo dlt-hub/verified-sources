@@ -21,11 +21,10 @@ from dlt.common.typing import TDataItem, TSortOrder
 
 from dlt.sources.credentials import ConnectionStringCredentials
 
+from .arrow_helpers import row_tuples_to_arrow
 from .schema_types import (
     table_to_columns,
     get_primary_key,
-    columns_to_arrow,
-    row_tuples_to_arrow,
     Table,
     SelectAny,
     ReflectionLevel,
