@@ -13,6 +13,7 @@ from typing_extensions import TypeAlias
 from sqlalchemy import Table, Column
 from sqlalchemy.engine import Row
 from sqlalchemy.sql import sqltypes, Select
+from sqlalchemy.sql.sqltypes import TypeEngine
 
 from dlt.common import logger
 from dlt.common.schema.typing import TColumnSchema, TTableSchemaColumns
@@ -25,15 +26,16 @@ if TYPE_CHECKING:
     SelectAny: TypeAlias = Select[Any]
     ColumnAny: TypeAlias = Column[Any]
     RowAny: TypeAlias = Row[Any]
+    TypeEngineAny = TypeEngine[Any]
 else:
     SelectAny: TypeAlias = Type[Any]
     ColumnAny: TypeAlias = Type[Any]
     RowAny: TypeAlias = Type[Any]
+    TypeEngineAny = Type[Any]
 
 
 TTypeAdapter = Callable[
-    [sqltypes.TypeEngine[Any]],
-    Optional[Union[sqltypes.TypeEngine[Any], Type[sqltypes.TypeEngine[Any]]]],
+    [TypeEngineAny], Optional[Union[TypeEngineAny, Type[TypeEngineAny]]]
 ]
 
 
