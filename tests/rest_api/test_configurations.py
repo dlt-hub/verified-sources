@@ -43,11 +43,9 @@ from dlt.sources.helpers.rest_client.paginators import (
     PageNumberPaginator,
 )
 from dlt.sources.helpers.rest_client.auth import (
-    AuthConfigBase,
     HttpBasicAuth,
     BearerTokenAuth,
     APIKeyAuth,
-    OAuthJWTAuth,
 )
 
 from .source_configs import (
@@ -571,8 +569,8 @@ def test_incremental_from_invalid_request_param():
         },
     }
     (incremental_config, incremental_param) = setup_incremental_object(request_params)
-    assert incremental_config == None
-    assert incremental_param == None
+    assert incremental_config is None
+    assert incremental_param is None
 
 
 def test_incremental_source_in_request_param():
