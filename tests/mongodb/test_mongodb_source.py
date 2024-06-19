@@ -1,4 +1,3 @@
-import datetime
 import json
 from unittest import mock
 
@@ -263,12 +262,12 @@ def test_python_types(destination_name):
         "field6": "text",
         "field7": [1, 2, 3],
         "field8": {"key": "value"},
-        "field9": datetime.datetime(2024, 1, 1, 0, 0, 0, tzinfo=datetime.timezone.utc),
+        "field9": DateTime(2024, 1, 1, 0, 0, 0, tzinfo=timezone("UTC")),
         "field10": "^foo",
         "field11": b"foo",
         "field12": "daad12312312312312312312",
         "field13": bson.code.Code("function() { return 1; }"),
-        "field14": datetime.datetime(1970, 1, 1, 0, 0, 1, tzinfo=timezone("UTC")),
+        "field14": DateTime(1970, 1, 1, 0, 0, 1, tzinfo=timezone("UTC")),
         "field15": "1.2",
         "field16": bytes("foo", "utf-8"),
     }.items():
