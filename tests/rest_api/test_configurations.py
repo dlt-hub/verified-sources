@@ -216,6 +216,11 @@ def test_bearer_token_fallback() -> None:
     assert auth.token == "secret"
 
 
+def test_error_message_invalid_auth_type() -> None:
+    with pytest.raises(ValueError) as e:
+        create_auth("non_existing_method")
+    assert str(e.value) == "Invalid authentication: non_existing_method. Available options: bearer, api_key, http_basic"
+
 def test_resource_expand() -> None:
     # convert str into name / path
     assert _make_endpoint_resource("path", {}) == {

@@ -129,7 +129,7 @@ def get_auth_class(auth_type: AuthType) -> Type[AuthConfigBase]:
     except KeyError:
         available_options = ", ".join(AUTH_MAP.keys())
         raise ValueError(
-            f"Invalid paginator: {auth_type}. "
+            f"Invalid authentication: {auth_type}. "
             f"Available options: {available_options}"
         )
 
