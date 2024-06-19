@@ -256,7 +256,7 @@ def convert_arrow_columns(table: Any) -> Any:
     Returns:
         pyarrow.lib.Table: The table with the columns converted.
     """
-    from pymongoarrow.types import _is_binary, _is_code, _is_decimal128, _is_objectid
+    from pymongoarrow.types import _is_binary, _is_code, _is_decimal128, _is_objectid  # type: ignore
     from dlt.common.libs.pyarrow import pyarrow
 
     for i, field in enumerate(table.schema):
