@@ -1,3 +1,4 @@
+import dlt.extract
 import pytest
 from copy import copy, deepcopy
 from typing import get_args
@@ -16,12 +17,14 @@ from sources.rest_api import rest_api_source, rest_api_resources
 from sources.rest_api.config_setup import (
     AUTH_MAP,
     PAGINATOR_MAP,
+    IncrementalParam,
     _bind_path_params,
     _setup_single_entity_endpoint,
     create_auth,
     create_paginator,
     _make_endpoint_resource,
     process_parent_data_item,
+    setup_incremental_object,
 )
 from sources.rest_api.typing import (
     AuthType,
@@ -540,3 +543,33 @@ def test_resource_schema() -> None:
     resource = resources[0]
     assert resource.name == "users"
     assert resources[1].name == "user"
+
+
+def test_incremental_from_request_param():
+    request_params = {
+        "foo": "bar",
+        "since": {
+            "type": "incremental",
+            "cursor_path": "updated_at",
+            "initial_value": "2024-01-01T00:00:00Z",
+        },
+    }
+    (incremental_config, incremental_param) = setup_incremental_object(request_params)
+    assert incremental_config == dlt.sources.incremental(
+        cursor_path="updated_at", initial_value="2024-01-01T00:00:00Z"
+    )
+    assert incremental_param == IncrementalParam(start="since", end=None)
+
+
+def test_incremental_source_in_request_param():
+    request_params = {
+        "foo": "bar",
+        "since": dlt.sources.incremental(
+            cursor_path="updated_at", initial_value="2024-01-01T00:00:00Z"
+        ),
+    }
+    (incremental_config, incremental_param) = setup_incremental_object(request_params)
+    assert incremental_config == dlt.sources.incremental(
+        cursor_path="updated_at", initial_value="2024-01-01T00:00:00Z"
+    )
+    assert incremental_param == IncrementalParam(start="since", end=None)
