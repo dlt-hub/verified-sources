@@ -1,10 +1,13 @@
+import datetime
 import json
 from unittest import mock
 
-import dlt
+import bson
+import pyarrow
 import pytest
 from pendulum import DateTime, timezone
 
+import dlt
 from sources.mongodb import mongodb, mongodb_collection
 from sources.mongodb_pipeline import (
     load_entire_database,
@@ -243,3 +246,80 @@ def test_order(row_order, last_value_func):
             last_value_func is max and row_order == "desc"
         ):
             assert c["date"] <= comments[i - 1]["date"]
+
+
+@pytest.mark.parametrize("destination_name", ALL_DESTINATIONS)
+def test_python_types(destination_name):
+    # test Python types
+    res = mongodb_collection(collection="types_test")
+    types = list(res)
+
+    for field, value in {
+        "field1": None,
+        "field2": True,
+        "field3": 1,
+        "field4": bson.int64.Int64(1),
+        "field5": 1.2,
+        "field6": "text",
+        "field7": [1, 2, 3],
+        "field8": {"key": "value"},
+        "field9": datetime.datetime(2024, 1, 1, 0, 0, 0, tzinfo=datetime.timezone.utc),
+        "field10": "^foo",
+        "field11": b"foo",
+        "field12": "daad12312312312312312312",
+        "field13": bson.code.Code("function() { return 1; }"),
+        "field14": datetime.datetime(1970, 1, 1, 0, 0, 1, tzinfo=timezone("UTC")),
+        "field15": "1.2",
+        "field16": bytes("foo", "utf-8"),
+    }.items():
+        assert types[0][field] == value
+
+    pipeline = dlt.pipeline(
+        pipeline_name="mongodb_test",
+        destination=destination_name,
+        dataset_name="mongodb_test_data",
+        full_refresh=True,
+    )
+    info = pipeline.run(res)
+    assert info.loads_ids != []
+
+
+@pytest.mark.parametrize("destination_name", ALL_DESTINATIONS)
+def test_arrow_types(destination_name):
+    # test Arrow types
+    res = mongodb_collection(collection="types_test", data_item_format="arrow")
+    types = list(res)[0]
+
+    for field, value in {
+        "field2": pyarrow.scalar(True),
+        "field3": pyarrow.scalar(1, type=pyarrow.int32()),
+        "field4": pyarrow.scalar(1),
+        "field5": pyarrow.scalar(1.2),
+        "field6": pyarrow.scalar("text"),
+        "field7": pyarrow.scalar([1, 2, 3], type=pyarrow.list_(pyarrow.int32())),
+        "field8": pyarrow.scalar({"key": "value"}),
+        "field9": pyarrow.scalar(DateTime(2024, 1, 1, 0, 0, 0)),
+        "field11": b"foo",
+        "field12": pyarrow.scalar("daad12312312312312312312"),
+        "field13": "function() { return 1; }",
+        "field15": "1.2",
+    }.items():
+
+        if field in ("field11", "field13", "field15"):
+            assert types[field][0].as_py() == value
+            continue
+
+        if field == "field9":
+            assert types[field][0].as_py() == value.as_py()
+            continue
+
+        assert types[field][0] == value
+
+    pipeline = dlt.pipeline(
+        pipeline_name="mongodb_test",
+        destination=destination_name,
+        dataset_name="mongodb_test_data",
+        full_refresh=True,
+    )
+    info = pipeline.run(res)
+    assert info.loads_ids != []

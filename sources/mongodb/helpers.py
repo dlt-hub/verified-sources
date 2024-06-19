@@ -6,12 +6,14 @@ from typing import TYPE_CHECKING, Any, Dict, Iterator, List, Optional, Tuple
 import dlt
 from bson.decimal128 import Decimal128
 from bson.objectid import ObjectId
+from bson.regex import Regex
+from bson.timestamp import Timestamp
 from dlt.common import logger
 from dlt.common.configuration.specs import BaseConfiguration, configspec
 from dlt.common.time import ensure_pendulum_datetime
 from dlt.common.typing import TDataItem
 from dlt.common.utils import map_nested_in_place
-from pendulum import _datetime
+from pendulum import _datetime, timezone
 from pymongo import ASCENDING, DESCENDING, MongoClient
 from pymongo.collection import Collection
 from pymongo.cursor import Cursor
@@ -235,7 +237,51 @@ def convert_mongo_objs(value: Any) -> Any:
         return str(value)
     if isinstance(value, _datetime.datetime):
         return ensure_pendulum_datetime(value)
+    if isinstance(value, Regex):
+        return value.try_compile().pattern
+    if isinstance(value, Timestamp):
+        date = value.as_datetime()
+        date = date.replace(tzinfo=timezone("UTC"))
+        return date
+
     return value
+
+
+def convert_arrow_columns(table: Any) -> Any:
+    """Convert the given table columns to Python types.
+
+    Args:
+        table (pyarrow.lib.Table): The table to convert.
+
+    Returns:
+        pyarrow.lib.Table: The table with the columns converted.
+    """
+    from pymongoarrow.types import _is_binary, _is_code, _is_decimal128, _is_objectid
+    from dlt.common.libs.pyarrow import pyarrow
+
+    for i, field in enumerate(table.schema):
+        if _is_objectid(field.type) or _is_decimal128(field.type):
+            col_values = [str(value) for value in table[field.name]]
+            table = table.set_column(
+                i,
+                pyarrow.field(field.name, pyarrow.string()),
+                pyarrow.array(col_values, type=pyarrow.string()),
+            )
+        else:
+            type_ = None
+            if _is_binary(field.type):
+                type_ = pyarrow.binary()
+            elif _is_code(field.type):
+                type_ = pyarrow.string()
+
+            if type_:
+                col_values = [value.as_py() for value in table[field.name]]
+                table = table.set_column(
+                    i,
+                    pyarrow.field(field.name, type_),
+                    pyarrow.array(col_values, type=type_),
+                )
+    return table
 
 
 def client_from_credentials(connection_url: str) -> TMongoClient:
