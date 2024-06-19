@@ -17,7 +17,6 @@ from .helpers import (
     TableBackend,
     SqlDatabaseTableConfiguration,
     SqlTableResourceConfiguration,
-    validate_reflection_level,
     _detect_precision_hints_deprecated,
 )
 from .schema_types import (
@@ -77,7 +76,7 @@ def sql_database(
     if detect_precision_hints:
         reflection_level = "full_with_precision"
     else:
-        reflection_level = validate_reflection_level(reflection_level, backend)
+        reflection_level = reflection_level or "minimal"
 
     # set up alchemy engine
     engine = engine_from_credentials(credentials)
@@ -170,7 +169,7 @@ def sql_table(
     if detect_precision_hints:
         reflection_level = "full_with_precision"
     else:
-        reflection_level = validate_reflection_level(reflection_level, backend)
+        reflection_level = reflection_level or "minimal"
 
     engine = engine_from_credentials(credentials)
     engine.execution_options(stream_results=True, max_row_buffer=2 * chunk_size)

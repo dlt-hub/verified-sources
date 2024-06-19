@@ -253,22 +253,6 @@ def unwrap_json_connector_x(field: str) -> TDataItem:
     return _unwrap
 
 
-def validate_reflection_level(
-    reflection_level: Optional[ReflectionLevel], backend: TableBackend
-) -> ReflectionLevel:
-    if backend == "pyarrow":
-        if reflection_level is None:
-            return "full"
-        if reflection_level == "minimal":
-            raise ValueError(
-                (
-                    "pyarrow backend requires reflection_level to be 'full' or 'full_with_precision' to infer schema. "
-                    "Either set reflection_level or change to another backend."
-                )
-            )
-    return reflection_level or "minimal"
-
-
 def _detect_precision_hints_deprecated(value: Optional[bool]) -> None:
     if value is None:
         return

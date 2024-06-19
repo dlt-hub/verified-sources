@@ -1,9 +1,10 @@
-from typing import Any, Sequence
+from typing import Any, Sequence, TYPE_CHECKING
 
 from dlt.common.schema.typing import TTableSchemaColumns
 from dlt.common import logger
 from dlt.common.configuration import with_config
 from dlt.common.destination import DestinationCapabilitiesContext
+from dlt.common.data_types import py_type_to_sc_type, coerce_value
 
 from .schema_types import RowAny
 
@@ -41,16 +42,12 @@ def columns_to_arrow(
 def row_tuples_to_arrow(
     rows: Sequence[RowAny], columns: TTableSchemaColumns, tz: str
 ) -> Any:
+    """Converts the rows to an arrow table using the columns schema.
+    Columns missing `data_type` will be inferred from the row data.
+    Columns with object types not supported by arrow are excluded from the resulting table.
+    """
     from dlt.common.libs.pyarrow import pyarrow as pa
     import numpy as np
-
-    arrow_schema = columns_to_arrow(columns, tz=tz)
-
-    columns_list = list(columns.values())
-    included_columns_idx = [
-        idx for idx, col in enumerate(columns_list) if col.get("data_type")
-    ]
-    included_column_names = [columns_list[idx]["name"] for idx in included_columns_idx]
 
     try:
         from pandas._libs import lib
@@ -64,11 +61,21 @@ def row_tuples_to_arrow(
 
     columnar = {
         col: dat.ravel()
-        for col, dat in zip(
-            included_column_names,
-            np.vsplit(pivoted_rows[included_columns_idx], len(included_columns_idx)),
-        )
+        for col, dat in zip(columns, np.vsplit(pivoted_rows, len(columns)))
     }
+    columnar_known_types = {
+        col["name"]: columnar[col["name"]]
+        for col in columns.values()
+        if col.get("data_type") is not None
+    }
+    columnar_unknown_types = {
+        col["name"]: columnar[col["name"]]
+        for col in columns.values()
+        if col.get("data_type") is None
+    }
+
+    arrow_schema = columns_to_arrow(columns, tz=tz)
+
     for idx in range(0, len(arrow_schema.names)):
         field = arrow_schema.field(idx)
         py_type = type(rows[0][idx])
@@ -77,6 +84,39 @@ def row_tuples_to_arrow(
             logger.warning(
                 f"Field {field.name} was reflected as decimal type, but rows contains {py_type.__name__}. Additional cast is required which may slow down arrow table generation."
             )
-            float_array = pa.array(columnar[field.name], type=pa.float64())
-            columnar[field.name] = float_array.cast(field.type, safe=False)
-    return pa.Table.from_pydict(columnar, schema=arrow_schema)
+            float_array = pa.array(columnar_known_types[field.name], type=pa.float64())
+            columnar_known_types[field.name] = float_array.cast(field.type, safe=False)
+
+    # If there are unknown type columns, first create a table to infer their types
+    if columnar_unknown_types:
+        new_schema_fields = []
+        for key in list(columnar_unknown_types):
+            try:
+                parr = columnar_unknown_types[key] = pa.array(
+                    columnar_unknown_types[key]
+                )
+            except pa.ArrowInvalid as e:
+                logger.warning(
+                    f"Column {key} contains a data type which is not supported by pyarrow. This column will be ignored. Error: {e}"
+                )
+                del columnar_unknown_types[key]
+            else:
+                new_schema_fields.append(
+                    pa.field(
+                        key,
+                        parr.type,
+                        nullable=columns[key]["nullable"],
+                    )
+                )
+                columnar_known_types[key] = columnar_unknown_types[key]
+
+        # New schema
+        column_order = {name: idx for idx, name in enumerate(columns)}
+        arrow_schema = pa.schema(
+            sorted(
+                list(arrow_schema) + new_schema_fields,
+                key=lambda x: column_order[x.name],
+            )
+        )
+
+    return pa.Table.from_pydict(columnar_known_types, schema=arrow_schema)

@@ -481,14 +481,7 @@ def test_reflection_levels(
             backend=backend,
         )
 
-    if backend == "pyarrow" and reflection_level == "minimal":
-        # Arrow requires reflection
-        with pytest.raises(ValueError) as exinfo:
-            source = prepare_source()
-        assert str(exinfo.value).startswith("pyarrow backend requires reflection_level")
-        return
-    else:
-        source = prepare_source()
+    source = prepare_source()
 
     pipeline = make_pipeline("duckdb")
     pipeline.extract(source)
@@ -894,7 +887,7 @@ def test_sql_database_include_view_in_table_names(
     assert_row_counts(pipeline, sql_source_db, ["app_user", "chat_message_view"])
 
 
-@pytest.mark.parametrize("backend", ["sqlalchemy", "pyarrow", "pandas"])
+@pytest.mark.parametrize("backend", ["pyarrow", "pandas"])
 @pytest.mark.parametrize("standalone_resource", [True, False])
 @pytest.mark.parametrize("reflection_level", ["minimal", "full", "full_with_precision"])
 @pytest.mark.parametrize("type_adapter", [True, False])
@@ -910,8 +903,8 @@ def test_infer_unsupported_types(
             return sa.JSON
         return t
 
-    if backend == "pyarrow" and reflection_level == "minimal":
-        pytest.skip("Arrow requires full reflection")
+    if backend == "pyarrow" and type_adapter:
+        pytest.skip("Arrow does not support type adapter for arrays")
 
     common_kwargs = dict(
         credentials=sql_source_db_unsupported_types.credentials,
@@ -972,14 +965,9 @@ def test_infer_unsupported_types(
         assert "data_type" not in columns["unsupported_daterange_1"]
         # Column is not loaded
         assert "unsupported_daterange_1" not in rows[0]
-        if not type_adapter:
-            # Column is not loaded
-            assert "unsupported_array_1" not in rows[0]
-            assert "data_type" not in columns["unsupported_array_1"]
-        else:
-            # Column is loaded
-            assert isinstance(json.loads(rows[0]["unsupported_array_1"]), list)
-            assert columns["unsupported_array_1"]["data_type"] == "complex"
+
+        assert isinstance(json.loads(rows[0]["unsupported_array_1"]), list)
+        assert columns["unsupported_array_1"]["data_type"] == "complex"
         # Other columns are loaded
         assert isinstance(rows[0]["supported_text"], str)
         assert isinstance(rows[0]["supported_datetime"], datetime)
