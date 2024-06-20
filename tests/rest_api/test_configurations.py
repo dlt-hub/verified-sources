@@ -568,9 +568,10 @@ def test_incremental_from_invalid_request_param():
             "initial_value": "2024-01-01T00:00:00Z",
         },
     }
-    (incremental_config, incremental_param) = setup_incremental_object(request_params)
-    assert incremental_config is None
-    assert incremental_param is None
+    with pytest.raises(ValueError) as e:
+        setup_incremental_object(request_params)
+
+    assert e.match("Invalid param type: no_incremental.")
 
 
 def test_incremental_source_in_request_param():

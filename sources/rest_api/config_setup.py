@@ -41,7 +41,6 @@ from dlt.sources.helpers.rest_client.auth import (
     HttpBasicAuth,
     BearerTokenAuth,
     APIKeyAuth,
-    OAuthJWTAuth,
 )
 
 from .typing import (
@@ -52,8 +51,7 @@ from .typing import (
     IncrementalArgs,
     IncrementalConfig,
     PaginatorConfig,
-    ParamBindConfig,
-    ResolveParamConfig,
+    ParamBindType,
     ResolvedParam,
     ResponseAction,
     Endpoint,
@@ -78,6 +76,7 @@ AUTH_MAP: Dict[AuthType, Type[AuthConfigBase]] = {
     "http_basic": HttpBasicAuth,
 }
 
+PARAM_TYPES: List[ParamBindType] = ["incremental", "resolve"]
 
 class IncrementalParam(NamedTuple):
     start: str
@@ -163,6 +162,8 @@ def setup_incremental_object(
     for key, value in request_params.items():
         if isinstance(value, dlt.sources.incremental):
             return value, IncrementalParam(start=key, end=None)
+        if isinstance(value, dict) and value.get("type") not in PARAM_TYPES:
+            raise ValueError( f"Invalid param type: {value.get('type')}. Available options: {PARAM_TYPES}")
         if isinstance(value, dict) and value.get("type") == "incremental":
             config = exclude_keys(value, {"type"})
             # TODO: implement param type to bind incremental to
