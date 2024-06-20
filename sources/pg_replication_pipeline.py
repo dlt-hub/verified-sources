@@ -18,13 +18,13 @@ def replicate_single_table() -> None:
         pipeline_name="source_pipeline",
         destination="postgres",
         dataset_name="replicate_single_table",
-        full_refresh=True,
+        dev_mode=True,
     )
     dest_pl = dlt.pipeline(
         pipeline_name="pg_replication_pipeline",
         destination="duckdb",
         dataset_name="replicate_single_table",
-        full_refresh=True,
+        dev_mode=True,
     )
 
     # create table "my_source_table" in source to demonstrate replication
@@ -75,13 +75,13 @@ def replicate_with_initial_load() -> None:
         pipeline_name="source_pipeline",
         destination="postgres",
         dataset_name="replicate_with_initial_load",
-        full_refresh=True,
+        dev_mode=True,
     )
     dest_pl = dlt.pipeline(
         pipeline_name="pg_replication_pipeline",
         destination="duckdb",
         dataset_name="replicate_with_initial_load",
-        full_refresh=True,
+        dev_mode=True,
     )
 
     # create table "my_source_table" in source to demonstrate replication
@@ -128,13 +128,13 @@ def replicate_entire_schema() -> None:
         pipeline_name="source_pipeline",
         destination="postgres",
         dataset_name="replicate_entire_schema",
-        full_refresh=True,
+        dev_mode=True,
     )
     dest_pl = dlt.pipeline(
         pipeline_name="pg_replication_pipeline",
         destination="duckdb",
         dataset_name="replicate_entire_schema",
-        full_refresh=True,
+        dev_mode=True,
     )
 
     # create two source tables to demonstrate schema replication
@@ -192,13 +192,13 @@ def replicate_with_column_selection() -> None:
         pipeline_name="source_pipeline",
         destination="postgres",
         dataset_name="replicate_with_column_selection",
-        full_refresh=True,
+        dev_mode=True,
     )
     dest_pl = dlt.pipeline(
         pipeline_name="pg_replication_pipeline",
         destination="duckdb",
         dataset_name="replicate_with_column_selection",
-        full_refresh=True,
+        dev_mode=True,
     )
 
     # create two source tables to demonstrate schema replication
