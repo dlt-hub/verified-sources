@@ -29,12 +29,12 @@ from sources.rest_api.config_setup import (
 from sources.rest_api.typing import (
     AuthType,
     AuthTypeConfig,
-    Endpoint,
     EndpointResource,
     PaginatorType,
     PaginatorTypeConfig,
     RESTAPIConfig,
     ResolvedParam,
+    IncrementalConfig
 )
 from dlt.sources.helpers.rest_client.paginators import (
     HeaderLinkPaginator,
@@ -591,25 +591,16 @@ def test_incremental_source_in_request_param():
 
 def test_endpoint_config_incremental():
     config = {
-        "name": "posts",
-        "endpoint": {
-            "path": "posts",
-            "params": {
-                "limit": 100,
-            },
-            "paginator": "json_response",
             "incremental": {
                 "start_param": "since",
                 "end_param": "until",
                 "cursor_path": "updated_at",
                 "initial_value": "2024-01-25T11:21:28Z",
-            },
-        },
+            }
     }
-
-    endpoint_config = cast(Endpoint, config["endpoint"])
-    (incremental, incremental_param) = setup_incremental_object(
-        endpoint_config.get("params"),
-        endpoint_config.get("incremental"),
+    incremental_config = cast(IncrementalConfig, config.get("incremental"))
+    (_, incremental_param) = setup_incremental_object(
+        {},
+        incremental_config,
     )
     assert incremental_param == IncrementalParam(start="since", end="until")
