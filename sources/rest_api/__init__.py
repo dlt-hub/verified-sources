@@ -28,9 +28,12 @@ from dlt.sources.helpers.rest_client.typing import HTTPMethodBasic
 from .typing import (
     ClientConfig,
     ResolvedParam,
+    ResolveParamConfig,
     Endpoint,
     EndpointResource,
+    IncrementalParamConfig,
     RESTAPIConfig,
+    ParamBindType,
 )
 from .config_setup import (
     IncrementalParam,
@@ -222,7 +225,7 @@ def create_resources(
                 f"Resource {resource_name} has include_from_parent but is not "
                 "dependent on another resource"
             )
-
+        _validate_param_type(request_params)
         (
             incremental_object,
             incremental_param,
@@ -339,6 +342,19 @@ def create_resources(
             )
 
     return resources
+
+
+PARAM_TYPES: List[ParamBindType] = ["incremental", "resolve"]
+
+
+def _validate_param_type(
+    request_params: Dict[str, ResolveParamConfig | IncrementalParamConfig | Any] | None
+):
+    for _, value in request_params.items():
+        if isinstance(value, dict) and value.get("type") not in PARAM_TYPES:
+            raise ValueError(
+                f"Invalid param type: {value.get('type')}. Available options: {PARAM_TYPES}"
+            )
 
 
 # XXX: This is a workaround pass test_dlt_init.py

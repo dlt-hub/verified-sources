@@ -13,7 +13,7 @@ from dlt.sources.helpers.rest_client.paginators import (
     HeaderLinkPaginator,
 )
 
-from sources.rest_api import rest_api_source, rest_api_resources
+from sources.rest_api import rest_api_source, rest_api_resources, _validate_param_type
 from sources.rest_api.config_setup import (
     AUTH_MAP,
     PAGINATOR_MAP,
@@ -34,7 +34,7 @@ from sources.rest_api.typing import (
     PaginatorTypeConfig,
     RESTAPIConfig,
     ResolvedParam,
-    IncrementalConfig
+    IncrementalConfig,
 )
 from dlt.sources.helpers.rest_client.paginators import (
     HeaderLinkPaginator,
@@ -560,7 +560,7 @@ def test_incremental_from_request_param():
     assert incremental_param == IncrementalParam(start="since", end=None)
 
 
-def test_incremental_from_invalid_request_param():
+def test_invalid_incremental():
     request_params = {
         "foo": "bar",
         "since": {
@@ -570,7 +570,7 @@ def test_incremental_from_invalid_request_param():
         },
     }
     with pytest.raises(ValueError) as e:
-        setup_incremental_object(request_params)
+        _validate_param_type(request_params)
 
     assert e.match("Invalid param type: no_incremental.")
 
@@ -591,12 +591,12 @@ def test_incremental_source_in_request_param():
 
 def test_endpoint_config_incremental():
     config = {
-            "incremental": {
-                "start_param": "since",
-                "end_param": "until",
-                "cursor_path": "updated_at",
-                "initial_value": "2024-01-25T11:21:28Z",
-            }
+        "incremental": {
+            "start_param": "since",
+            "end_param": "until",
+            "cursor_path": "updated_at",
+            "initial_value": "2024-01-25T11:21:28Z",
+        }
     }
     incremental_config = cast(IncrementalConfig, config.get("incremental"))
     (_, incremental_param) = setup_incremental_object(
