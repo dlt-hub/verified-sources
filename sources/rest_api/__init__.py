@@ -46,6 +46,8 @@ from .config_setup import (
 )
 from .utils import check_connection, exclude_keys  # noqa: F401
 
+PARAM_TYPES: List[ParamBindType] = ["incremental", "resolve"]
+
 
 def rest_api_source(
     config: RESTAPIConfig,
@@ -342,9 +344,6 @@ def create_resources(
             )
 
     return resources
-
-
-PARAM_TYPES: List[ParamBindType] = ["incremental", "resolve"]
 
 
 def _validate_param_type(

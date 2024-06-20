@@ -162,7 +162,9 @@ def setup_incremental_object(
         if isinstance(value, dict) and value.get("type") == "incremental":
             incremental_params.append(key)
     if len(incremental_params) > 1:
-        raise ValueError(f"Only a single incremental parameter is allower per endpoint. Found: {incremental_params}")
+        raise ValueError(
+            f"Only a single incremental parameter is allower per endpoint. Found: {incremental_params}"
+        )
 
     for key, value in request_params.items():
         if isinstance(value, dlt.sources.incremental):
