@@ -78,6 +78,7 @@ AUTH_MAP: Dict[AuthType, Type[AuthConfigBase]] = {
 
 PARAM_TYPES: List[ParamBindType] = ["incremental", "resolve"]
 
+
 class IncrementalParam(NamedTuple):
     start: str
     end: Optional[str]
@@ -163,7 +164,9 @@ def setup_incremental_object(
         if isinstance(value, dlt.sources.incremental):
             return value, IncrementalParam(start=key, end=None)
         if isinstance(value, dict) and value.get("type") not in PARAM_TYPES:
-            raise ValueError( f"Invalid param type: {value.get('type')}. Available options: {PARAM_TYPES}")
+            raise ValueError(
+                f"Invalid param type: {value.get('type')}. Available options: {PARAM_TYPES}"
+            )
         if isinstance(value, dict) and value.get("type") == "incremental":
             config = exclude_keys(value, {"type"})
             # TODO: implement param type to bind incremental to

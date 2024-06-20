@@ -1,7 +1,7 @@
 import dlt.extract
 import pytest
 from copy import copy, deepcopy
-from typing import get_args
+from typing import cast, get_args
 
 import dlt
 from dlt.common.utils import update_dict_nested, custom_environ
@@ -29,6 +29,7 @@ from sources.rest_api.config_setup import (
 from sources.rest_api.typing import (
     AuthType,
     AuthTypeConfig,
+    Endpoint,
     EndpointResource,
     PaginatorType,
     PaginatorTypeConfig,
@@ -586,3 +587,29 @@ def test_incremental_source_in_request_param():
         cursor_path="updated_at", initial_value="2024-01-01T00:00:00Z"
     )
     assert incremental_param == IncrementalParam(start="since", end=None)
+
+
+def test_endpoint_config_incremental():
+    config = {
+        "name": "posts",
+        "endpoint": {
+            "path": "posts",
+            "params": {
+                "limit": 100,
+            },
+            "paginator": "json_response",
+            "incremental": {
+                "start_param": "since",
+                "end_param": "until",
+                "cursor_path": "updated_at",
+                "initial_value": "2024-01-25T11:21:28Z",
+            },
+        },
+    }
+
+    endpoint_config = cast(Endpoint, config["endpoint"])
+    (incremental, incremental_param) = setup_incremental_object(
+        endpoint_config.get("params"),
+        endpoint_config.get("incremental"),
+    )
+    assert incremental_param == IncrementalParam(start="since", end="until")
