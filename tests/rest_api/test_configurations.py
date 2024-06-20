@@ -29,6 +29,7 @@ from sources.rest_api.config_setup import (
 from sources.rest_api.typing import (
     AuthType,
     AuthTypeConfig,
+    Endpoint,
     EndpointResource,
     PaginatorType,
     PaginatorTypeConfig,
