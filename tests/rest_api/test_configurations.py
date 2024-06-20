@@ -604,3 +604,26 @@ def test_endpoint_config_incremental():
         incremental_config,
     )
     assert incremental_param == IncrementalParam(start="since", end="until")
+
+
+def test_many_incrementals_in_resource():
+    request_params = {
+        "foo": "bar",
+        "first_incremental": {
+            "type": "incremental",
+            "cursor_path": "updated_at",
+            "initial_value": "2024-01-01T00:00:00Z",
+        },
+        "second_incremental": {
+            "type": "incremental",
+            "cursor_path": "created_at",
+            "initial_value": "2024-01-01T00:00:00Z",
+        },
+    }
+    with pytest.raises(ValueError) as e:
+        setup_incremental_object(request_params)
+
+    assert (
+        "Only a single incremental parameter is allower per endpoint. Found: ['first_incremental', 'second_incremental']"
+        in str(e.value)
+    )

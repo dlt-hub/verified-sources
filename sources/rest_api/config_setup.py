@@ -157,6 +157,13 @@ def setup_incremental_object(
     request_params: Dict[str, Any],
     incremental_config: Optional[IncrementalConfig] = None,
 ) -> Tuple[Optional[Incremental[Any]], Optional[IncrementalParam]]:
+    incremental_params: List[str] = []
+    for key, value in request_params.items():
+        if isinstance(value, dict) and value.get("type") == "incremental":
+            incremental_params.append(key)
+    if len(incremental_params) > 1:
+        raise ValueError(f"Only a single incremental parameter is allower per endpoint. Found: {incremental_params}")
+
     for key, value in request_params.items():
         if isinstance(value, dlt.sources.incremental):
             return value, IncrementalParam(start=key, end=None)
