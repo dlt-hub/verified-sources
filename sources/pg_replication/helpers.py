@@ -35,11 +35,6 @@ from dlt.extract.items import DataItemWithMeta
 from dlt.extract.resource import DltResource
 from dlt.sources.credentials import ConnectionStringCredentials
 
-try:
-    from ..sql_database import sql_table  # type: ignore[import-untyped]
-except Exception:
-    from sql_database import sql_table
-
 from .schema_types import _to_dlt_column_schema, _to_dlt_val
 from .exceptions import IncompatiblePostgresVersionException
 from .decoders import (
@@ -367,6 +362,16 @@ def snapshot_table_resource(
     Can be used to perform an initial load of the table, so all data that
     existed in the table prior to initializing replication is also captured.
     """
+    try:
+        from ..sql_database import sql_table  # type: ignore[import-untyped]
+    except Exception:
+        try:
+            from sql_database import sql_table
+        except ImportError as e:
+            from .exceptions import SqlDatabaseSourceImportError
+
+            raise SqlDatabaseSourceImportError from e
+
     resource: DltResource = sql_table(
         credentials=credentials,
         table=snapshot_table_name,
