@@ -649,8 +649,6 @@ def test_resource_hints():
                 "schema_contract": {"tables": "evolve"},
                 "table_format": "iceberg",
                 "selected": False,
-                # spec: Type[BaseConfiguration] = None,
-                "parallelized": True,
             },
         ],
     }
