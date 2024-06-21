@@ -1,8 +1,12 @@
 import dlt
 
+from dlt.destinations.impl.postgres.configuration import PostgresCredentials
 
 from pg_replication import replication_resource
 from pg_replication.helpers import init_replication
+
+
+PG_CREDS = dlt.secrets.get("sources.pg_replication.credentials", PostgresCredentials)
 
 
 def replicate_single_table() -> None:
@@ -255,7 +259,7 @@ def replicate_with_column_selection() -> None:
 def create_source_table(
     src_pl: dlt.Pipeline, sql: str, table_name: str = "my_source_table"
 ) -> None:
-    with src_pl.sql_client() as c:
+    with src_pl.sql_client(credentials=PG_CREDS) as c:
         try:
             c.create_dataset()
         except dlt.destinations.exceptions.DatabaseTerminalException:
@@ -267,7 +271,7 @@ def create_source_table(
 def change_source_table(
     src_pl: dlt.Pipeline, sql: str, table_name: str = "my_source_table"
 ) -> None:
-    with src_pl.sql_client() as c:
+    with src_pl.sql_client(credentials=PG_CREDS) as c:
         qual_name = c.make_qualified_table_name(table_name)
         c.execute_sql(sql.format(table_name=qual_name))
 
