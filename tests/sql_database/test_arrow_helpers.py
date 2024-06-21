@@ -1,4 +1,4 @@
-from datetime import datetime, timezone, date
+from datetime import datetime, timezone, date  # noqa: I251
 from uuid import uuid4
 
 import pytest
