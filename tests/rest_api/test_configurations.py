@@ -675,4 +675,4 @@ def test_resource_hints():
     assert resources[0].schema_contract == {"tables": "evolve"}
     assert schema.get("table_format") == "iceberg"
     assert resources[0].selected is False
-    # assert resources[0].parallelized is True # TODO: how to test if it is parallelized?
+    # TODO: test if it is parallelized and has spec
