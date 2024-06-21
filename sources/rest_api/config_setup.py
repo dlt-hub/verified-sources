@@ -41,7 +41,6 @@ from dlt.sources.helpers.rest_client.auth import (
     HttpBasicAuth,
     BearerTokenAuth,
     APIKeyAuth,
-    OAuthJWTAuth,
 )
 
 from .typing import (
@@ -52,8 +51,6 @@ from .typing import (
     IncrementalArgs,
     IncrementalConfig,
     PaginatorConfig,
-    ParamBindConfig,
-    ResolveParamConfig,
     ResolvedParam,
     ResponseAction,
     Endpoint,
@@ -129,7 +126,7 @@ def get_auth_class(auth_type: AuthType) -> Type[AuthConfigBase]:
     except KeyError:
         available_options = ", ".join(AUTH_MAP.keys())
         raise ValueError(
-            f"Invalid paginator: {auth_type}. "
+            f"Invalid authentication: {auth_type}. "
             f"Available options: {available_options}"
         )
 
@@ -160,6 +157,15 @@ def setup_incremental_object(
     request_params: Dict[str, Any],
     incremental_config: Optional[IncrementalConfig] = None,
 ) -> Tuple[Optional[Incremental[Any]], Optional[IncrementalParam]]:
+    incremental_params: List[str] = []
+    for key, value in request_params.items():
+        if isinstance(value, dict) and value.get("type") == "incremental":
+            incremental_params.append(key)
+    if len(incremental_params) > 1:
+        raise ValueError(
+            f"Only a single incremental parameter is allower per endpoint. Found: {incremental_params}"
+        )
+
     for key, value in request_params.items():
         if isinstance(value, dlt.sources.incremental):
             return value, IncrementalParam(start=key, end=None)

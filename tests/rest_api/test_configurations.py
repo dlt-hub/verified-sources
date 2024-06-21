@@ -1,6 +1,7 @@
+import dlt.extract
 import pytest
 from copy import copy, deepcopy
-from typing import get_args
+from typing import cast, get_args
 
 import dlt
 from dlt.common.utils import update_dict_nested, custom_environ
@@ -12,16 +13,18 @@ from dlt.sources.helpers.rest_client.paginators import (
     HeaderLinkPaginator,
 )
 
-from sources.rest_api import rest_api_source, rest_api_resources
+from sources.rest_api import rest_api_source, rest_api_resources, _validate_param_type
 from sources.rest_api.config_setup import (
     AUTH_MAP,
     PAGINATOR_MAP,
+    IncrementalParam,
     _bind_path_params,
     _setup_single_entity_endpoint,
     create_auth,
     create_paginator,
     _make_endpoint_resource,
     process_parent_data_item,
+    setup_incremental_object,
 )
 from sources.rest_api.typing import (
     AuthType,
@@ -31,6 +34,7 @@ from sources.rest_api.typing import (
     PaginatorTypeConfig,
     RESTAPIConfig,
     ResolvedParam,
+    IncrementalConfig,
 )
 from dlt.sources.helpers.rest_client.paginators import (
     HeaderLinkPaginator,
@@ -40,11 +44,9 @@ from dlt.sources.helpers.rest_client.paginators import (
     PageNumberPaginator,
 )
 from dlt.sources.helpers.rest_client.auth import (
-    AuthConfigBase,
     HttpBasicAuth,
     BearerTokenAuth,
     APIKeyAuth,
-    OAuthJWTAuth,
 )
 
 from .source_configs import (
@@ -214,6 +216,15 @@ def test_bearer_token_fallback() -> None:
     auth = create_auth({"token": "secret"})
     assert isinstance(auth, BearerTokenAuth)
     assert auth.token == "secret"
+
+
+def test_error_message_invalid_auth_type() -> None:
+    with pytest.raises(ValueError) as e:
+        create_auth("non_existing_method")
+    assert (
+        str(e.value)
+        == "Invalid authentication: non_existing_method. Available options: bearer, api_key, http_basic"
+    )
 
 
 def test_resource_expand() -> None:
@@ -531,3 +542,137 @@ def test_resource_schema() -> None:
     resource = resources[0]
     assert resource.name == "users"
     assert resources[1].name == "user"
+
+
+def test_incremental_from_request_param():
+    request_params = {
+        "foo": "bar",
+        "since": {
+            "type": "incremental",
+            "cursor_path": "updated_at",
+            "initial_value": "2024-01-01T00:00:00Z",
+        },
+    }
+    (incremental_config, incremental_param) = setup_incremental_object(request_params)
+    assert incremental_config == dlt.sources.incremental(
+        cursor_path="updated_at", initial_value="2024-01-01T00:00:00Z"
+    )
+    assert incremental_param == IncrementalParam(start="since", end=None)
+
+
+def test_invalid_incremental():
+    request_params = {
+        "foo": "bar",
+        "since": {
+            "type": "no_incremental",
+            "cursor_path": "updated_at",
+            "initial_value": "2024-01-01T00:00:00Z",
+        },
+    }
+    with pytest.raises(ValueError) as e:
+        _validate_param_type(request_params)
+
+    assert e.match("Invalid param type: no_incremental.")
+
+
+def test_incremental_source_in_request_param():
+    request_params = {
+        "foo": "bar",
+        "since": dlt.sources.incremental(
+            cursor_path="updated_at", initial_value="2024-01-01T00:00:00Z"
+        ),
+    }
+    (incremental_config, incremental_param) = setup_incremental_object(request_params)
+    assert incremental_config == dlt.sources.incremental(
+        cursor_path="updated_at", initial_value="2024-01-01T00:00:00Z"
+    )
+    assert incremental_param == IncrementalParam(start="since", end=None)
+
+
+def test_endpoint_config_incremental():
+    config = {
+        "incremental": {
+            "start_param": "since",
+            "end_param": "until",
+            "cursor_path": "updated_at",
+            "initial_value": "2024-01-25T11:21:28Z",
+        }
+    }
+    incremental_config = cast(IncrementalConfig, config.get("incremental"))
+    (_, incremental_param) = setup_incremental_object(
+        {},
+        incremental_config,
+    )
+    assert incremental_param == IncrementalParam(start="since", end="until")
+
+
+def test_many_incrementals_in_resource():
+    request_params = {
+        "foo": "bar",
+        "first_incremental": {
+            "type": "incremental",
+            "cursor_path": "updated_at",
+            "initial_value": "2024-01-01T00:00:00Z",
+        },
+        "second_incremental": {
+            "type": "incremental",
+            "cursor_path": "created_at",
+            "initial_value": "2024-01-01T00:00:00Z",
+        },
+    }
+    with pytest.raises(ValueError) as e:
+        setup_incremental_object(request_params)
+
+    assert (
+        "Only a single incremental parameter is allower per endpoint. Found: ['first_incremental', 'second_incremental']"
+        in str(e.value)
+    )
+
+
+def test_resource_hints():
+    config: RESTAPIConfig = {
+        "client": {"base_url": "https://api.example.com"},
+        "resources": [
+            {
+                "name": "posts",
+                "endpoint": {
+                    "params": {
+                        "limit": 100,
+                    },
+                },
+                "table_name": "a_table",
+                "max_table_nesting": 2,
+                "write_disposition": "merge",
+                "columns": {"a_text": {"name": "a_text", "data_type": "text"}},
+                "primary_key": "a_pk",
+                "merge_key": "a_merge_key",
+                "schema_contract": {"tables": "evolve"},
+                "table_format": "iceberg",
+                "selected": False,
+            },
+        ],
+    }
+
+    resources = rest_api_resources(config)
+    assert resources[0].name == "posts"
+    assert resources[0].table_name == "a_table"
+    assert resources[0].max_table_nesting == 2
+    assert resources[0].write_disposition == "merge"
+    assert resources[0].columns == {"a_text": {"name": "a_text", "data_type": "text"}}
+    schema = resources[0].compute_table_schema()
+    primary_keys = [
+        spec["name"]
+        for _, spec in schema["columns"].items()
+        if spec.get("primary_key", False)
+    ]
+    assert primary_keys == ["a_pk"]
+    merge_keys = [
+        spec["name"]
+        for _, spec in schema["columns"].items()
+        if spec.get("merge_key", False)
+    ]
+    assert merge_keys == ["a_merge_key"]
+    assert resources[0].schema_contract == {"tables": "evolve"}
+    assert schema.get("table_format") == "iceberg"
+    assert resources[0].selected is False
+    # TODO: test if it is parallelized and has spec
