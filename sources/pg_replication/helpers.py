@@ -469,7 +469,7 @@ def _get_conn(
         host=credentials.host,
         port=credentials.port,
         connection_factory=connection_factory,
-        **credentials.query,
+        **({} if credentials.query is None else credentials.query),
     )
 
 
