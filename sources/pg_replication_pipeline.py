@@ -243,14 +243,14 @@ def get_postgres_pipeline() -> dlt.Pipeline:
     Uses workaround to fix destination to `postgres`, so it does not get replaced
     during `dlt init`.
     """
-    src_pl = dlt.pipeline(
+    pipe = dlt.pipeline(
         pipeline_name="source_pipeline",
         # destination="postgres",  # don't use this, `dlt init` replaces this
         dataset_name="source_dataset",
         dev_mode=True,
     )
-    src_pl.destination = Destination.from_reference("postgres")  # use this instead
-    return src_pl
+    pipe.destination = Destination.from_reference("postgres")  # use this instead
+    return pipe
 
 
 def create_source_table(
