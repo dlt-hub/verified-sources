@@ -1,5 +1,6 @@
 import dlt
 
+from dlt.common.destination import Destination
 from dlt.destinations.impl.postgres.configuration import PostgresCredentials
 
 from pg_replication import replication_resource
@@ -18,12 +19,7 @@ def replicate_single_table() -> None:
     as you'll probably have another process feeding your Postgres instance.
     """
     # create source and destination pipelines
-    src_pl = dlt.pipeline(
-        pipeline_name="source_pipeline",
-        destination="postgres",
-        dataset_name="replicate_single_table",
-        dev_mode=True,
-    )
+    src_pl = get_postgres_pipeline()
     dest_pl = dlt.pipeline(
         pipeline_name="pg_replication_pipeline",
         destination="duckdb",
@@ -75,12 +71,7 @@ def replicate_with_initial_load() -> None:
     returned by `init_replication` helper.
     """
     # create source and destination pipelines
-    src_pl = dlt.pipeline(
-        pipeline_name="source_pipeline",
-        destination="postgres",
-        dataset_name="replicate_with_initial_load",
-        dev_mode=True,
-    )
+    src_pl = get_postgres_pipeline()
     dest_pl = dlt.pipeline(
         pipeline_name="pg_replication_pipeline",
         destination="duckdb",
@@ -128,12 +119,7 @@ def replicate_entire_schema() -> None:
     exception is raised if that's not the case.
     """
     # create source and destination pipelines
-    src_pl = dlt.pipeline(
-        pipeline_name="source_pipeline",
-        destination="postgres",
-        dataset_name="replicate_entire_schema",
-        dev_mode=True,
-    )
+    src_pl = get_postgres_pipeline()
     dest_pl = dlt.pipeline(
         pipeline_name="pg_replication_pipeline",
         destination="duckdb",
@@ -192,12 +178,7 @@ def replicate_with_column_selection() -> None:
     Demonstrates usage of `include_columns` argument.
     """
     # create source and destination pipelines
-    src_pl = dlt.pipeline(
-        pipeline_name="source_pipeline",
-        destination="postgres",
-        dataset_name="replicate_with_column_selection",
-        dev_mode=True,
-    )
+    src_pl = get_postgres_pipeline()
     dest_pl = dlt.pipeline(
         pipeline_name="pg_replication_pipeline",
         destination="duckdb",
@@ -254,6 +235,22 @@ def replicate_with_column_selection() -> None:
 
 
 # define some helper methods to make examples more readable
+
+
+def get_postgres_pipeline() -> dlt.Pipeline:
+    """Returns a pipeline loading into `postgres` destination.
+
+    Uses workaround to fix destination to `postgres`, so it does not get replaced
+    during `dlt init`.
+    """
+    src_pl = dlt.pipeline(
+        pipeline_name="source_pipeline",
+        # destination="postgres",  # don't use this, `dlt init` replaces this
+        dataset_name="source_dataset",
+        dev_mode=True,
+    )
+    src_pl.destination = Destination.from_reference("postgres")  # use this instead
+    return src_pl
 
 
 def create_source_table(
