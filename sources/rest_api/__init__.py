@@ -9,6 +9,7 @@ from typing import (
     Generator,
     Callable,
     cast,
+    Union
 )
 import graphlib  # type: ignore[import,unused-ignore]
 
@@ -347,8 +348,8 @@ def create_resources(
 
 
 def _validate_param_type(
-    request_params: Dict[str, ResolveParamConfig | IncrementalParamConfig | Any] | None
-):
+    request_params: Dict[str, Union[ResolveParamConfig, IncrementalParamConfig, Any]]
+) -> None:
     for _, value in request_params.items():
         if isinstance(value, dict) and value.get("type") not in PARAM_TYPES:
             raise ValueError(
