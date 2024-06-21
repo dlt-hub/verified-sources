@@ -627,3 +627,54 @@ def test_many_incrementals_in_resource():
         "Only a single incremental parameter is allower per endpoint. Found: ['first_incremental', 'second_incremental']"
         in str(e.value)
     )
+
+
+def test_resource_hints():
+    config: RESTAPIConfig = {
+        "client": {"base_url": "https://api.example.com"},
+        "resources": [
+            {
+                "name": "posts",
+                "endpoint": {
+                    "params": {
+                        "limit": 100,
+                    },
+                },
+                "table_name": "a_table",
+                "max_table_nesting": 2,
+                "write_disposition": "merge",
+                "columns": {"a_text": {"name": "a_text", "data_type": "text"}},
+                "primary_key": "a_pk",
+                "merge_key": "a_merge_key",
+                "schema_contract": {"tables": "evolve"},
+                "table_format": "iceberg",
+                "selected": False,
+                # spec: Type[BaseConfiguration] = None,
+                "parallelized": True,
+            },
+        ],
+    }
+
+    resources = rest_api_resources(config)
+    assert resources[0].name == "posts"
+    assert resources[0].table_name == "a_table"
+    assert resources[0].max_table_nesting == 2
+    assert resources[0].write_disposition == "merge"
+    assert resources[0].columns == {"a_text": {"name": "a_text", "data_type": "text"}}
+    schema = resources[0].compute_table_schema()
+    primary_keys = [
+        spec["name"]
+        for _, spec in schema["columns"].items()
+        if spec.get("primary_key", False)
+    ]
+    assert primary_keys == ["a_pk"]
+    merge_keys = [
+        spec["name"]
+        for _, spec in schema["columns"].items()
+        if spec.get("merge_key", False)
+    ]
+    assert merge_keys == ["a_merge_key"]
+    assert resources[0].schema_contract == {"tables": "evolve"}
+    assert schema.get("table_format") == "iceberg"
+    assert resources[0].selected is False
+    # assert resources[0].parallelized is True # TODO: how to test if it is parallelized?
