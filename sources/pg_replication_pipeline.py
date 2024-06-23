@@ -24,7 +24,7 @@ def replicate_single_table() -> None:
         pipeline_name="pg_replication_pipeline",
         destination="duckdb",
         dataset_name="replicate_single_table",
-        dev_mode=True,
+        full_refresh=True,
     )
 
     # create table "my_source_table" in source to demonstrate replication
@@ -76,7 +76,7 @@ def replicate_with_initial_load() -> None:
         pipeline_name="pg_replication_pipeline",
         destination="duckdb",
         dataset_name="replicate_with_initial_load",
-        dev_mode=True,
+        full_refresh=True,
     )
 
     # create table "my_source_table" in source to demonstrate replication
@@ -124,7 +124,7 @@ def replicate_entire_schema() -> None:
         pipeline_name="pg_replication_pipeline",
         destination="duckdb",
         dataset_name="replicate_entire_schema",
-        dev_mode=True,
+        full_refresh=True,
     )
 
     # create two source tables to demonstrate schema replication
@@ -183,7 +183,7 @@ def replicate_with_column_selection() -> None:
         pipeline_name="pg_replication_pipeline",
         destination="duckdb",
         dataset_name="replicate_with_column_selection",
-        dev_mode=True,
+        full_refresh=True,
     )
 
     # create two source tables to demonstrate schema replication
@@ -247,7 +247,7 @@ def get_postgres_pipeline() -> dlt.Pipeline:
         pipeline_name="source_pipeline",
         # destination="postgres",  # don't use this, `dlt init` replaces this
         dataset_name="source_dataset",
-        dev_mode=True,
+        full_refresh=True,
     )
     pipe.destination = Destination.from_reference("postgres")  # use this instead
     return pipe
