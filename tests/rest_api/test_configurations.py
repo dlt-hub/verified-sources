@@ -624,10 +624,7 @@ def test_many_incrementals_in_resource():
     with pytest.raises(ValueError) as e:
         setup_incremental_object(request_params)
 
-    assert (
-        "Only a single incremental parameter is allower per endpoint. Found: ['first_incremental', 'second_incremental']"
-        in str(e.value)
-    )
+    assert e.match("Only a single incremental parameter is allower per endpoint. Found: \['first_incremental', 'second_incremental'\]")
 
 
 def test_resource_hints():
