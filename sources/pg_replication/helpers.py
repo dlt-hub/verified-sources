@@ -123,6 +123,8 @@ def init_replication(
         - a `DltResource` object or a list of `DltResource` objects for the snapshot
           table(s) if `persist_snapshots` is `True` and the replication slot did not yet exist
     """
+    if persist_snapshots:
+        _import_sql_table_resource()
     if isinstance(table_names, str):
         table_names = [table_names]
     cur = _get_rep_conn(credentials).cursor()
@@ -362,17 +364,7 @@ def snapshot_table_resource(
     Can be used to perform an initial load of the table, so all data that
     existed in the table prior to initializing replication is also captured.
     """
-    try:
-        from ..sql_database import sql_table  # type: ignore[import-untyped]
-    except Exception:
-        try:
-            from sql_database import sql_table
-        except ImportError as e:
-            from .exceptions import SqlDatabaseSourceImportError
-
-            raise SqlDatabaseSourceImportError from e
-
-    resource: DltResource = sql_table(
+    resource: DltResource = sql_table(  # type: ignore[name-defined]
         credentials=credentials,
         table=snapshot_table_name,
         schema=schema_name,
@@ -460,6 +452,23 @@ def advance_slot(
             f"SELECT * FROM pg_replication_slot_advance('{slot_name}', '{lsn_int_to_hex(upto_lsn)}');"
         )
         cur.connection.close()
+
+
+def _import_sql_table_resource() -> None:
+    """Imports external `sql_table` resource from `sql_database` source.
+
+    Raises error if `sql_database` source is not available.
+    """
+    global sql_table
+    try:
+        from ..sql_database import sql_table  # type: ignore[import-untyped]
+    except Exception:
+        try:
+            from sql_database import sql_table
+        except ImportError as e:
+            from .exceptions import SqlDatabaseSourceImportError
+
+            raise SqlDatabaseSourceImportError from e
 
 
 def _get_conn(
