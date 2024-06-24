@@ -5,6 +5,8 @@ from unittest.mock import patch
 from copy import copy, deepcopy
 from typing import cast, get_args
 
+from graphlib import CycleError
+
 import dlt
 from dlt.common.utils import update_dict_nested, custom_environ
 from dlt.common.jsonpath import compile_path
@@ -673,6 +675,47 @@ def test_resource_hints():
             assert arg in kwargs.items()
 
 
+def test_two_resources_dependent_on_one_parent_resource():
+    config: RESTAPIConfig = {
+        "client": {
+            "base_url": "https://api.example.com",
+        },
+        "resources": [
+            "users",
+            {
+                "name": "user_details",
+                "endpoint": {
+                    "path": "user/{user_id}/",
+                    "params": {
+                        "user_id": {
+                            "type": "resolve",
+                            "field": "id",
+                            "resource": "users",
+                        },
+                    },
+                },
+            },
+            {
+                "name": "meetings",
+                "endpoint": {
+                    "path": "meetings/{user_id}/",
+                    "params": {
+                        "user_id": {
+                            "type": "resolve",
+                            "field": "id",
+                            "resource": "users",
+                        },
+                    },
+                },
+            },
+        ],
+    }
+    resources = rest_api_resources(config)
+
+    resource_names = [resource.name for resource in resources]
+    assert ["meetings", "user_details", "users"] == sorted(resource_names)
+
+
 def test_dependent_resource_with_multiple_parameter_bindings():
     config: RESTAPIConfig = {
         "client": {
@@ -684,8 +727,6 @@ def test_dependent_resource_with_multiple_parameter_bindings():
                 "name": "user_details",
                 "endpoint": {
                     "path": "user/{user_id}/{group_id}",
-                    "paginator": None,
-                    "data_selector": None,
                     "params": {
                         "user_id": {
                             "type": "resolve",
@@ -725,8 +766,6 @@ def test_one_resource_binding_two_parents():
                 "name": "user_details",
                 "endpoint": {
                     "path": "user/{user_id}/{group_id}",
-                    "paginator": None,
-                    "data_selector": None,
                     "params": {
                         "user_id": {
                             "type": "resolve",
@@ -753,3 +792,84 @@ def test_one_resource_binding_two_parents():
     error_part_2 = re.escape("ResolvedParam(param_name='group_id'")
     assert e.match(error_part_1)
     assert e.match(error_part_2)
+
+
+def test_resource_dependent_dependent():
+    config: RESTAPIConfig = {
+        "client": {
+            "base_url": "https://api.example.com",
+        },
+        "resources": [
+            "locations",
+            {
+                "name": "location_details",
+                "endpoint": {
+                    "path": "location/{location_id}",
+                    "params": {
+                        "location_id": {
+                            "type": "resolve",
+                            "field": "id",
+                            "resource": "locations",
+                        },
+                    },
+                },
+            },
+            {
+                "name": "meetings",
+                "endpoint": {
+                    "path": "/meetings/{room_id}",
+                    "params": {
+                        "room_id": {
+                            "type": "resolve",
+                            "field": "room_id",
+                            "resource": "location_details",
+                        },
+                    },
+                },
+            },
+        ],
+    }
+
+    resources = rest_api_resources(config)
+    resource_names = [resource.name for resource in resources]
+    assert ["location_details", "locations", "meetings"] == sorted(resource_names)
+
+
+def test_circular_resource_binding():
+    config: RESTAPIConfig = {
+        "client": {
+            "base_url": "https://api.example.com",
+        },
+        "resources": [
+            {
+                "name": "chicken",
+                "endpoint": {
+                    "path": "chicken/{egg_id}/",
+                    "params": {
+                        "egg_id": {
+                            "type": "resolve",
+                            "field": "id",
+                            "resource": "egg",
+                        },
+                    },
+                },
+            },
+            {
+                "name": "egg",
+                "endpoint": {
+                    "path": "egg/{chicken_id}/",
+                    "params": {
+                        "chicken_id": {
+                            "type": "resolve",
+                            "field": "id",
+                            "resource": "chicken",
+                        },
+                    },
+                },
+            },
+        ],
+    }
+
+    with pytest.raises(CycleError) as e:
+        rest_api_resources(config)
+    assert e.match(re.escape("'nodes are in a cycle', ['chicken', 'egg', 'chicken']"))
