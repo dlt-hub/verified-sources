@@ -1,5 +1,6 @@
 import dlt.extract
 import pytest
+from unittest.mock import patch
 from copy import copy, deepcopy
 from typing import cast, get_args
 
@@ -653,25 +654,20 @@ def test_resource_hints():
         ],
     }
 
-    resources = rest_api_resources(config)
-    assert resources[0].name == "posts"
-    assert resources[0].table_name == "a_table"
-    assert resources[0].max_table_nesting == 2
-    assert resources[0].write_disposition == "merge"
-    assert resources[0].columns == {"a_text": {"name": "a_text", "data_type": "text"}}
-    schema = resources[0].compute_table_schema()
-    primary_keys = [
-        spec["name"]
-        for _, spec in schema["columns"].items()
-        if spec.get("primary_key", False)
-    ]
-    assert primary_keys == ["a_pk"]
-    merge_keys = [
-        spec["name"]
-        for _, spec in schema["columns"].items()
-        if spec.get("merge_key", False)
-    ]
-    assert merge_keys == ["a_merge_key"]
-    assert resources[0].schema_contract == {"tables": "evolve"}
-    assert schema.get("table_format") == "iceberg"
-    assert resources[0].selected is False
+    with patch.object(dlt, "resource", wraps=dlt.resource) as mock_resource_constructor:
+        rest_api_resources(config)
+        mock_resource_constructor.assert_called_once()
+        expected_kwargs = {
+            "table_name": "a_table",
+            "max_table_nesting": 2,
+            "write_disposition": "merge",
+            "columns": {"a_text": {"name": "a_text", "data_type": "text"}},
+            "primary_key": "a_pk",
+            "merge_key": "a_merge_key",
+            "schema_contract": {"tables": "evolve"},
+            "table_format": "iceberg",
+            "selected": False,
+        }
+        for arg in expected_kwargs.items():
+            _, kwargs = mock_resource_constructor.call_args_list[0]
+            assert arg in kwargs.items()
