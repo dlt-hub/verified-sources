@@ -10,17 +10,16 @@ from rest_api import (
 
 
 @dlt.source
-# def github_source(github_token: str = dlt.secrets.value) -> Any:
-def github_source() -> Any:
+def github_source(github_token: str = dlt.secrets.value) -> Any:
     # Create a REST API configuration for the GitHub API
     # Use RESTAPIConfig to get autocompletion and type checking
     config: RESTAPIConfig = {
         "client": {
             "base_url": "https://api.github.com/repos/dlt-hub/dlt/",
-            # "auth": {
-            #     "type": "bearer",
-            #     "token": github_token,
-            # },
+            "auth": {
+                "type": "bearer",
+                "token": github_token,
+            },
         },
         # The default configuration for all resources and their endpoints
         "resource_defaults": {
