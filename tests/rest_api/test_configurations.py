@@ -1,3 +1,4 @@
+import re
 import dlt.extract
 import pytest
 from unittest.mock import patch
@@ -623,8 +624,10 @@ def test_many_incrementals_in_resource():
     }
     with pytest.raises(ValueError) as e:
         setup_incremental_object(request_params)
-
-    assert e.match("Only a single incremental parameter is allower per endpoint. Found: \['first_incremental', 'second_incremental'\]")
+    error_message = re.escape(
+        "Only a single incremental parameter is allower per endpoint. Found: ['first_incremental', 'second_incremental']"
+    )
+    assert e.match(error_message)
 
 
 def test_resource_hints():
@@ -668,3 +671,85 @@ def test_resource_hints():
         for arg in expected_kwargs.items():
             _, kwargs = mock_resource_constructor.call_args_list[0]
             assert arg in kwargs.items()
+
+
+def test_dependent_resource_with_multiple_parameter_bindings():
+    config: RESTAPIConfig = {
+        "client": {
+            "base_url": "https://api.example.com",
+        },
+        "resources": [
+            "users",
+            {
+                "name": "user_details",
+                "endpoint": {
+                    "path": "user/{user_id}/{group_id}",
+                    "paginator": None,
+                    "data_selector": None,
+                    "params": {
+                        "user_id": {
+                            "type": "resolve",
+                            "field": "id",
+                            "resource": "users",
+                        },
+                        "group_id": {
+                            "type": "resolve",
+                            "field": "group",
+                            "resource": "users",
+                        },
+                    },
+                },
+            },
+        ],
+    }
+    with pytest.raises(ValueError) as e:
+        rest_api_resources(config)
+
+    error_part_1 = re.escape(
+        "Multiple resolved params for resource user_details: [ResolvedParam(param_name='user_id'"
+    )
+    error_part_2 = re.escape("ResolvedParam(param_name='group_id'")
+    assert e.match(error_part_1)
+    assert e.match(error_part_2)
+
+
+def test_one_resource_binding_two_parents():
+    config: RESTAPIConfig = {
+        "client": {
+            "base_url": "https://api.example.com",
+        },
+        "resources": [
+            "users",
+            "groups",
+            {
+                "name": "user_details",
+                "endpoint": {
+                    "path": "user/{user_id}/{group_id}",
+                    "paginator": None,
+                    "data_selector": None,
+                    "params": {
+                        "user_id": {
+                            "type": "resolve",
+                            "field": "id",
+                            "resource": "users",
+                        },
+                        "group_id": {
+                            "type": "resolve",
+                            "field": "id",
+                            "resource": "groups",
+                        },
+                    },
+                },
+            },
+        ],
+    }
+
+    with pytest.raises(ValueError) as e:
+        rest_api_resources(config)
+
+    error_part_1 = re.escape(
+        "Multiple resolved params for resource user_details: [ResolvedParam(param_name='user_id'"
+    )
+    error_part_2 = re.escape("ResolvedParam(param_name='group_id'")
+    assert e.match(error_part_1)
+    assert e.match(error_part_2)
