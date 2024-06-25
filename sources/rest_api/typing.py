@@ -1,5 +1,6 @@
 from typing import (
     Any,
+    Callable,
     Dict,
     List,
     Literal,
@@ -212,10 +213,13 @@ class ResolvedParam:
         self.field_path = jsonpath.compile_path(self.resolve_config["field"])
 
 
-class ResponseAction(TypedDict, total=False):
+class ResponseActionDict(TypedDict, total=False):
     status_code: Optional[Union[int, str]]
     content: Optional[str]
-    action: str
+    action: Optional[Union[str, Callable[..., Any]]]
+
+
+ResponseAction = Union[ResponseActionDict, Callable]
 
 
 class Endpoint(TypedDict, total=False):
