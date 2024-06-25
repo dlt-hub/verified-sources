@@ -6,7 +6,6 @@ from stripe_analytics import (
     ENDPOINTS,
     INCREMENTAL_ENDPOINTS,
     incremental_stripe_source,
-    metrics_resource,
     stripe_source,
 )
 
@@ -89,53 +88,6 @@ def load_incremental_endpoints(
     # )
     # load_info = pipeline.run(source)
     # print(load_info)
-
-
-def load_data_and_get_metrics() -> None:
-    """
-    With the pipeline, you can calculate the most important metrics
-    and store them in a database as a resource.
-    Store metrics, get calculated metrics from the database, build dashboards.
-
-    Supported metrics:
-        Monthly Recurring Revenue (MRR),
-        Subscription churn rate.
-
-    Pipeline returns both metrics.
-
-    Use Subscription and Event endpoints to calculate the metrics.
-    """
-
-    pipeline = dlt.pipeline(
-        pipeline_name="stripe_analytics",
-        destination="duckdb",
-        dataset_name="stripe_metrics",
-    )
-
-    # Event is an endpoint with uneditable data, so we can use 'incremental_stripe_source'.
-    source_event = incremental_stripe_source(endpoints=("Event",))
-    # Subscription is an endpoint with editable data, use stripe_source.
-    source_subs = stripe_source(endpoints=("Subscription",))
-
-    # convert dates to the timestamp format
-    source_event.resources["Event"].apply_hints(
-        columns={
-            "created": {"data_type": "timestamp"},
-        }
-    )
-
-    source_subs.resources["Subscription"].apply_hints(
-        columns={
-            "created": {"data_type": "timestamp"},
-        }
-    )
-
-    load_info = pipeline.run(data=[source_subs, source_event])
-    print(load_info)
-
-    resource = metrics_resource()
-    load_info = pipeline.run(resource)
-    print(load_info)
 
 
 if __name__ == "__main__":
