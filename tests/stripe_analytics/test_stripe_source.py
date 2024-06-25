@@ -6,7 +6,6 @@ from sources.stripe_analytics import (
     incremental_stripe_source,
     stripe_source,
 )
-
 from tests.utils import ALL_DESTINATIONS, assert_load_info
 
 

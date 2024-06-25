@@ -101,5 +101,3 @@ if __name__ == "__main__":
     #     initial_start_date=datetime(2023, 5, 3),
     #     end_date=datetime(2024, 3, 1),
     # )
-    # # load Subscription and Event data, calculate metrics, store them in a database
-    # load_data_and_get_metrics()

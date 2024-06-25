@@ -4,13 +4,10 @@ from typing import Any, Dict, Generator, Iterable, Optional, Tuple
 
 import dlt
 import stripe
-from dlt.common import pendulum
-from dlt.common.typing import TDataItem
 from dlt.sources import DltResource
 from pendulum import DateTime
 
 from .helpers import pagination, transform_date
-from .metrics import calculate_mrr, churn_rate
 from .settings import ENDPOINTS, INCREMENTAL_ENDPOINTS
 
 
