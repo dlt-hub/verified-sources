@@ -56,6 +56,6 @@ To get the full list of supported endpoints, grab API credentials and initialise
     For example, the pipeline_name for the above pipeline example is `stripe_analytics`, you can use any custom name instead.
 
 
-💡 To explore additional customizations for this pipeline, we recommend referring to the official dlt Stripe verified documentation. It provides comprehensive information and guidance on how to further customize and tailor the pipeline to suit your specific needs. You can find the dlt Stripe documentation in [Setup Guide: Stripe](https://dlthub.com/docs/dlt-ecosystem/verified-sources/stripe) .
+💡 To explore additional customizations for this pipeline, we recommend referring to the official dlt Stripe verified documentation. It provides comprehensive information and guidance on how to further customize and tailor the pipeline to suit your specific needs. You can find the dlt Stripe documentation in [Setup Guide: Stripe](https://dlthub.com/docs/dlt-ecosystem/verified-sources/stripe).
 
 
