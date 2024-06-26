@@ -1,6 +1,8 @@
 import pytest
+import re
 
 import dlt
+from dlt.common.exceptions import DictValidationException
 from dlt.pipeline.exceptions import PipelineStepFailed
 from dlt.sources.helpers.rest_client.paginators import BaseReferencePaginator
 
@@ -341,3 +343,63 @@ def test_response_action_on_every_response(mock_api_server, mocker):
     list(mock_source.with_resources("posts").add_limit(1))
 
     mock_response_hook.assert_called_once()
+
+
+def test_only_one_response_action_every_response(mock_api_server, mocker):
+    def custom_hook(request, *args, **kwargs):
+        return request
+
+    mock_response_hook_1 = mocker.Mock(side_effect=custom_hook)
+    mock_response_hook_2 = mocker.Mock(side_effect=custom_hook)
+    mock_source = rest_api_source(
+        {
+            "client": {"base_url": "https://api.example.com"},
+            "resources": [
+                {
+                    "name": "posts",
+                    "endpoint": {
+                        "response_actions": [
+                            mock_response_hook_1,
+                            mock_response_hook_2,
+                        ],
+                    },
+                },
+            ],
+        }
+    )
+
+    list(mock_source.with_resources("posts").add_limit(1))
+
+    mock_response_hook_1.assert_called_once()
+    mock_response_hook_2.assert_not_called()
+
+
+def test_only_one_response_action_every_response(mock_api_server, mocker):
+    def custom_hook(request, *args, **kwargs):
+        return request
+
+    mock_response_hook_1 = mocker.Mock(side_effect=custom_hook)
+    mock_response_hook_2 = mocker.Mock(side_effect=custom_hook)
+    config: RESTAPIConfig = {
+        "client": {"base_url": "https://api.example.com"},
+        "resources": [
+            {
+                "name": "posts",
+                "endpoint": {
+                    "response_actions": [
+                        {
+                            "status_code": 200,
+                            "action": [mock_response_hook_1, mock_response_hook_2],
+                        },
+                    ],
+                },
+            },
+        ],
+    }
+    with pytest.raises(DictValidationException) as e:
+        rest_api_source(config)
+
+    assert e.match(
+        re.escape("For str: In path ./resources[0]/endpoint/response_actions[0]")
+    )
+    assert e.match(re.escape("has invalid type 'dict' while 'str' is expected"))

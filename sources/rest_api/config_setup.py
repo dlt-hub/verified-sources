@@ -53,6 +53,7 @@ from .typing import (
     PaginatorConfig,
     ResolvedParam,
     ResponseAction,
+    ResponseActionDict,
     Endpoint,
     EndpointResource,
 )
@@ -351,7 +352,7 @@ def _find_resolved_params(endpoint_config: Endpoint) -> List[ResolvedParam]:
 
 def _handle_response_actions(
     response: Response, actions: List[ResponseAction]
-) -> Optional[Tuple[Optional[str], Optional[Callable]]]:
+) -> Tuple[Optional[str], Optional[Callable[..., Any]]]:
     """Handle response actions based on the response and the provided actions."""
     content = response.text
 
@@ -363,8 +364,9 @@ def _handle_response_actions(
         response_action = None
         # TODO: can we replace the isinstance() conditionals with polymorphism?
         if isinstance(action, Callable):
-            custom_hook = action
+            custom_hook = cast(Callable[..., Any], action)
         else:
+            action = cast(ResponseActionDict, action)
             status_code = action.get("status_code")
             content_substr = action.get("content")
             response_action = action.get("action")

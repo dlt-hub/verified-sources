@@ -219,7 +219,7 @@ class ResponseActionDict(TypedDict, total=False):
     action: Optional[Union[str, Callable[..., Any]]]
 
 
-ResponseAction = Union[ResponseActionDict, Callable]
+ResponseAction = Union[ResponseActionDict, Callable[..., Any]]
 
 
 class Endpoint(TypedDict, total=False):
