@@ -290,7 +290,6 @@ def test_load_mock_api_typeddict_config(mock_api_server):
     assert table_counts["post_comments"] == 5000
 
 
-
 def test_response_action_on_status_code(mock_api_server, mocker):
     mock_response_hook = mocker.Mock()
     mock_source = rest_api_source(
@@ -313,6 +312,32 @@ def test_response_action_on_status_code(mock_api_server, mocker):
         }
     )
 
-    res = list(mock_source.with_resources("post_details").add_limit(1))
+    list(mock_source.with_resources("post_details").add_limit(1))
+
+    mock_response_hook.assert_called_once()
+
+
+def test_response_action_on_every_response(mock_api_server, mocker):
+    def custom_hook(request, *args, **kwargs):
+        return request
+
+    mock_response_hook = mocker.Mock(side_effect=custom_hook)
+    mock_source = rest_api_source(
+        {
+            "client": {"base_url": "https://api.example.com"},
+            "resources": [
+                {
+                    "name": "posts",
+                    "endpoint": {
+                        "response_actions": [
+                            mock_response_hook,
+                        ],
+                    },
+                },
+            ],
+        }
+    )
+
+    list(mock_source.with_resources("posts").add_limit(1))
 
     mock_response_hook.assert_called_once()
