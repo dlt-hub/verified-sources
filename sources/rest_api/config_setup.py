@@ -366,7 +366,7 @@ def _handle_response_action(
 ) -> Union[
     Tuple[str, Optional[List[Callable[..., Any]]]],
     Tuple[None, List[Callable[..., Any]]],
-    Tuple[None, None]
+    Tuple[None, None],
 ]:
     """
     Checks, based on the response, if the provided action applies.

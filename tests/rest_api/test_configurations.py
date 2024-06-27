@@ -1,7 +1,7 @@
 import dlt.extract
 import pytest
 from copy import copy, deepcopy
-from typing import cast, get_args
+from typing import cast, get_args, Dict, List, Any
 
 import dlt
 from dlt.common.utils import update_dict_nested, custom_environ
@@ -25,6 +25,8 @@ from sources.rest_api.config_setup import (
     _make_endpoint_resource,
     process_parent_data_item,
     setup_incremental_object,
+    create_response_hooks,
+    _handle_response_action,
 )
 from sources.rest_api.typing import (
     AuthType,
@@ -34,6 +36,7 @@ from sources.rest_api.typing import (
     PaginatorTypeConfig,
     RESTAPIConfig,
     ResolvedParam,
+    ResponseAction,
     IncrementalConfig,
 )
 from dlt.sources.helpers.rest_client.paginators import (
@@ -676,3 +679,62 @@ def test_resource_hints():
     assert schema.get("table_format") == "iceberg"
     assert resources[0].selected is False
     # TODO: test if it is parallelized and has spec
+
+
+def test_create_multiple_response_actions():
+    def custom_hook(response, *args, **kwargs):
+        return response
+
+    response_actions: List[ResponseAction] = [
+        custom_hook,
+        {"status_code": 404, "action": "ignore"},
+        {"content": "Not found", "action": "ignore"},
+        {"status_code": 200, "content": "some text", "action": "ignore"},
+    ]
+    hooks = cast(Dict[str, Any], create_response_hooks(response_actions))
+    assert len(hooks["response"]) == 4
+
+    response_actions_2: List[ResponseAction] = [
+        custom_hook,
+        {"status_code": 200, "action": custom_hook},
+    ]
+    hooks_2 = cast(Dict[str, Any], create_response_hooks(response_actions_2))
+    assert len(hooks_2["response"]) == 2
+
+
+def test_response_action_raises_type_error(mocker):
+    class C:
+        pass
+
+    response = mocker.Mock()
+    response.status_code = 200
+
+    with pytest.raises(ValueError) as e_1:
+        _handle_response_action(response, {"status_code": 200, "action": C()})
+    assert e_1.match("does not conform to expected type")
+
+    with pytest.raises(ValueError) as e_2:
+        _handle_response_action(response, {"status_code": 200, "action": 123})
+    assert e_2.match("does not conform to expected type")
+
+    assert ("ignore", None) == _handle_response_action(
+        response, {"status_code": 200, "action": "ignore"}
+    )
+    assert ("foobar", None) == _handle_response_action(
+        response, {"status_code": 200, "action": "foobar"}
+    )
+
+
+def test_parses_hooks_from_response_actions(mocker):
+    response = mocker.Mock()
+    response.status_code = 200
+
+    hook_1 = mocker.Mock()
+    hook_2 = mocker.Mock()
+
+    assert (None, [hook_1]) == _handle_response_action(
+        response, {"status_code": 200, "action": hook_1}
+    )
+    assert (None, [hook_1, hook_2]) == _handle_response_action(
+        response, {"status_code": 200, "action": [hook_1, hook_2]}
+    )

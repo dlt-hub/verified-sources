@@ -1,6 +1,6 @@
 import json
 import pytest
-from typing import List, Dict, Any, cast
+from typing import Dict, Any, cast
 
 import dlt
 from dlt.pipeline.exceptions import PipelineStepFailed
@@ -17,8 +17,6 @@ from sources.rest_api import (
     Endpoint,
     create_response_hooks,
 )
-from sources.rest_api.config_setup import _handle_response_action
-from sources.rest_api.typing import ResponseAction
 
 
 def test_load_mock_api(mock_api_server):
@@ -485,62 +483,3 @@ def test_response_actions_called_in_order(mock_api_server, mocker):
     mock_response_hook_2.assert_called_once()
 
     assert all(record["custom_field"] == "foobar" for record in data)
-
-
-def test_create_multiple_response_actions():
-    def custom_hook(response, *args, **kwargs):
-        return response
-
-    response_actions: List[ResponseAction] = [
-        custom_hook,
-        {"status_code": 404, "action": "ignore"},
-        {"content": "Not found", "action": "ignore"},
-        {"status_code": 200, "content": "some text", "action": "ignore"},
-    ]
-    hooks = cast(Dict[str, Any], create_response_hooks(response_actions))
-    assert len(hooks["response"]) == 4
-
-    response_actions_2: List[ResponseAction] = [
-        custom_hook,
-        {"status_code": 200, "action": custom_hook},
-    ]
-    hooks_2 = cast(Dict[str, Any], create_response_hooks(response_actions_2))
-    assert len(hooks_2["response"]) == 2
-
-
-def test_response_action_raises_type_error(mocker):
-    class C:
-        pass
-
-    response = mocker.Mock()
-    response.status_code = 200
-
-    with pytest.raises(ValueError) as e_1:
-        _handle_response_action(response, {"status_code": 200, "action": C()})
-    assert e_1.match("does not conform to expected type")
-
-    with pytest.raises(ValueError) as e_2:
-        _handle_response_action(response, {"status_code": 200, "action": 123})
-    assert e_2.match("does not conform to expected type")
-
-    assert ("ignore", None) == _handle_response_action(
-        response, {"status_code": 200, "action": "ignore"}
-    )
-    assert ("foobar", None) == _handle_response_action(
-        response, {"status_code": 200, "action": "foobar"}
-    )
-
-
-def test_parses_hooks_from_response_actions(mocker):
-    response = mocker.Mock()
-    response.status_code = 200
-
-    hook_1 = mocker.Mock()
-    hook_2 = mocker.Mock()
-
-    assert (None, [hook_1]) == _handle_response_action(
-        response, {"status_code": 200, "action": hook_1}
-    )
-    assert (None, [hook_1, hook_2]) == _handle_response_action(
-        response, {"status_code": 200, "action": [hook_1, hook_2]}
-    )
