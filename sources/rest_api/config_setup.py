@@ -366,17 +366,17 @@ def _handle_response_action(
 ) -> Union[
     Tuple[str, Optional[List[Callable[..., Any]]]],
     Tuple[None, List[Callable[..., Any]]],
+    Tuple[None, None]
 ]:
     """
     Checks, based on the response, if the provided action applies.
     """
-    content = response.text
+    content: str = response.text
     status_code = None
     content_substr = None
     action_type = None
     custom_hook = None
     response_action = None
-    # TODO: can we replace the isinstance() conditionals with polymorphism?
     if callable(action):
         custom_hook = [action]
     else:
@@ -433,7 +433,6 @@ def _create_response_action_hook(
             )
             raise IgnoreResponseException
 
-        # TODO: are the following lines necessary?
         # If no action has been taken and the status code indicates an error,
         # raise an HTTP error based on the response status
         elif not action_type and response.status_code >= 400:
