@@ -352,7 +352,10 @@ def _find_resolved_params(endpoint_config: Endpoint) -> List[ResolvedParam]:
 
 def _action_type_unless_custom_hook(
     action_type: Optional[str], custom_hook: Optional[List[Callable[..., Any]]]
-) -> Union[Tuple[str, Optional[List[Callable[..., Any]]]], Tuple[None, List[Callable[..., Any]]]]:
+) -> Union[
+    Tuple[str, Optional[List[Callable[..., Any]]]],
+    Tuple[None, List[Callable[..., Any]]],
+]:
     if custom_hook:
         return (None, custom_hook)
     return (action_type, None)
@@ -360,7 +363,10 @@ def _action_type_unless_custom_hook(
 
 def _handle_response_action(
     response: Response, action: ResponseAction
-) -> Union[Tuple[str, Optional[List[Callable[..., Any]]]], Tuple[None, List[Callable[..., Any]]]]:
+) -> Union[
+    Tuple[str, Optional[List[Callable[..., Any]]]],
+    Tuple[None, List[Callable[..., Any]]],
+]:
     """
     Checks, based on the response, if the provided action applies.
     """
@@ -371,8 +377,8 @@ def _handle_response_action(
     custom_hook = None
     response_action = None
     # TODO: can we replace the isinstance() conditionals with polymorphism?
-    if isinstance(action, Callable):
-        custom_hook = [cast(Callable[..., Any], action)]
+    if callable(action):
+        custom_hook = [action]
     else:
         action = cast(ResponseActionDict, action)
         status_code = action.get("status_code")
@@ -380,15 +386,16 @@ def _handle_response_action(
         response_action = action.get("action")
         if isinstance(response_action, str):
             action_type = response_action
-        elif isinstance(response_action, Callable):
-            hook: Callable[..., Any] = cast(Callable[..., Any], response_action)
-            custom_hook = [hook]
+        elif callable(response_action):
+            custom_hook = [response_action]
         elif isinstance(response_action, list) and all(
-            isinstance(action, Callable) for action in response_action
+            callable(action) for action in response_action
         ):
             custom_hook = response_action
         else:
-            raise ValueError(f"Action {response_action} does not conform to expected type. Expected: str or Callable or List[Callable]. Found: {type(response_action)}")
+            raise ValueError(
+                f"Action {response_action} does not conform to expected type. Expected: str or Callable or List[Callable]. Found: {type(response_action)}"
+            )
 
     if status_code is not None and content_substr is not None:
         if response.status_code == status_code and content_substr in content:

@@ -455,7 +455,10 @@ def test_response_actions_called_in_order(mock_api_server, mocker):
     mock_response_hook_1 = mocker.Mock(side_effect=set_encoding)
     mock_response_hook_2 = mocker.Mock(side_effect=add_field)
 
-    response_actions = [mock_response_hook_1, {"status_code": 200, "action": mock_response_hook_2}]
+    response_actions = [
+        mock_response_hook_1,
+        {"status_code": 200, "action": mock_response_hook_2},
+    ]
     hooks = cast(Dict[str, Any], create_response_hooks(response_actions))
     assert len(hooks.get("response")) == 2
 
@@ -501,12 +504,12 @@ def test_create_multiple_response_actions():
         custom_hook,
         {"status_code": 200, "action": custom_hook},
     ]
-    hooks_2 = cast(Dict[str, Any],create_response_hooks(response_actions_2))
+    hooks_2 = cast(Dict[str, Any], create_response_hooks(response_actions_2))
     assert len(hooks_2["response"]) == 2
 
 
 def test_response_action_raises_type_error(mocker):
-    class C():
+    class C:
         pass
 
     response = mocker.Mock()
@@ -520,8 +523,12 @@ def test_response_action_raises_type_error(mocker):
         _handle_response_action(response, {"status_code": 200, "action": 123})
     assert e_2.match("does not conform to expected type")
 
-    assert ("ignore", None) == _handle_response_action(response, {"status_code": 200, "action": "ignore"})
-    assert ("foobar", None) == _handle_response_action(response, {"status_code": 200, "action": "foobar"})
+    assert ("ignore", None) == _handle_response_action(
+        response, {"status_code": 200, "action": "ignore"}
+    )
+    assert ("foobar", None) == _handle_response_action(
+        response, {"status_code": 200, "action": "foobar"}
+    )
 
 
 def test_parses_hooks_from_response_actions(mocker):
@@ -531,5 +538,9 @@ def test_parses_hooks_from_response_actions(mocker):
     hook_1 = mocker.Mock()
     hook_2 = mocker.Mock()
 
-    assert (None, [hook_1]) == _handle_response_action(response, {"status_code": 200, "action": hook_1})
-    assert (None, [hook_1, hook_2]) == _handle_response_action(response, {"status_code": 200, "action": [hook_1, hook_2]})
+    assert (None, [hook_1]) == _handle_response_action(
+        response, {"status_code": 200, "action": hook_1}
+    )
+    assert (None, [hook_1, hook_2]) == _handle_response_action(
+        response, {"status_code": 200, "action": [hook_1, hook_2]}
+    )
