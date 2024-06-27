@@ -1,16 +1,6 @@
 """Generic API Source"""
 
-from typing import (
-    Type,
-    Any,
-    Dict,
-    List,
-    Optional,
-    Generator,
-    Callable,
-    cast,
-    Union
-)
+from typing import Type, Any, Dict, List, Optional, Generator, Callable, cast, Union
 import graphlib  # type: ignore[import,unused-ignore]
 
 import dlt
