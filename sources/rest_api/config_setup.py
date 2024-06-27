@@ -447,13 +447,20 @@ def create_response_hooks(
             response.encoding = 'windows-1252'
             return response
 
+        def remove_field(response: Response, *args, **kwargs) -> Response:
+            payload = response.json()
+            for record in payload:
+                del record["email"]
+            modified_content: bytes = json.dumps(payload).encode("utf-8")
+            response._content = modified_content
+            return response
+
         response_actions = [
             set_encoding,
             {"status_code": 404, "action": "ignore"},
             {"content": "Not found", "action": "ignore"},
-            {"status_code": 429, "action": "retry"},
-            {"status_code": 200, "content": "some text", "action": "retry"},
-            {"status_code": 200, "action": change_encoding},
+            {"status_code": 200, "content": "some text", "action": "ignore"},
+            {"status_code": 200, "action": remove_field},
         ]
         hooks = create_response_hooks(response_actions)
     """
