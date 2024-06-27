@@ -457,7 +457,7 @@ def create_response_hooks(
         def remove_field(response: Response, *args, **kwargs) -> Response:
             payload = response.json()
             for record in payload:
-                del record["email"]
+                record.pop("email", None)
             modified_content: bytes = json.dumps(payload).encode("utf-8")
             response._content = modified_content
             return response
