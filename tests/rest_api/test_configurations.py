@@ -8,10 +8,6 @@ from dlt.common.utils import update_dict_nested, custom_environ
 from dlt.common.jsonpath import compile_path
 from dlt.common.configuration import inject_section
 from dlt.common.configuration.specs import ConfigSectionContext
-from dlt.sources.helpers.rest_client.paginators import (
-    SinglePagePaginator,
-    HeaderLinkPaginator,
-)
 
 from sources.rest_api import rest_api_source, rest_api_resources, _validate_param_type
 from sources.rest_api.config_setup import (
@@ -45,7 +41,9 @@ from dlt.sources.helpers.rest_client.paginators import (
     JSONResponseCursorPaginator,
     OffsetPaginator,
     PageNumberPaginator,
+    SinglePagePaginator,
 )
+
 from dlt.sources.helpers.rest_client.auth import (
     HttpBasicAuth,
     BearerTokenAuth,
