@@ -433,9 +433,10 @@ def _create_response_action_hook(
             )
             raise IgnoreResponseException
 
+        # If there are hooks, then the REST client does not raise for status
         # If no action has been taken and the status code indicates an error,
         # raise an HTTP error based on the response status
-        elif not action_type and response.status_code >= 400:
+        elif not action_type:
             response.raise_for_status()
 
     return response_action_hook
