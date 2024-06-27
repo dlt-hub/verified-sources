@@ -1,10 +1,8 @@
 import json
 import pytest
-import re
 from typing import List, Dict, Any
 
 import dlt
-from dlt.common.exceptions import DictValidationException
 from dlt.pipeline.exceptions import PipelineStepFailed
 from dlt.sources.helpers.rest_client.paginators import BaseReferencePaginator
 from dlt.sources.helpers.requests import Response
@@ -297,6 +295,65 @@ def test_load_mock_api_typeddict_config(mock_api_server):
     assert table_counts["post_comments"] == 5000
 
 
+def test_config_validation_for_response_actions(mocker):
+    mock_response_hook_1 = mocker.Mock()
+    mock_response_hook_2 = mocker.Mock()
+    config_1: RESTAPIConfig = {
+        "client": {"base_url": "https://api.example.com"},
+        "resources": [
+            {
+                "name": "posts",
+                "endpoint": {
+                    "response_actions": [
+                        {
+                            "status_code": 200,
+                            "action": mock_response_hook_1,
+                        },
+                    ],
+                },
+            },
+        ],
+    }
+
+    rest_api_source(config_1)
+
+    config_2: RESTAPIConfig = {
+        "client": {"base_url": "https://api.example.com"},
+        "resources": [
+            {
+                "name": "posts",
+                "endpoint": {
+                    "response_actions": [
+                        mock_response_hook_1,
+                        mock_response_hook_2,
+                    ],
+                },
+            },
+        ],
+    }
+
+    rest_api_source(config_2)
+
+    config_3: RESTAPIConfig = {
+        "client": {"base_url": "https://api.example.com"},
+        "resources": [
+            {
+                "name": "posts",
+                "endpoint": {
+                    "response_actions": [
+                        {
+                            "status_code": 200,
+                            "action": [mock_response_hook_1, mock_response_hook_2],
+                        },
+                    ],
+                },
+            },
+        ],
+    }
+
+    rest_api_source(config_3)
+
+
 def test_response_action_on_status_code(mock_api_server, mocker):
     mock_response_hook = mocker.Mock()
     mock_source = rest_api_source(
@@ -350,9 +407,10 @@ def test_response_action_on_every_response(mock_api_server, mocker):
     mock_response_hook.assert_called_once()
 
 
-def test_only_one_response_action_every_response(mock_api_server, mocker):
-    def custom_hook(request, *args, **kwargs):
-        return request
+def test_multiple_response_action_every_response(mock_api_server, mocker):
+    def custom_hook(response, *args, **kwargs):
+        breakpoint()
+        return response
 
     mock_response_hook_1 = mocker.Mock(side_effect=custom_hook)
     mock_response_hook_2 = mocker.Mock(side_effect=custom_hook)
@@ -376,58 +434,26 @@ def test_only_one_response_action_every_response(mock_api_server, mocker):
     list(mock_source.with_resources("posts").add_limit(1))
 
     mock_response_hook_1.assert_called_once()
-    mock_response_hook_2.assert_not_called()
-
-
-def test_only_one_response_action_every_response(mock_api_server, mocker):
-    def custom_hook(request, *args, **kwargs):
-        return request
-
-    mock_response_hook_1 = mocker.Mock(side_effect=custom_hook)
-    mock_response_hook_2 = mocker.Mock(side_effect=custom_hook)
-    config: RESTAPIConfig = {
-        "client": {"base_url": "https://api.example.com"},
-        "resources": [
-            {
-                "name": "posts",
-                "endpoint": {
-                    "response_actions": [
-                        {
-                            "status_code": 200,
-                            "action": [mock_response_hook_1, mock_response_hook_2],
-                        },
-                    ],
-                },
-            },
-        ],
-    }
-    with pytest.raises(DictValidationException) as e:
-        rest_api_source(config)
-
-    assert e.match(
-        re.escape("For str: In path ./resources[0]/endpoint/response_actions[0]")
-    )
-    assert e.match(re.escape("has invalid type 'dict' while 'str' is expected"))
+    mock_response_hook_2.assert_called_once()
 
 
 def test_response_actions_called_in_order(mock_api_server, mocker):
-
     def set_encoding(response: Response, *args, **kwargs) -> Response:
-        breakpoint()
-        response.encoding = 'windows-1252'
+        # breakpoint()
+        response.encoding = "windows-1252"
         return response
 
-    def add_fields(response: Response, *args, **kwargs) -> Response:
+    def add_field(response: Response, *args, **kwargs) -> Response:
         breakpoint()
+        assert response.encoding == "windows-1252"
         data = response.json()
-        data['custom_field'] = "foobar"
-        modified_content: bytes = json.dumps(data).encode('utf-8')
+        data["custom_field"] = "foobar"
+        modified_content: bytes = json.dumps(data).encode("utf-8")
         response._content = modified_content
         return response
 
-
     mock_response_hook_1 = mocker.Mock(side_effect=set_encoding)
-    mock_response_hook_2 = mocker.Mock(side_effect=add_fields)
+    mock_response_hook_2 = mocker.Mock(side_effect=add_field)
     mock_source = rest_api_source(
         {
             "client": {"base_url": "https://api.example.com"},
@@ -448,7 +474,7 @@ def test_response_actions_called_in_order(mock_api_server, mocker):
     list(mock_source.with_resources("posts").add_limit(1))
 
     mock_response_hook_1.assert_called_once()
-    mock_response_hook_2.assert_not_called()
+    mock_response_hook_2.assert_called_once()
 
 
 def test_create_multiple_response_actions():
@@ -463,4 +489,11 @@ def test_create_multiple_response_actions():
         {"status_code": 200, "content": "some text", "action": "retry"},
     ]
     hooks: Dict[str, Any] = create_response_hooks(response_actions)
-    assert len(hooks['response']) == 5
+    assert len(hooks["response"]) == 5
+
+    response_actions_2: List[ResponseAction] = [
+        custom_hook,
+        {"status_code": "200", "action": custom_hook},
+    ]
+    hooks_2: Dict[str, Any] = create_response_hooks(response_actions_2)
+    assert len(hooks_2["response"]) == 2

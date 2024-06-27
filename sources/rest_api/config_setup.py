@@ -349,7 +349,10 @@ def _find_resolved_params(endpoint_config: Endpoint) -> List[ResolvedParam]:
         if (isinstance(value, dict) and value.get("type") == "resolve")
     ]
 
-def _action_type_unless_custom_hook(action_type: Optional[str], custom_hook: Optional[Callable[..., Any]]) -> Tuple[Optional[str], Optional[Callable[..., Any]]]:
+
+def _action_type_unless_custom_hook(
+    action_type: Optional[str], custom_hook: Optional[Callable[..., Any]]
+) -> Tuple[Optional[str], Optional[Callable[..., Any]]]:
     if custom_hook:
         return (None, custom_hook)
     return (action_type, None)
@@ -358,7 +361,9 @@ def _action_type_unless_custom_hook(action_type: Optional[str], custom_hook: Opt
 def _handle_response_action(
     response: Response, action: ResponseAction
 ) -> Tuple[Optional[str], Optional[Callable[..., Any]]]:
-    """Handle response actions based on the response and the provided actions."""
+    """
+    Checks, based on the response, if the provided action applies.
+    """
     content = response.text
     status_code = None
     content_substr = None
@@ -380,15 +385,15 @@ def _handle_response_action(
 
     if status_code is not None and content_substr is not None:
         if response.status_code == status_code and content_substr in content:
-          return _action_type_unless_custom_hook(action_type, custom_hook)
+            return _action_type_unless_custom_hook(action_type, custom_hook)
 
     elif status_code is not None:
         if response.status_code == status_code:
-          return _action_type_unless_custom_hook(action_type, custom_hook)
+            return _action_type_unless_custom_hook(action_type, custom_hook)
 
     elif content_substr is not None:
         if content_substr in content:
-          return _action_type_unless_custom_hook(action_type, custom_hook)
+            return _action_type_unless_custom_hook(action_type, custom_hook)
 
     elif status_code is None and content_substr is None and custom_hook is not None:
         return (None, custom_hook)
@@ -399,10 +404,11 @@ def _handle_response_action(
 def _create_response_action_hook(
     response_action: ResponseAction,
 ) -> Callable[[Response, Any, Any], None]:
-    def response_actions_hook(response: Response, *args: Any, **kwargs: Any) -> None:
-        (action_type, custom_hook) = _handle_response_action(
-            response, response_action
-        )
+    def response_action_hook(response: Response, *args: Any, **kwargs: Any) -> None:
+        """
+        This is the hook executed by the requests library
+        """
+        (action_type, custom_hook) = _handle_response_action(response, response_action)
         if custom_hook:
             custom_hook(response)
         elif action_type == "ignore":
@@ -412,12 +418,13 @@ def _create_response_action_hook(
             )
             raise IgnoreResponseException
 
+        # TODO: are the following lines necessary?
         # If no action has been taken and the status code indicates an error,
         # raise an HTTP error based on the response status
         elif not action_type and response.status_code >= 400:
             response.raise_for_status()
 
-    return response_actions_hook
+    return response_action_hook
 
 
 def create_response_hooks(
@@ -443,7 +450,11 @@ def create_response_hooks(
         hooks = create_response_hooks(response_actions)
     """
     if response_actions:
-        return {"response": [_create_response_action_hook(action) for action in response_actions]}
+        return {
+            "response": [
+                _create_response_action_hook(action) for action in response_actions
+            ]
+        }
     return None
 
 

@@ -35,13 +35,11 @@ from dlt.sources.helpers.rest_client.paginators import (
     OffsetPaginator,
     PageNumberPaginator,
 )
-from dlt.sources.helpers.rest_client.exceptions import IgnoreResponseException
 from dlt.sources.helpers.rest_client.auth import (
     AuthConfigBase,
     HttpBasicAuth,
     BearerTokenAuth,
     APIKeyAuth,
-    OAuthJWTAuth,
 )
 
 PaginatorType = Literal[
@@ -216,7 +214,7 @@ class ResolvedParam:
 class ResponseActionDict(TypedDict, total=False):
     status_code: Optional[Union[int, str]]
     content: Optional[str]
-    action: Optional[Union[str, Callable[..., Any]]]
+    action: Optional[Union[str, Union[Callable[..., Any], List[Callable[..., Any]]]]]
 
 
 ResponseAction = Union[ResponseActionDict, Callable[..., Any]]
