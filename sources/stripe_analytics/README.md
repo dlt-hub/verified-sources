@@ -1,7 +1,8 @@
 # Stripe
-Stripe is an online payment company that provides a platform for businesses to process payments from customers over the internet.  This verified source uses Stripe's API and `dlt` to extract key data such as customer information, subscription details, event records, etc. and then load it into a database. In addition, the pipeline example shows how to calculate some key metrics such as MRR (Monthly Recurring Revenue) and churn rate.
+Stripe is an online payment company that provides a platform for businesses to process payments from customers over the internet.  This verified source uses Stripe's API and `dlt` to extract key data such as customer information, subscription details, event records, etc. and then load it into a database.
 
 This verified source loads data from the following default endpoints:
+
 | Endpoint | Description |
 | --- | --- |
 | Subscription | recurring payment model offered by the Stripe payment platform. |
@@ -14,11 +15,11 @@ This verified source loads data from the following default endpoints:
 | Invoice | a document that represents a request for payment from a customer. |
 | BalanceTransaction | represents a record of funds movement within a Stripe account. |
 
-> Please note that the endpoints within the verified source can be tailored to meet your specific requirements, as outlined in the Stripe API reference documentation Detailed instructions on customizing these endpoints can be found in the customization section here.
+> Please note that the endpoints within the verified source can be tailored to meet your specific requirements, as outlined in the Stripe API reference documentation. Detailed instructions on customizing these endpoints can be found in the customization section [here](https://dlthub.com/docs/dlt-ecosystem/verified-sources/stripe#customization).
 
 ## Initialize the pipeline
 ```bash
-dlt init stripe bigquery
+dlt init stripe duckdb
 ```
 
 Here, we chose BigQuery as the destination. Alternatively, you can also choose redshift, duckdb, or any of the other [destinations.](https://dlthub.com/docs/dlt-ecosystem/destinations/)
@@ -34,7 +35,7 @@ To get the full list of supported endpoints, grab API credentials and initialise
     [sources.stripe_analytics]
     stripe_secret_key = "stripe_secret_key"# Please set me up!
     ```
-    
+
 3. Enter credentials for your chosen destination as per the [docs.](https://dlthub.com/docs/dlt-ecosystem/destinations/)
 
 ## Running the pipeline example
@@ -42,19 +43,18 @@ To get the full list of supported endpoints, grab API credentials and initialise
     ```bash
     pip install -r requirements.txt
     ```
-    
+
 2. Now you can build the verified source by using the command:
     ```bash
-    python3 stripe_analytics_pipeline.py
+    python stripe_analytics_pipeline.py
     ```
-    
+
 3. To ensure that everything loads as expected, use the command:
     ```bash
     dlt pipeline <pipeline_name> show
     ```
     For example, the pipeline_name for the above pipeline example is `stripe_analytics`, you can use any custom name instead.
-    
 
-💡 To explore additional customizations for this pipeline, we recommend referring to the official dlt Stripe verified documentation. It provides comprehensive information and guidance on how to further customize and tailor the pipeline to suit your specific needs. You can find the dlt Stripe documentation in [Setup Guide: Stripe](https://dlthub.com/docs/dlt-ecosystem/verified-sources/stripe) .
-    
- 
+
+💡 To explore additional customizations for this pipeline, we recommend referring to the official dlt Stripe verified documentation. It provides comprehensive information and guidance on how to further customize and tailor the pipeline to suit your specific needs. You can find the dlt Stripe documentation in [Setup Guide: Stripe](https://dlthub.com/docs/dlt-ecosystem/verified-sources/stripe).
+
