@@ -351,8 +351,8 @@ def _find_resolved_params(endpoint_config: Endpoint) -> List[ResolvedParam]:
 
 
 def _action_type_unless_custom_hook(
-    action_type: Optional[str], custom_hook: Optional[Callable[..., Any]]
-) -> Tuple[Optional[str], Optional[Callable[..., Any]]]:
+    action_type: Optional[str], custom_hook: Optional[List[Callable[..., Any]]]
+) -> Union[Tuple[str, Optional[List[Callable[..., Any]]]], Tuple[None, List[Callable[..., Any]]]]:
     if custom_hook:
         return (None, custom_hook)
     return (action_type, None)
@@ -360,7 +360,7 @@ def _action_type_unless_custom_hook(
 
 def _handle_response_action(
     response: Response, action: ResponseAction
-) -> Tuple[Optional[str], Optional[Callable[..., Any]]]:
+) -> Union[Tuple[str, Optional[List[Callable[..., Any]]]], Tuple[None, List[Callable[..., Any]]]]:
     """
     Checks, based on the response, if the provided action applies.
     """
@@ -372,7 +372,7 @@ def _handle_response_action(
     response_action = None
     # TODO: can we replace the isinstance() conditionals with polymorphism?
     if isinstance(action, Callable):
-        custom_hook = cast(Callable[..., Any], action)
+        custom_hook = [cast(Callable[..., Any], action)]
     else:
         action = cast(ResponseActionDict, action)
         status_code = action.get("status_code")
@@ -381,7 +381,14 @@ def _handle_response_action(
         if isinstance(response_action, str):
             action_type = response_action
         elif isinstance(response_action, Callable):
+            hook: Callable[..., Any] = cast(Callable[..., Any], response_action)
+            custom_hook = [hook]
+        elif isinstance(response_action, list) and all(
+            isinstance(action, Callable) for action in response_action
+        ):
             custom_hook = response_action
+        else:
+            raise ValueError(f"Action {response_action} does not conform to expected type. Expected: str or Callable or List[Callable]. Found: {type(response_action)}")
 
     if status_code is not None and content_substr is not None:
         if response.status_code == status_code and content_substr in content:
@@ -408,9 +415,10 @@ def _create_response_action_hook(
         """
         This is the hook executed by the requests library
         """
-        (action_type, custom_hook) = _handle_response_action(response, response_action)
-        if custom_hook:
-            custom_hook(response)
+        (action_type, custom_hooks) = _handle_response_action(response, response_action)
+        if custom_hooks:
+            for hook in custom_hooks:
+                hook(response)
         elif action_type == "ignore":
             logger.info(
                 f"Ignoring response with code {response.status_code} "
@@ -450,11 +458,8 @@ def create_response_hooks(
         hooks = create_response_hooks(response_actions)
     """
     if response_actions:
-        return {
-            "response": [
-                _create_response_action_hook(action) for action in response_actions
-            ]
-        }
+        hooks = [_create_response_action_hook(action) for action in response_actions]
+        return {"response": hooks}
     return None
 
 

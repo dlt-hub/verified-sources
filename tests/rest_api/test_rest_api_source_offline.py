@@ -17,6 +17,7 @@ from sources.rest_api import (
     Endpoint,
     create_response_hooks,
 )
+from sources.rest_api.config_setup import _handle_response_action
 from sources.rest_api.typing import ResponseAction
 
 
@@ -409,7 +410,6 @@ def test_response_action_on_every_response(mock_api_server, mocker):
 
 def test_multiple_response_action_every_response(mock_api_server, mocker):
     def custom_hook(response, *args, **kwargs):
-        breakpoint()
         return response
 
     mock_response_hook_1 = mocker.Mock(side_effect=custom_hook)
@@ -439,7 +439,7 @@ def test_multiple_response_action_every_response(mock_api_server, mocker):
 
 def test_response_actions_called_in_order(mock_api_server, mocker):
     def set_encoding(response: Response, *args, **kwargs) -> Response:
-        # breakpoint()
+        assert response.encoding != "windows-1252"
         response.encoding = "windows-1252"
         return response
 
@@ -497,3 +497,33 @@ def test_create_multiple_response_actions():
     ]
     hooks_2: Dict[str, Any] = create_response_hooks(response_actions_2)
     assert len(hooks_2["response"]) == 2
+
+
+def test_response_action_raises_type_error(mocker):
+    class C():
+        pass
+
+    response = mocker.Mock()
+    response.status_code = "200"
+
+    with pytest.raises(ValueError) as e_1:
+        _handle_response_action(response, {"status_code": "200", "action": C()})
+    assert e_1.match("does not conform to expected type")
+
+    with pytest.raises(ValueError) as e_2:
+        _handle_response_action(response, {"status_code": "200", "action": 123})
+    assert e_2.match("does not conform to expected type")
+
+    assert ("ignore", None) == _handle_response_action(response, {"status_code": "200", "action": "ignore"})
+    assert ("foobar", None) == _handle_response_action(response, {"status_code": "200", "action": "foobar"})
+
+
+def test_parses_hooks_from_response_actions(mocker):
+    response = mocker.Mock()
+    response.status_code = "200"
+
+    hook_1 = mocker.Mock()
+    hook_2 = mocker.Mock()
+
+    assert (None, [hook_1]) == _handle_response_action(response, {"status_code": "200", "action": hook_1})
+    assert (None, [hook_1, hook_2]) == _handle_response_action(response, {"status_code": "200", "action": [hook_1, hook_2]})
