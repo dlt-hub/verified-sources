@@ -147,9 +147,9 @@ def test_load_sql_table_incremental(
     """Run pipeline twice. Insert more rows after first run
     and ensure only those rows are stored after the second run.
     """
-    os.environ["SOURCES__SQL_DATABASE__CHAT_MESSAGE__INCREMENTAL__CURSOR_PATH"] = (
-        "updated_at"
-    )
+    os.environ[
+        "SOURCES__SQL_DATABASE__CHAT_MESSAGE__INCREMENTAL__CURSOR_PATH"
+    ] = "updated_at"
 
     pipeline = make_pipeline(destination_name)
     tables = ["chat_message"]
@@ -887,7 +887,7 @@ def test_sql_database_include_view_in_table_names(
     assert_row_counts(pipeline, sql_source_db, ["app_user", "chat_message_view"])
 
 
-@pytest.mark.parametrize("backend", ["pyarrow", "pandas"])
+@pytest.mark.parametrize("backend", ["pyarrow", "pandas", "sqlalchemy"])
 @pytest.mark.parametrize("standalone_resource", [True, False])
 @pytest.mark.parametrize("reflection_level", ["minimal", "full", "full_with_precision"])
 @pytest.mark.parametrize("type_adapter", [True, False])
@@ -939,11 +939,13 @@ def test_infer_unsupported_types(
     # unsupported columns have unknown data type here
     assert "unsupported_daterange_1" in columns
 
-    if backend != "pandas":
-        assert "data_type" not in columns["unsupported_daterange_1"]
-    else:
-        # Pandas infers types in extract
+    # Arrow and pandas infer types in extract
+    if backend == "pyarrow":
+        assert columns["unsupported_daterange_1"]["data_type"] == "complex"
+    elif backend == "pandas":
         assert columns["unsupported_daterange_1"]["data_type"] == "text"
+    else:
+        assert "data_type" not in columns["unsupported_daterange_1"]
 
     pipeline.normalize()
     pipeline.load()
@@ -961,10 +963,9 @@ def test_infer_unsupported_types(
     ]
 
     if backend == "pyarrow":
-        # arrow does not infer types
-        assert "data_type" not in columns["unsupported_daterange_1"]
-        # Column is not loaded
-        assert "unsupported_daterange_1" not in rows[0]
+        # TODO: duckdb writes structs as strings (not json encoded) to json columns
+        # Just check that it has a value
+        assert rows[0]["unsupported_daterange_1"]
 
         assert isinstance(json.loads(rows[0]["unsupported_array_1"]), list)
         assert columns["unsupported_array_1"]["data_type"] == "complex"

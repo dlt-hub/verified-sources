@@ -1,10 +1,10 @@
-from typing import Any, Sequence, TYPE_CHECKING
+from typing import Any, Sequence, Optional
 
 from dlt.common.schema.typing import TTableSchemaColumns
 from dlt.common import logger
 from dlt.common.configuration import with_config
 from dlt.common.destination import DestinationCapabilitiesContext
-from dlt.common.data_types import py_type_to_sc_type, coerce_value
+from dlt.common.json import custom_encode, map_nested_in_place
 
 from .schema_types import RowAny
 
@@ -91,24 +91,32 @@ def row_tuples_to_arrow(
     if columnar_unknown_types:
         new_schema_fields = []
         for key in list(columnar_unknown_types):
+            arrow_col: Optional[pa.Array] = None
             try:
-                parr = columnar_unknown_types[key] = pa.array(
+                arrow_col = columnar_known_types[key] = pa.array(
                     columnar_unknown_types[key]
                 )
             except pa.ArrowInvalid as e:
-                logger.warning(
-                    f"Column {key} contains a data type which is not supported by pyarrow. This column will be ignored. Error: {e}"
-                )
-                del columnar_unknown_types[key]
-            else:
+                # Try coercing types not supported by arrow to a json friendly format
+                # E.g. dataclasses -> dict, UUID -> str
+                try:
+                    arrow_col = columnar_known_types[key] = pa.array(
+                        map_nested_in_place(
+                            custom_encode, list(columnar_unknown_types[key])
+                        )
+                    )
+                except (pa.ArrowInvalid, TypeError):
+                    logger.warning(
+                        f"Column {key} contains a data type which is not supported by pyarrow. This column will be ignored. Error: {e}"
+                    )
+            if arrow_col is not None:
                 new_schema_fields.append(
                     pa.field(
                         key,
-                        parr.type,
+                        arrow_col.type,
                         nullable=columns[key]["nullable"],
                     )
                 )
-                columnar_known_types[key] = columnar_unknown_types[key]
 
         # New schema
         column_order = {name: idx for idx, name in enumerate(columns)}
