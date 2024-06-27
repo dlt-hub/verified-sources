@@ -1,10 +1,13 @@
+import json
 import pytest
 import re
+from typing import List, Dict, Any
 
 import dlt
 from dlt.common.exceptions import DictValidationException
 from dlt.pipeline.exceptions import PipelineStepFailed
 from dlt.sources.helpers.rest_client.paginators import BaseReferencePaginator
+from dlt.sources.helpers.requests import Response
 
 from tests.utils import assert_load_info, load_table_counts, assert_query_data
 
@@ -14,7 +17,9 @@ from sources.rest_api import (
     ClientConfig,
     EndpointResource,
     Endpoint,
+    create_response_hooks,
 )
+from sources.rest_api.typing import ResponseAction
 
 
 def test_load_mock_api(mock_api_server):
@@ -403,3 +408,59 @@ def test_only_one_response_action_every_response(mock_api_server, mocker):
         re.escape("For str: In path ./resources[0]/endpoint/response_actions[0]")
     )
     assert e.match(re.escape("has invalid type 'dict' while 'str' is expected"))
+
+
+def test_response_actions_called_in_order(mock_api_server, mocker):
+
+    def set_encoding(response: Response, *args, **kwargs) -> Response:
+        breakpoint()
+        response.encoding = 'windows-1252'
+        return response
+
+    def add_fields(response: Response, *args, **kwargs) -> Response:
+        breakpoint()
+        data = response.json()
+        data['custom_field'] = "foobar"
+        modified_content: bytes = json.dumps(data).encode('utf-8')
+        response._content = modified_content
+        return response
+
+
+    mock_response_hook_1 = mocker.Mock(side_effect=set_encoding)
+    mock_response_hook_2 = mocker.Mock(side_effect=add_fields)
+    mock_source = rest_api_source(
+        {
+            "client": {"base_url": "https://api.example.com"},
+            "resources": [
+                {
+                    "name": "posts",
+                    "endpoint": {
+                        "response_actions": [
+                            mock_response_hook_1,
+                            {"status_code": "200", "action": mock_response_hook_2},
+                        ],
+                    },
+                },
+            ],
+        }
+    )
+
+    list(mock_source.with_resources("posts").add_limit(1))
+
+    mock_response_hook_1.assert_called_once()
+    mock_response_hook_2.assert_not_called()
+
+
+def test_create_multiple_response_actions():
+    def custom_hook(response, *args, **kwargs):
+        return response
+
+    response_actions: List[ResponseAction] = [
+        custom_hook,
+        {"status_code": 404, "action": "ignore"},
+        {"content": "Not found", "action": "ignore"},
+        {"status_code": 429, "action": "retry"},
+        {"status_code": 200, "content": "some text", "action": "retry"},
+    ]
+    hooks: Dict[str, Any] = create_response_hooks(response_actions)
+    assert len(hooks['response']) == 5

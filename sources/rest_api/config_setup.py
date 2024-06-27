@@ -349,61 +349,59 @@ def _find_resolved_params(endpoint_config: Endpoint) -> List[ResolvedParam]:
         if (isinstance(value, dict) and value.get("type") == "resolve")
     ]
 
+def _action_type_unless_custom_hook(action_type: Optional[str], custom_hook: Optional[Callable[..., Any]]) -> Tuple[Optional[str], Optional[Callable[..., Any]]]:
+    if custom_hook:
+        return (None, custom_hook)
+    return (action_type, None)
 
-def _handle_response_actions(
-    response: Response, actions: List[ResponseAction]
+
+def _handle_response_action(
+    response: Response, action: ResponseAction
 ) -> Tuple[Optional[str], Optional[Callable[..., Any]]]:
     """Handle response actions based on the response and the provided actions."""
     content = response.text
+    status_code = None
+    content_substr = None
+    action_type = None
+    custom_hook = None
+    response_action = None
+    # TODO: can we replace the isinstance() conditionals with polymorphism?
+    if isinstance(action, Callable):
+        custom_hook = cast(Callable[..., Any], action)
+    else:
+        action = cast(ResponseActionDict, action)
+        status_code = action.get("status_code")
+        content_substr = action.get("content")
+        response_action = action.get("action")
+        if isinstance(response_action, str):
+            action_type = response_action
+        elif isinstance(response_action, Callable):
+            custom_hook = response_action
 
-    for action in actions:
-        status_code = None
-        content_substr = None
-        action_type = None
-        custom_hook = None
-        response_action = None
-        # TODO: can we replace the isinstance() conditionals with polymorphism?
-        if isinstance(action, Callable):
-            custom_hook = cast(Callable[..., Any], action)
-        else:
-            action = cast(ResponseActionDict, action)
-            status_code = action.get("status_code")
-            content_substr = action.get("content")
-            response_action = action.get("action")
-            if isinstance(response_action, str):
-                action_type = response_action
-            elif isinstance(response_action, Callable):
-                custom_hook = response_action
+    if status_code is not None and content_substr is not None:
+        if response.status_code == status_code and content_substr in content:
+          return _action_type_unless_custom_hook(action_type, custom_hook)
 
-        if status_code is not None and content_substr is not None:
-            if response.status_code == status_code and content_substr in content:
-                if custom_hook:
-                    return (None, custom_hook)
-                return (action_type, None)
+    elif status_code is not None:
+        if response.status_code == status_code:
+          return _action_type_unless_custom_hook(action_type, custom_hook)
 
-        elif status_code is not None:
-            if response.status_code == status_code:
-                if custom_hook:
-                    return (None, custom_hook)
-                return (action_type, None)
+    elif content_substr is not None:
+        if content_substr in content:
+          return _action_type_unless_custom_hook(action_type, custom_hook)
 
-        elif content_substr is not None:
-            if content_substr in content:
-                if custom_hook:
-                    return (None, custom_hook)
-                return (action_type, None)
+    elif status_code is None and content_substr is None and custom_hook is not None:
+        return (None, custom_hook)
 
-        elif status_code is None and content_substr is None and custom_hook is not None:
-            return (None, custom_hook)
     return (None, None)
 
 
-def _create_response_actions_hook(
-    response_actions: List[ResponseAction],
+def _create_response_action_hook(
+    response_action: ResponseAction,
 ) -> Callable[[Response, Any, Any], None]:
     def response_actions_hook(response: Response, *args: Any, **kwargs: Any) -> None:
-        (action_type, custom_hook) = _handle_response_actions(
-            response, response_actions
+        (action_type, custom_hook) = _handle_response_action(
+            response, response_action
         )
         if custom_hook:
             custom_hook(response)
@@ -430,22 +428,22 @@ def create_response_hooks(
     the default behavior is to raise an HTTP error.
 
     Example:
-        def change_encoding(response, *args, **kwargs):
+        def set_encoding(response, *args, **kwargs):
             response.encoding = 'windows-1252'
             return response
 
         response_actions = [
+            set_encoding,
             {"status_code": 404, "action": "ignore"},
             {"content": "Not found", "action": "ignore"},
             {"status_code": 429, "action": "retry"},
             {"status_code": 200, "content": "some text", "action": "retry"},
             {"status_code": 200, "action": change_encoding},
-            change_encoding,
         ]
         hooks = create_response_hooks(response_actions)
     """
     if response_actions:
-        return {"response": [_create_response_actions_hook(response_actions)]}
+        return {"response": [_create_response_action_hook(action) for action in response_actions]}
     return None
 
 
