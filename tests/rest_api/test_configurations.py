@@ -548,7 +548,7 @@ def test_resource_schema() -> None:
     assert resources[1].name == "user"
 
 
-def test_incremental_from_request_param():
+def test_constructs_incremental_from_request_param():
     request_params = {
         "foo": "bar",
         "since": {
@@ -564,7 +564,7 @@ def test_incremental_from_request_param():
     assert incremental_param == IncrementalParam(start="since", end=None)
 
 
-def test_invalid_incremental():
+def test_invalid_incremental_type_is_not_accepted():
     request_params = {
         "foo": "bar",
         "since": {
@@ -593,7 +593,7 @@ def test_incremental_source_in_request_param():
     assert incremental_param == IncrementalParam(start="since", end=None)
 
 
-def test_endpoint_config_incremental():
+def test_constructs_incremental_from_endpoint_config_incremental():
     config = {
         "incremental": {
             "start_param": "since",
@@ -610,7 +610,7 @@ def test_endpoint_config_incremental():
     assert incremental_param == IncrementalParam(start="since", end="until")
 
 
-def test_many_incrementals_in_resource():
+def test_one_resource_cannot_have_many_incrementals():
     request_params = {
         "foo": "bar",
         "first_incremental": {
@@ -632,7 +632,7 @@ def test_many_incrementals_in_resource():
     assert e.match(error_message)
 
 
-def test_resource_hints():
+def test_resource_hints_are_passed_to_resource_constructor():
     config: RESTAPIConfig = {
         "client": {"base_url": "https://api.example.com"},
         "resources": [
@@ -675,7 +675,14 @@ def test_resource_hints():
             assert arg in kwargs.items()
 
 
-def test_two_resources_dependent_on_one_parent_resource():
+def test_two_resources_can_depend_on_one_parent_resource():
+    user_id = {
+        "user_id": {
+            "type": "resolve",
+            "field": "id",
+            "resource": "users",
+        },
+    }
     config: RESTAPIConfig = {
         "client": {
             "base_url": "https://api.example.com",
@@ -686,37 +693,24 @@ def test_two_resources_dependent_on_one_parent_resource():
                 "name": "user_details",
                 "endpoint": {
                     "path": "user/{user_id}/",
-                    "params": {
-                        "user_id": {
-                            "type": "resolve",
-                            "field": "id",
-                            "resource": "users",
-                        },
-                    },
+                    "params": user_id,
                 },
             },
             {
                 "name": "meetings",
                 "endpoint": {
                     "path": "meetings/{user_id}/",
-                    "params": {
-                        "user_id": {
-                            "type": "resolve",
-                            "field": "id",
-                            "resource": "users",
-                        },
-                    },
+                    "params": user_id,
                 },
             },
         ],
     }
-    resources = rest_api_resources(config)
+    resources = rest_api_source(config).resources
+    assert resources["meetings"]._pipe.parent.name == "users"
+    assert resources["user_details"]._pipe.parent.name == "users"
 
-    resource_names = [resource.name for resource in resources]
-    assert ["meetings", "user_details", "users"] == sorted(resource_names)
 
-
-def test_dependent_resource_with_multiple_parameter_bindings():
+def test_dependent_resource_cannot_bind_multiple_parameters():
     config: RESTAPIConfig = {
         "client": {
             "base_url": "https://api.example.com",
@@ -754,7 +748,7 @@ def test_dependent_resource_with_multiple_parameter_bindings():
     assert e.match(error_part_2)
 
 
-def test_one_resource_binding_two_parents():
+def test_one_resource_cannot_bind_two_parents():
     config: RESTAPIConfig = {
         "client": {
             "base_url": "https://api.example.com",
@@ -830,12 +824,12 @@ def test_resource_dependent_dependent():
         ],
     }
 
-    resources = rest_api_resources(config)
-    resource_names = [resource.name for resource in resources]
-    assert ["location_details", "locations", "meetings"] == sorted(resource_names)
+    resources = rest_api_source(config).resources
+    assert resources["meetings"]._pipe.parent.name == "location_details"
+    assert resources["location_details"]._pipe.parent.name == "locations"
 
 
-def test_circular_resource_binding():
+def test_circular_resource_bindingis_invalid():
     config: RESTAPIConfig = {
         "client": {
             "base_url": "https://api.example.com",
