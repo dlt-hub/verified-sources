@@ -1,7 +1,11 @@
+import re
 import dlt.extract
 import pytest
+from unittest.mock import patch
 from copy import copy, deepcopy
 from typing import cast, get_args
+
+from graphlib import CycleError
 
 import dlt
 from dlt.common.utils import update_dict_nested, custom_environ
@@ -544,7 +548,7 @@ def test_resource_schema() -> None:
     assert resources[1].name == "user"
 
 
-def test_incremental_from_request_param():
+def test_constructs_incremental_from_request_param():
     request_params = {
         "foo": "bar",
         "since": {
@@ -560,7 +564,7 @@ def test_incremental_from_request_param():
     assert incremental_param == IncrementalParam(start="since", end=None)
 
 
-def test_invalid_incremental():
+def test_invalid_incremental_type_is_not_accepted():
     request_params = {
         "foo": "bar",
         "since": {
@@ -589,7 +593,7 @@ def test_incremental_source_in_request_param():
     assert incremental_param == IncrementalParam(start="since", end=None)
 
 
-def test_endpoint_config_incremental():
+def test_constructs_incremental_from_endpoint_config_incremental():
     config = {
         "incremental": {
             "start_param": "since",
@@ -606,7 +610,7 @@ def test_endpoint_config_incremental():
     assert incremental_param == IncrementalParam(start="since", end="until")
 
 
-def test_many_incrementals_in_resource():
+def test_one_resource_cannot_have_many_incrementals():
     request_params = {
         "foo": "bar",
         "first_incremental": {
@@ -622,14 +626,13 @@ def test_many_incrementals_in_resource():
     }
     with pytest.raises(ValueError) as e:
         setup_incremental_object(request_params)
-
-    assert (
+    error_message = re.escape(
         "Only a single incremental parameter is allower per endpoint. Found: ['first_incremental', 'second_incremental']"
-        in str(e.value)
     )
+    assert e.match(error_message)
 
 
-def test_resource_hints():
+def test_resource_hints_are_passed_to_resource_constructor():
     config: RESTAPIConfig = {
         "client": {"base_url": "https://api.example.com"},
         "resources": [
@@ -653,26 +656,214 @@ def test_resource_hints():
         ],
     }
 
-    resources = rest_api_resources(config)
-    assert resources[0].name == "posts"
-    assert resources[0].table_name == "a_table"
-    assert resources[0].max_table_nesting == 2
-    assert resources[0].write_disposition == "merge"
-    assert resources[0].columns == {"a_text": {"name": "a_text", "data_type": "text"}}
-    schema = resources[0].compute_table_schema()
-    primary_keys = [
-        spec["name"]
-        for _, spec in schema["columns"].items()
-        if spec.get("primary_key", False)
-    ]
-    assert primary_keys == ["a_pk"]
-    merge_keys = [
-        spec["name"]
-        for _, spec in schema["columns"].items()
-        if spec.get("merge_key", False)
-    ]
-    assert merge_keys == ["a_merge_key"]
-    assert resources[0].schema_contract == {"tables": "evolve"}
-    assert schema.get("table_format") == "iceberg"
-    assert resources[0].selected is False
-    # TODO: test if it is parallelized and has spec
+    with patch.object(dlt, "resource", wraps=dlt.resource) as mock_resource_constructor:
+        rest_api_resources(config)
+        mock_resource_constructor.assert_called_once()
+        expected_kwargs = {
+            "table_name": "a_table",
+            "max_table_nesting": 2,
+            "write_disposition": "merge",
+            "columns": {"a_text": {"name": "a_text", "data_type": "text"}},
+            "primary_key": "a_pk",
+            "merge_key": "a_merge_key",
+            "schema_contract": {"tables": "evolve"},
+            "table_format": "iceberg",
+            "selected": False,
+        }
+        for arg in expected_kwargs.items():
+            _, kwargs = mock_resource_constructor.call_args_list[0]
+            assert arg in kwargs.items()
+
+
+def test_two_resources_can_depend_on_one_parent_resource():
+    user_id = {
+        "user_id": {
+            "type": "resolve",
+            "field": "id",
+            "resource": "users",
+        },
+    }
+    config: RESTAPIConfig = {
+        "client": {
+            "base_url": "https://api.example.com",
+        },
+        "resources": [
+            "users",
+            {
+                "name": "user_details",
+                "endpoint": {
+                    "path": "user/{user_id}/",
+                    "params": user_id,
+                },
+            },
+            {
+                "name": "meetings",
+                "endpoint": {
+                    "path": "meetings/{user_id}/",
+                    "params": user_id,
+                },
+            },
+        ],
+    }
+    resources = rest_api_source(config).resources
+    assert resources["meetings"]._pipe.parent.name == "users"
+    assert resources["user_details"]._pipe.parent.name == "users"
+
+
+def test_dependent_resource_cannot_bind_multiple_parameters():
+    config: RESTAPIConfig = {
+        "client": {
+            "base_url": "https://api.example.com",
+        },
+        "resources": [
+            "users",
+            {
+                "name": "user_details",
+                "endpoint": {
+                    "path": "user/{user_id}/{group_id}",
+                    "params": {
+                        "user_id": {
+                            "type": "resolve",
+                            "field": "id",
+                            "resource": "users",
+                        },
+                        "group_id": {
+                            "type": "resolve",
+                            "field": "group",
+                            "resource": "users",
+                        },
+                    },
+                },
+            },
+        ],
+    }
+    with pytest.raises(ValueError) as e:
+        rest_api_resources(config)
+
+    error_part_1 = re.escape(
+        "Multiple resolved params for resource user_details: [ResolvedParam(param_name='user_id'"
+    )
+    error_part_2 = re.escape("ResolvedParam(param_name='group_id'")
+    assert e.match(error_part_1)
+    assert e.match(error_part_2)
+
+
+def test_one_resource_cannot_bind_two_parents():
+    config: RESTAPIConfig = {
+        "client": {
+            "base_url": "https://api.example.com",
+        },
+        "resources": [
+            "users",
+            "groups",
+            {
+                "name": "user_details",
+                "endpoint": {
+                    "path": "user/{user_id}/{group_id}",
+                    "params": {
+                        "user_id": {
+                            "type": "resolve",
+                            "field": "id",
+                            "resource": "users",
+                        },
+                        "group_id": {
+                            "type": "resolve",
+                            "field": "id",
+                            "resource": "groups",
+                        },
+                    },
+                },
+            },
+        ],
+    }
+
+    with pytest.raises(ValueError) as e:
+        rest_api_resources(config)
+
+    error_part_1 = re.escape(
+        "Multiple resolved params for resource user_details: [ResolvedParam(param_name='user_id'"
+    )
+    error_part_2 = re.escape("ResolvedParam(param_name='group_id'")
+    assert e.match(error_part_1)
+    assert e.match(error_part_2)
+
+
+def test_resource_dependent_dependent():
+    config: RESTAPIConfig = {
+        "client": {
+            "base_url": "https://api.example.com",
+        },
+        "resources": [
+            "locations",
+            {
+                "name": "location_details",
+                "endpoint": {
+                    "path": "location/{location_id}",
+                    "params": {
+                        "location_id": {
+                            "type": "resolve",
+                            "field": "id",
+                            "resource": "locations",
+                        },
+                    },
+                },
+            },
+            {
+                "name": "meetings",
+                "endpoint": {
+                    "path": "/meetings/{room_id}",
+                    "params": {
+                        "room_id": {
+                            "type": "resolve",
+                            "field": "room_id",
+                            "resource": "location_details",
+                        },
+                    },
+                },
+            },
+        ],
+    }
+
+    resources = rest_api_source(config).resources
+    assert resources["meetings"]._pipe.parent.name == "location_details"
+    assert resources["location_details"]._pipe.parent.name == "locations"
+
+
+def test_circular_resource_bindingis_invalid():
+    config: RESTAPIConfig = {
+        "client": {
+            "base_url": "https://api.example.com",
+        },
+        "resources": [
+            {
+                "name": "chicken",
+                "endpoint": {
+                    "path": "chicken/{egg_id}/",
+                    "params": {
+                        "egg_id": {
+                            "type": "resolve",
+                            "field": "id",
+                            "resource": "egg",
+                        },
+                    },
+                },
+            },
+            {
+                "name": "egg",
+                "endpoint": {
+                    "path": "egg/{chicken_id}/",
+                    "params": {
+                        "chicken_id": {
+                            "type": "resolve",
+                            "field": "id",
+                            "resource": "chicken",
+                        },
+                    },
+                },
+            },
+        ],
+    }
+
+    with pytest.raises(CycleError) as e:
+        rest_api_resources(config)
+    assert e.match(re.escape("'nodes are in a cycle', ['chicken', 'egg', 'chicken']"))
