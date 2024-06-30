@@ -207,6 +207,9 @@ def create_resources(
         request_params = endpoint_config.get("params", {})
         request_json = endpoint_config.get("json", None)
         paginator = create_paginator(endpoint_config.get("paginator"))
+        row_filter = endpoint_resource.pop("row_filter", lambda x: True)
+        transform = endpoint_resource.pop("transform", lambda x: x)
+        exclude_columns = endpoint_resource.pop("exclude_columns", [])
 
         resolved_param: ResolvedParam = resolved_param_map[resource_name]
 
@@ -250,21 +253,34 @@ def create_resources(
                 client: RESTClient = client,
                 incremental_object: Optional[Incremental[Any]] = incremental_object,
                 incremental_param: IncrementalParam = incremental_param,
+                row_filter: Callable[[Any], bool] = row_filter,
+                transform: Callable[[Any], Any] = transform,
+                exclude_columns: List[jsonpath.TJsonPath] = exclude_columns,
             ) -> Generator[Any, None, None]:
+                def exclude_elements(item: Any) -> Any:
+                    for exclude_path in exclude_columns:  # noqa: B023
+                        item = jsonpath.compile_path(exclude_path).filter(
+                            lambda x: True, item
+                        )
+                    return item
+
                 if incremental_object:
                     params[incremental_param.start] = incremental_object.last_value
                     if incremental_param.end:
                         params[incremental_param.end] = incremental_object.end_value
 
-                yield from client.paginate(
+                for page in client.paginate(
                     method=method,
                     path=path,
                     params=params,
-                    json=json,
                     paginator=paginator,
                     data_selector=data_selector,
                     hooks=hooks,
-                )
+                ):
+                    yield map(
+                        exclude_elements,
+                        map(transform, filter(row_filter, page)),
+                    )
 
             resources[resource_name] = dlt.resource(
                 paginate_resource,
@@ -277,6 +293,9 @@ def create_resources(
                 paginator=paginator,
                 data_selector=endpoint_config.get("data_selector"),
                 hooks=hooks,
+                row_filter=row_filter,
+                transform=transform,
+                exclude_columns=exclude_columns,
             )
 
         else:
