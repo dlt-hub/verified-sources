@@ -1,5 +1,6 @@
 from typing import (
     Any,
+    Callable,
     Dict,
     List,
     Literal,
@@ -34,13 +35,11 @@ from dlt.sources.helpers.rest_client.paginators import (
     OffsetPaginator,
     PageNumberPaginator,
 )
-from dlt.sources.helpers.rest_client.exceptions import IgnoreResponseException
 from dlt.sources.helpers.rest_client.auth import (
     AuthConfigBase,
     HttpBasicAuth,
     BearerTokenAuth,
     APIKeyAuth,
-    OAuthJWTAuth,
 )
 
 PaginatorType = Literal[
@@ -177,6 +176,7 @@ class IncrementalArgs(TypedDict, total=False):
     primary_key: Optional[TTableHintTemplate[TColumnNames]]
     end_value: Optional[str]
     row_order: Optional[TSortOrder]
+    transform: Optional[Callable[..., Any]]
 
 
 class IncrementalConfig(IncrementalArgs, total=False):
