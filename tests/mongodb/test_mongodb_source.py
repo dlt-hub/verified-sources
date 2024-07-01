@@ -10,7 +10,7 @@ from sources.mongodb_pipeline import (
     load_entire_database,
     load_select_collection_db,
     load_select_collection_db_filtered,
-    load_select_collection_db_items,
+    load_select_collection_db_items_parallel,
 )
 from tests.utils import ALL_DESTINATIONS, assert_load_info, load_table_counts
 
@@ -85,7 +85,10 @@ def test_nested_documents():
     ],
 )
 @pytest.mark.parametrize("destination_name", ALL_DESTINATIONS)
-def test_incremental(start, end, count1, count2, last_value_func, destination_name):
+@pytest.mark.parametrize("data_item_format", ["object", "arrow"])
+def test_incremental(
+    start, end, count1, count2, last_value_func, destination_name, data_item_format
+):
     pipeline = dlt.pipeline(
         pipeline_name="mongodb_test",
         destination=destination_name,
@@ -104,6 +107,7 @@ def test_incremental(start, end, count1, count2, last_value_func, destination_na
                 last_value_func=last_value_func,
                 row_order="asc",
             ),
+            data_item_format=data_item_format,
         )
     )
     for i, c in enumerate(comments[1:], start=1):
@@ -114,7 +118,10 @@ def test_incremental(start, end, count1, count2, last_value_func, destination_na
             assert start >= c["date"] >= end  # check value
             assert c["date"] <= comments[i - 1]["date"]  # check order
 
-    assert len(comments) == count1
+    if data_item_format == "object":
+        assert len(comments) == count1
+    elif data_item_format == "arrow":
+        assert len(comments[0]) == count1
 
     # read after the first range, but without end value
     comments = mongodb_collection(
@@ -140,21 +147,29 @@ def test_incremental(start, end, count1, count2, last_value_func, destination_na
     assert load_info.loads_ids == []
 
 
-def test_parallel_loading():
-    st_records = load_select_collection_db_items(parallel=False)
-    parallel_records = load_select_collection_db_items(parallel=True)
+@pytest.mark.parametrize("data_item_format", ["object", "arrow"])
+def test_parallel_loading(data_item_format):
+    st_records = load_select_collection_db_items_parallel(
+        data_item_format, parallel=False
+    )
+    parallel_records = load_select_collection_db_items_parallel(
+        data_item_format, parallel=True
+    )
     assert len(st_records) == len(parallel_records)
 
 
+@pytest.mark.parametrize("data_item_format", ["object", "arrow"])
 @pytest.mark.parametrize("destination_name", ALL_DESTINATIONS)
-def test_limit(destination_name):
+def test_limit(destination_name, data_item_format):
     pipeline = dlt.pipeline(
         pipeline_name="mongodb_test",
         destination=destination_name,
         dataset_name="mongodb_test_data",
         full_refresh=True,
     )
-    comments = mongodb_collection(collection="comments", limit=10)
+    comments = mongodb_collection(
+        collection="comments", limit=10, data_item_format=data_item_format
+    )
     pipeline.run(comments)
 
     table_counts = load_table_counts(pipeline, "comments")
@@ -198,8 +213,9 @@ def test_limit_warning(destination):
         )
 
 
+@pytest.mark.parametrize("data_item_format", ["object", "arrow"])
 @pytest.mark.parametrize("destination_name", ALL_DESTINATIONS)
-def test_limit_chunk_size(destination_name):
+def test_limit_chunk_size(destination_name, data_item_format):
     pipeline = dlt.pipeline(
         pipeline_name="mongodb_test",
         destination=destination_name,
@@ -212,6 +228,7 @@ def test_limit_chunk_size(destination_name):
         parallel=True,
         chunk_size=2,
         incremental=dlt.sources.incremental("date"),
+        data_item_format=data_item_format,
     )
     pipeline.run(comments)
 
@@ -220,8 +237,17 @@ def test_limit_chunk_size(destination_name):
 
 
 @pytest.mark.parametrize("row_order", ["asc", "desc", None])
-@pytest.mark.parametrize("last_value_func", [min, max, lambda x: max(x)])
-def test_order(row_order, last_value_func):
+@pytest.mark.parametrize(
+    "data_item_format,last_value_func",
+    [
+        ("object", min),
+        ("object", max),
+        ("object", lambda x: max(x)),
+        ("arrow", min),
+        ("arrow", max),
+    ],
+)
+def test_order(row_order, last_value_func, data_item_format):
     comments = list(
         mongodb_collection(
             collection="comments",
@@ -231,8 +257,12 @@ def test_order(row_order, last_value_func):
                 last_value_func=last_value_func,
                 row_order=row_order,
             ),
+            data_item_format=data_item_format,
         )
     )
+    if data_item_format == "arrow":
+        comments = comments[0].to_pylist()
+
     for i, c in enumerate(comments[1:], start=1):
         if (last_value_func is max and row_order == "asc") or (
             last_value_func is min and row_order == "desc"
