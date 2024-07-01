@@ -1,2 +1,2 @@
-dlt>=0.4.8
+dlt>=0.4.13
 psycopg2-binary>=2.9.9

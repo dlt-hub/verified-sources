@@ -87,7 +87,14 @@ def assert_pipeline_files(
     )
     # check destinations
     for args in visitor.known_calls[n.PIPELINE]:
-        assert args.arguments["destination"].value == destination_name
+        destination = args.arguments["destination"]
+        if pipeline_name == "pg_replication":
+            # allow None as `pg_replication` uses a workaround in its example
+            # pipeline to fix the destination such that it does not get replaced
+            # during `dlt init`
+            assert destination is None or destination.value == destination_name
+        else:
+            assert destination.value == destination_name
     # load secrets
     secrets = SecretsTomlProvider()
     if destination_name != "duckdb":
