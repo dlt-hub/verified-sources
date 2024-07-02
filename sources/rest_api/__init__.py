@@ -222,6 +222,7 @@ def create_resources(
         (
             incremental_object,
             incremental_param,
+            incremental_cursor_transform,
         ) = setup_incremental_object(request_params, endpoint_config.get("incremental"))
 
         client = RESTClient(
@@ -249,12 +250,13 @@ def create_resources(
                 hooks: Optional[Dict[str, Any]],
                 client: RESTClient = client,
                 incremental_object: Optional[Incremental[Any]] = incremental_object,
-                incremental_param: IncrementalParam = incremental_param,
+                incremental_param: Optional[IncrementalParam] = incremental_param,
+                incremental_cursor_transform: Optional[Callable[..., Any]] = incremental_cursor_transform
             ) -> Generator[Any, None, None]:
                 if incremental_object:
-                    params[incremental_param.start] = incremental_object.last_value
-                    if incremental_param.end:
-                        params[incremental_param.end] = incremental_object.end_value
+                    params = _set_incremental_params(
+                        params, incremental_object, incremental_param, incremental_cursor_transform
+                    )
 
                 yield from client.paginate(
                     method=method,
@@ -296,12 +298,13 @@ def create_resources(
                 resolved_param: ResolvedParam = resolved_param,
                 include_from_parent: List[str] = include_from_parent,
                 incremental_object: Optional[Incremental[Any]] = incremental_object,
-                incremental_param: IncrementalParam = incremental_param,
+                incremental_param: Optional[IncrementalParam] = incremental_param,
+                incremental_cursor_transform: Optional[Callable[..., Any]] = incremental_cursor_transform
             ) -> Generator[Any, None, None]:
                 if incremental_object:
-                    params[incremental_param.start] = incremental_object.last_value
-                    if incremental_param.end:
-                        params[incremental_param.end] = incremental_object.end_value
+                    params = _set_incremental_params(
+                        params, incremental_object, incremental_param, incremental_cursor_transform
+                    )
 
                 for item in items:
                     formatted_path, parent_record = process_parent_data_item(
@@ -335,6 +338,22 @@ def create_resources(
             )
 
     return resources
+
+
+def _set_incremental_params(
+    params: Dict[str, Any],
+    incremental_object: Incremental[Any],
+    incremental_param: IncrementalParam,
+    transform: Optional[Callable[..., Any]],
+) -> Dict[str, Any]:
+    def identity_func(x: Any) -> Any:
+        return x
+    if transform is None:
+        transform = identity_func
+    params[incremental_param.start] = transform(incremental_object.last_value)
+    if incremental_param.end:
+        params[incremental_param.end] = transform(incremental_object.end_value)
+    return params
 
 
 def _validate_param_type(
