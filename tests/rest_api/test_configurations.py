@@ -724,8 +724,8 @@ def test_transform_called_in_incremental_config(mocker):
     (inc, incremental_param, transform) = setup_incremental_object({}, incremental_config)
     param_set = _set_incremental_params({}, inc, incremental_param, callback)
 
-    callback.call_args_list[0].args == ("1",)
-    callback.call_args_list[1].args == (str(one_day_later),)
+    assert callback.call_args_list[0].args == ("1",)
+    assert callback.call_args_list[1].args == (str(one_day_later),)
 
     assert param_set == {"since": "1970-01-01", "until": "1970-01-02"}
 
