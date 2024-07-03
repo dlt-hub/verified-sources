@@ -1,4 +1,6 @@
 import re
+import pendulum
+
 import dlt.extract
 import pytest
 from unittest.mock import patch
@@ -17,7 +19,15 @@ from dlt.sources.helpers.rest_client.paginators import (
     HeaderLinkPaginator,
 )
 
-from sources.rest_api import rest_api_source, rest_api_resources, _validate_param_type
+from dlt.extract.incremental import Incremental
+
+from sources.rest_api import (
+    rest_api_source,
+    rest_api_resources,
+    _validate_param_type,
+    _set_incremental_params,
+)
+
 from sources.rest_api.config_setup import (
     AUTH_MAP,
     PAGINATOR_MAP,
@@ -548,23 +558,24 @@ def test_resource_schema() -> None:
     assert resources[1].name == "user"
 
 
-def test_constructs_incremental_from_request_param():
-    request_params = {
-        "foo": "bar",
-        "since": {
-            "type": "incremental",
-            "cursor_path": "updated_at",
-            "initial_value": "2024-01-01T00:00:00Z",
-        },
-    }
-    (incremental_config, incremental_param) = setup_incremental_object(request_params)
-    assert incremental_config == dlt.sources.incremental(
-        cursor_path="updated_at", initial_value="2024-01-01T00:00:00Z"
+@pytest.fixture()
+def incremental_with_init_and_end() -> Incremental:
+    return dlt.sources.incremental(
+        cursor_path="updated_at",
+        initial_value="2024-01-01T00:00:00Z",
+        end_value="2024-06-30T00:00:00Z",
     )
-    assert incremental_param == IncrementalParam(start="since", end=None)
 
 
-def test_invalid_incremental_type_is_not_accepted():
+@pytest.fixture()
+def incremental_with_init() -> Incremental:
+    return dlt.sources.incremental(
+        cursor_path="updated_at",
+        initial_value="2024-01-01T00:00:00Z",
+    )
+
+
+def test_invalid_incremental_type_is_not_accepted() -> None:
     request_params = {
         "foo": "bar",
         "since": {
@@ -579,38 +590,7 @@ def test_invalid_incremental_type_is_not_accepted():
     assert e.match("Invalid param type: no_incremental.")
 
 
-def test_incremental_source_in_request_param():
-    request_params = {
-        "foo": "bar",
-        "since": dlt.sources.incremental(
-            cursor_path="updated_at", initial_value="2024-01-01T00:00:00Z"
-        ),
-    }
-    (incremental_config, incremental_param) = setup_incremental_object(request_params)
-    assert incremental_config == dlt.sources.incremental(
-        cursor_path="updated_at", initial_value="2024-01-01T00:00:00Z"
-    )
-    assert incremental_param == IncrementalParam(start="since", end=None)
-
-
-def test_constructs_incremental_from_endpoint_config_incremental():
-    config = {
-        "incremental": {
-            "start_param": "since",
-            "end_param": "until",
-            "cursor_path": "updated_at",
-            "initial_value": "2024-01-25T11:21:28Z",
-        }
-    }
-    incremental_config = cast(IncrementalConfig, config.get("incremental"))
-    (_, incremental_param) = setup_incremental_object(
-        {},
-        incremental_config,
-    )
-    assert incremental_param == IncrementalParam(start="since", end="until")
-
-
-def test_one_resource_cannot_have_many_incrementals():
+def test_one_resource_cannot_have_many_incrementals() -> None:
     request_params = {
         "foo": "bar",
         "first_incremental": {
@@ -632,7 +612,177 @@ def test_one_resource_cannot_have_many_incrementals():
     assert e.match(error_message)
 
 
-def test_resource_hints_are_passed_to_resource_constructor():
+def test_constructs_incremental_from_request_param() -> None:
+    request_params = {
+        "foo": "bar",
+        "since": {
+            "type": "incremental",
+            "cursor_path": "updated_at",
+            "initial_value": "2024-01-01T00:00:00Z",
+        },
+    }
+    (incremental_config, incremental_param, _) = setup_incremental_object(
+        request_params
+    )
+    assert incremental_config == dlt.sources.incremental(
+        cursor_path="updated_at", initial_value="2024-01-01T00:00:00Z"
+    )
+    assert incremental_param == IncrementalParam(start="since", end=None)
+
+
+def test_constructs_incremental_from_request_param_with_incremental_object(
+    incremental_with_init,
+) -> None:
+    request_params = {
+        "foo": "bar",
+        "since": dlt.sources.incremental(
+            cursor_path="updated_at", initial_value="2024-01-01T00:00:00Z"
+        ),
+    }
+    (incremental_obj, incremental_param, _) = setup_incremental_object(request_params)
+    assert incremental_param == IncrementalParam(start="since", end=None)
+
+    assert incremental_with_init == incremental_obj
+
+
+def test_constructs_incremental_from_request_param_with_transform(
+    mocker, incremental_with_init_and_end
+) -> None:
+    def epoch_to_datetime(epoch: str):
+        return pendulum.from_timestamp(int(epoch))
+
+    param_config = {
+        "since": {
+            "type": "incremental",
+            "cursor_path": "updated_at",
+            "initial_value": "2024-01-01T00:00:00Z",
+            "end_value": "2024-06-30T00:00:00Z",
+            "transform": epoch_to_datetime,
+        }
+    }
+
+    (incremental_obj, incremental_param, transform) = setup_incremental_object(
+        param_config, None
+    )
+    assert incremental_param == IncrementalParam(start="since", end=None)
+    assert transform == epoch_to_datetime
+
+    assert incremental_with_init_and_end == incremental_obj
+
+
+def test_constructs_incremental_from_endpoint_config_incremental(
+    incremental_with_init,
+) -> None:
+    config = {
+        "incremental": {
+            "start_param": "since",
+            "end_param": "until",
+            "cursor_path": "updated_at",
+            "initial_value": "2024-01-01T00:00:00Z",
+        }
+    }
+    incremental_config = cast(IncrementalConfig, config.get("incremental"))
+    (incremental_obj, incremental_param, _) = setup_incremental_object(
+        {},
+        incremental_config,
+    )
+    assert incremental_param == IncrementalParam(start="since", end="until")
+
+    assert incremental_with_init == incremental_obj
+
+
+def test_constructs_incremental_from_endpoint_config_incremental_with_transform(
+    mocker,
+    incremental_with_init_and_end,
+) -> None:
+    def epoch_to_datetime(epoch):
+        return pendulum.from_timestamp(int(epoch))
+
+    resource_config_incremental: IncrementalConfig = {
+        "start_param": "since",
+        "end_param": "until",
+        "cursor_path": "updated_at",
+        "initial_value": "2024-01-01T00:00:00Z",
+        "end_value": "2024-06-30T00:00:00Z",
+        "transform": epoch_to_datetime,
+    }
+
+    (incremental_obj, incremental_param, transform) = setup_incremental_object(
+        {}, resource_config_incremental
+    )
+    assert incremental_param == IncrementalParam(start="since", end="until")
+    assert transform == epoch_to_datetime
+    assert incremental_with_init_and_end == incremental_obj
+
+
+def test_calls_transform_from_endpoint_config_incremental(mocker) -> None:
+    def epoch_to_date(epoch: str):
+        return pendulum.from_timestamp(int(epoch)).to_date_string()
+
+    callback = mocker.Mock(side_effect=epoch_to_date)
+    incremental_obj = mocker.Mock()
+    incremental_obj.last_value = "1"
+
+    incremental_param = IncrementalParam(start="since", end=None)
+    created_param = _set_incremental_params(
+        {}, incremental_obj, incremental_param, callback
+    )
+    assert created_param == {"since": "1970-01-01"}
+    assert callback.call_args_list[0].args == ("1",)
+
+
+def test_calls_transform_from_request_param(mocker) -> None:
+    def epoch_to_datetime(epoch: str):
+        return pendulum.from_timestamp(int(epoch)).to_date_string()
+
+    callback = mocker.Mock(side_effect=epoch_to_datetime)
+    start = 1
+    one_day_later = 60 * 60 * 24
+    incremental_config: IncrementalConfig = {
+        "start_param": "since",
+        "end_param": "until",
+        "cursor_path": "updated_at",
+        "initial_value": str(start),
+        "end_value": str(one_day_later),
+        "transform": callback,
+    }
+
+    (incremental_obj, incremental_param, _) = setup_incremental_object(
+        {}, incremental_config
+    )
+    assert incremental_param is not None
+    assert incremental_obj is not None
+    created_param = _set_incremental_params(
+        {}, incremental_obj, incremental_param, callback
+    )
+    assert created_param == {"since": "1970-01-01", "until": "1970-01-02"}
+    assert callback.call_args_list[0].args == (str(start),)
+    assert callback.call_args_list[1].args == (str(one_day_later),)
+
+
+def test_default_transform_is_identity(mocker) -> None:
+    start = 1
+    one_day_later = 60 * 60 * 24
+    incremental_config: IncrementalConfig = {
+        "start_param": "since",
+        "end_param": "until",
+        "cursor_path": "updated_at",
+        "initial_value": str(start),
+        "end_value": str(one_day_later),
+    }
+
+    (incremental_obj, incremental_param, _) = setup_incremental_object(
+        {}, incremental_config
+    )
+    assert incremental_param is not None
+    assert incremental_obj is not None
+    created_param = _set_incremental_params(
+        {}, incremental_obj, incremental_param, None
+    )
+    assert created_param == {"since": str(start), "until": str(one_day_later)}
+
+
+def test_resource_hints_are_passed_to_resource_constructor() -> None:
     config: RESTAPIConfig = {
         "client": {"base_url": "https://api.example.com"},
         "resources": [
@@ -675,7 +825,7 @@ def test_resource_hints_are_passed_to_resource_constructor():
             assert arg in kwargs.items()
 
 
-def test_two_resources_can_depend_on_one_parent_resource():
+def test_two_resources_can_depend_on_one_parent_resource() -> None:
     user_id = {
         "user_id": {
             "type": "resolve",
@@ -710,7 +860,7 @@ def test_two_resources_can_depend_on_one_parent_resource():
     assert resources["user_details"]._pipe.parent.name == "users"
 
 
-def test_dependent_resource_cannot_bind_multiple_parameters():
+def test_dependent_resource_cannot_bind_multiple_parameters() -> None:
     config: RESTAPIConfig = {
         "client": {
             "base_url": "https://api.example.com",
@@ -748,7 +898,7 @@ def test_dependent_resource_cannot_bind_multiple_parameters():
     assert e.match(error_part_2)
 
 
-def test_one_resource_cannot_bind_two_parents():
+def test_one_resource_cannot_bind_two_parents() -> None:
     config: RESTAPIConfig = {
         "client": {
             "base_url": "https://api.example.com",
@@ -788,7 +938,7 @@ def test_one_resource_cannot_bind_two_parents():
     assert e.match(error_part_2)
 
 
-def test_resource_dependent_dependent():
+def test_resource_dependent_dependent() -> None:
     config: RESTAPIConfig = {
         "client": {
             "base_url": "https://api.example.com",
@@ -829,7 +979,7 @@ def test_resource_dependent_dependent():
     assert resources["location_details"]._pipe.parent.name == "locations"
 
 
-def test_circular_resource_bindingis_invalid():
+def test_circular_resource_bindingis_invalid() -> None:
     config: RESTAPIConfig = {
         "client": {
             "base_url": "https://api.example.com",

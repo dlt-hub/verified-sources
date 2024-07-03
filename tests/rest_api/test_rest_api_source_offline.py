@@ -1,4 +1,5 @@
 import pytest
+import pendulum
 
 import dlt
 from dlt.pipeline.exceptions import PipelineStepFailed
@@ -288,3 +289,32 @@ def test_load_mock_api_typeddict_config(mock_api_server):
 
     assert table_counts["posts"] == 100
     assert table_counts["post_comments"] == 5000
+
+
+def test_posts_with_inremental_date_transformation(mock_api_server) -> None:
+    config: RESTAPIConfig = {
+        "client": {"base_url": "https://api.example.com"},
+        "resources": [
+            {
+                "name": "posts",
+                "endpoint": {
+                    "path": "posts",
+                    "incremental": {
+                        "start_param": "since",
+                        "end_param": "until",
+                        "cursor_path": "updated_at",
+                        "initial_value": "1",
+                        "end_value": str(60 * 60 * 24),
+                        "transform": lambda epoch: pendulum.from_timestamp(
+                            int(epoch)
+                        ).to_date_string(),
+                    },
+                },
+            },
+        ],
+    }
+    source = rest_api_source(config).add_limit(1)
+    results = list(source.with_resources("posts"))
+    for post in results:
+        assert post["since"] == "1970-01-01"
+        assert post["until"] == "1970-01-02"
