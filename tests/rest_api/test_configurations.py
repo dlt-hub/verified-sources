@@ -752,6 +752,26 @@ def test_calls_transform_from_request_param(mocker) -> None:
     assert callback.call_args_list[1].args == (str(one_day_later),)
 
 
+def test_default_transform_is_identity(mocker) -> None:
+    start = 1
+    one_day_later = 60 * 60 * 24
+    incremental_config: IncrementalConfig = {
+        "start_param": "since",
+        "end_param": "until",
+        "cursor_path": "updated_at",
+        "initial_value": str(start),
+        "end_value": str(one_day_later),
+    }
+
+    (incremental_obj, incremental_param, _) = setup_incremental_object(
+        {}, incremental_config
+    )
+    assert incremental_param is not None
+    assert incremental_obj is not None
+    created_param = _set_incremental_params({}, incremental_obj, incremental_param, None)
+    assert created_param == {"since": str(start), "until": str(one_day_later)}
+
+
 def test_resource_hints_are_passed_to_resource_constructor() -> None:
     config: RESTAPIConfig = {
         "client": {"base_url": "https://api.example.com"},
