@@ -556,6 +556,21 @@ def test_resource_schema() -> None:
     assert resources[1].name == "user"
 
 
+def test_invalid_incremental_type_is_not_accepted():
+    request_params = {
+        "foo": "bar",
+        "since": {
+            "type": "no_incremental",
+            "cursor_path": "updated_at",
+            "initial_value": "2024-01-01T00:00:00Z",
+        },
+    }
+    with pytest.raises(ValueError) as e:
+        _validate_param_type(request_params)
+
+    assert e.match("Invalid param type: no_incremental.")
+
+
 def test_constructs_incremental_from_request_param():
     request_params = {
         "foo": "bar",
@@ -574,35 +589,22 @@ def test_constructs_incremental_from_request_param():
     assert incremental_param == IncrementalParam(start="since", end=None)
 
 
-def test_invalid_incremental_type_is_not_accepted():
-    request_params = {
-        "foo": "bar",
-        "since": {
-            "type": "no_incremental",
-            "cursor_path": "updated_at",
-            "initial_value": "2024-01-01T00:00:00Z",
-        },
-    }
-    with pytest.raises(ValueError) as e:
-        _validate_param_type(request_params)
-
-    assert e.match("Invalid param type: no_incremental.")
-
-
-def test_incremental_source_in_request_param():
+def test_constructs_incremental_from_incremental_object_in_request_param():
     request_params = {
         "foo": "bar",
         "since": dlt.sources.incremental(
             cursor_path="updated_at", initial_value="2024-01-01T00:00:00Z"
         ),
     }
-    (incremental_config, incremental_param, _) = setup_incremental_object(
+    (incremental_obj, incremental_param, _) = setup_incremental_object(
         request_params
     )
-    assert incremental_config == dlt.sources.incremental(
+    assert incremental_param == IncrementalParam(start="since", end=None)
+
+    expected_incremental = dlt.sources.incremental(
         cursor_path="updated_at", initial_value="2024-01-01T00:00:00Z"
     )
-    assert incremental_param == IncrementalParam(start="since", end=None)
+    assert expected_incremental == incremental_obj
 
 
 def test_constructs_incremental_from_endpoint_config_incremental():
@@ -611,16 +613,22 @@ def test_constructs_incremental_from_endpoint_config_incremental():
             "start_param": "since",
             "end_param": "until",
             "cursor_path": "updated_at",
-            "initial_value": "2024-01-25T11:21:28Z",
+            "initial_value": "2024-01-01T00:00:00Z",
             "transform": lambda epoch: pendulum.from_timestamp(int(epoch)),
         }
     }
     incremental_config = cast(IncrementalConfig, config.get("incremental"))
-    (_, incremental_param, _) = setup_incremental_object(
+    (incremental_obj, incremental_param, _) = setup_incremental_object(
         {},
         incremental_config,
     )
     assert incremental_param == IncrementalParam(start="since", end="until")
+
+    expected_incremental = dlt.sources.incremental(
+        cursor_path="updated_at",
+        initial_value="2024-01-01T00:00:00Z",
+    )
+    assert expected_incremental == incremental_obj
 
 
 def test_one_resource_cannot_have_many_incrementals():
@@ -658,21 +666,18 @@ def test_setup_incremental_with_transform_in_incremental_config(mocker):
         "transform": epoch_to_datetime,
     }
 
-    expected_incremental = dlt.sources.incremental(
-        cursor_path="updated_at",
-        initial_value="2024-01-01T00:00:00Z",
-        end_value="2024-06-30T00:00:00Z",
-    )
-
     (incremental_obj, incremental_param, transform) = setup_incremental_object(
         {}, resource_config_incremental
     )
     assert incremental_param == IncrementalParam(start="since", end="until")
     assert transform == epoch_to_datetime
 
-    assert expected_incremental.initial_value == incremental_obj.initial_value
-    assert expected_incremental.cursor_path == incremental_obj.cursor_path
-    assert expected_incremental.end_value == incremental_obj.end_value
+    expected_incremental = dlt.sources.incremental(
+        cursor_path="updated_at",
+        initial_value="2024-01-01T00:00:00Z",
+        end_value="2024-06-30T00:00:00Z",
+    )
+    assert expected_incremental == incremental_obj
 
 
 def test_setup_incremental_with_transform_in_incremental_param(mocker):
@@ -700,9 +705,7 @@ def test_setup_incremental_with_transform_in_incremental_param(mocker):
         initial_value="2024-01-01T00:00:00Z",
         end_value="2024-06-30T00:00:00Z",
     )
-    assert expected_incremental.initial_value == incremental_obj.initial_value
-    assert expected_incremental.cursor_path == incremental_obj.cursor_path
-    assert expected_incremental.end_value == incremental_obj.end_value
+    assert expected_incremental == incremental_obj
 
 
 def test_transform_called_in_incremental_config(mocker):
