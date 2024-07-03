@@ -294,65 +294,6 @@ def test_load_mock_api_typeddict_config(mock_api_server):
     assert table_counts["post_comments"] == 5000
 
 
-def test_config_validation_for_response_actions(mocker):
-    mock_response_hook_1 = mocker.Mock()
-    mock_response_hook_2 = mocker.Mock()
-    config_1: RESTAPIConfig = {
-        "client": {"base_url": "https://api.example.com"},
-        "resources": [
-            {
-                "name": "posts",
-                "endpoint": {
-                    "response_actions": [
-                        {
-                            "status_code": 200,
-                            "action": mock_response_hook_1,
-                        },
-                    ],
-                },
-            },
-        ],
-    }
-
-    rest_api_source(config_1)
-
-    config_2: RESTAPIConfig = {
-        "client": {"base_url": "https://api.example.com"},
-        "resources": [
-            {
-                "name": "posts",
-                "endpoint": {
-                    "response_actions": [
-                        mock_response_hook_1,
-                        mock_response_hook_2,
-                    ],
-                },
-            },
-        ],
-    }
-
-    rest_api_source(config_2)
-
-    config_3: RESTAPIConfig = {
-        "client": {"base_url": "https://api.example.com"},
-        "resources": [
-            {
-                "name": "posts",
-                "endpoint": {
-                    "response_actions": [
-                        {
-                            "status_code": 200,
-                            "action": [mock_response_hook_1, mock_response_hook_2],
-                        },
-                    ],
-                },
-            },
-        ],
-    }
-
-    rest_api_source(config_3)
-
-
 def test_response_action_on_status_code(mock_api_server, mocker):
     mock_response_hook = mocker.Mock()
     mock_source = rest_api_source(

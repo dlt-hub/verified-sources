@@ -375,10 +375,10 @@ def _handle_response_action(
     status_code = None
     content_substr = None
     action_type = None
-    custom_hook = None
+    custom_hooks = None
     response_action = None
     if callable(action):
-        custom_hook = [action]
+        custom_hooks = [action]
     else:
         action = cast(ResponseActionDict, action)
         status_code = action.get("status_code")
@@ -387,11 +387,11 @@ def _handle_response_action(
         if isinstance(response_action, str):
             action_type = response_action
         elif callable(response_action):
-            custom_hook = [response_action]
+            custom_hooks = [response_action]
         elif isinstance(response_action, list) and all(
             callable(action) for action in response_action
         ):
-            custom_hook = response_action
+            custom_hooks = response_action
         else:
             raise ValueError(
                 f"Action {response_action} does not conform to expected type. Expected: str or Callable or List[Callable]. Found: {type(response_action)}"
@@ -399,18 +399,18 @@ def _handle_response_action(
 
     if status_code is not None and content_substr is not None:
         if response.status_code == status_code and content_substr in content:
-            return _action_type_unless_custom_hook(action_type, custom_hook)
+            return _action_type_unless_custom_hook(action_type, custom_hooks)
 
     elif status_code is not None:
         if response.status_code == status_code:
-            return _action_type_unless_custom_hook(action_type, custom_hook)
+            return _action_type_unless_custom_hook(action_type, custom_hooks)
 
     elif content_substr is not None:
         if content_substr in content:
-            return _action_type_unless_custom_hook(action_type, custom_hook)
+            return _action_type_unless_custom_hook(action_type, custom_hooks)
 
-    elif status_code is None and content_substr is None and custom_hook is not None:
-        return (None, custom_hook)
+    elif status_code is None and content_substr is None and custom_hooks is not None:
+        return (None, custom_hooks)
 
     return (None, None)
 
