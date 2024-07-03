@@ -642,12 +642,12 @@ def test_constructs_incremental_from_request_param_with_incremental_object(incre
     assert incremental_with_init == incremental_obj
 
 
-def test_constructs_incremental_from_transform_in_request_param_with_transform(
+def test_constructs_incremental_from_request_param_with_transform(
     mocker,
     incremental_with_init_and_end
 ) -> None:
-    def epoch_to_datetime(epoch):
-        return pendulum.from_timestamp(epoch)
+    def epoch_to_datetime(epoch: str):
+        return pendulum.from_timestamp(int(epoch))
 
     param_config = {
         "since": {
@@ -711,7 +711,21 @@ def test_constructs_incremental_from_endpoint_config_incremental_with_transform(
     assert incremental_with_init_and_end == incremental_obj
 
 
-def test_transform_called_in_incremental_config(mocker) -> None:
+def test_calls_transform_from_endpoint_config_incremental(mocker) -> None:
+    def epoch_to_date(epoch: str):
+        return pendulum.from_timestamp(int(epoch)).to_date_string()
+
+    callback = mocker.Mock(side_effect=epoch_to_date)
+    incremental_obj = mocker.Mock()
+    incremental_obj.last_value = "1"
+
+    incremental_param = IncrementalParam(start="since", end=None)
+    created_param = _set_incremental_params({}, incremental_obj, incremental_param, callback)
+    assert created_param == {"since": "1970-01-01"}
+    assert callback.call_args_list[0].args == ("1",)
+
+
+def test_calls_transform_from_request_param(mocker) -> None:
     def epoch_to_datetime(epoch: str):
         return pendulum.from_timestamp(int(epoch)).to_date_string()
 
@@ -727,14 +741,14 @@ def test_transform_called_in_incremental_config(mocker) -> None:
         "transform": callback,
     }
 
-    (incremental_obj, incremental_param, transform) = setup_incremental_object(
+    (incremental_obj, incremental_param, _) = setup_incremental_object(
         {}, incremental_config
     )
     assert incremental_param is not None
     assert incremental_obj is not None
     created_param = _set_incremental_params({}, incremental_obj, incremental_param, callback)
     assert created_param == {"since": "1970-01-01", "until": "1970-01-02"}
-    assert callback.call_args_list[0].args == ("1",)
+    assert callback.call_args_list[0].args == (str(start),)
     assert callback.call_args_list[1].args == (str(one_day_later),)
 
 
