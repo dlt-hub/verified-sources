@@ -566,6 +566,7 @@ def incremental_with_init_and_end() -> Incremental:
         end_value="2024-06-30T00:00:00Z",
     )
 
+
 @pytest.fixture()
 def incremental_with_init() -> Incremental:
     return dlt.sources.incremental(
@@ -629,7 +630,9 @@ def test_constructs_incremental_from_request_param() -> None:
     assert incremental_param == IncrementalParam(start="since", end=None)
 
 
-def test_constructs_incremental_from_request_param_with_incremental_object(incremental_with_init) -> None:
+def test_constructs_incremental_from_request_param_with_incremental_object(
+    incremental_with_init,
+) -> None:
     request_params = {
         "foo": "bar",
         "since": dlt.sources.incremental(
@@ -643,8 +646,7 @@ def test_constructs_incremental_from_request_param_with_incremental_object(incre
 
 
 def test_constructs_incremental_from_request_param_with_transform(
-    mocker,
-    incremental_with_init_and_end
+    mocker, incremental_with_init_and_end
 ) -> None:
     def epoch_to_datetime(epoch: str):
         return pendulum.from_timestamp(int(epoch))
@@ -668,7 +670,9 @@ def test_constructs_incremental_from_request_param_with_transform(
     assert incremental_with_init_and_end == incremental_obj
 
 
-def test_constructs_incremental_from_endpoint_config_incremental(incremental_with_init) -> None:
+def test_constructs_incremental_from_endpoint_config_incremental(
+    incremental_with_init,
+) -> None:
     config = {
         "incremental": {
             "start_param": "since",
@@ -720,7 +724,9 @@ def test_calls_transform_from_endpoint_config_incremental(mocker) -> None:
     incremental_obj.last_value = "1"
 
     incremental_param = IncrementalParam(start="since", end=None)
-    created_param = _set_incremental_params({}, incremental_obj, incremental_param, callback)
+    created_param = _set_incremental_params(
+        {}, incremental_obj, incremental_param, callback
+    )
     assert created_param == {"since": "1970-01-01"}
     assert callback.call_args_list[0].args == ("1",)
 
@@ -746,7 +752,9 @@ def test_calls_transform_from_request_param(mocker) -> None:
     )
     assert incremental_param is not None
     assert incremental_obj is not None
-    created_param = _set_incremental_params({}, incremental_obj, incremental_param, callback)
+    created_param = _set_incremental_params(
+        {}, incremental_obj, incremental_param, callback
+    )
     assert created_param == {"since": "1970-01-01", "until": "1970-01-02"}
     assert callback.call_args_list[0].args == (str(start),)
     assert callback.call_args_list[1].args == (str(one_day_later),)
@@ -768,7 +776,9 @@ def test_default_transform_is_identity(mocker) -> None:
     )
     assert incremental_param is not None
     assert incremental_obj is not None
-    created_param = _set_incremental_params({}, incremental_obj, incremental_param, None)
+    created_param = _set_incremental_params(
+        {}, incremental_obj, incremental_param, None
+    )
     assert created_param == {"since": str(start), "until": str(one_day_later)}
 
 
