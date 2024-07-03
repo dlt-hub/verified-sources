@@ -251,11 +251,16 @@ def create_resources(
                 client: RESTClient = client,
                 incremental_object: Optional[Incremental[Any]] = incremental_object,
                 incremental_param: Optional[IncrementalParam] = incremental_param,
-                incremental_cursor_transform: Optional[Callable[..., Any]] = incremental_cursor_transform
+                incremental_cursor_transform: Optional[
+                    Callable[..., Any]
+                ] = incremental_cursor_transform,
             ) -> Generator[Any, None, None]:
                 if incremental_object:
                     params = _set_incremental_params(
-                        params, incremental_object, incremental_param, incremental_cursor_transform
+                        params,
+                        incremental_object,
+                        incremental_param,
+                        incremental_cursor_transform,
                     )
 
                 yield from client.paginate(
@@ -299,11 +304,16 @@ def create_resources(
                 include_from_parent: List[str] = include_from_parent,
                 incremental_object: Optional[Incremental[Any]] = incremental_object,
                 incremental_param: Optional[IncrementalParam] = incremental_param,
-                incremental_cursor_transform: Optional[Callable[..., Any]] = incremental_cursor_transform
+                incremental_cursor_transform: Optional[
+                    Callable[..., Any]
+                ] = incremental_cursor_transform,
             ) -> Generator[Any, None, None]:
                 if incremental_object:
                     params = _set_incremental_params(
-                        params, incremental_object, incremental_param, incremental_cursor_transform
+                        params,
+                        incremental_object,
+                        incremental_param,
+                        incremental_cursor_transform,
                     )
 
                 for item in items:
@@ -348,6 +358,7 @@ def _set_incremental_params(
 ) -> Dict[str, Any]:
     def identity_func(x: Any) -> Any:
         return x
+
     if transform is None:
         transform = identity_func
     params[incremental_param.start] = transform(incremental_object.last_value)

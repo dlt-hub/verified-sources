@@ -556,7 +556,7 @@ def test_resource_schema() -> None:
     assert resources[1].name == "user"
 
 
-def test_invalid_incremental_type_is_not_accepted():
+def test_invalid_incremental_type_is_not_accepted() -> None:
     request_params = {
         "foo": "bar",
         "since": {
@@ -571,7 +571,7 @@ def test_invalid_incremental_type_is_not_accepted():
     assert e.match("Invalid param type: no_incremental.")
 
 
-def test_one_resource_cannot_have_many_incrementals():
+def test_one_resource_cannot_have_many_incrementals() -> None:
     request_params = {
         "foo": "bar",
         "first_incremental": {
@@ -593,7 +593,7 @@ def test_one_resource_cannot_have_many_incrementals():
     assert e.match(error_message)
 
 
-def test_constructs_incremental_from_request_param():
+def test_constructs_incremental_from_request_param() -> None:
     request_params = {
         "foo": "bar",
         "since": {
@@ -611,16 +611,14 @@ def test_constructs_incremental_from_request_param():
     assert incremental_param == IncrementalParam(start="since", end=None)
 
 
-def test_constructs_incremental_from_request_param_with_incremental_object():
+def test_constructs_incremental_from_request_param_with_incremental_object() -> None:
     request_params = {
         "foo": "bar",
         "since": dlt.sources.incremental(
             cursor_path="updated_at", initial_value="2024-01-01T00:00:00Z"
         ),
     }
-    (incremental_obj, incremental_param, _) = setup_incremental_object(
-        request_params
-    )
+    (incremental_obj, incremental_param, _) = setup_incremental_object(request_params)
     assert incremental_param == IncrementalParam(start="since", end=None)
 
     expected_incremental = dlt.sources.incremental(
@@ -629,7 +627,9 @@ def test_constructs_incremental_from_request_param_with_incremental_object():
     assert expected_incremental == incremental_obj
 
 
-def test_constructs_incremental_from_transform_in_request_param_with_transform(mocker):
+def test_constructs_incremental_from_transform_in_request_param_with_transform(
+    mocker,
+) -> None:
     def epoch_to_datetime(epoch):
         return pendulum.from_timestamp(epoch)
 
@@ -657,7 +657,7 @@ def test_constructs_incremental_from_transform_in_request_param_with_transform(m
     assert expected_incremental == incremental_obj
 
 
-def test_constructs_incremental_from_endpoint_config_incremental():
+def test_constructs_incremental_from_endpoint_config_incremental() -> None:
     config = {
         "incremental": {
             "start_param": "since",
@@ -680,7 +680,9 @@ def test_constructs_incremental_from_endpoint_config_incremental():
     assert expected_incremental == incremental_obj
 
 
-def test_constructs_incremental_from_endpoint_config_incremental_with_transform(mocker):
+def test_constructs_incremental_from_endpoint_config_incremental_with_transform(
+    mocker,
+) -> None:
     def epoch_to_datetime(epoch):
         return pendulum.from_timestamp(int(epoch))
 
@@ -707,13 +709,13 @@ def test_constructs_incremental_from_endpoint_config_incremental_with_transform(
     assert expected_incremental == incremental_obj
 
 
-def test_transform_called_in_incremental_config(mocker):
-    def epoch_to_datetime(epoch:str):
+def test_transform_called_in_incremental_config(mocker) -> None:
+    def epoch_to_datetime(epoch: str):
         return pendulum.from_timestamp(int(epoch)).to_date_string()
 
     callback = mocker.Mock(side_effect=epoch_to_datetime)
     start = 1
-    one_day_later = 60*60*24
+    one_day_later = 60 * 60 * 24
     incremental_config: IncrementalConfig = {
         "start_param": "since",
         "end_param": "until",
@@ -723,7 +725,9 @@ def test_transform_called_in_incremental_config(mocker):
         "transform": callback,
     }
 
-    (inc, incremental_param, transform) = setup_incremental_object({}, incremental_config)
+    (inc, incremental_param, transform) = setup_incremental_object(
+        {}, incremental_config
+    )
     param_set = _set_incremental_params({}, inc, incremental_param, callback)
 
     assert callback.call_args_list[0].args == ("1",)
@@ -732,7 +736,7 @@ def test_transform_called_in_incremental_config(mocker):
     assert param_set == {"since": "1970-01-01", "until": "1970-01-02"}
 
 
-def test_resource_hints_are_passed_to_resource_constructor():
+def test_resource_hints_are_passed_to_resource_constructor() -> None:
     config: RESTAPIConfig = {
         "client": {"base_url": "https://api.example.com"},
         "resources": [
@@ -775,7 +779,7 @@ def test_resource_hints_are_passed_to_resource_constructor():
             assert arg in kwargs.items()
 
 
-def test_two_resources_can_depend_on_one_parent_resource():
+def test_two_resources_can_depend_on_one_parent_resource() -> None:
     user_id = {
         "user_id": {
             "type": "resolve",
@@ -810,7 +814,7 @@ def test_two_resources_can_depend_on_one_parent_resource():
     assert resources["user_details"]._pipe.parent.name == "users"
 
 
-def test_dependent_resource_cannot_bind_multiple_parameters():
+def test_dependent_resource_cannot_bind_multiple_parameters() -> None:
     config: RESTAPIConfig = {
         "client": {
             "base_url": "https://api.example.com",
@@ -848,7 +852,7 @@ def test_dependent_resource_cannot_bind_multiple_parameters():
     assert e.match(error_part_2)
 
 
-def test_one_resource_cannot_bind_two_parents():
+def test_one_resource_cannot_bind_two_parents() -> None:
     config: RESTAPIConfig = {
         "client": {
             "base_url": "https://api.example.com",
@@ -888,7 +892,7 @@ def test_one_resource_cannot_bind_two_parents():
     assert e.match(error_part_2)
 
 
-def test_resource_dependent_dependent():
+def test_resource_dependent_dependent() -> None:
     config: RESTAPIConfig = {
         "client": {
             "base_url": "https://api.example.com",
@@ -929,7 +933,7 @@ def test_resource_dependent_dependent():
     assert resources["location_details"]._pipe.parent.name == "locations"
 
 
-def test_circular_resource_bindingis_invalid():
+def test_circular_resource_bindingis_invalid() -> None:
     config: RESTAPIConfig = {
         "client": {
             "base_url": "https://api.example.com",
