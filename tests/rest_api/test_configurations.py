@@ -571,66 +571,6 @@ def test_invalid_incremental_type_is_not_accepted():
     assert e.match("Invalid param type: no_incremental.")
 
 
-def test_constructs_incremental_from_request_param():
-    request_params = {
-        "foo": "bar",
-        "since": {
-            "type": "incremental",
-            "cursor_path": "updated_at",
-            "initial_value": "2024-01-01T00:00:00Z",
-        },
-    }
-    (incremental_config, incremental_param, _) = setup_incremental_object(
-        request_params
-    )
-    assert incremental_config == dlt.sources.incremental(
-        cursor_path="updated_at", initial_value="2024-01-01T00:00:00Z"
-    )
-    assert incremental_param == IncrementalParam(start="since", end=None)
-
-
-def test_constructs_incremental_from_incremental_object_in_request_param():
-    request_params = {
-        "foo": "bar",
-        "since": dlt.sources.incremental(
-            cursor_path="updated_at", initial_value="2024-01-01T00:00:00Z"
-        ),
-    }
-    (incremental_obj, incremental_param, _) = setup_incremental_object(
-        request_params
-    )
-    assert incremental_param == IncrementalParam(start="since", end=None)
-
-    expected_incremental = dlt.sources.incremental(
-        cursor_path="updated_at", initial_value="2024-01-01T00:00:00Z"
-    )
-    assert expected_incremental == incremental_obj
-
-
-def test_constructs_incremental_from_endpoint_config_incremental():
-    config = {
-        "incremental": {
-            "start_param": "since",
-            "end_param": "until",
-            "cursor_path": "updated_at",
-            "initial_value": "2024-01-01T00:00:00Z",
-            "transform": lambda epoch: pendulum.from_timestamp(int(epoch)),
-        }
-    }
-    incremental_config = cast(IncrementalConfig, config.get("incremental"))
-    (incremental_obj, incremental_param, _) = setup_incremental_object(
-        {},
-        incremental_config,
-    )
-    assert incremental_param == IncrementalParam(start="since", end="until")
-
-    expected_incremental = dlt.sources.incremental(
-        cursor_path="updated_at",
-        initial_value="2024-01-01T00:00:00Z",
-    )
-    assert expected_incremental == incremental_obj
-
-
 def test_one_resource_cannot_have_many_incrementals():
     request_params = {
         "foo": "bar",
@@ -653,34 +593,43 @@ def test_one_resource_cannot_have_many_incrementals():
     assert e.match(error_message)
 
 
-def test_setup_incremental_with_transform_in_incremental_config(mocker):
-    def epoch_to_datetime(epoch):
-        return pendulum.from_timestamp(epoch)
-
-    resource_config_incremental: IncrementalConfig = {
-        "start_param": "since",
-        "end_param": "until",
-        "cursor_path": "updated_at",
-        "initial_value": "2024-01-01T00:00:00Z",
-        "end_value": "2024-06-30T00:00:00Z",
-        "transform": epoch_to_datetime,
+def test_constructs_incremental_from_request_param():
+    request_params = {
+        "foo": "bar",
+        "since": {
+            "type": "incremental",
+            "cursor_path": "updated_at",
+            "initial_value": "2024-01-01T00:00:00Z",
+        },
     }
-
-    (incremental_obj, incremental_param, transform) = setup_incremental_object(
-        {}, resource_config_incremental
+    (incremental_config, incremental_param, _) = setup_incremental_object(
+        request_params
     )
-    assert incremental_param == IncrementalParam(start="since", end="until")
-    assert transform == epoch_to_datetime
+    assert incremental_config == dlt.sources.incremental(
+        cursor_path="updated_at", initial_value="2024-01-01T00:00:00Z"
+    )
+    assert incremental_param == IncrementalParam(start="since", end=None)
+
+
+def test_constructs_incremental_from_request_param_with_incremental_object():
+    request_params = {
+        "foo": "bar",
+        "since": dlt.sources.incremental(
+            cursor_path="updated_at", initial_value="2024-01-01T00:00:00Z"
+        ),
+    }
+    (incremental_obj, incremental_param, _) = setup_incremental_object(
+        request_params
+    )
+    assert incremental_param == IncrementalParam(start="since", end=None)
 
     expected_incremental = dlt.sources.incremental(
-        cursor_path="updated_at",
-        initial_value="2024-01-01T00:00:00Z",
-        end_value="2024-06-30T00:00:00Z",
+        cursor_path="updated_at", initial_value="2024-01-01T00:00:00Z"
     )
     assert expected_incremental == incremental_obj
 
 
-def test_setup_incremental_with_transform_in_incremental_param(mocker):
+def test_constructs_incremental_from_transform_in_request_param_with_transform(mocker):
     def epoch_to_datetime(epoch):
         return pendulum.from_timestamp(epoch)
 
@@ -698,6 +647,56 @@ def test_setup_incremental_with_transform_in_incremental_param(mocker):
         param_config, None
     )
     assert incremental_param == IncrementalParam(start="since", end=None)
+    assert transform == epoch_to_datetime
+
+    expected_incremental = dlt.sources.incremental(
+        cursor_path="updated_at",
+        initial_value="2024-01-01T00:00:00Z",
+        end_value="2024-06-30T00:00:00Z",
+    )
+    assert expected_incremental == incremental_obj
+
+
+def test_constructs_incremental_from_endpoint_config_incremental():
+    config = {
+        "incremental": {
+            "start_param": "since",
+            "end_param": "until",
+            "cursor_path": "updated_at",
+            "initial_value": "2024-01-01T00:00:00Z",
+        }
+    }
+    incremental_config = cast(IncrementalConfig, config.get("incremental"))
+    (incremental_obj, incremental_param, _) = setup_incremental_object(
+        {},
+        incremental_config,
+    )
+    assert incremental_param == IncrementalParam(start="since", end="until")
+
+    expected_incremental = dlt.sources.incremental(
+        cursor_path="updated_at",
+        initial_value="2024-01-01T00:00:00Z",
+    )
+    assert expected_incremental == incremental_obj
+
+
+def test_constructs_incremental_from_endpoint_config_incremental_with_transform(mocker):
+    def epoch_to_datetime(epoch):
+        return pendulum.from_timestamp(int(epoch))
+
+    resource_config_incremental: IncrementalConfig = {
+        "start_param": "since",
+        "end_param": "until",
+        "cursor_path": "updated_at",
+        "initial_value": "2024-01-01T00:00:00Z",
+        "end_value": "2024-06-30T00:00:00Z",
+        "transform": epoch_to_datetime,
+    }
+
+    (incremental_obj, incremental_param, transform) = setup_incremental_object(
+        {}, resource_config_incremental
+    )
+    assert incremental_param == IncrementalParam(start="since", end="until")
     assert transform == epoch_to_datetime
 
     expected_incremental = dlt.sources.incremental(
