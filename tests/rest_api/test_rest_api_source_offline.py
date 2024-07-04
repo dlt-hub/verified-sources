@@ -1,5 +1,6 @@
 import json
 import pytest
+from typing import Any, cast, Dict
 import pendulum
 
 import dlt
@@ -425,7 +426,7 @@ def test_response_actions_called_in_order(mock_api_server, mocker):
 
     assert all(record["custom_field"] == "foobar" for record in data)
 
-    
+
 def test_posts_with_inremental_date_transformation(mock_api_server) -> None:
     config: RESTAPIConfig = {
         "client": {"base_url": "https://api.example.com"},
@@ -453,4 +454,3 @@ def test_posts_with_inremental_date_transformation(mock_api_server) -> None:
     for post in results:
         assert post["since"] == "1970-01-01"
         assert post["until"] == "1970-01-02"
-

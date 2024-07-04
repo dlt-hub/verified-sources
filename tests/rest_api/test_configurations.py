@@ -807,23 +807,23 @@ def test_resource_hints_are_passed_to_resource_constructor() -> None:
         ],
     }
 
-   with patch.object(dlt, "resource", wraps=dlt.resource) as mock_resource_constructor:
-    rest_api_resources(config)
-    mock_resource_constructor.assert_called_once()
-    expected_kwargs = {
-        "table_name": "a_table",
-        "max_table_nesting": 2,
-        "write_disposition": "merge",
-        "columns": {"a_text": {"name": "a_text", "data_type": "text"}},
-        "primary_key": "a_pk",
-        "merge_key": "a_merge_key",
-        "schema_contract": {"tables": "evolve"},
-        "table_format": "iceberg",
-        "selected": False,
-    }
-    for arg in expected_kwargs.items():
-        _, kwargs = mock_resource_constructor.call_args_list[0]
-        assert arg in kwargs.items()
+    with patch.object(dlt, "resource", wraps=dlt.resource) as mock_resource_constructor:
+        rest_api_resources(config)
+        mock_resource_constructor.assert_called_once()
+        expected_kwargs = {
+            "table_name": "a_table",
+            "max_table_nesting": 2,
+            "write_disposition": "merge",
+            "columns": {"a_text": {"name": "a_text", "data_type": "text"}},
+            "primary_key": "a_pk",
+            "merge_key": "a_merge_key",
+            "schema_contract": {"tables": "evolve"},
+            "table_format": "iceberg",
+            "selected": False,
+        }
+        for arg in expected_kwargs.items():
+            _, kwargs = mock_resource_constructor.call_args_list[0]
+            assert arg in kwargs.items()
 
 
 def test_create_multiple_response_actions():
@@ -1136,4 +1136,3 @@ def test_circular_resource_bindingis_invalid() -> None:
     with pytest.raises(CycleError) as e:
         rest_api_resources(config)
     assert e.match(re.escape("'nodes are in a cycle', ['chicken', 'egg', 'chicken']"))
-

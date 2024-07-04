@@ -8,6 +8,7 @@ from typing import (
     Optional,
     Union,
     Callable,
+    cast,
     NamedTuple,
 )
 import graphlib  # type: ignore[import,unused-ignore]
