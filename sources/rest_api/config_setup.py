@@ -159,7 +159,11 @@ def setup_incremental_object(
 ]:
     incremental_params: List[str] = []
     for key, value in request_params.items():
-        if isinstance(value, dict) and value.get("type") == "incremental":
+        if (
+            isinstance(value, dict)
+            and value.get("type") == "incremental"
+            or isinstance(value, dlt.sources.incremental)
+        ):
             incremental_params.append(key)
     if len(incremental_params) > 1:
         raise ValueError(

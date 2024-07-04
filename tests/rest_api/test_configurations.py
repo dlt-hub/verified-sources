@@ -612,6 +612,24 @@ def test_one_resource_cannot_have_many_incrementals() -> None:
     assert e.match(error_message)
 
 
+def test_one_resource_cannot_have_many_incrementals_2(incremental_with_init) -> None:
+    request_params = {
+        "foo": "bar",
+        "first_incremental": {
+            "type": "incremental",
+            "cursor_path": "created_at",
+            "initial_value": "2024-02-02T00:00:00Z",
+        },
+        "second_incremental": incremental_with_init,
+    }
+    with pytest.raises(ValueError) as e:
+        setup_incremental_object(request_params)
+    error_message = re.escape(
+        "Only a single incremental parameter is allower per endpoint. Found: ['first_incremental', 'second_incremental']"
+    )
+    assert e.match(error_message)
+
+
 def test_constructs_incremental_from_request_param() -> None:
     request_params = {
         "foo": "bar",
