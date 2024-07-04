@@ -1,5 +1,6 @@
 import pytest
 import pendulum
+from unittest import mock
 
 import dlt
 from dlt.pipeline.exceptions import PipelineStepFailed
@@ -292,6 +293,8 @@ def test_load_mock_api_typeddict_config(mock_api_server):
 
 
 def test_posts_with_inremental_date_transformation(mock_api_server) -> None:
+    start_time = pendulum.from_timestamp(1)
+    one_day_later = start_time.add(days=1)
     config: RESTAPIConfig = {
         "client": {"base_url": "https://api.example.com"},
         "resources": [
@@ -303,8 +306,8 @@ def test_posts_with_inremental_date_transformation(mock_api_server) -> None:
                         "start_param": "since",
                         "end_param": "until",
                         "cursor_path": "updated_at",
-                        "initial_value": "1",
-                        "end_value": str(60 * 60 * 24),
+                        "initial_value": str(start_time.int_timestamp),
+                        "end_value": str(one_day_later.int_timestamp),
                         "transform": lambda epoch: pendulum.from_timestamp(
                             int(epoch)
                         ).to_date_string(),
@@ -313,8 +316,11 @@ def test_posts_with_inremental_date_transformation(mock_api_server) -> None:
             },
         ],
     }
-    source = rest_api_source(config).add_limit(1)
-    results = list(source.with_resources("posts"))
-    for post in results:
-        assert post["since"] == "1970-01-01"
-        assert post["until"] == "1970-01-02"
+    RESTClient = dlt.sources.helpers.rest_client.RESTClient
+    with mock.patch.object(RESTClient, "paginate") as mock_paginate:
+        source = rest_api_source(config).add_limit(1)
+        _ = list(source.with_resources("posts"))
+        assert mock_paginate.call_count == 1
+        _, called_kwargs = mock_paginate.call_args_list[0]
+        assert called_kwargs["params"] == {"since": "1970-01-01", "until": "1970-01-02"}
+        assert called_kwargs["path"] == "posts"

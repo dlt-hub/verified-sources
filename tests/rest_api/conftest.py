@@ -2,7 +2,7 @@ import re
 from typing import NamedTuple, Callable, Pattern, List, Union, TYPE_CHECKING
 import base64
 
-from urllib.parse import urlsplit, urlunsplit, urlparse, parse_qs
+from urllib.parse import urlsplit, urlunsplit
 
 import pytest
 import requests_mock
@@ -106,19 +106,6 @@ def serialize_page(
 
 def generate_posts(count=100):
     return [{"id": i, "title": f"Post {i}"} for i in range(count)]
-
-
-def generate_posts_with_date(since, until=None, count=100):
-    return [
-        {
-            "id": i,
-            "title": f"Post {i}",
-            "updated_at": "2024-01-01",
-            "since": since,
-            "until": until,
-        }
-        for i in range(count)
-    ]
 
 
 def generate_comments(post_id, count=50):
@@ -257,18 +244,6 @@ def mock_api_server():
                 return {"access_token": "new-valid-token"}
             context.status_code = 401
             return {"error": "Invalid refresh token"}
-
-        @router.get(r"/posts(\?since=[0-9\-]{10})(&until=[0-9\-]{0,10})$")
-        def posts_incremental_since_until(request, context):
-            since_date = parse_qs(urlparse(request.url).query).get(
-                "since", ["1900-01-01"]
-            )[0]
-            until_date = parse_qs(urlparse(request.url).query).get(
-                "until", ["9999-12-31"]
-            )[0]
-            return paginate_response(
-                request, generate_posts_with_date(since_date, until_date)
-            )
 
         router.register_routes(m)
 
