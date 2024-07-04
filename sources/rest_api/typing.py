@@ -212,10 +212,13 @@ class ResolvedParam:
         self.field_path = jsonpath.compile_path(self.resolve_config["field"])
 
 
-class ResponseAction(TypedDict, total=False):
+class ResponseActionDict(TypedDict, total=False):
     status_code: Optional[Union[int, str]]
     content: Optional[str]
-    action: str
+    action: Optional[Union[str, Union[Callable[..., Any], List[Callable[..., Any]]]]]
+
+
+ResponseAction = Union[ResponseActionDict, Callable[..., Any]]
 
 
 class Endpoint(TypedDict, total=False):
