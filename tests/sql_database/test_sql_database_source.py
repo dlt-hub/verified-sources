@@ -38,6 +38,20 @@ def make_pipeline(destination_name: str) -> dlt.Pipeline:
     )
 
 
+def test_pass_engine_credentials(sql_source_db: SQLAlchemySourceDB) -> None:
+    # verify database
+    database = sql_database(
+        sql_source_db.engine, schema=sql_source_db.schema, table_names=["chat_message"]
+    )
+    assert len(list(database)) == sql_source_db.table_infos["chat_message"]["row_count"]
+
+    # verify table
+    table = sql_table(
+        sql_source_db.engine, table="chat_message", schema=sql_source_db.schema
+    )
+    assert len(list(table)) == sql_source_db.table_infos["chat_message"]["row_count"]
+
+
 @pytest.mark.parametrize("destination_name", ALL_DESTINATIONS)
 @pytest.mark.parametrize("backend", ["sqlalchemy", "pandas", "pyarrow", "connectorx"])
 def test_load_sql_schema_loads_all_tables(

@@ -36,6 +36,7 @@ types-psycopg2 = "^2.9.0"
 pytest-mock = "^3.12.0"
 twisted = "22.10.0"
 pytest-forked = "^1.6.0"
+pendulum = "^3.0.0"
 
 [tool.poetry.group.sql_database.dependencies]
 sqlalchemy = ">=1.4"

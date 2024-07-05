@@ -41,7 +41,6 @@ from dlt.sources.helpers.rest_client.auth import (
     HttpBasicAuth,
     BearerTokenAuth,
     APIKeyAuth,
-    OAuthJWTAuth,
 )
 
 from .typing import (
@@ -49,13 +48,11 @@ from .typing import (
     PaginatorType,
     AuthType,
     AuthConfig,
-    IncrementalArgs,
     IncrementalConfig,
     PaginatorConfig,
-    ParamBindConfig,
-    ResolveParamConfig,
     ResolvedParam,
     ResponseAction,
+    ResponseActionDict,
     Endpoint,
     EndpointResource,
 )
@@ -129,7 +126,7 @@ def get_auth_class(auth_type: AuthType) -> Type[AuthConfigBase]:
     except KeyError:
         available_options = ", ".join(AUTH_MAP.keys())
         raise ValueError(
-            f"Invalid paginator: {auth_type}. "
+            f"Invalid authentication: {auth_type}. "
             f"Available options: {available_options}"
         )
 
@@ -159,28 +156,45 @@ def create_auth(auth_config: Optional[AuthConfig]) -> Optional[AuthConfigBase]:
 def setup_incremental_object(
     request_params: Dict[str, Any],
     incremental_config: Optional[IncrementalConfig] = None,
-) -> Tuple[Optional[Incremental[Any]], Optional[IncrementalParam]]:
+) -> Tuple[
+    Optional[Incremental[Any]], Optional[IncrementalParam], Optional[Callable[..., Any]]
+]:
+    incremental_params: List[str] = []
+    for key, value in request_params.items():
+        if isinstance(value, dict) and value.get("type") == "incremental":
+            incremental_params.append(key)
+    if len(incremental_params) > 1:
+        raise ValueError(
+            f"Only a single incremental parameter is allower per endpoint. Found: {incremental_params}"
+        )
+    transform: Optional[Callable[..., Any]]
     for key, value in request_params.items():
         if isinstance(value, dlt.sources.incremental):
-            return value, IncrementalParam(start=key, end=None)
+            return value, IncrementalParam(start=key, end=None), None
         if isinstance(value, dict) and value.get("type") == "incremental":
-            config = exclude_keys(value, {"type"})
+            transform = value.get("transform", None)
+            config = exclude_keys(value, {"type", "transform"})
             # TODO: implement param type to bind incremental to
             return (
                 dlt.sources.incremental(**config),
                 IncrementalParam(start=key, end=None),
+                transform,
             )
     if incremental_config:
-        config = exclude_keys(incremental_config, {"start_param", "end_param"})
+        transform = incremental_config.get("transform", None)
+        config = exclude_keys(
+            incremental_config, {"start_param", "end_param", "transform"}
+        )
         return (
-            dlt.sources.incremental(**cast(IncrementalArgs, config)),
+            dlt.sources.incremental(**config),
             IncrementalParam(
                 start=incremental_config["start_param"],
                 end=incremental_config.get("end_param"),
             ),
+            transform,
         )
 
-    return None, None
+    return None, None, None
 
 
 def make_parent_key_name(resource_name: str, field_name: str) -> str:
@@ -343,50 +357,96 @@ def _find_resolved_params(endpoint_config: Endpoint) -> List[ResolvedParam]:
     ]
 
 
-def _handle_response_actions(
-    response: Response, actions: List[ResponseAction]
-) -> Optional[str]:
-    """Handle response actions based on the response and the provided actions."""
-    content = response.text
+def _action_type_unless_custom_hook(
+    action_type: Optional[str], custom_hook: Optional[List[Callable[..., Any]]]
+) -> Union[
+    Tuple[str, Optional[List[Callable[..., Any]]]],
+    Tuple[None, List[Callable[..., Any]]],
+]:
+    if custom_hook:
+        return (None, custom_hook)
+    return (action_type, None)
 
-    for action in actions:
+
+def _handle_response_action(
+    response: Response, action: ResponseAction
+) -> Union[
+    Tuple[str, Optional[List[Callable[..., Any]]]],
+    Tuple[None, List[Callable[..., Any]]],
+    Tuple[None, None],
+]:
+    """
+    Checks, based on the response, if the provided action applies.
+    """
+    content: str = response.text
+    status_code = None
+    content_substr = None
+    action_type = None
+    custom_hooks = None
+    response_action = None
+    if callable(action):
+        custom_hooks = [action]
+    else:
+        action = cast(ResponseActionDict, action)
         status_code = action.get("status_code")
-        content_substr: str = action.get("content")
-        action_type: str = action.get("action")
+        content_substr = action.get("content")
+        response_action = action.get("action")
+        if isinstance(response_action, str):
+            action_type = response_action
+        elif callable(response_action):
+            custom_hooks = [response_action]
+        elif isinstance(response_action, list) and all(
+            callable(action) for action in response_action
+        ):
+            custom_hooks = response_action
+        else:
+            raise ValueError(
+                f"Action {response_action} does not conform to expected type. Expected: str or Callable or List[Callable]. Found: {type(response_action)}"
+            )
 
-        if status_code is not None and content_substr is not None:
-            if response.status_code == status_code and content_substr in content:
-                return action_type
+    if status_code is not None and content_substr is not None:
+        if response.status_code == status_code and content_substr in content:
+            return _action_type_unless_custom_hook(action_type, custom_hooks)
 
-        elif status_code is not None:
-            if response.status_code == status_code:
-                return action_type
+    elif status_code is not None:
+        if response.status_code == status_code:
+            return _action_type_unless_custom_hook(action_type, custom_hooks)
 
-        elif content_substr is not None:
-            if content_substr in content:
-                return action_type
+    elif content_substr is not None:
+        if content_substr in content:
+            return _action_type_unless_custom_hook(action_type, custom_hooks)
 
-    return None
+    elif status_code is None and content_substr is None and custom_hooks is not None:
+        return (None, custom_hooks)
+
+    return (None, None)
 
 
-def _create_response_actions_hook(
-    response_actions: List[ResponseAction],
+def _create_response_action_hook(
+    response_action: ResponseAction,
 ) -> Callable[[Response, Any, Any], None]:
-    def response_actions_hook(response: Response, *args: Any, **kwargs: Any) -> None:
-        action_type = _handle_response_actions(response, response_actions)
-        if action_type == "ignore":
+    def response_action_hook(response: Response, *args: Any, **kwargs: Any) -> None:
+        """
+        This is the hook executed by the requests library
+        """
+        (action_type, custom_hooks) = _handle_response_action(response, response_action)
+        if custom_hooks:
+            for hook in custom_hooks:
+                hook(response)
+        elif action_type == "ignore":
             logger.info(
                 f"Ignoring response with code {response.status_code} "
                 f"and content '{response.json()}'."
             )
             raise IgnoreResponseException
 
+        # If there are hooks, then the REST client does not raise for status
         # If no action has been taken and the status code indicates an error,
         # raise an HTTP error based on the response status
-        if not action_type and response.status_code >= 400:
+        elif not action_type:
             response.raise_for_status()
 
-    return response_actions_hook
+    return response_action_hook
 
 
 def create_response_hooks(
@@ -397,16 +457,30 @@ def create_response_hooks(
     the default behavior is to raise an HTTP error.
 
     Example:
+        def set_encoding(response, *args, **kwargs):
+            response.encoding = 'windows-1252'
+            return response
+
+        def remove_field(response: Response, *args, **kwargs) -> Response:
+            payload = response.json()
+            for record in payload:
+                record.pop("email", None)
+            modified_content: bytes = json.dumps(payload).encode("utf-8")
+            response._content = modified_content
+            return response
+
         response_actions = [
+            set_encoding,
             {"status_code": 404, "action": "ignore"},
             {"content": "Not found", "action": "ignore"},
-            {"status_code": 429, "action": "retry"},
-            {"status_code": 200, "content": "some text", "action": "retry"},
+            {"status_code": 200, "content": "some text", "action": "ignore"},
+            {"status_code": 200, "action": remove_field},
         ]
         hooks = create_response_hooks(response_actions)
     """
     if response_actions:
-        return {"response": [_create_response_actions_hook(response_actions)]}
+        hooks = [_create_response_action_hook(action) for action in response_actions]
+        return {"response": hooks}
     return None
 
 

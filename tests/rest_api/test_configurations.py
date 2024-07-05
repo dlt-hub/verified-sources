@@ -1,27 +1,42 @@
+import re
+import pendulum
+
+import dlt.extract
 import pytest
+from unittest.mock import patch
 from copy import copy, deepcopy
-from typing import get_args
+from typing import cast, get_args, Dict, List, Any
+
+from graphlib import CycleError
 
 import dlt
 from dlt.common.utils import update_dict_nested, custom_environ
 from dlt.common.jsonpath import compile_path
 from dlt.common.configuration import inject_section
 from dlt.common.configuration.specs import ConfigSectionContext
-from dlt.sources.helpers.rest_client.paginators import (
-    SinglePagePaginator,
-    HeaderLinkPaginator,
+
+from dlt.extract.incremental import Incremental
+
+from sources.rest_api import (
+    rest_api_source,
+    rest_api_resources,
+    _validate_param_type,
+    _set_incremental_params,
 )
 
-from sources.rest_api import rest_api_source, rest_api_resources
 from sources.rest_api.config_setup import (
     AUTH_MAP,
     PAGINATOR_MAP,
+    IncrementalParam,
     _bind_path_params,
     _setup_single_entity_endpoint,
     create_auth,
     create_paginator,
     _make_endpoint_resource,
     process_parent_data_item,
+    setup_incremental_object,
+    create_response_hooks,
+    _handle_response_action,
 )
 from sources.rest_api.typing import (
     AuthType,
@@ -31,6 +46,8 @@ from sources.rest_api.typing import (
     PaginatorTypeConfig,
     RESTAPIConfig,
     ResolvedParam,
+    ResponseAction,
+    IncrementalConfig,
 )
 from dlt.sources.helpers.rest_client.paginators import (
     HeaderLinkPaginator,
@@ -38,13 +55,13 @@ from dlt.sources.helpers.rest_client.paginators import (
     JSONResponseCursorPaginator,
     OffsetPaginator,
     PageNumberPaginator,
+    SinglePagePaginator,
 )
+
 from dlt.sources.helpers.rest_client.auth import (
-    AuthConfigBase,
     HttpBasicAuth,
     BearerTokenAuth,
     APIKeyAuth,
-    OAuthJWTAuth,
 )
 
 from .source_configs import (
@@ -214,6 +231,15 @@ def test_bearer_token_fallback() -> None:
     auth = create_auth({"token": "secret"})
     assert isinstance(auth, BearerTokenAuth)
     assert auth.token == "secret"
+
+
+def test_error_message_invalid_auth_type() -> None:
+    with pytest.raises(ValueError) as e:
+        create_auth("non_existing_method")
+    assert (
+        str(e.value)
+        == "Invalid authentication: non_existing_method. Available options: bearer, api_key, http_basic"
+    )
 
 
 def test_resource_expand() -> None:
@@ -531,3 +557,582 @@ def test_resource_schema() -> None:
     resource = resources[0]
     assert resource.name == "users"
     assert resources[1].name == "user"
+
+
+@pytest.fixture()
+def incremental_with_init_and_end() -> Incremental:
+    return dlt.sources.incremental(
+        cursor_path="updated_at",
+        initial_value="2024-01-01T00:00:00Z",
+        end_value="2024-06-30T00:00:00Z",
+    )
+
+
+@pytest.fixture()
+def incremental_with_init() -> Incremental:
+    return dlt.sources.incremental(
+        cursor_path="updated_at",
+        initial_value="2024-01-01T00:00:00Z",
+    )
+
+
+def test_invalid_incremental_type_is_not_accepted() -> None:
+    request_params = {
+        "foo": "bar",
+        "since": {
+            "type": "no_incremental",
+            "cursor_path": "updated_at",
+            "initial_value": "2024-01-01T00:00:00Z",
+        },
+    }
+    with pytest.raises(ValueError) as e:
+        _validate_param_type(request_params)
+
+    assert e.match("Invalid param type: no_incremental.")
+
+
+def test_one_resource_cannot_have_many_incrementals() -> None:
+    request_params = {
+        "foo": "bar",
+        "first_incremental": {
+            "type": "incremental",
+            "cursor_path": "updated_at",
+            "initial_value": "2024-01-01T00:00:00Z",
+        },
+        "second_incremental": {
+            "type": "incremental",
+            "cursor_path": "created_at",
+            "initial_value": "2024-01-01T00:00:00Z",
+        },
+    }
+    with pytest.raises(ValueError) as e:
+        setup_incremental_object(request_params)
+    error_message = re.escape(
+        "Only a single incremental parameter is allower per endpoint. Found: ['first_incremental', 'second_incremental']"
+    )
+    assert e.match(error_message)
+
+
+def test_constructs_incremental_from_request_param() -> None:
+    request_params = {
+        "foo": "bar",
+        "since": {
+            "type": "incremental",
+            "cursor_path": "updated_at",
+            "initial_value": "2024-01-01T00:00:00Z",
+        },
+    }
+    (incremental_config, incremental_param, _) = setup_incremental_object(
+        request_params
+    )
+    assert incremental_config == dlt.sources.incremental(
+        cursor_path="updated_at", initial_value="2024-01-01T00:00:00Z"
+    )
+    assert incremental_param == IncrementalParam(start="since", end=None)
+
+
+def test_constructs_incremental_from_request_param_with_incremental_object(
+    incremental_with_init,
+) -> None:
+    request_params = {
+        "foo": "bar",
+        "since": dlt.sources.incremental(
+            cursor_path="updated_at", initial_value="2024-01-01T00:00:00Z"
+        ),
+    }
+    (incremental_obj, incremental_param, _) = setup_incremental_object(request_params)
+    assert incremental_param == IncrementalParam(start="since", end=None)
+
+    assert incremental_with_init == incremental_obj
+
+
+def test_constructs_incremental_from_request_param_with_transform(
+    mocker, incremental_with_init_and_end
+) -> None:
+    def epoch_to_datetime(epoch: str):
+        return pendulum.from_timestamp(int(epoch))
+
+    param_config = {
+        "since": {
+            "type": "incremental",
+            "cursor_path": "updated_at",
+            "initial_value": "2024-01-01T00:00:00Z",
+            "end_value": "2024-06-30T00:00:00Z",
+            "transform": epoch_to_datetime,
+        }
+    }
+
+    (incremental_obj, incremental_param, transform) = setup_incremental_object(
+        param_config, None
+    )
+    assert incremental_param == IncrementalParam(start="since", end=None)
+    assert transform == epoch_to_datetime
+
+    assert incremental_with_init_and_end == incremental_obj
+
+
+def test_constructs_incremental_from_endpoint_config_incremental(
+    incremental_with_init,
+) -> None:
+    config = {
+        "incremental": {
+            "start_param": "since",
+            "end_param": "until",
+            "cursor_path": "updated_at",
+            "initial_value": "2024-01-01T00:00:00Z",
+        }
+    }
+    incremental_config = cast(IncrementalConfig, config.get("incremental"))
+    (incremental_obj, incremental_param, _) = setup_incremental_object(
+        {},
+        incremental_config,
+    )
+    assert incremental_param == IncrementalParam(start="since", end="until")
+
+    assert incremental_with_init == incremental_obj
+
+
+def test_constructs_incremental_from_endpoint_config_incremental_with_transform(
+    mocker,
+    incremental_with_init_and_end,
+) -> None:
+    def epoch_to_datetime(epoch):
+        return pendulum.from_timestamp(int(epoch))
+
+    resource_config_incremental: IncrementalConfig = {
+        "start_param": "since",
+        "end_param": "until",
+        "cursor_path": "updated_at",
+        "initial_value": "2024-01-01T00:00:00Z",
+        "end_value": "2024-06-30T00:00:00Z",
+        "transform": epoch_to_datetime,
+    }
+
+    (incremental_obj, incremental_param, transform) = setup_incremental_object(
+        {}, resource_config_incremental
+    )
+    assert incremental_param == IncrementalParam(start="since", end="until")
+    assert transform == epoch_to_datetime
+    assert incremental_with_init_and_end == incremental_obj
+
+
+def test_calls_transform_from_endpoint_config_incremental(mocker) -> None:
+    def epoch_to_date(epoch: str):
+        return pendulum.from_timestamp(int(epoch)).to_date_string()
+
+    callback = mocker.Mock(side_effect=epoch_to_date)
+    incremental_obj = mocker.Mock()
+    incremental_obj.last_value = "1"
+
+    incremental_param = IncrementalParam(start="since", end=None)
+    created_param = _set_incremental_params(
+        {}, incremental_obj, incremental_param, callback
+    )
+    assert created_param == {"since": "1970-01-01"}
+    assert callback.call_args_list[0].args == ("1",)
+
+
+def test_calls_transform_from_request_param(mocker) -> None:
+    def epoch_to_datetime(epoch: str):
+        return pendulum.from_timestamp(int(epoch)).to_date_string()
+
+    callback = mocker.Mock(side_effect=epoch_to_datetime)
+    start = 1
+    one_day_later = 60 * 60 * 24
+    incremental_config: IncrementalConfig = {
+        "start_param": "since",
+        "end_param": "until",
+        "cursor_path": "updated_at",
+        "initial_value": str(start),
+        "end_value": str(one_day_later),
+        "transform": callback,
+    }
+
+    (incremental_obj, incremental_param, _) = setup_incremental_object(
+        {}, incremental_config
+    )
+    assert incremental_param is not None
+    assert incremental_obj is not None
+    created_param = _set_incremental_params(
+        {}, incremental_obj, incremental_param, callback
+    )
+    assert created_param == {"since": "1970-01-01", "until": "1970-01-02"}
+    assert callback.call_args_list[0].args == (str(start),)
+    assert callback.call_args_list[1].args == (str(one_day_later),)
+
+
+def test_default_transform_is_identity(mocker) -> None:
+    start = 1
+    one_day_later = 60 * 60 * 24
+    incremental_config: IncrementalConfig = {
+        "start_param": "since",
+        "end_param": "until",
+        "cursor_path": "updated_at",
+        "initial_value": str(start),
+        "end_value": str(one_day_later),
+    }
+
+    (incremental_obj, incremental_param, _) = setup_incremental_object(
+        {}, incremental_config
+    )
+    assert incremental_param is not None
+    assert incremental_obj is not None
+    created_param = _set_incremental_params(
+        {}, incremental_obj, incremental_param, None
+    )
+    assert created_param == {"since": str(start), "until": str(one_day_later)}
+
+
+def test_resource_hints_are_passed_to_resource_constructor() -> None:
+    config: RESTAPIConfig = {
+        "client": {"base_url": "https://api.example.com"},
+        "resources": [
+            {
+                "name": "posts",
+                "endpoint": {
+                    "params": {
+                        "limit": 100,
+                    },
+                },
+                "table_name": "a_table",
+                "max_table_nesting": 2,
+                "write_disposition": "merge",
+                "columns": {"a_text": {"name": "a_text", "data_type": "text"}},
+                "primary_key": "a_pk",
+                "merge_key": "a_merge_key",
+                "schema_contract": {"tables": "evolve"},
+                "table_format": "iceberg",
+                "selected": False,
+            },
+        ],
+    }
+
+    with patch.object(dlt, "resource", wraps=dlt.resource) as mock_resource_constructor:
+        rest_api_resources(config)
+        mock_resource_constructor.assert_called_once()
+        expected_kwargs = {
+            "table_name": "a_table",
+            "max_table_nesting": 2,
+            "write_disposition": "merge",
+            "columns": {"a_text": {"name": "a_text", "data_type": "text"}},
+            "primary_key": "a_pk",
+            "merge_key": "a_merge_key",
+            "schema_contract": {"tables": "evolve"},
+            "table_format": "iceberg",
+            "selected": False,
+        }
+        for arg in expected_kwargs.items():
+            _, kwargs = mock_resource_constructor.call_args_list[0]
+            assert arg in kwargs.items()
+
+
+def test_create_multiple_response_actions():
+    def custom_hook(response, *args, **kwargs):
+        return response
+
+    response_actions: List[ResponseAction] = [
+        custom_hook,
+        {"status_code": 404, "action": "ignore"},
+        {"content": "Not found", "action": "ignore"},
+        {"status_code": 200, "content": "some text", "action": "ignore"},
+    ]
+    hooks = cast(Dict[str, Any], create_response_hooks(response_actions))
+    assert len(hooks["response"]) == 4
+
+    response_actions_2: List[ResponseAction] = [
+        custom_hook,
+        {"status_code": 200, "action": custom_hook},
+    ]
+    hooks_2 = cast(Dict[str, Any], create_response_hooks(response_actions_2))
+    assert len(hooks_2["response"]) == 2
+
+
+def test_response_action_raises_type_error(mocker):
+    class C:
+        pass
+
+    response = mocker.Mock()
+    response.status_code = 200
+
+    with pytest.raises(ValueError) as e_1:
+        _handle_response_action(response, {"status_code": 200, "action": C()})
+    assert e_1.match("does not conform to expected type")
+
+    with pytest.raises(ValueError) as e_2:
+        _handle_response_action(response, {"status_code": 200, "action": 123})
+    assert e_2.match("does not conform to expected type")
+
+    assert ("ignore", None) == _handle_response_action(
+        response, {"status_code": 200, "action": "ignore"}
+    )
+    assert ("foobar", None) == _handle_response_action(
+        response, {"status_code": 200, "action": "foobar"}
+    )
+
+
+def test_parses_hooks_from_response_actions(mocker):
+    response = mocker.Mock()
+    response.status_code = 200
+
+    hook_1 = mocker.Mock()
+    hook_2 = mocker.Mock()
+
+    assert (None, [hook_1]) == _handle_response_action(
+        response, {"status_code": 200, "action": hook_1}
+    )
+    assert (None, [hook_1, hook_2]) == _handle_response_action(
+        response, {"status_code": 200, "action": [hook_1, hook_2]}
+    )
+
+
+def test_config_validation_for_response_actions(mocker):
+    mock_response_hook_1 = mocker.Mock()
+    mock_response_hook_2 = mocker.Mock()
+    config_1: RESTAPIConfig = {
+        "client": {"base_url": "https://api.example.com"},
+        "resources": [
+            {
+                "name": "posts",
+                "endpoint": {
+                    "response_actions": [
+                        {
+                            "status_code": 200,
+                            "action": mock_response_hook_1,
+                        },
+                    ],
+                },
+            },
+        ],
+    }
+
+    rest_api_source(config_1)
+
+    config_2: RESTAPIConfig = {
+        "client": {"base_url": "https://api.example.com"},
+        "resources": [
+            {
+                "name": "posts",
+                "endpoint": {
+                    "response_actions": [
+                        mock_response_hook_1,
+                        mock_response_hook_2,
+                    ],
+                },
+            },
+        ],
+    }
+
+    rest_api_source(config_2)
+
+    config_3: RESTAPIConfig = {
+        "client": {"base_url": "https://api.example.com"},
+        "resources": [
+            {
+                "name": "posts",
+                "endpoint": {
+                    "response_actions": [
+                        {
+                            "status_code": 200,
+                            "action": [mock_response_hook_1, mock_response_hook_2],
+                        },
+                    ],
+                },
+            },
+        ],
+    }
+
+    rest_api_source(config_3)
+
+
+def test_two_resources_can_depend_on_one_parent_resource() -> None:
+    user_id = {
+        "user_id": {
+            "type": "resolve",
+            "field": "id",
+            "resource": "users",
+        },
+    }
+    config: RESTAPIConfig = {
+        "client": {
+            "base_url": "https://api.example.com",
+        },
+        "resources": [
+            "users",
+            {
+                "name": "user_details",
+                "endpoint": {
+                    "path": "user/{user_id}/",
+                    "params": user_id,
+                },
+            },
+            {
+                "name": "meetings",
+                "endpoint": {
+                    "path": "meetings/{user_id}/",
+                    "params": user_id,
+                },
+            },
+        ],
+    }
+    resources = rest_api_source(config).resources
+    assert resources["meetings"]._pipe.parent.name == "users"
+    assert resources["user_details"]._pipe.parent.name == "users"
+
+
+def test_dependent_resource_cannot_bind_multiple_parameters() -> None:
+    config: RESTAPIConfig = {
+        "client": {
+            "base_url": "https://api.example.com",
+        },
+        "resources": [
+            "users",
+            {
+                "name": "user_details",
+                "endpoint": {
+                    "path": "user/{user_id}/{group_id}",
+                    "params": {
+                        "user_id": {
+                            "type": "resolve",
+                            "field": "id",
+                            "resource": "users",
+                        },
+                        "group_id": {
+                            "type": "resolve",
+                            "field": "group",
+                            "resource": "users",
+                        },
+                    },
+                },
+            },
+        ],
+    }
+    with pytest.raises(ValueError) as e:
+        rest_api_resources(config)
+
+    error_part_1 = re.escape(
+        "Multiple resolved params for resource user_details: [ResolvedParam(param_name='user_id'"
+    )
+    error_part_2 = re.escape("ResolvedParam(param_name='group_id'")
+    assert e.match(error_part_1)
+    assert e.match(error_part_2)
+
+
+def test_one_resource_cannot_bind_two_parents() -> None:
+    config: RESTAPIConfig = {
+        "client": {
+            "base_url": "https://api.example.com",
+        },
+        "resources": [
+            "users",
+            "groups",
+            {
+                "name": "user_details",
+                "endpoint": {
+                    "path": "user/{user_id}/{group_id}",
+                    "params": {
+                        "user_id": {
+                            "type": "resolve",
+                            "field": "id",
+                            "resource": "users",
+                        },
+                        "group_id": {
+                            "type": "resolve",
+                            "field": "id",
+                            "resource": "groups",
+                        },
+                    },
+                },
+            },
+        ],
+    }
+
+    with pytest.raises(ValueError) as e:
+        rest_api_resources(config)
+
+    error_part_1 = re.escape(
+        "Multiple resolved params for resource user_details: [ResolvedParam(param_name='user_id'"
+    )
+    error_part_2 = re.escape("ResolvedParam(param_name='group_id'")
+    assert e.match(error_part_1)
+    assert e.match(error_part_2)
+
+
+def test_resource_dependent_dependent() -> None:
+    config: RESTAPIConfig = {
+        "client": {
+            "base_url": "https://api.example.com",
+        },
+        "resources": [
+            "locations",
+            {
+                "name": "location_details",
+                "endpoint": {
+                    "path": "location/{location_id}",
+                    "params": {
+                        "location_id": {
+                            "type": "resolve",
+                            "field": "id",
+                            "resource": "locations",
+                        },
+                    },
+                },
+            },
+            {
+                "name": "meetings",
+                "endpoint": {
+                    "path": "/meetings/{room_id}",
+                    "params": {
+                        "room_id": {
+                            "type": "resolve",
+                            "field": "room_id",
+                            "resource": "location_details",
+                        },
+                    },
+                },
+            },
+        ],
+    }
+
+    resources = rest_api_source(config).resources
+    assert resources["meetings"]._pipe.parent.name == "location_details"
+    assert resources["location_details"]._pipe.parent.name == "locations"
+
+
+def test_circular_resource_bindingis_invalid() -> None:
+    config: RESTAPIConfig = {
+        "client": {
+            "base_url": "https://api.example.com",
+        },
+        "resources": [
+            {
+                "name": "chicken",
+                "endpoint": {
+                    "path": "chicken/{egg_id}/",
+                    "params": {
+                        "egg_id": {
+                            "type": "resolve",
+                            "field": "id",
+                            "resource": "egg",
+                        },
+                    },
+                },
+            },
+            {
+                "name": "egg",
+                "endpoint": {
+                    "path": "egg/{chicken_id}/",
+                    "params": {
+                        "chicken_id": {
+                            "type": "resolve",
+                            "field": "id",
+                            "resource": "chicken",
+                        },
+                    },
+                },
+            },
+        ],
+    }
+
+    with pytest.raises(CycleError) as e:
+        rest_api_resources(config)
+    assert e.match(re.escape("'nodes are in a cycle', ['chicken', 'egg', 'chicken']"))
