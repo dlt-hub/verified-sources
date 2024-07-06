@@ -249,14 +249,16 @@ def get_postgres_pipeline() -> dlt.Pipeline:
         dataset_name="source_dataset",
         full_refresh=True,
     )
-    pipe.destination = Destination.from_reference("postgres")  # use this instead
+    pipe.destination = Destination.from_reference(
+        "postgres", credentials=PG_CREDS
+    )  # use this instead
     return pipe
 
 
 def create_source_table(
     src_pl: dlt.Pipeline, sql: str, table_name: str = "my_source_table"
 ) -> None:
-    with src_pl.sql_client(credentials=PG_CREDS) as c:
+    with src_pl.sql_client() as c:
         try:
             c.create_dataset()
         except dlt.destinations.exceptions.DatabaseTerminalException:
@@ -268,7 +270,7 @@ def create_source_table(
 def change_source_table(
     src_pl: dlt.Pipeline, sql: str, table_name: str = "my_source_table"
 ) -> None:
-    with src_pl.sql_client(credentials=PG_CREDS) as c:
+    with src_pl.sql_client() as c:
         qual_name = c.make_qualified_table_name(table_name)
         c.execute_sql(sql.format(table_name=qual_name))
 

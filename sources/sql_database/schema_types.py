@@ -1,7 +1,6 @@
 from typing import (
     Optional,
     Any,
-    Sequence,
     Type,
     TYPE_CHECKING,
     Literal,

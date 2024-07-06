@@ -105,6 +105,9 @@ def row_tuples_to_arrow(
                             custom_encode, list(columnar_unknown_types[key])
                         )
                     )
+                    logger.warning(
+                        f"Column {key} contains a data type which is not supported by pyarrow and got converted into {arrow_col.type}. This slows down arrow table generation."
+                    )
                 except (pa.ArrowInvalid, TypeError):
                     logger.warning(
                         f"Column {key} contains a data type which is not supported by pyarrow. This column will be ignored. Error: {e}"

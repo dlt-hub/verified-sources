@@ -280,5 +280,6 @@ class SqlTableResourceConfiguration(BaseConfiguration):
     incremental: Optional[dlt.sources.incremental] = None  # type: ignore[type-arg]
     chunk_size: int = 50000
     backend: TableBackend = "sqlalchemy"
-    detect_precision_hints: Optional[bool] = False
+    detect_precision_hints: Optional[bool] = None
     defer_table_reflect: Optional[bool] = False
+    reflection_level: Optional[ReflectionLevel] = "minimal"

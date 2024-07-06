@@ -65,7 +65,7 @@ def test_config_providers() -> Iterator[ConfigProvidersContext]:
 
 
 @pytest.fixture(autouse=True)
-def patch_pipeline_working_dir() -> None:
+def patch_pipeline_working_dir() -> Iterator[None]:
     """Puts the pipeline working directory into test storage"""
     try:
         with patch(
@@ -86,7 +86,7 @@ def new_test_storage() -> FileStorage:
 
 
 @pytest.fixture(scope="function", autouse=True)
-def preserve_environ() -> None:
+def preserve_environ() -> Iterator[None]:
     """Restores the environ after the test was run"""
     saved_environ = environ.copy()
     yield
