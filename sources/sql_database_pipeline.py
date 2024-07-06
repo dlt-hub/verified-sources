@@ -99,7 +99,7 @@ def load_standalone_table_resource() -> None:
     )
     # columns will be empty here due to defer_table_reflect set to True
     print(family.compute_table_schema())
-    return
+
     # Load all data from another table
     genome = sql_table(
         credentials="mysql+pymysql://rfamro@mysql-rfam-public.ebi.ac.uk:4497/Rfam",
