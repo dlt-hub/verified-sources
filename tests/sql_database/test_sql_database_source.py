@@ -55,6 +55,21 @@ def default_test_callback(
     return None
 
 
+def convert_time_to_us(table):
+    """map transform converting time column to microseconds (ie. from nanoseconds)"""
+    import pyarrow as pa
+    from pyarrow import compute as pc
+
+    time_ns_column = table['time_col']
+    time_us_column = pc.cast(time_ns_column, pa.time64('us'), safe=False)
+    new_table = table.set_column(
+        table.column_names.index('time_col'),
+        'time_col',
+        time_us_column,
+    )
+    return new_table
+
+
 def test_pass_engine_credentials(sql_source_db: SQLAlchemySourceDB) -> None:
     # verify database
     database = sql_database(
@@ -159,6 +174,11 @@ def test_load_sql_schema_loads_all_tables(
         type_adapter_callback=default_test_callback(destination_name, backend),
     )
 
+    if destination_name == "bigquery" and backend == "connectorx":
+        # connectorx generates nanoseconds time which bigquery cannot load
+        source.has_precision.add_map(convert_time_to_us)
+        source.has_precision_nullable.add_map(convert_time_to_us)
+
     assert (
         "chat_message_view" not in source.resources
     )  # Views are not reflected by default
@@ -186,6 +206,12 @@ def test_load_sql_schema_loads_all_tables_parallel(
         backend=backend,
         type_adapter_callback=default_test_callback(destination_name, backend),
     ).parallelize()
+
+    if destination_name == "bigquery" and backend == "connectorx":
+        # connectorx generates nanoseconds time which bigquery cannot load
+        source.has_precision.add_map(convert_time_to_us)
+        source.has_precision_nullable.add_map(convert_time_to_us)
+
     load_info = pipeline.run(source)
     print(
         humanize.precisedelta(
