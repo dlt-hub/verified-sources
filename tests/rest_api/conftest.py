@@ -122,7 +122,10 @@ def generate_posts_with_date(since, until=None, count=100):
 
 
 def generate_comments(post_id, count=50):
-    return [{"id": i, "body": f"Comment {i} for post {post_id}"} for i in range(count)]
+    return [
+        {"id": i, "post_id": post_id, "body": f"Comment {i} for post {post_id}"}
+        for i in range(count)
+    ]
 
 
 def get_page_number_from_query(qs, key="page", default=1):
@@ -171,7 +174,7 @@ def mock_api_server():
 
         @router.get(r"/posts/\d+$")
         def post_detail(request, context):
-            post_id = request.url.split("/")[-1]
+            post_id = int(request.url.split("/")[-1])
             return {"id": post_id, "body": f"Post body {post_id}"}
 
         @router.get(r"/posts/\d+/some_details_404")

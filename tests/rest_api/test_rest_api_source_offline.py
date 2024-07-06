@@ -21,6 +21,9 @@ from sources.rest_api import (
 
 
 def test_load_mock_api(mock_api_server):
+    # import os
+    # os.environ["EXTRACT__NEXT_ITEM_MODE"] = "fifo"
+    # os.environ["EXTRACT__MAX_PARALLEL_ITEMS"] = "1"
     pipeline = dlt.pipeline(
         pipeline_name="rest_api_mock",
         destination="duckdb",
@@ -80,21 +83,23 @@ def test_load_mock_api(mock_api_server):
         posts_details_table = client.make_qualified_table_name("post_details")
         post_comments_table = client.make_qualified_table_name("post_comments")
 
+    print(pipeline.default_schema.to_pretty_yaml())
+
     assert_query_data(
         pipeline,
-        f"SELECT title FROM {posts_table} limit 5",
+        f"SELECT title FROM {posts_table} ORDER BY id limit 5",
         [f"Post {i}" for i in range(5)],
     )
 
     assert_query_data(
         pipeline,
-        f"SELECT body FROM {posts_details_table} limit 5",
+        f"SELECT body FROM {posts_details_table} ORDER BY id limit 5",
         [f"Post body {i}" for i in range(5)],
     )
 
     assert_query_data(
         pipeline,
-        f"SELECT body FROM {post_comments_table} limit 5",
+        f"SELECT body FROM {post_comments_table} ORDER BY post_id, id limit 5",
         [f"Comment {i} for post 0" for i in range(5)],
     )
 
