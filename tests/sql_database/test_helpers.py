@@ -1,3 +1,5 @@
+from typing import TYPE_CHECKING
+
 import pytest
 
 import dlt
@@ -43,7 +45,7 @@ def test_make_query_incremental_max(
         backend,
         table,
         table_to_columns(table),
-        incremental=MockIncremental(),
+        incremental=MockIncremental(),  # type: ignore[arg-type]
     )
 
     query = loader.make_query()
@@ -73,7 +75,7 @@ def test_make_query_incremental_min(
         backend,
         table,
         table_to_columns(table),
-        incremental=MockIncremental(),
+        incremental=MockIncremental(),  # type: ignore[arg-type]
     )
 
     query = loader.make_query()
@@ -105,7 +107,7 @@ def test_make_query_incremental_end_value(
         backend,
         table,
         table_to_columns(table),
-        incremental=MockIncremental(),
+        incremental=MockIncremental(),  # type: ignore[arg-type]
     )
 
     query = loader.make_query()
@@ -135,7 +137,7 @@ def test_make_query_incremental_any_fun(
         backend,
         table,
         table_to_columns(table),
-        incremental=MockIncremental(),
+        incremental=MockIncremental(),  # type: ignore[arg-type]
     )
 
     query = loader.make_query()
