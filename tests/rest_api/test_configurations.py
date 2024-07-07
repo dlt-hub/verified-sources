@@ -529,7 +529,7 @@ def test_bind_path_param() -> None:
         _bind_path_params(tp_6)
 
 
-def test_process_parent_data_item():
+def test_process_parent_data_item() -> None:
     resolve_param = ResolvedParam(
         "id", {"field": "obj_id", "resource": "issues", "type": "resolve"}
     )
