@@ -16,7 +16,6 @@ def src_config() -> Iterator[Tuple[dlt.Pipeline, str, str]]:
         pipeline_name="src_pl",
         destination="postgres",
         full_refresh=True,
-        credentials=dlt.secrets.get("sources.pg_replication.credentials"),
     )
     yield src_pl, slot, pub
     # teardown
