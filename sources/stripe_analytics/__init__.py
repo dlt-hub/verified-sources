@@ -4,13 +4,10 @@ from typing import Any, Dict, Generator, Iterable, Optional, Tuple
 
 import dlt
 import stripe
-from dlt.common import pendulum
-from dlt.common.typing import TDataItem
 from dlt.sources import DltResource
 from pendulum import DateTime
 
 from .helpers import pagination, transform_date
-from .metrics import calculate_mrr, churn_rate
 from .settings import ENDPOINTS, INCREMENTAL_ENDPOINTS
 
 
@@ -100,37 +97,3 @@ def incremental_stripe_source(
             write_disposition="append",
             primary_key="id",
         )(endpoint)
-
-
-@dlt.resource(name="Metrics", write_disposition="append", primary_key="created")
-def metrics_resource() -> Iterable[TDataItem]:
-    """
-    Uses a SQL client to query the subscription and event data,
-    calculate the metrics, and store the results in the SQL table.
-    The function returns a generator that yields a dictionary containing
-    the calculated metrics data, including MRR (Monthly Recurring Revenue)
-    and Churn rate, as well as the current timestamp.
-
-    Returns:
-        Iterable[TDataItem]: A generator that yields a dictionary containing the calculated metrics data.
-    """
-    pipeline = dlt.current.pipeline()  # type: ignore
-    with pipeline.sql_client() as client:
-        with client.execute_query("SELECT * FROM subscription") as table:
-            sub_info = table.df()
-
-    # Access to events through the Retrieve Event API is guaranteed only for 30 days.
-    # But we probably have old data in the database.
-    with pipeline.sql_client() as client:
-        with client.execute_query(
-            "SELECT * FROM event WHERE created > %s", pendulum.now().subtract(days=30)
-        ) as table:
-            event_info = table.df()
-
-    mrr = calculate_mrr(sub_info)
-    print(f"MRR: {mrr}")
-
-    churn = churn_rate(event_info, sub_info)
-    print(f"Churn rate: {round(churn * 100, 1)}%")
-
-    yield {"MRR": mrr, "Churn rate": churn, "created": pendulum.now()}
