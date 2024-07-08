@@ -1,4 +1,5 @@
 import re
+from base64 import b64encode
 import pendulum
 
 import dlt.extract
@@ -25,7 +26,7 @@ from sources.rest_api import (
 )
 
 from sources.rest_api.config_setup import (
-    AUTH_MAP,
+    auth_map,
     PAGINATOR_MAP,
     IncrementalParam,
     _bind_path_params,
@@ -34,12 +35,15 @@ from sources.rest_api.config_setup import (
     create_paginator,
     _make_endpoint_resource,
     process_parent_data_item,
+    register_auth,
+    get_auth_class,
     setup_incremental_object,
     create_response_hooks,
     _handle_response_action,
 )
 from sources.rest_api.typing import (
     AuthType,
+    AuthConfig,
     AuthTypeConfig,
     EndpointResource,
     PaginatorType,
@@ -62,6 +66,7 @@ from dlt.sources.helpers.rest_client.auth import (
     HttpBasicAuth,
     BearerTokenAuth,
     APIKeyAuth,
+    OAuth2ClientCredentials,
 )
 
 from .source_configs import (
@@ -155,7 +160,7 @@ def test_auth_shorthands(auth_type: AuthType, section: str) -> None:
             ConfigSectionContext(sections=("sources", "rest_api")), merge_existing=False
         ):
             auth = create_auth(auth_type)
-            assert isinstance(auth, AUTH_MAP[auth_type])
+            assert isinstance(auth, auth_map[auth_type])
             if isinstance(auth, BearerTokenAuth):
                 assert auth.token == "token"
             if isinstance(auth, APIKeyAuth):
@@ -185,7 +190,7 @@ def test_auth_type_configs(auth_type_config: AuthTypeConfig, section: str) -> No
             ConfigSectionContext(sections=("sources", "rest_api")), merge_existing=False
         ):
             auth = create_auth(auth_type_config)
-            assert isinstance(auth, AUTH_MAP[auth_type_config["type"]])
+            assert isinstance(auth, auth_map[auth_type_config["type"]])
             if isinstance(auth, BearerTokenAuth):
                 # from typed dict
                 assert auth.token == "token"
@@ -240,6 +245,50 @@ def test_error_message_invalid_auth_type() -> None:
         str(e.value)
         == "Invalid authentication: non_existing_method. Available options: bearer, api_key, http_basic"
     )
+
+
+class OAuth2ClientCredentialsHTTPBasic(OAuth2ClientCredentials):
+    """Used e.g. by Zoom Video Communications, Inc."""
+
+    def build_access_token_request(self) -> Dict[str, Any]:
+        authentication: str = b64encode(
+            f"{self.client_id}:{self.client_secret}".encode()
+        ).decode()
+        return {
+            "headers": {
+                "Authorization": f"Basic {authentication}",
+                "Content-Type": "application/x-www-form-urlencoded",
+            },
+            "data": self.access_token_request_data,
+        }
+
+
+def test_registering_adds_to_available_auth() -> None:
+    register_auth(
+        "oauth2_client_credentials_http_basic", OAuth2ClientCredentialsHTTPBasic
+    )
+    assert (
+        get_auth_class("oauth2_client_credentials_http_basic") == OAuth2ClientCredentialsHTTPBasic
+    )
+
+
+def test_auth_method_can_be_used_after_registration() -> None:
+    register_auth(
+        "oauth2_client_credentials_http_basic", OAuth2ClientCredentialsHTTPBasic
+    )
+
+    config: AuthConfig = {  # type: ignore
+        "type": "oauth2_client_credentials_http_basic",
+        "access_token_url": "https://api.example.com/token",
+        "client_id": "a_client_id",
+        "client_secret": "a_client_secret",
+        "access_token_request_data": {
+            "grant_type": "account_credentials",
+            "account_id": "an_account_id",
+        },
+    }
+    auth = cast(OAuth2ClientCredentialsHTTPBasic, create_auth(config))
+    assert auth.client_id == "a_client_id"
 
 
 def test_resource_expand() -> None:

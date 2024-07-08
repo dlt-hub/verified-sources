@@ -10,9 +10,11 @@ from typing import (
     Callable,
     cast,
     NamedTuple,
+    KeysView,
 )
 import graphlib  # type: ignore[import,unused-ignore]
 import string
+from dataclasses import dataclass, field
 
 import dlt
 from dlt.common import logger
@@ -41,6 +43,7 @@ from dlt.sources.helpers.rest_client.auth import (
     HttpBasicAuth,
     BearerTokenAuth,
     APIKeyAuth,
+    OAuth2ClientCredentials,
 )
 
 from .typing import (
@@ -69,11 +72,34 @@ PAGINATOR_MAP: Dict[PaginatorType, Type[BasePaginator]] = {
     "page_number": PageNumberPaginator,
 }
 
-AUTH_MAP: Dict[AuthType, Type[AuthConfigBase]] = {
-    "bearer": BearerTokenAuth,
-    "api_key": APIKeyAuth,
-    "http_basic": HttpBasicAuth,
-}
+
+@dataclass
+class AuthMap:
+    _map: Dict[str, Type[AuthConfigBase]] = field(default_factory=dict)
+
+    def __post_init__(self) -> None:
+        self._map = {
+            "bearer": BearerTokenAuth,
+            "api_key": APIKeyAuth,
+            "http_basic": HttpBasicAuth,
+            "oauth2_client_credentials": OAuth2ClientCredentials,
+        }
+
+    def __getitem__(self, key: str) -> Type[AuthConfigBase]:
+        return self._map[key]
+
+    def __setitem__(self, key: str, value: Type[AuthConfigBase]) -> None:
+        self._map[key] = value
+
+    def keys(self) -> KeysView[str]:
+        return self._map.keys()
+
+
+auth_map = AuthMap()
+
+
+def register_auth(auth_method_name: str, auth_class: Type[AuthConfigBase]) -> None:
+    auth_map[auth_method_name] = auth_class
 
 
 class IncrementalParam(NamedTuple):
@@ -122,9 +148,9 @@ def create_paginator(
 
 def get_auth_class(auth_type: AuthType) -> Type[AuthConfigBase]:
     try:
-        return AUTH_MAP[auth_type]
+        return auth_map[auth_type]
     except KeyError:
-        available_options = ", ".join(AUTH_MAP.keys())
+        available_options = ", ".join(auth_map.keys())
         raise ValueError(
             f"Invalid authentication: {auth_type}. "
             f"Available options: {available_options}"
