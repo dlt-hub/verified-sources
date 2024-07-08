@@ -210,7 +210,7 @@ def test_posts_under_results_key(mock_api_server):
                     "endpoint": {
                         "path": "posts_under_a_different_key",
                         "data_selector": "many-results",
-                        "paginator": "json_response",
+                        "paginator": "json_link",
                     },
                 },
             ],

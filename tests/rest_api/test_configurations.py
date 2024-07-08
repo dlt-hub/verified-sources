@@ -51,7 +51,7 @@ from sources.rest_api.typing import (
 )
 from dlt.sources.helpers.rest_client.paginators import (
     HeaderLinkPaginator,
-    JSONResponsePaginator,
+    JSONLinkPaginator,
     JSONResponseCursorPaginator,
     OffsetPaginator,
     PageNumberPaginator,
@@ -124,7 +124,7 @@ def test_paginator_type_configs(paginator_type_config: PaginatorTypeConfig) -> N
             assert paginator.limit_param == "limit"
             assert paginator.total_path == compile_path("total")
             assert paginator.maximum_value == 1000
-        if isinstance(paginator, JSONResponsePaginator):
+        if isinstance(paginator, JSONLinkPaginator):
             assert paginator.next_url_path == compile_path("response.nex_page_link")
         if isinstance(paginator, JSONResponseCursorPaginator):
             assert paginator.cursor_path == compile_path("cursors.next")

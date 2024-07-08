@@ -79,7 +79,7 @@ def rest_api_source(
         pokemon_source = rest_api_source({
             "client": {
                 "base_url": "https://pokeapi.co/api/v2/",
-                "paginator": "json_response",
+                "paginator": "json_link",
             },
             "endpoints": {
                 "pokemon": {
