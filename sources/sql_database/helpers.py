@@ -282,4 +282,4 @@ class SqlTableResourceConfiguration(BaseConfiguration):
     backend: TableBackend = "sqlalchemy"
     detect_precision_hints: Optional[bool] = None
     defer_table_reflect: Optional[bool] = False
-    reflection_level: Optional[ReflectionLevel] = "minimal"
+    reflection_level: Optional[ReflectionLevel] = "full"

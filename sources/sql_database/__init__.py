@@ -36,7 +36,7 @@ def sql_database(
     chunk_size: int = 50000,
     backend: TableBackend = "sqlalchemy",
     detect_precision_hints: Optional[bool] = False,
-    reflection_level: Optional[ReflectionLevel] = "minimal",
+    reflection_level: Optional[ReflectionLevel] = "full",
     defer_table_reflect: Optional[bool] = None,
     table_adapter_callback: Callable[[Table], None] = None,
     backend_kwargs: Dict[str, Any] = None,
@@ -60,8 +60,8 @@ def sql_database(
         detect_precision_hints (bool): Deprecated. Use `reflection_level`. Set column precision and scale hints for supported data types in the target schema based on the columns in the source tables.
             This is disabled by default.
         reflection_level: (ReflectionLevel): Specifies how much information should be reflected from the source database schema.
-            "minimal": Only table names, nullability and primary keys are reflected. Data types are inferred from the data. This is the default option.
-            "full": Data types will be reflected on top of "minimal". `dlt` will coerce the data into reflected types if necessary.
+            "minimal": Only table names, nullability and primary keys are reflected. Data types are inferred from the data.
+            "full": Data types will be reflected on top of "minimal". `dlt` will coerce the data into reflected types if necessary. This is the default option.
             "full_with_precision": Sets precision and scale on supported data types (ie. decimal, text, binary). Creates big and regular integer types.
         defer_table_reflect (bool): Will connect and reflect table schema only when yielding data. Requires table_names to be explicitly passed.
             Enable this option when running on Airflow. Available on dlt 0.4.4 and later.
@@ -134,7 +134,7 @@ def sql_table(
     chunk_size: int = 50000,
     backend: TableBackend = "sqlalchemy",
     detect_precision_hints: Optional[bool] = None,
-    reflection_level: Optional[ReflectionLevel] = "minimal",
+    reflection_level: Optional[ReflectionLevel] = "full",
     defer_table_reflect: Optional[bool] = None,
     table_adapter_callback: Callable[[Table], None] = None,
     backend_kwargs: Dict[str, Any] = None,
@@ -156,8 +156,8 @@ def sql_table(
             "sqlalchemy" is the default and does not require additional dependencies, "pyarrow" creates stable destination schemas with correct data types,
             "connectorx" is typically the fastest but ignores the "chunk_size" so you must deal with large tables yourself.
         reflection_level: (ReflectionLevel): Specifies how much information should be reflected from the source database schema.
-            "minimal": Only table names, nullability and primary keys are reflected. Data types are inferred from the data. This is the default option.
-            "full": Data types will be reflected on top of "minimal". `dlt` will coerce the data into reflected types if necessary.
+            "minimal": Only table names, nullability and primary keys are reflected. Data types are inferred from the data.
+            "full": Data types will be reflected on top of "minimal". `dlt` will coerce the data into reflected types if necessary. This is the default option.
             "full_with_precision": Sets precision and scale on supported data types (ie. decimal, text, binary). Creates big and regular integer types.
         detect_precision_hints (bool): Deprecated. Use `reflection_level`. Set column precision and scale hints for supported data types in the target schema based on the columns in the source tables.
             This is disabled by default.
