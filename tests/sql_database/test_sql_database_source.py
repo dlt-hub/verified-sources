@@ -60,11 +60,11 @@ def convert_time_to_us(table):
     import pyarrow as pa
     from pyarrow import compute as pc
 
-    time_ns_column = table['time_col']
-    time_us_column = pc.cast(time_ns_column, pa.time64('us'), safe=False)
+    time_ns_column = table["time_col"]
+    time_us_column = pc.cast(time_ns_column, pa.time64("us"), safe=False)
     new_table = table.set_column(
-        table.column_names.index('time_col'),
-        'time_col',
+        table.column_names.index("time_col"),
+        "time_col",
         time_us_column,
     )
     return new_table

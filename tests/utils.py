@@ -108,7 +108,7 @@ def drop_active_pipeline_data() -> None:
                         # print("dropped")
                     except Exception as exc:
                         print(exc)
-                    with c.with_staging_dataset(staging=True):
+                    with c.with_staging_dataset():
                         try:
                             c.drop_dataset()
                             # print("dropped")
