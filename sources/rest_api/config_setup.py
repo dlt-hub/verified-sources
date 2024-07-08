@@ -214,7 +214,7 @@ def build_resource_dependency_graph(
         if isinstance(resource_kwargs, dict):
             # clone resource here, otherwise it needs to be cloned in several other places
             # note that this clones only dict structure, keeping all instances without deepcopy
-            resource_kwargs = update_dict_nested({}, resource_kwargs)  # type: ignore[assignment]
+            resource_kwargs = update_dict_nested({}, resource_kwargs)  # type: ignore[assignment, type-var]
 
         endpoint_resource = _make_endpoint_resource(resource_kwargs, resource_defaults)
         assert isinstance(endpoint_resource["endpoint"], dict)
@@ -368,9 +368,7 @@ def _action_type_unless_custom_hook(
     return (action_type, None)
 
 
-def _handle_response_action(
-    response: Response, action: ResponseAction
-) -> Union[
+def _handle_response_action(response: Response, action: ResponseAction) -> Union[
     Tuple[str, Optional[List[Callable[..., Any]]]],
     Tuple[None, List[Callable[..., Any]]],
     Tuple[None, None],
