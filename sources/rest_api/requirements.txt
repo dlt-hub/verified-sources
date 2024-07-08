@@ -1,1 +1,1 @@
-dlt>=0.5.0
+dlt @ git+https://github.com/dlt-hub/dlt@feat/1495-rename-JSONResponsePaginator
