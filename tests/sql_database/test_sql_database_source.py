@@ -171,6 +171,7 @@ def test_load_sql_schema_loads_all_tables(
         credentials=sql_source_db.credentials,
         schema=sql_source_db.schema,
         backend=backend,
+        reflection_level="minimal",
         type_adapter_callback=default_test_callback(destination_name, backend),
     )
 
@@ -204,6 +205,7 @@ def test_load_sql_schema_loads_all_tables_parallel(
         credentials=sql_source_db.credentials,
         schema=sql_source_db.schema,
         backend=backend,
+        reflection_level="minimal",
         type_adapter_callback=default_test_callback(destination_name, backend),
     ).parallelize()
 
@@ -235,6 +237,7 @@ def test_load_sql_table_names(
             credentials=sql_source_db.credentials,
             schema=sql_source_db.schema,
             table_names=tables,
+            reflection_level="minimal",
             backend=backend,
         )
     )
@@ -263,6 +266,7 @@ def test_load_sql_table_incremental(
             credentials=sql_source_db.credentials,
             schema=sql_source_db.schema,
             table_names=tables,
+            reflection_level="minimal",
             backend=backend,
         )
 
@@ -304,6 +308,7 @@ def test_load_mysql_data_load(destination_name: str, backend: TableBackend) -> N
         credentials="mysql+pymysql://rfamro@mysql-rfam-public.ebi.ac.uk:4497/Rfam",
         table="family",
         backend=backend,
+        reflection_level="minimal",
         backend_kwargs=backend_kwargs,
         # table_adapter_callback=_double_as_decimal_adapter,
     )
@@ -318,6 +323,7 @@ def test_load_mysql_data_load(destination_name: str, backend: TableBackend) -> N
         credentials="mysql+pymysql://rfamro@mysql-rfam-public.ebi.ac.uk:4497/Rfam",
         table="family",
         backend=backend,
+        reflection_level="minimal",
         # we also try to remove dialect automatically
         backend_kwargs={},
         # table_adapter_callback=_double_as_decimal_adapter,
@@ -341,6 +347,7 @@ def test_load_sql_table_resource_loads_data(
                 credentials=sql_source_db.credentials,
                 schema=sql_source_db.schema,
                 table="chat_message",
+                reflection_level="minimal",
                 backend=backend,
             )
         ]
@@ -365,6 +372,7 @@ def test_load_sql_table_resource_incremental(
                 schema=sql_source_db.schema,
                 table="chat_message",
                 incremental=dlt.sources.incremental("updated_at"),
+                reflection_level="minimal",
                 backend=backend,
             )
         ]
@@ -395,6 +403,7 @@ def test_load_sql_table_resource_incremental_initial_value(
                     "updated_at",
                     sql_source_db.table_infos["chat_message"]["created_at"].start_value,
                 ),
+                reflection_level="minimal",
                 backend=backend,
             )
         ]
@@ -941,17 +950,24 @@ def test_sql_table_from_view(
         credentials=sql_source_db.credentials,
         table="chat_message_view",
         schema=sql_source_db.schema,
+        backend=backend,
+        # use minimal level so we infer types from DATA
+        reflection_level="minimal",
+        incremental=dlt.sources.incremental("_created_at")
     )
 
     pipeline = make_pipeline("duckdb")
-    pipeline.run(table)
+    info = pipeline.run(table)
+    assert_load_info(info)
 
     assert_row_counts(pipeline, sql_source_db, ["chat_message_view"])
     assert "content" in pipeline.default_schema.tables["chat_message_view"]["columns"]
-    assert (
-        "content"
-        in load_tables_to_dicts(pipeline, "chat_message_view")["chat_message_view"][0]
-    )
+    assert "_created_at" in pipeline.default_schema.tables["chat_message_view"]["columns"]
+    db_data = load_tables_to_dicts(pipeline, "chat_message_view")["chat_message_view"]
+    assert "content" in db_data[0]
+    assert "_created_at" in db_data[0]
+    # make sure that all NULLs is not present
+    assert "_null_ts" in pipeline.default_schema.tables["chat_message_view"]["columns"]
 
 
 @pytest.mark.parametrize("backend", ["sqlalchemy", "pyarrow", "pandas", "connectorx"])

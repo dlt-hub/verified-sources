@@ -93,14 +93,18 @@ def row_tuples_to_arrow(
         for key in list(columnar_unknown_types):
             arrow_col: Optional[pa.Array] = None
             try:
-                arrow_col = columnar_known_types[key] = pa.array(
-                    columnar_unknown_types[key]
-                )
+                arrow_col = pa.array(columnar_unknown_types[key])
+                if pa.types.is_null(arrow_col.type):
+                    logger.warning(
+                            f"Column {key} contains only NULL values and data type could not be inferred. This column is removed from a arrow table"
+                    )
+                    continue
+
             except pa.ArrowInvalid as e:
                 # Try coercing types not supported by arrow to a json friendly format
                 # E.g. dataclasses -> dict, UUID -> str
                 try:
-                    arrow_col = columnar_known_types[key] = pa.array(
+                    arrow_col = pa.array(
                         map_nested_in_place(
                             custom_encode, list(columnar_unknown_types[key])
                         )
@@ -113,6 +117,7 @@ def row_tuples_to_arrow(
                         f"Column {key} contains a data type which is not supported by pyarrow. This column will be ignored. Error: {e}"
                     )
             if arrow_col is not None:
+                columnar_known_types[key] = arrow_col
                 new_schema_fields.append(
                     pa.field(
                         key,
