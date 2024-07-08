@@ -30,6 +30,7 @@ from dlt.sources.helpers.rest_client.auth import AuthConfigBase, TApiKeyLocation
 from dlt.sources.helpers.rest_client.paginators import (
     SinglePagePaginator,
     HeaderLinkPaginator,
+    JSONLinkPaginator,
     JSONResponseCursorPaginator,
     OffsetPaginator,
     PageNumberPaginator,
