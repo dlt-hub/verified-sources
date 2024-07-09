@@ -290,6 +290,8 @@ def test_python_types(destination_name):
         "field4": bson.int64.Int64(1),
         "field5": 1.2,
         "field6": "text",
+        "field7": [1, 2, 3],
+        "field8": {"key": "value"},
         "field9": DateTime(2024, 1, 1, 0, 0, 0, tzinfo=timezone("UTC")),
         "field10": "^foo",
         "field11": b"foo",
@@ -323,6 +325,8 @@ def test_arrow_types(destination_name):
         "field4": pyarrow.scalar(1),
         "field5": pyarrow.scalar(1.2),
         "field6": pyarrow.scalar("text"),
+        "field7": pyarrow.scalar([1, 2, 3], type=pyarrow.list_(pyarrow.int32())),
+        "field8": pyarrow.scalar({"key": "value"}),
         "field9": pyarrow.scalar(DateTime(2024, 1, 1, 0, 0, 0)),
         "field11": b"foo",
         "field12": pyarrow.scalar("daad12312312312312312312"),
@@ -346,5 +350,10 @@ def test_arrow_types(destination_name):
         dataset_name="mongodb_test_data",
         full_refresh=True,
     )
-    info = pipeline.run(res)
+
+    if destination_name == "postgres":
+        res = list(res)[0]
+        res = res.drop_columns(["field7", "field8"])
+
+    info = pipeline.run(res, table_name="types_test")
     assert info.loads_ids != []
