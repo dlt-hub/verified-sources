@@ -310,7 +310,7 @@ VALID_CONFIGS: List[RESTAPIConfig] = [
 PAGINATOR_TYPE_CONFIGS: List[PaginatorTypeConfig] = [
     {"type": "auto"},
     {"type": "single_page"},
-    {"type": "page_number", "initial_page": 10, "total_path": "response.pages"},
+    {"type": "page_number", "page": 10, "base_page": 1, "total_path": "response.pages"},
     {"type": "offset", "limit": 100, "maximum_offset": 1000},
     {"type": "header_link", "links_next_key": "next_page"},
     {"type": "json_response", "next_url_path": "response.nex_page_link"},

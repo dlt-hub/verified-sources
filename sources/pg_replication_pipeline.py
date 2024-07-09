@@ -249,7 +249,9 @@ def get_postgres_pipeline() -> dlt.Pipeline:
         dataset_name="source_dataset",
         full_refresh=True,
     )
-    pipe.destination = Destination.from_reference("postgres")  # use this instead
+    pipe.destination = Destination.from_reference(
+        "postgres", credentials=PG_CREDS
+    )  # use this instead
     return pipe
 
 

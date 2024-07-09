@@ -1,9 +1,12 @@
 import sqlalchemy as sa
 import humanize
+from typing import Any
 
 import dlt
 from dlt.common import pendulum
 from dlt.sources.credentials import ConnectionStringCredentials
+
+from sqlalchemy.sql.sqltypes import TypeEngine
 
 from sql_database import sql_database, sql_table, Table
 
@@ -28,6 +31,7 @@ def load_select_tables_from_database() -> None:
 
     # Configure the source to load a few select tables incrementally
     source_1 = sql_database(credentials).with_resources("family", "clan")
+    return
     # Add incremental config to the resources. "updated" is a timestamp column in these tables that gets used as a cursor
     source_1.family.apply_hints(incremental=dlt.sources.incremental("updated"))
     source_1.clan.apply_hints(incremental=dlt.sources.incremental("updated"))
@@ -86,12 +90,14 @@ def load_standalone_table_resource() -> None:
     # we also use `detect_precision_hints` to get detailed column schema
     # and defer_table_reflect to reflect schema only during execution
     family = sql_table(
-        credentials="mysql+pymysql://rfamro@mysql-rfam-public.ebi.ac.uk:4497/Rfam",
+        credentials=ConnectionStringCredentials(
+            "mysql+pymysql://rfamro@mysql-rfam-public.ebi.ac.uk:4497/Rfam"
+        ),
         table="family",
         incremental=dlt.sources.incremental(
             "updated",
         ),
-        detect_precision_hints=True,
+        reflection_level="full_with_precision",
         defer_table_reflect=True,
     )
     # columns will be empty here due to defer_table_reflect set to True
@@ -101,7 +107,7 @@ def load_standalone_table_resource() -> None:
     genome = sql_table(
         credentials="mysql+pymysql://rfamro@mysql-rfam-public.ebi.ac.uk:4497/Rfam",
         table="genome",
-        detect_precision_hints=True,
+        reflection_level="full_with_precision",
         defer_table_reflect=True,
     )
 
@@ -132,7 +138,7 @@ def select_columns() -> None:
         credentials="mysql+pymysql://rfamro@mysql-rfam-public.ebi.ac.uk:4497/Rfam",
         table="family",
         chunk_size=10,
-        detect_precision_hints=True,
+        reflection_level="full_with_precision",
         table_adapter_callback=table_adapter,
     )
 
@@ -248,7 +254,7 @@ def test_connectorx_speed() -> None:
         chunk_size=100000,
         backend="connectorx",
         # keep source data types
-        detect_precision_hints=True,
+        reflection_level="full_with_precision",
         # just to demonstrate how to setup a separate connection string for connectorx
         backend_kwargs={"conn": "postgresql://loader:loader@localhost:5432/dlt_data"},
     )
@@ -291,8 +297,32 @@ def test_pandas_backend_verbatim_decimals() -> None:
         # set coerce_float to False to represent them as string
         backend_kwargs={"coerce_float": False, "dtype_backend": "numpy_nullable"},
         # preserve full typing info. this will parse
-        detect_precision_hints=True,
+        reflection_level="full_with_precision",
     ).with_resources("family", "genome")
+
+    info = pipeline.run(sql_alchemy_source)
+    print(info)
+
+
+def use_type_adapter() -> None:
+    """Example use of type adapter to coerce unknown data types"""
+    pipeline = dlt.pipeline(
+        pipeline_name="dummy",
+        destination="postgres",
+        dataset_name="dummy",
+    )
+
+    def type_adapter(sql_type: TypeEngine[Any]) -> TypeEngine[Any]:
+        if isinstance(sql_type, sa.ARRAY):
+            return sa.JSON()  # Load arrays as JSON
+        return sql_type
+
+    sql_alchemy_source = sql_database(
+        "postgresql://loader:loader@localhost:5432/dlt_data",
+        backend="pyarrow",
+        type_adapter_callback=type_adapter,
+        reflection_level="full_with_precision",
+    ).with_resources("table_with_array_column")
 
     info = pipeline.run(sql_alchemy_source)
     print(info)
@@ -300,7 +330,7 @@ def test_pandas_backend_verbatim_decimals() -> None:
 
 if __name__ == "__main__":
     # Load selected tables with different settings
-    load_select_tables_from_database()
+    # load_select_tables_from_database()
 
     # load a table and select columns
     # select_columns()
@@ -309,7 +339,7 @@ if __name__ == "__main__":
     # select_with_end_value_and_row_order()
 
     # Load tables with the standalone table resource
-    # load_standalone_table_resource()
+    load_standalone_table_resource()
 
     # Load all tables from the database.
     # Warning: The sample database is very large

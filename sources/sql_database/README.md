@@ -138,7 +138,7 @@ print(info)
 There are certain limitations when using this backend:
 * it will ignore `chunk_size`. **connectorx** cannot yield data in batches.
 * in many cases it requires a connection string that differs from **sqlalchemy** connection string. Use `conn` argument in **backend_kwargs** to set it up.
-* it will convert **decimals** to **doubles** so you'll will loose precision.
+* it will convert **decimals** to **doubles** so you'll will lose precision.
 * nullability of the columns is ignored (always true)
 * it uses different database type mappings for each database type. [check here for more details](https://sfu-db.github.io/connector-x/databases.html)
 * JSON fields (at least those coming from postgres) are double wrapped in strings. Here's a transform to be added with `add_map` that will unwrap it:
@@ -203,4 +203,3 @@ No issues found. Postgres is the only backend where we observed 2x speedup with 
 
 ## Learn more
 💡 To explore additional customizations for this pipeline, we recommend referring to the official DLT SQL Database verified documentation. It provides comprehensive information and guidance on how to further customize and tailor the pipeline to suit your specific needs. You can find the DLT SQL Database documentation in [Setup Guide: SQL Database.](https://dlthub.com/docs/dlt-ecosystem/verified-sources/sql_database)
-

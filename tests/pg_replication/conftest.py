@@ -14,9 +14,10 @@ def src_config() -> Iterator[Tuple[dlt.Pipeline, str, str]]:
     # setup
     src_pl = dlt.pipeline(
         pipeline_name="src_pl",
-        destination="postgres",
-        full_refresh=True,
-        credentials=dlt.secrets.get("sources.pg_replication.credentials"),
+        destination=dlt.destinations.postgres(
+            credentials=dlt.secrets.get("sources.pg_replication.credentials")
+        ),
+        dev_mode=True,
     )
     yield src_pl, slot, pub
     # teardown
@@ -26,7 +27,7 @@ def src_config() -> Iterator[Tuple[dlt.Pipeline, str, str]]:
             c.drop_dataset()
         except Exception as e:
             print(e)
-        with c.with_staging_dataset(staging=True):
+        with c.with_staging_dataset():
             try:
                 c.drop_dataset()
             except Exception as e:

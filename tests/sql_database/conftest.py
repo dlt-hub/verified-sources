@@ -7,13 +7,13 @@ from dlt.sources.credentials import ConnectionStringCredentials
 from tests.sql_database.sql_source import SQLAlchemySourceDB
 
 
-@pytest.fixture(scope="package")
-def sql_source_db(request: pytest.FixtureRequest) -> Iterator[SQLAlchemySourceDB]:
+def _create_db(**kwargs) -> Iterator[SQLAlchemySourceDB]:
     # TODO: parametrize the fixture so it takes the credentials for all destinations
     credentials = dlt.secrets.get(
         "destination.postgres.credentials", expected_type=ConnectionStringCredentials
     )
-    db = SQLAlchemySourceDB(credentials)
+
+    db = SQLAlchemySourceDB(credentials, **kwargs)
     db.create_schema()
     try:
         db.create_tables()
@@ -21,3 +21,16 @@ def sql_source_db(request: pytest.FixtureRequest) -> Iterator[SQLAlchemySourceDB
         yield db
     finally:
         db.drop_schema()
+
+
+@pytest.fixture(scope="package")
+def sql_source_db(request: pytest.FixtureRequest) -> Iterator[SQLAlchemySourceDB]:
+    # Without unsupported types so we can test full schema load with connector-x
+    yield from _create_db(with_unsupported_types=False)
+
+
+@pytest.fixture(scope="package")
+def sql_source_db_unsupported_types(
+    request: pytest.FixtureRequest,
+) -> Iterator[SQLAlchemySourceDB]:
+    yield from _create_db(with_unsupported_types=True)
