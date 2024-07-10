@@ -953,7 +953,7 @@ def test_sql_table_from_view(
         backend=backend,
         # use minimal level so we infer types from DATA
         reflection_level="minimal",
-        incremental=dlt.sources.incremental("_created_at")
+        incremental=dlt.sources.incremental("_created_at"),
     )
 
     pipeline = make_pipeline("duckdb")
@@ -962,7 +962,9 @@ def test_sql_table_from_view(
 
     assert_row_counts(pipeline, sql_source_db, ["chat_message_view"])
     assert "content" in pipeline.default_schema.tables["chat_message_view"]["columns"]
-    assert "_created_at" in pipeline.default_schema.tables["chat_message_view"]["columns"]
+    assert (
+        "_created_at" in pipeline.default_schema.tables["chat_message_view"]["columns"]
+    )
     db_data = load_tables_to_dicts(pipeline, "chat_message_view")["chat_message_view"]
     assert "content" in db_data[0]
     assert "_created_at" in db_data[0]
