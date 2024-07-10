@@ -111,7 +111,7 @@ def sqla_col_to_column_schema(
         col["data_type"] = "bool"
     else:
         logger.warning(
-            f"A column with name {sql_col.name} contains unknown data type {sql_t} which cannot be mapped to `dlt` data type. When using sqlalchemy backend such data will be passed to the normalizer. In case of `pyarrow` backend such data will be ignored. In case of other backends, the behavior is backend-specific."
+            f"A column with name {sql_col.name} contains unknown data type {sql_t} which cannot be mapped to `dlt` data type. When using sqlalchemy backend such data will be passed to the normalizer. In case of `pyarrow` and `pandas` backend, data types are detected from numpy ndarrays. In case of other backends, the behavior is backend-specific."
         )
 
     return {key: value for key, value in col.items() if value is not None}  # type: ignore[return-value]

@@ -96,7 +96,7 @@ def row_tuples_to_arrow(
                 arrow_col = pa.array(columnar_unknown_types[key])
                 if pa.types.is_null(arrow_col.type):
                     logger.warning(
-                            f"Column {key} contains only NULL values and data type could not be inferred. This column is removed from a arrow table"
+                        f"Column {key} contains only NULL values and data type could not be inferred. This column is removed from a arrow table"
                     )
                     continue
 
