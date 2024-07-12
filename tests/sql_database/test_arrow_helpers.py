@@ -14,7 +14,7 @@ def test_row_tuples_to_arrow_unknown_types(all_unknown: bool) -> None:
     from sqlalchemy.dialects.postgresql import Range
 
     # Applies to NUMRANGE, DATERANGE, etc sql types. Sqlalchemy returns a Range dataclass
-    IntRange = Range[int]
+    IntRange = Range
 
     rows = [
         (

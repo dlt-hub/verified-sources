@@ -178,7 +178,7 @@ def sql_table(
     else:
         reflection_level = reflection_level or "minimal"
 
-    engine = engine_from_credentials(credentials)
+    engine = engine_from_credentials(credentials, may_dispose_after_use=True)
     engine.execution_options(stream_results=True, max_row_buffer=2 * chunk_size)
     metadata = metadata or MetaData(schema=schema)
 
