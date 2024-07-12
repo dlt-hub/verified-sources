@@ -69,16 +69,10 @@ def sqla_col_to_column_schema(
 
     add_precision = reflection_level == "full_with_precision"
 
-    if isinstance(sql_t, sqltypes.SmallInteger):
-        col["data_type"] = "bigint"
-        if add_precision:
-            col["precision"] = 32
-    elif isinstance(sql_t, sqltypes.Integer):
-        col["data_type"] = "bigint"
-    elif isinstance(sql_t, sqltypes.Numeric):
-        # dlt column type depends on the data returned by the sql alchemy dialect
-        # and not on the metadata reflected in the database. all Numeric types
-        # that are returned as floats will assume "double" type
+    if isinstance(sql_t, sqltypes.Numeric):
+        # check for Numeric type first and integer later, some numeric types (ie. Oracle)
+        # derive from both
+        # all Numeric types that are returned as floats will assume "double" type
         # and returned as decimals will assume "decimal" type
         if sql_t.asdecimal is False:
             col["data_type"] = "double"
@@ -91,6 +85,12 @@ def sqla_col_to_column_schema(
                     col["scale"] = sql_t.scale
                 elif sql_t.decimal_return_scale is not None:
                     col["scale"] = sql_t.decimal_return_scale
+    elif isinstance(sql_t, sqltypes.SmallInteger):
+        col["data_type"] = "bigint"
+        if add_precision:
+            col["precision"] = 32
+    elif isinstance(sql_t, sqltypes.Integer):
+        col["data_type"] = "bigint"
     elif isinstance(sql_t, sqltypes.String):
         col["data_type"] = "text"
         if add_precision and sql_t.length:
