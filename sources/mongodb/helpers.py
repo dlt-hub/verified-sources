@@ -134,9 +134,9 @@ class CollectionLoader:
         """
         filter_op = self._filter_op
         _raise_if_intersection(filter_op, filter_)
-        filter_.update(filter_op)
+        filter_op.update(filter_)
 
-        cursor = self.collection.find(filter=filter_)
+        cursor = self.collection.find(filter=filter_op)
         if self._sort_op:
             cursor = cursor.sort(self._sort_op)
 
@@ -164,20 +164,20 @@ class CollectionLoaderParallel(CollectionLoader):
 
         return batches
 
-    def _get_cursor(self, filter_: Dict[str, Any]) -> TCursor:
+    def _get_cursor(self, filter_: Dict[str, Any]) -> Cursor:
         """Get a reading cursor for the collection.
 
         Args:
             filter_ (Dict[str, Any]): The filter to apply to the collection.
 
         Returns:
-            TCursor: The cursor for the collection.
+            Cursor: The cursor for the collection.
         """
         filter_op = self._filter_op
         _raise_if_intersection(filter_op, filter_)
-        filter_.update(filter_op)
+        filter_op.update(filter_)
 
-        cursor = self.collection.find(filter=filter_)
+        cursor = self.collection.find(filter=filter_op)
         if self._sort_op:
             cursor = cursor.sort(self._sort_op)
 
@@ -255,7 +255,7 @@ class CollectionArrowLoader(CollectionLoader):
 
         filter_op = self._filter_op
         _raise_if_intersection(filter_op, filter_)
-        filter_.update(filter_op)
+        filter_op.update(filter_)
 
         cursor = self.collection.find_raw_batches(filter_, batch_size=self.chunk_size)
         if self._sort_op:
@@ -276,9 +276,21 @@ class CollectionArrowLoaderParallel(CollectionLoaderParallel):
     Apache Arrow for data processing.
     """
 
-    def _get_cursor(self) -> TCursor:
+    def _get_cursor(self, filter_: Dict[str, Any]) -> Cursor:
+        """Get a reading cursor for the collection.
+
+        Args:
+            filter_ (Dict[str, Any]): The filter to apply to the collection.
+
+        Returns:
+            Cursor: The cursor for the collection.
+        """
+        filter_op = self._filter_op
+        _raise_if_intersection(filter_op, filter_)
+        filter_op.update(filter_)
+
         cursor = self.collection.find_raw_batches(
-            filter=self._filter_op, batch_size=self.chunk_size
+            filter=filter_op, batch_size=self.chunk_size
         )
         if self._sort_op:
             cursor = cursor.sort(self._sort_op)  # type: ignore
