@@ -35,13 +35,11 @@ from dlt.sources.helpers.rest_client.paginators import (
     OffsetPaginator,
     PageNumberPaginator,
 )
-from dlt.sources.helpers.rest_client.exceptions import IgnoreResponseException
 from dlt.sources.helpers.rest_client.auth import (
     AuthConfigBase,
     HttpBasicAuth,
     BearerTokenAuth,
     APIKeyAuth,
-    OAuthJWTAuth,
 )
 
 PaginatorType = Literal[
@@ -178,6 +176,7 @@ class IncrementalArgs(TypedDict, total=False):
     primary_key: Optional[TTableHintTemplate[TColumnNames]]
     end_value: Optional[str]
     row_order: Optional[TSortOrder]
+    transform: Optional[Callable[..., Any]]
 
 
 class IncrementalConfig(IncrementalArgs, total=False):
@@ -213,10 +212,13 @@ class ResolvedParam:
         self.field_path = jsonpath.compile_path(self.resolve_config["field"])
 
 
-class ResponseAction(TypedDict, total=False):
+class ResponseActionDict(TypedDict, total=False):
     status_code: Optional[Union[int, str]]
     content: Optional[str]
-    action: str
+    action: Optional[Union[str, Union[Callable[..., Any], List[Callable[..., Any]]]]]
+
+
+ResponseAction = Union[ResponseActionDict, Callable[..., Any]]
 
 
 class Endpoint(TypedDict, total=False):

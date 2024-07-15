@@ -1,5 +1,6 @@
 """SQL database source helpers"""
 
+import warnings
 from typing import (
     Callable,
     Any,
@@ -20,12 +21,14 @@ from dlt.common.typing import TDataItem, TSortOrder
 
 from dlt.sources.credentials import ConnectionStringCredentials
 
+from .arrow_helpers import row_tuples_to_arrow
 from .schema_types import (
     table_to_columns,
-    columns_to_arrow,
-    row_tuples_to_arrow,
+    get_primary_key,
     Table,
     SelectAny,
+    ReflectionLevel,
+    TTypeAdapter,
 )
 
 from sqlalchemy import Table, create_engine
@@ -129,14 +132,15 @@ class TableLoader:
                 elif self.backend == "pandas":
                     from dlt.common.libs.pandas_sql import _wrap_result
 
-                    yield _wrap_result(
+                    df = _wrap_result(
                         partition,
                         columns,
                         **{"dtype_backend": "pyarrow", **backend_kwargs},
                     )
+                    yield df
                 elif self.backend == "pyarrow":
                     yield row_tuples_to_arrow(
-                        partition, self.columns, tz=backend_kwargs.get("tz")
+                        partition, self.columns, tz=backend_kwargs.get("tz", "UTC")
                     )
 
     def _load_rows_connectorx(
@@ -179,10 +183,11 @@ def table_rows(
     chunk_size: int,
     backend: TableBackend,
     incremental: Optional[dlt.sources.incremental[Any]] = None,
-    detect_precision_hints: bool = False,
     defer_table_reflect: bool = False,
     table_adapter_callback: Callable[[Table], None] = None,
+    reflection_level: ReflectionLevel = "minimal",
     backend_kwargs: Dict[str, Any] = None,
+    type_adapter_callback: Optional[TTypeAdapter] = None,
 ) -> Iterator[TDataItem]:
     columns: TTableSchemaColumns = None
     if defer_table_reflect:
@@ -191,7 +196,7 @@ def table_rows(
         )
         if table_adapter_callback:
             table_adapter_callback(table)
-        columns = table_to_columns(table, detect_precision_hints)
+        columns = table_to_columns(table, reflection_level, type_adapter_callback)
 
         # set the primary_key in the incremental
         if incremental and incremental.primary_key is None:
@@ -208,7 +213,7 @@ def table_rows(
         )
     else:
         # table was already reflected
-        columns = table_to_columns(table, detect_precision_hints)
+        columns = table_to_columns(table, reflection_level, type_adapter_callback)
 
     loader = TableLoader(
         engine, backend, table, columns, incremental=incremental, chunk_size=chunk_size
@@ -217,19 +222,13 @@ def table_rows(
 
 
 def engine_from_credentials(
-    credentials: Union[ConnectionStringCredentials, Engine, str]
+    credentials: Union[ConnectionStringCredentials, Engine, str], **backend_kwargs: Any
 ) -> Engine:
     if isinstance(credentials, Engine):
         return credentials
     if isinstance(credentials, ConnectionStringCredentials):
         credentials = credentials.to_native_representation()
-    return create_engine(credentials)
-
-
-def get_primary_key(table: Table) -> List[str]:
-    """Create primary key or return None if no key defined"""
-    primary_key = [c.name for c in table.primary_key]
-    return primary_key if len(primary_key) > 0 else None
+    return create_engine(credentials, **backend_kwargs)
 
 
 def unwrap_json_connector_x(field: str) -> TDataItem:
@@ -254,6 +253,20 @@ def unwrap_json_connector_x(field: str) -> TDataItem:
     return _unwrap
 
 
+def _detect_precision_hints_deprecated(value: Optional[bool]) -> None:
+    if value is None:
+        return
+
+    msg = "`detect_precision_hints` argument is deprecated and will be removed in a future release. "
+    if value:
+        msg += "Use `reflection_level='full_with_precision'` which has the same effect instead."
+
+    warnings.warn(
+        msg,
+        DeprecationWarning,
+    )
+
+
 @configspec
 class SqlDatabaseTableConfiguration(BaseConfiguration):
     incremental: Optional[dlt.sources.incremental] = None  # type: ignore[type-arg]
@@ -261,10 +274,12 @@ class SqlDatabaseTableConfiguration(BaseConfiguration):
 
 @configspec
 class SqlTableResourceConfiguration(BaseConfiguration):
-    credentials: ConnectionStringCredentials = None
+    credentials: Union[ConnectionStringCredentials, Engine, str] = None
     table: str = None
-    incremental: Optional[dlt.sources.incremental] = None  # type: ignore[type-arg]
     schema: Optional[str] = None
-
-
-__source_name__ = "sql_database"
+    incremental: Optional[dlt.sources.incremental] = None  # type: ignore[type-arg]
+    chunk_size: int = 50000
+    backend: TableBackend = "sqlalchemy"
+    detect_precision_hints: Optional[bool] = None
+    defer_table_reflect: Optional[bool] = False
+    reflection_level: Optional[ReflectionLevel] = "full"

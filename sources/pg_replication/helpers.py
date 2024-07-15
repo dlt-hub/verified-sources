@@ -35,11 +35,6 @@ from dlt.extract.items import DataItemWithMeta
 from dlt.extract.resource import DltResource
 from dlt.sources.credentials import ConnectionStringCredentials
 
-try:
-    from ..sql_database import sql_table  # type: ignore[import-untyped]
-except Exception:
-    from sql_database import sql_table
-
 from .schema_types import _to_dlt_column_schema, _to_dlt_val
 from .exceptions import IncompatiblePostgresVersionException
 from .decoders import (
@@ -128,6 +123,8 @@ def init_replication(
         - a `DltResource` object or a list of `DltResource` objects for the snapshot
           table(s) if `persist_snapshots` is `True` and the replication slot did not yet exist
     """
+    if persist_snapshots:
+        _import_sql_table_resource()
     if isinstance(table_names, str):
         table_names = [table_names]
     cur = _get_rep_conn(credentials).cursor()
@@ -155,9 +152,11 @@ def init_replication(
                     table_name=table_name,
                     schema_name=schema_name,
                     cur=cur_snap,
-                    include_columns=None
-                    if include_columns is None
-                    else include_columns.get(table_name),
+                    include_columns=(
+                        None
+                        if include_columns is None
+                        else include_columns.get(table_name)
+                    ),
                 )
                 for table_name in table_names
             ]
@@ -367,7 +366,7 @@ def snapshot_table_resource(
     Can be used to perform an initial load of the table, so all data that
     existed in the table prior to initializing replication is also captured.
     """
-    resource: DltResource = sql_table(
+    resource: DltResource = sql_table(  # type: ignore[name-defined]
         credentials=credentials,
         table=snapshot_table_name,
         schema=schema_name,
@@ -457,19 +456,36 @@ def advance_slot(
         cur.connection.close()
 
 
+def _import_sql_table_resource() -> None:
+    """Imports external `sql_table` resource from `sql_database` source.
+
+    Raises error if `sql_database` source is not available.
+    """
+    global sql_table
+    try:
+        from ..sql_database import sql_table  # type: ignore[import-untyped]
+    except Exception:
+        try:
+            from sql_database import sql_table
+        except ImportError as e:
+            from .exceptions import SqlDatabaseSourceImportError
+
+            raise SqlDatabaseSourceImportError from e
+
+
 def _get_conn(
     credentials: ConnectionStringCredentials,
     connection_factory: Optional[Any] = None,
 ) -> Union[psycopg2.extensions.connection, LogicalReplicationConnection]:
     """Returns a psycopg2 connection to interact with postgres."""
-    return psycopg2.connect(  # type: ignore[call-overload,no-any-return]
+    return psycopg2.connect(  # type: ignore[no-any-return]
         database=credentials.database,
         user=credentials.username,
         password=credentials.password,
         host=credentials.host,
         port=credentials.port,
         connection_factory=connection_factory,
-        **credentials.query,
+        **({} if credentials.query is None else credentials.query),
     )
 
 
@@ -596,13 +612,13 @@ class MessageConsumer:
 
         self.consumed_all: bool = False
         # data_items attribute maintains all data items
-        self.data_items: Dict[
-            int, List[Union[TDataItem, DataItemWithMeta]]
-        ] = dict()  # maps relation_id to list of data items
+        self.data_items: Dict[int, List[Union[TDataItem, DataItemWithMeta]]] = (
+            dict()
+        )  # maps relation_id to list of data items
         # other attributes only maintain last-seen values
-        self.last_table_schema: Dict[
-            int, TTableSchema
-        ] = dict()  # maps relation_id to table schema
+        self.last_table_schema: Dict[int, TTableSchema] = (
+            dict()
+        )  # maps relation_id to table schema
         self.last_commit_ts: pendulum.DateTime
         self.last_commit_lsn = None
 
@@ -737,9 +753,11 @@ class MessageConsumer:
             lsn=msg_start_lsn,
             commit_ts=self.last_commit_ts,
             for_delete=isinstance(decoded_msg, Delete),
-            include_columns=None
-            if self.include_columns is None
-            else self.include_columns.get(table_name),
+            include_columns=(
+                None
+                if self.include_columns is None
+                else self.include_columns.get(table_name)
+            ),
         )
         self.data_items[decoded_msg.relation_id].append(data_item)
 
