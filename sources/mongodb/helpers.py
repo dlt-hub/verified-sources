@@ -164,7 +164,7 @@ class CollectionLoaderParallel(CollectionLoader):
 
         return batches
 
-    def _get_cursor(self, filter_: Dict[str, Any]) -> Cursor:
+    def _get_cursor(self, filter_: Dict[str, Any]) -> Cursor[Any]:
         """Get a reading cursor for the collection.
 
         Args:
@@ -276,7 +276,7 @@ class CollectionArrowLoaderParallel(CollectionLoaderParallel):
     Apache Arrow for data processing.
     """
 
-    def _get_cursor(self, filter_: Dict[str, Any]) -> Cursor:
+    def _get_cursor(self, filter_: Dict[str, Any]) -> Cursor[Any]:
         """Get a reading cursor for the collection.
 
         Args:
