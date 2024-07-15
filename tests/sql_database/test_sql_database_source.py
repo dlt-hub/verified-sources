@@ -32,6 +32,15 @@ from tests.utils import (
 from tests.sql_database.sql_source import SQLAlchemySourceDB
 
 
+@pytest.fixture(autouse=True)
+def dispose_engines():
+    yield
+    import gc
+
+    # will collect and dispose all hanging engines
+    gc.collect()
+
+
 def make_pipeline(destination_name: str) -> dlt.Pipeline:
     return dlt.pipeline(
         pipeline_name="sql_database",
@@ -452,6 +461,7 @@ def test_load_sql_table_resource_incremental_end_value(
     except Exception as exc:
         if isinstance(exc.__context__, NotImplementedError):
             pytest.skip("Test skipped due to: " + str(exc.__context__))
+        raise
     # half of the records loaded -1 record. end values is non inclusive
     assert data_item_length(rows) == abs(end_id - start_id)
     # check first and last id to see if order was applied
