@@ -160,24 +160,36 @@ def setup_incremental_object(
     Optional[Incremental[Any]], Optional[IncrementalParam], Optional[Callable[..., Any]]
 ]:
     incremental_params: List[str] = []
-    for key, value in request_params.items():
-        if isinstance(value, dict) and value.get("type") == "incremental":
-            incremental_params.append(key)
+    for param_name, param_config in request_params.items():
+        if (
+            isinstance(param_config, dict)
+            and param_config.get("type") == "incremental"
+            or isinstance(param_config, dlt.sources.incremental)
+        ):
+            incremental_params.append(param_name)
     if len(incremental_params) > 1:
         raise ValueError(
             f"Only a single incremental parameter is allower per endpoint. Found: {incremental_params}"
         )
     transform: Optional[Callable[..., Any]]
-    for key, value in request_params.items():
-        if isinstance(value, dlt.sources.incremental):
-            return value, IncrementalParam(start=key, end=None), None
-        if isinstance(value, dict) and value.get("type") == "incremental":
-            transform = value.get("transform", None)
-            config = exclude_keys(value, {"type", "transform"})
+    for param_name, param_config in request_params.items():
+        if isinstance(param_config, dlt.sources.incremental):
+            if param_config.end_value is not None:
+                raise ValueError(
+                    f"Only initial_value is allowed in the configuration of param: {param_name}. To set end_value too use the incremental configuration at the resource level. See https://dlthub.com/docs/dlt-ecosystem/verified-sources/rest_api#incremental-loading/"
+                )
+            return param_config, IncrementalParam(start=param_name, end=None), None
+        if isinstance(param_config, dict) and param_config.get("type") == "incremental":
+            if param_config.get("end_value") or param_config.get("end_param"):
+                raise ValueError(
+                    f"Only start_param and initial_value are allowed in the configuration of param: {param_name}. To set end_value too use the incremental configuration at the resource level. See https://dlthub.com/docs/dlt-ecosystem/verified-sources/rest_api#incremental-loading"
+                )
+            transform = param_config.get("transform", None)
+            config = exclude_keys(param_config, {"type", "transform"})
             # TODO: implement param type to bind incremental to
             return (
                 dlt.sources.incremental(**config),
-                IncrementalParam(start=key, end=None),
+                IncrementalParam(start=param_name, end=None),
                 transform,
             )
     if incremental_config:

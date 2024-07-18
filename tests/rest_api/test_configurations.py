@@ -613,6 +613,24 @@ def test_one_resource_cannot_have_many_incrementals() -> None:
     assert e.match(error_message)
 
 
+def test_one_resource_cannot_have_many_incrementals_2(incremental_with_init) -> None:
+    request_params = {
+        "foo": "bar",
+        "first_incremental": {
+            "type": "incremental",
+            "cursor_path": "created_at",
+            "initial_value": "2024-02-02T00:00:00Z",
+        },
+        "second_incremental": incremental_with_init,
+    }
+    with pytest.raises(ValueError) as e:
+        setup_incremental_object(request_params)
+    error_message = re.escape(
+        "Only a single incremental parameter is allower per endpoint. Found: ['first_incremental', 'second_incremental']"
+    )
+    assert e.match(error_message)
+
+
 def test_constructs_incremental_from_request_param() -> None:
     request_params = {
         "foo": "bar",
@@ -647,7 +665,7 @@ def test_constructs_incremental_from_request_param_with_incremental_object(
 
 
 def test_constructs_incremental_from_request_param_with_transform(
-    mocker, incremental_with_init_and_end
+    incremental_with_init,
 ) -> None:
     def epoch_to_datetime(epoch: str):
         return pendulum.from_timestamp(int(epoch))
@@ -657,7 +675,6 @@ def test_constructs_incremental_from_request_param_with_transform(
             "type": "incremental",
             "cursor_path": "updated_at",
             "initial_value": "2024-01-01T00:00:00Z",
-            "end_value": "2024-06-30T00:00:00Z",
             "transform": epoch_to_datetime,
         }
     }
@@ -668,7 +685,52 @@ def test_constructs_incremental_from_request_param_with_transform(
     assert incremental_param == IncrementalParam(start="since", end=None)
     assert transform == epoch_to_datetime
 
-    assert incremental_with_init_and_end == incremental_obj
+    assert incremental_with_init == incremental_obj
+
+
+def test_does_not_construct_incremental_from_request_param_with_unsupported_incremental(
+    incremental_with_init_and_end,
+) -> None:
+    param_config = {
+        "since": {
+            "type": "incremental",
+            "cursor_path": "updated_at",
+            "initial_value": "2024-01-01T00:00:00Z",
+            "end_value": "2024-06-30T00:00:00Z",  # This is ignored
+        }
+    }
+
+    with pytest.raises(ValueError) as e:
+        setup_incremental_object(param_config)
+
+    assert e.match(
+        "Only start_param and initial_value are allowed in the configuration of param: since."
+    )
+
+    param_config_2 = {
+        "since_2": {
+            "type": "incremental",
+            "cursor_path": "updated_at",
+            "initial_value": "2024-01-01T00:00:00Z",
+            "end_param": "2024-06-30T00:00:00Z",  # This is ignored
+        }
+    }
+
+    with pytest.raises(ValueError) as e:
+        setup_incremental_object(param_config_2)
+
+    assert e.match(
+        "Only start_param and initial_value are allowed in the configuration of param: since_2."
+    )
+
+    param_config_3 = {"since_3": incremental_with_init_and_end}
+
+    with pytest.raises(ValueError) as e:
+        setup_incremental_object(param_config_3)
+
+    assert e.match(
+        "Only initial_value is allowed in the configuration of param: since_3."
+    )
 
 
 def test_constructs_incremental_from_endpoint_config_incremental(
@@ -693,7 +755,6 @@ def test_constructs_incremental_from_endpoint_config_incremental(
 
 
 def test_constructs_incremental_from_endpoint_config_incremental_with_transform(
-    mocker,
     incremental_with_init_and_end,
 ) -> None:
     def epoch_to_datetime(epoch):
