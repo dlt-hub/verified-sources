@@ -186,11 +186,12 @@ class SQLAlchemySourceDB:
         SELECT
             cm.id,
             cm.content,
-            cm.created_at,
-            cm.updated_at,
+            cm.created_at as _created_at,
+            cm.updated_at as _updated_at,
             au.email as user_email,
             au.display_name as user_display_name,
-            cc.name as channel_name
+            cc.name as channel_name,
+            CAST(NULL as TIMESTAMP) as _null_ts
         FROM {self.schema}.chat_message cm
         JOIN {self.schema}.app_user au ON cm.user_id = au.id
         JOIN {self.schema}.chat_channel cc ON cm.channel_id = cc.id

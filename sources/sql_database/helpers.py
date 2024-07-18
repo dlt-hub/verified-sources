@@ -218,17 +218,27 @@ def table_rows(
     loader = TableLoader(
         engine, backend, table, columns, incremental=incremental, chunk_size=chunk_size
     )
-    yield from loader.load_rows(backend_kwargs)
+    try:
+        yield from loader.load_rows(backend_kwargs)
+    finally:
+        # dispose the engine if created for this particular table
+        # NOTE: database wide engines are not disposed, not externally provided
+        if getattr(engine, "may_dispose_after_use", False):
+            engine.dispose()
 
 
 def engine_from_credentials(
-    credentials: Union[ConnectionStringCredentials, Engine, str], **backend_kwargs: Any
+    credentials: Union[ConnectionStringCredentials, Engine, str],
+    may_dispose_after_use: bool = False,
+    **backend_kwargs: Any,
 ) -> Engine:
     if isinstance(credentials, Engine):
         return credentials
     if isinstance(credentials, ConnectionStringCredentials):
         credentials = credentials.to_native_representation()
-    return create_engine(credentials, **backend_kwargs)
+    engine = create_engine(credentials, **backend_kwargs)
+    setattr(engine, "may_dispose_after_use", may_dispose_after_use)  # noqa
+    return engine
 
 
 def unwrap_json_connector_x(field: str) -> TDataItem:
@@ -282,4 +292,4 @@ class SqlTableResourceConfiguration(BaseConfiguration):
     backend: TableBackend = "sqlalchemy"
     detect_precision_hints: Optional[bool] = None
     defer_table_reflect: Optional[bool] = False
-    reflection_level: Optional[ReflectionLevel] = "minimal"
+    reflection_level: Optional[ReflectionLevel] = "full"

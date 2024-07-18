@@ -1,7 +1,5 @@
 from datetime import datetime, timezone, date  # noqa: I251
 from uuid import uuid4
-from dataclasses import dataclass
-from sqlalchemy.dialects.postgresql import Range
 
 import pytest
 import pyarrow as pa
@@ -13,8 +11,10 @@ from sources.sql_database.arrow_helpers import row_tuples_to_arrow
 def test_row_tuples_to_arrow_unknown_types(all_unknown: bool) -> None:
     """Test inferring data types with pyarrow"""
 
+    from sqlalchemy.dialects.postgresql import Range
+
     # Applies to NUMRANGE, DATERANGE, etc sql types. Sqlalchemy returns a Range dataclass
-    IntRange = Range[int]
+    IntRange = Range
 
     rows = [
         (

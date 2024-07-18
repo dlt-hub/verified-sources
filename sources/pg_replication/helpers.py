@@ -152,9 +152,11 @@ def init_replication(
                     table_name=table_name,
                     schema_name=schema_name,
                     cur=cur_snap,
-                    include_columns=None
-                    if include_columns is None
-                    else include_columns.get(table_name),
+                    include_columns=(
+                        None
+                        if include_columns is None
+                        else include_columns.get(table_name)
+                    ),
                 )
                 for table_name in table_names
             ]
@@ -610,13 +612,13 @@ class MessageConsumer:
 
         self.consumed_all: bool = False
         # data_items attribute maintains all data items
-        self.data_items: Dict[
-            int, List[Union[TDataItem, DataItemWithMeta]]
-        ] = dict()  # maps relation_id to list of data items
+        self.data_items: Dict[int, List[Union[TDataItem, DataItemWithMeta]]] = (
+            dict()
+        )  # maps relation_id to list of data items
         # other attributes only maintain last-seen values
-        self.last_table_schema: Dict[
-            int, TTableSchema
-        ] = dict()  # maps relation_id to table schema
+        self.last_table_schema: Dict[int, TTableSchema] = (
+            dict()
+        )  # maps relation_id to table schema
         self.last_commit_ts: pendulum.DateTime
         self.last_commit_lsn = None
 
@@ -751,9 +753,11 @@ class MessageConsumer:
             lsn=msg_start_lsn,
             commit_ts=self.last_commit_ts,
             for_delete=isinstance(decoded_msg, Delete),
-            include_columns=None
-            if self.include_columns is None
-            else self.include_columns.get(table_name),
+            include_columns=(
+                None
+                if self.include_columns is None
+                else self.include_columns.get(table_name)
+            ),
         )
         self.data_items[decoded_msg.relation_id].append(data_item)
 
