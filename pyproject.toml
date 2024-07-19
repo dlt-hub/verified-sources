@@ -12,7 +12,7 @@ packages = [{include = "sources"}]
 
 [tool.poetry.dependencies]
 python = ">=3.8.1,<3.13"
-dlt = { git = "https://github.com/dlt-hub/dlt.git", branch = "feat/1495-rename-JSONResponsePaginator", extras = ["redshift", "bigquery", "postgres", "duckdb"]}
+dlt = {version = "0.5.2a1", allow-prereleases = true, extras = ["redshift", "bigquery", "postgres", "duckdb"]}
 graphlib-backport = {version = "*", python = "<3.9"}
 
 [tool.poetry.group.dev.dependencies]
