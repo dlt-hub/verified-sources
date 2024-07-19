@@ -60,7 +60,7 @@ class PaginatorTypeConfig(TypedDict, total=True):
 class PageNumberPaginatorConfig(PaginatorTypeConfig, total=False):
     """A paginator that uses page number-based pagination strategy."""
 
-    initial_page: Optional[int]
+    base_page: Optional[int]
     page_param: Optional[str]
     total_path: Optional[jsonpath.TJsonPath]
     maximum_page: Optional[int]

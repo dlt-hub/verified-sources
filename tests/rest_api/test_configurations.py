@@ -114,6 +114,7 @@ def test_paginator_type_configs(paginator_type_config: PaginatorTypeConfig) -> N
             assert paginator.links_next_key == "next_page"
         if isinstance(paginator, PageNumberPaginator):
             assert paginator.current_value == 10
+            assert paginator.base_index == 1
             assert paginator.param_name == "page"
             assert paginator.total_path == compile_path("response.pages")
             assert paginator.maximum_value is None
@@ -134,6 +135,26 @@ def test_paginator_type_configs(paginator_type_config: PaginatorTypeConfig) -> N
 def test_paginator_instance_config() -> None:
     paginator = OffsetPaginator(limit=100)
     assert create_paginator(paginator) is paginator
+
+
+def test_page_number_paginator_creation() -> None:
+    config: RESTAPIConfig = {  # type: ignore
+        "client": {
+            "base_url": "https://api.example.com",
+            "paginator": {
+                "type": "page_number",
+                "page_param": "foobar",
+                "total_path": "response.pages",
+                "base_page": 1,
+                "maximum_page": 5,
+            },
+        },
+        "resources": ["posts"],
+    }
+    try:
+        rest_api_source(config)
+    except dlt.common.exceptions.DictValidationException:
+        pytest.fail("DictValidationException was unexpectedly raised")
 
 
 @pytest.mark.parametrize("auth_type", get_args(AuthType))
