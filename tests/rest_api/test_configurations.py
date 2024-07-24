@@ -164,7 +164,7 @@ def test_page_number_paginator_creation() -> None:
         pytest.fail("DictValidationException was unexpectedly raised")
 
 
-def test_json_link_paginator(mock_api_server) -> None:
+def test_allow_deprecated_json_response_paginator(mock_api_server) -> None:
     """
     Delete this test as soon as we stop supporting the deprecated key json_response
     for the JSONLinkPaginator
