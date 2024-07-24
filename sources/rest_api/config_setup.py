@@ -29,11 +29,16 @@ from dlt.sources.helpers.rest_client.paginators import (
     BasePaginator,
     SinglePagePaginator,
     HeaderLinkPaginator,
-    JSONLinkPaginator,
     JSONResponseCursorPaginator,
     OffsetPaginator,
     PageNumberPaginator,
 )
+
+try:
+    from dlt.sources.helpers.rest_client.paginators import JSONLinkPaginator
+except ImportError:
+    from dlt.sources.helpers.rest_client.paginators import JSONResponsePaginator as JSONLinkPaginator # type: ignore
+
 from dlt.sources.helpers.rest_client.detector import single_entity_path
 from dlt.sources.helpers.rest_client.exceptions import IgnoreResponseException
 from dlt.sources.helpers.rest_client.auth import (

@@ -51,12 +51,17 @@ from sources.rest_api.typing import (
 )
 from dlt.sources.helpers.rest_client.paginators import (
     HeaderLinkPaginator,
-    JSONLinkPaginator,
     JSONResponseCursorPaginator,
     OffsetPaginator,
     PageNumberPaginator,
     SinglePagePaginator,
 )
+
+try:
+    from dlt.sources.helpers.rest_client.paginators import JSONLinkPaginator
+except ImportError:
+    from dlt.sources.helpers.rest_client.paginators import JSONResponsePaginator as JSONLinkPaginator
+
 
 from dlt.sources.helpers.rest_client.auth import (
     HttpBasicAuth,
