@@ -171,7 +171,7 @@ def test_allow_deprecated_json_response_paginator(mock_api_server) -> None:
     Delete this test as soon as we stop supporting the deprecated key json_response
     for the JSONLinkPaginator
     """
-    config: RESTAPIConfig = { # type: ignore
+    config: RESTAPIConfig = {  # type: ignore
         "client": {"base_url": "https://api.example.com"},
         "resources": [
             {
@@ -1255,24 +1255,24 @@ def test_circular_resource_bindingis_invalid() -> None:
 
 def test_default_params_get_merged() -> None:
     resource_defaults: EndpointResourceBase = {
-            "primary_key": "id",
-            "write_disposition": "merge",
-            "endpoint": {
-                "params": {
-                    "per_page": 30,
-                },
+        "primary_key": "id",
+        "write_disposition": "merge",
+        "endpoint": {
+            "params": {
+                "per_page": 30,
             },
-        }
+        },
+    }
 
     resource: EndpointResource = {
-    "endpoint": {
-                "path": "issues",
-                "params": {
-                    "sort": "updated",
-                    "direction": "desc",
-                    "state": "open",
-                },
+        "endpoint": {
+            "path": "issues",
+            "params": {
+                "sort": "updated",
+                "direction": "desc",
+                "state": "open",
             },
+        },
     }
     merged_resource = _merge_resource_endpoints(resource_defaults, resource)
     assert merged_resource["endpoint"]["params"]["per_page"] == 30
