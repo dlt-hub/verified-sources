@@ -30,7 +30,7 @@ from dlt.sources.helpers.rest_client.auth import AuthConfigBase, TApiKeyLocation
 from dlt.sources.helpers.rest_client.paginators import (
     SinglePagePaginator,
     HeaderLinkPaginator,
-    JSONResponsePaginator,
+    JSONLinkPaginator,
     JSONResponseCursorPaginator,
     OffsetPaginator,
     PageNumberPaginator,
@@ -43,7 +43,7 @@ from dlt.sources.helpers.rest_client.auth import (
 )
 
 PaginatorType = Literal[
-    "json_response",
+    "json_link",
     "header_link",
     "auto",
     "single_page",
@@ -84,7 +84,7 @@ class HeaderLinkPaginatorConfig(PaginatorTypeConfig, total=False):
     links_next_key: Optional[str]
 
 
-class JSONResponsePaginatorConfig(PaginatorTypeConfig, total=False):
+class JSONLinkPaginatorConfig(PaginatorTypeConfig, total=False):
     """Locates the next page URL within the JSON response body. The key
     containing the URL can be specified using a JSON path."""
 
@@ -104,12 +104,12 @@ PaginatorConfig = Union[
     PageNumberPaginatorConfig,
     OffsetPaginatorConfig,
     HeaderLinkPaginatorConfig,
-    JSONResponsePaginatorConfig,
+    JSONLinkPaginatorConfig,
     JSONResponseCursorPaginatorConfig,
     BasePaginator,
     SinglePagePaginator,
     HeaderLinkPaginator,
-    JSONResponsePaginator,
+    JSONLinkPaginator,
     JSONResponseCursorPaginator,
     OffsetPaginator,
     PageNumberPaginator,

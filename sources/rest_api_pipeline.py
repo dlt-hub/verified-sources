@@ -116,7 +116,7 @@ def load_pokemon() -> None:
             "client": {
                 "base_url": "https://pokeapi.co/api/v2/",
                 # If you leave out the paginator, it will be inferred from the API:
-                # paginator: "json_response",
+                # paginator: "json_link",
             },
             "resource_defaults": {
                 "endpoint": {

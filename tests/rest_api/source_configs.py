@@ -137,7 +137,7 @@ VALID_CONFIGS: List[RESTAPIConfig] = [
                     "params": {
                         "limit": 100,
                     },
-                    "paginator": "json_response",
+                    "paginator": "json_link",
                 },
             },
         ],
@@ -217,7 +217,7 @@ VALID_CONFIGS: List[RESTAPIConfig] = [
                             "initial_value": "2024-01-25T11:21:28Z",
                         },
                     },
-                    "paginator": "json_response",
+                    "paginator": "json_link",
                 },
             },
         ],
@@ -232,7 +232,7 @@ VALID_CONFIGS: List[RESTAPIConfig] = [
                     "params": {
                         "limit": 100,
                     },
-                    "paginator": "json_response",
+                    "paginator": "json_link",
                     "incremental": {
                         "start_param": "since",
                         "end_param": "until",
@@ -313,7 +313,7 @@ PAGINATOR_TYPE_CONFIGS: List[PaginatorTypeConfig] = [
     {"type": "page_number", "page": 10, "base_page": 1, "total_path": "response.pages"},
     {"type": "offset", "limit": 100, "maximum_offset": 1000},
     {"type": "header_link", "links_next_key": "next_page"},
-    {"type": "json_response", "next_url_path": "response.nex_page_link"},
+    {"type": "json_link", "next_url_path": "response.nex_page_link"},
     {"type": "cursor", "cursor_param": "cursor"},
 ]
 

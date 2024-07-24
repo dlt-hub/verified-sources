@@ -29,7 +29,7 @@ from dlt.sources.helpers.rest_client.paginators import (
     BasePaginator,
     SinglePagePaginator,
     HeaderLinkPaginator,
-    JSONResponsePaginator,
+    JSONLinkPaginator,
     JSONResponseCursorPaginator,
     OffsetPaginator,
     PageNumberPaginator,
@@ -60,7 +60,7 @@ from .utils import exclude_keys
 
 
 PAGINATOR_MAP: Dict[PaginatorType, Type[BasePaginator]] = {
-    "json_response": JSONResponsePaginator,
+    "json_link": JSONLinkPaginator,
     "header_link": HeaderLinkPaginator,
     "auto": None,
     "single_page": SinglePagePaginator,
