@@ -33,6 +33,7 @@ from sources.rest_api.config_setup import (
     create_auth,
     create_paginator,
     _make_endpoint_resource,
+    _merge_resource_endpoints,
     process_parent_data_item,
     setup_incremental_object,
     create_response_hooks,
@@ -42,6 +43,7 @@ from sources.rest_api.typing import (
     AuthType,
     AuthTypeConfig,
     EndpointResource,
+    EndpointResourceBase,
     PaginatorType,
     PaginatorTypeConfig,
     RESTAPIConfig,
@@ -169,7 +171,7 @@ def test_allow_deprecated_json_response_paginator(mock_api_server) -> None:
     Delete this test as soon as we stop supporting the deprecated key json_response
     for the JSONLinkPaginator
     """
-    config: RESTAPIConfig = { # type: ignore
+    config: RESTAPIConfig = {  # type: ignore
         "client": {"base_url": "https://api.example.com"},
         "resources": [
             {
@@ -1249,3 +1251,28 @@ def test_circular_resource_bindingis_invalid() -> None:
     with pytest.raises(CycleError) as e:
         rest_api_resources(config)
     assert e.match(re.escape("'nodes are in a cycle', ['chicken', 'egg', 'chicken']"))
+
+
+def test_default_params_get_merged() -> None:
+    resource_defaults: EndpointResourceBase = {
+        "primary_key": "id",
+        "write_disposition": "merge",
+        "endpoint": {
+            "params": {
+                "per_page": 30,
+            },
+        },
+    }
+
+    resource: EndpointResource = {
+        "endpoint": {
+            "path": "issues",
+            "params": {
+                "sort": "updated",
+                "direction": "desc",
+                "state": "open",
+            },
+        },
+    }
+    merged_resource = _merge_resource_endpoints(resource_defaults, resource)
+    assert merged_resource["endpoint"]["params"]["per_page"] == 30
