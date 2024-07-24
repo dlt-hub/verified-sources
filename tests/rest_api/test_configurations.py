@@ -55,6 +55,7 @@ from dlt.sources.helpers.rest_client.paginators import (
     OffsetPaginator,
     PageNumberPaginator,
     SinglePagePaginator,
+    JSONResponsePaginator,
 )
 
 try:
@@ -169,7 +170,7 @@ def test_allow_deprecated_json_response_paginator(mock_api_server) -> None:
     Delete this test as soon as we stop supporting the deprecated key json_response
     for the JSONLinkPaginator
     """
-    config: RESTAPIConfig = { # type: ignore
+    config: RESTAPIConfig = {  # type: ignore
         "client": {"base_url": "https://api.example.com"},
         "resources": [
             {
@@ -180,6 +181,27 @@ def test_allow_deprecated_json_response_paginator(mock_api_server) -> None:
                         "type": "json_response",
                         "next_url_path": "links.next",
                     },
+                },
+            },
+        ],
+    }
+
+    rest_api_source(config)
+
+
+def test_allow_deprecated_json_response_paginator_2(mock_api_server) -> None:
+    """
+    Delete this test as soon as we stop supporting the deprecated key json_response
+    for the JSONLinkPaginator
+    """
+    config: RESTAPIConfig = {  # type: ignore
+        "client": {"base_url": "https://api.example.com"},
+        "resources": [
+            {
+                "name": "posts",
+                "endpoint": {
+                    "path": "posts",
+                    "paginator": JSONResponsePaginator(next_url_path="links.next"),
                 },
             },
         ],
