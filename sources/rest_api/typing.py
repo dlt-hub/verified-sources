@@ -38,7 +38,7 @@ from dlt.sources.helpers.rest_client.paginators import (
 try:
     from dlt.sources.helpers.rest_client.paginators import JSONLinkPaginator
 except ImportError:
-    from dlt.sources.helpers.rest_client.paginators import JSONResponsePaginator as JSONLinkPaginator
+    from dlt.sources.helpers.rest_client.paginators import JSONResponsePaginator as JSONLinkPaginator # type: ignore
 
 from dlt.sources.helpers.rest_client.auth import (
     AuthConfigBase,
