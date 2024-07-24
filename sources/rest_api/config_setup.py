@@ -554,7 +554,7 @@ def _merge_resource_endpoints(
         }
     if "params" in config_endpoint:
         merged_endpoint["params"] = {
-            **(merged_endpoint.get("json", {})),
+            **(merged_endpoint.get("params", {})),
             **config_endpoint["params"],
         }
     # merge columns
