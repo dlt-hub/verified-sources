@@ -38,7 +38,7 @@ from dlt.sources.helpers.rest_client.paginators import (
 try:
     from dlt.sources.helpers.rest_client.paginators import JSONLinkPaginator
 except ImportError:
-    from dlt.sources.helpers.rest_client.paginators import JSONResponsePaginator as JSONLinkPaginator # type: ignore
+    from dlt.sources.helpers.rest_client.paginators import JSONResponsePaginator as JSONLinkPaginator  # type: ignore
 
 from dlt.sources.helpers.rest_client.auth import (
     AuthConfigBase,
@@ -49,6 +49,7 @@ from dlt.sources.helpers.rest_client.auth import (
 
 PaginatorType = Literal[
     "json_link",
+    "json_response",  # deprecated. Use json_link instead. Will be removed in upcoming release
     "header_link",
     "auto",
     "single_page",

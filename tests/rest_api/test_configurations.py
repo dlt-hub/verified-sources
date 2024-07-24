@@ -60,7 +60,9 @@ from dlt.sources.helpers.rest_client.paginators import (
 try:
     from dlt.sources.helpers.rest_client.paginators import JSONLinkPaginator
 except ImportError:
-    from dlt.sources.helpers.rest_client.paginators import JSONResponsePaginator as JSONLinkPaginator
+    from dlt.sources.helpers.rest_client.paginators import (
+        JSONResponsePaginator as JSONLinkPaginator,
+    )
 
 
 from dlt.sources.helpers.rest_client.auth import (
@@ -160,6 +162,30 @@ def test_page_number_paginator_creation() -> None:
         rest_api_source(config)
     except dlt.common.exceptions.DictValidationException:
         pytest.fail("DictValidationException was unexpectedly raised")
+
+
+def test_allow_deprecated_json_response_paginator(mock_api_server) -> None:
+    """
+    Delete this test as soon as we stop supporting the deprecated key json_response
+    for the JSONLinkPaginator
+    """
+    config: RESTAPIConfig = { # type: ignore
+        "client": {"base_url": "https://api.example.com"},
+        "resources": [
+            {
+                "name": "posts",
+                "endpoint": {
+                    "path": "posts",
+                    "paginator": {
+                        "type": "json_response",
+                        "next_url_path": "links.next",
+                    },
+                },
+            },
+        ],
+    }
+
+    rest_api_source(config)
 
 
 @pytest.mark.parametrize("auth_type", get_args(AuthType))
