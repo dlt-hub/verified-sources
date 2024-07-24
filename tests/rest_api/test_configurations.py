@@ -1253,7 +1253,7 @@ def test_circular_resource_bindingis_invalid() -> None:
     assert e.match(re.escape("'nodes are in a cycle', ['chicken', 'egg', 'chicken']"))
 
 
-def test_default_params_get_merged() -> None:
+def test_resource_defaults_params_get_merged() -> None:
     resource_defaults: EndpointResourceBase = {
         "primary_key": "id",
         "write_disposition": "merge",
@@ -1276,3 +1276,69 @@ def test_default_params_get_merged() -> None:
     }
     merged_resource = _merge_resource_endpoints(resource_defaults, resource)
     assert merged_resource["endpoint"]["params"]["per_page"] == 30
+
+
+def test_resource_defaults_params_get_overwritten() -> None:
+    resource_defaults: EndpointResourceBase = {
+        "primary_key": "id",
+        "write_disposition": "merge",
+        "endpoint": {
+            "params": {
+                "per_page": 30,
+            },
+        },
+    }
+
+    resource: EndpointResource = {
+        "endpoint": {
+            "path": "issues",
+            "params": {
+                "per_page": 50,
+                "sort": "updated",
+            },
+        },
+    }
+    merged_resource = _merge_resource_endpoints(resource_defaults, resource)
+    assert merged_resource["endpoint"]["params"]["per_page"] == 50
+
+
+def test_resource_defaults_params_no_resource_params() -> None:
+    resource_defaults: EndpointResourceBase = {
+        "primary_key": "id",
+        "write_disposition": "merge",
+        "endpoint": {
+            "params": {
+                "per_page": 30,
+            },
+        },
+    }
+
+    resource: EndpointResource = {
+        "endpoint": {
+            "path": "issues",
+        },
+    }
+    merged_resource = _merge_resource_endpoints(resource_defaults, resource)
+    assert merged_resource["endpoint"]["params"]["per_page"] == 30
+
+
+def test_resource_defaults_no_params() -> None:
+    resource_defaults: EndpointResourceBase = {
+        "primary_key": "id",
+        "write_disposition": "merge",
+    }
+
+    resource: EndpointResource = {
+        "endpoint": {
+            "path": "issues",
+            "params": {
+                "per_page": 50,
+                "sort": "updated",
+            },
+        },
+    }
+    merged_resource = _merge_resource_endpoints(resource_defaults, resource)
+    assert merged_resource["endpoint"]["params"] == {
+        "per_page": 50,
+        "sort": "updated",
+    }
