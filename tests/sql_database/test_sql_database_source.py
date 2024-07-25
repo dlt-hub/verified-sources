@@ -21,6 +21,7 @@ from dlt.sources.credentials import ConnectionStringCredentials
 from sources.sql_database import sql_database, sql_table, TableBackend, ReflectionLevel
 from sources.sql_database.helpers import unwrap_json_connector_x
 
+from tests.sql_database.test_helpers import mock_json_column
 from tests.utils import (
     ALL_DESTINATIONS,
     assert_load_info,
@@ -189,6 +190,11 @@ def test_load_sql_schema_loads_all_tables(
         source.has_precision.add_map(convert_time_to_us)
         source.has_precision_nullable.add_map(convert_time_to_us)
 
+    if backend != "sqlalchemy":
+        # always use mock json
+        source.has_precision.add_map(mock_json_column("json_col"))
+        source.has_precision_nullable.add_map(mock_json_column("json_col"))
+
     assert (
         "chat_message_view" not in source.resources
     )  # Views are not reflected by default
@@ -222,6 +228,11 @@ def test_load_sql_schema_loads_all_tables_parallel(
         # connectorx generates nanoseconds time which bigquery cannot load
         source.has_precision.add_map(convert_time_to_us)
         source.has_precision_nullable.add_map(convert_time_to_us)
+
+    if backend != "sqlalchemy":
+        # always use mock json
+        source.has_precision.add_map(mock_json_column("json_col"))
+        source.has_precision_nullable.add_map(mock_json_column("json_col"))
 
     load_info = pipeline.run(source)
     print(
@@ -752,7 +763,7 @@ def test_all_types_no_precision_hints(
         source.resources[table_name].add_map(unwrap_json_connector_x("json_col"))
     pipeline.extract(source)
     pipeline.normalize(loader_file_format="parquet")
-    pipeline.load()
+    pipeline.load().raise_on_failed_jobs()
 
     schema = pipeline.default_schema
     # print(pipeline.default_schema.to_pretty_yaml())
@@ -842,9 +853,9 @@ def test_deferred_reflect_in_source(
         defer_table_reflect=True,
         backend=backend,
     )
-    # add JSON unwrap for connectorx
-    if backend == "connectorx":
-        source.resources["has_precision"].add_map(unwrap_json_connector_x("json_col"))
+    # mock the right json values for backends not supporting it
+    if backend in ("connectorx", "pandas"):
+        source.resources["has_precision"].add_map(mock_json_column("json_col"))
 
     # no columns in both tables
     assert source.has_precision.columns == {}
@@ -902,9 +913,9 @@ def test_deferred_reflect_in_resource(
         defer_table_reflect=True,
         backend=backend,
     )
-    # add JSON unwrap for connectorx
-    if backend == "connectorx":
-        table.add_map(unwrap_json_connector_x("json_col"))
+    # mock the right json values for backends not supporting it
+    if backend in ("connectorx", "pandas"):
+        table.add_map(mock_json_column("json_col"))
 
     # no columns in both tables
     assert table.columns == {}
