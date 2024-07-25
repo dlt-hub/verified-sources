@@ -1,11 +1,11 @@
-from dlt.sources.helpers.rest_client.paginators import JSONResponsePaginator
 
+import pytest
 from sources import rest_api
 from sources.rest_api.typing import PaginatorConfig
-import pytest
+from dlt.sources.helpers.rest_client.paginators import JSONLinkPaginator
 
 
-class CustomPaginator(JSONResponsePaginator):
+class CustomPaginator(JSONLinkPaginator):
     """A paginator that uses a specific key in the JSON response to find
     the next page URL.
     """
