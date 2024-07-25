@@ -386,7 +386,10 @@ def _action_type_unless_custom_hook(
     return (action_type, None)
 
 
-def _handle_response_action(response: Response, action: ResponseAction) -> Union[
+def _handle_response_action(
+    response: Response,
+    action: ResponseAction,
+) -> Union[
     Tuple[str, Optional[List[Callable[..., Any]]]],
     Tuple[None, List[Callable[..., Any]]],
     Tuple[None, None],
