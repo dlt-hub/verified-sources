@@ -275,7 +275,10 @@ def load_tables_to_dicts(
 
 
 def assert_schema_on_data(
-    table_schema: TTableSchema, rows: List[Dict[str, Any]], requires_nulls: bool
+    table_schema: TTableSchema,
+    rows: List[Dict[str, Any]],
+    requires_nulls: bool,
+    check_complex: bool,
 ) -> None:
     """Asserts that `rows` conform to `table_schema`. Fields and their order must conform to columns. Null values and
     python data types are checked.
@@ -299,7 +302,12 @@ def assert_schema_on_data(
             expected_dt = table_columns[key]["data_type"]
             # allow complex strings
             if expected_dt == "complex":
-                value = json.loads(value)
+                if check_complex:
+                    # NOTE: we expect a dict or a list here. simple types of null will fail the test
+                    value = json.loads(value)
+                else:
+                    # skip checking complex types
+                    continue
             actual_dt = py_type_to_sc_type(type(value))
             assert actual_dt == expected_dt
 

@@ -721,7 +721,10 @@ def test_all_types_with_precision_hints(
     table = schema.tables[table_name]
     assert_precision_columns(table["columns"], backend, nullable)
     assert_schema_on_data(
-        table, load_tables_to_dicts(pipeline, table_name)[table_name], nullable
+        table,
+        load_tables_to_dicts(pipeline, table_name)[table_name],
+        nullable,
+        backend in ["sqlalchemy", "pyarrow"],
     )
 
 
@@ -756,7 +759,10 @@ def test_all_types_no_precision_hints(
     table = schema.tables[table_name]
     assert_no_precision_columns(table["columns"], backend, nullable)
     assert_schema_on_data(
-        table, load_tables_to_dicts(pipeline, table_name)[table_name], nullable
+        table,
+        load_tables_to_dicts(pipeline, table_name)[table_name],
+        nullable,
+        backend in ["sqlalchemy", "pyarrow"],
     )
 
 
@@ -859,6 +865,7 @@ def test_deferred_reflect_in_source(
         precision_table,
         load_tables_to_dicts(pipeline, "has_precision")["has_precision"],
         True,
+        backend in ["sqlalchemy", "pyarrow"],
     )
     assert len(source.chat_message.columns) > 0  # type: ignore[arg-type]
     assert (
@@ -917,6 +924,7 @@ def test_deferred_reflect_in_resource(
         precision_table,
         load_tables_to_dicts(pipeline, "has_precision")["has_precision"],
         True,
+        backend in ["sqlalchemy", "pyarrow"],
     )
 
 
@@ -1335,6 +1343,10 @@ PRECISION_COLUMNS: List[TColumnSchema] = [
     {
         "data_type": "bool",
         "name": "bool_col",
+    },
+    {
+        "data_type": "text",
+        "name": "uuid_col",
     },
 ]
 

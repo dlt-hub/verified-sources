@@ -1,6 +1,7 @@
 from typing import List, TypedDict, Dict
 import random
 from copy import deepcopy
+from uuid import uuid4
 
 import mimesis
 from sqlalchemy import (
@@ -27,8 +28,9 @@ from sqlalchemy import (
     Time,
     JSON,
     ARRAY,
+    Uuid,
 )
-from sqlalchemy.dialects.postgresql import DATERANGE
+from sqlalchemy.dialects.postgresql import DATERANGE, JSONB
 
 from dlt.common.utils import chunks, uniq_id
 from dlt.sources.credentials import ConnectionStringCredentials
@@ -160,8 +162,9 @@ class SQLAlchemySourceDB:
                 Column("date_col", Date, nullable=nullable),
                 Column("time_col", Time, nullable=nullable),
                 Column("float_col", Float, nullable=nullable),
-                Column("json_col", JSON, nullable=nullable),
+                Column("json_col", JSONB, nullable=nullable),
                 Column("bool_col", Boolean, nullable=nullable),
+                Column("uuid_col", Uuid, nullable=nullable),
             )
 
         _make_precision_table("has_precision", False)
@@ -310,8 +313,9 @@ class SQLAlchemySourceDB:
                 date_col=mimesis.Datetime().date(),
                 time_col=mimesis.Datetime().time(),
                 float_col=random.random(),
-                json_col="[1, 2, 3]",
+                json_col={"data": [1, 2, 3]},
                 bool_col=random.randint(0, 1) == 1,
+                uuid_col=uuid4(),
             )
             for _ in range(n + null_n)
         ]

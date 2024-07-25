@@ -38,6 +38,15 @@ TTypeAdapter = Callable[
 ]
 
 
+def default_table_adapter(table: Table) -> None:
+    """Default table adapter being always called before custom one"""
+    for col in table._columns:
+        sql_t = col.type
+        if isinstance(sql_t, sqltypes.Uuid):
+            # emit uuids as string by default
+            sql_t.as_uuid = False
+
+
 def sqla_col_to_column_schema(
     sql_col: ColumnAny,
     reflection_level: ReflectionLevel,
@@ -69,7 +78,10 @@ def sqla_col_to_column_schema(
 
     add_precision = reflection_level == "full_with_precision"
 
-    if isinstance(sql_t, sqltypes.Numeric):
+    if isinstance(sql_t, sqltypes.Uuid):
+        # we represent UUID as text by default, see default_table_adapter
+        col["data_type"] = "text"
+    elif isinstance(sql_t, sqltypes.Numeric):
         # check for Numeric type first and integer later, some numeric types (ie. Oracle)
         # derive from both
         # all Numeric types that are returned as floats will assume "double" type

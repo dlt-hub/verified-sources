@@ -20,6 +20,7 @@ from .helpers import (
     _detect_precision_hints_deprecated,
 )
 from .schema_types import (
+    default_table_adapter,
     table_to_columns,
     get_primary_key,
     ReflectionLevel,
@@ -100,8 +101,10 @@ def sql_database(
         tables = list(metadata.tables.values())
 
     for table in tables:
-        if table_adapter_callback and not defer_table_reflect:
-            table_adapter_callback(table)
+        if not defer_table_reflect:
+            default_table_adapter(table)
+            if table_adapter_callback:
+                table_adapter_callback(table)
 
         yield dlt.resource(
             table_rows,
@@ -185,8 +188,10 @@ def sql_table(
     table_obj = Table(
         table, metadata, autoload_with=None if defer_table_reflect else engine
     )
-    if table_adapter_callback and not defer_table_reflect:
-        table_adapter_callback(table_obj)
+    if not defer_table_reflect:
+        default_table_adapter(table_obj)
+        if table_adapter_callback:
+            table_adapter_callback(table_obj)
 
     return dlt.resource(
         table_rows,
