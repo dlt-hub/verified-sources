@@ -1,8 +1,7 @@
-from typing import TYPE_CHECKING
-
 import pytest
 
 import dlt
+from dlt.common.typing import TDataItem
 
 from sources.sql_database.helpers import TableLoader, TableBackend
 from sources.sql_database.schema_types import table_to_columns
@@ -144,3 +143,30 @@ def test_make_query_incremental_any_fun(
     expected = table.select()
 
     assert query.compare(expected)
+
+
+def mock_json_column(field: str) -> TDataItem:
+    """"""
+    import pyarrow as pa
+    import pandas as pd
+
+    json_mock_str = '{"data": [1, 2, 3]}'
+
+    def _unwrap(table: TDataItem) -> TDataItem:
+        if isinstance(table, pd.DataFrame):
+            table[field] = [None if s is None else json_mock_str for s in table[field]]
+            return table
+        else:
+            col_index = table.column_names.index(field)
+            json_str_array = pa.array(
+                [None if s is None else json_mock_str for s in table[field]]
+            )
+            return table.set_column(
+                col_index,
+                pa.field(
+                    field, pa.string(), nullable=table.schema.field(field).nullable
+                ),
+                json_str_array,
+            )
+
+    return _unwrap
