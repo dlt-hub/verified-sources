@@ -2,6 +2,7 @@ import re
 import dlt.common
 import dlt.common.exceptions
 import pendulum
+from requests.auth import AuthBase
 
 import dlt.extract
 import pytest
@@ -76,6 +77,7 @@ from dlt.sources.helpers.rest_client.auth import (
     HttpBasicAuth,
     BearerTokenAuth,
     APIKeyAuth,
+    OAuth2ClientCredentials,
 )
 
 from .source_configs import (
@@ -1501,6 +1503,42 @@ def test_secret_masking_auth_config(secret_keys, config, masked_secrets):
         assert masked[key] == mask
 
 
+def test_secret_masking_oauth() -> None:
+    config = OAuth2ClientCredentials(
+        access_token_url="",
+        client_id="sensitive-secret",
+        client_secret="sensitive-secret",
+    )
+
+    obj = _mask_secrets(config)
+    assert "sensitive-secret" not in str(obj)
+
+    # TODO
+    # assert masked.access_token == "None"
+    # assert masked.client_id == "s*****t"
+    # assert masked.client_secret == "s*****t"
+
+
+def test_secret_masking_custom_auth() -> None:
+    class CustomAuthConfigBase(AuthConfigBase):
+        def __init__(self, token: str = "sensitive-secret"):
+            self.token = token
+
+    class CustomAuthBase(AuthBase):
+        def __init__(self, token: str = "sensitive-secret"):
+            self.token = token
+
+    auth = _mask_secrets(CustomAuthConfigBase())
+    assert "s*****t" not in str(auth)
+    # TODO
+    # assert auth.token == "s*****t"
+
+    auth_2 = _mask_secrets(CustomAuthBase())
+    assert "s*****t" not in str(auth_2)
+    # TODO
+    # assert auth_2.token == "s*****t"
+
+
 def test_validation_masks_auth_secrets() -> None:
     incorrect_config: RESTAPIConfig = {  # type: ignore
         "client": {
@@ -1517,7 +1555,7 @@ def test_validation_masks_auth_secrets() -> None:
         rest_api_source(incorrect_config)
     assert (
         re.search("sensitive-secret", str(e.value)) is None
-    ), "sensitive-secret is printed pattern unexpectedly"
+    ), "sensitive-secret printed pattern unexpectedly"
     assert e.match(
         re.escape("'{'type': 'bearer', 'location': 'header', 'token': 's*****t'}'")
     )

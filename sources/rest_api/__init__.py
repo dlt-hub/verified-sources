@@ -2,6 +2,7 @@
 from copy import deepcopy
 from typing import Type, Any, Dict, List, Optional, Generator, Callable, cast, Union
 import graphlib  # type: ignore[import,unused-ignore]
+from requests.auth import AuthBase
 
 import dlt
 from dlt.common.validation import validate_dict
@@ -15,6 +16,12 @@ from dlt.extract.source import DltResource, DltSource
 
 from dlt.sources.helpers.rest_client import RESTClient
 from dlt.sources.helpers.rest_client.paginators import BasePaginator
+from dlt.sources.helpers.rest_client.auth import (
+    HttpBasicAuth,
+    BearerTokenAuth,
+    APIKeyAuth,
+    AuthConfigBase,
+)
 from dlt.sources.helpers.rest_client.typing import HTTPMethodBasic
 from .typing import (
     AuthConfig,
@@ -363,16 +370,33 @@ def _validate_config(config: RESTAPIConfig) -> None:
 
 
 def _mask_secrets(auth_config: AuthConfig) -> AuthConfig:
-    sensitive_keys = [
-        "token",
-        "api_key",
-        "username",
-        "password",
-        "access_token",
-        "client_id",
-        "client_secret",
-    ]
-    for sensitive_key in sensitive_keys:
+    if isinstance(auth_config, AuthBase) and not isinstance(
+        auth_config, AuthConfigBase
+    ):
+        return auth_config
+
+    has_sensitive_key = any(key in auth_config for key in SENSITIVE_KEYS)
+    if (
+        isinstance(auth_config, (APIKeyAuth, BearerTokenAuth, HttpBasicAuth))
+        or has_sensitive_key
+    ):
+        return _mask_secrets_dict(auth_config)
+    # Here, we assume that OAuth2 and other custom classes that don't implement __get__()
+    # also don't print secrets in __str__()
+    # TODO: call auth_config.mask_secrets() when that is implemented in dlt-core
+    return auth_config
+
+
+SENSITIVE_KEYS: List[str] = [
+    "token",
+    "api_key",
+    "username",
+    "password",
+]
+
+
+def _mask_secrets_dict(auth_config: AuthConfig) -> AuthConfig:
+    for sensitive_key in SENSITIVE_KEYS:
         try:
             auth_config[sensitive_key] = _mask_secret(auth_config[sensitive_key])  # type: ignore[literal-required, index]
         except KeyError:
