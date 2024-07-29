@@ -357,12 +357,12 @@ def _validate_config(config: RESTAPIConfig) -> None:
     if client_config:
         auth = client_config.get("auth")
         if auth:
-            _mask_secrets(auth)
+            auth = _mask_secrets(auth)
 
     validate_dict(RESTAPIConfig, c, path=".")
 
 
-def _mask_secrets(auth_config: AuthConfig) -> None:
+def _mask_secrets(auth_config: AuthConfig) -> AuthConfig:
     sensitive_keys = [
         "token",
         "api_key",
@@ -377,6 +377,7 @@ def _mask_secrets(auth_config: AuthConfig) -> None:
             auth_config[sensitive_key] = _mask_secret(auth_config[sensitive_key])  # type: ignore[literal-required, index]
         except KeyError:
             continue
+    return auth_config
 
 
 def _mask_secret(secret: Optional[str]) -> str:

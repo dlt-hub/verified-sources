@@ -7,7 +7,7 @@ import dlt.extract
 import pytest
 from unittest.mock import patch
 from copy import copy, deepcopy
-from typing import cast, get_args, Dict, List, Any
+from typing import cast, get_args, Dict, List, Any, Optional, NamedTuple, Union
 
 from graphlib import CycleError
 
@@ -24,6 +24,7 @@ from sources.rest_api import (
     rest_api_resources,
     _validate_param_type,
     _set_incremental_params,
+    _mask_secrets,
 )
 
 from sources.rest_api.config_setup import (
@@ -42,6 +43,7 @@ from sources.rest_api.config_setup import (
     _handle_response_action,
 )
 from sources.rest_api.typing import (
+    AuthConfigBase,
     AuthType,
     AuthTypeConfig,
     EndpointResource,
@@ -1419,6 +1421,84 @@ def test_resource_defaults_no_params() -> None:
         "per_page": 50,
         "sort": "updated",
     }
+class AuthConfigTest(NamedTuple):
+    secret_keys: List[str]
+    config: Union[Dict[str, Any], AuthConfigBase]
+    masked_secrets: Optional[List[str]] = ["s*****t"]
+
+
+AUTH_CONFIGS = [
+    AuthConfigTest(
+        secret_keys=["token"],
+        config={
+            "type": "bearer",
+            "token": "sensitive-secret",
+        },
+    ),
+    AuthConfigTest(
+        secret_keys=["api_key"],
+        config={
+            "type": "api_key",
+            "api_key": "sensitive-secret",
+        },
+    ),
+    AuthConfigTest(
+        secret_keys=["username", "password"],
+        config={
+            "type": "http_basic",
+            "username": "sensitive-secret",
+            "password": "sensitive-secret",
+        },
+        masked_secrets=["s*****t", "s*****t"],
+    ),
+    AuthConfigTest(
+        secret_keys=["username", "password"],
+        config={
+            "type": "http_basic",
+            "username": "",
+            "password": "sensitive-secret",
+        },
+        masked_secrets=["*****", "s*****t"],
+    ),
+    AuthConfigTest(
+        secret_keys=["username", "password"],
+        config={
+            "type": "http_basic",
+            "username": "sensitive-secret",
+            "password": "",
+        },
+        masked_secrets=["s*****t", "*****"],
+    ),
+    AuthConfigTest(
+        secret_keys=["token"],
+        config=BearerTokenAuth(token="sensitive-secret"),
+    ),
+    AuthConfigTest(
+        secret_keys=["api_key"], config=APIKeyAuth(api_key="sensitive-secret")
+    ),
+    AuthConfigTest(
+        secret_keys=["username", "password"],
+        config=HttpBasicAuth("sensitive-secret", "sensitive-secret"),
+        masked_secrets=["s*****t", "s*****t"],
+    ),
+    AuthConfigTest(
+        secret_keys=["username", "password"],
+        config=HttpBasicAuth("sensitive-secret", ""),
+        masked_secrets=["s*****t", "*****"],
+    ),
+    AuthConfigTest(
+        secret_keys=["username", "password"],
+        config=HttpBasicAuth("", "sensitive-secret"),
+        masked_secrets=["*****", "s*****t"],
+    ),
+]
+
+
+@pytest.mark.parametrize("secret_keys, config, masked_secrets", AUTH_CONFIGS)
+def test_secret_masking_auth_config(secret_keys, config, masked_secrets):
+    masked = _mask_secrets(config)
+    for key, mask in zip(secret_keys, masked_secrets):
+        assert masked[key] == mask
 
 
 def test_validation_masks_auth_secrets() -> None:
