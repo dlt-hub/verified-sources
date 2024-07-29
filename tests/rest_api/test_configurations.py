@@ -1,4 +1,6 @@
 import re
+import dlt.common
+import dlt.common.exceptions
 import pendulum
 
 import dlt.extract
@@ -1417,3 +1419,21 @@ def test_resource_defaults_no_params() -> None:
         "per_page": 50,
         "sort": "updated",
     }
+
+
+def test_validation_masks_auth_secrets() -> None:
+    incorrect_config: RESTAPIConfig = {  # type: ignore
+        "client": {
+            "base_url": "https://api.example.com",
+            "auth": {
+                "type": "bearer",
+                "location": "header",
+                "token": "sensitive-secret",
+            }
+        },
+        "resources": ["posts"],
+    }
+    with pytest.raises(dlt.common.exceptions.DictValidationException) as e:
+        rest_api_source(incorrect_config)
+    assert re.search("sensitive-secret", str(e.value)) is None, "sensitive-secret is printed pattern unexpectedly"
+    assert e.match(re.escape("'{'type': 'bearer', 'location': 'header', 'token': 's*****t'}'"))

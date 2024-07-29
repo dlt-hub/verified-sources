@@ -1,5 +1,5 @@
 """Generic API Source"""
-
+from copy import deepcopy
 from typing import Type, Any, Dict, List, Optional, Generator, Callable, cast, Union
 import graphlib  # type: ignore[import,unused-ignore]
 
@@ -167,7 +167,7 @@ def rest_api_resources(config: RESTAPIConfig) -> List[DltResource]:
         })
     """
 
-    validate_dict(RESTAPIConfig, config, path=".")
+    _validate_config(config)
 
     client_config = config["client"]
     resource_defaults = config.get("resource_defaults", {})
@@ -349,6 +349,26 @@ def create_resources(
 
     return resources
 
+
+def _validate_config(config: RESTAPIConfig) -> None:
+    c = deepcopy(config)
+    client_config = c.get("client")
+    if client_config:
+        auth = client_config.get("auth")
+        if auth:
+            auth = _mask_secrets(auth)
+
+    validate_dict(RESTAPIConfig, c, path=".")
+
+def _mask_secrets(auth_config: Dict[str, Any]) -> Dict[str, Any]:
+    for sensitive_key in ["token", "api_key", "password", "access_token", "client_id", "client_secret"]:
+        if auth_config.get(sensitive_key):
+            auth_config[sensitive_key] = _mask_secret(auth_config.get(sensitive_key))
+
+def _mask_secret(secret: Optional[str]) -> str:
+    if secret is None:
+        return "None"
+    return f"{secret[0]}*****{secret[-1]}"
 
 def _set_incremental_params(
     params: Dict[str, Any],
