@@ -17,6 +17,7 @@ from dlt.sources.helpers.rest_client import RESTClient
 from dlt.sources.helpers.rest_client.paginators import BasePaginator
 from dlt.sources.helpers.rest_client.typing import HTTPMethodBasic
 from .typing import (
+    AuthConfig,
     ClientConfig,
     ResolvedParam,
     ResolveParamConfig,
@@ -356,19 +357,35 @@ def _validate_config(config: RESTAPIConfig) -> None:
     if client_config:
         auth = client_config.get("auth")
         if auth:
-            auth = _mask_secrets(auth)
+            _mask_secrets(auth)
 
     validate_dict(RESTAPIConfig, c, path=".")
 
-def _mask_secrets(auth_config: Dict[str, Any]) -> Dict[str, Any]:
-    for sensitive_key in ["token", "api_key", "password", "access_token", "client_id", "client_secret"]:
-        if auth_config.get(sensitive_key):
-            auth_config[sensitive_key] = _mask_secret(auth_config.get(sensitive_key))
+
+def _mask_secrets(auth_config: AuthConfig) -> None:
+    sensitive_keys = [
+        "token",
+        "api_key",
+        "username",
+        "password",
+        "access_token",
+        "client_id",
+        "client_secret",
+    ]
+    for sensitive_key in sensitive_keys:
+        try:
+            auth_config[sensitive_key] = _mask_secret(auth_config[sensitive_key])  # type: ignore[literal-required, index]
+        except KeyError:
+            continue
+
 
 def _mask_secret(secret: Optional[str]) -> str:
     if secret is None:
         return "None"
+    if len(secret) < 3:
+        return "*****"
     return f"{secret[0]}*****{secret[-1]}"
+
 
 def _set_incremental_params(
     params: Dict[str, Any],
