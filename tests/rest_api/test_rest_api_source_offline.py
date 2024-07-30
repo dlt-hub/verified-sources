@@ -433,7 +433,7 @@ def test_response_actions_called_in_order(mock_api_server, mocker):
     assert all(record["custom_field"] == "foobar" for record in data)
 
 
-def test_posts_with_inremental_date_transformation(mock_api_server) -> None:
+def test_posts_with_inremental_date_conversion(mock_api_server) -> None:
     start_time = pendulum.from_timestamp(1)
     one_day_later = start_time.add(days=1)
     config: RESTAPIConfig = {
@@ -449,7 +449,7 @@ def test_posts_with_inremental_date_transformation(mock_api_server) -> None:
                         "cursor_path": "updated_at",
                         "initial_value": str(start_time.int_timestamp),
                         "end_value": str(one_day_later.int_timestamp),
-                        "transform": lambda epoch: pendulum.from_timestamp(
+                        "convert": lambda epoch: pendulum.from_timestamp(
                             int(epoch)
                         ).to_date_string(),
                     },
