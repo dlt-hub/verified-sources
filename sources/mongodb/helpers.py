@@ -100,7 +100,7 @@ class CollectionLoader:
 
         return filt
 
-    def _limit(self, cursor: Cursor, limit: Optional[int] = None) -> Cursor:  # type: ignore
+    def _limit(self, cursor: Cursor, limit: Optional[int] = None) -> TCursor:  # type: ignore
         """Apply a limit to the cursor, if needed.
 
         Args:
@@ -164,7 +164,7 @@ class CollectionLoaderParallel(CollectionLoader):
 
         return batches
 
-    def _get_cursor(self, filter_: Dict[str, Any]) -> Cursor:
+    def _get_cursor(self, filter_: Dict[str, Any]) -> TCursor:
         """Get a reading cursor for the collection.
 
         Args:
@@ -276,7 +276,7 @@ class CollectionArrowLoaderParallel(CollectionLoaderParallel):
     Apache Arrow for data processing.
     """
 
-    def _get_cursor(self, filter_: Dict[str, Any]) -> Cursor:
+    def _get_cursor(self, filter_: Dict[str, Any]) -> TCursor:
         """Get a reading cursor for the collection.
 
         Args:
