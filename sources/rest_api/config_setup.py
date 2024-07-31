@@ -50,7 +50,6 @@ from dlt.sources.helpers.rest_client.auth import (
 
 from .typing import (
     EndpointResourceBase,
-    PaginatorType,
     AuthType,
     AuthConfig,
     IncrementalConfig,
@@ -64,7 +63,7 @@ from .typing import (
 from .utils import exclude_keys
 
 
-PAGINATOR_MAP: Dict[PaginatorType, Type[BasePaginator]] = {
+PAGINATOR_MAP: Dict[str, Type[BasePaginator]] = {
     "json_link": JSONLinkPaginator,
     "json_response": JSONLinkPaginator,  # deprecated. Use json_link instead. Will be removed in upcoming release
     "header_link": HeaderLinkPaginator,
@@ -87,13 +86,25 @@ class IncrementalParam(NamedTuple):
     end: Optional[str]
 
 
-def get_paginator_class(paginator_type: PaginatorType) -> Type[BasePaginator]:
+def register_paginator(
+    paginator_name: str,
+    paginator_class: Type[BasePaginator],
+) -> None:
+    if not issubclass(paginator_class, BasePaginator):
+        raise ValueError(
+            f"Invalid paginator: {paginator_class.__name__}. "
+            "Your custom paginator has to be a subclass of BasePaginator"
+        )
+    PAGINATOR_MAP[paginator_name] = paginator_class
+
+
+def get_paginator_class(paginator_name: str) -> Type[BasePaginator]:
     try:
-        return PAGINATOR_MAP[paginator_type]
+        return PAGINATOR_MAP[paginator_name]
     except KeyError:
         available_options = ", ".join(PAGINATOR_MAP.keys())
         raise ValueError(
-            f"Invalid paginator: {paginator_type}. "
+            f"Invalid paginator: {paginator_name}. "
             f"Available options: {available_options}"
         )
 
