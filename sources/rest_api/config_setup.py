@@ -1,3 +1,4 @@
+import warnings
 from copy import copy
 from typing import (
     Type,
@@ -37,7 +38,7 @@ from dlt.sources.helpers.rest_client.paginators import (
 try:
     from dlt.sources.helpers.rest_client.paginators import JSONLinkPaginator
 except ImportError:
-    from dlt.sources.helpers.rest_client.paginators import JSONResponsePaginator as JSONLinkPaginator  # type: ignore
+    from dlt.sources.helpers.rest_client.paginators import JSONResponsePaginator as JSONLinkPaginator
 
 from dlt.sources.helpers.rest_client.detector import single_entity_path
 from dlt.sources.helpers.rest_client.exceptions import IgnoreResponseException
@@ -188,7 +189,7 @@ def setup_incremental_object(
         raise ValueError(
             f"Only a single incremental parameter is allower per endpoint. Found: {incremental_params}"
         )
-    transform: Optional[Callable[..., Any]]
+    convert: Optional[Callable[..., Any]]
     for param_name, param_config in request_params.items():
         if isinstance(param_config, dlt.sources.incremental):
             if param_config.end_value is not None:
@@ -201,18 +202,19 @@ def setup_incremental_object(
                 raise ValueError(
                     f"Only start_param and initial_value are allowed in the configuration of param: {param_name}. To set end_value too use the incremental configuration at the resource level. See https://dlthub.com/docs/dlt-ecosystem/verified-sources/rest_api#incremental-loading"
                 )
-            transform = param_config.get("transform", None)
-            config = exclude_keys(param_config, {"type", "transform"})
+            convert = parse_convert_or_deprecated_transform(param_config)
+
+            config = exclude_keys(param_config, {"type", "convert", "transform"})
             # TODO: implement param type to bind incremental to
             return (
                 dlt.sources.incremental(**config),
                 IncrementalParam(start=param_name, end=None),
-                transform,
+                convert,
             )
     if incremental_config:
-        transform = incremental_config.get("transform", None)
+        convert = parse_convert_or_deprecated_transform(incremental_config)
         config = exclude_keys(
-            incremental_config, {"start_param", "end_param", "transform"}
+            incremental_config, {"start_param", "end_param", "convert", "transform"}
         )
         return (
             dlt.sources.incremental(**config),
@@ -220,10 +222,26 @@ def setup_incremental_object(
                 start=incremental_config["start_param"],
                 end=incremental_config.get("end_param"),
             ),
-            transform,
+            convert,
         )
 
     return None, None, None
+
+
+def parse_convert_or_deprecated_transform(
+    config: Union[IncrementalConfig, Dict[str, Any]]
+) -> Optional[Callable[..., Any]]:
+    convert = config.get("convert", None)
+    deprecated_transform = config.get("transform", None)
+    if deprecated_transform:
+        warnings.warn(
+            "The key `transform` is deprecated in the incremental configuration and it will be removed. "
+            "Use `convert` instead",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+        convert = deprecated_transform
+    return convert
 
 
 def make_parent_key_name(resource_name: str, field_name: str) -> str:

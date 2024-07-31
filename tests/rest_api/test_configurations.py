@@ -740,7 +740,7 @@ def test_constructs_incremental_from_request_param_with_incremental_object(
     assert incremental_with_init == incremental_obj
 
 
-def test_constructs_incremental_from_request_param_with_transform(
+def test_constructs_incremental_from_request_param_with_convert(
     incremental_with_init,
 ) -> None:
     def epoch_to_datetime(epoch: str):
@@ -751,15 +751,15 @@ def test_constructs_incremental_from_request_param_with_transform(
             "type": "incremental",
             "cursor_path": "updated_at",
             "initial_value": "2024-01-01T00:00:00Z",
-            "transform": epoch_to_datetime,
+            "convert": epoch_to_datetime,
         }
     }
 
-    (incremental_obj, incremental_param, transform) = setup_incremental_object(
+    (incremental_obj, incremental_param, convert) = setup_incremental_object(
         param_config, None
     )
     assert incremental_param == IncrementalParam(start="since", end=None)
-    assert transform == epoch_to_datetime
+    assert convert == epoch_to_datetime
 
     assert incremental_with_init == incremental_obj
 
@@ -830,7 +830,7 @@ def test_constructs_incremental_from_endpoint_config_incremental(
     assert incremental_with_init == incremental_obj
 
 
-def test_constructs_incremental_from_endpoint_config_incremental_with_transform(
+def test_constructs_incremental_from_endpoint_config_incremental_with_convert(
     incremental_with_init_and_end,
 ) -> None:
     def epoch_to_datetime(epoch):
@@ -842,18 +842,18 @@ def test_constructs_incremental_from_endpoint_config_incremental_with_transform(
         "cursor_path": "updated_at",
         "initial_value": "2024-01-01T00:00:00Z",
         "end_value": "2024-06-30T00:00:00Z",
-        "transform": epoch_to_datetime,
+        "convert": epoch_to_datetime,
     }
 
-    (incremental_obj, incremental_param, transform) = setup_incremental_object(
+    (incremental_obj, incremental_param, convert) = setup_incremental_object(
         {}, resource_config_incremental
     )
     assert incremental_param == IncrementalParam(start="since", end="until")
-    assert transform == epoch_to_datetime
+    assert convert == epoch_to_datetime
     assert incremental_with_init_and_end == incremental_obj
 
 
-def test_calls_transform_from_endpoint_config_incremental(mocker) -> None:
+def test_calls_convert_from_endpoint_config_incremental(mocker) -> None:
     def epoch_to_date(epoch: str):
         return pendulum.from_timestamp(int(epoch)).to_date_string()
 
@@ -869,7 +869,7 @@ def test_calls_transform_from_endpoint_config_incremental(mocker) -> None:
     assert callback.call_args_list[0].args == ("1",)
 
 
-def test_calls_transform_from_request_param(mocker) -> None:
+def test_calls_convert_from_request_param(mocker) -> None:
     def epoch_to_datetime(epoch: str):
         return pendulum.from_timestamp(int(epoch)).to_date_string()
 
@@ -882,7 +882,7 @@ def test_calls_transform_from_request_param(mocker) -> None:
         "cursor_path": "updated_at",
         "initial_value": str(start),
         "end_value": str(one_day_later),
-        "transform": callback,
+        "convert": callback,
     }
 
     (incremental_obj, incremental_param, _) = setup_incremental_object(
@@ -898,7 +898,7 @@ def test_calls_transform_from_request_param(mocker) -> None:
     assert callback.call_args_list[1].args == (str(one_day_later),)
 
 
-def test_default_transform_is_identity(mocker) -> None:
+def test_default_convert_is_identity() -> None:
     start = 1
     one_day_later = 60 * 60 * 24
     incremental_config: IncrementalConfig = {
@@ -918,6 +918,59 @@ def test_default_transform_is_identity(mocker) -> None:
         {}, incremental_obj, incremental_param, None
     )
     assert created_param == {"since": str(start), "until": str(one_day_later)}
+
+
+def test_incremental_param_transform_is_deprecated(incremental_with_init) -> None:
+    """Tests that deprecated interface works but issues deprecation warning"""
+
+    def epoch_to_datetime(epoch: str):
+        return pendulum.from_timestamp(int(epoch))
+
+    param_config = {
+        "since": {
+            "type": "incremental",
+            "cursor_path": "updated_at",
+            "initial_value": "2024-01-01T00:00:00Z",
+            "transform": epoch_to_datetime,
+        }
+    }
+
+    with pytest.deprecated_call():
+        (incremental_obj, incremental_param, convert) = setup_incremental_object(
+            param_config, None
+        )
+
+        assert incremental_param == IncrementalParam(start="since", end=None)
+        assert convert == epoch_to_datetime
+
+        assert incremental_with_init == incremental_obj
+
+
+def test_incremental_endpoint_config_transform_is_deprecated(
+    mocker,
+    incremental_with_init_and_end,
+) -> None:
+    """Tests that deprecated interface works but issues deprecation warning"""
+
+    def epoch_to_datetime(epoch):
+        return pendulum.from_timestamp(int(epoch))
+
+    resource_config_incremental: IncrementalConfig = {
+        "start_param": "since",
+        "end_param": "until",
+        "cursor_path": "updated_at",
+        "initial_value": "2024-01-01T00:00:00Z",
+        "end_value": "2024-06-30T00:00:00Z",
+        "transform": epoch_to_datetime,
+    }
+
+    with pytest.deprecated_call():
+        (incremental_obj, incremental_param, convert) = setup_incremental_object(
+            {}, resource_config_incremental
+        )
+        assert incremental_param == IncrementalParam(start="since", end="until")
+        assert convert == epoch_to_datetime
+        assert incremental_with_init_and_end == incremental_obj
 
 
 def test_resource_hints_are_passed_to_resource_constructor() -> None:
