@@ -333,7 +333,6 @@ def test_arrow_types(destination_name):
         "field13": "function() { return 1; }",
         "field15": "1.2",
     }.items():
-
         if field in ("field11", "field13", "field15"):
             assert types[field][0].as_py() == value
             continue

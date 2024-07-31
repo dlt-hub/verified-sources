@@ -612,13 +612,13 @@ class MessageConsumer:
 
         self.consumed_all: bool = False
         # data_items attribute maintains all data items
-        self.data_items: Dict[int, List[Union[TDataItem, DataItemWithMeta]]] = (
-            dict()
-        )  # maps relation_id to list of data items
+        self.data_items: Dict[
+            int, List[Union[TDataItem, DataItemWithMeta]]
+        ] = dict()  # maps relation_id to list of data items
         # other attributes only maintain last-seen values
-        self.last_table_schema: Dict[int, TTableSchema] = (
-            dict()
-        )  # maps relation_id to table schema
+        self.last_table_schema: Dict[
+            int, TTableSchema
+        ] = dict()  # maps relation_id to table schema
         self.last_commit_ts: pendulum.DateTime
         self.last_commit_lsn = None
 
