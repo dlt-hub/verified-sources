@@ -1,4 +1,3 @@
-
 import pytest
 from sources import rest_api
 from sources.rest_api.typing import PaginatorConfig

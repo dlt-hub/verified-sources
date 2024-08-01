@@ -1423,6 +1423,8 @@ def test_resource_defaults_no_params() -> None:
         "per_page": 50,
         "sort": "updated",
     }
+
+
 class AuthConfigTest(NamedTuple):
     secret_keys: List[str]
     config: Union[Dict[str, Any], AuthConfigBase]
