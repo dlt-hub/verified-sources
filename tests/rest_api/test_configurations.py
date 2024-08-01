@@ -1557,7 +1557,7 @@ def test_validation_masks_auth_secrets() -> None:
         rest_api_source(incorrect_config)
     assert (
         re.search("sensitive-secret", str(e.value)) is None
-    ), "sensitive-secret printed pattern unexpectedly"
+    ), "unexpectedly printed 'sensitive-secret'"
     assert e.match(
         re.escape("'{'type': 'bearer', 'location': 'header', 'token': 's*****t'}'")
     )
