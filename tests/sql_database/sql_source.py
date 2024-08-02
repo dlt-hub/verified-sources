@@ -165,6 +165,7 @@ class SQLAlchemySourceDB:
                 Column("json_col", JSONB, nullable=nullable),
                 Column("bool_col", Boolean, nullable=nullable),
                 Column("uuid_col", Uuid, nullable=nullable),
+                Column("array_col", ARRAY(Integer), nullable=nullable),
             )
 
         _make_precision_table("has_precision", False)
@@ -177,7 +178,6 @@ class SQLAlchemySourceDB:
                 Column("unsupported_daterange_1", DATERANGE, nullable=False),
                 Column("supported_text", Text, nullable=False),
                 Column("supported_int", Integer, nullable=False),
-                Column("unsupported_array_1", ARRAY(Integer), nullable=False),
                 Column("supported_datetime", DateTime(timezone=True), nullable=False),
             )
 
@@ -316,6 +316,7 @@ class SQLAlchemySourceDB:
                 json_col={"data": [1, 2, 3]},
                 bool_col=random.randint(0, 1) == 1,
                 uuid_col=uuid4(),
+                array_col=[1, 2, 3],
             )
             for _ in range(n + null_n)
         ]
@@ -342,7 +343,6 @@ class SQLAlchemySourceDB:
                 unsupported_daterange_1="[2020-01-01, 2020-09-01)",
                 supported_text=mimesis.Text().word(),
                 supported_int=random.randint(0, 100),
-                unsupported_array_1=[1, 2, 3],
                 supported_datetime=mimesis.Datetime().datetime(timezone="UTC"),
             )
             for _ in range(n)
