@@ -1359,6 +1359,10 @@ PRECISION_COLUMNS: List[TColumnSchema] = [
         "data_type": "text",
         "name": "uuid_col",
     },
+    {
+        "data_type": "complex",
+        "name": "array_col",
+    },
 ]
 
 NOT_NULL_PRECISION_COLUMNS = [
