@@ -46,6 +46,13 @@ from .config_setup import (
 from .utils import check_connection, exclude_keys  # noqa: F401
 
 PARAM_TYPES: List[ParamBindType] = ["incremental", "resolve"]
+MIN_SECRET_MASKING_LENGTH = 3
+SENSITIVE_KEYS: List[str] = [
+    "token",
+    "api_key",
+    "username",
+    "password",
+]
 
 
 def rest_api_source(
@@ -387,14 +394,6 @@ def _mask_secrets(auth_config: AuthConfig) -> AuthConfig:
     return auth_config
 
 
-SENSITIVE_KEYS: List[str] = [
-    "token",
-    "api_key",
-    "username",
-    "password",
-]
-
-
 def _mask_secrets_dict(auth_config: AuthConfig) -> AuthConfig:
     for sensitive_key in SENSITIVE_KEYS:
         try:
@@ -407,7 +406,7 @@ def _mask_secrets_dict(auth_config: AuthConfig) -> AuthConfig:
 def _mask_secret(secret: Optional[str]) -> str:
     if secret is None:
         return "None"
-    if len(secret) < 3:
+    if len(secret) < MIN_SECRET_MASKING_LENGTH:
         return "*****"
     return f"{secret[0]}*****{secret[-1]}"
 
