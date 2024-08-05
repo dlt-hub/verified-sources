@@ -42,11 +42,11 @@ To grab credentials and initialize the verified source, please refer to the [ful
 ## Add credentials
 
 1. Open `.dlt/secrets.toml`.
-2. Enter the username, password and security token:
+2. Enter the user name, password and security token:
     ```toml
     # put your secret values and credentials here. do not share this file and do not push it to github
     [sources.salesforce]
-    username = "please set me up!" # Salesforce user name
+    user_name = "please set me up!" # Salesforce user name
     password = "please set me up!" # Salesforce password
     security_token = "please set me up!" # Salesforce security token generated
     ```
