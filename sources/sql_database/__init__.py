@@ -101,22 +101,13 @@ def sql_database(
         tables = list(metadata.tables.values())
 
     for table in tables:
-        if not defer_table_reflect:
-            default_table_adapter(table)
-            if table_adapter_callback:
-                table_adapter_callback(table)
-
-        yield dlt.resource(
-            table_rows,
-            name=table.name,
-            primary_key=get_primary_key(table),
-            spec=SqlDatabaseTableConfiguration,
-            # columns hint will be set at runtime, after included_columns setting has been resolved
-        )(
-            engine,
-            table,
-            chunk_size,
-            backend,
+        yield sql_table(
+            credentials=credentials,
+            table=table.name,
+            schema=table.schema,
+            metadata=metadata,
+            chunk_size=chunk_size,
+            backend=backend,
             reflection_level=reflection_level,
             defer_table_reflect=defer_table_reflect,
             table_adapter_callback=table_adapter_callback,
@@ -187,7 +178,7 @@ def sql_table(
     engine.execution_options(stream_results=True, max_row_buffer=2 * chunk_size)
     metadata = metadata or MetaData(schema=schema)
 
-    table_obj = Table(
+    table_obj = metadata.tables.get("table") or Table(
         table, metadata, autoload_with=None if defer_table_reflect else engine
     )
     if not defer_table_reflect:
