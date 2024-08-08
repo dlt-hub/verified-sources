@@ -74,7 +74,7 @@ class TableLoader:
 
     def make_query(self) -> SelectAny:
         table = self.table
-        query = select(*[c for c in table.c if c.name in self.columns])
+        query = table.select()
         if not self.incremental:
             return query
         last_value_func = self.incremental.last_value_func
@@ -196,12 +196,10 @@ def table_rows(
         table = Table(
             table.name, table.metadata, autoload_with=engine, extend_existing=True
         )
-        default_table_adapter(table)
+        default_table_adapter(table, included_columns)
         if table_adapter_callback:
             table_adapter_callback(table)
-        columns = table_to_columns(
-            table, reflection_level, type_adapter_callback, included_columns
-        )
+        columns = table_to_columns(table, reflection_level, type_adapter_callback)
 
         # set the primary_key in the incremental
         if incremental and incremental.primary_key is None:
@@ -209,20 +207,17 @@ def table_rows(
             if primary_key is not None:
                 incremental.primary_key = primary_key
 
+        # yield empty record to set hints
+        yield dlt.mark.with_hints(
+            [],
+            dlt.mark.make_hints(
+                primary_key=get_primary_key(table),
+                columns=columns,
+            ),
+        )
     else:
         # table was already reflected
-        columns = table_to_columns(
-            table, reflection_level, type_adapter_callback, included_columns
-        )
-
-    # yield empty record to set hints
-    yield dlt.mark.with_hints(
-        [],
-        dlt.mark.make_hints(
-            primary_key=get_primary_key(table),
-            columns=columns,
-        ),
-    )
+        columns = table_to_columns(table, reflection_level, type_adapter_callback)
 
     loader = TableLoader(
         engine, backend, table, columns, incremental=incremental, chunk_size=chunk_size

@@ -182,7 +182,7 @@ def sql_table(
         table, metadata, autoload_with=None if defer_table_reflect else engine
     )
     if not defer_table_reflect:
-        default_table_adapter(table_obj)
+        default_table_adapter(table_obj, included_columns)
         if table_adapter_callback:
             table_adapter_callback(table_obj)
 
@@ -190,9 +190,7 @@ def sql_table(
         table_rows,
         name=table_obj.name,
         primary_key=get_primary_key(table_obj),
-        columns=table_to_columns(
-            table_obj, reflection_level, type_adapter_callback, included_columns
-        ),
+        columns=table_to_columns(table_obj, reflection_level, type_adapter_callback),
     )(
         engine,
         table_obj,
