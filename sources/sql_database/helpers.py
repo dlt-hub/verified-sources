@@ -32,7 +32,7 @@ from .schema_types import (
     TTypeAdapter,
 )
 
-from sqlalchemy import Table, create_engine
+from sqlalchemy import Table, create_engine, select
 from sqlalchemy.engine import Engine
 from sqlalchemy.exc import CompileError
 
@@ -74,7 +74,7 @@ class TableLoader:
 
     def make_query(self) -> SelectAny:
         table = self.table
-        query = table.select()
+        query = select(*[c for c in table.c if c.name in self.columns])
         if not self.incremental:
             return query
         last_value_func = self.incremental.last_value_func
@@ -189,6 +189,7 @@ def table_rows(
     reflection_level: ReflectionLevel = "minimal",
     backend_kwargs: Dict[str, Any] = None,
     type_adapter_callback: Optional[TTypeAdapter] = None,
+    included_columns: Optional[List[str]] = None,
 ) -> Iterator[TDataItem]:
     columns: TTableSchemaColumns = None
     if defer_table_reflect:
@@ -198,24 +199,30 @@ def table_rows(
         default_table_adapter(table)
         if table_adapter_callback:
             table_adapter_callback(table)
-        columns = table_to_columns(table, reflection_level, type_adapter_callback)
+        columns = table_to_columns(
+            table, reflection_level, type_adapter_callback, included_columns
+        )
 
         # set the primary_key in the incremental
         if incremental and incremental.primary_key is None:
             primary_key = get_primary_key(table)
             if primary_key is not None:
                 incremental.primary_key = primary_key
-        # yield empty record to set hints
-        yield dlt.mark.with_hints(
-            [],
-            dlt.mark.make_hints(
-                primary_key=get_primary_key(table),
-                columns=columns,
-            ),
-        )
+
     else:
         # table was already reflected
-        columns = table_to_columns(table, reflection_level, type_adapter_callback)
+        columns = table_to_columns(
+            table, reflection_level, type_adapter_callback, included_columns
+        )
+
+    # yield empty record to set hints
+    yield dlt.mark.with_hints(
+        [],
+        dlt.mark.make_hints(
+            primary_key=get_primary_key(table),
+            columns=columns,
+        ),
+    )
 
     loader = TableLoader(
         engine, backend, table, columns, incremental=incremental, chunk_size=chunk_size
@@ -282,6 +289,7 @@ def _detect_precision_hints_deprecated(value: Optional[bool]) -> None:
 @configspec
 class SqlDatabaseTableConfiguration(BaseConfiguration):
     incremental: Optional[dlt.sources.incremental] = None  # type: ignore[type-arg]
+    included_columns: Optional[List[str]] = None
 
 
 @configspec
@@ -295,3 +303,4 @@ class SqlTableResourceConfiguration(BaseConfiguration):
     detect_precision_hints: Optional[bool] = None
     defer_table_reflect: Optional[bool] = False
     reflection_level: Optional[ReflectionLevel] = "full"
+    included_columns: Optional[List[str]] = None

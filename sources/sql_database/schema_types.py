@@ -139,6 +139,7 @@ def table_to_columns(
     table: Table,
     reflection_level: ReflectionLevel = "full",
     type_conversion_fallback: Optional[TTypeAdapter] = None,
+    included_columns: Optional[List[str]] = None,
 ) -> TTableSchemaColumns:
     """Convert an sqlalchemy table to a dlt table schema."""
     return {
@@ -146,6 +147,7 @@ def table_to_columns(
         for col in (
             sqla_col_to_column_schema(c, reflection_level, type_conversion_fallback)
             for c in table.columns
+            if included_columns is None or c.name in included_columns
         )
         if col is not None
     }

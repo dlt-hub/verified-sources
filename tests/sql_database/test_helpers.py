@@ -2,6 +2,7 @@ import pytest
 
 import dlt
 from dlt.common.typing import TDataItem
+import sqlalchemy as sa
 
 from sources.sql_database.helpers import TableLoader, TableBackend
 from sources.sql_database.schema_types import table_to_columns
@@ -49,7 +50,7 @@ def test_make_query_incremental_max(
 
     query = loader.make_query()
     expected = (
-        table.select()
+        sa.select(*table.c)
         .order_by(table.c.created_at.asc())
         .where(table.c.created_at >= MockIncremental.last_value)
     )
@@ -79,7 +80,7 @@ def test_make_query_incremental_min(
 
     query = loader.make_query()
     expected = (
-        table.select()
+        sa.select(*table.c)
         .order_by(table.c.created_at.asc())  # `min` func swaps order
         .where(table.c.created_at <= MockIncremental.last_value)
     )
@@ -111,7 +112,7 @@ def test_make_query_incremental_end_value(
 
     query = loader.make_query()
     expected = (
-        table.select()
+        sa.select(*table.c)
         .where(table.c.created_at <= MockIncremental.last_value)
         .where(table.c.created_at > MockIncremental.end_value)
     )
@@ -140,7 +141,7 @@ def test_make_query_incremental_any_fun(
     )
 
     query = loader.make_query()
-    expected = table.select()
+    expected = sa.select(*table.c)
 
     assert query.compare(expected)
 

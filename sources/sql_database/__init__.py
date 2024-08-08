@@ -111,7 +111,7 @@ def sql_database(
             name=table.name,
             primary_key=get_primary_key(table),
             spec=SqlDatabaseTableConfiguration,
-            columns=table_to_columns(table, reflection_level, type_adapter_callback),
+            # columns hint will be set at runtime, after included_columns setting has been resolved
         )(
             engine,
             table,
@@ -142,6 +142,7 @@ def sql_table(
     table_adapter_callback: Callable[[Table], None] = None,
     backend_kwargs: Dict[str, Any] = None,
     type_adapter_callback: Optional[TTypeAdapter] = None,
+    included_columns: Optional[List[str]] = None,
 ) -> DltResource:
     """
     A dlt resource which loads data from an SQL database table using SQLAlchemy.
@@ -170,6 +171,7 @@ def sql_table(
         backend_kwargs (**kwargs): kwargs passed to table backend ie. "conn" is used to pass specialized connection string to connectorx.
         type_adapter_callback(Optional[Callable]): Callable to override type inference when reflecting columns.
             Argument is a single sqlalchemy data type (`TypeEngine` instance) and it should return another sqlalchemy data type, or `None` (type will be inferred from data)
+        included_columns (Optional[List[str]): List of column names to select from the table. If not provided, all columns are loaded.
 
     Returns:
         DltResource: The dlt resource for loading data from the SQL database table.
@@ -197,7 +199,9 @@ def sql_table(
         table_rows,
         name=table_obj.name,
         primary_key=get_primary_key(table_obj),
-        columns=table_to_columns(table_obj, reflection_level, type_adapter_callback),
+        columns=table_to_columns(
+            table_obj, reflection_level, type_adapter_callback, included_columns
+        ),
     )(
         engine,
         table_obj,
@@ -209,4 +213,5 @@ def sql_table(
         table_adapter_callback=table_adapter_callback,
         backend_kwargs=backend_kwargs,
         type_adapter_callback=type_adapter_callback,
+        included_columns=included_columns,
     )
