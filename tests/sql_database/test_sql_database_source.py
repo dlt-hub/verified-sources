@@ -1224,6 +1224,60 @@ def test_sql_table_included_columns(
     assert_row_counts(pipeline, sql_source_db, ["chat_message"])
 
 
+@pytest.mark.parametrize("backend", ["sqlalchemy", "pyarrow", "pandas", "connectorx"])
+@pytest.mark.parametrize("standalone_resource", [True, False])
+def test_query_adapter_callback(
+    sql_source_db: SQLAlchemySourceDB, backend: TableBackend, standalone_resource: bool
+) -> None:
+    def query_adapter_callback(query, table):
+        if table.name == "chat_channel":
+            # Only select active channels
+            return query.where(table.c.active.is_(True))
+        # Use the original query for other tables
+        return query
+
+    common_kwargs = dict(
+        credentials=sql_source_db.credentials,
+        schema=sql_source_db.schema,
+        reflection_level="full",
+        backend=backend,
+        query_adapter_callback=query_adapter_callback,
+    )
+
+    if standalone_resource:
+
+        @dlt.source
+        def dummy_source():
+            yield sql_table(
+                **common_kwargs,  # type: ignore[arg-type]
+                table="chat_channel",
+            )
+
+            yield sql_table(
+                **common_kwargs,  # type: ignore[arg-type]
+                table="chat_message",
+            )
+
+        source = dummy_source()
+    else:
+        source = sql_database(
+            **common_kwargs,  # type: ignore[arg-type]
+            table_names=["chat_message", "chat_channel"],
+        )
+
+    pipeline = make_pipeline("duckdb")
+    pipeline.extract(source)
+
+    pipeline.normalize()
+    pipeline.load().raise_on_failed_jobs()
+
+    channel_rows = load_tables_to_dicts(pipeline, "chat_channel")["chat_channel"]
+    assert channel_rows and all(row["active"] for row in channel_rows)
+
+    # unfiltred table loads all rows
+    assert_row_counts(pipeline, sql_source_db, ["chat_message"])
+
+
 def assert_row_counts(
     pipeline: dlt.Pipeline,
     sql_source_db: SQLAlchemySourceDB,
