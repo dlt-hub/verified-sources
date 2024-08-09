@@ -343,6 +343,7 @@ class SQLAlchemySourceDB:
                 unsupported_daterange_1="[2020-01-01, 2020-09-01)",
                 supported_text=mimesis.Text().word(),
                 supported_int=random.randint(0, 100),
+                supported_array_1=[1, 2, 3],
                 supported_datetime=mimesis.Datetime().datetime(timezone="UTC"),
             )
             for _ in range(n)
