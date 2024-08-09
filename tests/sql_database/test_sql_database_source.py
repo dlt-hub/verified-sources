@@ -1133,8 +1133,8 @@ def test_infer_unsupported_types(
         # Just check that it has a value
         assert rows[0]["unsupported_daterange_1"]
 
-        assert isinstance(json.loads(rows[0]["unsupported_array_1"]), list)
-        assert columns["unsupported_array_1"]["data_type"] == "complex"
+        assert isinstance(json.loads(rows[0]["supported_array_1"]), list)
+        assert columns["supported_array_1"]["data_type"] == "complex"
         # Other columns are loaded
         assert isinstance(rows[0]["supported_text"], str)
         assert isinstance(rows[0]["supported_datetime"], datetime)
@@ -1143,7 +1143,7 @@ def test_infer_unsupported_types(
         # sqla value is a dataclass and is inferred as complex
         assert columns["unsupported_daterange_1"]["data_type"] == "complex"
 
-        assert columns["unsupported_array_1"]["data_type"] == "complex"
+        assert columns["supported_array_1"]["data_type"] == "complex"
 
         value = rows[0]["unsupported_daterange_1"]
         assert set(json.loads(value).keys()) == {"lower", "upper", "bounds", "empty"}
@@ -1157,9 +1157,9 @@ def test_infer_unsupported_types(
         )
 
         if type_adapter and reflection_level != "minimal":
-            assert columns["unsupported_array_1"]["data_type"] == "complex"
+            assert columns["supported_array_1"]["data_type"] == "complex"
 
-            assert isinstance(json.loads(rows[0]["unsupported_array_1"]), list)
+            assert isinstance(json.loads(rows[0]["supported_array_1"]), list)
 
 
 @pytest.mark.parametrize("backend", ["sqlalchemy", "pyarrow", "pandas", "connectorx"])
@@ -1421,6 +1421,10 @@ PRECISION_COLUMNS: List[TColumnSchema] = [
     {
         "data_type": "text",
         "name": "uuid_col",
+    },
+    {
+        "data_type": "complex",
+        "name": "array_col",
     },
 ]
 
