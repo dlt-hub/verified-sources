@@ -165,7 +165,7 @@ class SQLAlchemySourceDB:
                 Column("json_col", JSONB, nullable=nullable),
                 Column("bool_col", Boolean, nullable=nullable),
                 Column("uuid_col", Uuid, nullable=nullable),
-                Column("array_col", ARRAY, nullable=nullable),
+                Column("array_col", ARRAY(Integer), nullable=nullable),
             )
 
         _make_precision_table("has_precision", False)
