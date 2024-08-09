@@ -29,6 +29,7 @@ from tests.utils import (
     load_table_counts,
     load_tables_to_dicts,
     assert_schema_on_data,
+    preserve_environ,
 )
 from tests.sql_database.sql_source import SQLAlchemySourceDB
 
@@ -96,9 +97,9 @@ def test_pass_engine_credentials(sql_source_db: SQLAlchemySourceDB) -> None:
 
 def test_named_sql_table_config(sql_source_db: SQLAlchemySourceDB) -> None:
     # set the credentials per table name
-    os.environ[
-        "SOURCES__SQL_DATABASE__CHAT_MESSAGE__CREDENTIALS"
-    ] = sql_source_db.engine.url.render_as_string(False)
+    os.environ["SOURCES__SQL_DATABASE__CHAT_MESSAGE__CREDENTIALS"] = (
+        sql_source_db.engine.url.render_as_string(False)
+    )
     table = sql_table(table="chat_message", schema=sql_source_db.schema)
     assert table.name == "chat_message"
     assert len(list(table)) == sql_source_db.table_infos["chat_message"]["row_count"]
@@ -118,9 +119,9 @@ def test_named_sql_table_config(sql_source_db: SQLAlchemySourceDB) -> None:
     assert len(list(table)) == 10
 
     # make it fail on cursor
-    os.environ[
-        "SOURCES__SQL_DATABASE__CHAT_MESSAGE__INCREMENTAL__CURSOR_PATH"
-    ] = "updated_at_x"
+    os.environ["SOURCES__SQL_DATABASE__CHAT_MESSAGE__INCREMENTAL__CURSOR_PATH"] = (
+        "updated_at_x"
+    )
     table = sql_table(table="chat_message", schema=sql_source_db.schema)
     with pytest.raises(ResourceExtractionError) as ext_ex:
         len(list(table))
@@ -129,9 +130,9 @@ def test_named_sql_table_config(sql_source_db: SQLAlchemySourceDB) -> None:
 
 def test_general_sql_database_config(sql_source_db: SQLAlchemySourceDB) -> None:
     # set the credentials per table name
-    os.environ[
-        "SOURCES__SQL_DATABASE__CREDENTIALS"
-    ] = sql_source_db.engine.url.render_as_string(False)
+    os.environ["SOURCES__SQL_DATABASE__CREDENTIALS"] = (
+        sql_source_db.engine.url.render_as_string(False)
+    )
     # applies to both sql table and sql database
     table = sql_table(table="chat_message", schema=sql_source_db.schema)
     assert len(list(table)) == sql_source_db.table_infos["chat_message"]["row_count"]
@@ -154,9 +155,9 @@ def test_general_sql_database_config(sql_source_db: SQLAlchemySourceDB) -> None:
     assert len(list(database)) == 10
 
     # make it fail on cursor
-    os.environ[
-        "SOURCES__SQL_DATABASE__CHAT_MESSAGE__INCREMENTAL__CURSOR_PATH"
-    ] = "updated_at_x"
+    os.environ["SOURCES__SQL_DATABASE__CHAT_MESSAGE__INCREMENTAL__CURSOR_PATH"] = (
+        "updated_at_x"
+    )
     table = sql_table(table="chat_message", schema=sql_source_db.schema)
     with pytest.raises(ResourceExtractionError) as ext_ex:
         len(list(table))
@@ -274,9 +275,9 @@ def test_load_sql_table_incremental(
     """Run pipeline twice. Insert more rows after first run
     and ensure only those rows are stored after the second run.
     """
-    os.environ[
-        "SOURCES__SQL_DATABASE__CHAT_MESSAGE__INCREMENTAL__CURSOR_PATH"
-    ] = "updated_at"
+    os.environ["SOURCES__SQL_DATABASE__CHAT_MESSAGE__INCREMENTAL__CURSOR_PATH"] = (
+        "updated_at"
+    )
 
     pipeline = make_pipeline(destination_name)
     tables = ["chat_message"]
@@ -821,7 +822,7 @@ def test_set_primary_key_deferred_incremental(
         # assert _r.incremental._incremental is updated_at
         if len(item) == 0:
             # not yet propagated
-            assert _r.incremental.primary_key == ["id"]
+            assert _r.incremental.primary_key is None
         else:
             assert _r.incremental.primary_key == ["id"]
         assert _r.incremental._incremental.primary_key == ["id"]
@@ -1159,6 +1160,68 @@ def test_infer_unsupported_types(
             assert columns["unsupported_array_1"]["data_type"] == "complex"
 
             assert isinstance(json.loads(rows[0]["unsupported_array_1"]), list)
+
+
+@pytest.mark.parametrize("backend", ["sqlalchemy", "pyarrow", "pandas", "connectorx"])
+@pytest.mark.parametrize("defer_table_reflect", (False, True))
+def test_sql_database_included_columns(
+    sql_source_db: SQLAlchemySourceDB, backend: TableBackend, defer_table_reflect: bool
+) -> None:
+    # include only some columns from the table
+    os.environ["SOURCES__SQL_DATABASE__CHAT_MESSAGE__INCLUDED_COLUMNS"] = json.dumps(
+        ["id", "created_at"]
+    )
+
+    source = sql_database(
+        credentials=sql_source_db.credentials,
+        schema=sql_source_db.schema,
+        table_names=["chat_message"],
+        reflection_level="full",
+        defer_table_reflect=defer_table_reflect,
+        backend=backend,
+    )
+
+    pipeline = make_pipeline("duckdb")
+    pipeline.run(source)
+
+    schema = pipeline.default_schema
+    schema_cols = set(
+        col
+        for col in schema.get_table_columns("chat_message", include_incomplete=True)
+        if not col.startswith("_dlt_")
+    )
+    assert schema_cols == {"id", "created_at"}
+
+    assert_row_counts(pipeline, sql_source_db, ["chat_message"])
+
+
+@pytest.mark.parametrize("backend", ["sqlalchemy", "pyarrow", "pandas", "connectorx"])
+@pytest.mark.parametrize("defer_table_reflect", (False, True))
+def test_sql_table_included_columns(
+    sql_source_db: SQLAlchemySourceDB, backend: TableBackend, defer_table_reflect: bool
+) -> None:
+    source = sql_table(
+        credentials=sql_source_db.credentials,
+        schema=sql_source_db.schema,
+        table="chat_message",
+        reflection_level="full",
+        defer_table_reflect=defer_table_reflect,
+        backend=backend,
+        included_columns=["id", "created_at"],
+    )
+
+    pipeline = make_pipeline("duckdb")
+    pipeline.run(source)
+
+    schema = pipeline.default_schema
+    schema_cols = set(
+        col
+        for col in schema.get_table_columns("chat_message", include_incomplete=True)
+        if not col.startswith("_dlt_")
+    )
+    assert schema_cols == {"id", "created_at"}
+
+    assert_row_counts(pipeline, sql_source_db, ["chat_message"])
 
 
 def assert_row_counts(

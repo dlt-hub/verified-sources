@@ -101,22 +101,13 @@ def sql_database(
         tables = list(metadata.tables.values())
 
     for table in tables:
-        if not defer_table_reflect:
-            default_table_adapter(table)
-            if table_adapter_callback:
-                table_adapter_callback(table)
-
-        yield dlt.resource(
-            table_rows,
-            name=table.name,
-            primary_key=get_primary_key(table),
-            spec=SqlDatabaseTableConfiguration,
-            columns=table_to_columns(table, reflection_level, type_adapter_callback),
-        )(
-            engine,
-            table,
-            chunk_size,
-            backend,
+        yield sql_table(
+            credentials=credentials,
+            table=table.name,
+            schema=table.schema,
+            metadata=metadata,
+            chunk_size=chunk_size,
+            backend=backend,
             reflection_level=reflection_level,
             defer_table_reflect=defer_table_reflect,
             table_adapter_callback=table_adapter_callback,
@@ -142,6 +133,7 @@ def sql_table(
     table_adapter_callback: Callable[[Table], None] = None,
     backend_kwargs: Dict[str, Any] = None,
     type_adapter_callback: Optional[TTypeAdapter] = None,
+    included_columns: Optional[List[str]] = None,
 ) -> DltResource:
     """
     A dlt resource which loads data from an SQL database table using SQLAlchemy.
@@ -170,6 +162,7 @@ def sql_table(
         backend_kwargs (**kwargs): kwargs passed to table backend ie. "conn" is used to pass specialized connection string to connectorx.
         type_adapter_callback(Optional[Callable]): Callable to override type inference when reflecting columns.
             Argument is a single sqlalchemy data type (`TypeEngine` instance) and it should return another sqlalchemy data type, or `None` (type will be inferred from data)
+        included_columns (Optional[List[str]): List of column names to select from the table. If not provided, all columns are loaded.
 
     Returns:
         DltResource: The dlt resource for loading data from the SQL database table.
@@ -185,11 +178,11 @@ def sql_table(
     engine.execution_options(stream_results=True, max_row_buffer=2 * chunk_size)
     metadata = metadata or MetaData(schema=schema)
 
-    table_obj = Table(
+    table_obj = metadata.tables.get("table") or Table(
         table, metadata, autoload_with=None if defer_table_reflect else engine
     )
     if not defer_table_reflect:
-        default_table_adapter(table_obj)
+        default_table_adapter(table_obj, included_columns)
         if table_adapter_callback:
             table_adapter_callback(table_obj)
 
@@ -209,4 +202,5 @@ def sql_table(
         table_adapter_callback=table_adapter_callback,
         backend_kwargs=backend_kwargs,
         type_adapter_callback=type_adapter_callback,
+        included_columns=included_columns,
     )

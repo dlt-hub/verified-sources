@@ -38,8 +38,13 @@ TTypeAdapter = Callable[
 ]
 
 
-def default_table_adapter(table: Table) -> None:
+def default_table_adapter(table: Table, included_columns: Optional[List[str]]) -> None:
     """Default table adapter being always called before custom one"""
+    if included_columns is not None:
+        # Delete columns not included in the load
+        for col in list(table._columns):
+            if col.name not in included_columns:
+                table._columns.remove(col)
     for col in table._columns:
         sql_t = col.type
         if isinstance(sql_t, sqltypes.Uuid):
