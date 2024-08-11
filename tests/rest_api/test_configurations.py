@@ -1,11 +1,14 @@
 import re
+import dlt.common
+import dlt.common.exceptions
 import pendulum
+from requests.auth import AuthBase
 
 import dlt.extract
 import pytest
 from unittest.mock import patch
 from copy import copy, deepcopy
-from typing import cast, get_args, Dict, List, Any
+from typing import cast, get_args, Dict, List, Any, Optional, NamedTuple, Union
 
 from graphlib import CycleError
 
@@ -22,6 +25,7 @@ from sources.rest_api import (
     rest_api_resources,
     _validate_param_type,
     _set_incremental_params,
+    _mask_secrets,
 )
 
 from sources.rest_api.config_setup import (
@@ -33,15 +37,18 @@ from sources.rest_api.config_setup import (
     create_auth,
     create_paginator,
     _make_endpoint_resource,
+    _merge_resource_endpoints,
     process_parent_data_item,
     setup_incremental_object,
     create_response_hooks,
     _handle_response_action,
 )
 from sources.rest_api.typing import (
+    AuthConfigBase,
     AuthType,
     AuthTypeConfig,
     EndpointResource,
+    EndpointResourceBase,
     PaginatorType,
     PaginatorTypeConfig,
     RESTAPIConfig,
@@ -51,17 +58,26 @@ from sources.rest_api.typing import (
 )
 from dlt.sources.helpers.rest_client.paginators import (
     HeaderLinkPaginator,
-    JSONResponsePaginator,
     JSONResponseCursorPaginator,
     OffsetPaginator,
     PageNumberPaginator,
     SinglePagePaginator,
+    JSONResponsePaginator,
 )
+
+try:
+    from dlt.sources.helpers.rest_client.paginators import JSONLinkPaginator
+except ImportError:
+    from dlt.sources.helpers.rest_client.paginators import (
+        JSONResponsePaginator as JSONLinkPaginator,
+    )
+
 
 from dlt.sources.helpers.rest_client.auth import (
     HttpBasicAuth,
     BearerTokenAuth,
     APIKeyAuth,
+    OAuth2ClientCredentials,
 )
 
 from .source_configs import (
@@ -114,6 +130,7 @@ def test_paginator_type_configs(paginator_type_config: PaginatorTypeConfig) -> N
             assert paginator.links_next_key == "next_page"
         if isinstance(paginator, PageNumberPaginator):
             assert paginator.current_value == 10
+            assert paginator.base_index == 1
             assert paginator.param_name == "page"
             assert paginator.total_path == compile_path("response.pages")
             assert paginator.maximum_value is None
@@ -124,7 +141,7 @@ def test_paginator_type_configs(paginator_type_config: PaginatorTypeConfig) -> N
             assert paginator.limit_param == "limit"
             assert paginator.total_path == compile_path("total")
             assert paginator.maximum_value == 1000
-        if isinstance(paginator, JSONResponsePaginator):
+        if isinstance(paginator, JSONLinkPaginator):
             assert paginator.next_url_path == compile_path("response.nex_page_link")
         if isinstance(paginator, JSONResponseCursorPaginator):
             assert paginator.cursor_path == compile_path("cursors.next")
@@ -134,6 +151,71 @@ def test_paginator_type_configs(paginator_type_config: PaginatorTypeConfig) -> N
 def test_paginator_instance_config() -> None:
     paginator = OffsetPaginator(limit=100)
     assert create_paginator(paginator) is paginator
+
+
+def test_page_number_paginator_creation() -> None:
+    config: RESTAPIConfig = {  # type: ignore
+        "client": {
+            "base_url": "https://api.example.com",
+            "paginator": {
+                "type": "page_number",
+                "page_param": "foobar",
+                "total_path": "response.pages",
+                "base_page": 1,
+                "maximum_page": 5,
+            },
+        },
+        "resources": ["posts"],
+    }
+    try:
+        rest_api_source(config)
+    except dlt.common.exceptions.DictValidationException:
+        pytest.fail("DictValidationException was unexpectedly raised")
+
+
+def test_allow_deprecated_json_response_paginator(mock_api_server) -> None:
+    """
+    Delete this test as soon as we stop supporting the deprecated key json_response
+    for the JSONLinkPaginator
+    """
+    config: RESTAPIConfig = {  # type: ignore
+        "client": {"base_url": "https://api.example.com"},
+        "resources": [
+            {
+                "name": "posts",
+                "endpoint": {
+                    "path": "posts",
+                    "paginator": {
+                        "type": "json_response",
+                        "next_url_path": "links.next",
+                    },
+                },
+            },
+        ],
+    }
+
+    rest_api_source(config)
+
+
+def test_allow_deprecated_json_response_paginator_2(mock_api_server) -> None:
+    """
+    Delete this test as soon as we stop supporting the deprecated key json_response
+    for the JSONLinkPaginator
+    """
+    config: RESTAPIConfig = {  # type: ignore
+        "client": {"base_url": "https://api.example.com"},
+        "resources": [
+            {
+                "name": "posts",
+                "endpoint": {
+                    "path": "posts",
+                    "paginator": JSONResponsePaginator(next_url_path="links.next"),
+                },
+            },
+        ],
+    }
+
+    rest_api_source(config)
 
 
 @pytest.mark.parametrize("auth_type", get_args(AuthType))
@@ -475,7 +557,7 @@ def test_bind_path_param() -> None:
         _bind_path_params(tp_6)
 
 
-def test_process_parent_data_item():
+def test_process_parent_data_item() -> None:
     resolve_param = ResolvedParam(
         "id", {"field": "obj_id", "resource": "issues", "type": "resolve"}
     )
@@ -613,6 +695,24 @@ def test_one_resource_cannot_have_many_incrementals() -> None:
     assert e.match(error_message)
 
 
+def test_one_resource_cannot_have_many_incrementals_2(incremental_with_init) -> None:
+    request_params = {
+        "foo": "bar",
+        "first_incremental": {
+            "type": "incremental",
+            "cursor_path": "created_at",
+            "initial_value": "2024-02-02T00:00:00Z",
+        },
+        "second_incremental": incremental_with_init,
+    }
+    with pytest.raises(ValueError) as e:
+        setup_incremental_object(request_params)
+    error_message = re.escape(
+        "Only a single incremental parameter is allower per endpoint. Found: ['first_incremental', 'second_incremental']"
+    )
+    assert e.match(error_message)
+
+
 def test_constructs_incremental_from_request_param() -> None:
     request_params = {
         "foo": "bar",
@@ -646,8 +746,8 @@ def test_constructs_incremental_from_request_param_with_incremental_object(
     assert incremental_with_init == incremental_obj
 
 
-def test_constructs_incremental_from_request_param_with_transform(
-    mocker, incremental_with_init_and_end
+def test_constructs_incremental_from_request_param_with_convert(
+    incremental_with_init,
 ) -> None:
     def epoch_to_datetime(epoch: str):
         return pendulum.from_timestamp(int(epoch))
@@ -657,18 +757,62 @@ def test_constructs_incremental_from_request_param_with_transform(
             "type": "incremental",
             "cursor_path": "updated_at",
             "initial_value": "2024-01-01T00:00:00Z",
-            "end_value": "2024-06-30T00:00:00Z",
-            "transform": epoch_to_datetime,
+            "convert": epoch_to_datetime,
         }
     }
 
-    (incremental_obj, incremental_param, transform) = setup_incremental_object(
+    (incremental_obj, incremental_param, convert) = setup_incremental_object(
         param_config, None
     )
     assert incremental_param == IncrementalParam(start="since", end=None)
-    assert transform == epoch_to_datetime
+    assert convert == epoch_to_datetime
 
-    assert incremental_with_init_and_end == incremental_obj
+    assert incremental_with_init == incremental_obj
+
+
+def test_does_not_construct_incremental_from_request_param_with_unsupported_incremental(
+    incremental_with_init_and_end,
+) -> None:
+    param_config = {
+        "since": {
+            "type": "incremental",
+            "cursor_path": "updated_at",
+            "initial_value": "2024-01-01T00:00:00Z",
+            "end_value": "2024-06-30T00:00:00Z",  # This is ignored
+        }
+    }
+
+    with pytest.raises(ValueError) as e:
+        setup_incremental_object(param_config)
+
+    assert e.match(
+        "Only start_param and initial_value are allowed in the configuration of param: since."
+    )
+
+    param_config_2 = {
+        "since_2": {
+            "type": "incremental",
+            "cursor_path": "updated_at",
+            "initial_value": "2024-01-01T00:00:00Z",
+            "end_param": "2024-06-30T00:00:00Z",  # This is ignored
+        }
+    }
+
+    with pytest.raises(ValueError) as e:
+        setup_incremental_object(param_config_2)
+
+    assert e.match(
+        "Only start_param and initial_value are allowed in the configuration of param: since_2."
+    )
+
+    param_config_3 = {"since_3": incremental_with_init_and_end}
+
+    with pytest.raises(ValueError) as e:
+        setup_incremental_object(param_config_3)
+
+    assert e.match(
+        "Only initial_value is allowed in the configuration of param: since_3."
+    )
 
 
 def test_constructs_incremental_from_endpoint_config_incremental(
@@ -692,8 +836,7 @@ def test_constructs_incremental_from_endpoint_config_incremental(
     assert incremental_with_init == incremental_obj
 
 
-def test_constructs_incremental_from_endpoint_config_incremental_with_transform(
-    mocker,
+def test_constructs_incremental_from_endpoint_config_incremental_with_convert(
     incremental_with_init_and_end,
 ) -> None:
     def epoch_to_datetime(epoch):
@@ -705,18 +848,18 @@ def test_constructs_incremental_from_endpoint_config_incremental_with_transform(
         "cursor_path": "updated_at",
         "initial_value": "2024-01-01T00:00:00Z",
         "end_value": "2024-06-30T00:00:00Z",
-        "transform": epoch_to_datetime,
+        "convert": epoch_to_datetime,
     }
 
-    (incremental_obj, incremental_param, transform) = setup_incremental_object(
+    (incremental_obj, incremental_param, convert) = setup_incremental_object(
         {}, resource_config_incremental
     )
     assert incremental_param == IncrementalParam(start="since", end="until")
-    assert transform == epoch_to_datetime
+    assert convert == epoch_to_datetime
     assert incremental_with_init_and_end == incremental_obj
 
 
-def test_calls_transform_from_endpoint_config_incremental(mocker) -> None:
+def test_calls_convert_from_endpoint_config_incremental(mocker) -> None:
     def epoch_to_date(epoch: str):
         return pendulum.from_timestamp(int(epoch)).to_date_string()
 
@@ -732,7 +875,7 @@ def test_calls_transform_from_endpoint_config_incremental(mocker) -> None:
     assert callback.call_args_list[0].args == ("1",)
 
 
-def test_calls_transform_from_request_param(mocker) -> None:
+def test_calls_convert_from_request_param(mocker) -> None:
     def epoch_to_datetime(epoch: str):
         return pendulum.from_timestamp(int(epoch)).to_date_string()
 
@@ -745,7 +888,7 @@ def test_calls_transform_from_request_param(mocker) -> None:
         "cursor_path": "updated_at",
         "initial_value": str(start),
         "end_value": str(one_day_later),
-        "transform": callback,
+        "convert": callback,
     }
 
     (incremental_obj, incremental_param, _) = setup_incremental_object(
@@ -761,7 +904,7 @@ def test_calls_transform_from_request_param(mocker) -> None:
     assert callback.call_args_list[1].args == (str(one_day_later),)
 
 
-def test_default_transform_is_identity(mocker) -> None:
+def test_default_convert_is_identity() -> None:
     start = 1
     one_day_later = 60 * 60 * 24
     incremental_config: IncrementalConfig = {
@@ -781,6 +924,59 @@ def test_default_transform_is_identity(mocker) -> None:
         {}, incremental_obj, incremental_param, None
     )
     assert created_param == {"since": str(start), "until": str(one_day_later)}
+
+
+def test_incremental_param_transform_is_deprecated(incremental_with_init) -> None:
+    """Tests that deprecated interface works but issues deprecation warning"""
+
+    def epoch_to_datetime(epoch: str):
+        return pendulum.from_timestamp(int(epoch))
+
+    param_config = {
+        "since": {
+            "type": "incremental",
+            "cursor_path": "updated_at",
+            "initial_value": "2024-01-01T00:00:00Z",
+            "transform": epoch_to_datetime,
+        }
+    }
+
+    with pytest.deprecated_call():
+        (incremental_obj, incremental_param, convert) = setup_incremental_object(
+            param_config, None
+        )
+
+        assert incremental_param == IncrementalParam(start="since", end=None)
+        assert convert == epoch_to_datetime
+
+        assert incremental_with_init == incremental_obj
+
+
+def test_incremental_endpoint_config_transform_is_deprecated(
+    mocker,
+    incremental_with_init_and_end,
+) -> None:
+    """Tests that deprecated interface works but issues deprecation warning"""
+
+    def epoch_to_datetime(epoch):
+        return pendulum.from_timestamp(int(epoch))
+
+    resource_config_incremental: IncrementalConfig = {
+        "start_param": "since",
+        "end_param": "until",
+        "cursor_path": "updated_at",
+        "initial_value": "2024-01-01T00:00:00Z",
+        "end_value": "2024-06-30T00:00:00Z",
+        "transform": epoch_to_datetime,
+    }
+
+    with pytest.deprecated_call():
+        (incremental_obj, incremental_param, convert) = setup_incremental_object(
+            {}, resource_config_incremental
+        )
+        assert incremental_param == IncrementalParam(start="since", end="until")
+        assert convert == epoch_to_datetime
+        assert incremental_with_init_and_end == incremental_obj
 
 
 def test_resource_hints_are_passed_to_resource_constructor() -> None:
@@ -1136,3 +1332,232 @@ def test_circular_resource_bindingis_invalid() -> None:
     with pytest.raises(CycleError) as e:
         rest_api_resources(config)
     assert e.match(re.escape("'nodes are in a cycle', ['chicken', 'egg', 'chicken']"))
+
+
+def test_resource_defaults_params_get_merged() -> None:
+    resource_defaults: EndpointResourceBase = {
+        "primary_key": "id",
+        "write_disposition": "merge",
+        "endpoint": {
+            "params": {
+                "per_page": 30,
+            },
+        },
+    }
+
+    resource: EndpointResource = {
+        "endpoint": {
+            "path": "issues",
+            "params": {
+                "sort": "updated",
+                "direction": "desc",
+                "state": "open",
+            },
+        },
+    }
+    merged_resource = _merge_resource_endpoints(resource_defaults, resource)
+    assert merged_resource["endpoint"]["params"]["per_page"] == 30
+
+
+def test_resource_defaults_params_get_overwritten() -> None:
+    resource_defaults: EndpointResourceBase = {
+        "primary_key": "id",
+        "write_disposition": "merge",
+        "endpoint": {
+            "params": {
+                "per_page": 30,
+            },
+        },
+    }
+
+    resource: EndpointResource = {
+        "endpoint": {
+            "path": "issues",
+            "params": {
+                "per_page": 50,
+                "sort": "updated",
+            },
+        },
+    }
+    merged_resource = _merge_resource_endpoints(resource_defaults, resource)
+    assert merged_resource["endpoint"]["params"]["per_page"] == 50
+
+
+def test_resource_defaults_params_no_resource_params() -> None:
+    resource_defaults: EndpointResourceBase = {
+        "primary_key": "id",
+        "write_disposition": "merge",
+        "endpoint": {
+            "params": {
+                "per_page": 30,
+            },
+        },
+    }
+
+    resource: EndpointResource = {
+        "endpoint": {
+            "path": "issues",
+        },
+    }
+    merged_resource = _merge_resource_endpoints(resource_defaults, resource)
+    assert merged_resource["endpoint"]["params"]["per_page"] == 30
+
+
+def test_resource_defaults_no_params() -> None:
+    resource_defaults: EndpointResourceBase = {
+        "primary_key": "id",
+        "write_disposition": "merge",
+    }
+
+    resource: EndpointResource = {
+        "endpoint": {
+            "path": "issues",
+            "params": {
+                "per_page": 50,
+                "sort": "updated",
+            },
+        },
+    }
+    merged_resource = _merge_resource_endpoints(resource_defaults, resource)
+    assert merged_resource["endpoint"]["params"] == {
+        "per_page": 50,
+        "sort": "updated",
+    }
+
+
+class AuthConfigTest(NamedTuple):
+    secret_keys: List[str]
+    config: Union[Dict[str, Any], AuthConfigBase]
+    masked_secrets: Optional[List[str]] = ["s*****t"]
+
+
+AUTH_CONFIGS = [
+    AuthConfigTest(
+        secret_keys=["token"],
+        config={
+            "type": "bearer",
+            "token": "sensitive-secret",
+        },
+    ),
+    AuthConfigTest(
+        secret_keys=["api_key"],
+        config={
+            "type": "api_key",
+            "api_key": "sensitive-secret",
+        },
+    ),
+    AuthConfigTest(
+        secret_keys=["username", "password"],
+        config={
+            "type": "http_basic",
+            "username": "sensitive-secret",
+            "password": "sensitive-secret",
+        },
+        masked_secrets=["s*****t", "s*****t"],
+    ),
+    AuthConfigTest(
+        secret_keys=["username", "password"],
+        config={
+            "type": "http_basic",
+            "username": "",
+            "password": "sensitive-secret",
+        },
+        masked_secrets=["*****", "s*****t"],
+    ),
+    AuthConfigTest(
+        secret_keys=["username", "password"],
+        config={
+            "type": "http_basic",
+            "username": "sensitive-secret",
+            "password": "",
+        },
+        masked_secrets=["s*****t", "*****"],
+    ),
+    AuthConfigTest(
+        secret_keys=["token"],
+        config=BearerTokenAuth(token="sensitive-secret"),
+    ),
+    AuthConfigTest(
+        secret_keys=["api_key"], config=APIKeyAuth(api_key="sensitive-secret")
+    ),
+    AuthConfigTest(
+        secret_keys=["username", "password"],
+        config=HttpBasicAuth("sensitive-secret", "sensitive-secret"),
+        masked_secrets=["s*****t", "s*****t"],
+    ),
+    AuthConfigTest(
+        secret_keys=["username", "password"],
+        config=HttpBasicAuth("sensitive-secret", ""),
+        masked_secrets=["s*****t", "*****"],
+    ),
+    AuthConfigTest(
+        secret_keys=["username", "password"],
+        config=HttpBasicAuth("", "sensitive-secret"),
+        masked_secrets=["*****", "s*****t"],
+    ),
+]
+
+
+@pytest.mark.parametrize("secret_keys, config, masked_secrets", AUTH_CONFIGS)
+def test_secret_masking_auth_config(secret_keys, config, masked_secrets):
+    masked = _mask_secrets(config)
+    for key, mask in zip(secret_keys, masked_secrets):
+        assert masked[key] == mask
+
+
+def test_secret_masking_oauth() -> None:
+    config = OAuth2ClientCredentials(
+        access_token_url="",
+        client_id="sensitive-secret",
+        client_secret="sensitive-secret",
+    )
+
+    obj = _mask_secrets(config)
+    assert "sensitive-secret" not in str(obj)
+
+    # TODO
+    # assert masked.access_token == "None"
+    # assert masked.client_id == "s*****t"
+    # assert masked.client_secret == "s*****t"
+
+
+def test_secret_masking_custom_auth() -> None:
+    class CustomAuthConfigBase(AuthConfigBase):
+        def __init__(self, token: str = "sensitive-secret"):
+            self.token = token
+
+    class CustomAuthBase(AuthBase):
+        def __init__(self, token: str = "sensitive-secret"):
+            self.token = token
+
+    auth = _mask_secrets(CustomAuthConfigBase())
+    assert "s*****t" not in str(auth)
+    # TODO
+    # assert auth.token == "s*****t"
+
+    auth_2 = _mask_secrets(CustomAuthBase())
+    assert "s*****t" not in str(auth_2)
+    # TODO
+    # assert auth_2.token == "s*****t"
+
+
+def test_validation_masks_auth_secrets() -> None:
+    incorrect_config: RESTAPIConfig = {  # type: ignore
+        "client": {
+            "base_url": "https://api.example.com",
+            "auth": {
+                "type": "bearer",
+                "location": "header",
+                "token": "sensitive-secret",
+            },
+        },
+        "resources": ["posts"],
+    }
+    with pytest.raises(dlt.common.exceptions.DictValidationException) as e:
+        rest_api_source(incorrect_config)
+    assert (
+        re.search("sensitive-secret", str(e.value)) is None
+    ), "unexpectedly printed 'sensitive-secret'"
+    assert e.match(
+        re.escape("'{'type': 'bearer', 'location': 'header', 'token': 's*****t'}'")
+    )

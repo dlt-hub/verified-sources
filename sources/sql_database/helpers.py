@@ -23,6 +23,7 @@ from dlt.sources.credentials import ConnectionStringCredentials
 
 from .arrow_helpers import row_tuples_to_arrow
 from .schema_types import (
+    default_table_adapter,
     table_to_columns,
     get_primary_key,
     Table,
@@ -31,7 +32,7 @@ from .schema_types import (
     TTypeAdapter,
 )
 
-from sqlalchemy import Table, create_engine
+from sqlalchemy import Table, create_engine, select
 from sqlalchemy.engine import Engine
 from sqlalchemy.exc import CompileError
 
@@ -188,12 +189,14 @@ def table_rows(
     reflection_level: ReflectionLevel = "minimal",
     backend_kwargs: Dict[str, Any] = None,
     type_adapter_callback: Optional[TTypeAdapter] = None,
+    included_columns: Optional[List[str]] = None,
 ) -> Iterator[TDataItem]:
     columns: TTableSchemaColumns = None
     if defer_table_reflect:
         table = Table(
             table.name, table.metadata, autoload_with=engine, extend_existing=True
         )
+        default_table_adapter(table, included_columns)
         if table_adapter_callback:
             table_adapter_callback(table)
         columns = table_to_columns(table, reflection_level, type_adapter_callback)
@@ -203,6 +206,7 @@ def table_rows(
             primary_key = get_primary_key(table)
             if primary_key is not None:
                 incremental.primary_key = primary_key
+
         # yield empty record to set hints
         yield dlt.mark.with_hints(
             [],
@@ -218,17 +222,27 @@ def table_rows(
     loader = TableLoader(
         engine, backend, table, columns, incremental=incremental, chunk_size=chunk_size
     )
-    yield from loader.load_rows(backend_kwargs)
+    try:
+        yield from loader.load_rows(backend_kwargs)
+    finally:
+        # dispose the engine if created for this particular table
+        # NOTE: database wide engines are not disposed, not externally provided
+        if getattr(engine, "may_dispose_after_use", False):
+            engine.dispose()
 
 
 def engine_from_credentials(
-    credentials: Union[ConnectionStringCredentials, Engine, str], **backend_kwargs: Any
+    credentials: Union[ConnectionStringCredentials, Engine, str],
+    may_dispose_after_use: bool = False,
+    **backend_kwargs: Any,
 ) -> Engine:
     if isinstance(credentials, Engine):
         return credentials
     if isinstance(credentials, ConnectionStringCredentials):
         credentials = credentials.to_native_representation()
-    return create_engine(credentials, **backend_kwargs)
+    engine = create_engine(credentials, **backend_kwargs)
+    setattr(engine, "may_dispose_after_use", may_dispose_after_use)  # noqa
+    return engine
 
 
 def unwrap_json_connector_x(field: str) -> TDataItem:
@@ -270,6 +284,7 @@ def _detect_precision_hints_deprecated(value: Optional[bool]) -> None:
 @configspec
 class SqlDatabaseTableConfiguration(BaseConfiguration):
     incremental: Optional[dlt.sources.incremental] = None  # type: ignore[type-arg]
+    included_columns: Optional[List[str]] = None
 
 
 @configspec
@@ -283,3 +298,4 @@ class SqlTableResourceConfiguration(BaseConfiguration):
     detect_precision_hints: Optional[bool] = None
     defer_table_reflect: Optional[bool] = False
     reflection_level: Optional[ReflectionLevel] = "full"
+    included_columns: Optional[List[str]] = None

@@ -30,11 +30,18 @@ from dlt.sources.helpers.rest_client.auth import AuthConfigBase, TApiKeyLocation
 from dlt.sources.helpers.rest_client.paginators import (
     SinglePagePaginator,
     HeaderLinkPaginator,
-    JSONResponsePaginator,
     JSONResponseCursorPaginator,
     OffsetPaginator,
     PageNumberPaginator,
 )
+
+try:
+    from dlt.sources.helpers.rest_client.paginators import JSONLinkPaginator
+except ImportError:
+    from dlt.sources.helpers.rest_client.paginators import (
+        JSONResponsePaginator as JSONLinkPaginator,
+    )
+
 from dlt.sources.helpers.rest_client.auth import (
     AuthConfigBase,
     HttpBasicAuth,
@@ -43,7 +50,8 @@ from dlt.sources.helpers.rest_client.auth import (
 )
 
 PaginatorType = Literal[
-    "json_response",
+    "json_link",
+    "json_response",  # deprecated. Use json_link instead. Will be removed in upcoming release
     "header_link",
     "auto",
     "single_page",
@@ -60,7 +68,7 @@ class PaginatorTypeConfig(TypedDict, total=True):
 class PageNumberPaginatorConfig(PaginatorTypeConfig, total=False):
     """A paginator that uses page number-based pagination strategy."""
 
-    initial_page: Optional[int]
+    base_page: Optional[int]
     page_param: Optional[str]
     total_path: Optional[jsonpath.TJsonPath]
     maximum_page: Optional[int]
@@ -84,7 +92,7 @@ class HeaderLinkPaginatorConfig(PaginatorTypeConfig, total=False):
     links_next_key: Optional[str]
 
 
-class JSONResponsePaginatorConfig(PaginatorTypeConfig, total=False):
+class JSONLinkPaginatorConfig(PaginatorTypeConfig, total=False):
     """Locates the next page URL within the JSON response body. The key
     containing the URL can be specified using a JSON path."""
 
@@ -104,12 +112,12 @@ PaginatorConfig = Union[
     PageNumberPaginatorConfig,
     OffsetPaginatorConfig,
     HeaderLinkPaginatorConfig,
-    JSONResponsePaginatorConfig,
+    JSONLinkPaginatorConfig,
     JSONResponseCursorPaginatorConfig,
     BasePaginator,
     SinglePagePaginator,
     HeaderLinkPaginator,
-    JSONResponsePaginator,
+    JSONLinkPaginator,
     JSONResponseCursorPaginator,
     OffsetPaginator,
     PageNumberPaginator,
@@ -176,7 +184,7 @@ class IncrementalArgs(TypedDict, total=False):
     primary_key: Optional[TTableHintTemplate[TColumnNames]]
     end_value: Optional[str]
     row_order: Optional[TSortOrder]
-    transform: Optional[Callable[..., Any]]
+    convert: Optional[Callable[..., Any]]
 
 
 class IncrementalConfig(IncrementalArgs, total=False):

@@ -23,6 +23,12 @@ error_msg_suffix = (
     "E.g. dlt>=0.3.5,<0.4.0"
 )
 
+
+def has_url_with_pin(dlt_req: Requirement) -> bool:
+    """Checks if the url contains a reference to a branch, tag, or commit"""
+    return dlt_req.url is not None and "@" in dlt_req.url
+
+
 for source in source_dirs:
     req_path = source.joinpath("requirements.txt")
     if not req_path.is_file():
@@ -54,7 +60,7 @@ for source in source_dirs:
         )
         error = True
         continue
-    if not dlt_req.specifier:
+    if not dlt_req.specifier and not has_url_with_pin(dlt_req):
         print(
             f"ERROR: Source {source.name} dlt requirement '{dlt_req}' has no version constraint. {error_msg_suffix}"
         )

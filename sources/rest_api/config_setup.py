@@ -1,3 +1,4 @@
+import warnings
 from copy import copy
 from typing import (
     Type,
@@ -29,11 +30,18 @@ from dlt.sources.helpers.rest_client.paginators import (
     BasePaginator,
     SinglePagePaginator,
     HeaderLinkPaginator,
-    JSONResponsePaginator,
     JSONResponseCursorPaginator,
     OffsetPaginator,
     PageNumberPaginator,
 )
+
+try:
+    from dlt.sources.helpers.rest_client.paginators import JSONLinkPaginator
+except ImportError:
+    from dlt.sources.helpers.rest_client.paginators import (
+        JSONResponsePaginator as JSONLinkPaginator,
+    )
+
 from dlt.sources.helpers.rest_client.detector import single_entity_path
 from dlt.sources.helpers.rest_client.exceptions import IgnoreResponseException
 from dlt.sources.helpers.rest_client.auth import (
@@ -45,7 +53,6 @@ from dlt.sources.helpers.rest_client.auth import (
 
 from .typing import (
     EndpointResourceBase,
-    PaginatorType,
     AuthType,
     AuthConfig,
     IncrementalConfig,
@@ -59,8 +66,9 @@ from .typing import (
 from .utils import exclude_keys
 
 
-PAGINATOR_MAP: Dict[PaginatorType, Type[BasePaginator]] = {
-    "json_response": JSONResponsePaginator,
+PAGINATOR_MAP: Dict[str, Type[BasePaginator]] = {
+    "json_link": JSONLinkPaginator,
+    "json_response": JSONLinkPaginator,  # deprecated. Use json_link instead. Will be removed in upcoming release
     "header_link": HeaderLinkPaginator,
     "auto": None,
     "single_page": SinglePagePaginator,
@@ -81,13 +89,25 @@ class IncrementalParam(NamedTuple):
     end: Optional[str]
 
 
-def get_paginator_class(paginator_type: PaginatorType) -> Type[BasePaginator]:
+def register_paginator(
+    paginator_name: str,
+    paginator_class: Type[BasePaginator],
+) -> None:
+    if not issubclass(paginator_class, BasePaginator):
+        raise ValueError(
+            f"Invalid paginator: {paginator_class.__name__}. "
+            "Your custom paginator has to be a subclass of BasePaginator"
+        )
+    PAGINATOR_MAP[paginator_name] = paginator_class
+
+
+def get_paginator_class(paginator_name: str) -> Type[BasePaginator]:
     try:
-        return PAGINATOR_MAP[paginator_type]
+        return PAGINATOR_MAP[paginator_name]
     except KeyError:
         available_options = ", ".join(PAGINATOR_MAP.keys())
         raise ValueError(
-            f"Invalid paginator: {paginator_type}. "
+            f"Invalid paginator: {paginator_name}. "
             f"Available options: {available_options}"
         )
 
@@ -160,30 +180,43 @@ def setup_incremental_object(
     Optional[Incremental[Any]], Optional[IncrementalParam], Optional[Callable[..., Any]]
 ]:
     incremental_params: List[str] = []
-    for key, value in request_params.items():
-        if isinstance(value, dict) and value.get("type") == "incremental":
-            incremental_params.append(key)
+    for param_name, param_config in request_params.items():
+        if (
+            isinstance(param_config, dict)
+            and param_config.get("type") == "incremental"
+            or isinstance(param_config, dlt.sources.incremental)
+        ):
+            incremental_params.append(param_name)
     if len(incremental_params) > 1:
         raise ValueError(
             f"Only a single incremental parameter is allower per endpoint. Found: {incremental_params}"
         )
-    transform: Optional[Callable[..., Any]]
-    for key, value in request_params.items():
-        if isinstance(value, dlt.sources.incremental):
-            return value, IncrementalParam(start=key, end=None), None
-        if isinstance(value, dict) and value.get("type") == "incremental":
-            transform = value.get("transform", None)
-            config = exclude_keys(value, {"type", "transform"})
+    convert: Optional[Callable[..., Any]]
+    for param_name, param_config in request_params.items():
+        if isinstance(param_config, dlt.sources.incremental):
+            if param_config.end_value is not None:
+                raise ValueError(
+                    f"Only initial_value is allowed in the configuration of param: {param_name}. To set end_value too use the incremental configuration at the resource level. See https://dlthub.com/docs/dlt-ecosystem/verified-sources/rest_api#incremental-loading/"
+                )
+            return param_config, IncrementalParam(start=param_name, end=None), None
+        if isinstance(param_config, dict) and param_config.get("type") == "incremental":
+            if param_config.get("end_value") or param_config.get("end_param"):
+                raise ValueError(
+                    f"Only start_param and initial_value are allowed in the configuration of param: {param_name}. To set end_value too use the incremental configuration at the resource level. See https://dlthub.com/docs/dlt-ecosystem/verified-sources/rest_api#incremental-loading"
+                )
+            convert = parse_convert_or_deprecated_transform(param_config)
+
+            config = exclude_keys(param_config, {"type", "convert", "transform"})
             # TODO: implement param type to bind incremental to
             return (
                 dlt.sources.incremental(**config),
-                IncrementalParam(start=key, end=None),
-                transform,
+                IncrementalParam(start=param_name, end=None),
+                convert,
             )
     if incremental_config:
-        transform = incremental_config.get("transform", None)
+        convert = parse_convert_or_deprecated_transform(incremental_config)
         config = exclude_keys(
-            incremental_config, {"start_param", "end_param", "transform"}
+            incremental_config, {"start_param", "end_param", "convert", "transform"}
         )
         return (
             dlt.sources.incremental(**config),
@@ -191,10 +224,26 @@ def setup_incremental_object(
                 start=incremental_config["start_param"],
                 end=incremental_config.get("end_param"),
             ),
-            transform,
+            convert,
         )
 
     return None, None, None
+
+
+def parse_convert_or_deprecated_transform(
+    config: Union[IncrementalConfig, Dict[str, Any]]
+) -> Optional[Callable[..., Any]]:
+    convert = config.get("convert", None)
+    deprecated_transform = config.get("transform", None)
+    if deprecated_transform:
+        warnings.warn(
+            "The key `transform` is deprecated in the incremental configuration and it will be removed. "
+            "Use `convert` instead",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+        convert = deprecated_transform
+    return convert
 
 
 def make_parent_key_name(resource_name: str, field_name: str) -> str:
@@ -368,7 +417,10 @@ def _action_type_unless_custom_hook(
     return (action_type, None)
 
 
-def _handle_response_action(response: Response, action: ResponseAction) -> Union[
+def _handle_response_action(
+    response: Response,
+    action: ResponseAction,
+) -> Union[
     Tuple[str, Optional[List[Callable[..., Any]]]],
     Tuple[None, List[Callable[..., Any]]],
     Tuple[None, None],
@@ -536,7 +588,7 @@ def _merge_resource_endpoints(
         }
     if "params" in config_endpoint:
         merged_endpoint["params"] = {
-            **(merged_endpoint.get("json", {})),
+            **(merged_endpoint.get("params", {})),
             **config_endpoint["params"],
         }
     # merge columns

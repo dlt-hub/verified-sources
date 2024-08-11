@@ -1,6 +1,7 @@
 import sqlalchemy as sa
 import humanize
 from typing import Any
+import os
 
 import dlt
 from dlt.common import pendulum
@@ -323,6 +324,29 @@ def use_type_adapter() -> None:
         type_adapter_callback=type_adapter,
         reflection_level="full_with_precision",
     ).with_resources("table_with_array_column")
+
+    info = pipeline.run(sql_alchemy_source)
+    print(info)
+
+
+def specify_columns_to_load() -> None:
+    """Run the SQL database source with a subset of table columns loaded"""
+    pipeline = dlt.pipeline(
+        pipeline_name="dummy",
+        destination="postgres",
+        dataset_name="dummy",
+    )
+
+    # Columns can be specified per table in env var (json array) or in `.dlt/config.toml`
+    os.environ["SOURCES__SQL_DATABASE__FAMILY__INCLUDED_COLUMNS"] = (
+        '["rfam_acc", "description"]'
+    )
+
+    sql_alchemy_source = sql_database(
+        "mysql+pymysql://rfamro@mysql-rfam-public.ebi.ac.uk:4497/Rfam?&binary_prefix=true",
+        backend="pyarrow",
+        reflection_level="full_with_precision",
+    ).with_resources("family", "genome")
 
     info = pipeline.run(sql_alchemy_source)
     print(info)

@@ -21,6 +21,7 @@ from dlt.sources.credentials import ConnectionStringCredentials
 from sources.sql_database import sql_database, sql_table, TableBackend, ReflectionLevel
 from sources.sql_database.helpers import unwrap_json_connector_x
 
+from tests.sql_database.test_helpers import mock_json_column
 from tests.utils import (
     ALL_DESTINATIONS,
     assert_load_info,
@@ -28,8 +29,18 @@ from tests.utils import (
     load_table_counts,
     load_tables_to_dicts,
     assert_schema_on_data,
+    preserve_environ,
 )
 from tests.sql_database.sql_source import SQLAlchemySourceDB
+
+
+@pytest.fixture(autouse=True)
+def dispose_engines():
+    yield
+    import gc
+
+    # will collect and dispose all hanging engines
+    gc.collect()
 
 
 def make_pipeline(destination_name: str) -> dlt.Pipeline:
@@ -86,9 +97,9 @@ def test_pass_engine_credentials(sql_source_db: SQLAlchemySourceDB) -> None:
 
 def test_named_sql_table_config(sql_source_db: SQLAlchemySourceDB) -> None:
     # set the credentials per table name
-    os.environ[
-        "SOURCES__SQL_DATABASE__CHAT_MESSAGE__CREDENTIALS"
-    ] = sql_source_db.engine.url.render_as_string(False)
+    os.environ["SOURCES__SQL_DATABASE__CHAT_MESSAGE__CREDENTIALS"] = (
+        sql_source_db.engine.url.render_as_string(False)
+    )
     table = sql_table(table="chat_message", schema=sql_source_db.schema)
     assert table.name == "chat_message"
     assert len(list(table)) == sql_source_db.table_infos["chat_message"]["row_count"]
@@ -108,9 +119,9 @@ def test_named_sql_table_config(sql_source_db: SQLAlchemySourceDB) -> None:
     assert len(list(table)) == 10
 
     # make it fail on cursor
-    os.environ[
-        "SOURCES__SQL_DATABASE__CHAT_MESSAGE__INCREMENTAL__CURSOR_PATH"
-    ] = "updated_at_x"
+    os.environ["SOURCES__SQL_DATABASE__CHAT_MESSAGE__INCREMENTAL__CURSOR_PATH"] = (
+        "updated_at_x"
+    )
     table = sql_table(table="chat_message", schema=sql_source_db.schema)
     with pytest.raises(ResourceExtractionError) as ext_ex:
         len(list(table))
@@ -119,9 +130,9 @@ def test_named_sql_table_config(sql_source_db: SQLAlchemySourceDB) -> None:
 
 def test_general_sql_database_config(sql_source_db: SQLAlchemySourceDB) -> None:
     # set the credentials per table name
-    os.environ[
-        "SOURCES__SQL_DATABASE__CREDENTIALS"
-    ] = sql_source_db.engine.url.render_as_string(False)
+    os.environ["SOURCES__SQL_DATABASE__CREDENTIALS"] = (
+        sql_source_db.engine.url.render_as_string(False)
+    )
     # applies to both sql table and sql database
     table = sql_table(table="chat_message", schema=sql_source_db.schema)
     assert len(list(table)) == sql_source_db.table_infos["chat_message"]["row_count"]
@@ -144,9 +155,9 @@ def test_general_sql_database_config(sql_source_db: SQLAlchemySourceDB) -> None:
     assert len(list(database)) == 10
 
     # make it fail on cursor
-    os.environ[
-        "SOURCES__SQL_DATABASE__CHAT_MESSAGE__INCREMENTAL__CURSOR_PATH"
-    ] = "updated_at_x"
+    os.environ["SOURCES__SQL_DATABASE__CHAT_MESSAGE__INCREMENTAL__CURSOR_PATH"] = (
+        "updated_at_x"
+    )
     table = sql_table(table="chat_message", schema=sql_source_db.schema)
     with pytest.raises(ResourceExtractionError) as ext_ex:
         len(list(table))
@@ -179,6 +190,11 @@ def test_load_sql_schema_loads_all_tables(
         # connectorx generates nanoseconds time which bigquery cannot load
         source.has_precision.add_map(convert_time_to_us)
         source.has_precision_nullable.add_map(convert_time_to_us)
+
+    if backend != "sqlalchemy":
+        # always use mock json
+        source.has_precision.add_map(mock_json_column("json_col"))
+        source.has_precision_nullable.add_map(mock_json_column("json_col"))
 
     assert (
         "chat_message_view" not in source.resources
@@ -213,6 +229,11 @@ def test_load_sql_schema_loads_all_tables_parallel(
         # connectorx generates nanoseconds time which bigquery cannot load
         source.has_precision.add_map(convert_time_to_us)
         source.has_precision_nullable.add_map(convert_time_to_us)
+
+    if backend != "sqlalchemy":
+        # always use mock json
+        source.has_precision.add_map(mock_json_column("json_col"))
+        source.has_precision_nullable.add_map(mock_json_column("json_col"))
 
     load_info = pipeline.run(source)
     print(
@@ -254,9 +275,9 @@ def test_load_sql_table_incremental(
     """Run pipeline twice. Insert more rows after first run
     and ensure only those rows are stored after the second run.
     """
-    os.environ[
-        "SOURCES__SQL_DATABASE__CHAT_MESSAGE__INCREMENTAL__CURSOR_PATH"
-    ] = "updated_at"
+    os.environ["SOURCES__SQL_DATABASE__CHAT_MESSAGE__INCREMENTAL__CURSOR_PATH"] = (
+        "updated_at"
+    )
 
     pipeline = make_pipeline(destination_name)
     tables = ["chat_message"]
@@ -452,6 +473,7 @@ def test_load_sql_table_resource_incremental_end_value(
     except Exception as exc:
         if isinstance(exc.__context__, NotImplementedError):
             pytest.skip("Test skipped due to: " + str(exc.__context__))
+        raise
     # half of the records loaded -1 record. end values is non inclusive
     assert data_item_length(rows) == abs(end_id - start_id)
     # check first and last id to see if order was applied
@@ -711,7 +733,10 @@ def test_all_types_with_precision_hints(
     table = schema.tables[table_name]
     assert_precision_columns(table["columns"], backend, nullable)
     assert_schema_on_data(
-        table, load_tables_to_dicts(pipeline, table_name)[table_name], nullable
+        table,
+        load_tables_to_dicts(pipeline, table_name)[table_name],
+        nullable,
+        backend in ["sqlalchemy", "pyarrow"],
     )
 
 
@@ -739,14 +764,17 @@ def test_all_types_no_precision_hints(
         source.resources[table_name].add_map(unwrap_json_connector_x("json_col"))
     pipeline.extract(source)
     pipeline.normalize(loader_file_format="parquet")
-    pipeline.load()
+    pipeline.load().raise_on_failed_jobs()
 
     schema = pipeline.default_schema
     # print(pipeline.default_schema.to_pretty_yaml())
     table = schema.tables[table_name]
     assert_no_precision_columns(table["columns"], backend, nullable)
     assert_schema_on_data(
-        table, load_tables_to_dicts(pipeline, table_name)[table_name], nullable
+        table,
+        load_tables_to_dicts(pipeline, table_name)[table_name],
+        nullable,
+        backend in ["sqlalchemy", "pyarrow"],
     )
 
 
@@ -794,7 +822,7 @@ def test_set_primary_key_deferred_incremental(
         # assert _r.incremental._incremental is updated_at
         if len(item) == 0:
             # not yet propagated
-            assert _r.incremental.primary_key == ["id"]
+            assert _r.incremental.primary_key is None
         else:
             assert _r.incremental.primary_key == ["id"]
         assert _r.incremental._incremental.primary_key == ["id"]
@@ -826,9 +854,9 @@ def test_deferred_reflect_in_source(
         defer_table_reflect=True,
         backend=backend,
     )
-    # add JSON unwrap for connectorx
-    if backend == "connectorx":
-        source.resources["has_precision"].add_map(unwrap_json_connector_x("json_col"))
+    # mock the right json values for backends not supporting it
+    if backend in ("connectorx", "pandas"):
+        source.resources["has_precision"].add_map(mock_json_column("json_col"))
 
     # no columns in both tables
     assert source.has_precision.columns == {}
@@ -849,6 +877,7 @@ def test_deferred_reflect_in_source(
         precision_table,
         load_tables_to_dicts(pipeline, "has_precision")["has_precision"],
         True,
+        backend in ["sqlalchemy", "pyarrow"],
     )
     assert len(source.chat_message.columns) > 0  # type: ignore[arg-type]
     assert (
@@ -885,9 +914,9 @@ def test_deferred_reflect_in_resource(
         defer_table_reflect=True,
         backend=backend,
     )
-    # add JSON unwrap for connectorx
-    if backend == "connectorx":
-        table.add_map(unwrap_json_connector_x("json_col"))
+    # mock the right json values for backends not supporting it
+    if backend in ("connectorx", "pandas"):
+        table.add_map(mock_json_column("json_col"))
 
     # no columns in both tables
     assert table.columns == {}
@@ -907,6 +936,7 @@ def test_deferred_reflect_in_resource(
         precision_table,
         load_tables_to_dicts(pipeline, "has_precision")["has_precision"],
         True,
+        backend in ["sqlalchemy", "pyarrow"],
     )
 
 
@@ -1132,6 +1162,68 @@ def test_infer_unsupported_types(
             assert isinstance(json.loads(rows[0]["unsupported_array_1"]), list)
 
 
+@pytest.mark.parametrize("backend", ["sqlalchemy", "pyarrow", "pandas", "connectorx"])
+@pytest.mark.parametrize("defer_table_reflect", (False, True))
+def test_sql_database_included_columns(
+    sql_source_db: SQLAlchemySourceDB, backend: TableBackend, defer_table_reflect: bool
+) -> None:
+    # include only some columns from the table
+    os.environ["SOURCES__SQL_DATABASE__CHAT_MESSAGE__INCLUDED_COLUMNS"] = json.dumps(
+        ["id", "created_at"]
+    )
+
+    source = sql_database(
+        credentials=sql_source_db.credentials,
+        schema=sql_source_db.schema,
+        table_names=["chat_message"],
+        reflection_level="full",
+        defer_table_reflect=defer_table_reflect,
+        backend=backend,
+    )
+
+    pipeline = make_pipeline("duckdb")
+    pipeline.run(source)
+
+    schema = pipeline.default_schema
+    schema_cols = set(
+        col
+        for col in schema.get_table_columns("chat_message", include_incomplete=True)
+        if not col.startswith("_dlt_")
+    )
+    assert schema_cols == {"id", "created_at"}
+
+    assert_row_counts(pipeline, sql_source_db, ["chat_message"])
+
+
+@pytest.mark.parametrize("backend", ["sqlalchemy", "pyarrow", "pandas", "connectorx"])
+@pytest.mark.parametrize("defer_table_reflect", (False, True))
+def test_sql_table_included_columns(
+    sql_source_db: SQLAlchemySourceDB, backend: TableBackend, defer_table_reflect: bool
+) -> None:
+    source = sql_table(
+        credentials=sql_source_db.credentials,
+        schema=sql_source_db.schema,
+        table="chat_message",
+        reflection_level="full",
+        defer_table_reflect=defer_table_reflect,
+        backend=backend,
+        included_columns=["id", "created_at"],
+    )
+
+    pipeline = make_pipeline("duckdb")
+    pipeline.run(source)
+
+    schema = pipeline.default_schema
+    schema_cols = set(
+        col
+        for col in schema.get_table_columns("chat_message", include_incomplete=True)
+        if not col.startswith("_dlt_")
+    )
+    assert schema_cols == {"id", "created_at"}
+
+    assert_row_counts(pipeline, sql_source_db, ["chat_message"])
+
+
 def assert_row_counts(
     pipeline: dlt.Pipeline,
     sql_source_db: SQLAlchemySourceDB,
@@ -1325,6 +1417,10 @@ PRECISION_COLUMNS: List[TColumnSchema] = [
     {
         "data_type": "bool",
         "name": "bool_col",
+    },
+    {
+        "data_type": "text",
+        "name": "uuid_col",
     },
 ]
 

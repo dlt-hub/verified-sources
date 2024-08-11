@@ -1,7 +1,7 @@
 from typing import Any, Sequence, Optional
 
 from dlt.common.schema.typing import TTableSchemaColumns
-from dlt.common import logger
+from dlt.common import logger, json
 from dlt.common.configuration import with_config
 from dlt.common.destination import DestinationCapabilitiesContext
 from dlt.common.json import custom_encode, map_nested_in_place
@@ -86,6 +86,17 @@ def row_tuples_to_arrow(
             )
             float_array = pa.array(columnar_known_types[field.name], type=pa.float64())
             columnar_known_types[field.name] = float_array.cast(field.type, safe=False)
+        if issubclass(py_type, (dict, list)):
+            logger.warning(
+                f"Field {field.name} was reflected as JSON type and needs to be serialized back to string to be placed in arrow table. This will slow data extraction down. You should cast JSON field to STRING in your database system ie. by creating and extracting an SQL VIEW that selects with cast."
+            )
+            json_str_array = pa.array(
+                [
+                    None if s is None else json.dumps(s)
+                    for s in columnar_known_types[field.name]
+                ]
+            )
+            columnar_known_types[field.name] = json_str_array
 
     # If there are unknown type columns, first create a table to infer their types
     if columnar_unknown_types:
