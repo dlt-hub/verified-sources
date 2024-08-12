@@ -22,9 +22,6 @@ from sources.rest_api import (
 
 
 def test_load_mock_api(mock_api_server):
-    # import os
-    # os.environ["EXTRACT__NEXT_ITEM_MODE"] = "fifo"
-    # os.environ["EXTRACT__MAX_PARALLEL_ITEMS"] = "1"
     pipeline = dlt.pipeline(
         pipeline_name="rest_api_mock",
         destination="duckdb",
