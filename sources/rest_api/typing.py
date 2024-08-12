@@ -240,6 +240,11 @@ class Endpoint(TypedDict, total=False):
     incremental: Optional[IncrementalConfig]
 
 
+class ProcessingSteps(TypedDict):
+    filter: Optional[Callable[[Any], bool]]
+    map: Optional[Callable[[Any], Any]]
+
+
 class ResourceBase(TypedDict, total=False):
     """Defines hints that may be passed to `dlt.resource` decorator"""
 
@@ -254,9 +259,10 @@ class ResourceBase(TypedDict, total=False):
     table_format: Optional[TTableHintTemplate[TTableFormat]]
     selected: Optional[bool]
     parallelized: Optional[bool]
-    row_filter: Optional[Callable[[Any], bool]]
-    transform: Optional[Callable[[Any], Any]]
-    exclude_columns: Optional[List[jsonpath.TJsonPath]]
+    processing_steps: Optional[List[ProcessingSteps]]
+    # row_filter: Optional[Callable[[Any], bool]]
+    # transform: Optional[Callable[[Any], Any]]
+    # exclude_columns: Optional[List[jsonpath.TJsonPath]]
 
 
 class EndpointResourceBase(ResourceBase, total=False):

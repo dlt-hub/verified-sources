@@ -1,4 +1,5 @@
 """Generic API Source"""
+
 from copy import deepcopy
 from typing import Type, Any, Dict, List, Optional, Generator, Callable, cast, Union
 import graphlib  # type: ignore[import,unused-ignore]
@@ -33,6 +34,7 @@ from .typing import (
     IncrementalParamConfig,
     RESTAPIConfig,
     ParamBindType,
+    ProcessingSteps,
 )
 from .config_setup import (
     IncrementalParam,
@@ -222,9 +224,7 @@ def create_resources(
         request_params = endpoint_config.get("params", {})
         request_json = endpoint_config.get("json", None)
         paginator = create_paginator(endpoint_config.get("paginator"))
-        row_filter = endpoint_resource.pop("row_filter", lambda x: True)
-        transform = endpoint_resource.pop("transform", lambda x: x)
-        exclude_columns = endpoint_resource.pop("exclude_columns", [])
+        processing_steps = endpoint_resource.pop("processing_steps", [])
 
         resolved_param: ResolvedParam = resolved_param_map[resource_name]
 
@@ -272,9 +272,7 @@ def create_resources(
                 incremental_cursor_transform: Optional[
                     Callable[..., Any]
                 ] = incremental_cursor_transform,
-                row_filter: Callable[[Any], bool] = row_filter,
-                transform: Callable[[Any], Any] = transform,
-                exclude_columns: List[jsonpath.TJsonPath] = exclude_columns,
+                processing_steps: Optional[ProcessingSteps] = processing_steps,
             ) -> Generator[Any, None, None]:
                 def exclude_elements(item: Any) -> Any:
                     for exclude_path in exclude_columns:  # noqa: B023
@@ -282,6 +280,15 @@ def create_resources(
                             lambda x: True, item
                         )
                     return item
+
+                def process(items: Any) -> Any:
+                    processed_items = items
+                    for step in processing_steps:
+                        if "filter" in step:
+                            processed_items = filter(step["filter"], processed_items)
+                        if "map" in step:
+                            processed_items = map(step["map"], processed_items)
+                    return [x for x in processed_items]
 
                 if incremental_object:
                     params = _set_incremental_params(
@@ -299,10 +306,10 @@ def create_resources(
                     data_selector=data_selector,
                     hooks=hooks,
                 ):
-                    yield map(
-                        exclude_elements,
-                        map(transform, filter(row_filter, page)),
-                    )
+                    if processing_steps:
+                        yield process(page)
+                        return
+                    yield page
 
             resources[resource_name] = dlt.resource(
                 paginate_resource,
@@ -315,9 +322,7 @@ def create_resources(
                 paginator=paginator,
                 data_selector=endpoint_config.get("data_selector"),
                 hooks=hooks,
-                row_filter=row_filter,
-                transform=transform,
-                exclude_columns=exclude_columns,
+                processing_steps=processing_steps,
             )
 
         else:
