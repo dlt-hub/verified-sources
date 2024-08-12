@@ -256,6 +256,14 @@ def create_resources(
             endpoint_resource, {"endpoint", "include_from_parent"}
         )
 
+        def process(resource, processing_steps) -> Any:
+            for step in processing_steps:
+                if "filter" in step:
+                    resource.add_filter(step["filter"])
+                if "map" in step:
+                    resource.add_map(step["map"])
+            return resource
+
         if resolved_param is None:
 
             def paginate_resource(
@@ -272,24 +280,7 @@ def create_resources(
                 incremental_cursor_transform: Optional[
                     Callable[..., Any]
                 ] = incremental_cursor_transform,
-                processing_steps: Optional[ProcessingSteps] = processing_steps,
             ) -> Generator[Any, None, None]:
-                def exclude_elements(item: Any) -> Any:
-                    for exclude_path in exclude_columns:  # noqa: B023
-                        item = jsonpath.compile_path(exclude_path).filter(
-                            lambda x: True, item
-                        )
-                    return item
-
-                def process(items: Any) -> Any:
-                    processed_items = items
-                    for step in processing_steps:
-                        if "filter" in step:
-                            processed_items = filter(step["filter"], processed_items)
-                        if "map" in step:
-                            processed_items = map(step["map"], processed_items)
-                    return [x for x in processed_items]
-
                 if incremental_object:
                     params = _set_incremental_params(
                         params,
@@ -306,9 +297,6 @@ def create_resources(
                     data_selector=data_selector,
                     hooks=hooks,
                 ):
-                    if processing_steps:
-                        yield process(page)
-                        return
                     yield page
 
             resources[resource_name] = dlt.resource(
@@ -322,7 +310,9 @@ def create_resources(
                 paginator=paginator,
                 data_selector=endpoint_config.get("data_selector"),
                 hooks=hooks,
-                processing_steps=processing_steps,
+            )
+            resources[resource_name] = process(
+                resources[resource_name], processing_steps
             )
 
         else:
@@ -384,6 +374,10 @@ def create_resources(
                 paginator=paginator,
                 data_selector=endpoint_config.get("data_selector"),
                 hooks=hooks,
+            )
+
+            resources[resource_name] = process(
+                resources[resource_name], processing_steps
             )
 
     return resources
