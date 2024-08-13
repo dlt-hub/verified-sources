@@ -1,4 +1,4 @@
-from typing import TYPE_CHECKING, Any, Dict, Iterator, Optional
+from typing import TYPE_CHECKING, Any, Iterator, Optional
 
 from dlt.common import json
 from dlt.common.typing import copy_sig
@@ -55,6 +55,24 @@ def _read_jsonl(
             yield lines_chunk
 
 
+def _read_json(
+    items: Iterator[FileItemDict], chunksize: int = 1000
+) -> Iterator[TDataItems]:
+    """Reads JSON file content and extract the data in chunks.
+
+    Args:
+        chunksize (int, optional): The number of JSON objects to load and yield at once, defaults to 1000
+
+    Returns:
+        Iterator[TDataItems]: An iterator over chunks of the file content
+    """
+    for file_obj in items:
+        with file_obj.open() as f:
+            data = json.load(f)  # Load the entire JSON array
+            for i in range(0, len(data), chunksize):
+                yield data[i : i + chunksize]
+
+
 def _read_parquet(
     items: Iterator[FileItemDict],
     chunksize: int = 10,
@@ -80,7 +98,7 @@ def _read_csv_duckdb(
     items: Iterator[FileItemDict],
     chunk_size: Optional[int] = 5000,
     use_pyarrow: bool = False,
-    **duckdb_kwargs: Any
+    **duckdb_kwargs: Any,
 ) -> Iterator[TDataItems]:
     """A resource to extract data from the given CSV files.
 
@@ -121,6 +139,10 @@ if TYPE_CHECKING:
 
         @copy_sig(_read_jsonl)
         def read_jsonl(self) -> DltResource:
+            ...
+
+        @copy_sig(_read_json)
+        def read_json(self) -> DltResource:
             ...
 
         @copy_sig(_read_parquet)

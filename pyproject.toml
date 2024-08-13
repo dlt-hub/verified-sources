@@ -11,7 +11,7 @@ readme = "README.md"
 packages = [{include = "sources"}]
 
 [tool.poetry.dependencies]
-python = ">=3.8.1,<3.13"
+python = ">=3.8.1,<3.12"
 dlt = {version = "0.5.2", allow-prereleases = true, extras = ["redshift", "bigquery", "postgres", "duckdb"]}
 graphlib-backport = {version = "*", python = "<3.9"}
 
