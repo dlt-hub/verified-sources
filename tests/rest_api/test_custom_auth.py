@@ -5,6 +5,7 @@ from sources import rest_api
 from sources.rest_api.typing import ApiKeyAuthConfig, AuthConfig
 from dlt.sources.helpers.rest_client.auth import APIKeyAuth, OAuth2ClientCredentials
 
+
 class CustomOAuth2(OAuth2ClientCredentials):
     def build_access_token_request(self) -> Dict[str, Any]:
         """Used e.g. by Zoom Zoom Video Communications, Inc."""
@@ -18,6 +19,7 @@ class CustomOAuth2(OAuth2ClientCredentials):
             },
             "data": self.access_token_request_data,
         }
+
 
 class TestCustomAuth:
     @pytest.fixture
@@ -52,18 +54,21 @@ class TestCustomAuth:
     def test_registering_adds_to_AUTH_MAP(self, custom_auth_config: AuthConfig) -> None:
         rest_api.config_setup.register_auth("custom_oauth_2", CustomOAuth2)
         cls = rest_api.config_setup.get_auth_class("custom_oauth_2")
-        assert cls is CustomOauth2
+        assert cls is CustomOAuth2
 
-
-    def test_registering_adds_to_AUTH_MAP(self, custom_auth_config: AuthConfig) -> None:
+    def test_registering_allows_usage(self, custom_auth_config: AuthConfig) -> None:
         rest_api.config_setup.register_auth("custom_oauth_2", CustomOAuth2)
-        auth = rest_api.config_setup.create_auth(custom_auth_config)
-        assert auth.build_access_token_request()["data"]["account_id"] == "test_account_id"
+        auth = cast(CustomOAuth2, rest_api.config_setup.create_auth(custom_auth_config))
+        assert (
+            auth.build_access_token_request()["data"]["account_id"] == "test_account_id"
+        )
 
-    def test_registering_not_auth_config_base_throws_error(self):
+    def test_registering_not_auth_config_base_throws_error(self) -> None:
         class NotAuthConfigBase:
             pass
 
         with pytest.raises(ValueError) as e:
-            rest_api.config_setup.register_auth("not_an_auth_config_base", NotAuthConfigBase)
-        assert e.match("Invalid authentication: NotAuthConfigBase.")
+            rest_api.config_setup.register_auth(
+                "not_an_auth_config_base", NotAuthConfigBase  # type: ignore
+            )
+        assert e.match("Invalid auth: NotAuthConfigBase.")

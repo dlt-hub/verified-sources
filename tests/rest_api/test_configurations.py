@@ -266,7 +266,7 @@ def test_auth_type_configs(auth_type_config: AuthTypeConfig, section: str) -> No
         with inject_section(
             ConfigSectionContext(sections=("sources", "rest_api")), merge_existing=False
         ):
-            auth = create_auth(auth_type_config)
+            auth = create_auth(auth_type_config)  # type: ignore
             assert isinstance(auth, AUTH_MAP[auth_type_config["type"]])
             if isinstance(auth, BearerTokenAuth):
                 # from typed dict
@@ -281,6 +281,11 @@ def test_auth_type_configs(auth_type_config: AuthTypeConfig, section: str) -> No
                 assert auth.username == "username"
                 # injected
                 assert auth.password == "password"
+            if isinstance(auth, OAuth2ClientCredentials):
+                assert auth.access_token_url == "https://example.com/oauth/token"
+                assert auth.client_id == "a_client_id"
+                assert auth.client_secret == "a_client_secret"
+                assert auth.default_token_expiration == 60
 
 
 @pytest.mark.parametrize(
@@ -320,7 +325,7 @@ def test_error_message_invalid_auth_type() -> None:
         create_auth("non_existing_method")
     assert (
         str(e.value)
-        == "Invalid authentication: non_existing_method. Available options: bearer, api_key, http_basic"
+        == "Invalid authentication: non_existing_method. Available options: bearer, api_key, http_basic, oauth2_client_credentials"
     )
 
 

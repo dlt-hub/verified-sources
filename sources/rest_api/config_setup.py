@@ -49,6 +49,7 @@ from dlt.sources.helpers.rest_client.auth import (
     HttpBasicAuth,
     BearerTokenAuth,
     APIKeyAuth,
+    OAuth2ClientCredentials,
 )
 
 from .typing import (
@@ -77,10 +78,11 @@ PAGINATOR_MAP: Dict[str, Type[BasePaginator]] = {
     "page_number": PageNumberPaginator,
 }
 
-AUTH_MAP: Dict[AuthType, Type[AuthConfigBase]] = {
+AUTH_MAP: Dict[str, Type[AuthConfigBase]] = {
     "bearer": BearerTokenAuth,
     "api_key": APIKeyAuth,
     "http_basic": HttpBasicAuth,
+    "oauth2_client_credentials": OAuth2ClientCredentials,
 }
 
 
@@ -140,6 +142,18 @@ def create_paginator(
     return None
 
 
+def register_auth(
+    auth_name: str,
+    auth_class: Type[AuthConfigBase],
+) -> None:
+    if not issubclass(auth_class, AuthConfigBase):
+        raise ValueError(
+            f"Invalid auth: {auth_class.__name__}. "
+            "Your custom auth has to be a subclass of AuthConfigBase"
+        )
+    AUTH_MAP[auth_name] = auth_class
+
+
 def get_auth_class(auth_type: AuthType) -> Type[AuthConfigBase]:
     try:
         return AUTH_MAP[auth_type]
@@ -168,7 +182,7 @@ def create_auth(auth_config: Optional[AuthConfig]) -> Optional[AuthConfigBase]:
     if auth:
         # TODO: provide explicitly (non-default) values as explicit explicit_value=dict(auth)
         # this will resolve auth which is a configuration using current section context
-        return resolve_configuration(auth)
+        return resolve_configuration(auth, accept_partial=True)
 
     return None
 
