@@ -239,6 +239,8 @@ def test_auth_shorthands(auth_type: AuthType, section: str) -> None:
         with inject_section(
             ConfigSectionContext(sections=("sources", "rest_api")), merge_existing=False
         ):
+            import os
+            print(os.environ)
             auth = create_auth(auth_type)
             assert isinstance(auth, AUTH_MAP[auth_type])
             if isinstance(auth, BearerTokenAuth):
