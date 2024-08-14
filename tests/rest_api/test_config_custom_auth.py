@@ -56,12 +56,17 @@ class TestCustomAuth:
         cls = rest_api.config_setup.get_auth_class("custom_oauth_2")
         assert cls is CustomOAuth2
 
+        # teardown test
+        del rest_api.config_setup.AUTH_MAP["custom_oauth_2"]
+
     def test_registering_allows_usage(self, custom_auth_config: AuthConfig) -> None:
         rest_api.config_setup.register_auth("custom_oauth_2", CustomOAuth2)
         auth = cast(CustomOAuth2, rest_api.config_setup.create_auth(custom_auth_config))
-        assert (
-            auth.build_access_token_request()["data"]["account_id"] == "test_account_id"
-        )
+        request = auth.build_access_token_request()
+        assert request["data"]["account_id"] == "test_account_id"
+
+        # teardown test
+        del rest_api.config_setup.AUTH_MAP["custom_oauth_2"]
 
     def test_registering_not_auth_config_base_throws_error(self) -> None:
         class NotAuthConfigBase:

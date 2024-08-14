@@ -230,6 +230,9 @@ def test_auth_shorthands(auth_type: AuthType, section: str) -> None:
             f"{section}__API_KEY": "api_key",
             f"{section}__USERNAME": "username",
             f"{section}__PASSWORD": "password",
+            f"{section}__ACCESS_TOKEN_URL": "https://example.com/oauth/token",
+            f"{section}__CLIENT_ID": "a_client_id",
+            f"{section}__CLIENT_SECRET": "a_client_secret",
         }
     ):
         # shorthands need to instantiate from config
@@ -247,6 +250,11 @@ def test_auth_shorthands(auth_type: AuthType, section: str) -> None:
             if isinstance(auth, HttpBasicAuth):
                 assert auth.username == "username"
                 assert auth.password == "password"
+            if isinstance(auth, OAuth2ClientCredentials):
+                assert auth.access_token_url == "https://example.com/oauth/token"
+                assert auth.client_id == "a_client_id"
+                assert auth.client_secret == "a_client_secret"
+                assert auth.default_token_expiration == 3600
 
 
 @pytest.mark.parametrize("auth_type_config", AUTH_TYPE_CONFIGS)
@@ -322,10 +330,18 @@ def test_bearer_token_fallback() -> None:
 
 def test_error_message_invalid_auth_type() -> None:
     with pytest.raises(ValueError) as e:
-        create_auth("non_existing_method")
+        create_auth("non_existing_method")  # type: ignore
     assert (
         str(e.value)
         == "Invalid authentication: non_existing_method. Available options: bearer, api_key, http_basic, oauth2_client_credentials"
+    )
+
+def test_error_message_invalid_paginator() -> None:
+    with pytest.raises(ValueError) as e:
+        create_paginator("non_existing_method")  # type: ignore
+    assert (
+        str(e.value)
+        == "Invalid paginator: non_existing_method. Available options: json_link, json_response, header_link, auto, single_page, cursor, offset, page_number"
     )
 
 

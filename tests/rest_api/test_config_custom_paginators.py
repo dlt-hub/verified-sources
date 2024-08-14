@@ -44,11 +44,17 @@ class TestCustomPaginator:
         cls = rest_api.config_setup.get_paginator_class("custom_paginator")
         assert cls is CustomPaginator
 
+        # teardown test
+        del rest_api.config_setup.PAGINATOR_MAP["custom_paginator"]
+
     def test_registering_allows_usage(self, custom_paginator_config) -> None:
         rest_api.config_setup.register_paginator("custom_paginator", CustomPaginator)
         paginator = rest_api.config_setup.create_paginator(custom_paginator_config)
         assert paginator.has_next_page is True
         assert str(paginator.next_url_path) == "response.next_page_link"
+
+        # teardown test
+        del rest_api.config_setup.PAGINATOR_MAP["custom_paginator"]
 
     def test_registering_not_base_paginator_throws_error(self) -> None:
         class NotAPaginator:
