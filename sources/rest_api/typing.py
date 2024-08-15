@@ -260,9 +260,6 @@ class ResourceBase(TypedDict, total=False):
     selected: Optional[bool]
     parallelized: Optional[bool]
     processing_steps: Optional[List[ProcessingSteps]]
-    # row_filter: Optional[Callable[[Any], bool]]
-    # transform: Optional[Callable[[Any], Any]]
-    # exclude_columns: Optional[List[jsonpath.TJsonPath]]
 
 
 class EndpointResourceBase(ResourceBase, total=False):

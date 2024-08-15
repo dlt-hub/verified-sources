@@ -289,15 +289,14 @@ def create_resources(
                         incremental_cursor_transform,
                     )
 
-                for page in client.paginate(
+                yield client.paginate(
                     method=method,
                     path=path,
                     params=params,
                     paginator=paginator,
                     data_selector=data_selector,
                     hooks=hooks,
-                ):
-                    yield page
+                )
 
             resources[resource_name] = dlt.resource(
                 paginate_resource,

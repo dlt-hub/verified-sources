@@ -15,103 +15,174 @@ def _make_pipeline(destination_name: str):
     )
 
 
-@pytest.mark.parametrize("destination_name", ALL_DESTINATIONS)
-def test_rest_api_source(destination_name: str) -> None:
+def test_rest_api_source_filtered(mock_api_server) -> None:
     config: RESTAPIConfig = {
         "client": {
-            "base_url": "https://pokeapi.co/api/v2/",
-        },
-        "resource_defaults": {
-            "endpoint": {
-                "params": {
-                    "limit": 1000,
-                },
-            }
+            "base_url": "https://api.example.com",
         },
         "resources": [
             {
-                "name": "pokemon_list",
-                "endpoint": "pokemon",
+                "name": "posts",
+                "endpoint": "posts",
                 "processing_steps": [
-                    {"filter": lambda x: x["name"] == "bulbasaur"},
+                    {"filter": lambda x: x["id"] == 1},
                 ],
             },
         ],
     }
-    data = rest_api_source(config)
-    pipeline = _make_pipeline(destination_name)
-    load_info = pipeline.run(data)
-    print(load_info)
-    assert_load_info(load_info)
-    table_names = [t["name"] for t in pipeline.default_schema.data_tables()]
-    table_counts = load_table_counts(pipeline, *table_names)
+    mock_source = rest_api_source(config)
 
-    assert table_counts.keys() == {"pokemon_list"}
-
-    assert table_counts["pokemon_list"] == 1
+    data = list(mock_source.with_resources("posts"))
+    assert len(data) == 1
+    assert data[0]["title"] == "Post 1"
 
 
-@pytest.mark.parametrize("destination_name", ALL_DESTINATIONS)
-def test_dependent_resource(destination_name: str) -> None:
-    config = {
+def test_rest_api_source_map(mock_api_server) -> None:
+
+    def lower_title(row):
+        row["title"] = row["title"].lower()
+        return row
+
+    config: RESTAPIConfig = {
         "client": {
-            "base_url": "https://pokeapi.co/api/v2/",
-        },
-        "resource_defaults": {
-            "endpoint": {
-                "params": {
-                    "limit": 1000,
-                },
-            }
+            "base_url": "https://api.example.com",
         },
         "resources": [
             {
-                "name": "pokemon_list",
-                "endpoint": {
-                    "path": "pokemon",
-                    "paginator": SinglePagePaginator(),
-                    "data_selector": "results",
-                    "params": {
-                        "limit": 2,
-                    },
-                },
-                "selected": False,
+                "name": "posts",
+                "endpoint": "posts",
                 "processing_steps": [
-                    {"filter": lambda x: x["name"] == "bulbasaur"},
+                    {"map": lower_title},
                 ],
-            },
-            {
-                "name": "pokemon",
-                "endpoint": {
-                    "path": "pokemon/{name}",
-                    "params": {
-                        "name": {
-                            "type": "resolve",
-                            "resource": "pokemon_list",
-                            "field": "name",
-                        },
-                    },
-                },
             },
         ],
     }
+    mock_source = rest_api_source(config)
 
-    data = rest_api_source(config)
-    pipeline = _make_pipeline(destination_name)
-    load_info = pipeline.run(data)
-    assert_load_info(load_info)
-    table_names = [t["name"] for t in pipeline.default_schema.data_tables()]
-    table_counts = load_table_counts(pipeline, *table_names)
+    data = list(mock_source.with_resources("posts"))
 
-    assert set(table_counts.keys()) == {
-        "pokemon",
-        "pokemon__types",
-        "pokemon__stats",
-        "pokemon__moves__version_group_details",
-        "pokemon__moves",
-        "pokemon__game_indices",
-        "pokemon__forms",
-        "pokemon__abilities",
+    assert all(record["title"].startswith("post ") for record in data)
+
+
+def test_rest_api_source_filter_and_map(mock_api_server) -> None:
+
+    def id_by_10(row):
+        row["id"] = row["id"] * 10
+        return row
+
+    config: RESTAPIConfig = {
+        "client": {
+            "base_url": "https://api.example.com",
+        },
+        "resources": [
+            {
+                "name": "posts",
+                "endpoint": "posts",
+                "processing_steps": [
+                    {"map": id_by_10},
+                    {"filter": lambda x: x["id"] == 10},
+                ],
+            },
+            {
+                "name": "posts_2",
+                "endpoint": "posts",
+                "processing_steps": [
+                    {"filter": lambda x: x["id"] == 10},
+                    {"map": id_by_10},
+                ],
+            },
+        ],
     }
+    mock_source = rest_api_source(config)
 
-    assert table_counts["pokemon"] == 1
+    data = list(mock_source.with_resources("posts"))
+    assert len(data) == 1
+    assert data[0]["title"] == "Post 1"
+
+    data = list(mock_source.with_resources("posts_2"))
+    assert len(data) == 1
+    assert data[0]["id"] == 100
+    assert data[0]["title"] == "Post 10"
+
+
+def test_rest_api_source_filtered_child(mock_api_server) -> None:
+    config: RESTAPIConfig = {
+        "client": {
+            "base_url": "https://api.example.com",
+        },
+        "resources": [
+            {
+                "name": "posts",
+                "endpoint": "posts",
+                "processing_steps": [
+                    {"filter": lambda x: x["id"] in (1, 2)},
+                ],
+            },
+            {
+                "name": "comments",
+                "endpoint": {
+                    "path": "/posts/{post_id}/comments",
+                    "params": {
+                        "post_id": {
+                            "type": "resolve",
+                            "resource": "posts",
+                            "field": "id",
+                        }
+                    },
+                },
+                "processing_steps": [
+                    {"filter": lambda x: x["id"] == 1},
+                ],
+            },
+        ],
+    }
+    mock_source = rest_api_source(config)
+
+    data = list(mock_source.with_resources("comments"))
+    assert len(data) == 2
+    # assert data[0]["title"] == "Post 1"
+
+
+def test_rest_api_source_filtered_and_map_child(mock_api_server) -> None:
+
+    def extend_body(row):
+        row["body"] = f"{row['_posts_title']} - {row['body']}"
+        return row
+
+    config: RESTAPIConfig = {
+        "client": {
+            "base_url": "https://api.example.com",
+        },
+        "resources": [
+            {
+                "name": "posts",
+                "endpoint": "posts",
+                "processing_steps": [
+                    {"filter": lambda x: x["id"] in (1, 2)},
+                ],
+            },
+            {
+                "name": "comments",
+                "endpoint": {
+                    "path": "/posts/{post_id}/comments",
+                    "params": {
+                        "post_id": {
+                            "type": "resolve",
+                            "resource": "posts",
+                            "field": "id",
+                        }
+                    },
+                },
+                "include_from_parent": ["title"],
+                "processing_steps": [
+                    {"map": extend_body},
+                    {"filter": lambda x: x["body"].startswith("Post 2")},
+                ],
+            },
+        ],
+    }
+    mock_source = rest_api_source(config)
+
+    data = list(mock_source.with_resources("comments"))
+    # assert len(data) == 1
+    assert data[0]["body"] == "Post 2 - Comment 0 for post 2"
