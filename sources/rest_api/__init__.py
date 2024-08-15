@@ -406,7 +406,14 @@ def _mask_secrets(auth_config: AuthConfig) -> AuthConfig:
 
     has_sensitive_key = any(key in auth_config for key in SENSITIVE_KEYS)
     if (
-        isinstance(auth_config, (APIKeyAuth, BearerTokenAuth, HttpBasicAuth))
+        isinstance(
+            auth_config,
+            (
+                APIKeyAuth,
+                BearerTokenAuth,
+                HttpBasicAuth,
+            ),
+        )
         or has_sensitive_key
     ):
         return _mask_secrets_dict(auth_config)
