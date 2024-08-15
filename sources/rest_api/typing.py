@@ -241,8 +241,8 @@ class Endpoint(TypedDict, total=False):
 
 
 class ProcessingSteps(TypedDict):
-    filter: Optional[Callable[[Any], bool]]
-    map: Optional[Callable[[Any], Any]]
+    filter: Optional[Callable[[Any], bool]]  # noqa: A003
+    map: Optional[Callable[[Any], Any]]  # noqa: A003
 
 
 class ResourceBase(TypedDict, total=False):
