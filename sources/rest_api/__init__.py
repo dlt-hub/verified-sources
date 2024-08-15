@@ -289,10 +289,11 @@ def create_resources(
                         incremental_cursor_transform,
                     )
 
-                yield client.paginate(
+                yield from client.paginate(
                     method=method,
                     path=path,
                     params=params,
+                    json=json,
                     paginator=paginator,
                     data_selector=data_selector,
                     hooks=hooks,
@@ -360,7 +361,7 @@ def create_resources(
                         if parent_record:
                             for child_record in child_page:
                                 child_record.update(parent_record)
-                        yield child_page
+                        yield from child_page
 
             resources[resource_name] = dlt.resource(  # type: ignore[call-overload]
                 paginate_dependent_resource,
