@@ -10,7 +10,7 @@ from typing import (
 from dataclasses import dataclass, field
 
 import psycopg2
-from psycopg2.extensions import cursor
+from psycopg2.extensions import cursor, connection as ConnectionExt
 from psycopg2.extras import (
     LogicalReplicationConnection,
     ReplicationCursor,
@@ -476,7 +476,7 @@ def _import_sql_table_resource() -> None:
 def _get_conn(
     credentials: ConnectionStringCredentials,
     connection_factory: Optional[Any] = None,
-) -> Union[psycopg2.extensions.connection, LogicalReplicationConnection]:
+) -> ConnectionExt:
     """Returns a psycopg2 connection to interact with postgres."""
     return psycopg2.connect(  # type: ignore[no-any-return]
         database=credentials.database,
