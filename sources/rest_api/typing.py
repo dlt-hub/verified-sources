@@ -243,6 +243,7 @@ class Endpoint(TypedDict, total=False):
 class ProcessingSteps(TypedDict):
     filter: Optional[Callable[[Any], bool]]
     map: Optional[Callable[[Any], Any]]
+    exclude_columns: Optional[List[str]]
 
 
 class ResourceBase(TypedDict, total=False):

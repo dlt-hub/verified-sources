@@ -256,7 +256,11 @@ def create_resources(
             endpoint_resource, {"endpoint", "include_from_parent"}
         )
 
-        def process(resource, processing_steps) -> Any:
+        def process(
+            resource: DltResource,
+            processing_steps: List[ProcessingSteps] = [],
+        ) -> Any:
+
             for step in processing_steps:
                 if "filter" in step:
                     resource.add_filter(step["filter"])
@@ -361,7 +365,7 @@ def create_resources(
                         if parent_record:
                             for child_record in child_page:
                                 child_record.update(parent_record)
-                        yield from child_page
+                        yield child_page
 
             resources[resource_name] = dlt.resource(  # type: ignore[call-overload]
                 paginate_dependent_resource,

@@ -1,8 +1,10 @@
+from typing import Callable, List
+
 import dlt
 import pytest
 from dlt.sources.helpers.rest_client.paginators import SinglePagePaginator
-
-from sources.rest_api import rest_api_source, RESTAPIConfig
+from dlt.extract.source import DltResource
+from sources.rest_api import RESTAPIConfig, rest_api_source
 from tests.utils import ALL_DESTINATIONS, assert_load_info, load_table_counts
 
 
@@ -35,6 +37,37 @@ def test_rest_api_source_filtered(mock_api_server) -> None:
     data = list(mock_source.with_resources("posts"))
     assert len(data) == 1
     assert data[0]["title"] == "Post 1"
+
+
+def test_rest_api_source_exclude_columns(mock_api_server) -> None:
+
+    def exclude_columns(columns: List[str]) -> Callable:
+        def pop_columns(resource: DltResource) -> DltResource:
+            for col in columns:
+                resource.pop(col)
+            return resource
+
+        return pop_columns
+
+    config: RESTAPIConfig = {
+        "client": {
+            "base_url": "https://api.example.com",
+        },
+        "resources": [
+            {
+                "name": "posts",
+                "endpoint": "posts",
+                "processing_steps": [
+                    {"map": exclude_columns(["title"])},
+                ],
+            },
+        ],
+    }
+    mock_source = rest_api_source(config)
+
+    data = list(mock_source.with_resources("posts"))
+
+    assert all("title" not in record for record in data)
 
 
 def test_rest_api_source_map(mock_api_server) -> None:
