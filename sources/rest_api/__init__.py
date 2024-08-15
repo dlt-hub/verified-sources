@@ -258,29 +258,14 @@ def create_resources(
 
         def process(
             resource: DltResource,
-            processing_steps: Union[List[ProcessingSteps], Dict],
+            processing_steps: List[ProcessingSteps],
         ) -> Any:
-
-            def exclude_columns(columns: List[str]) -> Callable:
-                def pop_columns(resource: DltResource) -> DltResource:
-                    for col in columns:
-                        resource.pop(col)
-                    return resource
-
-                return pop_columns
-
-            registered_map_methods = {"exclude_columns": exclude_columns}
 
             for step in processing_steps:
                 if "filter" in step:
                     resource.add_filter(step["filter"])
-                elif "map" in step:
+                if "map" in step:
                     resource.add_map(step["map"])
-                else:
-                    step_method, step_arguments = next(iter(step.items()))
-                    resource.add_map(
-                        registered_map_methods[step_method](step_arguments)
-                    )
             return resource
 
         if resolved_param is None:

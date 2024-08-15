@@ -58,7 +58,9 @@ def test_rest_api_source_exclude_columns(mock_api_server) -> None:
                 "name": "posts",
                 "endpoint": "posts",
                 "processing_steps": [
-                    {"map": exclude_columns(["title"])},
+                    {
+                        "map": exclude_columns(["title"]),
+                    },
                 ],
             },
         ],
@@ -68,6 +70,39 @@ def test_rest_api_source_exclude_columns(mock_api_server) -> None:
     data = list(mock_source.with_resources("posts"))
 
     assert all("title" not in record for record in data)
+
+
+def test_rest_api_source_anonymize_columns(mock_api_server) -> None:
+
+    def anonymize_columns(columns: List[str]) -> Callable:
+        def empty_columns(resource: DltResource) -> DltResource:
+            for col in columns:
+                resource[col] = "dummy"
+            return resource
+
+        return empty_columns
+
+    config: RESTAPIConfig = {
+        "client": {
+            "base_url": "https://api.example.com",
+        },
+        "resources": [
+            {
+                "name": "posts",
+                "endpoint": "posts",
+                "processing_steps": [
+                    {
+                        "map": anonymize_columns(["title"]),
+                    },
+                ],
+            },
+        ],
+    }
+    mock_source = rest_api_source(config)
+
+    data = list(mock_source.with_resources("posts"))
+
+    assert all(record["title"] == "dummy" for record in data)
 
 
 def test_rest_api_source_map(mock_api_server) -> None:
