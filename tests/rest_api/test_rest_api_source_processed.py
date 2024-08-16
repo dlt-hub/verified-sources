@@ -251,5 +251,4 @@ def test_rest_api_source_filtered_and_map_child(mock_api_server) -> None:
     mock_source = rest_api_source(config)
 
     data = list(mock_source.with_resources("comments"))
-    # assert len(data) == 1
     assert data[0]["body"] == "Post 2 - Comment 0 for post 2"
