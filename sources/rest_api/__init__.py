@@ -260,7 +260,6 @@ def create_resources(
             resource: DltResource,
             processing_steps: List[ProcessingSteps],
         ) -> Any:
-
             for step in processing_steps:
                 if "filter" in step:
                     resource.add_filter(step["filter"])
