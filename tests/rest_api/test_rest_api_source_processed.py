@@ -208,7 +208,6 @@ def test_rest_api_source_filtered_child(mock_api_server) -> None:
 
     data = list(mock_source.with_resources("comments"))
     assert len(data) == 2
-    # assert data[0]["title"] == "Post 1"
 
 
 def test_rest_api_source_filtered_and_map_child(mock_api_server) -> None:
