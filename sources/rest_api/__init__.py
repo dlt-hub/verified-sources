@@ -379,7 +379,6 @@ def create_resources(
                 data_selector=endpoint_config.get("data_selector"),
                 hooks=hooks,
             )
-
             resources[resource_name] = process(
                 resources[resource_name], processing_steps
             )
