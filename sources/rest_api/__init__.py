@@ -1,4 +1,5 @@
 """Generic API Source"""
+
 from copy import deepcopy
 from typing import Type, Any, Dict, List, Optional, Generator, Callable, cast, Union
 import graphlib  # type: ignore[import,unused-ignore]
@@ -33,6 +34,7 @@ from .typing import (
     IncrementalParamConfig,
     RESTAPIConfig,
     ParamBindType,
+    ProcessingSteps,
 )
 from .config_setup import (
     IncrementalParam,
@@ -222,6 +224,7 @@ def create_resources(
         request_params = endpoint_config.get("params", {})
         request_json = endpoint_config.get("json", None)
         paginator = create_paginator(endpoint_config.get("paginator"))
+        processing_steps = endpoint_resource.pop("processing_steps", [])
 
         resolved_param: ResolvedParam = resolved_param_map[resource_name]
 
@@ -252,6 +255,17 @@ def create_resources(
         resource_kwargs = exclude_keys(
             endpoint_resource, {"endpoint", "include_from_parent"}
         )
+
+        def process(
+            resource: DltResource,
+            processing_steps: List[ProcessingSteps],
+        ) -> Any:
+            for step in processing_steps:
+                if "filter" in step:
+                    resource.add_filter(step["filter"])
+                if "map" in step:
+                    resource.add_map(step["map"])
+            return resource
 
         if resolved_param is None:
 
@@ -299,6 +313,9 @@ def create_resources(
                 paginator=paginator,
                 data_selector=endpoint_config.get("data_selector"),
                 hooks=hooks,
+            )
+            resources[resource_name] = process(
+                resources[resource_name], processing_steps
             )
 
         else:
@@ -361,6 +378,9 @@ def create_resources(
                 data_selector=endpoint_config.get("data_selector"),
                 hooks=hooks,
             )
+            resources[resource_name] = process(
+                resources[resource_name], processing_steps
+            )
 
     return resources
 
@@ -384,7 +404,14 @@ def _mask_secrets(auth_config: AuthConfig) -> AuthConfig:
 
     has_sensitive_key = any(key in auth_config for key in SENSITIVE_KEYS)
     if (
-        isinstance(auth_config, (APIKeyAuth, BearerTokenAuth, HttpBasicAuth))
+        isinstance(
+            auth_config,
+            (
+                APIKeyAuth,
+                BearerTokenAuth,
+                HttpBasicAuth,
+            ),
+        )
         or has_sensitive_key
     ):
         return _mask_secrets_dict(auth_config)
