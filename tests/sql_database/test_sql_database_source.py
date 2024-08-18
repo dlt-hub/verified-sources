@@ -21,7 +21,7 @@ from dlt.sources.credentials import ConnectionStringCredentials
 from sources.sql_database import sql_database, sql_table, TableBackend, ReflectionLevel
 from sources.sql_database.helpers import unwrap_json_connector_x
 
-from tests.sql_database.test_helpers import mock_json_column
+from tests.sql_database.test_helpers import mock_array_column, mock_json_column
 from tests.utils import (
     ALL_DESTINATIONS,
     assert_load_info,
@@ -195,6 +195,9 @@ def test_load_sql_schema_loads_all_tables(
         # always use mock json
         source.has_precision.add_map(mock_json_column("json_col"))
         source.has_precision_nullable.add_map(mock_json_column("json_col"))
+        # always use mock array
+        source.has_precision.add_map(mock_array_column("array_col"))
+        source.has_precision_nullable.add_map(mock_array_column("array_col"))
 
     assert (
         "chat_message_view" not in source.resources
@@ -234,6 +237,9 @@ def test_load_sql_schema_loads_all_tables_parallel(
         # always use mock json
         source.has_precision.add_map(mock_json_column("json_col"))
         source.has_precision_nullable.add_map(mock_json_column("json_col"))
+        # always use mock array
+        source.has_precision.add_map(mock_array_column("array_col"))
+        source.has_precision_nullable.add_map(mock_array_column("array_col"))
 
     load_info = pipeline.run(source)
     print(
@@ -857,6 +863,7 @@ def test_deferred_reflect_in_source(
     # mock the right json values for backends not supporting it
     if backend in ("connectorx", "pandas"):
         source.resources["has_precision"].add_map(mock_json_column("json_col"))
+        source.resources["has_precision"].add_map(mock_array_column("array_col"))
 
     # no columns in both tables
     assert source.has_precision.columns == {}
@@ -917,6 +924,7 @@ def test_deferred_reflect_in_resource(
     # mock the right json values for backends not supporting it
     if backend in ("connectorx", "pandas"):
         table.add_map(mock_json_column("json_col"))
+        table.add_map(mock_array_column("array_col"))
 
     # no columns in both tables
     assert table.columns == {}
