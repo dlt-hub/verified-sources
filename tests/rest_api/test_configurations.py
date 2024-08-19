@@ -223,6 +223,10 @@ def test_allow_deprecated_json_response_paginator_2(mock_api_server) -> None:
     "section", ("SOURCES__REST_API__CREDENTIALS", "SOURCES__CREDENTIALS", "CREDENTIALS")
 )
 def test_auth_shorthands(auth_type: AuthType, section: str) -> None:
+    # TODO: remove when changes in rest_client/auth.py are released
+    if auth_type == "oauth2_client_credentials":
+        pytest.skip("Waiting for release of changes in rest_client/auth.py")
+
     # mock all required envs
     with custom_environ(
         {
@@ -230,12 +234,18 @@ def test_auth_shorthands(auth_type: AuthType, section: str) -> None:
             f"{section}__API_KEY": "api_key",
             f"{section}__USERNAME": "username",
             f"{section}__PASSWORD": "password",
+            # TODO: uncomment when changes in rest_client/auth.py are released
+            # f"{section}__ACCESS_TOKEN_URL": "https://example.com/oauth/token",
+            # f"{section}__CLIENT_ID": "a_client_id",
+            # f"{section}__CLIENT_SECRET": "a_client_secret",
         }
     ):
         # shorthands need to instantiate from config
         with inject_section(
             ConfigSectionContext(sections=("sources", "rest_api")), merge_existing=False
         ):
+            import os
+            print(os.environ)
             auth = create_auth(auth_type)
             assert isinstance(auth, AUTH_MAP[auth_type])
             if isinstance(auth, BearerTokenAuth):
@@ -247,6 +257,12 @@ def test_auth_shorthands(auth_type: AuthType, section: str) -> None:
             if isinstance(auth, HttpBasicAuth):
                 assert auth.username == "username"
                 assert auth.password == "password"
+            # TODO: uncomment when changes in rest_client/auth.py are released
+            # if isinstance(auth, OAuth2ClientCredentials):
+            #     assert auth.access_token_url == "https://example.com/oauth/token"
+            #     assert auth.client_id == "a_client_id"
+            #     assert auth.client_secret == "a_client_secret"
+            #     assert auth.default_token_expiration == 3600
 
 
 @pytest.mark.parametrize("auth_type_config", AUTH_TYPE_CONFIGS)
@@ -266,7 +282,7 @@ def test_auth_type_configs(auth_type_config: AuthTypeConfig, section: str) -> No
         with inject_section(
             ConfigSectionContext(sections=("sources", "rest_api")), merge_existing=False
         ):
-            auth = create_auth(auth_type_config)
+            auth = create_auth(auth_type_config)  # type: ignore
             assert isinstance(auth, AUTH_MAP[auth_type_config["type"]])
             if isinstance(auth, BearerTokenAuth):
                 # from typed dict
@@ -281,6 +297,11 @@ def test_auth_type_configs(auth_type_config: AuthTypeConfig, section: str) -> No
                 assert auth.username == "username"
                 # injected
                 assert auth.password == "password"
+            if isinstance(auth, OAuth2ClientCredentials):
+                assert auth.access_token_url == "https://example.com/oauth/token"
+                assert auth.client_id == "a_client_id"
+                assert auth.client_secret == "a_client_secret"
+                assert auth.default_token_expiration == 60
 
 
 @pytest.mark.parametrize(
@@ -317,10 +338,18 @@ def test_bearer_token_fallback() -> None:
 
 def test_error_message_invalid_auth_type() -> None:
     with pytest.raises(ValueError) as e:
-        create_auth("non_existing_method")
+        create_auth("non_existing_method")  # type: ignore
     assert (
         str(e.value)
-        == "Invalid authentication: non_existing_method. Available options: bearer, api_key, http_basic"
+        == "Invalid authentication: non_existing_method. Available options: bearer, api_key, http_basic, oauth2_client_credentials"
+    )
+
+def test_error_message_invalid_paginator() -> None:
+    with pytest.raises(ValueError) as e:
+        create_paginator("non_existing_method")  # type: ignore
+    assert (
+        str(e.value)
+        == "Invalid paginator: non_existing_method. Available options: json_link, json_response, header_link, auto, single_page, cursor, offset, page_number"
     )
 
 
