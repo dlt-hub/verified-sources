@@ -244,8 +244,6 @@ def test_auth_shorthands(auth_type: AuthType, section: str) -> None:
         with inject_section(
             ConfigSectionContext(sections=("sources", "rest_api")), merge_existing=False
         ):
-            import os
-            print(os.environ)
             auth = create_auth(auth_type)
             assert isinstance(auth, AUTH_MAP[auth_type])
             if isinstance(auth, BearerTokenAuth):
@@ -343,6 +341,7 @@ def test_error_message_invalid_auth_type() -> None:
         str(e.value)
         == "Invalid authentication: non_existing_method. Available options: bearer, api_key, http_basic, oauth2_client_credentials"
     )
+
 
 def test_error_message_invalid_paginator() -> None:
     with pytest.raises(ValueError) as e:
