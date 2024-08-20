@@ -45,9 +45,9 @@ def load_dlthub_dlt_all_data() -> None:
 def load_dlthub_dlt_stargazers() -> None:
     """Loads all stargazers for dlthub dlt repo"""
     pipeline = dlt.pipeline(
-        "github_staragarzers",
+        "github_stargazers",
         destination="duckdb",
-        dataset_name="dlthub_staragarzers",
+        dataset_name="dlthub_stargazers",
         full_refresh=True,
     )
     data = github_stargazers("dlt-hub", "dlt")
