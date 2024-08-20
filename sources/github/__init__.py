@@ -120,7 +120,7 @@ def github_stargazers(
 ) -> Sequence[DltResource]:
     """Get stargazers in the repo `name` with owner `owner`.
 
-    This source uses graphql to retrieve all staragars with the associated starred date,
+    This source uses graphql to retrieve all stargazers with the associated starred date,
     Internally graphql is used to retrieve data. It is cost optimized and you are able to retrieve the
     data for fairly large repos quickly and cheaply.
 
@@ -132,7 +132,7 @@ def github_stargazers(
         max_items (int, optional): How many issues/pull requests to get in total. None means All.
 
     Returns:
-        Sequence[DltResource]: Two DltResources: `issues` with issues and `pull_requests` with pull requests
+        Sequence[DltResource]: One DltResource: `stargazers` 
     """
     return (
         dlt.resource(
