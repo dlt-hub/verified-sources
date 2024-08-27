@@ -132,7 +132,7 @@ def github_stargazers(
         max_items (int, optional): How many issues/pull requests to get in total. None means All.
 
     Returns:
-        Sequence[DltResource]: One DltResource: `stargazers` 
+        Sequence[DltResource]: One DltResource: `stargazers`
     """
     return (
         dlt.resource(
