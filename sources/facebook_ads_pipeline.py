@@ -15,7 +15,7 @@ def load_all_ads_objects() -> None:
         pipeline_name="facebook_ads",
         destination="duckdb",
         dataset_name="facebook_ads_data",
-        full_refresh=True,
+        dev_mode=True,
     )
     info = pipeline.run(facebook_ads_source())
     print(info)
@@ -27,7 +27,7 @@ def merge_ads_objects() -> None:
         pipeline_name="facebook_insights",
         destination="duckdb",
         dataset_name="facebook_insights_data",
-        full_refresh=True,
+        dev_mode=True,
     )
     fb_ads = facebook_ads_source()
     # enable root key propagation on a source that is not a merge one by default. this is not required if you always use merge but below we start
@@ -53,7 +53,7 @@ def load_ads_with_custom_fields() -> None:
         pipeline_name="facebook_ads",
         destination="duckdb",
         dataset_name="facebook_ads_data",
-        full_refresh=True,
+        dev_mode=True,
     )
     fb_ads = facebook_ads_source()
     # only loads add ids, works the same for campaigns, leads etc.
@@ -68,7 +68,7 @@ def load_only_disapproved_ads() -> None:
         pipeline_name="facebook_ads",
         destination="duckdb",
         dataset_name="facebook_ads_data",
-        full_refresh=True,
+        dev_mode=True,
     )
     fb_ads = facebook_ads_source()
     # we want only disapproved ads
@@ -87,7 +87,7 @@ def load_and_enrich_objects() -> None:
         pipeline_name="facebook_ads",
         destination="duckdb",
         dataset_name="facebook_ads_data",
-        full_refresh=True,
+        dev_mode=True,
     )
     # also shows how to reduce chunk size: many small requests will be made
     fb_ads = facebook_ads_source(chunk_size=2)
@@ -108,7 +108,7 @@ def load_insights() -> None:
         pipeline_name="facebook_insights",
         destination="duckdb",
         dataset_name="facebook_insights_data",
-        full_refresh=True,
+        dev_mode=True,
     )
     # just load 1 past day with attribution window of 7 days - that will re-acquire last 8 days + today
     i_daily = facebook_insights_source(initial_load_past_days=1)

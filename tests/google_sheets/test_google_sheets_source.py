@@ -159,7 +159,7 @@ def test_blank_columns() -> None:
     )
     pipeline = dlt.pipeline(
         destination="duckdb",
-        full_refresh=True,
+        dev_mode=True,
         dataset_name="test_blank_columns_data",
     )
     pipeline.extract(data)
@@ -578,7 +578,7 @@ def test_auto_header_names():
 def test_table_rename() -> None:
     pipeline = dlt.pipeline(
         destination="duckdb",
-        full_refresh=True,
+        dev_mode=True,
         dataset_name="test_table_rename_data",
     )
     data = google_spreadsheet(
@@ -598,7 +598,7 @@ def test_table_rename() -> None:
 def test_table_rename_and_multiple_spreadsheets() -> None:
     pipeline = dlt.pipeline(
         destination="duckdb",
-        full_refresh=True,
+        dev_mode=True,
         dataset_name="test_table_rename_data",
     )
     # take data from spreadsheet 1
@@ -699,7 +699,7 @@ def _row_helper(row, destination_name):
 def _run_pipeline(
     destination_name,
     dataset_name,
-    full_refresh=True,
+    dev_mode=True,
     range_names=None,
     get_sheets=True,
     get_named_ranges=True,
@@ -709,7 +709,7 @@ def _run_pipeline(
     """
     pipeline = dlt.pipeline(
         destination=destination_name,
-        full_refresh=full_refresh,
+        dev_mode=dev_mode,
         dataset_name=dataset_name,
     )
     data = google_spreadsheet(

@@ -60,7 +60,7 @@ if __name__ == "__main__":
         pipeline_name="generic",
         destination="duckdb",
         dataset_name="generic_data",
-        full_refresh=False,
+        dev_mode=False,
     )
 
     load_info = p.run(source())

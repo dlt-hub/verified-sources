@@ -26,7 +26,7 @@ def test_load_mock_api(mock_api_server):
         pipeline_name="rest_api_mock",
         destination="duckdb",
         dataset_name="rest_api_mock",
-        full_refresh=True,
+        dev_mode=True,
     )
 
     mock_source = rest_api_source(
@@ -181,7 +181,7 @@ def test_unauthorized_access_to_protected_endpoint(mock_api_server):
         pipeline_name="rest_api_mock",
         destination="duckdb",
         dataset_name="rest_api_mock",
-        full_refresh=True,
+        dev_mode=True,
     )
 
     mock_source = rest_api_source(
@@ -261,7 +261,7 @@ def test_load_mock_api_typeddict_config(mock_api_server):
         pipeline_name="rest_api_mock",
         destination="duckdb",
         dataset_name="rest_api_mock",
-        full_refresh=True,
+        dev_mode=True,
     )
 
     mock_source = rest_api_source(

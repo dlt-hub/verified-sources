@@ -16,13 +16,13 @@ from tests.utils import ALL_DESTINATIONS, assert_load_info, skipifwindows
 def run_pipeline(
     destination_name: str, queries: dict, resource: DltResource, run_async: bool = False
 ):
-    # Mind the full_refresh flag - it makes sure that data is loaded to unique dataset.
+    # Mind the dev_mode flag - it makes sure that data is loaded to unique dataset.
     # This allows you to run the tests on the same database in parallel
     pipeline = dlt.pipeline(
         pipeline_name="pipeline_name",
         destination=destination_name,
         dataset_name="dataset_name",
-        full_refresh=True,
+        dev_mode=True,
     )
     data_extractor = resource | unstructured_to_structured_resource(
         queries,

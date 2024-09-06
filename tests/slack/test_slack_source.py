@@ -12,7 +12,7 @@ def test_tabel_per_channel(destination_name: str) -> None:
         pipeline_name="slack",
         destination=destination_name,
         dataset_name="slack_data",
-        full_refresh=True,
+        dev_mode=True,
     )
 
     # Set page size to ensure we use pagination
@@ -43,7 +43,7 @@ def test_all_resources(destination_name: str) -> None:
         pipeline_name="slack",
         destination=destination_name,
         dataset_name="slack_data",
-        full_refresh=True,
+        dev_mode=True,
     )
 
     # Set page size to ensure we use pagination
@@ -74,7 +74,7 @@ def test_replies(destination_name: str) -> None:
         pipeline_name="slack",
         destination=destination_name,
         dataset_name="slack_data",
-        full_refresh=True,
+        dev_mode=True,
     )
 
     # Set page size to ensure we use pagination
@@ -104,7 +104,7 @@ def test_with_merge_disposition(destination_name: str, table_per_channel: bool) 
         pipeline_name="slack",
         destination=destination_name,
         dataset_name="slack_data",
-        full_refresh=True,
+        dev_mode=True,
     )
 
     # Set page size to ensure we use pagination
@@ -136,7 +136,7 @@ def test_users(destination_name: str) -> None:
         pipeline_name="slack",
         destination=destination_name,
         dataset_name="slack_user_data",
-        full_refresh=True,
+        dev_mode=True,
     )
 
     # Selected just one channel to avoid loading all channels

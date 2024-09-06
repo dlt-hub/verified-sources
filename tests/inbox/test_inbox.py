@@ -14,7 +14,7 @@ def test_load_uids_incremental() -> None:
     pipeline = dlt.pipeline(
         pipeline_name="test_load_uids_incremental",
         destination="dummy",
-        full_refresh=True,
+        dev_mode=True,
     )
     source = inbox_source()
     pipeline.extract(source.uids)
@@ -127,7 +127,7 @@ def test_parse_pdf() -> None:
         pipeline_name="standard_inbox",
         destination="duckdb",
         dataset_name="attachments_data",
-        full_refresh=True,
+        dev_mode=True,
     )
 
     # get attachment resource from a source, we only want pdfs that we later parse

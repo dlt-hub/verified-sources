@@ -19,7 +19,7 @@ def test_github_reactions(destination_name: str) -> None:
         "github_reactions",
         destination=destination_name,
         dataset_name="duckdb_issues",
-        full_refresh=True,
+        dev_mode=True,
     )
     # get only 100 items (for issues and pull request)
     data = github_reactions("duckdb", "duckdb", items_per_page=100, max_items=100)
@@ -55,7 +55,7 @@ def test_github_events(destination_name: str) -> None:
         "github_events",
         destination=destination_name,
         dataset_name="airflow_events",
-        full_refresh=True,
+        dev_mode=True,
     )
     data = github_repo_events("apache", "airflow")
     load_info = pipeline.run(data)
@@ -86,7 +86,7 @@ def test_github_stargazers(destination_name: str) -> None:
         "github_stargazers",
         destination=destination_name,
         dataset_name="duckdb_stargazers",
-        full_refresh=True,
+        dev_mode=True,
     )
     # get only 100 stargazers
     data = github_stargazers("duckdb", "duckdb", items_per_page=100, max_items=100)

@@ -137,7 +137,7 @@ def test_resource_contacts_with_history(destination_name: str, mock_response) ->
             pipeline_name="hubspot",
             destination=destination_name,
             dataset_name="hubspot_data",
-            full_refresh=True,
+            dev_mode=True,
         )
         source = hubspot(
             api_key="fake_key",
@@ -203,7 +203,7 @@ def test_only_users_properties(destination_name: str, mock_response) -> None:
         pipeline_name="hubspot",
         destination=destination_name,
         dataset_name="hubspot_data",
-        full_refresh=True,
+        dev_mode=True,
     )
     source = hubspot(api_key="fake_key")
     source.contacts.bind(props=props, include_custom_props=False)
@@ -240,7 +240,7 @@ def test_only_default_props(destination_name: str, mock_response) -> None:
         pipeline_name="hubspot",
         destination=destination_name,
         dataset_name="hubspot_data",
-        full_refresh=True,
+        dev_mode=True,
     )
     source = hubspot(api_key="fake_key")
     source.contacts.bind(include_custom_props=False)
@@ -278,7 +278,7 @@ def test_users_and_custom_properties(destination_name: str, mock_response) -> No
         pipeline_name="hubspot",
         destination=destination_name,
         dataset_name="hubspot_data",
-        full_refresh=True,
+        dev_mode=True,
     )
     source = hubspot(api_key="fake_key")
     source.contacts.bind(props=props)
@@ -318,7 +318,7 @@ def test_custom_only_properties(destination_name: str, mock_response) -> None:
         pipeline_name="hubspot",
         destination=destination_name,
         dataset_name="hubspot_data",
-        full_refresh=True,
+        dev_mode=True,
     )
     source = hubspot(api_key="fake_key")
 
@@ -337,7 +337,7 @@ def test_all_resources(destination_name: str) -> None:
         pipeline_name="hubspot",
         destination=destination_name,
         dataset_name="hubspot_data",
-        full_refresh=True,
+        dev_mode=True,
     )
     load_info = pipeline.run(hubspot(include_history=True))
 
@@ -409,7 +409,7 @@ def test_event_resources(destination_name: str) -> None:
         pipeline_name="hubspot",
         destination=destination_name,
         dataset_name="hubspot_data",
-        full_refresh=True,
+        dev_mode=True,
     )
     load_info = pipeline.run(
         hubspot_events_for_objects("company", ["7086461639", "7086464459"])

@@ -144,7 +144,7 @@ def test_incrementing(destination_name: str) -> None:
     # dataset_name = "analytics_dataset_" + uniq_id()  # use random dataset name so we can run many tests in parallel
     pipeline = dlt.pipeline(
         destination=destination_name,
-        full_refresh=True,
+        dev_mode=True,
         dataset_name="analytics_dataset",
     )
 
@@ -152,7 +152,7 @@ def test_incrementing(destination_name: str) -> None:
     # with pendulum.test(incremental_end_date):
     #     # do not use full refresh it does not work with pendulum mock
 
-    #     pipeline = _create_pipeline(queries=QUERIES, destination_name=destination_name, dataset_name=dataset_name, full_refresh=False)
+    #     pipeline = _create_pipeline(queries=QUERIES, destination_name=destination_name, dataset_name=dataset_name, dev_mode=False)
     # incremental_load_counts = [load_table_counts(pipeline, *ALL_TABLES.keys())]
 
     # load the rest of the data
@@ -209,7 +209,7 @@ def test_pagination(destination_name: str) -> None:
         queries=QUERIES,
         destination_name=destination_name,
         dataset_name="analytics_dataset_pagination_5",
-        full_refresh=True,
+        dev_mode=True,
     )
     first_load_counts = load_table_counts(pipeline_pagination_5, *ALL_TABLES.keys())
     # drop the pipeline explicitly. fixture drops only one active pipeline
@@ -222,7 +222,7 @@ def test_pagination(destination_name: str) -> None:
         queries=QUERIES,
         destination_name=destination_name,
         dataset_name="analytics_dataset_pagination_10",
-        full_refresh=True,
+        dev_mode=True,
     )
     second_load_counts = load_table_counts(pipeline_pagination_10, *ALL_TABLES.keys())
     assert first_load_counts == second_load_counts
@@ -241,7 +241,7 @@ def test_starting_date(destination_name: str) -> None:
         queries=QUERIES,
         destination_name=destination_name,
         dataset_name="analytics_dataset_start_date_1",
-        full_refresh=True,
+        dev_mode=True,
         start_date="2021-01-01",
     )
     first_load_counts = load_table_counts(pipeline_start_date_1, *ALL_TABLES.keys())
@@ -251,7 +251,7 @@ def test_starting_date(destination_name: str) -> None:
         queries=QUERIES,
         destination_name=destination_name,
         dataset_name="analytics_dataset_start_date_2",
-        full_refresh=True,
+        dev_mode=True,
         start_date="2022-01-01",
     )
     second_load_counts = load_table_counts(pipeline_start_date_2, *ALL_TABLES.keys())
@@ -272,18 +272,18 @@ def _create_pipeline(
     dataset_name: str,
     queries: List[DictStrAny],
     start_date: Optional[str] = None,
-    full_refresh: bool = True,
+    dev_mode: bool = True,
 ):
     """
     Helper, creates the pipelines and asserts the data is loaded correctly
     :param destination_name - redshift/bigquery/postgres
     :param start_date: Only used the first time for incremental loading to have a starting date for gathering data.
-    :param full_refresh: pipeline parameter
+    :param dev_mode: pipeline parameter
     :param queries: Describes how many reports and what data should be retrieved for each report.
     """
     pipeline = dlt.pipeline(
         destination=destination_name,
-        full_refresh=full_refresh,
+        dev_mode=dev_mode,
         dataset_name=dataset_name,
     )
     # gather data with sources and see which data to run or not

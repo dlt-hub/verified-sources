@@ -74,7 +74,7 @@ def read_csv_duckdb_compressed() -> None:
         pipeline_name="standard_filesystem",
         destination="duckdb",
         dataset_name="taxi_data",
-        full_refresh=True,
+        dev_mode=True,
     )
 
     met_files = readers(

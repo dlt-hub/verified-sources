@@ -10,7 +10,7 @@ def test_all_resources(destination_name: str) -> None:
         pipeline_name="template",
         destination=destination_name,
         dataset_name="template_data",
-        full_refresh=True,
+        dev_mode=True,
     )
     load_info = pipeline.run(source())
     print(load_info)

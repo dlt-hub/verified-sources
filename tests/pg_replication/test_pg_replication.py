@@ -62,7 +62,7 @@ def test_core_functionality(
     )
 
     dest_pl = dlt.pipeline(
-        pipeline_name="dest_pl", destination=destination_name, full_refresh=True
+        pipeline_name="dest_pl", destination=destination_name, dev_mode=True
     )
 
     # initial load
@@ -190,7 +190,7 @@ def test_without_init_load(
 
     # load changes to destination and assert expectations
     dest_pl = dlt.pipeline(
-        pipeline_name="dest_pl", destination=destination_name, full_refresh=True
+        pipeline_name="dest_pl", destination=destination_name, dev_mode=True
     )
     info = dest_pl.run(changes)
     assert_load_info(info)
@@ -238,7 +238,7 @@ def test_insert_only(src_config: Tuple[dlt.Pipeline, str, str]) -> None:
     src_pl.run(items({"id": 2, "foo": "bar"}))
 
     # extract items from resource
-    dest_pl = dlt.pipeline(pipeline_name="dest_pl", full_refresh=True)
+    dest_pl = dlt.pipeline(pipeline_name="dest_pl", dev_mode=True)
     extract_info = dest_pl.extract(changes)
     assert get_table_metrics(extract_info, "items")["items_count"] == 1
 
@@ -296,7 +296,7 @@ def test_mapped_data_types(
 
     # initial load
     dest_pl = dlt.pipeline(
-        pipeline_name="dest_pl", destination=destination_name, full_refresh=True
+        pipeline_name="dest_pl", destination=destination_name, dev_mode=True
     )
     if init_load:
         info = dest_pl.run(snapshot)
@@ -397,7 +397,7 @@ def test_unmapped_data_types(
 
     # run destination pipeline and assert resulting data types
     dest_pl = dlt.pipeline(
-        pipeline_name="dest_pl", destination=destination_name, full_refresh=True
+        pipeline_name="dest_pl", destination=destination_name, dev_mode=True
     )
     dest_pl.extract(changes)
     dest_pl.normalize()
@@ -437,7 +437,7 @@ def test_write_disposition(
     # assert write disposition on tables dispatched by changes resource
     changes = replication_resource(slot_name, pub_name)
     src_pl.run(items({"id": 2, "val": True}))
-    dest_pl = dlt.pipeline(pipeline_name="dest_pl", full_refresh=True)
+    dest_pl = dlt.pipeline(pipeline_name="dest_pl", dev_mode=True)
     dest_pl.extract(changes)
     assert (
         dest_pl.default_schema.get_table("items")["write_disposition"]
@@ -512,7 +512,7 @@ def test_include_columns(
 
     # load to destination and assert column expectations
     dest_pl = dlt.pipeline(
-        pipeline_name="dest_pl", destination=destination_name, full_refresh=True
+        pipeline_name="dest_pl", destination=destination_name, dev_mode=True
     )
     if init_load:
         dest_pl.run(snapshots)
@@ -583,7 +583,7 @@ def test_column_hints(
 
     # load to destination and assert column expectations
     dest_pl = dlt.pipeline(
-        pipeline_name="dest_pl", destination=destination_name, full_refresh=True
+        pipeline_name="dest_pl", destination=destination_name, dev_mode=True
     )
     if init_load:
         dest_pl.run(snapshots)
@@ -652,7 +652,7 @@ def test_table_schema_change(
     # create resource and pipeline
     changes = replication_resource(slot_name, pub_name)
     dest_pl = dlt.pipeline(
-        pipeline_name="dest_pl", destination=destination_name, full_refresh=True
+        pipeline_name="dest_pl", destination=destination_name, dev_mode=True
     )
 
     # add a column in one commit, this will create one Relation message
@@ -808,7 +808,7 @@ def test_replicate_schema(src_config: Tuple[dlt.Pipeline, str, str]) -> None:
             tbl_y({"id_y": 2, "val_y": "foo"}),
         ]
     )
-    dest_pl = dlt.pipeline(pipeline_name="dest_pl", full_refresh=True)
+    dest_pl = dlt.pipeline(pipeline_name="dest_pl", dev_mode=True)
     dest_pl.extract(changes)
     assert set(dest_pl.default_schema.data_table_names()) == {"tbl_x", "tbl_y"}
 
@@ -843,7 +843,7 @@ def test_batching(src_config: Tuple[dlt.Pipeline, str, str]) -> None:
     changes = replication_resource(slot_name, pub_name, target_batch_size=50)
 
     # create destination pipeline and resource
-    dest_pl = dlt.pipeline(pipeline_name="dest_pl", full_refresh=True)
+    dest_pl = dlt.pipeline(pipeline_name="dest_pl", dev_mode=True)
 
     # insert 100 records into source table in one transaction
     batch = [{**r, **{"id": key}} for r in [data] for key in range(1, 101)]

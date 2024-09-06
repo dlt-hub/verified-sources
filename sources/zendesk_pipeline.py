@@ -20,7 +20,7 @@ def incremental_load_all_default() -> Any:
     pipeline = dlt.pipeline(
         pipeline_name="dlt_zendesk_pipeline",
         destination="postgres",
-        full_refresh=False,
+        dev_mode=False,
         dataset_name="sample_zendesk_data3",
     )
 
@@ -42,7 +42,7 @@ def load_support_with_pivoting() -> Any:
     pipeline = dlt.pipeline(
         pipeline_name="zendesk_support_pivoting",
         destination="postgres",
-        full_refresh=False,
+        dev_mode=False,
     )
     data = zendesk_support(load_all=False, pivot_ticket_fields=True)
     info = pipeline.run(data=data)
@@ -64,7 +64,7 @@ def incremental_load_all_start_date() -> Any:
     pipeline = dlt.pipeline(
         pipeline_name="dlt_zendesk_pipeline",
         destination="postgres",
-        full_refresh=False,
+        dev_mode=False,
         dataset_name="sample_zendesk_data",
     )
     data = zendesk_support(load_all=True, start_date=start_date)
@@ -83,7 +83,7 @@ def incremental_load_with_backloading() -> Any:
     pipeline = dlt.pipeline(
         pipeline_name="dlt_zendesk_pipeline",
         destination="postgres",
-        full_refresh=False,
+        dev_mode=False,
         dataset_name="sample_zendesk_data",
     )
 

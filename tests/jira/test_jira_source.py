@@ -13,12 +13,12 @@ from tests.utils import (
 
 @pytest.mark.parametrize("destination_name", ALL_DESTINATIONS)
 def test_load_all_endpoints(destination_name: str) -> None:
-    # mind the full_refresh flag - it makes sure that data is loaded to unique dataset. this allows you to run the tests on the same database in parallel
+    # mind the dev_mode flag - it makes sure that data is loaded to unique dataset. this allows you to run the tests on the same database in parallel
     pipeline = dlt.pipeline(
         pipeline_name="test_pipeline_name",
         destination=destination_name,
         dataset_name="test_dataset_name",
-        full_refresh=True,
+        dev_mode=True,
     )
     all_endpoints = jira(page_size=1)
     # disable user - use next test for that
@@ -35,12 +35,12 @@ def test_load_all_endpoints(destination_name: str) -> None:
 
 @pytest.mark.parametrize("destination_name", ALL_DESTINATIONS)
 def test_load_users(destination_name: str) -> None:
-    # mind the full_refresh flag - it makes sure that data is loaded to unique dataset. this allows you to run the tests on the same database in parallel
+    # mind the dev_mode flag - it makes sure that data is loaded to unique dataset. this allows you to run the tests on the same database in parallel
     pipeline = dlt.pipeline(
         pipeline_name="test_pipeline_name",
         destination=destination_name,
         dataset_name="test_dataset_name",
-        full_refresh=True,
+        dev_mode=True,
     )
     data = jira()
     all_endpoints = jira(page_size=5)
@@ -89,12 +89,12 @@ def test_load_query_issues(destination_name: str) -> None:
         "",  # all returned
     ]
 
-    # mind the `full_refresh` flag - it makes sure that data is loaded to unique dataset. this allows you to run the tests on the same database in parallel
+    # mind the `dev_mode` flag - it makes sure that data is loaded to unique dataset. this allows you to run the tests on the same database in parallel
     pipeline = dlt.pipeline(
         pipeline_name="test_pipeline_name",
         destination=destination_name,
         dataset_name="test_dataset_name",
-        full_refresh=True,
+        dev_mode=True,
     )
 
     # load issues from specified Jira queries.

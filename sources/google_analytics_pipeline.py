@@ -34,7 +34,7 @@ def simple_load() -> Any:
     pipeline = dlt.pipeline(
         pipeline_name="dlt_google_analytics_pipeline",
         destination="duckdb",
-        full_refresh=False,
+        dev_mode=False,
         dataset_name="sample_analytics_data",
     )
     # Google Analytics source function - taking data from QUERIES defined locally instead of config
@@ -57,7 +57,7 @@ def simple_load_config() -> Any:
     pipeline = dlt.pipeline(
         pipeline_name="dlt_google_analytics_pipeline",
         destination="duckdb",
-        full_refresh=False,
+        dev_mode=False,
         dataset_name="sample_analytics_data",
     )
     # Google Analytics source function - taking data from QUERIES defined locally instead of config
@@ -82,7 +82,7 @@ def chose_date_first_load(start_date: str = "2000-01-01") -> Any:
     pipeline = dlt.pipeline(
         pipeline_name="dlt_google_analytics_pipeline",
         destination="duckdb",
-        full_refresh=False,
+        dev_mode=False,
         dataset_name="sample_analytics_data",
     )
     # Google Analytics source function

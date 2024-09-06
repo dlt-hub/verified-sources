@@ -10,7 +10,7 @@ def test_all_resources(destination_name: str) -> None:
         pipeline_name="asana",
         destination=destination_name,
         dataset_name="asana_data",
-        full_refresh=True,
+        dev_mode=True,
     )
     load_info = pipeline.run(asana_source())
     print(load_info)

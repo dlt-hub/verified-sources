@@ -13,7 +13,7 @@ def test_load_selected_notion_database(destination_name: str):
         pipeline_name="mux",
         destination=destination_name,
         dataset_name="mux_data",
-        full_refresh=True,
+        dev_mode=True,
     )
 
     info = pipeline.run(mux_source())

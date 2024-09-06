@@ -11,13 +11,13 @@ from tests.utils import ALL_DESTINATIONS, assert_load_info
 
 @pytest.mark.parametrize("destination_name", ALL_DESTINATIONS)
 def test_incremental_resources(destination_name: str) -> None:
-    # mind the full_refresh flag - it makes sure that data is loaded to unique dataset.
+    # mind the dev_mode flag - it makes sure that data is loaded to unique dataset.
     # this allows you to run the tests on the same database in parallel
     pipeline = dlt.pipeline(
         pipeline_name="stripe_analytics_test_inc",
         destination=destination_name,
         dataset_name="stripe_incremental_test",
-        full_refresh=True,
+        dev_mode=True,
     )
     data = incremental_stripe_source()
     # load all endpoints out of the data source
@@ -27,13 +27,13 @@ def test_incremental_resources(destination_name: str) -> None:
 
 @pytest.mark.parametrize("destination_name", ALL_DESTINATIONS)
 def test_updated_resources(destination_name: str) -> None:
-    # mind the full_refresh flag - it makes sure that data is loaded to unique dataset.
+    # mind the dev_mode flag - it makes sure that data is loaded to unique dataset.
     # this allows you to run the tests on the same database in parallel
     pipeline = dlt.pipeline(
         pipeline_name="stripe_analytics_test_upd",
         destination=destination_name,
         dataset_name="stripe_updated_test",
-        full_refresh=True,
+        dev_mode=True,
     )
     data = stripe_source()
     # load all endpoints out of the data source
@@ -43,13 +43,13 @@ def test_updated_resources(destination_name: str) -> None:
 
 @pytest.mark.parametrize("destination_name", ALL_DESTINATIONS)
 def test_load_subscription(destination_name: str) -> None:
-    # mind the full_refresh flag - it makes sure that data is loaded to unique dataset.
+    # mind the dev_mode flag - it makes sure that data is loaded to unique dataset.
     # this allows you to run the tests on the same database in parallel
     pipeline = dlt.pipeline(
         pipeline_name="stripe_analytics_subscriptions_test",
         destination=destination_name,
         dataset_name="stripe_subscriptions_test",
-        full_refresh=True,
+        dev_mode=True,
     )
     data = stripe_source(endpoints=("Subscription",), end_date=datetime(2024, 5, 3))
     data.resources["Subscription"].apply_hints(
@@ -95,7 +95,7 @@ def test_incremental_event_load(destination_name: str) -> None:
         pipeline_name="stripe_analytics_event_test",
         destination=destination_name,
         dataset_name="stripe_event_test",
-        full_refresh=True,
+        dev_mode=True,
     )
     data = incremental_stripe_source(
         endpoints=("Event",), end_date=datetime(2024, 2, 1)

@@ -104,7 +104,7 @@ def test_pivoting_tickets(destination_name: str) -> None:
     # Run pipeline without pivoting - get columns of tickets and check that it has the expected columns
     pipeline_pivoting_1 = dlt.pipeline(
         destination=destination_name,
-        full_refresh=True,
+        dev_mode=True,
         dataset_name="test_unpivot_tickets_support",
     )
     data = zendesk_support(load_all=False, pivot_ticket_fields=False)
@@ -121,7 +121,7 @@ def test_pivoting_tickets(destination_name: str) -> None:
     # run pipeline with pivoting - get columns of tickets and check that it has the expected columns
     pipeline_pivoting_2 = dlt.pipeline(
         destination=destination_name,
-        full_refresh=True,
+        dev_mode=True,
         dataset_name="test_pivot_tickets_support",
     )
     data2 = zendesk_support(load_all=False, pivot_ticket_fields=True)
@@ -155,7 +155,7 @@ def test_incrementing(destination_name: str) -> None:
         # run pipeline
         pipeline_incremental = _create_pipeline(
             destination_name=destination_name,
-            full_refresh=True,
+            dev_mode=True,
             dataset_name="test_incremental",
             include_chat=True,
             include_support=True,
@@ -186,7 +186,7 @@ def test_tickets_end_date_incremental(destination_name: str) -> None:
     """Test time range loading tickets with end_value and incremental"""
     pipeline = dlt.pipeline(
         destination=destination_name,
-        full_refresh=True,
+        dev_mode=True,
     )
 
     # Run with start time matching exactly the timestamp of the first ticket
@@ -323,7 +323,7 @@ def test_zendesk_talk(destination_name: str) -> None:
 def _create_pipeline(
     destination_name: str,
     dataset_name: str,
-    full_refresh: bool = True,
+    dev_mode: bool = True,
     include_support: bool = False,
     include_chat: bool = False,
     include_talk: bool = False,
@@ -331,13 +331,13 @@ def _create_pipeline(
     """
     Helper, creates the pipelines and asserts the data is loaded correctly
     @:param: destination_name - redshift/bigquery/postgres
-    @:param: full_refresh: pipeline parameter
+    @:param: dev_mode: pipeline parameter
     @:param include_support: bool that indicates whether to include zendesk support source
     @:param include_chat: bool that indicates whether to include zendesk chat source
     """
     pipeline = dlt.pipeline(
         destination=destination_name,
-        full_refresh=full_refresh,
+        dev_mode=dev_mode,
         dataset_name=dataset_name,
     )
     # gather data with sources and see which data to run or not

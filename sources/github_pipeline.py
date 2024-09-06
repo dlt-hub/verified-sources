@@ -9,7 +9,7 @@ def load_duckdb_repo_reactions_issues_only() -> None:
         "github_reactions",
         destination="duckdb",
         dataset_name="duckdb_issues",
-        full_refresh=True,
+        dev_mode=True,
     )
     # get only 100 items (for issues and pull request)
     data = github_reactions(
@@ -36,7 +36,7 @@ def load_dlthub_dlt_all_data() -> None:
         "github_reactions",
         destination="duckdb",
         dataset_name="dlthub_reactions",
-        full_refresh=True,
+        dev_mode=True,
     )
     data = github_reactions("dlt-hub", "dlt")
     print(pipeline.run(data))
@@ -48,7 +48,7 @@ def load_dlthub_dlt_stargazers() -> None:
         "github_stargazers",
         destination="duckdb",
         dataset_name="dlthub_stargazers",
-        full_refresh=True,
+        dev_mode=True,
     )
     data = github_stargazers("dlt-hub", "dlt")
     print(pipeline.run(data))

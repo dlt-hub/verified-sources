@@ -10,7 +10,7 @@ def from_local_folder_to_structured(data_dir: str) -> None:
         pipeline_name="unstructured_local_folder",
         destination="duckdb",
         dataset_name="unstructured_data_local_folder",
-        full_refresh=True,
+        dev_mode=True,
     )
 
     data_resource = local_folder_resource(data_dir)
@@ -37,7 +37,7 @@ def from_google_drive_to_structured() -> None:
         pipeline_name="unstructured_google_drive",
         destination="duckdb",
         dataset_name="unstructured_data_google_drive",
-        full_refresh=True,
+        dev_mode=True,
     )
 
     data_source = google_drive_source(
@@ -64,7 +64,7 @@ def from_inbox_to_structured() -> None:
         pipeline_name="unstructured_inbox",
         destination="duckdb",
         dataset_name="unstructured_inbox_data",
-        full_refresh=True,
+        dev_mode=True,
     )
 
     data_source = inbox_source(

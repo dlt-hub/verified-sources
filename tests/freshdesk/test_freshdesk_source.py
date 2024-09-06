@@ -32,7 +32,7 @@ from tests.utils import ALL_DESTINATIONS, assert_load_info, load_table_counts
 #         pipeline_name="test_pipeline_name",
 #         destination=destination_name,
 #         dataset_name="test_dataset_name",
-#         full_refresh=True,
+#         dev_mode=True,
 #     )
 #     all_endpoints = freshdesk_source()
 #     all_endpoints.max_table_nesting = 0

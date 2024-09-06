@@ -138,7 +138,7 @@ def load_collection_with_arrow(pipeline: Pipeline = None) -> LoadInfo:
             pipeline_name="local_mongo",
             destination="postgres",
             dataset_name="mongo_select_incremental",
-            full_refresh=True,
+            dev_mode=True,
         )
 
     # Configure the source to load data with Arrow

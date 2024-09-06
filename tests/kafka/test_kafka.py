@@ -120,7 +120,7 @@ def test_kafka_read(kafka_topics, kafka_messages):
         pipeline_name="kafka_test",
         destination="postgres",
         dataset_name="kafka_test_data",
-        full_refresh=True,
+        dev_mode=True,
     )
 
     resource = kafka_consumer(kafka_topics)
@@ -163,7 +163,7 @@ def test_kafka_read_custom_msg_processor(kafka_topics, kafka_messages):
         pipeline_name="kafka_test",
         destination="postgres",
         dataset_name="kafka_test_data",
-        full_refresh=True,
+        dev_mode=True,
     )
     resource = kafka_consumer(kafka_topics, msg_processor=_custom_msg_processor)
     load_info = pipeline.run(resource)
@@ -290,7 +290,7 @@ def test_read_after_state_dropped(kafka_topics, kafka_messages):
         pipeline_name="kafka_test",
         destination="postgres",
         dataset_name="kafka_test_data",
-        full_refresh=True,
+        dev_mode=True,
     )
 
     resource = kafka_consumer(kafka_topics)
@@ -313,7 +313,7 @@ def _extract_assert(topics, expected):
         pipeline_name="kafka_test",
         destination="postgres",
         dataset_name="kafka_test_data",
-        full_refresh=True,
+        dev_mode=True,
     )
 
     resource = kafka_consumer(topics)
