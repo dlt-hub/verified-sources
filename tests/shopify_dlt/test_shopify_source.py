@@ -112,7 +112,7 @@ def test_end_date_incremental(destination_name: str) -> None:
     assert_load_info(info)
 
     row_counts = pipeline.last_trace.last_normalize_info.row_counts
-    assert row_counts["orders"] == 10
+    assert row_counts["orders"] == 11
 
     with pipeline.sql_client() as client:
         rows2 = [

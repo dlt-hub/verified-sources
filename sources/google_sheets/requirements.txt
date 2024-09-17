@@ -1,2 +1,2 @@
 google-api-python-client
-dlt>=0.3.25
+dlt>=0.5.1
