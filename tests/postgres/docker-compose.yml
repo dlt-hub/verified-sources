@@ -1,4 +1,3 @@
-version: "3.7"
 services:
    db:
     env_file: postgres.env
@@ -6,9 +5,14 @@ services:
       context: postgres
       dockerfile: Dockerfile
     container_name: dlt_postgres_db
+    command:
+    - postgres
+    - -c
+    - config_file=/etc/postgresql/postgresql.conf
     restart: unless-stopped
     volumes:
       - db_home:/var/lib/postgresql/data
+      - ./postgresql.conf:/etc/postgresql/postgresql.conf:ro
     ports:
       - 5432:5432
 
