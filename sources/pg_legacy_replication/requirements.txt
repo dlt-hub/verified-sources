@@ -1,0 +1,3 @@
+dlt>=0.4.13
+psycopg2-binary>=2.9.9
+protobuf>=5
