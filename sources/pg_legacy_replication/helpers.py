@@ -47,7 +47,7 @@ from .decoders import (
 )
 
 
-@dlt.sources.config.with_config(sections=("sources", "pg_replication"))
+@dlt.sources.config.with_config(sections=("sources", "pg_legacy_replication"))
 def init_replication(
     slot_name: str,
     pub_name: str,
@@ -136,7 +136,7 @@ def init_replication(
         add_schema_to_publication(schema_name, pub_name, cur)
     else:
         add_tables_to_publication(table_names, schema_name, pub_name, cur)
-    slot = create_replication_slot(slot_name, cur)
+    slot = create_replication_slot(slot_name, cur, "decoderbufs")
     if persist_snapshots:
         if slot is None:
             logger.info(
@@ -179,7 +179,7 @@ def init_replication(
     return None
 
 
-@dlt.sources.config.with_config(sections=("sources", "pg_replication"))
+@dlt.sources.config.with_config(sections=("sources", "pg_legacy_replication"))
 def get_pg_version(
     cur: cursor = None,
     credentials: ConnectionStringCredentials = dlt.secrets.value,
@@ -566,11 +566,15 @@ class ItemGenerator:
                 decode=False,
                 options=self.options,
             )
+            pub_opts = {
+                "insert": True,
+                "update": True,
+                "delete": True,
+                "truncate": False,
+            }
             consumer = MessageConsumer(
                 upto_lsn=self.upto_lsn,
-                pub_ops=get_pub_ops(
-                    self.options["publication_names"], self.credentials
-                ),
+                pub_ops=pub_opts,
                 target_batch_size=self.target_batch_size,
                 include_columns=self.include_columns,
                 columns=self.columns,

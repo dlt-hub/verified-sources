@@ -79,7 +79,7 @@ def replication_resource(
         advance_slot(start_lsn, slot_name, credentials)
 
     # continue until last message in replication slot
-    options = {"publication_names": pub_name, "proto_version": "1"}
+    options: Dict[str, str] = {}
     upto_lsn = get_max_lsn(slot_name, options, credentials)
     if upto_lsn is None:
         return
