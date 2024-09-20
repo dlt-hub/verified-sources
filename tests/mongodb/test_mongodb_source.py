@@ -1,11 +1,11 @@
-import bson
 import json
+from unittest import mock
+
+import bson
+import dlt
 import pyarrow
 import pytest
 from pendulum import DateTime, timezone
-from unittest import mock
-
-import dlt
 
 from sources.mongodb import mongodb, mongodb_collection
 from sources.mongodb_pipeline import (
@@ -151,12 +151,8 @@ def test_incremental(
 
 @pytest.mark.parametrize("data_item_format", ["object", "arrow"])
 def test_parallel_loading(data_item_format):
-    st_records = load_select_collection_db_items_parallel(
-        data_item_format, parallel=False
-    )
-    parallel_records = load_select_collection_db_items_parallel(
-        data_item_format, parallel=True
-    )
+    st_records = load_select_collection_db_items_parallel(data_item_format, parallel=False)
+    parallel_records = load_select_collection_db_items_parallel(data_item_format, parallel=True)
     assert len(st_records) == len(parallel_records)
 
 
@@ -356,3 +352,24 @@ def test_arrow_types(destination_name):
 
     info = pipeline.run(res, table_name="types_test")
     assert info.loads_ids != []
+
+
+@pytest.mark.parametrize("destination_name", ALL_DESTINATIONS)
+@pytest.mark.parametrize("data_item_format", ["object", "arrow"])
+def test_mongodb_without_pymongoarrow(destination_name: str, data_item_format: str) -> None:
+    with mock.patch.dict("sys.modules", {"pymongoarrow": None}):
+        pipeline = dlt.pipeline(
+            pipeline_name="test_mongodb_without_pymongoarrow",
+            destination=destination_name,
+            dataset_name="test_mongodb_without_pymongoarrow_data",
+            full_refresh=True,
+        )
+
+        comments = mongodb_collection(
+            collection="comments", limit=10, data_item_format=data_item_format
+        )
+        load_info = pipeline.run(comments)
+
+        assert load_info.loads_ids != []
+        table_counts = load_table_counts(pipeline, "comments")
+        assert table_counts["comments"] == 10
