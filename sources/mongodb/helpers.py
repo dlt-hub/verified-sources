@@ -29,6 +29,13 @@ else:
     TCollection = Any
     TCursor = Any
 
+try:
+    import pymongoarrow  # type: ignore
+
+    PYMONGOARROW_AVAILABLE = True
+except ImportError:
+    PYMONGOARROW_AVAILABLE = False
+
 
 class CollectionLoader:
     def __init__(
@@ -301,15 +308,21 @@ def collection_documents(
     Returns:
         Iterable[DltResource]: A list of DLT resources for each collection to be loaded.
     """
+    if data_item_format == "arrow" and not PYMONGOARROW_AVAILABLE:
+        dlt.common.logger.warn(
+            "'pymongoarrow' is not installed; falling back to standard MongoDB CollectionLoader."
+        )
+        data_item_format = "object"
+
     if parallel:
         if data_item_format == "arrow":
             LoaderClass = CollectionArrowLoaderParallel
-        elif data_item_format == "object":
+        else:
             LoaderClass = CollectionLoaderParallel  # type: ignore
     else:
         if data_item_format == "arrow":
             LoaderClass = CollectionArrowLoader  # type: ignore
-        elif data_item_format == "object":
+        else:
             LoaderClass = CollectionLoader  # type: ignore
 
     loader = LoaderClass(

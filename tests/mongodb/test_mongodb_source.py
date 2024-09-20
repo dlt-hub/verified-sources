@@ -151,8 +151,12 @@ def test_incremental(
 
 @pytest.mark.parametrize("data_item_format", ["object", "arrow"])
 def test_parallel_loading(data_item_format):
-    st_records = load_select_collection_db_items_parallel(data_item_format, parallel=False)
-    parallel_records = load_select_collection_db_items_parallel(data_item_format, parallel=True)
+    st_records = load_select_collection_db_items_parallel(
+        data_item_format, parallel=False
+    )
+    parallel_records = load_select_collection_db_items_parallel(
+        data_item_format, parallel=True
+    )
     assert len(st_records) == len(parallel_records)
 
 
@@ -356,7 +360,9 @@ def test_arrow_types(destination_name):
 
 @pytest.mark.parametrize("destination_name", ALL_DESTINATIONS)
 @pytest.mark.parametrize("data_item_format", ["object", "arrow"])
-def test_mongodb_without_pymongoarrow(destination_name: str, data_item_format: str) -> None:
+def test_mongodb_without_pymongoarrow(
+    destination_name: str, data_item_format: str
+) -> None:
     with mock.patch.dict("sys.modules", {"pymongoarrow": None}):
         pipeline = dlt.pipeline(
             pipeline_name="test_mongodb_without_pymongoarrow",
