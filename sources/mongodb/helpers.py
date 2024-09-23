@@ -107,7 +107,7 @@ class CollectionLoader:
 
         return filt
 
-    def _limit(self, cursor: Cursor, limit: Optional[int] = None) -> Cursor:  # type: ignore
+    def _limit(self, cursor: Cursor, limit: Optional[int] = None) -> TCursor:  # type: ignore
         """Apply a limit to the cursor, if needed.
 
         Args:
@@ -127,16 +127,23 @@ class CollectionLoader:
 
         return cursor
 
-    def load_documents(self, limit: Optional[int] = None) -> Iterator[TDataItem]:
+    def load_documents(
+        self, filter_: Dict[str, Any], limit: Optional[int] = None
+    ) -> Iterator[TDataItem]:
         """Construct the query and load the documents from the collection.
 
         Args:
+            filter_ (Dict[str, Any]): The filter to apply to the collection.
             limit (Optional[int]): The number of documents to load.
 
         Yields:
             Iterator[TDataItem]: An iterator of the loaded documents.
         """
-        cursor = self.collection.find(self._filter_op)
+        filter_op = self._filter_op
+        _raise_if_intersection(filter_op, filter_)
+        filter_op.update(filter_)
+
+        cursor = self.collection.find(filter=filter_op)
         if self._sort_op:
             cursor = cursor.sort(self._sort_op)
 
@@ -164,8 +171,20 @@ class CollectionLoaderParallel(CollectionLoader):
 
         return batches
 
-    def _get_cursor(self) -> TCursor:
-        cursor = self.collection.find(filter=self._filter_op)
+    def _get_cursor(self, filter_: Dict[str, Any]) -> TCursor:
+        """Get a reading cursor for the collection.
+
+        Args:
+            filter_ (Dict[str, Any]): The filter to apply to the collection.
+
+        Returns:
+            Cursor: The cursor for the collection.
+        """
+        filter_op = self._filter_op
+        _raise_if_intersection(filter_op, filter_)
+        filter_op.update(filter_)
+
+        cursor = self.collection.find(filter=filter_op)
         if self._sort_op:
             cursor = cursor.sort(self._sort_op)
 
@@ -181,31 +200,37 @@ class CollectionLoaderParallel(CollectionLoader):
 
         return data
 
-    def _get_all_batches(self, limit: Optional[int] = None) -> Iterator[TDataItem]:
+    def _get_all_batches(
+        self, filter_: Dict[str, Any], limit: Optional[int] = None
+    ) -> Iterator[TDataItem]:
         """Load all documents from the collection in parallel batches.
 
         Args:
+            filter_ (Dict[str, Any]): The filter to apply to the collection.
             limit (Optional[int]): The maximum number of documents to load.
 
         Yields:
             Iterator[TDataItem]: An iterator of the loaded documents.
         """
-        batches = self._create_batches(limit)
-        cursor = self._get_cursor()
+        batches = self._create_batches(limit=limit)
+        cursor = self._get_cursor(filter_=filter_)
 
         for batch in batches:
             yield self._run_batch(cursor=cursor, batch=batch)
 
-    def load_documents(self, limit: Optional[int] = None) -> Iterator[TDataItem]:
+    def load_documents(
+        self, filter_: Dict[str, Any], limit: Optional[int] = None
+    ) -> Iterator[TDataItem]:
         """Load documents from the collection in parallel.
 
         Args:
+            filter_ (Dict[str, Any]): The filter to apply to the collection.
             limit (Optional[int]): The number of documents to load.
 
         Yields:
             Iterator[TDataItem]: An iterator of the loaded documents.
         """
-        for document in self._get_all_batches(limit):
+        for document in self._get_all_batches(limit=limit, filter_=filter_):
             yield document
 
 
@@ -215,11 +240,14 @@ class CollectionArrowLoader(CollectionLoader):
     Apache Arrow for data processing.
     """
 
-    def load_documents(self, limit: Optional[int] = None) -> Iterator[Any]:
+    def load_documents(
+        self, filter_: Dict[str, Any], limit: Optional[int] = None
+    ) -> Iterator[Any]:
         """
         Load documents from the collection in Apache Arrow format.
 
         Args:
+            filter_ (Dict[str, Any]): The filter to apply to the collection.
             limit (Optional[int]): The number of documents to load.
 
         Yields:
@@ -232,9 +260,11 @@ class CollectionArrowLoader(CollectionLoader):
             None, codec_options=self.collection.codec_options
         )
 
-        cursor = self.collection.find_raw_batches(
-            self._filter_op, batch_size=self.chunk_size
-        )
+        filter_op = self._filter_op
+        _raise_if_intersection(filter_op, filter_)
+        filter_op.update(filter_)
+
+        cursor = self.collection.find_raw_batches(filter_, batch_size=self.chunk_size)
         if self._sort_op:
             cursor = cursor.sort(self._sort_op)  # type: ignore
 
@@ -253,9 +283,21 @@ class CollectionArrowLoaderParallel(CollectionLoaderParallel):
     Apache Arrow for data processing.
     """
 
-    def _get_cursor(self) -> TCursor:
+    def _get_cursor(self, filter_: Dict[str, Any]) -> TCursor:
+        """Get a reading cursor for the collection.
+
+        Args:
+            filter_ (Dict[str, Any]): The filter to apply to the collection.
+
+        Returns:
+            Cursor: The cursor for the collection.
+        """
+        filter_op = self._filter_op
+        _raise_if_intersection(filter_op, filter_)
+        filter_op.update(filter_)
+
         cursor = self.collection.find_raw_batches(
-            filter=self._filter_op, batch_size=self.chunk_size
+            filter=filter_op, batch_size=self.chunk_size
         )
         if self._sort_op:
             cursor = cursor.sort(self._sort_op)  # type: ignore
@@ -283,6 +325,7 @@ class CollectionArrowLoaderParallel(CollectionLoaderParallel):
 def collection_documents(
     client: TMongoClient,
     collection: TCollection,
+    filter_: Dict[str, Any],
     incremental: Optional[dlt.sources.incremental[Any]] = None,
     parallel: bool = False,
     limit: Optional[int] = None,
@@ -296,6 +339,7 @@ def collection_documents(
     Args:
         client (MongoClient): The PyMongo client `pymongo.MongoClient` instance.
         collection (Collection): The collection `pymongo.collection.Collection` to load.
+        filter_ (Dict[str, Any]): The filter to apply to the collection.
         incremental (Optional[dlt.sources.incremental[Any]]): The incremental configuration.
         parallel (bool): Option to enable parallel loading for the collection. Default is False.
         limit (Optional[int]): The maximum number of documents to load.
@@ -328,7 +372,7 @@ def collection_documents(
     loader = LoaderClass(
         client, collection, incremental=incremental, chunk_size=chunk_size
     )
-    for data in loader.load_documents(limit=limit):
+    for data in loader.load_documents(limit=limit, filter_=filter_):
         yield data
 
 
@@ -388,6 +432,27 @@ def client_from_credentials(connection_url: str) -> TMongoClient:
         connection_url, uuidRepresentation="standard", tz_aware=True
     )
     return client
+
+
+def _raise_if_intersection(filter1: Dict[str, Any], filter2: Dict[str, Any]) -> None:
+    """
+    Raise an exception, if the given filters'
+    fields are intersecting.
+
+    Args:
+        filter1 (Dict[str, Any]): The first filter.
+        filter2 (Dict[str, Any]): The second filter.
+    """
+    field_inter = filter1.keys() & filter2.keys()
+    for field in field_inter:
+        if filter1[field].keys() & filter2[field].keys():
+            str_repr = str({field: filter1[field]})
+            raise ValueError(
+                (
+                    f"Filtering operator {str_repr} is already used by the "
+                    "incremental and can't be used in the filter."
+                )
+            )
 
 
 @configspec
