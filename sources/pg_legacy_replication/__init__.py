@@ -80,7 +80,7 @@ def replication_resource(
 
     # continue until last message in replication slot
     options: Dict[str, str] = {}
-    upto_lsn = get_max_lsn(slot_name, options, credentials)
+    upto_lsn = get_max_lsn(slot_name, credentials)
     if upto_lsn is None:
         return
 

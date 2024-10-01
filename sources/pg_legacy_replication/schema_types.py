@@ -6,6 +6,8 @@ from dlt.common import Decimal
 from dlt.common.data_types.typing import TDataType
 from dlt.common.data_types.type_helpers import coerce_value
 from dlt.common.schema.typing import TColumnSchema, TColumnType
+from dlt.destinations import postgres
+from dlt.destinations.impl.postgres.postgres import PostgresTypeMapper
 
 from .decoders import ColumnType
 
@@ -77,10 +79,7 @@ def _get_scale(type_id: int, atttypmod: int) -> Optional[int]:
 
 
 @lru_cache(maxsize=None)
-def _type_mapper() -> Any:
-    from dlt.destinations import postgres
-    from dlt.destinations.impl.postgres.postgres import PostgresTypeMapper
-
+def _type_mapper() -> PostgresTypeMapper:
     return PostgresTypeMapper(postgres().capabilities())
 
 
@@ -92,7 +91,7 @@ def _to_dlt_column_type(type_id: int, atttypmod: int) -> TColumnType:
     pg_type = _PG_TYPES.get(type_id)
     precision = _get_precision(type_id, atttypmod)
     scale = _get_scale(type_id, atttypmod)
-    return _type_mapper().from_db_type(pg_type, precision, scale)  # type: ignore[no-any-return]
+    return _type_mapper().from_db_type(pg_type, precision, scale)
 
 
 def _to_dlt_column_schema(col: ColumnType) -> TColumnSchema:

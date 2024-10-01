@@ -35,7 +35,7 @@ from dlt.extract.items import DataItemWithMeta
 from dlt.extract.resource import DltResource
 from dlt.sources.credentials import ConnectionStringCredentials
 
-from .schema_types import _to_dlt_column_schema, _to_dlt_val
+from .schema_types import _to_dlt_column_schema, _to_dlt_val, _PG_TYPES, _type_mapper
 from .exceptions import IncompatiblePostgresVersionException
 from .decoders import (
     Begin,
@@ -44,7 +44,10 @@ from .decoders import (
     Update,
     Delete,
     ColumnData,
+    convert_pg_ts,
 )
+from .pg_logicaldec_pb2 import RowMessage, Op  # type: ignore [attr-defined]
+from google.protobuf.json_format import MessageToDict
 
 
 @dlt.sources.config.with_config(sections=("sources", "pg_legacy_replication"))
@@ -384,7 +387,6 @@ def snapshot_table_resource(
 
 def get_max_lsn(
     slot_name: str,
-    options: Dict[str, str],
     credentials: ConnectionStringCredentials,
 ) -> Optional[int]:
     """Returns maximum Log Sequence Number (LSN) in replication slot.
@@ -393,14 +395,10 @@ def get_max_lsn(
     Does not consume the slot, i.e. messages are not flushed.
     Raises error if the replication slot or publication does not exist.
     """
-    # comma-separated value string
-    options_str = ", ".join(
-        f"'{x}'" for xs in list(map(list, options.items())) for x in xs
-    )
     cur = _get_conn(credentials).cursor()
     cur.execute(
         "SELECT MAX(lsn) - '0/0' AS max_lsn "  # subtract '0/0' to convert pg_lsn type to int (https://stackoverflow.com/a/73738472)
-        f"FROM pg_logical_slot_peek_binary_changes('{slot_name}', NULL, NULL, {options_str});"
+        f"FROM pg_logical_slot_peek_binary_changes('{slot_name}', NULL, NULL);"
     )
     lsn: int = cur.fetchone()[0]
     cur.connection.close()
@@ -640,24 +638,36 @@ class MessageConsumer:
         - `target_batch_size` is reached
         - a table's schema has changed
         """
-        op = msg.payload[:1]
-        if op == b"I":
-            self.process_change(Insert(msg.payload), msg.data_start)
-        elif op == b"U":
-            self.process_change(Update(msg.payload), msg.data_start)
-        elif op == b"D":
-            self.process_change(Delete(msg.payload), msg.data_start)
-        elif op == b"B":
-            self.last_commit_ts = Begin(msg.payload).commit_ts  # type: ignore[assignment]
-        elif op == b"C":
-            self.process_commit(msg)
-        elif op == b"R":
-            self.process_relation(Relation(msg.payload))
-        elif op == b"T":
-            logger.warning(
-                "The truncate operation is currently not supported. "
-                "Truncate replication messages are ignored."
-            )
+        row_msg = RowMessage()
+        row_msg.ParseFromString(msg.payload)
+        from devtools import debug
+
+        debug(MessageToDict(row_msg, including_default_value_fields=True))  # type: ignore[call-arg]
+        op = row_msg.op
+        if op == Op.BEGIN:
+            self.last_commit_ts = convert_pg_ts(row_msg.commit_time)  # type: ignore[assignment]
+        # if op == Op.UPDATE:
+        #     self.process_change(row_msg)
+        # op = msg.payload[:1]
+        # if op == b"I":
+        #     self.process_change(Insert(msg.payload), msg.data_start)
+        # elif op == b"U":
+        #     self.process_change(Update(msg.payload), msg.data_start)
+        # elif op == b"D":
+        #     self.process_change(Delete(msg.payload), msg.data_start)
+        # elif op == b"B":
+        #     self.last_commit_ts = Begin(msg.payload).commit_ts  # type: ignore[assignment]
+        # elif op == b"C":
+        #     self.process_commit(msg)
+        # elif op == b"R":
+        #     self.process_relation(Relation(msg.payload))
+        # elif op == b"T":
+        #     logger.warning(
+        #         "The truncate operation is currently not supported. "
+        #         "Truncate replication messages are ignored."
+        #     )
+        else:
+            raise AssertionError(f"Unsupported operation : {row_msg}")
 
     def process_commit(self, msg: ReplicationMessage) -> None:
         """Updates object state when Commit message is observed.
@@ -789,3 +799,47 @@ class MessageConsumer:
         if for_delete:
             data_item["deleted_ts"] = commit_ts
         return data_item
+
+
+from dlt.common.schema.typing import TColumnSchema, TColumnType
+from typing import Any, Dict
+from devtools import debug
+
+
+def extract_table_schema(row_msg: RowMessage) -> Dict[str, Any]:
+    debug(row_msg)
+    schema_name, table_name = row_msg.table.split(".")
+    # Remove leading and trailing quotes
+    table_name = table_name[1:-1]
+    import re
+
+    regex = r"^(?P<table_name>[a-zA-Z_][a-zA-Z0-9_]{0,62})_snapshot_(?P<snapshot_name>[a-zA-Z0-9_-]+)$"
+    match = re.match(regex, table_name)
+    if match:
+        table_name = match.group("table_name")
+        snapshot_name = match.group("snapshot_name")
+        print(f"Table name: {table_name}, Snapshot name: {snapshot_name}")
+
+    precision_map = {
+        "datum_int32": 32,
+        "datum_int64": 64,
+        "datum_float": 32,
+        "datum_double": 64,
+    }
+
+    new_columns = {}
+    for col, typeinfo in zip(row_msg.new_tuple, row_msg.new_typeinfo):
+        base_data_type: TColumnType = _type_mapper().from_db_type(typeinfo.modifier)
+        column_data: TColumnSchema = {
+            "name": col.column_name,
+            "nullable": typeinfo.value_optional,
+            **base_data_type,
+        }
+
+        precision = precision_map.get(col.WhichOneof("datum"))
+        if precision is not None:
+            column_data["precision"] = precision
+
+        new_columns[col.column_name] = column_data
+
+    return {"name": table_name, "columns": new_columns}
