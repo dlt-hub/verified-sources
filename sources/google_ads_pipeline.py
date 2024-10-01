@@ -11,7 +11,7 @@ def load_pipeline() -> LoadInfo:
     pipeline = dlt.pipeline(
         pipeline_name="dlt_google_ads_pipeline",
         destination="duckdb",
-        full_refresh=False,
+        dev_mode=False,
         dataset_name="full_load_google_ads",
     )
     data_default = google_ads()

@@ -22,7 +22,7 @@ def test_load_all_ads_object(destination_name: str) -> None:
         pipeline_name="facebook_ads",
         destination=destination_name,
         dataset_name="facebook_ads_data",
-        full_refresh=True,
+        dev_mode=True,
     )
     info = pipeline.run(facebook_ads_source())
     assert_load_info(info)

@@ -13,7 +13,7 @@ def load_crm_data() -> None:
     """
 
     # Create a DLT pipeline object with the pipeline name, dataset name, and destination database type
-    # Add full_refresh=(True or False) if you need your pipeline to create the dataset in your destination
+    # Add dev_mode=(True or False) if you need your pipeline to create the dataset in your destination
     p = dlt.pipeline(
         pipeline_name="hubspot",
         dataset_name="hubspot_dataset",
@@ -37,7 +37,7 @@ def load_crm_data_with_history() -> None:
     """
 
     # Create a DLT pipeline object with the pipeline name, dataset name, and destination database type
-    # Add full_refresh=(True or False) if you need your pipeline to create the dataset in your destination
+    # Add dev_mode=(True or False) if you need your pipeline to create the dataset in your destination
     p = dlt.pipeline(
         pipeline_name="hubspot",
         dataset_name="hubspot_dataset",
@@ -61,7 +61,7 @@ def load_crm_objects_with_custom_properties() -> None:
 
     # Create a DLT pipeline object with the pipeline name,
     # dataset name, properties to read and destination database
-    # type Add full_refresh=(True or False) if you need your
+    # type Add dev_mode=(True or False) if you need your
     # pipeline to create the dataset in your destination
     p = dlt.pipeline(
         pipeline_name="hubspot",
@@ -102,7 +102,7 @@ def load_web_analytics_events(
         pipeline_name="hubspot",
         dataset_name="hubspot_dataset",
         destination="duckdb",
-        full_refresh=False,
+        dev_mode=False,
     )
 
     # you can get many resources by calling this function for various object types

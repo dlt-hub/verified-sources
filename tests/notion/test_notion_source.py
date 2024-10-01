@@ -13,7 +13,7 @@ def test_load_all_notion_databases(destination_name: str):
         pipeline_name="notion",
         destination=destination_name,
         dataset_name="notion_data",
-        full_refresh=True,
+        dev_mode=True,
     )
 
     info = pipeline.run(notion_databases())
@@ -55,7 +55,7 @@ def test_load_selected_notion_database(destination_name: str):
         pipeline_name="notion",
         destination=destination_name,
         dataset_name="notion_data",
-        full_refresh=True,
+        dev_mode=True,
     )
 
     info = pipeline.run(sales_database)

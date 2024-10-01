@@ -17,7 +17,7 @@ def load_kinesis() -> None:
         pipeline_name="kinesis_pipeline",
         destination="duckdb",
         dataset_name="kinesis",
-        full_refresh=True,
+        dev_mode=True,
     )
     # the resource below will take its name from the stream name, it can be used multiple times
     # by default it assumes that Data is json and parses it, here we disable that to just get bytes in **data** elements of the message
@@ -50,7 +50,7 @@ def decode_kinesis_messages() -> None:
         pipeline_name="kinesis_pipeline",
         destination="duckdb",
         dataset_name="kinesis_parsed",
-        full_refresh=True,
+        dev_mode=True,
     )
 
     dlt_ci_kinesis_stream = kinesis_stream(

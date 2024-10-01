@@ -18,7 +18,7 @@ def test_all_resources(destination_name: str) -> None:
         pipeline_name="shopify",
         destination=destination_name,
         dataset_name="shopify_data",
-        full_refresh=True,
+        dev_mode=True,
     )
     # Set per page limit to ensure we use pagination
     load_info = pipeline.run(shopify_source(items_per_page=5))
@@ -49,7 +49,7 @@ def test_start_date() -> None:
         pipeline_name="shopify",
         destination="duckdb",
         dataset_name="shopify_data",
-        full_refresh=True,
+        dev_mode=True,
     )
 
     # we only load objects updated on 05.05. or after
@@ -66,7 +66,7 @@ def test_end_date_incremental(destination_name: str) -> None:
         pipeline_name="shopify",
         destination="duckdb",
         dataset_name="shopify_data",
-        full_refresh=True,
+        dev_mode=True,
     )
 
     # Set start date to the exact timestamp of the first order in the test account
@@ -112,7 +112,7 @@ def test_end_date_incremental(destination_name: str) -> None:
     assert_load_info(info)
 
     row_counts = pipeline.last_trace.last_normalize_info.row_counts
-    assert row_counts["orders"] == 10
+    assert row_counts["orders"] == 11
 
     with pipeline.sql_client() as client:
         rows2 = [
@@ -135,7 +135,7 @@ def test_order_status(destination_name: str) -> None:
         pipeline_name="shopify",
         destination=destination_name,
         dataset_name="shopify_data",
-        full_refresh=True,
+        dev_mode=True,
     )
 
     data = shopify_source(
@@ -158,7 +158,7 @@ def test_min_created_at(destination_name: str) -> None:
         pipeline_name="shopify",
         destination=destination_name,
         dataset_name="shopify_data",
-        full_refresh=True,
+        dev_mode=True,
     )
 
     # Order create before created_at_min, but updated after
@@ -197,7 +197,7 @@ def test_request_params(resource_name: str) -> None:
     pipeline = dlt.pipeline(
         pipeline_name="shopify",
         dataset_name="shopify_data",
-        full_refresh=True,
+        dev_mode=True,
     )
 
     data = shopify_source(

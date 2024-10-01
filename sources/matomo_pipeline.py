@@ -10,7 +10,7 @@ def run_full_load() -> None:
     pipeline_reports = dlt.pipeline(
         dataset_name="matomo_full_load",
         export_schema_path="schemas/export",
-        full_refresh=False,
+        dev_mode=False,
         destination="postgres",
         pipeline_name="matomo",
     )
@@ -44,7 +44,7 @@ def run_custom_reports() -> None:
     site_id = 3
     pipeline_reports = dlt.pipeline(
         dataset_name="matomo_custom_reports",
-        full_refresh=False,
+        dev_mode=False,
         destination="postgres",
         pipeline_name="matomo",
     )
@@ -62,7 +62,7 @@ def run_reports() -> None:
     site_id = 3
     pipeline_reports = dlt.pipeline(
         dataset_name="matomo_reports",
-        full_refresh=False,
+        dev_mode=False,
         destination="postgres",
         pipeline_name="matomo",
     )
@@ -78,7 +78,7 @@ def run_live_events() -> None:
 
     pipeline_events = dlt.pipeline(
         dataset_name="matomo_events",
-        full_refresh=False,
+        dev_mode=False,
         destination="duckdb",
         pipeline_name="matomo",
     )

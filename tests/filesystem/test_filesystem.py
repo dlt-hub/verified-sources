@@ -109,7 +109,7 @@ def test_csv_transformers(bucket_url: str) -> None:
         pipeline_name="file_data",
         destination="duckdb",
         dataset_name="all_files",
-        full_refresh=True,
+        dev_mode=True,
     )
 
     # load all csvs merging data on a date column
@@ -168,7 +168,7 @@ def test_standard_readers(bucket_url: str) -> None:
         pipeline_name="file_data",
         destination="duckdb",
         dataset_name="all_files",
-        full_refresh=True,
+        dev_mode=True,
     )
     load_info = pipeline.run(
         [
@@ -210,7 +210,7 @@ def test_incremental_load(bucket_url: str) -> None:
         pipeline_name="file_data",
         destination="duckdb",
         dataset_name="filesystem_data_duckdb",
-        full_refresh=True,
+        dev_mode=True,
     )
 
     # Load all files

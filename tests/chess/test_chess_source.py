@@ -11,13 +11,13 @@ PLAYERS = ["magnuscarlsen", "vincentkeymer", "dommarajugukesh", "rpragchess"]
 
 @pytest.mark.parametrize("destination_name", ALL_DESTINATIONS)
 def test_load_players_games(destination_name: str) -> None:
-    # mind the full_refresh flag - it makes sure that data is loaded to unique dataset.
+    # mind the dev_mode flag - it makes sure that data is loaded to unique dataset.
     # this allows you to run the tests on the same database in parallel
     pipeline = dlt.pipeline(
         pipeline_name="chess_players_games",
         destination=destination_name,
         dataset_name="chess_players_games_data",
-        full_refresh=True,
+        dev_mode=True,
     )
     data = source(
         PLAYERS,
@@ -55,13 +55,13 @@ def test_load_players_games(destination_name: str) -> None:
 
 @pytest.mark.parametrize("destination_name", ALL_DESTINATIONS)
 def test_load_players_profiles(destination_name: str) -> None:
-    # mind the full_refresh flag - it makes sure that data is loaded to unique dataset.
+    # mind the dev_mode flag - it makes sure that data is loaded to unique dataset.
     # this allows you to run the tests on the same database in parallel
     pipeline = dlt.pipeline(
         pipeline_name="chess_players_profiles",
         destination=destination_name,
         dataset_name="chess_players_profiles_data",
-        full_refresh=True,
+        dev_mode=True,
     )
     data = source(PLAYERS)
     # load the "players_games" out of the data source
@@ -97,7 +97,7 @@ def test_incremental_games_load(destination_name: str) -> None:
         pipeline_name="chess_players_games",
         destination=destination_name,
         dataset_name="chess_players_games_data",
-        full_refresh=True,
+        dev_mode=True,
     )
     data = source(["magnuscarlsen"], start_month="2022/11", end_month="2022/11")
     info = pipeline.run(data.with_resources("players_games"))

@@ -21,7 +21,7 @@ pipeline = dlt.pipeline(
     pipeline_name="local_folder",
     destination="duckdb",
     dataset_name="data_local_folder",
-    full_refresh=True,
+    dev_mode=True,
 )
 
 # use extensions to filter files as 'extensions=(".txt", ".pdf", ...)'

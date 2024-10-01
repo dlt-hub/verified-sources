@@ -14,7 +14,7 @@ def load_pipeline_with_ranges(
     pipeline = dlt.pipeline(
         pipeline_name="google_sheets_pipeline",
         destination="duckdb",
-        full_refresh=True,
+        dev_mode=True,
         dataset_name="test",
     )
     data = google_spreadsheet(
@@ -34,7 +34,7 @@ def load_pipeline_with_sheets(spreadsheet_url_or_id: str) -> None:
     pipeline = dlt.pipeline(
         pipeline_name="google_sheets_pipeline",
         destination="duckdb",
-        full_refresh=True,
+        dev_mode=True,
         dataset_name="sample_google_sheet_data",
     )
     data = google_spreadsheet(
@@ -53,7 +53,7 @@ def load_pipeline_with_named_ranges(spreadsheet_url_or_id: str) -> None:
     pipeline = dlt.pipeline(
         pipeline_name="google_sheets_pipeline",
         destination="duckdb",
-        full_refresh=True,
+        dev_mode=True,
         dataset_name="sample_google_sheet_data",
     )
     data = google_spreadsheet(
@@ -72,7 +72,7 @@ def load_pipeline_with_sheets_and_ranges(spreadsheet_url_or_id: str) -> None:
     pipeline = dlt.pipeline(
         pipeline_name="google_sheets_pipeline",
         destination="duckdb",
-        full_refresh=True,
+        dev_mode=True,
         dataset_name="sample_google_sheet_data",
     )
     data = google_spreadsheet(
@@ -92,7 +92,7 @@ def load_with_table_rename_and_multiple_spreadsheets(
     pipeline = dlt.pipeline(
         pipeline_name="google_sheets_pipeline",
         destination="duckdb",
-        full_refresh=True,
+        dev_mode=True,
         dataset_name="sample_google_sheet_data",
     )
 

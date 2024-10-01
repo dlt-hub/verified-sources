@@ -31,7 +31,7 @@ def imap_read_messages(senders: Sequence[str]) -> dlt.Pipeline:
         pipeline_name="standard_inbox",
         destination="duckdb",
         dataset_name="messages_data",
-        full_refresh=True,
+        dev_mode=True,
     )
 
     # get messages resource from the source
@@ -50,7 +50,7 @@ def imap_get_attachments(senders: Sequence[str]) -> dlt.Pipeline:
         pipeline_name="standard_inbox",
         destination="duckdb",
         dataset_name="attachments_data",
-        full_refresh=True,
+        dev_mode=True,
     )
 
     # get attachment resource from a source, we only want pdfs that we later parse

@@ -12,7 +12,7 @@ def test_all_resources(destination_name: str) -> None:
         pipeline_name="test_pipeline",
         destination=destination_name,
         dataset_name="test_data",
-        full_refresh=True,
+        dev_mode=True,
     )
     # Set per page limit to ensure we use pagination
     load_info = pipeline.run(personio_source())
@@ -35,7 +35,7 @@ def test_incremental_endpoints(destination_name: str) -> None:
         pipeline_name="test_pipeline",
         destination=destination_name,
         dataset_name="test_data",
-        full_refresh=True,
+        dev_mode=True,
     )
     info = pipeline.run(personio_source().with_resources("employees"))
     assert_load_info(info)

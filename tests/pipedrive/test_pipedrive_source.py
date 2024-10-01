@@ -64,13 +64,13 @@ TESTED_RESOURCES = {
 
 @pytest.mark.parametrize("destination_name", ALL_DESTINATIONS)
 def test_all_resources(destination_name: str) -> None:
-    # mind the full_refresh flag - it makes sure that data is loaded to unique dataset. this allows you to run the tests on the same database in parallel
+    # mind the dev_mode flag - it makes sure that data is loaded to unique dataset. this allows you to run the tests on the same database in parallel
     # configure the pipeline with your destination details
     pipeline = dlt.pipeline(
         pipeline_name="pipedrive",
         destination=destination_name,
         dataset_name="pipedrive_data",
-        full_refresh=True,
+        dev_mode=True,
     )
     load_info = pipeline.run(pipedrive_source())
     print(load_info)
@@ -89,7 +89,7 @@ def test_leads_resource_incremental(destination_name: str) -> None:
         pipeline_name="pipedrive",
         destination=destination_name,
         dataset_name="pipedrive_data",
-        full_refresh=True,
+        dev_mode=True,
     )
     # Load all leads from beginning
     data = leads()
@@ -114,7 +114,7 @@ def test_custom_fields_munger(destination_name: str) -> None:
         pipeline_name="pipedrive",
         destination=destination_name,
         dataset_name="pipedrive_data",
-        full_refresh=True,
+        dev_mode=True,
     )
 
     load_info = pipeline.run(
@@ -255,7 +255,7 @@ def test_since_timestamp() -> None:
         autospec=True,
         return_value=iter([]),
     ) as m:
-        pipeline = dlt.pipeline(pipeline_name="pipedrive", full_refresh=True)
+        pipeline = dlt.pipeline(pipeline_name="pipedrive", dev_mode=True)
         incremental_source = pipedrive_source(
             since_timestamp="1986-03-03T04:00:00+04:00"
         ).with_resources("persons")
@@ -270,7 +270,7 @@ def test_since_timestamp() -> None:
         autospec=True,
         return_value=iter([]),
     ) as m:
-        pipeline = dlt.pipeline(pipeline_name="pipedrive", full_refresh=True)
+        pipeline = dlt.pipeline(pipeline_name="pipedrive", dev_mode=True)
         pipeline.extract(pipedrive_source(since_timestamp=pendulum.parse("1986-03-03T04:00:00+04:00")).with_resources("persons"))  # type: ignore[arg-type]
 
     assert (
@@ -282,7 +282,7 @@ def test_since_timestamp() -> None:
         autospec=True,
         return_value=iter([]),
     ) as m:
-        pipeline = dlt.pipeline(pipeline_name="pipedrive", full_refresh=True)
+        pipeline = dlt.pipeline(pipeline_name="pipedrive", dev_mode=True)
         pipeline.extract(pipedrive_source().with_resources("persons"))
 
     assert (
@@ -296,7 +296,7 @@ def test_incremental(destination_name: str) -> None:
         pipeline_name="pipedrive",
         destination=destination_name,
         dataset_name="pipedrive",
-        full_refresh=True,
+        dev_mode=True,
     )
 
     # No items older than initial value are loaded
@@ -445,7 +445,7 @@ def test_recents_none_data_items_from_recents() -> None:
     with requests_mock.Mocker(session=requests.client.session, real_http=True) as m:
         m.register_uri("GET", "/v1/recents", json=mock_data)
         pipeline = dlt.pipeline(
-            pipeline_name="pipedrive", dataset_name="pipedrive_data", full_refresh=True
+            pipeline_name="pipedrive", dataset_name="pipedrive_data", dev_mode=True
         )
         pipeline.extract(
             pipedrive_source().with_resources("persons", "custom_fields_mapping")

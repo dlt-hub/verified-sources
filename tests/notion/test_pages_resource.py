@@ -11,7 +11,7 @@ def test_load_all_pages(destination_name: str):
         pipeline_name="notion",
         destination=destination_name,
         dataset_name="notion_data",
-        full_refresh=True,
+        dev_mode=True,
     )
 
     info = pipeline.run(notion_pages())
@@ -37,7 +37,7 @@ def test_load_selected_pages(destination_name: str):
         pipeline_name="notion",
         destination=destination_name,
         dataset_name="notion_data",
-        full_refresh=True,
+        dev_mode=True,
     )
 
     info = pipeline.run(notion_pages(page_ids=[page_id]))

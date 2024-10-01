@@ -283,7 +283,7 @@ get counts of elements in tables, select and assert the data in tables etc.
 Your tests will be run both locally and on CI. It means that a few instances of your test may be
 executed in parallel, and they will be sharing resources. A few simple rules make that possible.
 
-1. Always use `full_refresh` when creating pipelines in test. This will make sure that data is
+1. Always use `dev_mode` when creating pipelines in test. This will make sure that data is
    loaded into a new schema/dataset. Fixtures in `conftest.py` will drop datasets created during load.
 2. When creating any fixtures for your tests, make sure that fixture is unique for your test
    instance.

@@ -21,7 +21,7 @@ def test_full_load(destination_name: str) -> None:
     pipeline = dlt.pipeline(
         pipeline_name="dlt_google_ads_pipeline",
         destination=destination_name,
-        full_refresh=False,
+        dev_mode=False,
         dataset_name="full_load_google_ads",
     )
     load_info = pipeline.run(google_ads())

@@ -23,7 +23,7 @@ def test_all_resources(destination_name: str) -> None:
         pipeline_name="salesforce",
         destination=destination_name,
         dataset_name="salesforce_data",
-        full_refresh=True,
+        dev_mode=True,
     )
     source = salesforce_source()
 

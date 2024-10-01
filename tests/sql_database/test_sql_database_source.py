@@ -48,7 +48,7 @@ def make_pipeline(destination_name: str) -> dlt.Pipeline:
         pipeline_name="sql_database",
         destination=destination_name,
         dataset_name="test_sql_pipeline_" + uniq_id(),
-        full_refresh=False,
+        dev_mode=False,
     )
 
 

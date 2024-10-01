@@ -49,7 +49,7 @@ pipeline = dlt.pipeline(
     pipeline_name="unstructured_google_drive",
     destination="duckdb",
     dataset_name="unstructured_data_google_drive",
-    full_refresh=True,
+    dev_mode=True,
 )
 
 # use extensions to filter files as 'extensions=(".txt", ".pdf", ...)'

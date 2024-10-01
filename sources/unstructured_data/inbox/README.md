@@ -99,7 +99,7 @@ pipeline = dlt.pipeline(
     pipeline_name="inbox",
     destination="duckdb",
     dataset_name="inbox_data",
-    full_refresh=False,
+    dev_mode=False,
 )
 
 data_source = inbox_source(attachments=True, filter_by_mime_type=("application/pdf",))

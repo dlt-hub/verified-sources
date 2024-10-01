@@ -27,7 +27,7 @@ def test_all_resources(destination_name: str) -> None:
         pipeline_name="mongodb",
         destination=destination_name,
         dataset_name="mongodb_data",
-        full_refresh=True,
+        dev_mode=True,
     )
 
     # Load entire database
@@ -99,7 +99,7 @@ def test_incremental(
         pipeline_name="mongodb_test",
         destination=destination_name,
         dataset_name="mongodb_test_data",
-        full_refresh=True,
+        dev_mode=True,
     )
 
     # read a particular range
@@ -171,7 +171,7 @@ def test_limit(destination_name, data_item_format):
         pipeline_name="mongodb_test",
         destination=destination_name,
         dataset_name="mongodb_test_data",
-        full_refresh=True,
+        dev_mode=True,
     )
     comments = mongodb_collection(
         collection="comments", limit=10, data_item_format=data_item_format
@@ -191,7 +191,7 @@ def test_limit_on_source(destination_name):
         pipeline_name="mongodb_test",
         destination=destination_name,
         dataset_name="mongodb_test_data",
-        full_refresh=True,
+        dev_mode=True,
     )
     comments = mongodb(collection_names=collections, limit=limit)
     pipeline.run(comments)
@@ -207,7 +207,7 @@ def test_limit_warning(destination):
         pipeline_name="mongodb_test",
         destination=destination,
         dataset_name="mongodb_test_data",
-        full_refresh=True,
+        dev_mode=True,
     )
     comments = mongodb_collection(collection="comments", limit=10)
 
@@ -226,7 +226,7 @@ def test_limit_chunk_size(destination_name, data_item_format):
         pipeline_name="mongodb_test",
         destination=destination_name,
         dataset_name="mongodb_test_data",
-        full_refresh=True,
+        dev_mode=True,
     )
     comments = mongodb_collection(
         collection="comments",
@@ -311,7 +311,7 @@ def test_python_types(destination_name):
         pipeline_name="mongodb_test",
         destination=destination_name,
         dataset_name="mongodb_test_data",
-        full_refresh=True,
+        dev_mode=True,
     )
     info = pipeline.run(res)
     assert info.loads_ids != []
@@ -351,7 +351,7 @@ def test_arrow_types(destination_name):
         pipeline_name="mongodb_test",
         destination=destination_name,
         dataset_name="mongodb_test_data",
-        full_refresh=True,
+        dev_mode=True,
     )
 
     if destination_name == "postgres":
