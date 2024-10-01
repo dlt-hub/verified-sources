@@ -97,9 +97,9 @@ def test_pass_engine_credentials(sql_source_db: SQLAlchemySourceDB) -> None:
 
 def test_named_sql_table_config(sql_source_db: SQLAlchemySourceDB) -> None:
     # set the credentials per table name
-    os.environ["SOURCES__SQL_DATABASE__CHAT_MESSAGE__CREDENTIALS"] = (
-        sql_source_db.engine.url.render_as_string(False)
-    )
+    os.environ[
+        "SOURCES__SQL_DATABASE__CHAT_MESSAGE__CREDENTIALS"
+    ] = sql_source_db.engine.url.render_as_string(False)
     table = sql_table(table="chat_message", schema=sql_source_db.schema)
     assert table.name == "chat_message"
     assert len(list(table)) == sql_source_db.table_infos["chat_message"]["row_count"]
@@ -119,9 +119,9 @@ def test_named_sql_table_config(sql_source_db: SQLAlchemySourceDB) -> None:
     assert len(list(table)) == 10
 
     # make it fail on cursor
-    os.environ["SOURCES__SQL_DATABASE__CHAT_MESSAGE__INCREMENTAL__CURSOR_PATH"] = (
-        "updated_at_x"
-    )
+    os.environ[
+        "SOURCES__SQL_DATABASE__CHAT_MESSAGE__INCREMENTAL__CURSOR_PATH"
+    ] = "updated_at_x"
     table = sql_table(table="chat_message", schema=sql_source_db.schema)
     with pytest.raises(ResourceExtractionError) as ext_ex:
         len(list(table))
@@ -130,9 +130,9 @@ def test_named_sql_table_config(sql_source_db: SQLAlchemySourceDB) -> None:
 
 def test_general_sql_database_config(sql_source_db: SQLAlchemySourceDB) -> None:
     # set the credentials per table name
-    os.environ["SOURCES__SQL_DATABASE__CREDENTIALS"] = (
-        sql_source_db.engine.url.render_as_string(False)
-    )
+    os.environ[
+        "SOURCES__SQL_DATABASE__CREDENTIALS"
+    ] = sql_source_db.engine.url.render_as_string(False)
     # applies to both sql table and sql database
     table = sql_table(table="chat_message", schema=sql_source_db.schema)
     assert len(list(table)) == sql_source_db.table_infos["chat_message"]["row_count"]
@@ -155,9 +155,9 @@ def test_general_sql_database_config(sql_source_db: SQLAlchemySourceDB) -> None:
     assert len(list(database)) == 10
 
     # make it fail on cursor
-    os.environ["SOURCES__SQL_DATABASE__CHAT_MESSAGE__INCREMENTAL__CURSOR_PATH"] = (
-        "updated_at_x"
-    )
+    os.environ[
+        "SOURCES__SQL_DATABASE__CHAT_MESSAGE__INCREMENTAL__CURSOR_PATH"
+    ] = "updated_at_x"
     table = sql_table(table="chat_message", schema=sql_source_db.schema)
     with pytest.raises(ResourceExtractionError) as ext_ex:
         len(list(table))
@@ -275,9 +275,9 @@ def test_load_sql_table_incremental(
     """Run pipeline twice. Insert more rows after first run
     and ensure only those rows are stored after the second run.
     """
-    os.environ["SOURCES__SQL_DATABASE__CHAT_MESSAGE__INCREMENTAL__CURSOR_PATH"] = (
-        "updated_at"
-    )
+    os.environ[
+        "SOURCES__SQL_DATABASE__CHAT_MESSAGE__INCREMENTAL__CURSOR_PATH"
+    ] = "updated_at"
 
     pipeline = make_pipeline(destination_name)
     tables = ["chat_message"]

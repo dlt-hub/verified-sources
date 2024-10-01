@@ -40,7 +40,6 @@ def test_rest_api_source_filtered(mock_api_server) -> None:
 
 
 def test_rest_api_source_exclude_columns(mock_api_server) -> None:
-
     def exclude_columns(columns: List[str]) -> Callable:
         def pop_columns(resource: DltResource) -> DltResource:
             for col in columns:
@@ -73,7 +72,6 @@ def test_rest_api_source_exclude_columns(mock_api_server) -> None:
 
 
 def test_rest_api_source_anonymize_columns(mock_api_server) -> None:
-
     def anonymize_columns(columns: List[str]) -> Callable:
         def empty_columns(resource: DltResource) -> DltResource:
             for col in columns:
@@ -106,7 +104,6 @@ def test_rest_api_source_anonymize_columns(mock_api_server) -> None:
 
 
 def test_rest_api_source_map(mock_api_server) -> None:
-
     def lower_title(row):
         row["title"] = row["title"].lower()
         return row
@@ -133,7 +130,6 @@ def test_rest_api_source_map(mock_api_server) -> None:
 
 
 def test_rest_api_source_filter_and_map(mock_api_server) -> None:
-
     def id_by_10(row):
         row["id"] = row["id"] * 10
         return row
@@ -211,7 +207,6 @@ def test_rest_api_source_filtered_child(mock_api_server) -> None:
 
 
 def test_rest_api_source_filtered_and_map_child(mock_api_server) -> None:
-
     def extend_body(row):
         row["body"] = f"{row['_posts_title']} - {row['body']}"
         return row

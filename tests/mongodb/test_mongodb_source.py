@@ -1,11 +1,15 @@
-import bson
 import json
+from unittest import mock
+
+import bson
+import dlt
 import pyarrow
 import pytest
 from pendulum import DateTime, timezone
 from unittest import mock
 
 import dlt
+from dlt.pipeline.exceptions import PipelineStepFailed
 
 from sources.mongodb import mongodb, mongodb_collection
 from sources.mongodb_pipeline import (
@@ -356,3 +360,73 @@ def test_arrow_types(destination_name):
 
     info = pipeline.run(res, table_name="types_test")
     assert info.loads_ids != []
+
+
+@pytest.mark.parametrize("destination_name", ALL_DESTINATIONS)
+def test_filter(destination_name):
+    """
+    The field `runtime` is not set in some movies,
+    thus incremental will not work. However, adding
+    an explicit filter_, which says to consider
+    only documents with `runtime`, makes it work.
+    """
+    pipeline = dlt.pipeline(
+        pipeline_name="mongodb_test",
+        destination=destination_name,
+        dataset_name="mongodb_test_data",
+        full_refresh=True,
+    )
+    movies = mongodb_collection(
+        collection="movies",
+        incremental=dlt.sources.incremental("runtime", initial_value=500),
+        filter_={"runtime": {"$exists": True}},
+    )
+    pipeline.run(movies)
+
+    table_counts = load_table_counts(pipeline, "movies")
+    assert table_counts["movies"] == 23
+
+
+@pytest.mark.parametrize("destination_name", ALL_DESTINATIONS)
+def test_filter_intersect(destination_name):
+    """
+    Check that using in the filter_ fields that
+    are used by incremental is not allowed.
+    """
+    pipeline = dlt.pipeline(
+        pipeline_name="mongodb_test",
+        destination=destination_name,
+        dataset_name="mongodb_test_data",
+        full_refresh=True,
+    )
+    movies = mongodb_collection(
+        collection="movies",
+        incremental=dlt.sources.incremental("runtime", initial_value=20),
+        filter_={"runtime": {"$gte": 20}},
+    )
+
+    with pytest.raises(PipelineStepFailed):
+        pipeline.run(movies)
+
+
+@pytest.mark.parametrize("destination_name", ALL_DESTINATIONS)
+@pytest.mark.parametrize("data_item_format", ["object", "arrow"])
+def test_mongodb_without_pymongoarrow(
+    destination_name: str, data_item_format: str
+) -> None:
+    with mock.patch.dict("sys.modules", {"pymongoarrow": None}):
+        pipeline = dlt.pipeline(
+            pipeline_name="test_mongodb_without_pymongoarrow",
+            destination=destination_name,
+            dataset_name="test_mongodb_without_pymongoarrow_data",
+            full_refresh=True,
+        )
+
+        comments = mongodb_collection(
+            collection="comments", limit=10, data_item_format=data_item_format
+        )
+        load_info = pipeline.run(comments)
+
+        assert load_info.loads_ids != []
+        table_counts = load_table_counts(pipeline, "comments")
+        assert table_counts["comments"] == 10

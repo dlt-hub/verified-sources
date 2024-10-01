@@ -137,7 +137,7 @@ Possible paginators are:
 Usage example of the `JSONLinkPaginator`, for a response with the URL of the next page located at `paging.next`:
 ```python
 "paginator": JSONLinkPaginator(
-    next_url_path="paging.next"]
+    next_url_path="paging.next"
 )
 ```
 
