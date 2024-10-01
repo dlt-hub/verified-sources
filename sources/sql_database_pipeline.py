@@ -338,9 +338,9 @@ def specify_columns_to_load() -> None:
     )
 
     # Columns can be specified per table in env var (json array) or in `.dlt/config.toml`
-    os.environ["SOURCES__SQL_DATABASE__FAMILY__INCLUDED_COLUMNS"] = (
-        '["rfam_acc", "description"]'
-    )
+    os.environ[
+        "SOURCES__SQL_DATABASE__FAMILY__INCLUDED_COLUMNS"
+    ] = '["rfam_acc", "description"]'
 
     sql_alchemy_source = sql_database(
         "mysql+pymysql://rfamro@mysql-rfam-public.ebi.ac.uk:4497/Rfam?&binary_prefix=true",

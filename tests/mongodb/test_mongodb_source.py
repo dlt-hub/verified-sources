@@ -1,5 +1,8 @@
-import bson
 import json
+from unittest import mock
+
+import bson
+import dlt
 import pyarrow
 import pytest
 from pendulum import DateTime, timezone
@@ -404,3 +407,26 @@ def test_filter_intersect(destination_name):
 
     with pytest.raises(PipelineStepFailed):
         pipeline.run(movies)
+
+
+@pytest.mark.parametrize("destination_name", ALL_DESTINATIONS)
+@pytest.mark.parametrize("data_item_format", ["object", "arrow"])
+def test_mongodb_without_pymongoarrow(
+    destination_name: str, data_item_format: str
+) -> None:
+    with mock.patch.dict("sys.modules", {"pymongoarrow": None}):
+        pipeline = dlt.pipeline(
+            pipeline_name="test_mongodb_without_pymongoarrow",
+            destination=destination_name,
+            dataset_name="test_mongodb_without_pymongoarrow_data",
+            full_refresh=True,
+        )
+
+        comments = mongodb_collection(
+            collection="comments", limit=10, data_item_format=data_item_format
+        )
+        load_info = pipeline.run(comments)
+
+        assert load_info.loads_ids != []
+        table_counts = load_table_counts(pipeline, "comments")
+        assert table_counts["comments"] == 10
