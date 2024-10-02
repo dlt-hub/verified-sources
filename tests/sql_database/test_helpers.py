@@ -1,6 +1,8 @@
-import pytest
+from functools import partial
+from typing import Literal
 
 import dlt
+import pytest
 from dlt.common.typing import TDataItem
 
 from sources.sql_database.helpers import TableLoader, TableBackend
@@ -145,21 +147,24 @@ def test_make_query_incremental_any_fun(
     assert query.compare(expected)
 
 
-def mock_json_column(field: str) -> TDataItem:
+def mock_column(field: str, mock_type: Literal["json", "array"] = "json") -> TDataItem:
     """"""
-    import pyarrow as pa
     import pandas as pd
+    import pyarrow as pa
 
-    json_mock_str = '{"data": [1, 2, 3]}'
+    if mock_type == "json":
+        mock_str = '{"data": [1, 2, 3]}'
+    elif mock_type == "array":
+        mock_str = "[1, 2, 3]"
 
     def _unwrap(table: TDataItem) -> TDataItem:
         if isinstance(table, pd.DataFrame):
-            table[field] = [None if s is None else json_mock_str for s in table[field]]
+            table[field] = [None if s is None else mock_str for s in table[field]]
             return table
         else:
             col_index = table.column_names.index(field)
             json_str_array = pa.array(
-                [None if s is None else json_mock_str for s in table[field]]
+                [None if s is None else mock_str for s in table[field]]
             )
             return table.set_column(
                 col_index,
@@ -170,3 +175,7 @@ def mock_json_column(field: str) -> TDataItem:
             )
 
     return _unwrap
+
+
+mock_json_column = partial(mock_column, mock_type="json")
+mock_array_column = partial(mock_column, mock_type="array")
