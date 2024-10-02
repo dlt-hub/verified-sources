@@ -191,5 +191,5 @@ class ScrapingHost:
         logger.info("Starting scrapy crawler")
         self.scrapy_runner.run()
 
-        # Wait to for pipeline finish it's job
+        # Wait to for pipeline finish its job
         pipeline_worker.join()
