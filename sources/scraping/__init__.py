@@ -8,7 +8,6 @@ import typing as t
 import dlt
 
 from dlt.sources import DltResource
-from dlt.common.source import _SOURCES, SourceInfo
 
 from scrapy import Spider  # type: ignore
 
@@ -65,10 +64,8 @@ def run_pipeline(  # type: ignore[valid-type]
     scraping_host.run(*args, **kwargs)
 
 
-# This way we allow dlt init to detect scraping source it is indeed hacky
-# and the core team is working to provide a better alternative.
-_SOURCES[run_pipeline.__qualname__] = SourceInfo(
-    ScrapingConfig,
-    run_pipeline,
-    inspect.getmodule(run_pipeline),
-)
+@dlt.source(spec=ScrapingConfig)
+def _register() -> DltResource:
+    raise NotImplementedError(
+        "Due to internal architecture of Scrapy, we could not represent it as a generator. Please use `run_pipeline` function instead"
+    )
