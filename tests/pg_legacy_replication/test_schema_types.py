@@ -1,4 +1,4 @@
-from sources.pg_legacy_replication.helpers import extract_table_schema
+from sources.pg_legacy_replication.schema_types import _extract_table_schema
 from sources.pg_legacy_replication.pg_logicaldec_pb2 import (
     RowMessage,
     Op,
@@ -29,20 +29,20 @@ def test_extract_table_schema():
     )
     row_msg.new_typeinfo.extend(
         [
-            TypeInfo(modifier="bigint", value_optional=True),
+            TypeInfo(modifier="bigint"),
             TypeInfo(modifier="character varying", value_optional=True),
             TypeInfo(modifier="character varying", value_optional=True),
             TypeInfo(modifier="character varying", value_optional=True),
         ]
     )
-    assert extract_table_schema(row_msg) == {
+    assert _extract_table_schema(row_msg) == {
         "name": "tbl_x",
         "columns": {
             "id_x": {
                 "data_type": "bigint",
                 "precision": 64,
                 "name": "id_x",
-                "nullable": True,
+                "nullable": False,
             },
             "val_x": {
                 "data_type": "text",
