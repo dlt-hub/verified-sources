@@ -79,7 +79,11 @@ def _get_scale(type_id: int, atttypmod: int) -> Optional[int]:
 @lru_cache(maxsize=None)
 def _type_mapper() -> Any:
     from dlt.destinations import postgres
-    from dlt.destinations.impl.postgres.postgres import PostgresTypeMapper
+
+    try:
+        from dlt.destinations.impl.postgres.postgres import PostgresTypeMapper
+    except ImportError:
+        from dlt.destinations.impl.postgres.factory import PostgresTypeMapper  # type: ignore
 
     return PostgresTypeMapper(postgres().capabilities())
 
