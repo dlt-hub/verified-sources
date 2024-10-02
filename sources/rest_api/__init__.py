@@ -284,6 +284,15 @@ def create_resources(
                     Callable[..., Any]
                 ] = incremental_cursor_transform,
             ) -> Generator[Any, None, None]:
+
+                formatted_path = path.format(
+                    **{
+                        k: v
+                        for k, v in params.items()
+                        if isinstance(v, (int, float, str))
+                    }
+                )
+
                 if incremental_object:
                     params = _set_incremental_params(
                         params,
@@ -294,7 +303,7 @@ def create_resources(
 
                 yield from client.paginate(
                     method=method,
-                    path=path,
+                    path=formatted_path,
                     params=params,
                     json=json,
                     paginator=paginator,
