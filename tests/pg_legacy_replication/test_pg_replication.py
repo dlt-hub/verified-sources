@@ -51,7 +51,7 @@ def test_core_functionality(
         pub_name=pub_name,
         schema_name=src_pl.dataset_name,
         table_names=("tbl_x", "tbl_y"),
-        persist_snapshots=True,
+        take_snapshots=True,
     )
 
     changes = replication_resource(slot_name, pub_name)
@@ -286,7 +286,7 @@ def test_mapped_data_types(
         pub_name=pub_name,
         schema_name=src_pl.dataset_name,
         table_names="items",
-        persist_snapshots=init_load,
+        take_snapshots=init_load,
         columns={"items": column_schema} if give_hints else None,
     )
 
@@ -429,7 +429,7 @@ def test_write_disposition(
         schema_name=src_pl.dataset_name,
         table_names="items",
         publish=publish,
-        persist_snapshots=True,
+        take_snapshots=True,
     )
 
     # assert write disposition on snapshot resource
@@ -496,7 +496,7 @@ def test_include_columns(
         schema_name=src_pl.dataset_name,
         table_names=("tbl_x", "tbl_y", "tbl_z"),
         publish="insert",
-        persist_snapshots=init_load,
+        take_snapshots=init_load,
         include_columns=include_columns,
     )
     changes = replication_resource(
@@ -567,7 +567,7 @@ def test_column_hints(
         schema_name=src_pl.dataset_name,
         table_names=("tbl_x", "tbl_y", "tbl_z"),
         publish="insert",
-        persist_snapshots=init_load,
+        take_snapshots=init_load,
         columns=column_hints,
     )
     changes = replication_resource(
@@ -717,7 +717,7 @@ def test_init_replication(src_config: Tuple[dlt.Pipeline, str, str]) -> None:
         pub_name=pub_name,
         schema_name=src_pl.dataset_name,
         table_names="tbl_x",
-        persist_snapshots=True,
+        take_snapshots=True,
     )
     assert snapshot is not None
     assert get_table_names_in_pub() == {"tbl_x"}
@@ -728,7 +728,7 @@ def test_init_replication(src_config: Tuple[dlt.Pipeline, str, str]) -> None:
         pub_name=pub_name,
         schema_name=src_pl.dataset_name,
         table_names=("tbl_x", "tbl_y"),
-        persist_snapshots=True,
+        take_snapshots=True,
     )
     assert snapshots is None
     assert get_table_names_in_pub() == {"tbl_x", "tbl_y"}

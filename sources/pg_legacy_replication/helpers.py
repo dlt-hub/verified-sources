@@ -54,16 +54,14 @@ from google.protobuf.json_format import MessageToDict
 @dlt.sources.config.with_config(sections=("sources", "pg_legacy_replication"))
 def init_replication(
     slot_name: str,
-    pub_name: str,
-    schema_name: str,
+    schema: str,
     table_names: Optional[Union[str, Sequence[str]]] = None,
     credentials: ConnectionStringCredentials = dlt.secrets.value,
-    publish: str = "insert, update, delete",
-    persist_snapshots: bool = False,
+    take_snapshots: bool = True,
     include_columns: Optional[Dict[str, Sequence[str]]] = None,
     columns: Optional[Dict[str, TTableSchemaColumns]] = None,
     reset: bool = False,
-) -> Optional[Union[DltResource, List[DltResource]]]:
+) -> Optional[List[DltResource]]:
     """Initializes replication for one, several, or all tables within a schema.
 
     Can be called repeatedly with the same `slot_name` and `pub_name`:
@@ -81,7 +79,7 @@ def init_replication(
     Args:
         slot_name (str): Name of the replication slot to create if it does not exist yet.
         pub_name (str): Name of the publication to create if it does not exist yet.
-        schema_name (str): Name of the schema to replicate tables from.
+        schema (str): Name of the schema to replicate tables from.
         table_names (Optional[Union[str, Sequence[str]]]):  Name(s) of the table(s)
           to include in the publication. If not provided, all tables in the schema
           are included (also tables added to the schema after the publication was created).
@@ -91,7 +89,7 @@ def init_replication(
           are `insert`, `update`, and `delete`. `truncate` is currently not
           supported—messages of that type are ignored.
           E.g. `publish="insert"` will create a publication that only publishes insert operations.
-        persist_snapshots (bool): Whether the table states in the snapshot exported
+        take_snapshots (bool): Whether the table states in the snapshot exported
           during replication slot creation are persisted to tables. If true, a
           snapshot table is created in Postgres for all included tables, and corresponding
           resources (`DltResource` objects) for these tables are created and returned.
@@ -107,7 +105,7 @@ def init_replication(
               "table_y": ["col_x", "col_y", "col_z"],
           }
           ```
-          Argument is only used if `persist_snapshots` is `True`.
+          Argument is only used if `take_snapshots` is `True`.
         columns (Optional[Dict[str, TTableSchemaColumns]]): Maps
           table name(s) to column hints to apply on the snapshot table resource(s).
           For example:
@@ -117,33 +115,27 @@ def init_replication(
               "table_y": {"col_y": {"precision": 32}},
           }
           ```
-          Argument is only used if `persist_snapshots` is `True`.
+          Argument is only used if `take_snapshots` is `True`.
         reset (bool): If set to True, the existing slot and publication are dropped
           and recreated. Has no effect if a slot and publication with the provided
           names do not yet exist.
 
     Returns:
-        - None if `persist_snapshots` is `False`
+        - None if `take_snapshots` is `False`
         - a `DltResource` object or a list of `DltResource` objects for the snapshot
-          table(s) if `persist_snapshots` is `True` and the replication slot did not yet exist
+          table(s) if `take_snapshots` is `True` and the replication slot did not yet exist
     """
-    if persist_snapshots:
+    if take_snapshots:
         _import_sql_table_resource()
     if isinstance(table_names, str):
         table_names = [table_names]
     cur = _get_rep_conn(credentials).cursor()
     if reset:
         drop_replication_slot(slot_name, cur)
-        drop_publication(pub_name, cur)
-    create_publication(pub_name, cur, publish)
-    if table_names is None:
-        add_schema_to_publication(schema_name, pub_name, cur)
-    else:
-        add_tables_to_publication(table_names, schema_name, pub_name, cur)
-    slot = create_replication_slot(slot_name, cur, "decoderbufs")
-    if persist_snapshots:
+    slot = create_replication_slot(slot_name, cur)
+    if take_snapshots:
         if slot is None:
-            logger.info(
+            raise NotImplementedError(
                 "Cannot persist snapshots because they do not exist. "
                 f'The replication slot "{slot_name}" already existed prior to calling this function.'
             )
@@ -154,7 +146,7 @@ def init_replication(
                 persist_snapshot_table(
                     snapshot_name=slot["snapshot_name"],
                     table_name=table_name,
-                    schema_name=schema_name,
+                    schema_name=schema,
                     cur=cur_snap,
                     include_columns=(
                         None
@@ -167,9 +159,9 @@ def init_replication(
             snapshot_table_resources = [
                 snapshot_table_resource(
                     snapshot_table_name=snapshot_table_name,
-                    schema_name=schema_name,
+                    schema_name=schema,
                     table_name=table_name,
-                    write_disposition="append" if publish == "insert" else "merge",
+                    write_disposition="merge",  # FIXME Change later
                     columns=None if columns is None else columns.get(table_name),
                     credentials=credentials,
                 )
@@ -177,8 +169,6 @@ def init_replication(
                     table_names, snapshot_table_names
                 )
             ]
-            if len(snapshot_table_resources) == 1:
-                return snapshot_table_resources[0]
             return snapshot_table_resources
     return None
 
@@ -194,98 +184,8 @@ def get_pg_version(
     return _get_conn(credentials).server_version
 
 
-def create_publication(
-    name: str,
-    cur: cursor,
-    publish: str = "insert, update, delete",
-) -> None:
-    """Creates a publication for logical replication if it doesn't exist yet.
-
-    Does nothing if the publication already exists.
-    Raises error if the user does not have the CREATE privilege for the database.
-    """
-    esc_name = escape_postgres_identifier(name)
-    try:
-        cur.execute(f"CREATE PUBLICATION {esc_name} WITH (publish = '{publish}');")
-        logger.info(
-            f"Successfully created publication {esc_name} with publish = '{publish}'."
-        )
-    except psycopg2.errors.DuplicateObject:  # the publication already exists
-        logger.info(f'Publication "{name}" already exists.')
-
-
-def add_table_to_publication(
-    table_name: str,
-    schema_name: str,
-    pub_name: str,
-    cur: cursor,
-) -> None:
-    """Adds a table to a publication for logical replication.
-
-    Does nothing if the table is already a member of the publication.
-    Raises error if the user is not owner of the table.
-    """
-    qual_name = _make_qualified_table_name(table_name, schema_name)
-    esc_pub_name = escape_postgres_identifier(pub_name)
-    try:
-        cur.execute(f"ALTER PUBLICATION {esc_pub_name} ADD TABLE {qual_name};")
-        logger.info(
-            f"Successfully added table {qual_name} to publication {esc_pub_name}."
-        )
-    except psycopg2.errors.DuplicateObject:
-        logger.info(
-            f"Table {qual_name} is already a member of publication {esc_pub_name}."
-        )
-
-
-def add_tables_to_publication(
-    table_names: Union[str, Sequence[str]],
-    schema_name: str,
-    pub_name: str,
-    cur: cursor,
-) -> None:
-    """Adds one or multiple tables to a publication for logical replication.
-
-    Calls `add_table_to_publication` for each table in `table_names`.
-    """
-    if isinstance(table_names, str):
-        table_names = table_names
-    for table_name in table_names:
-        add_table_to_publication(table_name, schema_name, pub_name, cur)
-
-
-def add_schema_to_publication(
-    schema_name: str,
-    pub_name: str,
-    cur: cursor,
-) -> None:
-    """Adds a schema to a publication for logical replication if the schema is not a member yet.
-
-    Raises error if the user is not a superuser.
-    """
-    if (version := get_pg_version(cur)) < 150000:
-        raise IncompatiblePostgresVersionException(
-            f"Cannot add schema to publication because the Postgres server version {version} is too low."
-            " Adding schemas to a publication is only supported for Postgres version 15 or higher."
-            " Upgrade your Postgres server version or set the `table_names` argument to explicitly specify table names."
-        )
-    esc_schema_name = escape_postgres_identifier(schema_name)
-    esc_pub_name = escape_postgres_identifier(pub_name)
-    try:
-        cur.execute(
-            f"ALTER PUBLICATION {esc_pub_name} ADD TABLES IN SCHEMA {esc_schema_name};"
-        )
-        logger.info(
-            f"Successfully added schema {esc_schema_name} to publication {esc_pub_name}."
-        )
-    except psycopg2.errors.DuplicateObject:
-        logger.info(
-            f"Schema {esc_schema_name} is already a member of publication {esc_pub_name}."
-        )
-
-
 def create_replication_slot(  # type: ignore[return]
-    name: str, cur: ReplicationCursor, output_plugin: str = "pgoutput"
+    name: str, cur: ReplicationCursor, output_plugin: str = "decoderbufs"
 ) -> Optional[Dict[str, str]]:
     """Creates a replication slot if it doesn't exist yet."""
     try:
@@ -312,19 +212,6 @@ def drop_replication_slot(name: str, cur: ReplicationCursor) -> None:
     except psycopg2.errors.UndefinedObject:  # the replication slot does not exist
         logger.info(
             f'Replication slot "{name}" cannot be dropped because it does not exist.'
-        )
-
-
-def drop_publication(name: str, cur: ReplicationCursor) -> None:
-    """Drops a publication if it exists."""
-    esc_name = escape_postgres_identifier(name)
-    try:
-        cur.execute(f"DROP PUBLICATION {esc_name};")
-        cur.connection.commit()
-        logger.info(f"Successfully dropped publication {esc_name}.")
-    except psycopg2.errors.UndefinedObject:  # the publication does not exist
-        logger.info(
-            f"Publication {esc_name} cannot be dropped because it does not exist."
         )
 
 

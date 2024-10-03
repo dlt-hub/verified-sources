@@ -13,12 +13,11 @@ from .helpers import advance_slot, get_max_lsn, ItemGenerator
 
 
 @dlt.resource(
-    name=lambda args: args["slot_name"] + "_" + args["pub_name"],
+    name=lambda args: args["slot_name"],
     standalone=True,
 )
 def replication_resource(
     slot_name: str,
-    pub_name: str,
     credentials: ConnectionStringCredentials = dlt.secrets.value,
     include_columns: Optional[Dict[str, Sequence[str]]] = None,
     columns: Optional[Dict[str, TTableSchemaColumns]] = None,
@@ -36,7 +35,6 @@ def replication_resource(
 
     Args:
         slot_name (str): Name of the replication slot to consume replication messages from.
-        pub_name (str): Name of the publication that publishes DML operations for the table(s).
         credentials (ConnectionStringCredentials): Postgres database credentials.
         include_columns (Optional[Dict[str, Sequence[str]]]): Maps table name(s) to
           sequence of names of columns to include in the generated data items.

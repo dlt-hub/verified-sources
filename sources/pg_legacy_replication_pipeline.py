@@ -34,17 +34,15 @@ def replicate_single_table() -> None:
 
     # initialize replication for the source table—this creates a replication slot and publication
     slot_name = "example_slot"
-    pub_name = "example_pub"
     init_replication(  # requires the Postgres user to have the REPLICATION attribute assigned
         slot_name=slot_name,
-        pub_name=pub_name,
-        schema_name=src_pl.dataset_name,
+        schema=src_pl.dataset_name,
         table_names="my_source_table",
         reset=True,
     )
 
     # create a resource that generates items for each change in the source table
-    changes = replication_resource(slot_name, pub_name)
+    changes = replication_resource(slot_name)
 
     # insert two records in source table and propagate changes to destination
     change_source_table(
@@ -67,7 +65,7 @@ def replicate_single_table() -> None:
 def replicate_with_initial_load() -> None:
     """Sets up replication with initial load.
 
-    Demonstrates usage of `persist_snapshots` argument and snapshot resource
+    Demonstrates usage of `take_snapshots` argument and snapshot resource
     returned by `init_replication` helper.
     """
     # create source and destination pipelines
@@ -91,13 +89,11 @@ def replicate_with_initial_load() -> None:
 
     # initialize replication for the source table
     slot_name = "example_slot"
-    pub_name = "example_pub"
     snapshot = init_replication(  # requires the Postgres user to have the REPLICATION attribute assigned
         slot_name=slot_name,
-        pub_name=pub_name,
-        schema_name=src_pl.dataset_name,
+        schema=src_pl.dataset_name,
         table_names="my_source_table",
-        persist_snapshots=True,  # persist snapshot table(s) and let function return resource(s) for initial load
+        take_snapshots=True,  # persist snapshot table(s) and let function return resource(s) for initial load
         reset=True,
     )
 
@@ -107,7 +103,7 @@ def replicate_with_initial_load() -> None:
 
     # insert record in source table and propagate change to destination
     change_source_table(src_pl, "INSERT INTO {table_name} VALUES (3, true);")
-    changes = replication_resource(slot_name, pub_name)
+    changes = replication_resource(slot_name)
     dest_pl.run(changes)
     show_destination_table(dest_pl)
 
@@ -141,16 +137,14 @@ def replicate_entire_schema() -> None:
 
     # initialize schema replication by omitting the `table_names` argument
     slot_name = "example_slot"
-    pub_name = "example_pub"
     init_replication(  # initializing schema replication requires the Postgres user to be a superuser
         slot_name=slot_name,
-        pub_name=pub_name,
-        schema_name=src_pl.dataset_name,
+        schema=src_pl.dataset_name,
         reset=True,
     )
 
     # create a resource that generates items for each change in the schema's tables
-    changes = replication_resource(slot_name, pub_name)
+    changes = replication_resource(slot_name)
 
     # insert records in source tables and propagate changes to destination
     change_source_table(
@@ -200,11 +194,9 @@ def replicate_with_column_selection() -> None:
 
     # initialize schema replication by omitting the `table_names` argument
     slot_name = "example_slot"
-    pub_name = "example_pub"
     init_replication(  # requires the Postgres user to have the REPLICATION attribute assigned
         slot_name=slot_name,
-        pub_name=pub_name,
-        schema_name=src_pl.dataset_name,
+        schema=src_pl.dataset_name,
         table_names=("tbl_x", "tbl_y"),
         reset=True,
     )
@@ -212,7 +204,6 @@ def replicate_with_column_selection() -> None:
     # create a resource that generates items for each change in the schema's tables
     changes = replication_resource(
         slot_name=slot_name,
-        pub_name=pub_name,
         include_columns={
             "tbl_x": ("c1", "c2")
         },  # columns not specified here are excluded from generated data items
