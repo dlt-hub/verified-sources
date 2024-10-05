@@ -553,7 +553,15 @@ def process_parent_data_item(
     item: Dict[str, Any],
     resolved_param: ResolvedParam,
     include_from_parent: List[str],
-) -> Tuple[str, Dict[str, Any]]:
+) -> Tuple[List[str], Dict[str, Any]]:
+
+    def to_list(
+            s: Any,
+        ) -> List[Any]:
+        if isinstance(s, list):
+            return s
+        return [s]
+
     parent_resource_name = resolved_param.resolve_config["resource"]
 
     field_values = jsonpath.find_values(resolved_param.field_path, item)
@@ -563,7 +571,10 @@ def process_parent_data_item(
         raise ValueError(
             f"Transformer expects a field '{field_path}' to be present in the incoming data from resource {parent_resource_name} in order to bind it to path param {resolved_param.param_name}. Available parent fields are {', '.join(item.keys())}"
         )
-    bound_path = path.format(**{resolved_param.param_name: field_values[0]})
+
+    bound_path = [path.format(**{resolved_param.param_name: field_value}) for field_value in to_list(field_values[0])]
+
+    # bound_path = path.format(**{resolved_param.param_name: field_values[0]})
 
     parent_record: Dict[str, Any] = {}
     if include_from_parent:
