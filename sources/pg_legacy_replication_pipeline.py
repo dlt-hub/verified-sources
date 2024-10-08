@@ -37,7 +37,7 @@ def replicate_single_table() -> None:
     init_replication(  # requires the Postgres user to have the REPLICATION attribute assigned
         slot_name=slot_name,
         schema=src_pl.dataset_name,
-        table_names="my_source_table",
+        table_names=["my_source_table"],
         reset=True,
     )
 
@@ -92,7 +92,7 @@ def replicate_with_initial_load() -> None:
     snapshot = init_replication(  # requires the Postgres user to have the REPLICATION attribute assigned
         slot_name=slot_name,
         schema=src_pl.dataset_name,
-        table_names="my_source_table",
+        table_names=["my_source_table"],
         take_snapshots=True,  # persist snapshot table(s) and let function return resource(s) for initial load
         reset=True,
     )
@@ -197,7 +197,7 @@ def replicate_with_column_selection() -> None:
     init_replication(  # requires the Postgres user to have the REPLICATION attribute assigned
         slot_name=slot_name,
         schema=src_pl.dataset_name,
-        table_names=("tbl_x", "tbl_y"),
+        table_names=["tbl_x", "tbl_y"],
         reset=True,
     )
 

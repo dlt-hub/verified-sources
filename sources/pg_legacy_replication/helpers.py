@@ -54,17 +54,16 @@ from google.protobuf.json_format import MessageToDict
 @dlt.sources.config.with_config(sections=("sources", "pg_legacy_replication"))
 def init_replication(
     slot_name: str,
-    schema: str,
-    table_names: Optional[Union[str, Sequence[str]]] = None,
+    schema: Optional[str] = dlt.config.value,
+    table_names: Optional[List[str]] = dlt.config.value,
     credentials: ConnectionStringCredentials = dlt.secrets.value,
     take_snapshots: bool = True,
     include_columns: Optional[Dict[str, Sequence[str]]] = None,
-    columns: Optional[Dict[str, TTableSchemaColumns]] = None,
     reset: bool = False,
 ) -> Optional[List[DltResource]]:
     """Initializes replication for one, several, or all tables within a schema.
 
-    Can be called repeatedly with the same `slot_name` and `pub_name`:
+    Can be called repeatedly with the same `slot_name`:
     - creates a replication slot and publication with provided names if they do not exist yet
     - skips creation of slot and publication if they already exist (unless`reset` is set to `False`)
     - supports addition of new tables by extending `table_names`
@@ -78,17 +77,11 @@ def init_replication(
 
     Args:
         slot_name (str): Name of the replication slot to create if it does not exist yet.
-        pub_name (str): Name of the publication to create if it does not exist yet.
         schema (str): Name of the schema to replicate tables from.
         table_names (Optional[Union[str, Sequence[str]]]):  Name(s) of the table(s)
           to include in the publication. If not provided, all tables in the schema
           are included (also tables added to the schema after the publication was created).
         credentials (ConnectionStringCredentials): Postgres database credentials.
-        publish (str): Comma-separated string of DML operations. Can be used to
-          control which changes are included in the publication. Allowed operations
-          are `insert`, `update`, and `delete`. `truncate` is currently not
-          supported—messages of that type are ignored.
-          E.g. `publish="insert"` will create a publication that only publishes insert operations.
         take_snapshots (bool): Whether the table states in the snapshot exported
           during replication slot creation are persisted to tables. If true, a
           snapshot table is created in Postgres for all included tables, and corresponding
@@ -106,14 +99,6 @@ def init_replication(
           }
           ```
           Argument is only used if `take_snapshots` is `True`.
-        columns (Optional[Dict[str, TTableSchemaColumns]]): Maps
-          table name(s) to column hints to apply on the snapshot table resource(s).
-          For example:
-          ```
-          columns={
-              "table_x": {"col_a": {"data_type": "complex"}},
-              "table_y": {"col_y": {"precision": 32}},
-          }
           ```
           Argument is only used if `take_snapshots` is `True`.
         reset (bool): If set to True, the existing slot and publication are dropped
@@ -127,49 +112,68 @@ def init_replication(
     """
     if take_snapshots:
         _import_sql_table_resource()
-    if isinstance(table_names, str):
-        table_names = [table_names]
     cur = _get_rep_conn(credentials).cursor()
     if reset:
         drop_replication_slot(slot_name, cur)
     slot = create_replication_slot(slot_name, cur)
     if take_snapshots:
-        if slot is None:
-            raise NotImplementedError(
-                "Cannot persist snapshots because they do not exist. "
-                f'The replication slot "{slot_name}" already existed prior to calling this function.'
+        from sqlalchemy import text, Connection
+
+        def init_connection(conn: Connection) -> Connection:
+            if slot is None:
+                # Using the same isolation level that pg_backup uses
+                conn.execute(
+                    text(
+                        "SET TRANSACTION ISOLATION LEVEL SERIALIZABLE, READ ONLY, DEFERRABLE;"
+                    )
+                )
+            else:
+                conn.execute(text("SET TRANSACTION ISOLATION LEVEL REPEATABLE READ;"))
+                conn.execute(
+                    text(f"SET TRANSACTION SNAPSHOT '{slot['snapshot_name']}';")
+                )
+            return conn
+
+        snapshot_resources = [
+            sql_table(  # type: ignore[name-defined]
+                credentials=credentials,
+                table=table_name,
+                schema=schema,
+                included_columns=include_columns.get(table_name),
+                conn_init_callback=init_connection,
             )
-        else:
-            # need separate session to read the snapshot: https://stackoverflow.com/q/75852587
-            cur_snap = _get_conn(credentials).cursor()
-            snapshot_table_names = [
-                persist_snapshot_table(
-                    snapshot_name=slot["snapshot_name"],
-                    table_name=table_name,
-                    schema_name=schema,
-                    cur=cur_snap,
-                    include_columns=(
-                        None
-                        if include_columns is None
-                        else include_columns.get(table_name)
-                    ),
-                )
-                for table_name in table_names
-            ]
-            snapshot_table_resources = [
-                snapshot_table_resource(
-                    snapshot_table_name=snapshot_table_name,
-                    schema_name=schema,
-                    table_name=table_name,
-                    write_disposition="merge",  # FIXME Change later
-                    columns=None if columns is None else columns.get(table_name),
-                    credentials=credentials,
-                )
-                for table_name, snapshot_table_name in zip(
-                    table_names, snapshot_table_names
-                )
-            ]
-            return snapshot_table_resources
+            for table_name in table_names
+        ]
+        # # need separate session to read the snapshot: https://stackoverflow.com/q/75852587
+        # cur_snap = _get_conn(credentials).cursor()
+        # snapshot_table_names = [
+        #     persist_snapshot_table(
+        #         snapshot_name=slot["snapshot_name"],
+        #         table_name=table_name,
+        #         schema_name=schema,
+        #         cur=cur_snap,
+        #         include_columns=(
+        #             None
+        #             if include_columns is None
+        #             else include_columns.get(table_name)
+        #         ),
+        #     )
+        #     for table_name in table_names
+        # ]
+        # snapshot_table_resources = [
+        #     snapshot_table_resource(
+        #         snapshot_table_name=snapshot_table_name,
+        #         schema_name=schema,
+        #         table_name=table_name,
+        #         write_disposition="merge",  # FIXME Change later
+        #         columns=None if columns is None else columns.get(table_name),
+        #         credentials=credentials,
+        #     )
+        #     for table_name, snapshot_table_name in zip(
+        #         table_names, snapshot_table_names
+        #     )
+        # ]
+        return snapshot_resources
     return None
 
 
