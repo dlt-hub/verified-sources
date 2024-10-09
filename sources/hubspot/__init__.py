@@ -181,7 +181,7 @@ def resource_template(
     """
 
     # Use provided props or fetch from ENTITY_PROPERTIES if not provided
-    properties: List[str] = ENTITY_PROPERTIES.get(entity, props or [])
+    properties: List[str] = ENTITY_PROPERTIES.get(entity, list(props or []))
 
     # Use these properties to yield the crm_objects
     yield from crm_objects(
@@ -218,7 +218,7 @@ def resource_history_template(
 def hubspot_properties(
     properties_list: Optional[List[Dict[str, Any]]] = None,
     api_key: str = dlt.secrets.value,
-) -> DltResource:
+)  -> Iterator[TDataItems]:
     """
     A DLT resource that retrieves HubSpot properties for a given list of objects.
 
@@ -304,9 +304,9 @@ def stages_timing(
         limit = len(date_entered_properties)
     while idx < limit:
         if len(props) - idx < MAX_PROPS_LENGTH:
-            props_part: str = ",".join(props[idx: idx + MAX_PROPS_LENGTH].split(",")[:-1])
+            props_part = ",".join(props[idx: idx + MAX_PROPS_LENGTH].split(",")[:-1])
         else:
-            props_part: str = props[idx: idx + MAX_PROPS_LENGTH]
+            props_part = props[idx: idx + MAX_PROPS_LENGTH]
         idx += len(props_part)
         for data in fetch_data_for_properties(
             props_part, api_key, object_type, soft_delete
@@ -351,7 +351,7 @@ def hubspot(
     soft_delete: bool = False,
     include_custom_props: bool = True,
     props: Optional[Sequence[str]] = None,  # Add props argument here
-) -> Sequence[DltResource]:
+) -> Iterator[DltResource]:
     """
     A DLT source that retrieves data from the HubSpot API using the
     specified API key.
@@ -477,30 +477,30 @@ def fetch_props(
     """
     if props == ALL:
         # Fetch all property names
-        props = list(_get_property_names(api_key, object_type))
+        props_list = list(_get_property_names(api_key, object_type))
     elif isinstance(props, str):
         # If props are passed as a single string, convert it to a list
-        props = [props]
+        props_list = [props]
     else:
         # Ensure it's a list of strings, if not already
-        props = extract_properties_list(props)
+        props_list = extract_properties_list(props or [])
 
     if include_custom_props:
         all_props: List[str] = _get_property_names(api_key, object_type)
         custom_props: List[str] = [prop for prop in all_props if not prop.startswith("hs_")]
-        props = props + custom_props  # type: ignore
+        props_list += custom_props
 
-    props = ",".join(sorted(list(set(props))))
+    props_str = ",".join(sorted(set(props_list)))
 
-    if len(props) > MAX_PROPS_LENGTH:
+    if len(props_str) > MAX_PROPS_LENGTH:
         raise ValueError(
             "Your request to Hubspot is too long to process. "
             f"Maximum allowed query length is {MAX_PROPS_LENGTH} symbols, while "
-            f"your list of properties `{props[:200]}`... is {len(props)} "
+            f"your list of properties `{props_str[:200]}`... is {len(props_str)} "
             "symbols long. Use the `props` argument of the resource to "
             "set the list of properties to extract from the endpoint."
         )
-    return props
+    return props_str
 
 
 @dlt.resource
