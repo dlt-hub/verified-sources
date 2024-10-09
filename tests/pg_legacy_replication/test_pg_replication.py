@@ -14,7 +14,11 @@ from tests.utils import (
     get_table_metrics,
 )
 from sources.pg_legacy_replication import replication_resource
-from sources.pg_legacy_replication.helpers import init_replication, get_pg_version
+from sources.pg_legacy_replication.helpers import (
+    init_replication,
+    get_pg_version,
+    cleanup_snapshot_resources,
+)
 from sources.pg_legacy_replication.exceptions import (
     IncompatiblePostgresVersionException,
 )
@@ -74,6 +78,7 @@ def test_core_functionality(
     exp_tbl_y = [{"id_y": 1, "val_y": True}]
     assert_loaded_data(dest_pl, "tbl_x", ["id_x", "val_x"], exp_tbl_x, "id_x")
     assert_loaded_data(dest_pl, "tbl_y", ["id_y", "val_y"], exp_tbl_y, "id_y")
+    cleanup_snapshot_resources(snapshots)
 
     # process changes
     info = dest_pl.run(changes)
