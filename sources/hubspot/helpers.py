@@ -31,7 +31,7 @@ def _get_headers(api_key: str) -> Dict[str, str]:
     return dict(authorization=f"Bearer {api_key}")
 
 
-def pagination(_data: Dict[str, Any], headers: Dict[str, Any]):
+def pagination(_data: Dict[str, Any], headers: Dict[str, Any]) -> Optional[Dict[str, Any]]:
     _next = _data.get("paging", {}).get("next", None)
     # _next = False
     if _next:
@@ -201,7 +201,7 @@ def _get_property_names(api_key: str, object_type: str) -> List[str]:
     return properties
 
 
-def get_properties_labels(api_key: str, object_type: str, property_name: str):
+def get_properties_labels(api_key: str, object_type: str, property_name: str) -> Iterator[Dict[str, Any]]:
     endpoint = f"/crm/v3/properties/{object_type}/{property_name}"
     url = get_url(endpoint)
     headers = _get_headers(api_key)

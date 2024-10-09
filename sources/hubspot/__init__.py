@@ -21,10 +21,9 @@ The source also supports enabling Web Analytics Events for each endpoint by sett
 
 Example:
 To retrieve data from all endpoints, use the following code:
-
 """
 
-from typing import Any, Dict, Iterator, List, Literal, Sequence
+from typing import Any, Dict, Iterator, List, Literal, Optional, Sequence, Tuple
 from urllib.parse import quote
 
 import dlt
@@ -58,12 +57,12 @@ from .settings import (
 THubspotObjectType = Literal["company", "contact", "deal", "ticket", "product", "quote"]
 
 
-def extract_properties_list(props):
+def extract_properties_list(props: Sequence[Any]) -> List[str]:
     """
     Flatten a list of property dictionaries to extract property names.
 
     Args:
-        props (List[Dict[str, Any]]): List of property dictionaries.
+        props (Sequence[Any]): List of property names or property dictionaries.
 
     Returns:
         List[str]: List of property names.
@@ -71,8 +70,12 @@ def extract_properties_list(props):
     return [prop if isinstance(prop, str) else prop.get("name") for prop in props]
 
 
-
-def fetch_data_for_properties(props, api_key, object_type, soft_delete):
+def fetch_data_for_properties(
+    props: Sequence[str],
+    api_key: str,
+    object_type: str,
+    soft_delete: bool,
+) -> Iterator[TDataItems]:
     """
     Fetch data for a given set of properties from the HubSpot API.
 
@@ -86,8 +89,8 @@ def fetch_data_for_properties(props, api_key, object_type, soft_delete):
         Iterator[TDataItems]: Data retrieved from the HubSpot API.
     """
 
-    params = {"properties": props, "limit": 100}
-    context = {SOFT_DELETE_KEY: False} if soft_delete else None
+    params: Dict[str, Any] = {"properties": props, "limit": 100}
+    context: Optional[Dict[str, Any]] = {SOFT_DELETE_KEY: False} if soft_delete else None
 
     yield from fetch_data(
         CRM_OBJECT_ENDPOINTS[object_type], api_key, params=params, context=context
@@ -104,7 +107,7 @@ def fetch_data_for_properties(props, api_key, object_type, soft_delete):
 def crm_objects(
     object_type: str,
     api_key: str = dlt.secrets.value,
-    props: Sequence[str] = None,
+    props: Optional[Sequence[str]] = None,
     include_custom_props: bool = True,
     archived: bool = False,
 ) -> Iterator[TDataItems]:
@@ -114,7 +117,7 @@ def crm_objects(
     Args:
         object_type (str): Type of HubSpot object (e.g., 'company', 'contact').
         api_key (str, optional): API key for HubSpot authentication.
-        props (Sequence[str], optional): List of properties to retrieve. Defaults to None.
+        props (Optional[Sequence[str]], optional): List of properties to retrieve. Defaults to None.
         include_custom_props (bool, optional): Include custom properties in the result. Defaults to True.
         archived (bool, optional): Fetch archived (soft-deleted) objects. Defaults to False.
 
@@ -126,10 +129,10 @@ def crm_objects(
 
 
 def crm_object_history(
-        object_type: THubspotObjectType,
-        api_key: str = dlt.secrets.value,
-        include_custom_props: bool = True,
-):
+    object_type: THubspotObjectType,
+    api_key: str = dlt.secrets.value,
+    include_custom_props: bool = True,
+) -> Iterator[TDataItems]:
     """
     Fetch the history of property changes for a given CRM object type.
 
@@ -143,7 +146,7 @@ def crm_object_history(
     """
 
     # Fetch the properties from ENTITY_PROPERTIES or default to "All"
-    props = ENTITY_PROPERTIES.get(object_type, "All")
+    props: str = ENTITY_PROPERTIES.get(object_type, "All")
 
     # Fetch the properties with the option to include custom properties
     props = fetch_props(object_type, api_key, props, include_custom_props)
@@ -155,20 +158,21 @@ def crm_object_history(
         props,
     )
 
+
 def resource_template(
-        entity: THubspotObjectType,
-        api_key: str = dlt.config.value,
-        props: Sequence[str] = None,  # Add props as an argument
-        include_custom_props: bool = False,
-        soft_delete: bool = False,
-):
+    entity: THubspotObjectType,
+    api_key: str = dlt.config.value,
+    props: Optional[Sequence[str]] = None,  # Add props as an argument
+    include_custom_props: bool = False,
+    soft_delete: bool = False,
+) -> Iterator[TDataItems]:
     """
     Template function to yield CRM resources for a specific HubSpot entity.
 
     Args:
         entity (THubspotObjectType): Type of HubSpot object (e.g., 'company', 'contact').
         api_key (str, optional): HubSpot API key for authentication.
-        props (Sequence[str], optional): List of properties to retrieve. Defaults to None.
+        props (Optional[Sequence[str]], optional): List of properties to retrieve. Defaults to None.
         include_custom_props (bool, optional): Include custom properties in the result. Defaults to False.
         soft_delete (bool, optional): Fetch soft-deleted (archived) records. Defaults to False.
 
@@ -177,7 +181,7 @@ def resource_template(
     """
 
     # Use provided props or fetch from ENTITY_PROPERTIES if not provided
-    properties = ENTITY_PROPERTIES.get(entity, props or [])
+    properties: List[str] = ENTITY_PROPERTIES.get(entity, props or [])
 
     # Use these properties to yield the crm_objects
     yield from crm_objects(
@@ -189,12 +193,11 @@ def resource_template(
     )
 
 
-
 def resource_history_template(
     entity: THubspotObjectType,
     api_key: str = dlt.config.value,
     include_custom_props: bool = False,
-):
+) -> Iterator[TDataItems]:
     """
     Template function to yield historical CRM resource data for a specific HubSpot entity.
 
@@ -213,23 +216,25 @@ def resource_history_template(
 
 @dlt.resource(name="properties", write_disposition="replace")
 def hubspot_properties(
-    properties_list: List[Dict[str, Any]] = None,
+    properties_list: Optional[List[Dict[str, Any]]] = None,
     api_key: str = dlt.secrets.value,
 ) -> DltResource:
     """
     A DLT resource that retrieves HubSpot properties for a given list of objects.
 
     Args:
-        properties_list (List[Dict[str, Any]], optional): List of properties to retrieve.
+        properties_list (Optional[List[Dict[str, Any]]], optional): List of properties to retrieve.
         api_key (str, optional): HubSpot API key for authentication.
 
     Yields:
         DltResource: A DLT resource containing properties for HubSpot objects.
     """
 
-    def get_properties_description(properties_list):
+    def get_properties_description(
+        properties_list_inner: List[Dict[str, Any]]
+    ) -> Iterator[Dict[str, Any]]:
         """Fetch properties."""
-        for property_info in properties_list:
+        for property_info in properties_list_inner:
             yield get_properties_labels(
                 api_key=api_key,
                 object_type=property_info["object_type"],
@@ -237,11 +242,15 @@ def hubspot_properties(
             )
 
     # Ensure properties_list is defined
-    properties_list = properties_list or []
-    yield from get_properties_description(properties_list)
+    properties_list_inner: List[Dict[str, Any]] = properties_list or []
+    yield from get_properties_description(properties_list_inner)
 
 
-def pivot_stages_properties(data, property_prefix=STAGE_PROPERTY_PREFIX, id_prop="id"):
+def pivot_stages_properties(
+    data: List[Dict[str, Any]],
+    property_prefix: str = STAGE_PROPERTY_PREFIX,
+    id_prop: str = "id",
+) -> List[Dict[str, Any]]:
     """
     Transform the data by pivoting stage properties.
 
@@ -253,9 +262,9 @@ def pivot_stages_properties(data, property_prefix=STAGE_PROPERTY_PREFIX, id_prop
     Returns:
         List[Dict[str, Any]]: Transformed data with pivoted stage properties.
     """
-    new_data = []
+    new_data: List[Dict[str, Any]] = []
     for record in data:
-        record_not_null = {k: v for k, v in record.items() if v is not None}
+        record_not_null: Dict[str, Any] = {k: v for k, v in record.items() if v is not None}
         if id_prop not in record_not_null:
             continue
         id_val = record_not_null.pop(id_prop)
@@ -271,7 +280,7 @@ def stages_timing(
     object_type: str,
     api_key: str = dlt.config.value,
     soft_delete: bool = False,
-    limit: int = None
+    limit: Optional[int] = None,
 ) -> Iterator[TDataItems]:
     """
     Fetch stage timing data for a specific object type from the HubSpot API.
@@ -280,24 +289,24 @@ def stages_timing(
         object_type (str): Type of HubSpot object (e.g., 'deal', 'ticket').
         api_key (str, optional): HubSpot API key for authentication.
         soft_delete (bool, optional): Fetch soft-deleted (archived) records. Defaults to False.
-        limit (int, optional): Limit the number of properties to fetch. Defaults to None.
+        limit (Optional[int], optional): Limit the number of properties to fetch. Defaults to None.
 
     Yields:
         Iterator[TDataItems]: Stage timing data.
     """
-    all_properties = list(_get_property_names(api_key, object_type))
-    date_entered_properties = [
+    all_properties: List[str] = list(_get_property_names(api_key, object_type))
+    date_entered_properties: List[str] = [
         prop for prop in all_properties if prop.startswith(STAGE_PROPERTY_PREFIX)
     ]
-    props = ",".join(date_entered_properties)
-    idx = 0
+    props: str = ",".join(date_entered_properties)
+    idx: int = 0
     if limit is None:
         limit = len(date_entered_properties)
     while idx < limit:
         if len(props) - idx < MAX_PROPS_LENGTH:
-            props_part = ",".join(props[idx: idx + MAX_PROPS_LENGTH].split(",")[:-1])
+            props_part: str = ",".join(props[idx: idx + MAX_PROPS_LENGTH].split(",")[:-1])
         else:
-            props_part = props[idx: idx + MAX_PROPS_LENGTH]
+            props_part: str = props[idx: idx + MAX_PROPS_LENGTH]
         idx += len(props_part)
         for data in fetch_data_for_properties(
             props_part, api_key, object_type, soft_delete
@@ -306,8 +315,8 @@ def stages_timing(
 
 
 def owners(
-        api_key: str,  # Define api_key as a required argument
-        soft_delete: bool = False  # Add soft_delete as a parameter
+    api_key: str,
+    soft_delete: bool = False,
 ) -> Iterator[TDataItems]:
     """
     Fetch HubSpot owners data.
@@ -327,10 +336,10 @@ def owners(
     # Fetch soft-deleted owners if requested
     if soft_delete:
         for page in fetch_data(
-                endpoint=CRM_OBJECT_ENDPOINTS["owner"],
-                params=ARCHIVED_PARAM,
-                api_key=api_key,
-                context={SOFT_DELETE_KEY: True},
+            endpoint=CRM_OBJECT_ENDPOINTS["owner"],
+            params=ARCHIVED_PARAM,
+            api_key=api_key,
+            context={SOFT_DELETE_KEY: True},
         ):
             yield page
 
@@ -341,7 +350,7 @@ def hubspot(
     include_history: bool = False,
     soft_delete: bool = False,
     include_custom_props: bool = True,
-    props: Sequence[str] = None,  # Add props argument here
+    props: Optional[Sequence[str]] = None,  # Add props argument here
 ) -> Sequence[DltResource]:
     """
     A DLT source that retrieves data from the HubSpot API using the
@@ -374,23 +383,22 @@ def hubspot(
     """
 
     def hubspot_pipelines_for_objects(
-        api_key: str = dlt.secrets.value,
-    ) -> DltResource:
+        api_key_inner: str = dlt.secrets.value,
+    ) -> Iterator[DltResource]:
         """
-        A standalone DLT resources that retrieves properties.
+        A standalone DLT resource that retrieves pipelines for HubSpot objects.
 
         Args:
-            object_type(List[THubspotObjectType], required): List of the hubspot object types see definition of THubspotObjectType literal.
-            api_key (str, optional): The API key used to authenticate with the HubSpot API. Defaults to dlt.secrets.value.
+            api_key_inner (str, optional): The API key used to authenticate with the HubSpot API. Defaults to dlt.secrets.value.
 
-        Returns:
-            Incremental dlt resource to track properties for objects from the list
+        Yields:
+            Iterator[DltResource]: DLT resources for pipelines and stages.
         """
 
-        def get_pipelines(object_type: THubspotObjectType):
+        def get_pipelines(object_type: THubspotObjectType) -> Iterator[TDataItems]:
             yield from fetch_data(
                 CRM_PIPELINES_ENDPOINT.format(objectType=object_type),
-                api_key=api_key,
+                api_key=api_key_inner,
             )
 
         for obj_type in PIPELINES_OBJECTS:
@@ -452,7 +460,7 @@ def hubspot(
 def fetch_props(
     object_type: str,
     api_key: str,
-    props: Sequence[str] = None,
+    props: Optional[Sequence[str]] = None,
     include_custom_props: bool = True,
 ) -> str:
     """
@@ -461,7 +469,7 @@ def fetch_props(
     Args:
         object_type (str): Type of HubSpot object (e.g., 'company', 'contact').
         api_key (str): HubSpot API key for authentication.
-        props (Sequence[str], optional): List of properties to fetch. Defaults to None.
+        props (Optional[Sequence[str]], optional): List of properties to fetch. Defaults to None.
         include_custom_props (bool, optional): Include custom properties in the result. Defaults to True.
 
     Returns:
@@ -478,8 +486,8 @@ def fetch_props(
         props = extract_properties_list(props)
 
     if include_custom_props:
-        all_props = _get_property_names(api_key, object_type)
-        custom_props = [prop for prop in all_props if not prop.startswith("hs_")]
+        all_props: List[str] = _get_property_names(api_key, object_type)
+        custom_props: List[str] = [prop for prop in all_props if not prop.startswith("hs_")]
         props = props + custom_props  # type: ignore
 
     props = ",".join(sorted(list(set(props))))
@@ -495,7 +503,6 @@ def fetch_props(
     return props
 
 
-
 @dlt.resource
 def hubspot_events_for_objects(
     object_type: THubspotObjectType,
@@ -504,20 +511,20 @@ def hubspot_events_for_objects(
     start_date: pendulum.DateTime = STARTDATE,
 ) -> DltResource:
     """
-    A standalone DLT resources that retrieves web analytics events from the HubSpot API for a particular object type and list of object ids.
+    A standalone DLT resource that retrieves web analytics events from the HubSpot API for a particular object type and list of object ids.
 
     Args:
-        object_type(THubspotObjectType, required): One of the hubspot object types see definition of THubspotObjectType literal
-        object_ids: (List[THubspotObjectType], required): List of object ids to track events
+        object_type (THubspotObjectType): One of the hubspot object types see definition of THubspotObjectType literal.
+        object_ids (List[str]): List of object ids to track events.
         api_key (str, optional): The API key used to authenticate with the HubSpot API. Defaults to dlt.secrets.value.
-        start_date (datetime, optional): The initial date time from which start getting events, default to STARTDATE
+        start_date (pendulum.DateTime, optional): The initial date time from which start getting events, default to STARTDATE.
 
     Returns:
-        incremental dlt resource to track events for objects from the list
+        DltResource: Incremental DLT resource to track events for objects from the list.
     """
 
-    end_date = pendulum.now().isoformat()
-    name = object_type + "_events"
+    end_date: str = pendulum.now().isoformat()
+    name: str = object_type + "_events"
 
     def get_web_analytics_events(
         occurred_at: dlt.sources.incremental[str],
@@ -526,10 +533,10 @@ def hubspot_events_for_objects(
         A helper function that retrieves web analytics events for a given object type from the HubSpot API.
 
         Args:
-            object_type (str): The type of object for which to retrieve web analytics events.
+            occurred_at (dlt.sources.incremental[str]): Incremental source for event occurrence time.
 
         Yields:
-            dict: A dictionary representing a web analytics event.
+            Iterator[List[Dict[str, Any]]]: Web analytics event data.
         """
         for object_id in object_ids:
             yield from fetch_data(
