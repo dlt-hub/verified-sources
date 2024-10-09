@@ -13,6 +13,8 @@ The `dlt` HubSpot verified source allows you to automatically load data from Hub
 | Tickets | requests for help from customers or users |
 | Quotes | pricing information of a product |
 | Web analytics | events |
+| Owners | information about account managers or users  |
+| Pipelines | stages and progress tracking | 
 
 ## Initialize the pipeline with Hubspot verified source
 ```bash
