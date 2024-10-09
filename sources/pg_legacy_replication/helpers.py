@@ -48,6 +48,8 @@ from .decoders import (
 )
 
 from .pg_logicaldec_pb2 import Op, RowMessage  # type: ignore [attr-defined]
+from .schema_types import _to_dlt_column_schema, _to_dlt_val
+from .exceptions import SqlDatabaseSourceImportError
 from google.protobuf.json_format import MessageToDict
 
 
@@ -110,71 +112,57 @@ def init_replication(
         - a `DltResource` object or a list of `DltResource` objects for the snapshot
           table(s) if `take_snapshots` is `True` and the replication slot did not yet exist
     """
-    if take_snapshots:
-        _import_sql_table_resource()
-    cur = _get_rep_conn(credentials).cursor()
+    rep_conn = _get_rep_conn(credentials)
+    rep_cur = rep_conn.cursor()
     if reset:
-        drop_replication_slot(slot_name, cur)
-    slot = create_replication_slot(slot_name, cur)
-    if take_snapshots:
-        from sqlalchemy import text, Connection
+        drop_replication_slot(slot_name, rep_cur)
+    slot = create_replication_slot(slot_name, rep_cur)
 
-        def init_connection(conn: Connection) -> Connection:
-            if slot is None:
-                # Using the same isolation level that pg_backup uses
-                conn.execute(
-                    text(
-                        "SET TRANSACTION ISOLATION LEVEL SERIALIZABLE, READ ONLY, DEFERRABLE;"
-                    )
-                )
-            else:
-                conn.execute(text("SET TRANSACTION ISOLATION LEVEL REPEATABLE READ;"))
-                conn.execute(
-                    text(f"SET TRANSACTION SNAPSHOT '{slot['snapshot_name']}';")
-                )
-            return conn
+    if not take_snapshots:
+        rep_conn.close()
+        return None
 
-        snapshot_resources = [
-            sql_table(  # type: ignore[name-defined]
-                credentials=credentials,
-                table=table_name,
-                schema=schema,
-                included_columns=include_columns.get(table_name),
-                conn_init_callback=init_connection,
+    _import_sql_table_resource()
+    # If this point is reached it means that sqlalchemy is available
+    from sqlalchemy import Connection as ConnectionSqla, Engine, event
+
+    if include_columns is None:
+        include_columns = {}
+
+    engine: Engine = engine_from_credentials(  # type: ignore[name-defined]
+        credentials,
+        may_dispose_after_use=False,
+        pool_size=1,  # Only one connection in the pool
+        max_overflow=0,  # No additional connections beyond the pool size
+        pool_timeout=30,  # Time to wait for a connection to be available
+        pool_recycle=-1,  # Disable automatic connection recycling
+        pool_pre_ping=True,  # Test the connection before using it (optional)
+    )
+    engine.execution_options(stream_results=True, max_row_buffer=2 * 50000)
+    setattr(engine, "rep_conn", rep_conn)  # noqa
+
+    @event.listens_for(engine, "begin")
+    def on_begin(conn: ConnectionSqla) -> None:
+        cur = conn.connection.cursor()
+        if slot is None:
+            # Using the same isolation level that pg_backup uses
+            cur.execute(
+                "SET TRANSACTION ISOLATION LEVEL SERIALIZABLE, READ ONLY, DEFERRABLE"
             )
-            for table_name in table_names
-        ]
-        # # need separate session to read the snapshot: https://stackoverflow.com/q/75852587
-        # cur_snap = _get_conn(credentials).cursor()
-        # snapshot_table_names = [
-        #     persist_snapshot_table(
-        #         snapshot_name=slot["snapshot_name"],
-        #         table_name=table_name,
-        #         schema_name=schema,
-        #         cur=cur_snap,
-        #         include_columns=(
-        #             None
-        #             if include_columns is None
-        #             else include_columns.get(table_name)
-        #         ),
-        #     )
-        #     for table_name in table_names
-        # ]
-        # snapshot_table_resources = [
-        #     snapshot_table_resource(
-        #         snapshot_table_name=snapshot_table_name,
-        #         schema_name=schema,
-        #         table_name=table_name,
-        #         write_disposition="merge",  # FIXME Change later
-        #         columns=None if columns is None else columns.get(table_name),
-        #         credentials=credentials,
-        #     )
-        #     for table_name, snapshot_table_name in zip(
-        #         table_names, snapshot_table_names
-        #     )
-        # ]
-        return snapshot_resources
-    return None
+        else:
+            cur.execute("SET TRANSACTION ISOLATION LEVEL REPEATABLE READ")
+            cur.execute(f"SET TRANSACTION SNAPSHOT '{slot['snapshot_name']}'")
+
+    snapshot_resources = [
+        sql_table(  # type: ignore[name-defined]
+            credentials=engine,
+            table=table_name,
+            schema=schema,
+            included_columns=include_columns.get(table_name),
+        )
+        for table_name in table_names
+    ]
+    return snapshot_resources
 
 
 @dlt.sources.config.with_config(sections=("sources", "pg_legacy_replication"))
@@ -219,62 +207,62 @@ def drop_replication_slot(name: str, cur: ReplicationCursor) -> None:
         )
 
 
-def persist_snapshot_table(
-    snapshot_name: str,
-    table_name: str,
-    schema_name: str,
-    cur: cursor,
-    include_columns: Optional[Sequence[str]] = None,
-) -> str:
-    """Persists exported snapshot table state.
-
-    Reads snapshot table content and copies it into new table.
-    """
-    col_str = "*"
-    if include_columns is not None:
-        col_str = ", ".join(map(escape_postgres_identifier, include_columns))
-    snapshot_table_name = f"{table_name}_snapshot_{snapshot_name}"
-    snapshot_qual_name = _make_qualified_table_name(snapshot_table_name, schema_name)
-    qual_name = _make_qualified_table_name(table_name, schema_name)
-    cur.execute(
-        f"""
-        START TRANSACTION ISOLATION LEVEL REPEATABLE READ;
-        SET TRANSACTION SNAPSHOT '{snapshot_name}';
-        CREATE TABLE {snapshot_qual_name} AS SELECT {col_str} FROM {qual_name};
-    """
-    )
-    cur.connection.commit()
-    logger.info(f"Successfully persisted snapshot table state in {snapshot_qual_name}.")
-    return snapshot_table_name
-
-
-def snapshot_table_resource(
-    snapshot_table_name: str,
-    schema_name: str,
-    table_name: str,
-    write_disposition: TWriteDisposition,
-    columns: TTableSchemaColumns = None,
-    credentials: ConnectionStringCredentials = dlt.secrets.value,
-) -> DltResource:
-    """Returns a resource for a persisted snapshot table.
-
-    Can be used to perform an initial load of the table, so all data that
-    existed in the table prior to initializing replication is also captured.
-    """
-    resource: DltResource = sql_table(  # type: ignore[name-defined]
-        credentials=credentials,
-        table=snapshot_table_name,
-        schema=schema_name,
-        detect_precision_hints=True,
-    )
-    primary_key = _get_pk(table_name, schema_name, credentials)
-    resource.apply_hints(
-        table_name=table_name,
-        write_disposition=write_disposition,
-        columns=columns,
-        primary_key=primary_key,
-    )
-    return resource
+# def persist_snapshot_table(
+#     snapshot_name: str,
+#     table_name: str,
+#     schema_name: str,
+#     cur: cursor,
+#     include_columns: Optional[Sequence[str]] = None,
+# ) -> str:
+#     """Persists exported snapshot table state.
+#
+#     Reads snapshot table content and copies it into new table.
+#     """
+#     col_str = "*"
+#     if include_columns is not None:
+#         col_str = ", ".join(map(escape_postgres_identifier, include_columns))
+#     snapshot_table_name = f"{table_name}_snapshot_{snapshot_name}"
+#     snapshot_qual_name = _make_qualified_table_name(snapshot_table_name, schema_name)
+#     qual_name = _make_qualified_table_name(table_name, schema_name)
+#     cur.execute(
+#         f"""
+#         START TRANSACTION ISOLATION LEVEL REPEATABLE READ;
+#         SET TRANSACTION SNAPSHOT '{snapshot_name}';
+#         CREATE TABLE {snapshot_qual_name} AS SELECT {col_str} FROM {qual_name};
+#     """
+#     )
+#     cur.connection.commit()
+#     logger.info(f"Successfully persisted snapshot table state in {snapshot_qual_name}.")
+#     return snapshot_table_name
+#
+#
+# def snapshot_table_resource(
+#     snapshot_table_name: str,
+#     schema_name: str,
+#     table_name: str,
+#     write_disposition: TWriteDisposition,
+#     columns: TTableSchemaColumns = None,
+#     credentials: ConnectionStringCredentials = dlt.secrets.value,
+# ) -> DltResource:
+#     """Returns a resource for a persisted snapshot table.
+#
+#     Can be used to perform an initial load of the table, so all data that
+#     existed in the table prior to initializing replication is also captured.
+#     """
+#     resource: DltResource = sql_table(  # type: ignore[name-defined]
+#         credentials=credentials,
+#         table=snapshot_table_name,
+#         schema=schema_name,
+#         detect_precision_hints=True,
+#     )
+#     primary_key = _get_pk(table_name, schema_name, credentials)
+#     resource.apply_hints(
+#         table_name=table_name,
+#         write_disposition=write_disposition,
+#         columns=columns,
+#         primary_key=primary_key,
+#     )
+#     return resource
 
 
 def get_max_lsn(
@@ -297,28 +285,28 @@ def get_max_lsn(
     return lsn
 
 
-def get_pub_ops(
-    pub_name: str,
-    credentials: ConnectionStringCredentials,
-) -> Dict[str, bool]:
-    """Returns dictionary of DML operations and their publish status."""
-    cur = _get_conn(credentials).cursor()
-    cur.execute(
-        f"""
-        SELECT pubinsert, pubupdate, pubdelete, pubtruncate
-        FROM pg_publication WHERE pubname = '{pub_name}'
-    """
-    )
-    result = cur.fetchone()
-    cur.connection.close()
-    if result is None:
-        raise ValueError(f'Publication "{pub_name}" does not exist.')
-    return {
-        "insert": result[0],
-        "update": result[1],
-        "delete": result[2],
-        "truncate": result[3],
-    }
+# def get_pub_ops(
+#     pub_name: str,
+#     credentials: ConnectionStringCredentials,
+# ) -> Dict[str, bool]:
+#     """Returns dictionary of DML operations and their publish status."""
+#     cur = _get_conn(credentials).cursor()
+#     cur.execute(
+#         f"""
+#         SELECT pubinsert, pubupdate, pubdelete, pubtruncate
+#         FROM pg_publication WHERE pubname = '{pub_name}'
+#     """
+#     )
+#     result = cur.fetchone()
+#     cur.connection.close()
+#     if result is None:
+#         raise ValueError(f'Publication "{pub_name}" does not exist.')
+#     return {
+#         "insert": result[0],
+#         "update": result[1],
+#         "delete": result[2],
+#         "truncate": result[3],
+#     }
 
 
 def lsn_int_to_hex(lsn: int) -> str:
@@ -351,16 +339,17 @@ def _import_sql_table_resource() -> None:
 
     Raises error if `sql_database` source is not available.
     """
-    global sql_table
+    global sql_table, engine_from_credentials
     try:
-        from ..sql_database import sql_table  # type: ignore[import-untyped]
-    except Exception:
+        from ..sql_database import sql_table, engine_from_credentials  # type: ignore[import-untyped]
+    except ImportError:
         try:
-            from sql_database import sql_table
-        except ImportError as e:
-            from .exceptions import SqlDatabaseSourceImportError
-
-            raise SqlDatabaseSourceImportError from e
+            from dlt.sources.sql_database import sql_table, engine_from_credentials  # type: ignore[import-not-found]
+        except ImportError:
+            try:
+                from sql_database import sql_table, engine_from_credentials
+            except ImportError as e:
+                raise SqlDatabaseSourceImportError from e
 
 
 def _get_conn(
@@ -389,43 +378,43 @@ def _get_rep_conn(
     return _get_conn(credentials, LogicalReplicationConnection)  # type: ignore[return-value]
 
 
-def _make_qualified_table_name(table_name: str, schema_name: str) -> str:
-    """Escapes and combines a schema and table name."""
-    return (
-        escape_postgres_identifier(schema_name)
-        + "."
-        + escape_postgres_identifier(table_name)
-    )
-
-
-def _get_pk(
-    table_name: str,
-    schema_name: str,
-    credentials: ConnectionStringCredentials,
-) -> Optional[TColumnNames]:
-    """Returns primary key column(s) for postgres table.
-
-    Returns None if no primary key columns exist.
-    """
-    qual_name = _make_qualified_table_name(table_name, schema_name)
-    cur = _get_conn(credentials).cursor()
-    # https://wiki.postgresql.org/wiki/Retrieve_primary_key_columns
-    cur.execute(
-        f"""
-        SELECT a.attname
-        FROM   pg_index i
-        JOIN   pg_attribute a ON a.attrelid = i.indrelid AND a.attnum = ANY(i.indkey)
-        WHERE  i.indrelid = '{qual_name}'::regclass
-        AND    i.indisprimary;
-    """
-    )
-    result = [tup[0] for tup in cur.fetchall()]
-    cur.connection.close()
-    if len(result) == 0:
-        return None
-    elif len(result) == 1:
-        return result[0]  # type: ignore[no-any-return]
-    return result
+# def _make_qualified_table_name(table_name: str, schema_name: str) -> str:
+#     """Escapes and combines a schema and table name."""
+#     return (
+#         escape_postgres_identifier(schema_name)
+#         + "."
+#         + escape_postgres_identifier(table_name)
+#     )
+#
+#
+# def _get_pk(
+#     table_name: str,
+#     schema_name: str,
+#     credentials: ConnectionStringCredentials,
+# ) -> Optional[TColumnNames]:
+#     """Returns primary key column(s) for postgres table.
+#
+#     Returns None if no primary key columns exist.
+#     """
+#     qual_name = _make_qualified_table_name(table_name, schema_name)
+#     cur = _get_conn(credentials).cursor()
+#     # https://wiki.postgresql.org/wiki/Retrieve_primary_key_columns
+#     cur.execute(
+#         f"""
+#         SELECT a.attname
+#         FROM   pg_index i
+#         JOIN   pg_attribute a ON a.attrelid = i.indrelid AND a.attnum = ANY(i.indkey)
+#         WHERE  i.indrelid = '{qual_name}'::regclass
+#         AND    i.indisprimary;
+#     """
+#     )
+#     result = [tup[0] for tup in cur.fetchall()]
+#     cur.connection.close()
+#     if len(result) == 0:
+#         return None
+#     elif len(result) == 1:
+#         return result[0]  # type: ignore[no-any-return]
+#     return result
 
 
 @dataclass
@@ -535,7 +524,6 @@ class MessageConsumer:
         """
         row_msg = RowMessage()
         row_msg.ParseFromString(msg.payload)
-        from devtools import debug
 
         debug(MessageToDict(row_msg, including_default_value_fields=True))  # type: ignore[call-arg]
         op = row_msg.op

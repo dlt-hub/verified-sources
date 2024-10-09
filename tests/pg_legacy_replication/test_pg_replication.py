@@ -53,31 +53,31 @@ def test_core_functionality(
         take_snapshots=True,
     )
 
-    # changes = replication_resource(slot_name, pub_name)
-    #
-    # src_pl.run(
-    #     [
-    #         tbl_x([{"id_x": 2, "val_x": "bar"}, {"id_x": 3, "val_x": "baz"}]),
-    #         tbl_y({"id_y": 2, "val_y": False}),
-    #     ]
-    # )
-    #
-    # dest_pl = dlt.pipeline(
-    #     pipeline_name="dest_pl", destination=destination_name, full_refresh=True
-    # )
-    #
-    # # initial load
-    # info = dest_pl.run(snapshots)
-    # assert_load_info(info)
-    # assert load_table_counts(dest_pl, "tbl_x", "tbl_y") == {"tbl_x": 1, "tbl_y": 1}
-    # exp_tbl_x = [{"id_x": 1, "val_x": "foo"}]
-    # exp_tbl_y = [{"id_y": 1, "val_y": True}]
-    # assert_loaded_data(dest_pl, "tbl_x", ["id_x", "val_x"], exp_tbl_x, "id_x")
-    # assert_loaded_data(dest_pl, "tbl_y", ["id_y", "val_y"], exp_tbl_y, "id_y")
-    #
-    # # process changes
-    # info = dest_pl.run(changes)
-    # assert_load_info(info)
+    changes = replication_resource(slot_name)
+
+    src_pl.run(
+        [
+            tbl_x([{"id_x": 2, "val_x": "bar"}, {"id_x": 3, "val_x": "baz"}]),
+            tbl_y({"id_y": 2, "val_y": False}),
+        ]
+    )
+
+    dest_pl = dlt.pipeline(
+        pipeline_name="dest_pl", destination=destination_name, full_refresh=True
+    )
+
+    # initial load
+    info = dest_pl.run(snapshots)
+    assert_load_info(info)
+    assert load_table_counts(dest_pl, "tbl_x", "tbl_y") == {"tbl_x": 1, "tbl_y": 1}
+    exp_tbl_x = [{"id_x": 1, "val_x": "foo"}]
+    exp_tbl_y = [{"id_y": 1, "val_y": True}]
+    assert_loaded_data(dest_pl, "tbl_x", ["id_x", "val_x"], exp_tbl_x, "id_x")
+    assert_loaded_data(dest_pl, "tbl_y", ["id_y", "val_y"], exp_tbl_y, "id_y")
+
+    # process changes
+    info = dest_pl.run(changes)
+    assert_load_info(info)
     # assert load_table_counts(dest_pl, "tbl_x", "tbl_y") == {"tbl_x": 3, "tbl_y": 2}
     # exp_tbl_x = [
     #     {"id_x": 1, "val_x": "foo"},
