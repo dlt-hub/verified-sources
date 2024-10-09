@@ -47,6 +47,8 @@ from .decoders import (
     convert_pg_ts,
 )
 
+from sqlalchemy import Connection as ConnectionSqla, Engine, event
+
 from .pg_logicaldec_pb2 import Op, RowMessage  # type: ignore [attr-defined]
 from .schema_types import _to_dlt_column_schema, _to_dlt_val
 from .exceptions import SqlDatabaseSourceImportError
@@ -118,28 +120,14 @@ def init_replication(
         drop_replication_slot(slot_name, rep_cur)
     slot = create_replication_slot(slot_name, rep_cur)
 
+    # Close connection if no snapshots are needed
     if not take_snapshots:
         rep_conn.close()
         return None
 
+    # Ensure `sqlalchemy` and `sql_table` are available
     _import_sql_table_resource()
-    # If this point is reached it means that sqlalchemy is available
-    from sqlalchemy import Connection as ConnectionSqla, Engine, event
-
-    if include_columns is None:
-        include_columns = {}
-
-    engine: Engine = engine_from_credentials(  # type: ignore[name-defined]
-        credentials,
-        may_dispose_after_use=False,
-        pool_size=1,  # Only one connection in the pool
-        max_overflow=0,  # No additional connections beyond the pool size
-        pool_timeout=30,  # Time to wait for a connection to be available
-        pool_recycle=-1,  # Disable automatic connection recycling
-        pool_pre_ping=True,  # Test the connection before using it (optional)
-    )
-    engine.execution_options(stream_results=True, max_row_buffer=2 * 50000)
-    setattr(engine, "rep_conn", rep_conn)  # noqa
+    engine = _configure_engine(credentials, rep_conn)
 
     @event.listens_for(engine, "begin")
     def on_begin(conn: ConnectionSqla) -> None:
@@ -153,7 +141,8 @@ def init_replication(
             cur.execute("SET TRANSACTION ISOLATION LEVEL REPEATABLE READ")
             cur.execute(f"SET TRANSACTION SNAPSHOT '{slot['snapshot_name']}'")
 
-    snapshot_resources = [
+    include_columns = include_columns or {}
+    return [
         sql_table(  # type: ignore[name-defined]
             credentials=engine,
             table=table_name,
@@ -162,7 +151,19 @@ def init_replication(
         )
         for table_name in table_names
     ]
-    return snapshot_resources
+
+
+def _configure_engine(
+    credentials: ConnectionStringCredentials, rep_conn: LogicalReplicationConnection
+) -> Engine:
+    """
+    Configures the SQLAlchemy engine.
+    Also attaches the replication connection in order to prevent it being garbage collected and closed.
+    """
+    engine: Engine = engine_from_credentials(credentials, may_dispose_after_use=False)  # type: ignore[name-defined]
+    engine.execution_options(stream_results=True, max_row_buffer=2 * 50000)
+    setattr(engine, "rep_conn", rep_conn)  # noqa
+    return engine
 
 
 @dlt.sources.config.with_config(sections=("sources", "pg_legacy_replication"))
