@@ -23,7 +23,7 @@ Example:
 To retrieve data from all endpoints, use the following code:
 """
 
-from typing import Any, Dict, Iterator, List, Literal, Optional, Sequence, Tuple
+from typing import Any, Dict, Iterator, List, Literal, Optional, Sequence, Tuple, Union
 from urllib.parse import quote
 
 import dlt
@@ -146,10 +146,10 @@ def crm_object_history(
     """
 
     # Fetch the properties from ENTITY_PROPERTIES or default to "All"
-    props: str = ENTITY_PROPERTIES.get(object_type, "All")
+    props_entry: Union[List[str], str] = ENTITY_PROPERTIES.get(object_type, "All")
 
     # Fetch the properties with the option to include custom properties
-    props = fetch_props(object_type, api_key, props, include_custom_props)
+    props: str = fetch_props(object_type, api_key, props_entry, include_custom_props)
 
     # Yield the property history
     yield from fetch_property_history(
@@ -157,7 +157,6 @@ def crm_object_history(
         api_key,
         props,
     )
-
 
 def resource_template(
     entity: THubspotObjectType,
@@ -235,7 +234,7 @@ def hubspot_properties(
     ) -> Iterator[Dict[str, Any]]:
         """Fetch properties."""
         for property_info in properties_list_inner:
-            yield get_properties_labels(
+            yield from get_properties_labels(
                 api_key=api_key,
                 object_type=property_info["object_type"],
                 property_name=property_info["property_name"],

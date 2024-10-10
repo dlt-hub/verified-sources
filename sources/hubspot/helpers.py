@@ -1,7 +1,7 @@
 """Hubspot source helpers"""
 
 import urllib.parse
-from typing import Any, Dict, Iterator, List, Optional
+from typing import Any, Dict, Iterator, List, Optional, Generator
 
 from dlt.sources.helpers import requests
 
@@ -38,7 +38,7 @@ def pagination(_data: Dict[str, Any], headers: Dict[str, Any]) -> Optional[Dict[
         next_url = _next["link"]
         # Get the next page response
         r = requests.get(next_url, headers=headers)
-        return r.json()
+        return r.json() # type: ignore
     else:
         return None
 
@@ -206,7 +206,7 @@ def get_properties_labels(api_key: str, object_type: str, property_name: str) ->
     url = get_url(endpoint)
     headers = _get_headers(api_key)
     r = requests.get(url, headers=headers)
-    _data = r.json()
+    _data: Optional[Dict[str, Any]] = r.json()
     while _data is not None:
-        yield _data
+        yield _data 
         _data = pagination(_data, headers)
