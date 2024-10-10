@@ -208,5 +208,5 @@ def get_properties_labels(api_key: str, object_type: str, property_name: str) ->
     r = requests.get(url, headers=headers)
     _data: Optional[Dict[str, Any]] = r.json()
     while _data is not None:
-        yield _data 
+        yield _data
         _data = pagination(_data, headers)
