@@ -5,17 +5,10 @@ from typing import Optional, Any, Dict
 from dlt.common import Decimal
 from dlt.common.data_types.typing import TDataType
 from dlt.common.data_types.type_helpers import coerce_value
-from dlt.common.schema.typing import (
-    TColumnSchema,
-    TColumnType,
-    TTableSchemaColumns,
-    TTableSchema,
-)
-from dlt.destinations import postgres
-from dlt.destinations.impl.postgres.postgres import PostgresTypeMapper
+from dlt.common.schema.typing import TColumnSchema, TColumnType
 
 from .decoders import ColumnType
-from .pg_logicaldec_pb2 import RowMessage  # type: ignore[attr-defined]
+
 
 _DUMMY_VALS: Dict[TDataType, Any] = {
     "bigint": 0,
@@ -32,6 +25,7 @@ _DUMMY_VALS: Dict[TDataType, Any] = {
 }
 """Dummy values used to replace NULLs in NOT NULL columns in key-only delete records."""
 
+
 _PG_TYPES: Dict[int, str] = {
     16: "boolean",
     17: "bytea",
@@ -47,14 +41,6 @@ _PG_TYPES: Dict[int, str] = {
     3802: "jsonb",
 }
 """Maps postgres type OID to type string. Only includes types present in PostgresTypeMapper."""
-
-_DATUM_PRECISIONS: Dict[str, int] = {
-    "datum_int32": 32,
-    "datum_int64": 64,
-    "datum_float": 32,
-    "datum_double": 64,
-}
-"""TODO: Add comment here"""
 
 
 def _get_precision(type_id: int, atttypmod: int) -> Optional[int]:
@@ -91,7 +77,14 @@ def _get_scale(type_id: int, atttypmod: int) -> Optional[int]:
 
 
 @lru_cache(maxsize=None)
-def _type_mapper() -> PostgresTypeMapper:
+def _type_mapper() -> Any:
+    from dlt.destinations import postgres
+
+    try:
+        from dlt.destinations.impl.postgres.postgres import PostgresTypeMapper
+    except ImportError:
+        from dlt.destinations.impl.postgres.factory import PostgresTypeMapper  # type: ignore
+
     return PostgresTypeMapper(postgres().capabilities())
 
 
@@ -103,7 +96,7 @@ def _to_dlt_column_type(type_id: int, atttypmod: int) -> TColumnType:
     pg_type = _PG_TYPES.get(type_id)
     precision = _get_precision(type_id, atttypmod)
     scale = _get_scale(type_id, atttypmod)
-    return _type_mapper().from_db_type(pg_type, precision, scale)
+    return _type_mapper().from_db_type(pg_type, precision, scale)  # type: ignore[no-any-return]
 
 
 def _to_dlt_column_schema(col: ColumnType) -> TColumnSchema:
@@ -134,25 +127,3 @@ def _to_dlt_val(val: str, data_type: TDataType, byte1: str, for_delete: bool) ->
         raise ValueError(
             f"Byte1 in replication message must be 'n' or 't', not '{byte1}'."
         )
-
-
-def _extract_table_schema(row_msg: RowMessage) -> TTableSchema:
-    schema_name, table_name = row_msg.table.split(".")
-
-    columns: TTableSchemaColumns = {}
-    for c, c_info in zip(row_msg.new_tuple, row_msg.new_typeinfo):
-        assert _PG_TYPES[c.column_type] == c_info.modifier
-        col_type: TColumnType = _type_mapper().from_db_type(c_info.modifier)
-        col_schema: TColumnSchema = {
-            "name": c.column_name,
-            "nullable": c_info.value_optional,
-            **col_type,
-        }
-
-        precision = _DATUM_PRECISIONS.get(c.WhichOneof("datum"))
-        if precision is not None:
-            col_schema["precision"] = precision
-
-        columns[c.column_name] = col_schema
-
-    return {"name": table_name, "columns": columns}

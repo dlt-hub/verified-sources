@@ -49,7 +49,7 @@ from .decoders import (
 
 from sqlalchemy import Connection as ConnectionSqla, Engine, event
 
-from .pg_logicaldec_pb2 import Op, RowMessage  # type: ignore [attr-defined]
+from .pg_logicaldec_pb2 import Op, RowMessage
 from .schema_types import _to_dlt_column_schema, _to_dlt_val
 from .exceptions import SqlDatabaseSourceImportError
 from google.protobuf.json_format import MessageToDict
@@ -421,9 +421,27 @@ class MessageConsumer:
         debug(MessageToDict(row_msg, including_default_value_fields=True))  # type: ignore[call-arg]
         op = row_msg.op
         if op == Op.BEGIN:
-            self.last_commit_ts = Begin(row_msg).commit_ts  # type: ignore[assignment]
+            self.last_commit_ts = convert_pg_ts(row_msg.commit_time)  # type: ignore[assignment]
         elif op == Op.COMMIT:
             self.process_commit(msg)
+        # elif op == Op.INSERT:
+        #     column_data = decoded_msg.new_tuple.column_data
+        #     table_name = row_msg.table
+        #     data_item = self.gen_data_item(
+        #         data=column_data,
+        #         column_schema=self.last_table_schema[decoded_msg.relation_id][
+        #             "columns"
+        #         ],
+        #         lsn=msg.data_start,
+        #         commit_ts=convert_pg_ts(row_msg.commit_time),
+        #         for_delete=False,
+        #         include_columns=(
+        #             None
+        #             if self.include_columns is None
+        #             else self.include_columns.get(table_name)
+        #         ),
+        #     )
+        #     self.data_items[decoded_msg.relation_id].append(data_item)
         # if op == Op.UPDATE:
         #     self.process_change(row_msg)
         # op = msg.payload[:1]
@@ -523,31 +541,31 @@ class MessageConsumer:
         )
         self.data_items[decoded_msg.relation_id] = [meta_item]
 
-    def process_change(
-        self, decoded_msg: Union[Insert, Update, Delete], msg_start_lsn: int
-    ) -> None:
-        """Processes replication message of type Insert, Update, or Delete.
-
-        Adds data item for inserted/updated/deleted record to instance attribute.
-        """
-        if isinstance(decoded_msg, (Insert, Update)):
-            column_data = decoded_msg.new_tuple.column_data
-        elif isinstance(decoded_msg, Delete):
-            column_data = decoded_msg.old_tuple.column_data
-        table_name = self.last_table_schema[decoded_msg.relation_id]["name"]
-        data_item = self.gen_data_item(
-            data=column_data,
-            column_schema=self.last_table_schema[decoded_msg.relation_id]["columns"],
-            lsn=msg_start_lsn,
-            commit_ts=self.last_commit_ts,
-            for_delete=isinstance(decoded_msg, Delete),
-            include_columns=(
-                None
-                if self.include_columns is None
-                else self.include_columns.get(table_name)
-            ),
-        )
-        self.data_items[decoded_msg.relation_id].append(data_item)
+    # def process_change(
+    #     self, decoded_msg: Union[Insert, Update, Delete], msg_start_lsn: int
+    # ) -> None:
+    #     """Processes replication message of type Insert, Update, or Delete.
+    #
+    #     Adds data item for inserted/updated/deleted record to instance attribute.
+    #     """
+    #     if isinstance(decoded_msg, (Insert, Update)):
+    #         column_data = decoded_msg.new_tuple.column_data
+    #     elif isinstance(decoded_msg, Delete):
+    #         column_data = decoded_msg.old_tuple.column_data
+    #     table_name = self.last_table_schema[decoded_msg.relation_id]["name"]
+    #     data_item = self.gen_data_item(
+    #         data=column_data,
+    #         column_schema=self.last_table_schema[decoded_msg.relation_id]["columns"],
+    #         lsn=msg_start_lsn,
+    #         commit_ts=self.last_commit_ts,
+    #         for_delete=isinstance(decoded_msg, Delete),
+    #         include_columns=(
+    #             None
+    #             if self.include_columns is None
+    #             else self.include_columns.get(table_name)
+    #         ),
+    #     )
+    #     self.data_items[decoded_msg.relation_id].append(data_item)
 
     @staticmethod
     def gen_data_item(
@@ -573,3 +591,44 @@ class MessageConsumer:
         if for_delete:
             data_item["deleted_ts"] = commit_ts
         return data_item
+
+
+# FIXME Refactor later
+from .schema_types import _PG_TYPES, _type_mapper
+from dlt.common.schema.typing import TColumnType, TColumnSchema
+
+_DATUM_PRECISIONS: Dict[str, int] = {
+    "datum_int32": 32,
+    "datum_int64": 64,
+    "datum_float": 32,
+    "datum_double": 64,
+}
+"""TODO: Add comment here"""
+
+
+def extract_table_schema(row_msg: RowMessage) -> TTableSchema:
+    schema_name, table_name = row_msg.table.split(".")
+
+    columns: TTableSchemaColumns = {}
+    for c, c_info in zip(row_msg.new_tuple, row_msg.new_typeinfo):
+        assert _PG_TYPES[c.column_type] == c_info.modifier
+        col_type: TColumnType = _type_mapper().from_db_type(c_info.modifier)
+        col_schema: TColumnSchema = {
+            "name": c.column_name,
+            "nullable": c_info.value_optional,
+            **col_type,
+        }
+
+        precision = _DATUM_PRECISIONS.get(c.WhichOneof("datum"))
+        if precision is not None:
+            col_schema["precision"] = precision
+
+        columns[c.column_name] = col_schema
+
+    return {"name": table_name, "columns": columns}
+
+
+def gen_data_item(
+    row_msg: RowMessage, lsn: int, include_columns: Optional[Sequence[str]] = None
+) -> TDataItem:
+    pass
