@@ -7,6 +7,7 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from typing import List, Optional, Union
+from .pg_logicaldec_pb2 import Op, RowMessage  # type: ignore [attr-defined]
 
 # integer byte lengths
 INT8 = 1
@@ -132,64 +133,86 @@ class PgoutputMessage(ABC):
         return TupleData(n_columns=n_columns, column_data=column_data)
 
 
-class Begin(PgoutputMessage):
-    """
-    https://pgpedia.info/x/xlogrecptr.html
-    https://www.postgresql.org/docs/14/datatype-pg-lsn.html
-
-    byte1 Byte1('B') Identifies the message as a begin message.
-    lsn Int64 The final LSN of the transaction.
-    commit_tx_ts Int64 Commit timestamp of the transaction. The value is in number of microseconds since PostgreSQL epoch (2000-01-01).
-    tx_xid Int32 Xid of the transaction.
-    """
-
-    byte1: str
-    lsn: int
-    commit_ts: datetime
-    tx_xid: int
-
-    def decode_buffer(self) -> None:
-        if self.byte1 != "B":
-            raise ValueError("first byte in buffer does not match Begin message")
-        self.lsn = self.read_int64()
-        self.commit_ts = self.read_timestamp()
-        self.tx_xid = self.read_int64()
-
-    def __repr__(self) -> str:
-        return (
-            f"BEGIN \n\tbyte1: '{self.byte1}', \n\tLSN: {self.lsn}, "
-            f"\n\tcommit_ts {self.commit_ts}, \n\ttx_xid: {self.tx_xid}"
-        )
-
-
-class Commit(PgoutputMessage):
-    """
-    byte1: Byte1('C') Identifies the message as a commit message.
-    flags: Int8 Flags; currently unused (must be 0).
-    lsn_commit: Int64 The LSN of the commit.
-    lsn: Int64 The end LSN of the transaction.
-    Int64 Commit timestamp of the transaction. The value is in number of microseconds since PostgreSQL epoch (2000-01-01).
-    """
-
-    byte1: str
-    flags: int
-    lsn_commit: int
-    lsn: int
+@dataclass
+class Begin:
+    transaction_id: int
     commit_ts: datetime
 
-    def decode_buffer(self) -> None:
-        if self.byte1 != "C":
-            raise ValueError("first byte in buffer does not match Commit message")
-        self.flags = self.read_int8()
-        self.lsn_commit = self.read_int64()
-        self.lsn = self.read_int64()
-        self.commit_ts = self.read_timestamp()
+    def __init__(self, row_msg: RowMessage):
+        assert row_msg.op == Op.BEGIN
+        self.transaction_id = row_msg.transaction_id
+        self.commit_ts = convert_pg_ts(row_msg.commit_time)
 
-    def __repr__(self) -> str:
-        return (
-            f"COMMIT \n\tbyte1: {self.byte1}, \n\tflags {self.flags}, \n\tlsn_commit: {self.lsn_commit}"
-            f"\n\tLSN: {self.lsn}, \n\tcommit_ts {self.commit_ts}"
-        )
+
+# class Begin(PgoutputMessage):
+#     """
+#     https://pgpedia.info/x/xlogrecptr.html
+#     https://www.postgresql.org/docs/14/datatype-pg-lsn.html
+#
+#     byte1 Byte1('B') Identifies the message as a begin message.
+#     lsn Int64 The final LSN of the transaction.
+#     commit_tx_ts Int64 Commit timestamp of the transaction. The value is in number of microseconds since PostgreSQL epoch (2000-01-01).
+#     tx_xid Int32 Xid of the transaction.
+#     """
+#
+#     byte1: str
+#     lsn: int
+#     commit_ts: datetime
+#     tx_xid: int
+#
+#     def decode_buffer(self) -> None:
+#         if self.byte1 != "B":
+#             raise ValueError("first byte in buffer does not match Begin message")
+#         self.lsn = self.read_int64()
+#         self.commit_ts = self.read_timestamp()
+#         self.tx_xid = self.read_int64()
+#
+#     def __repr__(self) -> str:
+#         return (
+#             f"BEGIN \n\tbyte1: '{self.byte1}', \n\tLSN: {self.lsn}, "
+#             f"\n\tcommit_ts {self.commit_ts}, \n\ttx_xid: {self.tx_xid}"
+#         )
+
+
+@dataclass
+class Commit:
+    transaction_id: int
+    commit_ts: datetime
+
+    def __init__(self, row_msg: RowMessage):
+        assert row_msg.op == Op.COMMIT
+        self.transaction_id = row_msg.transaction_id
+        self.commit_ts = convert_pg_ts(row_msg.commit_time)
+
+
+# class Commit(PgoutputMessage):
+#     """
+#     byte1: Byte1('C') Identifies the message as a commit message.
+#     flags: Int8 Flags; currently unused (must be 0).
+#     lsn_commit: Int64 The LSN of the commit.
+#     lsn: Int64 The end LSN of the transaction.
+#     Int64 Commit timestamp of the transaction. The value is in number of microseconds since PostgreSQL epoch (2000-01-01).
+#     """
+#
+#     byte1: str
+#     flags: int
+#     lsn_commit: int
+#     lsn: int
+#     commit_ts: datetime
+#
+#     def decode_buffer(self) -> None:
+#         if self.byte1 != "C":
+#             raise ValueError("first byte in buffer does not match Commit message")
+#         self.flags = self.read_int8()
+#         self.lsn_commit = self.read_int64()
+#         self.lsn = self.read_int64()
+#         self.commit_ts = self.read_timestamp()
+#
+#     def __repr__(self) -> str:
+#         return (
+#             f"COMMIT \n\tbyte1: {self.byte1}, \n\tflags {self.flags}, \n\tlsn_commit: {self.lsn_commit}"
+#             f"\n\tLSN: {self.lsn}, \n\tcommit_ts {self.commit_ts}"
+#         )
 
 
 class Origin:

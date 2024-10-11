@@ -138,16 +138,6 @@ def _to_dlt_val(val: str, data_type: TDataType, byte1: str, for_delete: bool) ->
 
 def _extract_table_schema(row_msg: RowMessage) -> TTableSchema:
     schema_name, table_name = row_msg.table.split(".")
-    # Remove leading and trailing quotes
-    table_name = table_name[1:-1]
-    import re
-
-    regex = r"^(?P<table_name>[a-zA-Z_][a-zA-Z0-9_]{0,62})_snapshot_(?P<snapshot_name>[a-zA-Z0-9_-]+)$"
-    match = re.match(regex, table_name)
-    if match:
-        table_name = match.group("table_name")
-        snapshot_name = match.group("snapshot_name")
-        print(f"Table name: {table_name}, Snapshot name: {snapshot_name}")
 
     columns: TTableSchemaColumns = {}
     for c, c_info in zip(row_msg.new_tuple, row_msg.new_typeinfo):

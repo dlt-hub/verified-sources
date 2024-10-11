@@ -415,13 +415,15 @@ class MessageConsumer:
         - `target_batch_size` is reached
         - a table's schema has changed
         """
+        debug(msg)
         row_msg = RowMessage()
         row_msg.ParseFromString(msg.payload)
-
         debug(MessageToDict(row_msg, including_default_value_fields=True))  # type: ignore[call-arg]
         op = row_msg.op
         if op == Op.BEGIN:
-            self.last_commit_ts = convert_pg_ts(row_msg.commit_time)  # type: ignore[assignment]
+            self.last_commit_ts = Begin(row_msg).commit_ts  # type: ignore[assignment]
+        elif op == Op.COMMIT:
+            self.process_commit(msg)
         # if op == Op.UPDATE:
         #     self.process_change(row_msg)
         # op = msg.payload[:1]
@@ -431,10 +433,6 @@ class MessageConsumer:
         #     self.process_change(Update(msg.payload), msg.data_start)
         # elif op == b"D":
         #     self.process_change(Delete(msg.payload), msg.data_start)
-        # elif op == b"B":
-        #     self.last_commit_ts = Begin(msg.payload).commit_ts  # type: ignore[assignment]
-        # elif op == b"C":
-        #     self.process_commit(msg)
         # elif op == b"R":
         #     self.process_relation(Relation(msg.payload))
         # elif op == b"T":
