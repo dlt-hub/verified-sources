@@ -14,7 +14,7 @@ def test_extract_table_schema():
             {
                 "columnName": "id_y",
                 "columnType": "20",
-                "datumInt64": "2",
+                "datumInt64": 2,
             },
             {
                 "columnName": "val_y",
@@ -78,4 +78,64 @@ def test_extract_table_schema():
                 "nullable": False,
             },
         },
+    }
+
+
+def test_gen_data_item():
+    row_msg = RowMessage()
+    data = {
+        "transactionId": 969,
+        "commitTime": "1728662646949062",
+        "table": "src_pl_dataset_202410110404048747_staging.tbl_y",
+        "op": "INSERT",
+        "newTuple": [
+            {
+                "columnName": "id_y",
+                "columnType": "20",
+                "datumInt64": "2",
+            },
+            {
+                "columnName": "val_y",
+                "columnType": "16",
+                "datumBool": False,
+            },
+            {
+                "columnName": "_dlt_load_id",
+                "columnType": "1043",
+                "datumString": "1728662646.2657657",
+            },
+            {
+                "columnName": "_dlt_id",
+                "columnType": "1043",
+                "datumString": "gGjifTMTAUs5ag",
+            },
+        ],
+        "newTypeinfo": [
+            {
+                "modifier": "bigint",
+                "valueOptional": False,
+            },
+            {
+                "modifier": "boolean",
+                "valueOptional": True,
+            },
+            {
+                "modifier": "character varying",
+                "valueOptional": False,
+            },
+            {
+                "modifier": "character varying",
+                "valueOptional": False,
+            },
+        ],
+        "oldTuple": [],
+    }
+    parse_dict(data, row_msg)
+    table_schema = extract_table_schema(row_msg)
+    assert gen_data_item(row_msg, table_schema["columns"], lsn=27078296) == {
+        "_dlt_id": "gGjifTMTAUs5ag",
+        "_dlt_load_id": "1728662646.2657657",
+        "id_y": 2,
+        "lsn": 27078296,
+        "val_y": False,
     }

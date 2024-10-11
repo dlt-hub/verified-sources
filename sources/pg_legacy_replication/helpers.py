@@ -629,6 +629,31 @@ def extract_table_schema(row_msg: RowMessage) -> TTableSchema:
 
 
 def gen_data_item(
-    row_msg: RowMessage, lsn: int, include_columns: Optional[Sequence[str]] = None
+    row_msg: RowMessage,
+    column_schema: TTableSchemaColumns,
+    *,
+    lsn: int,
+    include_columns: Optional[Sequence[str]] = None,
 ) -> TDataItem:
-    pass
+    """Generates data item from a `RowMessage` and corresponding metadata."""
+    assert row_msg.op in (Op.INSERT, Op.UPDATE, Op.DELETE)
+    column_data = (
+        row_msg.new_tuple if row_msg.op in (Op.INSERT, Op.UPDATE) else row_msg.old_tuple
+    )
+
+    data_item = {
+        data.column_name: getattr(data, data.WhichOneof("datum"))
+        for schema, data in zip(column_schema.values(), column_data)
+        if include_columns is None or data.column_name in include_columns
+    }
+
+    data_item["lsn"] = lsn
+    if row_msg.op == Op.DELETE:
+        data_item["deleted_ts"] = _convert_pg_timestamp(row_msg.commit_time)
+
+    return data_item
+
+
+def _convert_pg_timestamp(microseconds_since_2000: int) -> pendulum.DateTime:
+    epoch_2000 = pendulum.datetime(2000, 1, 1, tz="UTC")
+    return epoch_2000.add(microseconds=microseconds_since_2000)
