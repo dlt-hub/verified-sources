@@ -1,4 +1,4 @@
-"""Pipeline to load shopify data into BigQuery.
+"""Pipeline to load Shopify data into DuckDB.
 """
 
 import dlt
