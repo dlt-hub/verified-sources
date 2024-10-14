@@ -21,7 +21,7 @@ from dlt.sources.credentials import ConnectionStringCredentials
 from sources.sql_database import sql_database, sql_table, TableBackend, ReflectionLevel
 from sources.sql_database.helpers import unwrap_json_connector_x
 
-from tests.sql_database.test_helpers import mock_json_column
+from tests.sql_database.test_helpers import mock_array_column, mock_json_column
 from tests.utils import (
     ALL_DESTINATIONS,
     assert_load_info,
@@ -195,6 +195,9 @@ def test_load_sql_schema_loads_all_tables(
         # always use mock json
         source.has_precision.add_map(mock_json_column("json_col"))
         source.has_precision_nullable.add_map(mock_json_column("json_col"))
+        # always use mock array
+        source.has_precision.add_map(mock_array_column("array_col"))
+        source.has_precision_nullable.add_map(mock_array_column("array_col"))
 
     assert (
         "chat_message_view" not in source.resources
@@ -234,6 +237,9 @@ def test_load_sql_schema_loads_all_tables_parallel(
         # always use mock json
         source.has_precision.add_map(mock_json_column("json_col"))
         source.has_precision_nullable.add_map(mock_json_column("json_col"))
+        # always use mock array
+        source.has_precision.add_map(mock_array_column("array_col"))
+        source.has_precision_nullable.add_map(mock_array_column("array_col"))
 
     load_info = pipeline.run(source)
     print(
@@ -857,6 +863,7 @@ def test_deferred_reflect_in_source(
     # mock the right json values for backends not supporting it
     if backend in ("connectorx", "pandas"):
         source.resources["has_precision"].add_map(mock_json_column("json_col"))
+        source.resources["has_precision"].add_map(mock_array_column("array_col"))
 
     # no columns in both tables
     assert source.has_precision.columns == {}
@@ -917,6 +924,7 @@ def test_deferred_reflect_in_resource(
     # mock the right json values for backends not supporting it
     if backend in ("connectorx", "pandas"):
         table.add_map(mock_json_column("json_col"))
+        table.add_map(mock_array_column("array_col"))
 
     # no columns in both tables
     assert table.columns == {}
@@ -1056,28 +1064,17 @@ def test_pass_engine_credentials(sql_source_db: SQLAlchemySourceDB) -> None:
 @pytest.mark.parametrize("backend", ["pyarrow", "pandas", "sqlalchemy"])
 @pytest.mark.parametrize("standalone_resource", [True, False])
 @pytest.mark.parametrize("reflection_level", ["minimal", "full", "full_with_precision"])
-@pytest.mark.parametrize("type_adapter", [True, False])
 def test_infer_unsupported_types(
     sql_source_db_unsupported_types: SQLAlchemySourceDB,
     backend: TableBackend,
     reflection_level: ReflectionLevel,
     standalone_resource: bool,
-    type_adapter: bool,
 ) -> None:
-    def type_adapter_callback(t):
-        if isinstance(t, sa.ARRAY):
-            return sa.JSON
-        return t
-
-    if backend == "pyarrow" and type_adapter:
-        pytest.skip("Arrow does not support type adapter for arrays")
-
     common_kwargs = dict(
         credentials=sql_source_db_unsupported_types.credentials,
         schema=sql_source_db_unsupported_types.schema,
         reflection_level=reflection_level,
         backend=backend,
-        type_adapter_callback=type_adapter_callback if type_adapter else None,
     )
     if standalone_resource:
 
@@ -1133,8 +1130,6 @@ def test_infer_unsupported_types(
         # Just check that it has a value
         assert rows[0]["unsupported_daterange_1"]
 
-        assert isinstance(json.loads(rows[0]["unsupported_array_1"]), list)
-        assert columns["unsupported_array_1"]["data_type"] == "complex"
         # Other columns are loaded
         assert isinstance(rows[0]["supported_text"], str)
         assert isinstance(rows[0]["supported_datetime"], datetime)
@@ -1142,8 +1137,6 @@ def test_infer_unsupported_types(
     elif backend == "sqlalchemy":
         # sqla value is a dataclass and is inferred as complex
         assert columns["unsupported_daterange_1"]["data_type"] == "complex"
-
-        assert columns["unsupported_array_1"]["data_type"] == "complex"
 
         value = rows[0]["unsupported_daterange_1"]
         assert set(json.loads(value).keys()) == {"lower", "upper", "bounds", "empty"}
@@ -1155,11 +1148,6 @@ def test_infer_unsupported_types(
             r"\[\d{4}-\d{2}-\d{2},\d{4}-\d{2}-\d{2}\)",
             rows[0]["unsupported_daterange_1"],
         )
-
-        if type_adapter and reflection_level != "minimal":
-            assert columns["unsupported_array_1"]["data_type"] == "complex"
-
-            assert isinstance(json.loads(rows[0]["unsupported_array_1"]), list)
 
 
 @pytest.mark.parametrize("backend", ["sqlalchemy", "pyarrow", "pandas", "connectorx"])
@@ -1475,6 +1463,10 @@ PRECISION_COLUMNS: List[TColumnSchema] = [
     {
         "data_type": "text",
         "name": "uuid_col",
+    },
+    {
+        "data_type": "complex",
+        "name": "array_col",
     },
 ]
 
