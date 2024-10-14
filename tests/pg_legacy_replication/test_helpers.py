@@ -77,6 +77,16 @@ def test_extract_table_schema():
                 "name": "_dlt_id",
                 "nullable": False,
             },
+            "lsn": {
+                "data_type": "bigint",
+                "dedup_sort": "desc",
+                "nullable": True,
+            },
+            "deleted_ts": {
+                "data_type": "timestamp",
+                "hard_delete": True,
+                "nullable": True,
+            },
         },
     }
 

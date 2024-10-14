@@ -53,6 +53,7 @@ from .pg_logicaldec_pb2 import Op, RowMessage
 from .schema_types import _to_dlt_column_schema, _to_dlt_val
 from .exceptions import SqlDatabaseSourceImportError
 from google.protobuf.json_format import MessageToDict
+from collections import defaultdict
 
 
 @dlt.sources.config.with_config(sections=("sources", "pg_legacy_replication"))
@@ -357,8 +358,8 @@ class ItemGenerator:
         finally:
             cur.connection.close()
             self.last_commit_lsn = consumer.last_commit_lsn
-            for rel_id, data_items in consumer.data_items.items():
-                table_name = consumer.last_table_schema[rel_id]["name"]
+            for qual_table_name, data_items in consumer.data_items.items():
+                table_name = consumer.last_table_schema[qual_table_name]["name"]
                 yield data_items[0]  # meta item with column hints only, no data
                 yield dlt.mark.with_table_name(data_items[1:], table_name)
             self.generated_all = consumer.consumed_all
@@ -392,11 +393,13 @@ class MessageConsumer:
         self.consumed_all: bool = False
         # data_items attribute maintains all data items
         self.data_items: Dict[
-            int, List[Union[TDataItem, DataItemWithMeta]]
-        ] = dict()  # maps relation_id to list of data items
+            str, List[Union[TDataItem, DataItemWithMeta]]
+        ] = defaultdict(
+            list
+        )  # maps qualified table names to list of data items
         # other attributes only maintain last-seen values
         self.last_table_schema: Dict[
-            int, TTableSchema
+            str, TTableSchema
         ] = dict()  # maps relation_id to table schema
         self.last_commit_ts: pendulum.DateTime
         self.last_commit_lsn = None
@@ -424,8 +427,24 @@ class MessageConsumer:
             self.last_commit_ts = convert_pg_ts(row_msg.commit_time)  # type: ignore[assignment]
         elif op == Op.COMMIT:
             self.process_commit(msg)
-        # elif op == Op.INSERT:
-        #     column_data = decoded_msg.new_tuple.column_data
+        elif op == Op.INSERT:
+            last_table_schema = self.last_table_schema.get(row_msg.table)
+            table_schema = extract_table_schema(row_msg)
+            if last_table_schema is not None and last_table_schema != table_schema:
+                raise StopReplication  # table schema change
+            self.last_table_schema[row_msg.table] = table_schema
+            schema, table_name = row_msg.table.split(".")
+            data_item = gen_data_item(
+                row_msg,
+                table_schema["columns"],
+                lsn=msg.data_start,
+                include_columns=(
+                    None
+                    if self.include_columns is None
+                    else self.include_columns.get(table_name)
+                ),
+            )
+            self.data_items[row_msg.table].append(data_item)
         #     table_name = row_msg.table
         #     data_item = self.gen_data_item(
         #         data=column_data,
@@ -475,71 +494,71 @@ class MessageConsumer:
         if self.consumed_all or n_items >= self.target_batch_size:
             raise StopReplication
 
-    def process_relation(self, decoded_msg: Relation) -> None:
-        """Processes a replication message of type Relation.
-
-        Stores table schema in object state.
-        Creates meta item to emit column hints while yielding data.
-
-        Raises StopReplication when a table's schema changes.
-        """
-        if (
-            self.data_items.get(decoded_msg.relation_id) is not None
-        ):  # table schema change
-            raise StopReplication
-        # get table schema information from source and store in object state
-        table_name = decoded_msg.relation_name
-        columns: TTableSchemaColumns = {
-            c.name: _to_dlt_column_schema(c) for c in decoded_msg.columns
-        }
-        self.last_table_schema[decoded_msg.relation_id] = {
-            "name": table_name,
-            "columns": columns,
-        }
-
-        # apply user input
-        # 1) exclude columns
-        include_columns = (
-            None
-            if self.include_columns is None
-            else self.include_columns.get(table_name)
-        )
-        if include_columns is not None:
-            columns = {k: v for k, v in columns.items() if k in include_columns}
-        # 2) override source hints
-        column_hints: TTableSchemaColumns = (
-            dict() if self.columns is None else self.columns.get(table_name, dict())
-        )
-        for column_name, column_val in column_hints.items():
-            columns[column_name] = merge_column(columns[column_name], column_val)
-
-        # add hints for replication columns
-        columns["lsn"] = {"data_type": "bigint", "nullable": True}
-        if self.pub_ops["update"] or self.pub_ops["delete"]:
-            columns["lsn"]["dedup_sort"] = "desc"
-        if self.pub_ops["delete"]:
-            columns["deleted_ts"] = {
-                "hard_delete": True,
-                "data_type": "timestamp",
-                "nullable": True,
-            }
-
-        # determine write disposition
-        write_disposition: TWriteDisposition = "append"
-        if self.pub_ops["update"] or self.pub_ops["delete"]:
-            write_disposition = "merge"
-
-        # include meta item to emit hints while yielding data
-        meta_item = dlt.mark.with_hints(
-            [],
-            dlt.mark.make_hints(
-                table_name=table_name,
-                write_disposition=write_disposition,
-                columns=columns,
-            ),
-            create_table_variant=True,
-        )
-        self.data_items[decoded_msg.relation_id] = [meta_item]
+    # def process_relation(self, decoded_msg: Relation) -> None:
+    #     """Processes a replication message of type Relation.
+    #
+    #     Stores table schema in object state.
+    #     Creates meta item to emit column hints while yielding data.
+    #
+    #     Raises StopReplication when a table's schema changes.
+    #     """
+    #     if (
+    #         self.data_items.get(decoded_msg.relation_id) is not None
+    #     ):  # table schema change
+    #         raise StopReplication
+    #     # get table schema information from source and store in object state
+    #     table_name = decoded_msg.relation_name
+    #     columns: TTableSchemaColumns = {
+    #         c.name: _to_dlt_column_schema(c) for c in decoded_msg.columns
+    #     }
+    #     self.last_table_schema[decoded_msg.relation_id] = {
+    #         "name": table_name,
+    #         "columns": columns,
+    #     }
+    #
+    #     # apply user input
+    #     # 1) exclude columns
+    #     include_columns = (
+    #         None
+    #         if self.include_columns is None
+    #         else self.include_columns.get(table_name)
+    #     )
+    #     if include_columns is not None:
+    #         columns = {k: v for k, v in columns.items() if k in include_columns}
+    #     # 2) override source hints
+    #     column_hints: TTableSchemaColumns = (
+    #         dict() if self.columns is None else self.columns.get(table_name, dict())
+    #     )
+    #     for column_name, column_val in column_hints.items():
+    #         columns[column_name] = merge_column(columns[column_name], column_val)
+    #
+    #     # add hints for replication columns
+    #     columns["lsn"] = {"data_type": "bigint", "nullable": True}
+    #     if self.pub_ops["update"] or self.pub_ops["delete"]:
+    #         columns["lsn"]["dedup_sort"] = "desc"
+    #     if self.pub_ops["delete"]:
+    #         columns["deleted_ts"] = {
+    #             "hard_delete": True,
+    #             "data_type": "timestamp",
+    #             "nullable": True,
+    #         }
+    #
+    #     # determine write disposition
+    #     write_disposition: TWriteDisposition = "append"
+    #     if self.pub_ops["update"] or self.pub_ops["delete"]:
+    #         write_disposition = "merge"
+    #
+    #     # include meta item to emit hints while yielding data
+    #     meta_item = dlt.mark.with_hints(
+    #         [],
+    #         dlt.mark.make_hints(
+    #             table_name=table_name,
+    #             write_disposition=write_disposition,
+    #             columns=columns,
+    #         ),
+    #         create_table_variant=True,
+    #     )
+    #     self.data_items[decoded_msg.relation_id] = [meta_item]
 
     # def process_change(
     #     self, decoded_msg: Union[Insert, Update, Delete], msg_start_lsn: int
@@ -566,31 +585,31 @@ class MessageConsumer:
     #         ),
     #     )
     #     self.data_items[decoded_msg.relation_id].append(data_item)
-
-    @staticmethod
-    def gen_data_item(
-        data: List[ColumnData],
-        column_schema: TTableSchemaColumns,
-        lsn: int,
-        commit_ts: pendulum.DateTime,
-        for_delete: bool,
-        include_columns: Optional[Sequence[str]] = None,
-    ) -> TDataItem:
-        """Generates data item from replication message data and corresponding metadata."""
-        data_item = {
-            schema["name"]: _to_dlt_val(
-                val=data.col_data,
-                data_type=schema["data_type"],
-                byte1=data.col_data_category,
-                for_delete=for_delete,
-            )
-            for (schema, data) in zip(column_schema.values(), data)
-            if (True if include_columns is None else schema["name"] in include_columns)
-        }
-        data_item["lsn"] = lsn
-        if for_delete:
-            data_item["deleted_ts"] = commit_ts
-        return data_item
+    #
+    # @staticmethod
+    # def gen_data_item(
+    #     data: List[ColumnData],
+    #     column_schema: TTableSchemaColumns,
+    #     lsn: int,
+    #     commit_ts: pendulum.DateTime,
+    #     for_delete: bool,
+    #     include_columns: Optional[Sequence[str]] = None,
+    # ) -> TDataItem:
+    #     """Generates data item from replication message data and corresponding metadata."""
+    #     data_item = {
+    #         schema["name"]: _to_dlt_val(
+    #             val=data.col_data,
+    #             data_type=schema["data_type"],
+    #             byte1=data.col_data_category,
+    #             for_delete=for_delete,
+    #         )
+    #         for (schema, data) in zip(column_schema.values(), data)
+    #         if (True if include_columns is None else schema["name"] in include_columns)
+    #     }
+    #     data_item["lsn"] = lsn
+    #     if for_delete:
+    #         data_item["deleted_ts"] = commit_ts
+    #     return data_item
 
 
 # FIXME Refactor later
@@ -606,25 +625,48 @@ _DATUM_PRECISIONS: Dict[str, int] = {
 """TODO: Add comment here"""
 
 
-def extract_table_schema(row_msg: RowMessage) -> TTableSchema:
-    schema_name, table_name = row_msg.table.split(".")
-
+def extract_table_schema(
+    row_msg: RowMessage, *, include_columns: Optional[Sequence[str]] = None
+) -> TTableSchema:
     columns: TTableSchemaColumns = {}
-    for c, c_info in zip(row_msg.new_tuple, row_msg.new_typeinfo):
-        assert _PG_TYPES[c.column_type] == c_info.modifier
-        col_type: TColumnType = _type_mapper().from_db_type(c_info.modifier)
+    type_mapper = _type_mapper()
+    for col, col_info in zip(row_msg.new_tuple, row_msg.new_typeinfo):
+        col_name = col.column_name
+        if include_columns is not None and col_name not in include_columns:
+            continue
+        assert (
+            _PG_TYPES[col.column_type] == col_info.modifier
+        ), f"Type mismatch for column {col_name}"
+        col_type: TColumnType = type_mapper.from_db_type(col_info.modifier)
         col_schema: TColumnSchema = {
-            "name": c.column_name,
-            "nullable": c_info.value_optional,
+            "name": col_name,
+            "nullable": col_info.value_optional,
             **col_type,
         }
 
-        precision = _DATUM_PRECISIONS.get(c.WhichOneof("datum"))
+        precision = _DATUM_PRECISIONS.get(col.WhichOneof("datum"))
         if precision is not None:
             col_schema["precision"] = precision
 
-        columns[c.column_name] = col_schema
+        columns[col_name] = col_schema
 
+    # Add replication columns
+    columns.update(
+        {
+            "lsn": {
+                "data_type": "bigint",
+                "nullable": True,
+                "dedup_sort": "desc",
+            },
+            "deleted_ts": {
+                "data_type": "timestamp",
+                "nullable": True,
+                "hard_delete": True,
+            },
+        }
+    )
+
+    table_name = row_msg.table.split(".")[1]
     return {"name": table_name, "columns": columns}
 
 
