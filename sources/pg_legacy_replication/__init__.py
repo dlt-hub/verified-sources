@@ -13,11 +13,13 @@ from .helpers import advance_slot, get_max_lsn, ItemGenerator
 
 
 @dlt.resource(
-    name=lambda args: args["slot_name"],
+    name=lambda args: args["slot_name"] + "_" + args["schema"],
     standalone=True,
 )
 def replication_resource(
     slot_name: str,
+    schema: str = dlt.config.value,
+    table_names: Sequence[str] = dlt.config.value,
     credentials: ConnectionStringCredentials = dlt.secrets.value,
     include_columns: Optional[Dict[str, Sequence[str]]] = None,
     columns: Optional[Dict[str, TTableSchemaColumns]] = None,
@@ -87,6 +89,8 @@ def replication_resource(
         gen = ItemGenerator(
             credentials=credentials,
             slot_name=slot_name,
+            schema=schema,
+            table_names=table_names,
             options=options,
             upto_lsn=upto_lsn,
             start_lsn=start_lsn,

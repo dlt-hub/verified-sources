@@ -1,6 +1,7 @@
 from typing import (
     Optional,
     Dict,
+    Set,
     Iterator,
     Union,
     List,
@@ -59,8 +60,8 @@ from collections import defaultdict
 @dlt.sources.config.with_config(sections=("sources", "pg_legacy_replication"))
 def init_replication(
     slot_name: str,
-    schema: Optional[str] = dlt.config.value,
-    table_names: Optional[List[str]] = dlt.config.value,
+    schema: str = dlt.config.value,
+    table_names: Sequence[str] = dlt.config.value,
     credentials: ConnectionStringCredentials = dlt.secrets.value,
     take_snapshots: bool = True,
     include_columns: Optional[Dict[str, Sequence[str]]] = None,
@@ -315,6 +316,8 @@ def _get_rep_conn(
 class ItemGenerator:
     credentials: ConnectionStringCredentials
     slot_name: str
+    schema: str
+    table_names: Sequence[str]
     options: Dict[str, str]
     upto_lsn: int
     start_lsn: int = 0
@@ -348,6 +351,8 @@ class ItemGenerator:
             consumer = MessageConsumer(
                 upto_lsn=self.upto_lsn,
                 pub_ops=pub_opts,
+                schema=self.schema,
+                table_names=set(self.table_names),
                 target_batch_size=self.target_batch_size,
                 include_columns=self.include_columns,
                 columns=self.columns,
@@ -358,10 +363,17 @@ class ItemGenerator:
         finally:
             cur.connection.close()
             self.last_commit_lsn = consumer.last_commit_lsn
-            for qual_table_name, data_items in consumer.data_items.items():
-                table_name = consumer.last_table_schema[qual_table_name]["name"]
-                yield data_items[0]  # meta item with column hints only, no data
-                yield dlt.mark.with_table_name(data_items[1:], table_name)
+            for table_name, data_items in consumer.data_items.items():
+                table_schema = consumer.last_table_schema[table_name]
+                assert table_name == table_schema["name"]
+                yield dlt.mark.with_hints(  # meta item with column hints only, no data
+                    [],
+                    dlt.mark.make_hints(
+                        table_name=table_name, columns=table_schema["columns"]
+                    ),
+                    create_table_variant=True,
+                )
+                yield dlt.mark.with_table_name(data_items, table_name)
             self.generated_all = consumer.consumed_all
 
 
@@ -380,12 +392,16 @@ class MessageConsumer:
         self,
         upto_lsn: int,
         pub_ops: Dict[str, bool],
+        schema: str,
+        table_names: Set[str],
         target_batch_size: int = 1000,
         include_columns: Optional[Dict[str, Sequence[str]]] = None,
         columns: Optional[Dict[str, TTableSchemaColumns]] = None,
     ) -> None:
         self.upto_lsn = upto_lsn
         self.pub_ops = pub_ops
+        self.schema = schema
+        self.table_names = table_names
         self.target_batch_size = target_batch_size
         self.include_columns = include_columns
         self.columns = columns
@@ -418,22 +434,23 @@ class MessageConsumer:
         - `target_batch_size` is reached
         - a table's schema has changed
         """
-        debug(msg)
         row_msg = RowMessage()
         row_msg.ParseFromString(msg.payload)
-        debug(MessageToDict(row_msg, including_default_value_fields=True))  # type: ignore[call-arg]
         op = row_msg.op
         if op == Op.BEGIN:
             self.last_commit_ts = convert_pg_ts(row_msg.commit_time)  # type: ignore[assignment]
         elif op == Op.COMMIT:
             self.process_commit(msg)
         elif op == Op.INSERT:
-            last_table_schema = self.last_table_schema.get(row_msg.table)
-            table_schema = extract_table_schema(row_msg)
-            if last_table_schema is not None and last_table_schema != table_schema:
-                raise StopReplication  # table schema change
-            self.last_table_schema[row_msg.table] = table_schema
             schema, table_name = row_msg.table.split(".")
+            if schema != self.schema or table_name not in self.table_names:
+                return
+            last_table_schema = self.last_table_schema.get(table_name)
+            table_schema = extract_table_schema(row_msg)
+            if last_table_schema is None:
+                self.last_table_schema[table_name] = table_schema
+            elif last_table_schema != table_schema:
+                raise StopReplication  # table schema change
             data_item = gen_data_item(
                 row_msg,
                 table_schema["columns"],
@@ -444,23 +461,7 @@ class MessageConsumer:
                     else self.include_columns.get(table_name)
                 ),
             )
-            self.data_items[row_msg.table].append(data_item)
-        #     table_name = row_msg.table
-        #     data_item = self.gen_data_item(
-        #         data=column_data,
-        #         column_schema=self.last_table_schema[decoded_msg.relation_id][
-        #             "columns"
-        #         ],
-        #         lsn=msg.data_start,
-        #         commit_ts=convert_pg_ts(row_msg.commit_time),
-        #         for_delete=False,
-        #         include_columns=(
-        #             None
-        #             if self.include_columns is None
-        #             else self.include_columns.get(table_name)
-        #         ),
-        #     )
-        #     self.data_items[decoded_msg.relation_id].append(data_item)
+            self.data_items[table_name].append(data_item)
         # if op == Op.UPDATE:
         #     self.process_change(row_msg)
         # op = msg.payload[:1]
@@ -478,6 +479,8 @@ class MessageConsumer:
         #         "Truncate replication messages are ignored."
         #     )
         else:
+            debug(msg)
+            debug(MessageToDict(row_msg, including_default_value_fields=True))  # type: ignore[call-arg]
             raise AssertionError(f"Unsupported operation : {row_msg}")
 
     def process_commit(self, msg: ReplicationMessage) -> None:

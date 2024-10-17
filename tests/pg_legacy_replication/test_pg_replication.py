@@ -57,7 +57,11 @@ def test_core_functionality(
         take_snapshots=True,
     )
 
-    changes = replication_resource(slot_name)
+    changes = replication_resource(
+        slot_name=slot_name,
+        schema=src_pl.dataset_name,
+        table_names=("tbl_x", "tbl_y"),
+    )
 
     src_pl.run(
         [
@@ -83,41 +87,41 @@ def test_core_functionality(
     # process changes
     info = dest_pl.run(changes)
     assert_load_info(info)
-    # assert load_table_counts(dest_pl, "tbl_x", "tbl_y") == {"tbl_x": 3, "tbl_y": 2}
-    # exp_tbl_x = [
-    #     {"id_x": 1, "val_x": "foo"},
-    #     {"id_x": 2, "val_x": "bar"},
-    #     {"id_x": 3, "val_x": "baz"},
-    # ]
-    # exp_tbl_y = [{"id_y": 1, "val_y": True}, {"id_y": 2, "val_y": False}]
-    # assert_loaded_data(dest_pl, "tbl_x", ["id_x", "val_x"], exp_tbl_x, "id_x")
-    # assert_loaded_data(dest_pl, "tbl_y", ["id_y", "val_y"], exp_tbl_y, "id_y")
-    #
-    # # change single table
-    # src_pl.run(tbl_y({"id_y": 3, "val_y": True}))
-    #
-    # # process changes
-    # info = dest_pl.run(changes)
-    # assert_load_info(info)
-    # assert load_table_counts(dest_pl, "tbl_x", "tbl_y") == {"tbl_x": 3, "tbl_y": 3}
-    # exp_tbl_y = [
-    #     {"id_y": 1, "val_y": True},
-    #     {"id_y": 2, "val_y": False},
-    #     {"id_y": 3, "val_y": True},
-    # ]
-    # assert_loaded_data(dest_pl, "tbl_x", ["id_x", "val_x"], exp_tbl_x, "id_x")
-    # assert_loaded_data(dest_pl, "tbl_y", ["id_y", "val_y"], exp_tbl_y, "id_y")
-    #
-    # # update tables
-    # with src_pl.sql_client() as c:
-    #     qual_name = src_pl.sql_client().make_qualified_table_name("tbl_x")
-    #     c.execute_sql(f"UPDATE {qual_name} SET val_x = 'foo_updated' WHERE id_x = 1;")
-    #     qual_name = src_pl.sql_client().make_qualified_table_name("tbl_y")
-    #     c.execute_sql(f"UPDATE {qual_name} SET val_y = false WHERE id_y = 1;")
-    #
-    # # process changes
-    # info = dest_pl.run(changes)
-    # assert_load_info(info)
+    assert load_table_counts(dest_pl, "tbl_x", "tbl_y") == {"tbl_x": 3, "tbl_y": 2}
+    exp_tbl_x = [
+        {"id_x": 1, "val_x": "foo"},
+        {"id_x": 2, "val_x": "bar"},
+        {"id_x": 3, "val_x": "baz"},
+    ]
+    exp_tbl_y = [{"id_y": 1, "val_y": True}, {"id_y": 2, "val_y": False}]
+    assert_loaded_data(dest_pl, "tbl_x", ["id_x", "val_x"], exp_tbl_x, "id_x")
+    assert_loaded_data(dest_pl, "tbl_y", ["id_y", "val_y"], exp_tbl_y, "id_y")
+
+    # change single table
+    src_pl.run(tbl_y({"id_y": 3, "val_y": True}))
+
+    # process changes
+    info = dest_pl.run(changes)
+    assert_load_info(info)
+    assert load_table_counts(dest_pl, "tbl_x", "tbl_y") == {"tbl_x": 3, "tbl_y": 3}
+    exp_tbl_y = [
+        {"id_y": 1, "val_y": True},
+        {"id_y": 2, "val_y": False},
+        {"id_y": 3, "val_y": True},
+    ]
+    assert_loaded_data(dest_pl, "tbl_x", ["id_x", "val_x"], exp_tbl_x, "id_x")
+    assert_loaded_data(dest_pl, "tbl_y", ["id_y", "val_y"], exp_tbl_y, "id_y")
+
+    # update tables
+    with src_pl.sql_client() as c:
+        qual_name = src_pl.sql_client().make_qualified_table_name("tbl_x")
+        c.execute_sql(f"UPDATE {qual_name} SET val_x = 'foo_updated' WHERE id_x = 1;")
+        qual_name = src_pl.sql_client().make_qualified_table_name("tbl_y")
+        c.execute_sql(f"UPDATE {qual_name} SET val_y = false WHERE id_y = 1;")
+
+    # process changes
+    info = dest_pl.run(changes)
+    assert_load_info(info)
     # assert load_table_counts(dest_pl, "tbl_x", "tbl_y") == {"tbl_x": 3, "tbl_y": 3}
     # exp_tbl_x = [
     #     {"id_x": 1, "val_x": "foo_updated"},
