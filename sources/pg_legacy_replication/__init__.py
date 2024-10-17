@@ -84,13 +84,14 @@ def replication_resource(
     if upto_lsn is None:
         return
 
+    table_qnames = {f"{schema}.{table_name}" for table_name in table_names}
+
     # generate items in batches
     while True:
         gen = ItemGenerator(
             credentials=credentials,
             slot_name=slot_name,
-            schema=schema,
-            table_names=table_names,
+            table_qnames=table_qnames,
             options=options,
             upto_lsn=upto_lsn,
             start_lsn=start_lsn,

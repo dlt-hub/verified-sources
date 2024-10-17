@@ -85,7 +85,7 @@ def test_core_functionality(
     cleanup_snapshot_resources(snapshots)
 
     # process changes
-    info = dest_pl.run(changes)
+    info = dest_pl.run(changes, write_disposition="merge")
     assert_load_info(info)
     assert load_table_counts(dest_pl, "tbl_x", "tbl_y") == {"tbl_x": 3, "tbl_y": 2}
     exp_tbl_x = [
@@ -101,7 +101,7 @@ def test_core_functionality(
     src_pl.run(tbl_y({"id_y": 3, "val_y": True}))
 
     # process changes
-    info = dest_pl.run(changes)
+    info = dest_pl.run(changes, write_disposition="merge")
     assert_load_info(info)
     assert load_table_counts(dest_pl, "tbl_x", "tbl_y") == {"tbl_x": 3, "tbl_y": 3}
     exp_tbl_y = [
@@ -120,7 +120,7 @@ def test_core_functionality(
         c.execute_sql(f"UPDATE {qual_name} SET val_y = false WHERE id_y = 1;")
 
     # process changes
-    info = dest_pl.run(changes)
+    info = dest_pl.run(changes, write_disposition="merge")
     assert_load_info(info)
     # assert load_table_counts(dest_pl, "tbl_x", "tbl_y") == {"tbl_x": 3, "tbl_y": 3}
     # exp_tbl_x = [

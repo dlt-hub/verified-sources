@@ -316,8 +316,7 @@ def _get_rep_conn(
 class ItemGenerator:
     credentials: ConnectionStringCredentials
     slot_name: str
-    schema: str
-    table_names: Sequence[str]
+    table_qnames: Set[str]
     options: Dict[str, str]
     upto_lsn: int
     start_lsn: int = 0
@@ -351,8 +350,7 @@ class ItemGenerator:
             consumer = MessageConsumer(
                 upto_lsn=self.upto_lsn,
                 pub_ops=pub_opts,
-                schema=self.schema,
-                table_names=set(self.table_names),
+                table_qnames=self.table_qnames,
                 target_batch_size=self.target_batch_size,
                 include_columns=self.include_columns,
                 columns=self.columns,
@@ -392,16 +390,14 @@ class MessageConsumer:
         self,
         upto_lsn: int,
         pub_ops: Dict[str, bool],
-        schema: str,
-        table_names: Set[str],
+        table_qnames: Set[str],
         target_batch_size: int = 1000,
         include_columns: Optional[Dict[str, Sequence[str]]] = None,
         columns: Optional[Dict[str, TTableSchemaColumns]] = None,
     ) -> None:
         self.upto_lsn = upto_lsn
         self.pub_ops = pub_ops
-        self.schema = schema
-        self.table_names = table_names
+        self.table_qnames = table_qnames
         self.target_batch_size = target_batch_size
         self.include_columns = include_columns
         self.columns = columns
@@ -442,9 +438,9 @@ class MessageConsumer:
         elif op == Op.COMMIT:
             self.process_commit(msg)
         elif op == Op.INSERT:
-            schema, table_name = row_msg.table.split(".")
-            if schema != self.schema or table_name not in self.table_names:
+            if row_msg.table not in self.table_qnames:
                 return
+            _, table_name = row_msg.table.split(".")
             last_table_schema = self.last_table_schema.get(table_name)
             table_schema = extract_table_schema(row_msg)
             if last_table_schema is None:
@@ -669,7 +665,7 @@ def extract_table_schema(
         }
     )
 
-    table_name = row_msg.table.split(".")[1]
+    _, table_name = row_msg.table.split(".")
     return {"name": table_name, "columns": columns}
 
 
