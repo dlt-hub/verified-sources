@@ -362,15 +362,16 @@ class ItemGenerator:
             cur.connection.close()
             self.last_commit_lsn = consumer.last_commit_lsn
             for table_name, data_items in consumer.data_items.items():
-                table_schema = consumer.last_table_schema[table_name]
-                assert table_name == table_schema["name"]
-                yield dlt.mark.with_hints(  # meta item with column hints only, no data
-                    [],
-                    dlt.mark.make_hints(
-                        table_name=table_name, columns=table_schema["columns"]
-                    ),
-                    create_table_variant=True,
-                )
+                table_schema = consumer.last_table_schema.get(table_name)
+                if table_schema:
+                    assert table_name == table_schema["name"]
+                    yield dlt.mark.with_hints(  # meta item with column hints only, no data
+                        [],
+                        dlt.mark.make_hints(
+                            table_name=table_name, columns=table_schema["columns"]
+                        ),
+                        create_table_variant=True,
+                    )
                 yield dlt.mark.with_table_name(data_items, table_name)
             self.generated_all = consumer.consumed_all
 
@@ -458,15 +459,44 @@ class MessageConsumer:
                 ),
             )
             self.data_items[table_name].append(data_item)
-        # if op == Op.UPDATE:
-        #     self.process_change(row_msg)
+        elif op == Op.UPDATE:
+            if row_msg.table not in self.table_qnames:
+                return
+            _, table_name = row_msg.table.split(".")
+            last_table_schema = self.last_table_schema.get(table_name)
+            table_schema = extract_table_schema(row_msg)
+            if last_table_schema is None:
+                self.last_table_schema[table_name] = table_schema
+            elif last_table_schema != table_schema:
+                raise StopReplication  # table schema change
+            data_item = gen_data_item(
+                row_msg,
+                table_schema["columns"],
+                lsn=msg.data_start,
+                include_columns=(
+                    None
+                    if self.include_columns is None
+                    else self.include_columns.get(table_name)
+                ),
+            )
+            self.data_items[table_name].append(data_item)
+        elif op == Op.DELETE:
+            debug(msg)
+            debug(MessageToDict(row_msg, including_default_value_fields=True))  # type: ignore[call-arg]
+            if row_msg.table not in self.table_qnames:
+                return
+            _, table_name = row_msg.table.split(".")
+            data_item = gen_delete_item(
+                row_msg,
+                lsn=msg.data_start,
+                include_columns=(
+                    None
+                    if self.include_columns is None
+                    else self.include_columns.get(table_name)
+                ),
+            )
+            self.data_items[table_name].append(data_item)
         # op = msg.payload[:1]
-        # if op == b"I":
-        #     self.process_change(Insert(msg.payload), msg.data_start)
-        # elif op == b"U":
-        #     self.process_change(Update(msg.payload), msg.data_start)
-        # elif op == b"D":
-        #     self.process_change(Delete(msg.payload), msg.data_start)
         # elif op == b"R":
         #     self.process_relation(Relation(msg.payload))
         # elif op == b"T":
@@ -612,7 +642,7 @@ class MessageConsumer:
 
 
 # FIXME Refactor later
-from .schema_types import _PG_TYPES, _type_mapper
+from .schema_types import _PG_TYPES, _type_mapper, _DUMMY_VALS
 from dlt.common.schema.typing import TColumnType, TColumnSchema
 
 _DATUM_PRECISIONS: Dict[str, int] = {
@@ -695,6 +725,40 @@ def gen_data_item(
     return data_item
 
 
+def gen_delete_item(
+    row_msg: RowMessage,
+    *,
+    lsn: int,
+    include_columns: Optional[Sequence[str]] = None,
+) -> TDataItem:
+    """Generates data item from a `RowMessage` and corresponding metadata."""
+    assert row_msg.op == Op.DELETE
+
+    column_data = row_msg.old_tuple
+    type_mapper = _type_mapper()
+    data_item = {}
+
+    for data in column_data:
+        if include_columns and data.column_name not in include_columns:
+            continue
+        datum_name = data.WhichOneof("datum")
+        if datum_name:
+            data_item[data.column_name] = getattr(data, datum_name)
+        else:
+            db_type = _PG_TYPES[data.column_type]
+            col_type: TColumnType = type_mapper.from_db_type(db_type)
+            data_item[data.column_name] = _DUMMY_VALS[col_type["data_type"]]
+
+    data_item["lsn"] = lsn
+    data_item["deleted_ts"] = _convert_db_timestamp(row_msg.commit_time)
+
+    return data_item
+
+
 def _convert_pg_timestamp(microseconds_since_2000: int) -> pendulum.DateTime:
     epoch_2000 = pendulum.datetime(2000, 1, 1, tz="UTC")
     return epoch_2000.add(microseconds=microseconds_since_2000)
+
+
+def _convert_db_timestamp(microseconds_since_1970: int) -> pendulum.DateTime:
+    return pendulum.from_timestamp(microseconds_since_1970 / 1_000_000, tz="UTC")

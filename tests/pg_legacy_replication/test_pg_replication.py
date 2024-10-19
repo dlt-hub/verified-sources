@@ -122,37 +122,37 @@ def test_core_functionality(
     # process changes
     info = dest_pl.run(changes, write_disposition="merge")
     assert_load_info(info)
-    # assert load_table_counts(dest_pl, "tbl_x", "tbl_y") == {"tbl_x": 3, "tbl_y": 3}
-    # exp_tbl_x = [
-    #     {"id_x": 1, "val_x": "foo_updated"},
-    #     {"id_x": 2, "val_x": "bar"},
-    #     {"id_x": 3, "val_x": "baz"},
-    # ]
-    # exp_tbl_y = [
-    #     {"id_y": 1, "val_y": False},
-    #     {"id_y": 2, "val_y": False},
-    #     {"id_y": 3, "val_y": True},
-    # ]
-    # assert_loaded_data(dest_pl, "tbl_x", ["id_x", "val_x"], exp_tbl_x, "id_x")
-    # assert_loaded_data(dest_pl, "tbl_y", ["id_y", "val_y"], exp_tbl_y, "id_y")
-    #
-    # # delete from table
-    # with src_pl.sql_client() as c:
-    #     qual_name = src_pl.sql_client().make_qualified_table_name("tbl_x")
-    #     c.execute_sql(f"DELETE FROM {qual_name} WHERE id_x = 1;")
-    #
-    # # process changes
-    # info = dest_pl.run(changes)
-    # assert_load_info(info)
-    # assert load_table_counts(dest_pl, "tbl_x", "tbl_y") == {"tbl_x": 2, "tbl_y": 3}
-    # exp_tbl_x = [{"id_x": 2, "val_x": "bar"}, {"id_x": 3, "val_x": "baz"}]
-    # exp_tbl_y = [
-    #     {"id_y": 1, "val_y": False},
-    #     {"id_y": 2, "val_y": False},
-    #     {"id_y": 3, "val_y": True},
-    # ]
-    # assert_loaded_data(dest_pl, "tbl_x", ["id_x", "val_x"], exp_tbl_x, "id_x")
-    # assert_loaded_data(dest_pl, "tbl_y", ["id_y", "val_y"], exp_tbl_y, "id_y")
+    assert load_table_counts(dest_pl, "tbl_x", "tbl_y") == {"tbl_x": 3, "tbl_y": 3}
+    exp_tbl_x = [
+        {"id_x": 1, "val_x": "foo_updated"},
+        {"id_x": 2, "val_x": "bar"},
+        {"id_x": 3, "val_x": "baz"},
+    ]
+    exp_tbl_y = [
+        {"id_y": 1, "val_y": False},
+        {"id_y": 2, "val_y": False},
+        {"id_y": 3, "val_y": True},
+    ]
+    assert_loaded_data(dest_pl, "tbl_x", ["id_x", "val_x"], exp_tbl_x, "id_x")
+    assert_loaded_data(dest_pl, "tbl_y", ["id_y", "val_y"], exp_tbl_y, "id_y")
+
+    # delete from table
+    with src_pl.sql_client() as c:
+        qual_name = src_pl.sql_client().make_qualified_table_name("tbl_x")
+        c.execute_sql(f"DELETE FROM {qual_name} WHERE id_x = 1;")
+
+    # process changes
+    info = dest_pl.run(changes)
+    assert_load_info(info)
+    assert load_table_counts(dest_pl, "tbl_x", "tbl_y") == {"tbl_x": 2, "tbl_y": 3}
+    exp_tbl_x = [{"id_x": 2, "val_x": "bar"}, {"id_x": 3, "val_x": "baz"}]
+    exp_tbl_y = [
+        {"id_y": 1, "val_y": False},
+        {"id_y": 2, "val_y": False},
+        {"id_y": 3, "val_y": True},
+    ]
+    assert_loaded_data(dest_pl, "tbl_x", ["id_x", "val_x"], exp_tbl_x, "id_x")
+    assert_loaded_data(dest_pl, "tbl_y", ["id_y", "val_y"], exp_tbl_y, "id_y")
 
 
 @pytest.mark.parametrize("destination_name", ALL_DESTINATIONS)

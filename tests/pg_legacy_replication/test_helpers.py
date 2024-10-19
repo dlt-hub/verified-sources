@@ -1,4 +1,10 @@
-from sources.pg_legacy_replication.helpers import extract_table_schema, gen_data_item
+import pendulum
+
+from sources.pg_legacy_replication.helpers import (
+    extract_table_schema,
+    gen_data_item,
+    gen_delete_item,
+)
 from sources.pg_legacy_replication.pg_logicaldec_pb2 import RowMessage
 from google.protobuf.json_format import ParseDict as parse_dict
 
@@ -148,4 +154,44 @@ def test_gen_data_item():
         "id_y": 2,
         "lsn": 27078296,
         "val_y": False,
+    }
+
+
+def test_gen_delete_item():
+    row_msg = RowMessage()
+    data = {
+        "transactionId": 932,
+        "commitTime": "1729299383354856",
+        "table": "src_pl_dataset_202410191256122080.tbl_x",
+        "op": "DELETE",
+        "oldTuple": [
+            {
+                "columnName": "id_x",
+                "columnType": "20",
+                "datumInt64": "1",
+            },
+            {
+                "columnName": "val_x",
+                "columnType": "1043",
+            },
+            {
+                "columnName": "_dlt_load_id",
+                "columnType": "1043",
+            },
+            {
+                "columnName": "_dlt_id",
+                "columnType": "1043",
+            },
+        ],
+        "newTuple": [],
+        "newTypeinfo": [],
+    }
+    parse_dict(data, row_msg)
+    assert gen_delete_item(row_msg, lsn=27078296) == {
+        "id_x": 1,
+        "val_x": "",
+        "_dlt_load_id": "",
+        "_dlt_id": "",
+        "lsn": 27078296,
+        "deleted_ts": pendulum.parse("2024-10-19T00:56:23.354856+00:00"),
     }
