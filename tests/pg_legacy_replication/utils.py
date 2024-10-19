@@ -47,6 +47,6 @@ def is_super_user(sql_client) -> bool:
         "sources.pg_replication.credentials", ConnectionStringCredentials
     ).username
     with sql_client() as c:
-        return c.execute_sql(
+        return c.execute_sql(  # type: ignore[no-any-return]
             f"SELECT rolsuper FROM pg_roles WHERE rolname = '{username}';"
         )[0][0]

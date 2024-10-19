@@ -1,6 +1,6 @@
 import pytest
 
-from typing import Set, Tuple
+from typing import Dict, Set, Sequence, Tuple
 from copy import deepcopy
 from psycopg2.errors import InsufficientPrivilege
 
@@ -29,7 +29,7 @@ from .utils import add_pk, assert_loaded_data, is_super_user
 
 @pytest.mark.parametrize("destination_name", ALL_DESTINATIONS)
 def test_core_functionality(
-    src_config: Tuple[dlt.Pipeline, str, str], destination_name: str
+    src_config: Tuple[dlt.Pipeline, str], destination_name: str
 ) -> None:
     @dlt.resource(write_disposition="merge", primary_key="id_x")
     def tbl_x(data):
@@ -39,7 +39,7 @@ def test_core_functionality(
     def tbl_y(data):
         yield data
 
-    src_pl, slot_name, pub_name = src_config
+    src_pl, slot_name = src_config
 
     src_pl.run(
         [
@@ -157,7 +157,7 @@ def test_core_functionality(
 
 @pytest.mark.parametrize("destination_name", ALL_DESTINATIONS)
 def test_without_init_load(
-    src_config: Tuple[dlt.Pipeline, str, str], destination_name: str
+    src_config: Tuple[dlt.Pipeline, str], destination_name: str
 ) -> None:
     @dlt.resource(write_disposition="merge", primary_key="id_x")
     def tbl_x(data):
@@ -167,7 +167,7 @@ def test_without_init_load(
     def tbl_y(data):
         yield data
 
-    src_pl, slot_name, pub_name = src_config
+    src_pl, slot_name = src_config
 
     # create postgres table
     # since we're skipping initial load, these records should not be in the replicated table
@@ -183,11 +183,10 @@ def test_without_init_load(
     # initialize replication and create resource for changes
     init_replication(
         slot_name=slot_name,
-        pub_name=pub_name,
-        schema_name=src_pl.dataset_name,
+        schema=src_pl.dataset_name,
         table_names=("tbl_x", "tbl_y"),
     )
-    changes = replication_resource(slot_name, pub_name)
+    changes = replication_resource(slot_name)
 
     # change postgres table after replication has been initialized
     # these records should be in the replicated table
@@ -225,11 +224,11 @@ def test_without_init_load(
     assert_loaded_data(dest_pl, "tbl_y", ["id_y", "val_y"], exp_tbl_y, "id_y")
 
 
-def test_insert_only(src_config: Tuple[dlt.Pipeline, str, str]) -> None:
+def test_insert_only(src_config: Tuple[dlt.Pipeline, str]) -> None:
     def items(data):
         yield data
 
-    src_pl, slot_name, pub_name = src_config
+    src_pl, slot_name = src_config
 
     # create postgres table with single record
     src_pl.run(items({"id": 1, "foo": "bar"}))
@@ -237,12 +236,11 @@ def test_insert_only(src_config: Tuple[dlt.Pipeline, str, str]) -> None:
     # initialize replication and create resource for changes
     init_replication(
         slot_name=slot_name,
-        pub_name=pub_name,
-        schema_name=src_pl.dataset_name,
+        schema=src_pl.dataset_name,
         table_names="items",
         publish="insert",
     )
-    changes = replication_resource(slot_name, pub_name)
+    changes = replication_resource(slot_name)
 
     # insert a record in postgres table
     src_pl.run(items({"id": 2, "foo": "bar"}))
@@ -267,7 +265,7 @@ def test_insert_only(src_config: Tuple[dlt.Pipeline, str, str]) -> None:
 @pytest.mark.parametrize("give_hints", [True, False])
 @pytest.mark.parametrize("init_load", [True, False])
 def test_mapped_data_types(
-    src_config: Tuple[dlt.Pipeline, str, str],
+    src_config: Tuple[dlt.Pipeline, str],
     destination_name: str,
     give_hints: bool,
     init_load: bool,
@@ -282,7 +280,7 @@ def test_mapped_data_types(
     def items(data):
         yield data
 
-    src_pl, slot_name, pub_name = src_config
+    src_pl, slot_name = src_config
 
     # create postgres table with single record containing all data types
     src_pl.run(items(data))
@@ -291,8 +289,7 @@ def test_mapped_data_types(
     # initialize replication and create resources
     snapshot = init_replication(
         slot_name=slot_name,
-        pub_name=pub_name,
-        schema_name=src_pl.dataset_name,
+        schema=src_pl.dataset_name,
         table_names="items",
         take_snapshots=init_load,
         columns={"items": column_schema} if give_hints else None,
@@ -300,7 +297,6 @@ def test_mapped_data_types(
 
     changes = replication_resource(
         slot_name=slot_name,
-        pub_name=pub_name,
         columns={"items": column_schema} if give_hints else None,
     )
 
@@ -377,10 +373,10 @@ def test_mapped_data_types(
 
 @pytest.mark.parametrize("destination_name", ALL_DESTINATIONS)
 def test_unmapped_data_types(
-    src_config: Tuple[dlt.Pipeline, str, str], destination_name: str
+    src_config: Tuple[dlt.Pipeline, str], destination_name: str
 ) -> None:
     """Assert postgres data types that aren't explicitly mapped default to "text" type."""
-    src_pl, slot_name, pub_name = src_config
+    src_pl, slot_name = src_config
 
     # create postgres table with some unmapped types
     with src_pl.sql_client() as c:
@@ -392,12 +388,11 @@ def test_unmapped_data_types(
     # initialize replication and create resource
     init_replication(
         slot_name=slot_name,
-        pub_name=pub_name,
-        schema_name=src_pl.dataset_name,
+        schema=src_pl.dataset_name,
         table_names="data_types",
         publish="insert",
     )
-    changes = replication_resource(slot_name, pub_name)
+    changes = replication_resource(slot_name)
 
     # insert record in source table to create replication item
     with src_pl.sql_client() as c:
@@ -418,14 +413,12 @@ def test_unmapped_data_types(
 
 
 @pytest.mark.parametrize("publish", ["insert", "insert, update, delete"])
-def test_write_disposition(
-    src_config: Tuple[dlt.Pipeline, str, str], publish: str
-) -> None:
+def test_write_disposition(src_config: Tuple[dlt.Pipeline, str], publish: str) -> None:
     @dlt.resource
     def items(data):
         yield data
 
-    src_pl, slot_name, pub_name = src_config
+    src_pl, slot_name = src_config
 
     # create postgres table
     src_pl.run(items({"id": 1, "val": True}))
@@ -433,8 +426,7 @@ def test_write_disposition(
     # create resources
     snapshot = init_replication(
         slot_name=slot_name,
-        pub_name=pub_name,
-        schema_name=src_pl.dataset_name,
+        schema=src_pl.dataset_name,
         table_names="items",
         publish=publish,
         take_snapshots=True,
@@ -445,7 +437,7 @@ def test_write_disposition(
     assert snapshot.write_disposition == expected_write_disposition
 
     # assert write disposition on tables dispatched by changes resource
-    changes = replication_resource(slot_name, pub_name)
+    changes = replication_resource(slot_name)
     src_pl.run(items({"id": 2, "val": True}))
     dest_pl = dlt.pipeline(pipeline_name="dest_pl", full_refresh=True)
     dest_pl.extract(changes)
@@ -458,11 +450,11 @@ def test_write_disposition(
 @pytest.mark.parametrize("destination_name", ALL_DESTINATIONS)
 @pytest.mark.parametrize("init_load", [True, False])
 def test_include_columns(
-    src_config: Tuple[dlt.Pipeline, str, str], destination_name: str, init_load: bool
+    src_config: Tuple[dlt.Pipeline, str], destination_name: str, init_load: bool
 ) -> None:
     def get_cols(pipeline: dlt.Pipeline, table_name: str) -> set:
         with pipeline.destination_client(pipeline.default_schema_name) as client:
-            client: SqlJobClientBase
+            assert isinstance(client, SqlJobClientBase)
             return {
                 k
                 for k in client.get_storage_table(table_name)[1].keys()
@@ -481,7 +473,7 @@ def test_include_columns(
     def tbl_z(data):
         yield data
 
-    src_pl, slot_name, pub_name = src_config
+    src_pl, slot_name = src_config
 
     # create three postgres tables
     src_pl.run(
@@ -493,23 +485,20 @@ def test_include_columns(
     )
 
     # initialize replication and create resources
-    include_columns = {
+    include_columns: Dict[str, Sequence[str]] = {
         "tbl_x": ["id_x", "val_x"],
         "tbl_y": ["id_y", "val_y"],
         # tbl_z is not specified, hence all columns should be included
     }
     snapshots = init_replication(
         slot_name=slot_name,
-        pub_name=pub_name,
-        schema_name=src_pl.dataset_name,
+        schema=src_pl.dataset_name,
         table_names=("tbl_x", "tbl_y", "tbl_z"),
         publish="insert",
         take_snapshots=init_load,
         include_columns=include_columns,
     )
-    changes = replication_resource(
-        slot_name=slot_name, pub_name=pub_name, include_columns=include_columns
-    )
+    changes = replication_resource(slot_name=slot_name, include_columns=include_columns)
 
     # update three postgres tables
     src_pl.run(
@@ -538,7 +527,7 @@ def test_include_columns(
 @pytest.mark.parametrize("destination_name", ALL_DESTINATIONS)
 @pytest.mark.parametrize("init_load", [True, False])
 def test_column_hints(
-    src_config: Tuple[dlt.Pipeline, str, str], destination_name: str, init_load: bool
+    src_config: Tuple[dlt.Pipeline, str], destination_name: str, init_load: bool
 ) -> None:
     @dlt.resource
     def tbl_x(data):
@@ -552,7 +541,7 @@ def test_column_hints(
     def tbl_z(data):
         yield data
 
-    src_pl, slot_name, pub_name = src_config
+    src_pl, slot_name = src_config
 
     # create three postgres tables
     src_pl.run(
@@ -571,16 +560,13 @@ def test_column_hints(
     }
     snapshots = init_replication(
         slot_name=slot_name,
-        pub_name=pub_name,
-        schema_name=src_pl.dataset_name,
+        schema=src_pl.dataset_name,
         table_names=("tbl_x", "tbl_y", "tbl_z"),
         publish="insert",
         take_snapshots=init_load,
         columns=column_hints,
     )
-    changes = replication_resource(
-        slot_name=slot_name, pub_name=pub_name, columns=column_hints
-    )
+    changes = replication_resource(slot_name=slot_name, columns=column_hints)
 
     # update three postgres tables
     src_pl.run(
@@ -643,9 +629,9 @@ def test_column_hints(
 
 @pytest.mark.parametrize("destination_name", ALL_DESTINATIONS)
 def test_table_schema_change(
-    src_config: Tuple[dlt.Pipeline, str, str], destination_name: str
+    src_config: Tuple[dlt.Pipeline, str], destination_name: str
 ) -> None:
-    src_pl, slot_name, pub_name = src_config
+    src_pl, slot_name = src_config
 
     # create postgres table
     src_pl.run([{"c1": 1, "c2": 1}], table_name="items")
@@ -653,14 +639,13 @@ def test_table_schema_change(
     # initialize replication
     init_replication(
         slot_name=slot_name,
-        pub_name=pub_name,
-        schema_name=src_pl.dataset_name,
+        schema=src_pl.dataset_name,
         table_names="items",
         publish="insert",
     )
 
     # create resource and pipeline
-    changes = replication_resource(slot_name, pub_name)
+    changes = replication_resource(slot_name)
     dest_pl = dlt.pipeline(
         pipeline_name="dest_pl", destination=destination_name, full_refresh=True
     )
@@ -688,93 +673,7 @@ def test_table_schema_change(
     )
 
 
-def test_init_replication(src_config: Tuple[dlt.Pipeline, str, str]) -> None:
-    def get_table_names_in_pub() -> Set[str]:
-        with src_pl.sql_client() as c:
-            result = c.execute_sql(
-                f"SELECT tablename FROM pg_publication_tables WHERE pubname = '{pub_name}';"
-            )
-            return {tup[0] for tup in result}
-
-    @dlt.resource
-    def tbl_x(data):
-        yield data
-
-    @dlt.resource
-    def tbl_y(data):
-        yield data
-
-    @dlt.resource
-    def tbl_z(data):
-        yield data
-
-    src_pl, slot_name, pub_name = src_config
-
-    # create three postgres tables
-    src_pl.run(
-        [
-            tbl_x({"id_x": 1, "val_x": "foo"}),
-            tbl_y({"id_y": 1, "val_y": "foo"}),
-            tbl_z({"id_z": 1, "val_z": "foo"}),
-        ]
-    )
-
-    # initialize replication with a single table
-    snapshot = init_replication(
-        slot_name=slot_name,
-        pub_name=pub_name,
-        schema_name=src_pl.dataset_name,
-        table_names="tbl_x",
-        take_snapshots=True,
-    )
-    assert snapshot is not None
-    assert get_table_names_in_pub() == {"tbl_x"}
-
-    # adding another table is supported, but snapshot tables won't be persisted
-    snapshots = init_replication(
-        slot_name=slot_name,
-        pub_name=pub_name,
-        schema_name=src_pl.dataset_name,
-        table_names=("tbl_x", "tbl_y"),
-        take_snapshots=True,
-    )
-    assert snapshots is None
-    assert get_table_names_in_pub() == {"tbl_x", "tbl_y"}
-
-    # removing a table is not supported
-    init_replication(
-        slot_name=slot_name,
-        pub_name=pub_name,
-        schema_name=src_pl.dataset_name,
-        table_names="tbl_x",  # "tbl_y" is no longer provided
-    )
-    # "tbl_y" is still in the publication
-    assert get_table_names_in_pub() == {"tbl_x", "tbl_y"}
-
-    # switching to whole schema replication is supported by omitting `table_names`,
-    # but only for Postgres server versions 15 or higher and with superuser privileges
-    is_su = is_super_user(src_pl.sql_client)
-    if get_pg_version() >= 150000 and is_su:
-        init_replication(
-            slot_name=slot_name,
-            pub_name=pub_name,
-            schema_name=src_pl.dataset_name,
-        )
-        # includes dlt system tables
-        assert get_table_names_in_pub() >= {"tbl_x", "tbl_y", "tbl_z"}
-    else:
-        exp_err = (
-            InsufficientPrivilege if not is_su else IncompatiblePostgresVersionException
-        )
-        with pytest.raises(exp_err):
-            init_replication(
-                slot_name=slot_name,
-                pub_name=pub_name,
-                schema_name=src_pl.dataset_name,
-            )
-
-
-def test_replicate_schema(src_config: Tuple[dlt.Pipeline, str, str]) -> None:
+def test_replicate_schema(src_config: Tuple[dlt.Pipeline, str]) -> None:
     if get_pg_version() < 150000:
         pytest.skip("incompatible Postgres server version")
     if not is_super_user(src_config[0].sql_client):
@@ -792,7 +691,7 @@ def test_replicate_schema(src_config: Tuple[dlt.Pipeline, str, str]) -> None:
     def tbl_z(data):
         yield data
 
-    src_pl, slot_name, pub_name = src_config
+    src_pl, slot_name = src_config
 
     # create two postgres tables
     src_pl.run(
@@ -805,11 +704,10 @@ def test_replicate_schema(src_config: Tuple[dlt.Pipeline, str, str]) -> None:
     # initialize replication and create resource
     init_replication(
         slot_name=slot_name,
-        pub_name=pub_name,
-        schema_name=src_pl.dataset_name,  # we only specify `schema_name`, not `table_names`
+        schema=src_pl.dataset_name,  # we only specify `schema`, not `table_names`
         publish="insert",
     )
-    changes = replication_resource(slot_name, pub_name)
+    changes = replication_resource(slot_name)
 
     # change source tables and load to destination
     src_pl.run(
@@ -834,10 +732,10 @@ def test_replicate_schema(src_config: Tuple[dlt.Pipeline, str, str]) -> None:
     assert set(dest_pl.default_schema.data_table_names()) == {"tbl_x", "tbl_y", "tbl_z"}
 
 
-def test_batching(src_config: Tuple[dlt.Pipeline, str, str]) -> None:
+def test_batching(src_config: Tuple[dlt.Pipeline, str]) -> None:
     # this test asserts the number of data items yielded by the replication resource
     # is not affected by `target_batch_size` and the number of replication messages per transaction
-    src_pl, slot_name, pub_name = src_config
+    src_pl, slot_name = src_config
 
     # create postgres table with single record
     data = {"id": 1000, "val": True}
@@ -846,11 +744,10 @@ def test_batching(src_config: Tuple[dlt.Pipeline, str, str]) -> None:
     # initialize replication and create resource for changes
     init_replication(
         slot_name=slot_name,
-        pub_name=pub_name,
-        schema_name=src_pl.dataset_name,
+        schema=src_pl.dataset_name,
         table_names="items",
     )
-    changes = replication_resource(slot_name, pub_name, target_batch_size=50)
+    changes = replication_resource(slot_name, target_batch_size=50)
 
     # create destination pipeline and resource
     dest_pl = dlt.pipeline(pipeline_name="dest_pl", full_refresh=True)
