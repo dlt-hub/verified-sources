@@ -204,7 +204,7 @@ def replicate_with_column_selection() -> None:
     # create a resource that generates items for each change in the schema's tables
     changes = replication_resource(
         slot_name=slot_name,
-        include_columns={
+        included_columns={
             "tbl_x": ("c1", "c2")
         },  # columns not specified here are excluded from generated data items
     )

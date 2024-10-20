@@ -64,7 +64,8 @@ def init_replication(
     table_names: Sequence[str] = dlt.config.value,
     credentials: ConnectionStringCredentials = dlt.secrets.value,
     take_snapshots: bool = False,
-    include_columns: Optional[Dict[str, Sequence[str]]] = None,
+    included_columns: Optional[Dict[str, Sequence[str]]] = None,
+    columns: Optional[Dict[str, TTableSchemaColumns]] = None,
     reset: bool = False,
 ) -> Optional[List[DltResource]]:
     """Initializes replication for one, several, or all tables within a schema.
@@ -94,12 +95,12 @@ def init_replication(
           resources (`DltResource` objects) for these tables are created and returned.
           The resources can be used to perform an initial load of all data present
           in the tables at the moment the replication slot got created.
-        include_columns (Optional[Dict[str, Sequence[str]]]): Maps table name(s) to
+        included_columns (Optional[Dict[str, Sequence[str]]]): Maps table name(s) to
           sequence of names of columns to include in the snapshot table(s).
           Any column not in the sequence is excluded. If not provided, all columns
           are included. For example:
           ```
-          include_columns={
+          included_columns={
               "table_x": ["col_a", "col_c"],
               "table_y": ["col_x", "col_y", "col_z"],
           }
@@ -143,13 +144,15 @@ def init_replication(
             cur.execute("SET TRANSACTION ISOLATION LEVEL REPEATABLE READ")
             cur.execute(f"SET TRANSACTION SNAPSHOT '{slot['snapshot_name']}'")
 
-    include_columns = include_columns or {}
+    included_columns = included_columns or {}
+    columns = columns or {}
     return [
-        sql_table(  # type: ignore[name-defined]
-            credentials=engine,
-            table=table_name,
-            schema=schema,
-            included_columns=include_columns.get(table_name),
+        _prepare_snapshot_resource(
+            engine,
+            table_name,
+            schema,
+            included_columns=included_columns.get(table_name),
+            columns=columns.get(table_name),
         )
         for table_name in table_names
     ]
@@ -171,6 +174,25 @@ def _configure_engine(
         delattr(engine, "rep_conn")
 
     return engine
+
+
+def _prepare_snapshot_resource(
+    engine: Engine,
+    table_name: str,
+    schema: str,
+    *,
+    included_columns: Optional[Sequence[str]] = None,
+    columns: Optional[TTableSchemaColumns] = None,
+) -> DltResource:
+    t_rsrc: DltResource = sql_table(  # type: ignore[name-defined]
+        credentials=engine,
+        table=table_name,
+        schema=schema,
+        included_columns=included_columns,
+    )
+    if columns:
+        t_rsrc.apply_hints(columns=columns)
+    return t_rsrc
 
 
 def cleanup_snapshot_resources(snapshots: List[DltResource]) -> None:
@@ -321,7 +343,7 @@ class ItemGenerator:
     upto_lsn: int
     start_lsn: int = 0
     target_batch_size: int = 1000
-    include_columns: Optional[Dict[str, Sequence[str]]] = (None,)  # type: ignore[assignment]
+    included_columns: Optional[Dict[str, Sequence[str]]] = (None,)  # type: ignore[assignment]
     columns: Optional[Dict[str, TTableSchemaColumns]] = (None,)  # type: ignore[assignment]
     last_commit_lsn: Optional[int] = field(default=None, init=False)
     generated_all: bool = False
@@ -352,7 +374,7 @@ class ItemGenerator:
                 pub_ops=pub_opts,
                 table_qnames=self.table_qnames,
                 target_batch_size=self.target_batch_size,
-                include_columns=self.include_columns,
+                included_columns=self.included_columns,
                 columns=self.columns,
             )
             cur.consume_stream(consumer)
@@ -393,14 +415,14 @@ class MessageConsumer:
         pub_ops: Dict[str, bool],
         table_qnames: Set[str],
         target_batch_size: int = 1000,
-        include_columns: Optional[Dict[str, Sequence[str]]] = None,
+        included_columns: Optional[Dict[str, Sequence[str]]] = None,
         columns: Optional[Dict[str, TTableSchemaColumns]] = None,
     ) -> None:
         self.upto_lsn = upto_lsn
         self.pub_ops = pub_ops
         self.table_qnames = table_qnames
         self.target_batch_size = target_batch_size
-        self.include_columns = include_columns or {}
+        self.included_columns = included_columns or {}
         self.columns = columns or {}
 
         self.consumed_all: bool = False
@@ -432,88 +454,96 @@ class MessageConsumer:
         - a table's schema has changed
         """
         row_msg = RowMessage()
-        row_msg.ParseFromString(msg.payload)
-        op = row_msg.op
-        if op == Op.BEGIN:
-            self.last_commit_ts = convert_pg_ts(row_msg.commit_time)  # type: ignore[assignment]
-        elif op == Op.COMMIT:
-            self.process_commit(msg)
-        elif op == Op.INSERT:
-            if row_msg.table not in self.table_qnames:
-                return
-            _, table_name = row_msg.table.split(".")
-            last_table_schema = self.last_table_schema.get(table_name)
-            table_schema = extract_table_schema(
-                row_msg,
-                column_hints=self.columns.get(table_name),
-                include_columns=self.include_columns.get(table_name),
+        try:
+            row_msg.ParseFromString(msg.payload)
+            op = row_msg.op
+            if op == Op.BEGIN:
+                self.last_commit_ts = convert_pg_ts(row_msg.commit_time)  # type: ignore[assignment]
+            elif op == Op.COMMIT:
+                self.process_commit(msg)
+            elif op == Op.INSERT:
+                if row_msg.table not in self.table_qnames:
+                    return
+                _, table_name = row_msg.table.split(".")
+                last_table_schema = self.last_table_schema.get(table_name)
+                table_schema = extract_table_schema(
+                    row_msg,
+                    column_hints=self.columns.get(table_name),
+                    included_columns=self.included_columns.get(table_name),
+                )
+                if last_table_schema is None:
+                    self.last_table_schema[table_name] = table_schema
+                elif last_table_schema != table_schema:
+                    raise StopReplication  # table schema change
+                data_item = gen_data_item(
+                    row_msg,
+                    table_schema["columns"],
+                    lsn=msg.data_start,
+                    included_columns=(
+                        None
+                        if self.included_columns is None
+                        else self.included_columns.get(table_name)
+                    ),
+                )
+                self.data_items[table_name].append(data_item)
+            elif op == Op.UPDATE:
+                if row_msg.table not in self.table_qnames:
+                    return
+                _, table_name = row_msg.table.split(".")
+                last_table_schema = self.last_table_schema.get(table_name)
+                table_schema = extract_table_schema(
+                    row_msg,
+                    column_hints=self.columns.get(table_name),
+                    included_columns=self.included_columns.get(table_name),
+                )
+                if last_table_schema is None:
+                    self.last_table_schema[table_name] = table_schema
+                elif last_table_schema != table_schema:
+                    raise StopReplication  # table schema change
+                data_item = gen_data_item(
+                    row_msg,
+                    table_schema["columns"],
+                    lsn=msg.data_start,
+                    included_columns=(
+                        None
+                        if self.included_columns is None
+                        else self.included_columns.get(table_name)
+                    ),
+                )
+                self.data_items[table_name].append(data_item)
+            elif op == Op.DELETE:
+                if row_msg.table not in self.table_qnames:
+                    return
+                _, table_name = row_msg.table.split(".")
+                data_item = gen_delete_item(
+                    row_msg,
+                    lsn=msg.data_start,
+                    included_columns=(
+                        None
+                        if self.included_columns is None
+                        else self.included_columns.get(table_name)
+                    ),
+                )
+                self.data_items[table_name].append(data_item)
+            # op = msg.payload[:1]
+            # elif op == b"R":
+            #     self.process_relation(Relation(msg.payload))
+            # elif op == b"T":
+            #     logger.warning(
+            #         "The truncate operation is currently not supported. "
+            #         "Truncate replication messages are ignored."
+            #     )
+            else:
+                debug(msg)
+                debug(MessageToDict(row_msg, including_default_value_fields=True))  # type: ignore[call-arg]
+                raise AssertionError(f"Unsupported operation : {row_msg}")
+        except StopReplication:
+            raise
+        except Exception:
+            logger.error(
+                "A fatal error occured while processing a message: %s", row_msg
             )
-            if last_table_schema is None:
-                self.last_table_schema[table_name] = table_schema
-            elif last_table_schema != table_schema:
-                raise StopReplication  # table schema change
-            data_item = gen_data_item(
-                row_msg,
-                table_schema["columns"],
-                lsn=msg.data_start,
-                include_columns=(
-                    None
-                    if self.include_columns is None
-                    else self.include_columns.get(table_name)
-                ),
-            )
-            self.data_items[table_name].append(data_item)
-        elif op == Op.UPDATE:
-            if row_msg.table not in self.table_qnames:
-                return
-            _, table_name = row_msg.table.split(".")
-            last_table_schema = self.last_table_schema.get(table_name)
-            table_schema = extract_table_schema(
-                row_msg,
-                column_hints=self.columns.get(table_name),
-                include_columns=self.include_columns.get(table_name),
-            )
-            if last_table_schema is None:
-                self.last_table_schema[table_name] = table_schema
-            elif last_table_schema != table_schema:
-                raise StopReplication  # table schema change
-            data_item = gen_data_item(
-                row_msg,
-                table_schema["columns"],
-                lsn=msg.data_start,
-                include_columns=(
-                    None
-                    if self.include_columns is None
-                    else self.include_columns.get(table_name)
-                ),
-            )
-            self.data_items[table_name].append(data_item)
-        elif op == Op.DELETE:
-            if row_msg.table not in self.table_qnames:
-                return
-            _, table_name = row_msg.table.split(".")
-            data_item = gen_delete_item(
-                row_msg,
-                lsn=msg.data_start,
-                include_columns=(
-                    None
-                    if self.include_columns is None
-                    else self.include_columns.get(table_name)
-                ),
-            )
-            self.data_items[table_name].append(data_item)
-        # op = msg.payload[:1]
-        # elif op == b"R":
-        #     self.process_relation(Relation(msg.payload))
-        # elif op == b"T":
-        #     logger.warning(
-        #         "The truncate operation is currently not supported. "
-        #         "Truncate replication messages are ignored."
-        #     )
-        else:
-            debug(msg)
-            debug(MessageToDict(row_msg, including_default_value_fields=True))  # type: ignore[call-arg]
-            raise AssertionError(f"Unsupported operation : {row_msg}")
+            raise
 
     def process_commit(self, msg: ReplicationMessage) -> None:
         """Updates object state when Commit message is observed.
@@ -664,7 +694,7 @@ def extract_table_schema(
     row_msg: RowMessage,
     *,
     column_hints: Optional[TTableSchemaColumns] = None,
-    include_columns: Optional[Sequence[str]] = None,
+    included_columns: Optional[Sequence[str]] = None,
 ) -> TTableSchema:
     columns: TTableSchemaColumns = {
         "lsn": {
@@ -681,21 +711,49 @@ def extract_table_schema(
     type_mapper = _type_mapper()
     for col, col_info in zip(row_msg.new_tuple, row_msg.new_typeinfo):
         col_name = col.column_name
-        if include_columns and col_name not in include_columns:
+        if included_columns and col_name not in included_columns:
             continue
-        assert (
-            _PG_TYPES[col.column_type] == col_info.modifier
-        ), f"Type mismatch for column {col_name}"
-        col_type: TColumnType = type_mapper.from_db_type(col_info.modifier)
+        db_type = _PG_TYPES[col.column_type]
+        col_type: TColumnType = type_mapper.from_db_type(db_type)
         col_schema: TColumnSchema = {
             "name": col_name,
             "nullable": col_info.value_optional,
             **col_type,
         }
+        if db_type == "character varying":
+            import re
 
-        precision = _DATUM_PRECISIONS.get(col.WhichOneof("datum"))
-        if precision:
+            match = re.search(r"character varying\((\d+)\)", col_info.modifier)
+            if match:
+                col_schema["precision"] = int(match.group(1))
+        elif db_type == "numeric":
+            import re
+
+            match = re.search(r"numeric\((\d+),(\d+)\)", col_info.modifier)
+            precision, scale = map(int, match.groups())
             col_schema["precision"] = precision
+            col_schema["scale"] = scale
+        elif db_type == "timestamp with time zone":
+            import re
+
+            match = re.search(r"timestamp\((\d+)\) with time zone", col_info.modifier)
+            if match:
+                col_schema["precision"] = int(match.group(1))
+            # col_schema["timezone"] = True FIXME
+        elif db_type == "time without time zone":
+            import re
+
+            match = re.search(r"time\((\d+)\) without time zone", col_info.modifier)
+            if match:
+                col_schema["precision"] = int(match.group(1))
+            # col_schema["timezone"] = False FIXME
+        else:
+            assert (
+                _PG_TYPES[col.column_type] == col_info.modifier
+            ), f"Type mismatch for column {col_name}"
+
+            if precision := _DATUM_PRECISIONS.get(col.WhichOneof("datum")):
+                col_schema["precision"] = precision
 
         columns[col_name] = (
             merge_column(col_schema, column_hints.get(col_name))
@@ -712,23 +770,17 @@ def gen_data_item(
     column_schema: TTableSchemaColumns,
     *,
     lsn: int,
-    include_columns: Optional[Sequence[str]] = None,
+    included_columns: Optional[Sequence[str]] = None,
 ) -> TDataItem:
     """Generates data item from a `RowMessage` and corresponding metadata."""
-    assert row_msg.op in (Op.INSERT, Op.UPDATE, Op.DELETE)
-    column_data = (
-        row_msg.new_tuple if row_msg.op in (Op.INSERT, Op.UPDATE) else row_msg.old_tuple
-    )
-
-    data_item = {
-        data.column_name: getattr(data, data.WhichOneof("datum"))
-        for schema, data in zip(column_schema.values(), column_data)
-        if include_columns is None or data.column_name in include_columns
-    }
-
-    data_item["lsn"] = lsn
-    if row_msg.op == Op.DELETE:
-        data_item["deleted_ts"] = _convert_pg_timestamp(row_msg.commit_time)
+    assert row_msg.op in (Op.INSERT, Op.UPDATE)
+    data_item = {"lsn": lsn}
+    for data in row_msg.new_tuple:
+        if included_columns and data.column_name not in included_columns:
+            continue
+        datum = data.WhichOneof("datum")
+        assert datum or column_schema[data.column_name]["nullable"]
+        data_item[data.column_name] = getattr(data, datum) if datum else None
 
     return data_item
 
@@ -737,7 +789,7 @@ def gen_delete_item(
     row_msg: RowMessage,
     *,
     lsn: int,
-    include_columns: Optional[Sequence[str]] = None,
+    included_columns: Optional[Sequence[str]] = None,
 ) -> TDataItem:
     """Generates data item from a `RowMessage` and corresponding metadata."""
     assert row_msg.op == Op.DELETE
@@ -747,7 +799,7 @@ def gen_delete_item(
     data_item = {}
 
     for data in column_data:
-        if include_columns and data.column_name not in include_columns:
+        if included_columns and data.column_name not in included_columns:
             continue
         datum_name = data.WhichOneof("datum")
         if datum_name:

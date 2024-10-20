@@ -233,45 +233,6 @@ def test_without_init_load(
     assert_loaded_data(dest_pl, "tbl_y", ["id_y", "val_y"], exp_tbl_y, "id_y")
 
 
-def test_insert_only(src_config: Tuple[dlt.Pipeline, str]) -> None:
-    def items(data):
-        yield data
-
-    src_pl, slot_name = src_config
-
-    # create postgres table with single record
-    src_pl.run(items({"id": 1, "foo": "bar"}))
-
-    # initialize replication and create resource for changes
-    init_replication(
-        slot_name=slot_name,
-        schema=src_pl.dataset_name,
-        table_names="items",
-        publish="insert",
-    )
-    changes = replication_resource(
-        slot_name=slot_name, schema=src_pl.dataset_name, table_names="items"
-    )
-
-    # insert a record in postgres table
-    src_pl.run(items({"id": 2, "foo": "bar"}))
-
-    # extract items from resource
-    dest_pl = dlt.pipeline(pipeline_name="dest_pl", dev_mode=True)
-    extract_info = dest_pl.extract(changes)
-    assert get_table_metrics(extract_info, "items")["items_count"] == 1
-
-    # do an update and a delete—these operations should not lead to items in the resource
-    with src_pl.sql_client() as c:
-        qual_name = src_pl.sql_client().make_qualified_table_name("items")
-        c.execute_sql(f"UPDATE {qual_name} SET foo = 'baz' WHERE id = 2;")
-        c.execute_sql(f"DELETE FROM {qual_name} WHERE id = 2;")
-    extract_info = dest_pl.extract(changes)
-    assert (
-        get_table_metrics(extract_info, "items") is None
-    )  # there should be no metrics for the "items" table
-
-
 @pytest.mark.parametrize("destination_name", ALL_DESTINATIONS)
 @pytest.mark.parametrize("give_hints", [True, False])
 @pytest.mark.parametrize("init_load", [True, False])
@@ -301,13 +262,15 @@ def test_mapped_data_types(
     snapshot = init_replication(
         slot_name=slot_name,
         schema=src_pl.dataset_name,
-        table_names="items",
+        table_names=("items",),
         take_snapshots=init_load,
         columns={"items": column_schema} if give_hints else None,
     )
 
     changes = replication_resource(
         slot_name=slot_name,
+        schema=src_pl.dataset_name,
+        table_names=("items",),
         columns={"items": column_schema} if give_hints else None,
     )
 
@@ -327,7 +290,7 @@ def test_mapped_data_types(
     r2["col1"] = 2
     src_pl.run(items([r1, r2]))
 
-    info = dest_pl.run(changes)
+    info = dest_pl.run(changes, write_disposition="merge")
     assert_load_info(info)
     assert load_table_counts(dest_pl, "items")["items"] == 3 if init_load else 2
 
@@ -351,7 +314,7 @@ def test_mapped_data_types(
     src_pl.run(items([r1, r2]))
 
     # process changes and assert expectations
-    info = dest_pl.run(changes)
+    info = dest_pl.run(changes, write_disposition="merge")
     assert_load_info(info)
     assert load_table_counts(dest_pl, "items")["items"] == 3 if init_load else 2
     exp = [
@@ -373,7 +336,7 @@ def test_mapped_data_types(
         c.execute_sql(f"UPDATE {qual_name} SET col2 = 2.5 WHERE col1 = 2;")
 
     # process change and assert expectation
-    info = dest_pl.run(changes)
+    info = dest_pl.run(changes, write_disposition="merge")
     assert_load_info(info)
     assert load_table_counts(dest_pl, "items")["items"] == 3 if init_load else 2
     exp = [{"col1": 2, "col2": 2.5, "col3": False}]

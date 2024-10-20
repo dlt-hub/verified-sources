@@ -21,7 +21,7 @@ def replication_resource(
     schema: str = dlt.config.value,
     table_names: Sequence[str] = dlt.config.value,
     credentials: ConnectionStringCredentials = dlt.secrets.value,
-    include_columns: Optional[Dict[str, Sequence[str]]] = None,
+    included_columns: Optional[Dict[str, Sequence[str]]] = None,
     columns: Optional[Dict[str, TTableSchemaColumns]] = None,
     target_batch_size: int = 1000,
     flush_slot: bool = True,
@@ -38,7 +38,7 @@ def replication_resource(
     Args:
         slot_name (str): Name of the replication slot to consume replication messages from.
         credentials (ConnectionStringCredentials): Postgres database credentials.
-        include_columns (Optional[Dict[str, Sequence[str]]]): Maps table name(s) to
+        included_columns (Optional[Dict[str, Sequence[str]]]): Maps table name(s) to
           sequence of names of columns to include in the generated data items.
           Any column not in the sequence is excluded. If not provided, all columns
           are included. For example:
@@ -96,7 +96,7 @@ def replication_resource(
             upto_lsn=upto_lsn,
             start_lsn=start_lsn,
             target_batch_size=target_batch_size,
-            include_columns=include_columns,
+            included_columns=included_columns,
             columns=columns,
         )
         yield from gen
