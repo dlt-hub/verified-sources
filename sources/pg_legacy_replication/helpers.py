@@ -63,7 +63,7 @@ def init_replication(
     schema: str = dlt.config.value,
     table_names: Sequence[str] = dlt.config.value,
     credentials: ConnectionStringCredentials = dlt.secrets.value,
-    take_snapshots: bool = True,
+    take_snapshots: bool = False,
     include_columns: Optional[Dict[str, Sequence[str]]] = None,
     reset: bool = False,
 ) -> Optional[List[DltResource]]:
@@ -400,8 +400,8 @@ class MessageConsumer:
         self.pub_ops = pub_ops
         self.table_qnames = table_qnames
         self.target_batch_size = target_batch_size
-        self.include_columns = include_columns
-        self.columns = columns
+        self.include_columns = include_columns or {}
+        self.columns = columns or {}
 
         self.consumed_all: bool = False
         # data_items attribute maintains all data items
@@ -443,7 +443,11 @@ class MessageConsumer:
                 return
             _, table_name = row_msg.table.split(".")
             last_table_schema = self.last_table_schema.get(table_name)
-            table_schema = extract_table_schema(row_msg)
+            table_schema = extract_table_schema(
+                row_msg,
+                column_hints=self.columns.get(table_name),
+                include_columns=self.include_columns.get(table_name),
+            )
             if last_table_schema is None:
                 self.last_table_schema[table_name] = table_schema
             elif last_table_schema != table_schema:
@@ -464,7 +468,11 @@ class MessageConsumer:
                 return
             _, table_name = row_msg.table.split(".")
             last_table_schema = self.last_table_schema.get(table_name)
-            table_schema = extract_table_schema(row_msg)
+            table_schema = extract_table_schema(
+                row_msg,
+                column_hints=self.columns.get(table_name),
+                include_columns=self.include_columns.get(table_name),
+            )
             if last_table_schema is None:
                 self.last_table_schema[table_name] = table_schema
             elif last_table_schema != table_schema:
@@ -481,8 +489,6 @@ class MessageConsumer:
             )
             self.data_items[table_name].append(data_item)
         elif op == Op.DELETE:
-            debug(msg)
-            debug(MessageToDict(row_msg, including_default_value_fields=True))  # type: ignore[call-arg]
             if row_msg.table not in self.table_qnames:
                 return
             _, table_name = row_msg.table.split(".")
@@ -655,13 +661,27 @@ _DATUM_PRECISIONS: Dict[str, int] = {
 
 
 def extract_table_schema(
-    row_msg: RowMessage, *, include_columns: Optional[Sequence[str]] = None
+    row_msg: RowMessage,
+    *,
+    column_hints: Optional[TTableSchemaColumns] = None,
+    include_columns: Optional[Sequence[str]] = None,
 ) -> TTableSchema:
-    columns: TTableSchemaColumns = {}
+    columns: TTableSchemaColumns = {
+        "lsn": {
+            "data_type": "bigint",
+            "nullable": True,
+            "dedup_sort": "desc",
+        },
+        "deleted_ts": {
+            "data_type": "timestamp",
+            "nullable": True,
+            "hard_delete": True,
+        },
+    }
     type_mapper = _type_mapper()
     for col, col_info in zip(row_msg.new_tuple, row_msg.new_typeinfo):
         col_name = col.column_name
-        if include_columns is not None and col_name not in include_columns:
+        if include_columns and col_name not in include_columns:
             continue
         assert (
             _PG_TYPES[col.column_type] == col_info.modifier
@@ -674,26 +694,14 @@ def extract_table_schema(
         }
 
         precision = _DATUM_PRECISIONS.get(col.WhichOneof("datum"))
-        if precision is not None:
+        if precision:
             col_schema["precision"] = precision
 
-        columns[col_name] = col_schema
-
-    # Add replication columns
-    columns.update(
-        {
-            "lsn": {
-                "data_type": "bigint",
-                "nullable": True,
-                "dedup_sort": "desc",
-            },
-            "deleted_ts": {
-                "data_type": "timestamp",
-                "nullable": True,
-                "hard_delete": True,
-            },
-        }
-    )
+        columns[col_name] = (
+            merge_column(col_schema, column_hints.get(col_name))
+            if column_hints and column_hints.get(col_name)
+            else col_schema
+        )
 
     _, table_name = row_msg.table.split(".")
     return {"name": table_name, "columns": columns}
