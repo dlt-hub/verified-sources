@@ -334,73 +334,6 @@ def _get_rep_conn(
     return _get_conn(credentials, LogicalReplicationConnection)  # type: ignore[return-value]
 
 
-@dataclass
-class ItemGenerator:
-    credentials: ConnectionStringCredentials
-    slot_name: str
-    table_qnames: Set[str]
-    options: Dict[str, str]
-    upto_lsn: int
-    start_lsn: int = 0
-    target_batch_size: int = 1000
-    included_columns: Optional[Dict[str, Sequence[str]]] = (None,)  # type: ignore[assignment]
-    columns: Optional[Dict[str, TTableSchemaColumns]] = (None,)  # type: ignore[assignment]
-    last_commit_lsn: Optional[int] = field(default=None, init=False)
-    generated_all: bool = False
-
-    def __iter__(self) -> Iterator[Union[TDataItem, DataItemWithMeta]]:
-        """Yields replication messages from MessageConsumer.
-
-        Starts replication of messages published by the publication from the replication slot.
-        Maintains LSN of last consumed Commit message in object state.
-        Does not advance the slot.
-        """
-        try:
-            cur = _get_rep_conn(self.credentials).cursor()
-            cur.start_replication(
-                slot_name=self.slot_name,
-                start_lsn=self.start_lsn,
-                decode=False,
-                options=self.options,
-            )
-            pub_opts = {
-                "insert": True,
-                "update": True,
-                "delete": True,
-                "truncate": False,
-            }
-            consumer = MessageConsumer(
-                upto_lsn=self.upto_lsn,
-                pub_ops=pub_opts,
-                table_qnames=self.table_qnames,
-                target_batch_size=self.target_batch_size,
-                included_columns=self.included_columns,
-                columns=self.columns,
-            )
-            cur.consume_stream(consumer)
-        except StopReplication:  # completed batch or reached `upto_lsn`
-            pass
-        finally:
-            cur.connection.close()
-            self.last_commit_lsn = consumer.last_commit_lsn
-            for table_name, data_items in consumer.data_items.items():
-                table_schema = consumer.last_table_schema.get(table_name)
-                if table_schema:
-                    assert table_name == table_schema["name"]
-                    yield dlt.mark.with_hints(  # meta item with column hints only, no data
-                        [],
-                        dlt.mark.make_hints(
-                            table_name=table_name, columns=table_schema["columns"]
-                        ),
-                        create_table_variant=True,
-                    )
-                yield dlt.mark.with_table_name(data_items, table_name)
-            self.generated_all = consumer.consumed_all
-
-
-from devtools import debug
-
-
 class MessageConsumer:
     """Consumes messages from a ReplicationCursor sequentially.
 
@@ -412,14 +345,12 @@ class MessageConsumer:
     def __init__(
         self,
         upto_lsn: int,
-        pub_ops: Dict[str, bool],
         table_qnames: Set[str],
         target_batch_size: int = 1000,
         included_columns: Optional[Dict[str, Sequence[str]]] = None,
         columns: Optional[Dict[str, TTableSchemaColumns]] = None,
     ) -> None:
         self.upto_lsn = upto_lsn
-        self.pub_ops = pub_ops
         self.table_qnames = table_qnames
         self.target_batch_size = target_batch_size
         self.included_columns = included_columns or {}
@@ -435,9 +366,9 @@ class MessageConsumer:
         # other attributes only maintain last-seen values
         self.last_table_schema: Dict[
             str, TTableSchema
-        ] = dict()  # maps relation_id to table schema
+        ] = dict()  # maps table name to table schema
         self.last_commit_ts: pendulum.DateTime
-        self.last_commit_lsn = None
+        self.last_commit_lsn: Optional[int] = None
 
     def __call__(self, msg: ReplicationMessage) -> None:
         """Processes message received from stream."""
@@ -458,84 +389,16 @@ class MessageConsumer:
             row_msg.ParseFromString(msg.payload)
             op = row_msg.op
             if op == Op.BEGIN:
-                self.last_commit_ts = convert_pg_ts(row_msg.commit_time)  # type: ignore[assignment]
+                self.last_commit_ts = _convert_db_timestamp(row_msg.commit_time)
             elif op == Op.COMMIT:
-                self.process_commit(msg)
+                self.process_commit(msg.data_start)
             elif op == Op.INSERT:
-                if row_msg.table not in self.table_qnames:
-                    return
-                _, table_name = row_msg.table.split(".")
-                last_table_schema = self.last_table_schema.get(table_name)
-                table_schema = extract_table_schema(
-                    row_msg,
-                    column_hints=self.columns.get(table_name),
-                    included_columns=self.included_columns.get(table_name),
-                )
-                if last_table_schema is None:
-                    self.last_table_schema[table_name] = table_schema
-                elif last_table_schema != table_schema:
-                    raise StopReplication  # table schema change
-                data_item = gen_data_item(
-                    row_msg,
-                    table_schema["columns"],
-                    lsn=msg.data_start,
-                    included_columns=(
-                        None
-                        if self.included_columns is None
-                        else self.included_columns.get(table_name)
-                    ),
-                )
-                self.data_items[table_name].append(data_item)
+                self.process_change(row_msg, msg.data_start)
             elif op == Op.UPDATE:
-                if row_msg.table not in self.table_qnames:
-                    return
-                _, table_name = row_msg.table.split(".")
-                last_table_schema = self.last_table_schema.get(table_name)
-                table_schema = extract_table_schema(
-                    row_msg,
-                    column_hints=self.columns.get(table_name),
-                    included_columns=self.included_columns.get(table_name),
-                )
-                if last_table_schema is None:
-                    self.last_table_schema[table_name] = table_schema
-                elif last_table_schema != table_schema:
-                    raise StopReplication  # table schema change
-                data_item = gen_data_item(
-                    row_msg,
-                    table_schema["columns"],
-                    lsn=msg.data_start,
-                    included_columns=(
-                        None
-                        if self.included_columns is None
-                        else self.included_columns.get(table_name)
-                    ),
-                )
-                self.data_items[table_name].append(data_item)
+                self.process_change(row_msg, msg.data_start)
             elif op == Op.DELETE:
-                if row_msg.table not in self.table_qnames:
-                    return
-                _, table_name = row_msg.table.split(".")
-                data_item = gen_delete_item(
-                    row_msg,
-                    lsn=msg.data_start,
-                    included_columns=(
-                        None
-                        if self.included_columns is None
-                        else self.included_columns.get(table_name)
-                    ),
-                )
-                self.data_items[table_name].append(data_item)
-            # op = msg.payload[:1]
-            # elif op == b"R":
-            #     self.process_relation(Relation(msg.payload))
-            # elif op == b"T":
-            #     logger.warning(
-            #         "The truncate operation is currently not supported. "
-            #         "Truncate replication messages are ignored."
-            #     )
+                self.process_delete(row_msg, msg.data_start)
             else:
-                debug(msg)
-                debug(MessageToDict(row_msg, including_default_value_fields=True))  # type: ignore[call-arg]
                 raise AssertionError(f"Unsupported operation : {row_msg}")
         except StopReplication:
             raise
@@ -545,13 +408,13 @@ class MessageConsumer:
             )
             raise
 
-    def process_commit(self, msg: ReplicationMessage) -> None:
+    def process_commit(self, lsn: int) -> None:
         """Updates object state when Commit message is observed.
 
         Raises StopReplication when `upto_lsn` or `target_batch_size` is reached.
         """
-        self.last_commit_lsn = msg.data_start
-        if msg.data_start >= self.upto_lsn:
+        self.last_commit_lsn = lsn
+        if lsn >= self.upto_lsn:
             self.consumed_all = True
         n_items = sum(
             [len(items) for items in self.data_items.values()]
@@ -559,122 +422,111 @@ class MessageConsumer:
         if self.consumed_all or n_items >= self.target_batch_size:
             raise StopReplication
 
-    # def process_relation(self, decoded_msg: Relation) -> None:
-    #     """Processes a replication message of type Relation.
-    #
-    #     Stores table schema in object state.
-    #     Creates meta item to emit column hints while yielding data.
-    #
-    #     Raises StopReplication when a table's schema changes.
-    #     """
-    #     if (
-    #         self.data_items.get(decoded_msg.relation_id) is not None
-    #     ):  # table schema change
-    #         raise StopReplication
-    #     # get table schema information from source and store in object state
-    #     table_name = decoded_msg.relation_name
-    #     columns: TTableSchemaColumns = {
-    #         c.name: _to_dlt_column_schema(c) for c in decoded_msg.columns
-    #     }
-    #     self.last_table_schema[decoded_msg.relation_id] = {
-    #         "name": table_name,
-    #         "columns": columns,
-    #     }
-    #
-    #     # apply user input
-    #     # 1) exclude columns
-    #     include_columns = (
-    #         None
-    #         if self.include_columns is None
-    #         else self.include_columns.get(table_name)
-    #     )
-    #     if include_columns is not None:
-    #         columns = {k: v for k, v in columns.items() if k in include_columns}
-    #     # 2) override source hints
-    #     column_hints: TTableSchemaColumns = (
-    #         dict() if self.columns is None else self.columns.get(table_name, dict())
-    #     )
-    #     for column_name, column_val in column_hints.items():
-    #         columns[column_name] = merge_column(columns[column_name], column_val)
-    #
-    #     # add hints for replication columns
-    #     columns["lsn"] = {"data_type": "bigint", "nullable": True}
-    #     if self.pub_ops["update"] or self.pub_ops["delete"]:
-    #         columns["lsn"]["dedup_sort"] = "desc"
-    #     if self.pub_ops["delete"]:
-    #         columns["deleted_ts"] = {
-    #             "hard_delete": True,
-    #             "data_type": "timestamp",
-    #             "nullable": True,
-    #         }
-    #
-    #     # determine write disposition
-    #     write_disposition: TWriteDisposition = "append"
-    #     if self.pub_ops["update"] or self.pub_ops["delete"]:
-    #         write_disposition = "merge"
-    #
-    #     # include meta item to emit hints while yielding data
-    #     meta_item = dlt.mark.with_hints(
-    #         [],
-    #         dlt.mark.make_hints(
-    #             table_name=table_name,
-    #             write_disposition=write_disposition,
-    #             columns=columns,
-    #         ),
-    #         create_table_variant=True,
-    #     )
-    #     self.data_items[decoded_msg.relation_id] = [meta_item]
+    def process_change(self, msg: RowMessage, lsn: int) -> None:
+        """Processes replication message of type Insert or Update"""
+        if msg.table not in self.table_qnames:
+            return
+        _, table_name = msg.table.split(".")
+        last_table_schema = self.last_table_schema.get(table_name)
+        table_schema = extract_table_schema(
+            msg,
+            column_hints=self.columns.get(table_name),
+            included_columns=self.included_columns.get(table_name),
+        )
+        if last_table_schema is None:
+            self.last_table_schema[table_name] = table_schema
+        elif last_table_schema != table_schema:
+            raise StopReplication  # table schema change
 
-    # def process_change(
-    #     self, decoded_msg: Union[Insert, Update, Delete], msg_start_lsn: int
-    # ) -> None:
-    #     """Processes replication message of type Insert, Update, or Delete.
-    #
-    #     Adds data item for inserted/updated/deleted record to instance attribute.
-    #     """
-    #     if isinstance(decoded_msg, (Insert, Update)):
-    #         column_data = decoded_msg.new_tuple.column_data
-    #     elif isinstance(decoded_msg, Delete):
-    #         column_data = decoded_msg.old_tuple.column_data
-    #     table_name = self.last_table_schema[decoded_msg.relation_id]["name"]
-    #     data_item = self.gen_data_item(
-    #         data=column_data,
-    #         column_schema=self.last_table_schema[decoded_msg.relation_id]["columns"],
-    #         lsn=msg_start_lsn,
-    #         commit_ts=self.last_commit_ts,
-    #         for_delete=isinstance(decoded_msg, Delete),
-    #         include_columns=(
-    #             None
-    #             if self.include_columns is None
-    #             else self.include_columns.get(table_name)
-    #         ),
-    #     )
-    #     self.data_items[decoded_msg.relation_id].append(data_item)
-    #
-    # @staticmethod
-    # def gen_data_item(
-    #     data: List[ColumnData],
-    #     column_schema: TTableSchemaColumns,
-    #     lsn: int,
-    #     commit_ts: pendulum.DateTime,
-    #     for_delete: bool,
-    #     include_columns: Optional[Sequence[str]] = None,
-    # ) -> TDataItem:
-    #     """Generates data item from replication message data and corresponding metadata."""
-    #     data_item = {
-    #         schema["name"]: _to_dlt_val(
-    #             val=data.col_data,
-    #             data_type=schema["data_type"],
-    #             byte1=data.col_data_category,
-    #             for_delete=for_delete,
-    #         )
-    #         for (schema, data) in zip(column_schema.values(), data)
-    #         if (True if include_columns is None else schema["name"] in include_columns)
-    #     }
-    #     data_item["lsn"] = lsn
-    #     if for_delete:
-    #         data_item["deleted_ts"] = commit_ts
-    #     return data_item
+        data_item = gen_data_item(
+            msg,
+            table_schema["columns"],
+            lsn=lsn,
+            included_columns=(
+                None
+                if self.included_columns is None
+                else self.included_columns.get(table_name)
+            ),
+        )
+        self.data_items[table_name].append(data_item)
+
+    def process_delete(self, msg: RowMessage, lsn: int) -> None:
+        """Processes replication message of type Delete"""
+        if msg.table not in self.table_qnames:
+            return
+        _, table_name = msg.table.split(".")
+        data_item = gen_delete_item(
+            msg,
+            lsn=lsn,
+            included_columns=(
+                None
+                if self.included_columns is None
+                else self.included_columns.get(table_name)
+            ),
+        )
+        self.data_items[table_name].append(data_item)
+
+
+@dataclass
+class ItemGenerator:
+    credentials: ConnectionStringCredentials
+    slot_name: str
+    table_qnames: Set[str]
+    options: Dict[str, str]
+    upto_lsn: int
+    start_lsn: int = 0
+    target_batch_size: int = 1000
+    included_columns: Optional[Dict[str, Sequence[str]]] = None
+    columns: Optional[Dict[str, TTableSchemaColumns]] = None
+    last_commit_lsn: Optional[int] = field(default=None, init=False)
+    generated_all: bool = False
+
+    def __iter__(self) -> Iterator[Union[TDataItem, DataItemWithMeta]]:
+        """Yields replication messages from MessageConsumer.
+
+        Starts replication of messages published by the publication from the replication slot.
+        Maintains LSN of last consumed Commit message in object state.
+        Does not advance the slot.
+        """
+        try:
+            cur = _get_rep_conn(self.credentials).cursor()
+            cur.start_replication(
+                slot_name=self.slot_name,
+                start_lsn=self.start_lsn,
+                decode=False,
+                options=self.options,
+            )
+            consumer = MessageConsumer(
+                upto_lsn=self.upto_lsn,
+                table_qnames=self.table_qnames,
+                target_batch_size=self.target_batch_size,
+                included_columns=self.included_columns,
+                columns=self.columns,
+            )
+            cur.consume_stream(consumer)
+        except StopReplication:  # completed batch or reached `upto_lsn`
+            pass
+        finally:
+            cur.connection.close()
+            yield from self.flush(consumer)
+
+    def flush(
+        self, consumer: MessageConsumer
+    ) -> Iterator[Union[TDataItem, DataItemWithMeta]]:
+        self.last_commit_lsn = consumer.last_commit_lsn
+        for table_name, data_items in consumer.data_items.items():
+            table_schema = consumer.last_table_schema.get(table_name)
+            if table_schema:
+                assert table_name == table_schema["name"]
+                yield dlt.mark.with_hints(  # meta item with column hints only, no data
+                    [],
+                    dlt.mark.make_hints(
+                        table_name=table_name, columns=table_schema["columns"]
+                    ),
+                    create_table_variant=True,
+                )
+            yield dlt.mark.with_table_name(data_items, table_name)
+        self.generated_all = consumer.consumed_all
 
 
 # FIXME Refactor later
@@ -791,33 +643,26 @@ def gen_delete_item(
     lsn: int,
     included_columns: Optional[Sequence[str]] = None,
 ) -> TDataItem:
-    """Generates data item from a `RowMessage` and corresponding metadata."""
+    """Generates DELETE data item from a `RowMessage` and corresponding metadata."""
     assert row_msg.op == Op.DELETE
 
     column_data = row_msg.old_tuple
     type_mapper = _type_mapper()
-    data_item = {}
+    data_item = {"lsn": lsn, "deleted_ts": _convert_db_timestamp(row_msg.commit_time)}
 
     for data in column_data:
-        if included_columns and data.column_name not in included_columns:
+        col_name = data.column_name
+        if included_columns and col_name not in included_columns:
             continue
-        datum_name = data.WhichOneof("datum")
-        if datum_name:
-            data_item[data.column_name] = getattr(data, datum_name)
+        datum = data.WhichOneof("datum")
+        if datum:
+            data_item[col_name] = getattr(data, datum)
         else:
             db_type = _PG_TYPES[data.column_type]
             col_type: TColumnType = type_mapper.from_db_type(db_type)
-            data_item[data.column_name] = _DUMMY_VALS[col_type["data_type"]]
-
-    data_item["lsn"] = lsn
-    data_item["deleted_ts"] = _convert_db_timestamp(row_msg.commit_time)
+            data_item[col_name] = _DUMMY_VALS[col_type["data_type"]]
 
     return data_item
-
-
-def _convert_pg_timestamp(microseconds_since_2000: int) -> pendulum.DateTime:
-    epoch_2000 = pendulum.datetime(2000, 1, 1, tz="UTC")
-    return epoch_2000.add(microseconds=microseconds_since_2000)
 
 
 def _convert_db_timestamp(microseconds_since_1970: int) -> pendulum.DateTime:
