@@ -22,6 +22,7 @@ from psycopg2.extras import (
 import dlt
 
 from dlt.common import logger
+from dlt.common.data_types import coerce_value
 from dlt.common.typing import TDataItem
 from dlt.common.pendulum import pendulum
 from dlt.common.schema.typing import (
@@ -50,8 +51,7 @@ from .decoders import (
 
 from sqlalchemy import Connection as ConnectionSqla, Engine, event
 
-from .pg_logicaldec_pb2 import Op, RowMessage
-from .schema_types import _to_dlt_column_schema, _to_dlt_val
+from .pg_logicaldec_pb2 import DatumMessage, Op, RowMessage
 from .exceptions import SqlDatabaseSourceImportError
 from google.protobuf.json_format import MessageToDict
 from collections import defaultdict
@@ -357,18 +357,12 @@ class MessageConsumer:
         self.columns = columns or {}
 
         self.consumed_all: bool = False
-        # data_items attribute maintains all data items
-        self.data_items: Dict[
-            str, List[Union[TDataItem, DataItemWithMeta]]
-        ] = defaultdict(
-            list
-        )  # maps qualified table names to list of data items
-        # other attributes only maintain last-seen values
-        self.last_table_schema: Dict[
-            str, TTableSchema
-        ] = dict()  # maps table name to table schema
+        # maps table names to list of data items
+        self.data_items: Dict[str, List[TDataItem]] = defaultdict(list)
+        # maps table name to table schema
+        self.last_table_schema: Dict[str, TTableSchema] = dict()
         self.last_commit_ts: pendulum.DateTime
-        self.last_commit_lsn: Optional[int] = None
+        self.last_commit_lsn: int
 
     def __call__(self, msg: ReplicationMessage) -> None:
         """Processes message received from stream."""
@@ -388,16 +382,17 @@ class MessageConsumer:
         try:
             row_msg.ParseFromString(msg.payload)
             op = row_msg.op
+            lsn = msg.data_start
             if op == Op.BEGIN:
-                self.last_commit_ts = _convert_db_timestamp(row_msg.commit_time)
+                self.last_commit_ts = epoch_micros_to_datetime(row_msg.commit_time)
             elif op == Op.COMMIT:
-                self.process_commit(msg.data_start)
+                self.process_commit(lsn)
             elif op == Op.INSERT:
-                self.process_change(row_msg, msg.data_start)
+                self.process_change(row_msg, lsn)
             elif op == Op.UPDATE:
-                self.process_change(row_msg, msg.data_start)
+                self.process_change(row_msg, lsn)
             elif op == Op.DELETE:
-                self.process_delete(row_msg, msg.data_start)
+                self.process_delete(row_msg, lsn)
             else:
                 raise AssertionError(f"Unsupported operation : {row_msg}")
         except StopReplication:
@@ -439,7 +434,7 @@ class MessageConsumer:
             raise StopReplication  # table schema change
 
         data_item = gen_data_item(
-            msg,
+            msg.new_tuple,
             table_schema["columns"],
             lsn=lsn,
             included_columns=(
@@ -456,7 +451,8 @@ class MessageConsumer:
             return
         _, table_name = msg.table.split(".")
         data_item = gen_delete_item(
-            msg,
+            msg.old_tuple,
+            msg.commit_time,
             lsn=lsn,
             included_columns=(
                 None
@@ -531,13 +527,23 @@ class ItemGenerator:
 
 # FIXME Refactor later
 from .schema_types import _PG_TYPES, _type_mapper, _DUMMY_VALS
-from dlt.common.schema.typing import TColumnType, TColumnSchema
+from dlt.common.schema.typing import TColumnType, TColumnSchema, TDataType
 
 _DATUM_PRECISIONS: Dict[str, int] = {
     "datum_int32": 32,
     "datum_int64": 64,
     "datum_float": 32,
     "datum_double": 64,
+}
+
+_DATUM_RAW_TYPES: Dict[str, TDataType] = {
+    "datum_int32": "bigint",
+    "datum_int64": "bigint",
+    "datum_float": "double",
+    "datum_double": "double",
+    "datum_bool": "bool",
+    "datum_string": "text",
+    "datum_bytes": "binary",
 }
 """TODO: Add comment here"""
 
@@ -618,39 +624,57 @@ def extract_table_schema(
 
 
 def gen_data_item(
-    row_msg: RowMessage,
+    row: Sequence[DatumMessage],
     column_schema: TTableSchemaColumns,
     *,
     lsn: int,
     included_columns: Optional[Sequence[str]] = None,
 ) -> TDataItem:
-    """Generates data item from a `RowMessage` and corresponding metadata."""
-    assert row_msg.op in (Op.INSERT, Op.UPDATE)
-    data_item = {"lsn": lsn}
-    for data in row_msg.new_tuple:
-        if included_columns and data.column_name not in included_columns:
+    """Generates data item from a row and corresponding metadata."""
+    data_item: TDataItem = {"lsn": lsn}
+    for data in row:
+        col_name = data.column_name
+        col_schema = column_schema[col_name]
+        if included_columns and col_name not in included_columns:
             continue
         datum = data.WhichOneof("datum")
-        assert datum or column_schema[data.column_name]["nullable"]
-        data_item[data.column_name] = getattr(data, datum) if datum else None
+        assert datum or col_schema["nullable"]
+        if datum is None:
+            data_item[col_name] = None
+        else:
+            raw_value = getattr(data, datum)
+            data_type = col_schema["data_type"]
+            if data_type == "date":
+                data_item[col_name] = epoch_days_to_date(raw_value)
+            elif data_type == "time":
+                data_item[col_name] = microseconds_to_time(raw_value)
+            elif data_type == "timestamp":
+                data_item[col_name] = epoch_micros_to_datetime(raw_value)
+            else:
+                data_item[col_name] = coerce_value(
+                    to_type=col_schema["data_type"],
+                    from_type=_DATUM_RAW_TYPES[datum],
+                    value=raw_value,
+                )
 
     return data_item
 
 
 def gen_delete_item(
-    row_msg: RowMessage,
+    row: Sequence[DatumMessage],
+    commit_time: int,
     *,
     lsn: int,
     included_columns: Optional[Sequence[str]] = None,
 ) -> TDataItem:
-    """Generates DELETE data item from a `RowMessage` and corresponding metadata."""
-    assert row_msg.op == Op.DELETE
-
-    column_data = row_msg.old_tuple
+    """Generates DELETE data item from a row and corresponding metadata."""
     type_mapper = _type_mapper()
-    data_item = {"lsn": lsn, "deleted_ts": _convert_db_timestamp(row_msg.commit_time)}
+    data_item: TDataItem = {
+        "lsn": lsn,
+        "deleted_ts": epoch_micros_to_datetime(commit_time),
+    }
 
-    for data in column_data:
+    for data in row:
         col_name = data.column_name
         if included_columns and col_name not in included_columns:
             continue
@@ -665,5 +689,13 @@ def gen_delete_item(
     return data_item
 
 
-def _convert_db_timestamp(microseconds_since_1970: int) -> pendulum.DateTime:
-    return pendulum.from_timestamp(microseconds_since_1970 / 1_000_000, tz="UTC")
+def epoch_micros_to_datetime(microseconds_since_1970: int) -> pendulum.DateTime:
+    return pendulum.from_timestamp(microseconds_since_1970 / 1_000_000)
+
+
+def microseconds_to_time(microseconds: int) -> pendulum.Time:
+    return pendulum.Time(0).add(microseconds=microseconds)
+
+
+def epoch_days_to_date(epoch_days: int) -> pendulum.Date:
+    return pendulum.Date(1970, 1, 1).add(days=epoch_days)

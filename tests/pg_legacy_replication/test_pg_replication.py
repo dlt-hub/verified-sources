@@ -267,11 +267,16 @@ def test_mapped_data_types(
         columns={"items": column_schema} if give_hints else None,
     )
 
+    if give_hints:
+        column_schema["col1"]["primary_key"] = True
+    else:
+        column_schema = {"col1": {"primary_key": True}}
+
     changes = replication_resource(
         slot_name=slot_name,
         schema=src_pl.dataset_name,
         table_names=("items",),
-        columns={"items": column_schema} if give_hints else None,
+        columns={"items": column_schema},
     )
 
     # initial load
