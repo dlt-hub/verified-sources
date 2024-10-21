@@ -37,7 +37,7 @@ from dlt.extract.items import DataItemWithMeta
 from dlt.extract.resource import DltResource
 from dlt.sources.credentials import ConnectionStringCredentials
 
-from .schema_types import _to_dlt_column_schema, _to_dlt_val
+from .schema_types import _epoch_micros_to_datetime, _to_dlt_column_schema, _to_dlt_val
 from .exceptions import IncompatiblePostgresVersionException
 from .decoders import (
     Begin,
@@ -384,7 +384,7 @@ class MessageConsumer:
             op = row_msg.op
             lsn = msg.data_start
             if op == Op.BEGIN:
-                self.last_commit_ts = epoch_micros_to_datetime(row_msg.commit_time)
+                self.last_commit_ts = _epoch_micros_to_datetime(row_msg.commit_time)
             elif op == Op.COMMIT:
                 self.process_commit(lsn)
             elif op == Op.INSERT:
@@ -435,14 +435,14 @@ class MessageConsumer:
 
         data_item = gen_data_item(
             msg.new_tuple,
-            table_schema["columns"],
-            lsn=lsn,
+            column_schema=table_schema["columns"],
             included_columns=(
                 None
                 if self.included_columns is None
                 else self.included_columns.get(table_name)
             ),
         )
+        data_item["lsn"] = lsn
         self.data_items[table_name].append(data_item)
 
     def process_delete(self, msg: RowMessage, lsn: int) -> None:
@@ -450,16 +450,17 @@ class MessageConsumer:
         if msg.table not in self.table_qnames:
             return
         _, table_name = msg.table.split(".")
-        data_item = gen_delete_item(
+        data_item = gen_data_item(
             msg.old_tuple,
-            msg.commit_time,
-            lsn=lsn,
+            for_delete=True,
             included_columns=(
                 None
                 if self.included_columns is None
                 else self.included_columns.get(table_name)
             ),
         )
+        data_item["lsn"] = lsn
+        data_item["deleted_ts"] = _epoch_micros_to_datetime(msg.commit_time)
         self.data_items[table_name].append(data_item)
 
 
@@ -535,17 +536,6 @@ _DATUM_PRECISIONS: Dict[str, int] = {
     "datum_float": 32,
     "datum_double": 64,
 }
-
-_DATUM_RAW_TYPES: Dict[str, TDataType] = {
-    "datum_int32": "bigint",
-    "datum_int64": "bigint",
-    "datum_float": "double",
-    "datum_double": "double",
-    "datum_bool": "bool",
-    "datum_string": "text",
-    "datum_bytes": "binary",
-}
-"""TODO: Add comment here"""
 
 
 def extract_table_schema(
@@ -625,77 +615,21 @@ def extract_table_schema(
 
 def gen_data_item(
     row: Sequence[DatumMessage],
-    column_schema: TTableSchemaColumns,
     *,
-    lsn: int,
     included_columns: Optional[Sequence[str]] = None,
+    column_schema: Optional[TTableSchemaColumns] = None,
+    for_delete: bool = False,
 ) -> TDataItem:
     """Generates data item from a row and corresponding metadata."""
-    data_item: TDataItem = {"lsn": lsn}
-    for data in row:
-        col_name = data.column_name
-        col_schema = column_schema[col_name]
-        if included_columns and col_name not in included_columns:
-            continue
-        datum = data.WhichOneof("datum")
-        assert datum or col_schema["nullable"]
-        if datum is None:
-            data_item[col_name] = None
-        else:
-            raw_value = getattr(data, datum)
-            data_type = col_schema["data_type"]
-            if data_type == "date":
-                data_item[col_name] = epoch_days_to_date(raw_value)
-            elif data_type == "time":
-                data_item[col_name] = microseconds_to_time(raw_value)
-            elif data_type == "timestamp":
-                data_item[col_name] = epoch_micros_to_datetime(raw_value)
-            else:
-                data_item[col_name] = coerce_value(
-                    to_type=col_schema["data_type"],
-                    from_type=_DATUM_RAW_TYPES[datum],
-                    value=raw_value,
-                )
-
-    return data_item
-
-
-def gen_delete_item(
-    row: Sequence[DatumMessage],
-    commit_time: int,
-    *,
-    lsn: int,
-    included_columns: Optional[Sequence[str]] = None,
-) -> TDataItem:
-    """Generates DELETE data item from a row and corresponding metadata."""
-    type_mapper = _type_mapper()
-    data_item: TDataItem = {
-        "lsn": lsn,
-        "deleted_ts": epoch_micros_to_datetime(commit_time),
-    }
+    data_item: TDataItem = {}
 
     for data in row:
         col_name = data.column_name
         if included_columns and col_name not in included_columns:
             continue
-        datum = data.WhichOneof("datum")
-        if datum:
-            data_item[col_name] = getattr(data, datum)
-        else:
-            db_type = _PG_TYPES[data.column_type]
-            col_type: TColumnType = type_mapper.from_db_type(db_type)
-            data_item[col_name] = _DUMMY_VALS[col_type["data_type"]]
+        data_type = (
+            column_schema[col_name]["data_type"] if column_schema else data.column_type
+        )
+        data_item[col_name] = _to_dlt_val(data, data_type, for_delete=for_delete)
 
     return data_item
-
-
-def epoch_micros_to_datetime(microseconds_since_1970: int) -> pendulum.DateTime:
-    return pendulum.from_timestamp(microseconds_since_1970 / 1_000_000)
-
-
-def microseconds_to_time(microseconds: int) -> pendulum.Time:
-    return pendulum.Time(0).add(microseconds=microseconds)
-
-
-def epoch_days_to_date(epoch_days: int) -> pendulum.Date:
-    return pendulum.Date(1970, 1, 1).add(days=epoch_days)

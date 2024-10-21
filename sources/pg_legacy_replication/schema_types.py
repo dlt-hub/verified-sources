@@ -1,6 +1,7 @@
 from functools import lru_cache
 import json
-from typing import Optional, Any, Dict
+import pendulum
+from typing import Optional, Any, Dict, Callable, Union
 
 from dlt.common import Decimal
 from dlt.common.data_types.typing import TDataType
@@ -8,7 +9,7 @@ from dlt.common.data_types.type_helpers import coerce_value
 from dlt.common.schema.typing import TColumnSchema, TColumnType
 
 from .decoders import ColumnType
-
+from .pg_logicaldec_pb2 import DatumMessage
 
 _DUMMY_VALS: Dict[TDataType, Any] = {
     "bigint": 0,
@@ -25,7 +26,6 @@ _DUMMY_VALS: Dict[TDataType, Any] = {
 }
 """Dummy values used to replace NULLs in NOT NULL columns in key-only delete records."""
 
-
 _PG_TYPES: Dict[int, str] = {
     16: "boolean",
     17: "bytea",
@@ -41,6 +41,17 @@ _PG_TYPES: Dict[int, str] = {
     3802: "jsonb",
 }
 """Maps postgres type OID to type string. Only includes types present in PostgresTypeMapper."""
+
+_DATUM_RAW_TYPES: Dict[str, TDataType] = {
+    "datum_int32": "bigint",
+    "datum_int64": "bigint",
+    "datum_float": "double",
+    "datum_double": "double",
+    "datum_bool": "bool",
+    "datum_string": "text",
+    "datum_bytes": "binary",
+}
+"""Maps decoderbuf's datum msg type to dlt type."""
 
 
 def _get_precision(type_id: int, atttypmod: int) -> Optional[int]:
@@ -109,21 +120,43 @@ def _to_dlt_column_schema(col: ColumnType) -> TColumnSchema:
     return {**dlt_column_type, **partial_column_schema}  # type: ignore[typeddict-item]
 
 
-def _to_dlt_val(val: str, data_type: TDataType, byte1: str, for_delete: bool) -> Any:
-    """Converts pgoutput's text-formatted value into dlt-compatible data value."""
-    if byte1 == "n":
-        if for_delete:
-            # replace None with dummy value to prevent NOT NULL violations in staging table
-            return _DUMMY_VALS[data_type]
-        return None
-    elif byte1 == "t":
-        if data_type == "binary":
-            # https://www.postgresql.org/docs/current/datatype-binary.html#DATATYPE-BINARY-BYTEA-HEX-FORMAT
-            return bytes.fromhex(val.replace("\\x", ""))
-        elif data_type == "complex":
-            return json.loads(val)
-        return coerce_value(data_type, "text", val)
-    else:
-        raise ValueError(
-            f"Byte1 in replication message must be 'n' or 't', not '{byte1}'."
-        )
+def _epoch_micros_to_datetime(microseconds_since_1970: int) -> pendulum.DateTime:
+    return pendulum.from_timestamp(microseconds_since_1970 / 1_000_000)
+
+
+def _microseconds_to_time(microseconds: int) -> pendulum.Time:
+    return pendulum.Time(0).add(microseconds=microseconds)
+
+
+def _epoch_days_to_date(epoch_days: int) -> pendulum.Date:
+    return pendulum.Date(1970, 1, 1).add(days=epoch_days)
+
+
+data_type_handlers: Dict[TDataType, Callable[[Any], Any]] = {
+    "date": _epoch_days_to_date,
+    "time": _microseconds_to_time,
+    "timestamp": _epoch_micros_to_datetime,
+}
+
+
+def _to_dlt_val(
+    val: DatumMessage, data_type: Union[TDataType, int], *, for_delete: bool = False
+) -> Any:
+    """Converts decoderbuf's datum value into dlt-compatible data value."""
+    if isinstance(data_type, int):
+        col_type: TColumnType = _type_mapper().from_db_type(_PG_TYPES[data_type])
+        data_type = col_type["data_type"]
+
+    datum = val.WhichOneof("datum")
+    if datum is None:
+        return _DUMMY_VALS[data_type] if for_delete else None
+
+    raw_value = getattr(val, datum)
+    if data_type in data_type_handlers:
+        return data_type_handlers[data_type](raw_value)
+
+    return coerce_value(
+        to_type=data_type,
+        from_type=_DATUM_RAW_TYPES[datum],
+        value=raw_value,
+    )

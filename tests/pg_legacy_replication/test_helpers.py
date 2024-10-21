@@ -10,7 +10,6 @@ from google.protobuf.json_format import ParseDict as parse_dict
 from sources.pg_legacy_replication.helpers import (
     extract_table_schema,
     gen_data_item,
-    gen_delete_item,
 )
 from sources.pg_legacy_replication.pg_logicaldec_pb2 import RowMessage
 
@@ -157,7 +156,6 @@ LSN = random.randint(0, 10000)
                 "_dlt_id": "gGjifTMTAUs5ag",
                 "_dlt_load_id": "1728662646.2657657",
                 "id_y": 2,
-                "lsn": LSN,
                 "val_y": False,
             },
         ),
@@ -200,7 +198,6 @@ LSN = random.randint(0, 10000)
                 ],
             },
             {
-                "lsn": LSN,
                 "col4": pendulum.parse("2022-05-23T13:26:45.176451+00:00"),
                 "col9": {
                     "complex": [1, 2, 3, "a"],
@@ -218,10 +215,8 @@ LSN = random.randint(0, 10000)
 def test_gen_data_item(data, data_item: TDataItem):
     row_msg = RowMessage()
     parse_dict(data, row_msg)
-    table_schema = extract_table_schema(row_msg)
-    assert (
-        gen_data_item(row_msg.new_tuple, table_schema["columns"], lsn=LSN) == data_item
-    )
+    column_schema = extract_table_schema(row_msg)["columns"]
+    assert gen_data_item(row_msg.new_tuple, column_schema=column_schema) == data_item
 
 
 @pytest.mark.parametrize(
@@ -253,18 +248,11 @@ def test_gen_data_item(data, data_item: TDataItem):
                     },
                 ],
             },
-            {
-                "id_x": 1,
-                "val_x": "",
-                "_dlt_load_id": "",
-                "_dlt_id": "",
-                "lsn": LSN,
-                "deleted_ts": pendulum.parse("2024-10-19T00:56:23.354856+00:00"),
-            },
+            {"id_x": 1, "val_x": "", "_dlt_load_id": "", "_dlt_id": ""},
         ),
     ],
 )
 def test_gen_delete_item(data, data_item: TDataItem):
     row_msg = RowMessage()
     parse_dict(data, row_msg)
-    assert gen_delete_item(row_msg.old_tuple, row_msg.commit_time, lsn=LSN) == data_item
+    assert gen_data_item(row_msg.old_tuple, for_delete=True) == data_item
