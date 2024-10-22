@@ -205,7 +205,7 @@ def replicate_with_column_selection() -> None:
     changes = replication_resource(
         slot_name=slot_name,
         included_columns={
-            "tbl_x": ("c1", "c2")
+            "tbl_x": ["c1", "c2"]
         },  # columns not specified here are excluded from generated data items
     )
 

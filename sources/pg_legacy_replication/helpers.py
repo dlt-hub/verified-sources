@@ -16,6 +16,7 @@ import psycopg2
 from dlt.common import logger
 from dlt.common.pendulum import pendulum
 from dlt.common.schema.typing import (
+    TColumnNames,
     TTableSchema,
     TTableSchemaColumns,
 )
@@ -42,10 +43,10 @@ from .schema_types import _epoch_micros_to_datetime, _to_dlt_column_schema, _to_
 def init_replication(
     slot_name: str,
     schema: str = dlt.config.value,
-    table_names: Sequence[str] = dlt.config.value,
+    table_names: List[str] = dlt.config.value,
     credentials: ConnectionStringCredentials = dlt.secrets.value,
     take_snapshots: bool = False,
-    included_columns: Optional[Dict[str, Sequence[str]]] = None,
+    included_columns: Optional[Dict[str, TColumnNames]] = None,
     columns: Optional[Dict[str, TTableSchemaColumns]] = None,
     reset: bool = False,
 ) -> Optional[List[DltResource]]:
@@ -162,7 +163,7 @@ def _prepare_snapshot_resource(
     table_name: str,
     schema: str,
     *,
-    included_columns: Optional[Sequence[str]] = None,
+    included_columns: Optional[TColumnNames] = None,
     columns: Optional[TTableSchemaColumns] = None,
 ) -> DltResource:
     t_rsrc: DltResource = sql_table(  # type: ignore[name-defined]
@@ -328,13 +329,20 @@ class MessageConsumer:
         upto_lsn: int,
         table_qnames: Set[str],
         target_batch_size: int = 1000,
-        included_columns: Optional[Dict[str, Sequence[str]]] = None,
+        included_columns: Optional[Dict[str, TColumnNames]] = None,
         columns: Optional[Dict[str, TTableSchemaColumns]] = None,
     ) -> None:
         self.upto_lsn = upto_lsn
         self.table_qnames = table_qnames
         self.target_batch_size = target_batch_size
-        self.included_columns = included_columns or {}
+        self.included_columns = (
+            {
+                table_name: _normalize_included_columns(columns)
+                for table_name, columns in included_columns.items()
+            }
+            if included_columns
+            else {}
+        )
         self.columns = columns or {}
 
         self.consumed_all: bool = False
@@ -404,7 +412,7 @@ class MessageConsumer:
             return
         _, table_name = msg.table.split(".")
         last_table_schema = self.last_table_schema.get(table_name)
-        table_schema = extract_table_schema(
+        table_schema = infer_table_schema(
             msg,
             column_hints=self.columns.get(table_name),
             included_columns=self.included_columns.get(table_name),
@@ -417,11 +425,7 @@ class MessageConsumer:
         data_item = gen_data_item(
             msg.new_tuple,
             column_schema=table_schema["columns"],
-            included_columns=(
-                None
-                if self.included_columns is None
-                else self.included_columns.get(table_name)
-            ),
+            included_columns=self.included_columns.get(table_name),
         )
         data_item["lsn"] = lsn
         self.data_items[table_name].append(data_item)
@@ -434,11 +438,7 @@ class MessageConsumer:
         data_item = gen_data_item(
             msg.old_tuple,
             for_delete=True,
-            included_columns=(
-                None
-                if self.included_columns is None
-                else self.included_columns.get(table_name)
-            ),
+            included_columns=self.included_columns.get(table_name),
         )
         data_item["lsn"] = lsn
         data_item["deleted_ts"] = _epoch_micros_to_datetime(msg.commit_time)
@@ -454,7 +454,7 @@ class ItemGenerator:
     upto_lsn: int
     start_lsn: int = 0
     target_batch_size: int = 1000
-    included_columns: Optional[Dict[str, Sequence[str]]] = None
+    included_columns: Optional[Dict[str, TColumnNames]] = None
     columns: Optional[Dict[str, TTableSchemaColumns]] = None
     last_commit_lsn: Optional[int] = field(default=None, init=False)
     generated_all: bool = False
@@ -507,53 +507,43 @@ class ItemGenerator:
         self.generated_all = consumer.consumed_all
 
 
-# FIXME Refactor later
-
-_DATUM_PRECISIONS: Dict[str, int] = {
-    "datum_int32": 32,
-    "datum_int64": 64,
-    "datum_float": 32,
-    "datum_double": 64,
-}
-
-
-def extract_table_schema(
-    row_msg: RowMessage,
+def infer_table_schema(
+    msg: RowMessage,
     *,
     column_hints: Optional[TTableSchemaColumns] = None,
-    included_columns: Optional[Sequence[str]] = None,
+    included_columns: Optional[Set[str]] = None,
 ) -> TTableSchema:
+    """Infers the table schema from the replication message and optional hints"""
     columns: TTableSchemaColumns = {
-        "lsn": {
-            "data_type": "bigint",
-            "nullable": True,
-            "dedup_sort": "desc",
-        },
-        "deleted_ts": {
-            "data_type": "timestamp",
-            "nullable": True,
-            "hard_delete": True,
-        },
-    }
-    for col, col_info in zip(row_msg.new_tuple, row_msg.new_typeinfo):
-        col_name = col.column_name
-        if included_columns and col_name not in included_columns:
-            continue
-        col_schema = _to_dlt_column_schema(col, col_info)
-        columns[col_name] = (
-            merge_column(col_schema, column_hints.get(col_name))
-            if column_hints and column_hints.get(col_name)
-            else col_schema
+        col.column_name: (
+            merge_column(
+                _to_dlt_column_schema(col, col_info),
+                column_hints.get(col.column_name),
+            )
+            if column_hints and col.column_name in column_hints
+            else _to_dlt_column_schema(col, col_info)
         )
+        for col, col_info in zip(msg.new_tuple, msg.new_typeinfo)
+        if not included_columns or col.column_name in included_columns
+    }
 
-    _, table_name = row_msg.table.split(".")
-    return {"name": table_name, "columns": columns}
+    columns["lsn"] = {"data_type": "bigint", "nullable": True, "dedup_sort": "desc"}
+    columns["deleted_ts"] = {
+        "data_type": "timestamp",
+        "nullable": True,
+        "hard_delete": True,
+    }
+
+    return {
+        "name": msg.table.split(".")[1],
+        "columns": columns,
+    }
 
 
 def gen_data_item(
     row: Sequence[DatumMessage],
     *,
-    included_columns: Optional[Sequence[str]] = None,
+    included_columns: Optional[Set[str]] = None,
     column_schema: Optional[TTableSchemaColumns] = None,
     for_delete: bool = False,
 ) -> TDataItem:
@@ -570,3 +560,15 @@ def gen_data_item(
         data_item[col_name] = _to_dlt_val(data, data_type, for_delete=for_delete)
 
     return data_item
+
+
+def _normalize_included_columns(
+    included_columns: Optional[TColumnNames],
+) -> Optional[Set[str]]:
+    if included_columns is None:
+        return None
+    return (
+        {included_columns}
+        if isinstance(included_columns, str)
+        else set(included_columns)
+    )

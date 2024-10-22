@@ -8,7 +8,7 @@ from dlt.common.typing import TDataItem
 from google.protobuf.json_format import ParseDict as parse_dict
 
 from sources.pg_legacy_replication.helpers import (
-    extract_table_schema,
+    infer_table_schema,
     gen_data_item,
 )
 from sources.pg_legacy_replication.pg_logicaldec_pb2 import RowMessage
@@ -88,14 +88,14 @@ from sources.pg_legacy_replication.pg_logicaldec_pb2 import RowMessage
         },
     ],
 )
-def test_extract_table_schema(
+def test_infer_table_schema(
     data,
     column_hints: Optional[TTableSchemaColumns],
     expected_schema: TTableSchema,
 ):
     row_msg = RowMessage()
     parse_dict(data, row_msg)
-    assert extract_table_schema(row_msg, column_hints=column_hints) == expected_schema
+    assert infer_table_schema(row_msg, column_hints=column_hints) == expected_schema
 
 
 LSN = random.randint(0, 10000)
@@ -215,7 +215,7 @@ LSN = random.randint(0, 10000)
 def test_gen_data_item(data, data_item: TDataItem):
     row_msg = RowMessage()
     parse_dict(data, row_msg)
-    column_schema = extract_table_schema(row_msg)["columns"]
+    column_schema = infer_table_schema(row_msg)["columns"]
     assert gen_data_item(row_msg.new_tuple, column_schema=column_schema) == data_item
 
 

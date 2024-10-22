@@ -1,28 +1,21 @@
-import pytest
-
-from typing import Dict, Set, Sequence, Tuple
 from copy import deepcopy
-from psycopg2.errors import InsufficientPrivilege
+from typing import Dict, Set, Tuple
 
 import dlt
+import pytest
 from dlt.destinations.job_client_impl import SqlJobClientBase
 
-from tests.utils import (
-    ALL_DESTINATIONS,
-    assert_load_info,
-    load_table_counts,
-    get_table_metrics,
-)
 from sources.pg_legacy_replication import replication_resource
 from sources.pg_legacy_replication.helpers import (
     init_replication,
     get_pg_version,
     cleanup_snapshot_resources,
 )
-from sources.pg_legacy_replication.exceptions import (
-    IncompatiblePostgresVersionException,
+from tests.utils import (
+    ALL_DESTINATIONS,
+    assert_load_info,
+    load_table_counts,
 )
-
 from .cases import TABLE_ROW_ALL_DATA_TYPES, TABLE_UPDATE_COLUMNS_SCHEMA
 from .utils import add_pk, assert_loaded_data, is_super_user
 
@@ -394,44 +387,9 @@ def test_unmapped_data_types(
     assert columns["uuid_col"]["data_type"] == "text"
 
 
-@pytest.mark.parametrize("publish", ["insert", "insert, update, delete"])
-def test_write_disposition(src_config: Tuple[dlt.Pipeline, str], publish: str) -> None:
-    @dlt.resource
-    def items(data):
-        yield data
-
-    src_pl, slot_name = src_config
-
-    # create postgres table
-    src_pl.run(items({"id": 1, "val": True}))
-
-    # create resources
-    snapshot = init_replication(
-        slot_name=slot_name,
-        schema=src_pl.dataset_name,
-        table_names="items",
-        publish=publish,
-        take_snapshots=True,
-    )
-
-    # assert write disposition on snapshot resource
-    expected_write_disposition = "append" if publish == "insert" else "merge"
-    assert snapshot.write_disposition == expected_write_disposition
-
-    # assert write disposition on tables dispatched by changes resource
-    changes = replication_resource(slot_name)
-    src_pl.run(items({"id": 2, "val": True}))
-    dest_pl = dlt.pipeline(pipeline_name="dest_pl", dev_mode=True)
-    dest_pl.extract(changes)
-    assert (
-        dest_pl.default_schema.get_table("items")["write_disposition"]
-        == expected_write_disposition
-    )
-
-
 @pytest.mark.parametrize("destination_name", ALL_DESTINATIONS)
 @pytest.mark.parametrize("init_load", [True, False])
-def test_include_columns(
+def test_included_columns(
     src_config: Tuple[dlt.Pipeline, str], destination_name: str, init_load: bool
 ) -> None:
     def get_cols(pipeline: dlt.Pipeline, table_name: str) -> set:
@@ -467,20 +425,24 @@ def test_include_columns(
     )
 
     # initialize replication and create resources
-    include_columns: Dict[str, Sequence[str]] = {
-        "tbl_x": ["id_x", "val_x"],
-        "tbl_y": ["id_y", "val_y"],
+    included_columns: Dict[str, Set[str]] = {
+        "tbl_x": {"id_x", "val_x"},
+        "tbl_y": {"id_y", "val_y"},
         # tbl_z is not specified, hence all columns should be included
     }
     snapshots = init_replication(
         slot_name=slot_name,
         schema=src_pl.dataset_name,
         table_names=("tbl_x", "tbl_y", "tbl_z"),
-        publish="insert",
         take_snapshots=init_load,
-        include_columns=include_columns,
+        included_columns=included_columns,
     )
-    changes = replication_resource(slot_name=slot_name, include_columns=include_columns)
+    changes = replication_resource(
+        slot_name=slot_name,
+        schema=src_pl.dataset_name,
+        table_names=("tbl_x", "tbl_y", "tbl_z"),
+        included_columns=included_columns,
+    )
 
     # update three postgres tables
     src_pl.run(
@@ -501,9 +463,15 @@ def test_include_columns(
         assert get_cols(dest_pl, "tbl_y") == {"id_y", "val_y"}
         assert get_cols(dest_pl, "tbl_z") == {"id_z", "val_z", "another_col_z"}
     dest_pl.run(changes)
-    assert get_cols(dest_pl, "tbl_x") == {"id_x", "val_x", "lsn"}
-    assert get_cols(dest_pl, "tbl_y") == {"id_y", "val_y", "lsn"}
-    assert get_cols(dest_pl, "tbl_z") == {"id_z", "val_z", "another_col_z", "lsn"}
+    assert get_cols(dest_pl, "tbl_x") == {"id_x", "val_x", "lsn", "deleted_ts"}
+    assert get_cols(dest_pl, "tbl_y") == {"id_y", "val_y", "lsn", "deleted_ts"}
+    assert get_cols(dest_pl, "tbl_z") == {
+        "id_z",
+        "val_z",
+        "another_col_z",
+        "lsn",
+        "deleted_ts",
+    }
 
 
 @pytest.mark.parametrize("destination_name", ALL_DESTINATIONS)
@@ -544,11 +512,15 @@ def test_column_hints(
         slot_name=slot_name,
         schema=src_pl.dataset_name,
         table_names=("tbl_x", "tbl_y", "tbl_z"),
-        publish="insert",
         take_snapshots=init_load,
         columns=column_hints,
     )
-    changes = replication_resource(slot_name=slot_name, columns=column_hints)
+    changes = replication_resource(
+        slot_name=slot_name,
+        schema=src_pl.dataset_name,
+        table_names=("tbl_x", "tbl_y", "tbl_z"),
+        columns=column_hints,
+    )
 
     # update three postgres tables
     src_pl.run(
@@ -622,12 +594,15 @@ def test_table_schema_change(
     init_replication(
         slot_name=slot_name,
         schema=src_pl.dataset_name,
-        table_names="items",
-        publish="insert",
+        table_names=("items",),
     )
 
     # create resource and pipeline
-    changes = replication_resource(slot_name)
+    changes = replication_resource(
+        slot_name=slot_name,
+        schema=src_pl.dataset_name,
+        table_names=("items",),
+    )
     dest_pl = dlt.pipeline(
         pipeline_name="dest_pl", destination=destination_name, dev_mode=True
     )
@@ -727,9 +702,14 @@ def test_batching(src_config: Tuple[dlt.Pipeline, str]) -> None:
     init_replication(
         slot_name=slot_name,
         schema=src_pl.dataset_name,
-        table_names="items",
+        table_names=["items"],
     )
-    changes = replication_resource(slot_name, target_batch_size=50)
+    changes = replication_resource(
+        slot_name=slot_name,
+        schema=src_pl.dataset_name,
+        table_names=["items"],
+        target_batch_size=50,
+    )
 
     # create destination pipeline and resource
     dest_pl = dlt.pipeline(pipeline_name="dest_pl", dev_mode=True)

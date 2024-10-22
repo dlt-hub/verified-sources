@@ -1,11 +1,3 @@
-class NoPrimaryKeyException(Exception):
-    pass
-
-
-class IncompatiblePostgresVersionException(Exception):
-    pass
-
-
 class SqlDatabaseSourceImportError(Exception):
     def __init__(self) -> None:
         super().__init__(
