@@ -368,10 +368,13 @@ def test_unmapped_data_types(
     init_replication(
         slot_name=slot_name,
         schema=src_pl.dataset_name,
-        table_names="data_types",
-        publish="insert",
+        table_names=("data_types",),
     )
-    changes = replication_resource(slot_name)
+    changes = replication_resource(
+        slot_name=slot_name,
+        schema=src_pl.dataset_name,
+        table_names=("data_types",),
+    )
 
     # insert record in source table to create replication item
     with src_pl.sql_client() as c:

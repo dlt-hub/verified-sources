@@ -1,15 +1,14 @@
+import re
 from functools import lru_cache
-import json
-import pendulum
-from typing import Optional, Any, Dict, Callable, Union
+from typing import Optional, Any, Dict, Callable, Union, Tuple
 
+import pendulum
 from dlt.common import Decimal
-from dlt.common.data_types.typing import TDataType
 from dlt.common.data_types.type_helpers import coerce_value
+from dlt.common.data_types.typing import TDataType
 from dlt.common.schema.typing import TColumnSchema, TColumnType
 
-from .decoders import ColumnType
-from .pg_logicaldec_pb2 import DatumMessage
+from .pg_logicaldec_pb2 import DatumMessage, TypeInfo
 
 _DUMMY_VALS: Dict[TDataType, Any] = {
     "bigint": 0,
@@ -53,38 +52,37 @@ _DATUM_RAW_TYPES: Dict[str, TDataType] = {
 }
 """Maps decoderbuf's datum msg type to dlt type."""
 
+_FIXED_PRECISION_TYPES: Dict[int, Tuple[int, Optional[int]]] = {
+    21: (16, None),  # smallint
+    23: (32, None),  # integer
+    20: (64, None),  # bigint
+}
+"""Dict for fixed precision types"""
 
-def _get_precision(type_id: int, atttypmod: int) -> Optional[int]:
-    """Get precision from postgres type attributes."""
-    # https://stackoverflow.com/a/3351120
-    if type_id == 21:  # smallint
-        return 16
-    elif type_id == 23:  # integer
-        return 32
-    elif type_id == 20:  # bigint
-        return 64
-    if atttypmod != -1:
-        if type_id == 1700:  # numeric
-            return ((atttypmod - 4) >> 16) & 65535
-        elif type_id in (
-            1083,
-            1184,
-        ):  # time without time zone, timestamp with time zone
-            return atttypmod
-        elif type_id == 1043:  # character varying
-            return atttypmod - 4
-    return None
+_VARYING_PRECISION_PATTERNS: Dict[int, str] = {
+    1043: r"character varying\((\d+)\)",
+    1700: r"numeric\((\d+),(\d+)\)",
+    1184: r"timestamp\((\d+)\) with time zone",
+    1083: r"time\((\d+)\) without time zone",
+}
+"""Regex patterns for precision/scale types"""
 
 
-def _get_scale(type_id: int, atttypmod: int) -> Optional[int]:
-    """Get scale from postgres type attributes."""
-    # https://stackoverflow.com/a/3351120
-    if atttypmod != -1:
-        if type_id in (21, 23, 20):  # smallint, integer, bigint
-            return 0
-        if type_id == 1700:  # numeric
-            return (atttypmod - 4) & 65535
-    return None
+def _get_precision_and_scale(
+    type_id: int, modifier: str
+) -> Optional[Tuple[int, Optional[int]]]:
+    """Get precision from postgres type attributes and modifiers."""
+    if type_id in _FIXED_PRECISION_TYPES:
+        return _FIXED_PRECISION_TYPES[type_id]
+
+    if pattern := _VARYING_PRECISION_PATTERNS.get(type_id):
+        if match := re.search(pattern, modifier):
+            groups = match.groups()
+            precision = int(groups[0])
+            scale = int(groups[1]) if len(groups) > 1 else None
+            return (precision, scale)
+
+    return (None, None)
 
 
 @lru_cache(maxsize=None)
@@ -99,25 +97,23 @@ def _type_mapper() -> Any:
     return PostgresTypeMapper(postgres().capabilities())
 
 
-def _to_dlt_column_type(type_id: int, atttypmod: int) -> TColumnType:
+def _to_dlt_column_type(type_id: int, modifier: str) -> TColumnType:
     """Converts postgres type OID to dlt column type.
 
     Type OIDs not in _PG_TYPES mapping default to "text" type.
     """
     pg_type = _PG_TYPES.get(type_id)
-    precision = _get_precision(type_id, atttypmod)
-    scale = _get_scale(type_id, atttypmod)
+    precision, scale = _get_precision_and_scale(type_id, modifier)
     return _type_mapper().from_db_type(pg_type, precision, scale)  # type: ignore[no-any-return]
 
 
-def _to_dlt_column_schema(col: ColumnType) -> TColumnSchema:
-    """Converts pypgoutput ColumnType to dlt column schema."""
-    dlt_column_type = _to_dlt_column_type(col.type_id, col.atttypmod)
-    partial_column_schema = {
-        "name": col.name,
-        "primary_key": bool(col.part_of_pkey),
+def _to_dlt_column_schema(datum: DatumMessage, type_info: TypeInfo) -> TColumnSchema:
+    """Converts decoderbuf's datum value/typeinfo to dlt column schema."""
+    return {
+        "name": datum.column_name,
+        "nullable": type_info.value_optional,
+        **_to_dlt_column_type(datum.column_type, type_info.modifier),
     }
-    return {**dlt_column_type, **partial_column_schema}  # type: ignore[typeddict-item]
 
 
 def _epoch_micros_to_datetime(microseconds_since_1970: int) -> pendulum.DateTime:
@@ -137,6 +133,7 @@ data_type_handlers: Dict[TDataType, Callable[[Any], Any]] = {
     "time": _microseconds_to_time,
     "timestamp": _epoch_micros_to_datetime,
 }
+"""Dispatch table for type conversions"""
 
 
 def _to_dlt_val(

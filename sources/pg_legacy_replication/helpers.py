@@ -1,3 +1,5 @@
+from collections import defaultdict
+from dataclasses import dataclass, field
 from typing import (
     Optional,
     Dict,
@@ -8,9 +10,20 @@ from typing import (
     Sequence,
     Any,
 )
-from dataclasses import dataclass, field
 
+import dlt
 import psycopg2
+from dlt.common import logger
+from dlt.common.pendulum import pendulum
+from dlt.common.schema.typing import (
+    TTableSchema,
+    TTableSchemaColumns,
+)
+from dlt.common.schema.utils import merge_column
+from dlt.common.typing import TDataItem
+from dlt.extract.items import DataItemWithMeta
+from dlt.extract.resource import DltResource
+from dlt.sources.credentials import ConnectionStringCredentials
 from psycopg2.extensions import cursor, connection as ConnectionExt
 from psycopg2.extras import (
     LogicalReplicationConnection,
@@ -18,43 +31,11 @@ from psycopg2.extras import (
     ReplicationMessage,
     StopReplication,
 )
-
-import dlt
-
-from dlt.common import logger
-from dlt.common.data_types import coerce_value
-from dlt.common.typing import TDataItem
-from dlt.common.pendulum import pendulum
-from dlt.common.schema.typing import (
-    TTableSchema,
-    TTableSchemaColumns,
-    TColumnNames,
-    TWriteDisposition,
-)
-from dlt.common.schema.utils import merge_column
-from dlt.common.data_writers.escape import escape_postgres_identifier
-from dlt.extract.items import DataItemWithMeta
-from dlt.extract.resource import DltResource
-from dlt.sources.credentials import ConnectionStringCredentials
-
-from .schema_types import _epoch_micros_to_datetime, _to_dlt_column_schema, _to_dlt_val
-from .exceptions import IncompatiblePostgresVersionException
-from .decoders import (
-    Begin,
-    Relation,
-    Insert,
-    Update,
-    Delete,
-    ColumnData,
-    convert_pg_ts,
-)
-
 from sqlalchemy import Connection as ConnectionSqla, Engine, event
 
-from .pg_logicaldec_pb2 import DatumMessage, Op, RowMessage
 from .exceptions import SqlDatabaseSourceImportError
-from google.protobuf.json_format import MessageToDict
-from collections import defaultdict
+from .pg_logicaldec_pb2 import DatumMessage, Op, RowMessage
+from .schema_types import _epoch_micros_to_datetime, _to_dlt_column_schema, _to_dlt_val
 
 
 @dlt.sources.config.with_config(sections=("sources", "pg_legacy_replication"))
@@ -527,8 +508,6 @@ class ItemGenerator:
 
 
 # FIXME Refactor later
-from .schema_types import _PG_TYPES, _type_mapper, _DUMMY_VALS
-from dlt.common.schema.typing import TColumnType, TColumnSchema, TDataType
 
 _DATUM_PRECISIONS: Dict[str, int] = {
     "datum_int32": 32,
@@ -556,53 +535,11 @@ def extract_table_schema(
             "hard_delete": True,
         },
     }
-    type_mapper = _type_mapper()
     for col, col_info in zip(row_msg.new_tuple, row_msg.new_typeinfo):
         col_name = col.column_name
         if included_columns and col_name not in included_columns:
             continue
-        db_type = _PG_TYPES[col.column_type]
-        col_type: TColumnType = type_mapper.from_db_type(db_type)
-        col_schema: TColumnSchema = {
-            "name": col_name,
-            "nullable": col_info.value_optional,
-            **col_type,
-        }
-        if db_type == "character varying":
-            import re
-
-            match = re.search(r"character varying\((\d+)\)", col_info.modifier)
-            if match:
-                col_schema["precision"] = int(match.group(1))
-        elif db_type == "numeric":
-            import re
-
-            match = re.search(r"numeric\((\d+),(\d+)\)", col_info.modifier)
-            precision, scale = map(int, match.groups())
-            col_schema["precision"] = precision
-            col_schema["scale"] = scale
-        elif db_type == "timestamp with time zone":
-            import re
-
-            match = re.search(r"timestamp\((\d+)\) with time zone", col_info.modifier)
-            if match:
-                col_schema["precision"] = int(match.group(1))
-            # col_schema["timezone"] = True FIXME
-        elif db_type == "time without time zone":
-            import re
-
-            match = re.search(r"time\((\d+)\) without time zone", col_info.modifier)
-            if match:
-                col_schema["precision"] = int(match.group(1))
-            # col_schema["timezone"] = False FIXME
-        else:
-            assert (
-                _PG_TYPES[col.column_type] == col_info.modifier
-            ), f"Type mismatch for column {col_name}"
-
-            if precision := _DATUM_PRECISIONS.get(col.WhichOneof("datum")):
-                col_schema["precision"] = precision
-
+        col_schema = _to_dlt_column_schema(col, col_info)
         columns[col_name] = (
             merge_column(col_schema, column_hints.get(col_name))
             if column_hints and column_hints.get(col_name)
