@@ -68,7 +68,7 @@ def facebook_ads_source(
     We also provide a transformation `enrich_ad_objects` that you can add to any of the resources to get additional data per object via `object.get_api`
 
     Args:
-        account_id (str, optional): Account id associated with add manager. See README.md
+        account_id (str, optional): Account id associated with ads manager. See README.md
         access_token (str, optional): Access token associated with the Business Facebook App. See README.md
         chunk_size (int, optional): A size of the page and batch request. You may need to decrease it if you request a lot of fields. Defaults to 50.
         request_timeout (float, optional): Connection timeout. Defaults to 300.0.
@@ -149,7 +149,7 @@ def facebook_insights_source(
         fields (Sequence[str], optional): A list of fields to include in each reports. Note that `breakdowns` option adds fields automatically. Defaults to DEFAULT_INSIGHT_FIELDS.
         attribution_window_days_lag (int, optional): Attribution window in days. The reports in attribution window are refreshed on each run.. Defaults to 7.
         time_increment_days (int, optional): The report aggregation window in days. use 7 for weekly aggregation. Defaults to 1.
-        breakdowns (TInsightsBreakdownOptions, optional): A presents with common aggregations. See settings.py for details. Defaults to "ads_insights_age_and_gender".
+        breakdowns (TInsightsBreakdownOptions, optional): A presents with common aggregations. See settings.py for details. Defaults to "ads_insights".
         action_breakdowns (Sequence[str], optional): Action aggregation types. See settings.py for details. Defaults to ALL_ACTION_BREAKDOWNS.
         level (TInsightsLevels, optional): The granularity level. Defaults to "ad".
         action_attribution_windows (Sequence[str], optional): Attribution windows for actions. Defaults to ALL_ACTION_ATTRIBUTION_WINDOWS.
