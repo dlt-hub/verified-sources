@@ -15,6 +15,7 @@ _DUMMY_VALS: Dict[TDataType, Any] = {
     "binary": b" ",
     "bool": True,
     "complex": [0],
+    "json": [0],  # type: ignore[dict-item]
     "date": "2000-01-01",
     "decimal": Decimal(0),
     "double": 0.0,
@@ -90,11 +91,24 @@ def _type_mapper() -> Any:
     from dlt.destinations import postgres
 
     try:
-        from dlt.destinations.impl.postgres.postgres import PostgresTypeMapper
-    except ImportError:
         from dlt.destinations.impl.postgres.factory import PostgresTypeMapper  # type: ignore
+    except ImportError:
+        from dlt.destinations.impl.postgres.postgres import PostgresTypeMapper
 
     return PostgresTypeMapper(postgres().capabilities())
+
+
+# FIXME Hack to get it to work with 0.5.x and 1.x
+def _from_destination_type(
+    db_type: str, precision: Optional[int] = None, scale: Optional[int] = None
+) -> TColumnType:
+    mapper = _type_mapper()
+    from_db_type: Callable[[str, Optional[int], Optional[int]], TColumnType]
+    if hasattr(mapper, "from_destination_type"):
+        from_db_type = mapper.from_destination_type
+    else:
+        from_db_type = mapper.from_db_type
+    return from_db_type(db_type, precision, scale)
 
 
 def _to_dlt_column_type(type_id: int, modifier: str) -> TColumnType:
@@ -104,7 +118,7 @@ def _to_dlt_column_type(type_id: int, modifier: str) -> TColumnType:
     """
     pg_type = _PG_TYPES.get(type_id)
     precision, scale = _get_precision_and_scale(type_id, modifier)
-    return _type_mapper().from_db_type(pg_type, precision, scale)  # type: ignore[no-any-return]
+    return _from_destination_type(pg_type, precision, scale)
 
 
 def _to_dlt_column_schema(datum: DatumMessage, type_info: TypeInfo) -> TColumnSchema:
@@ -141,7 +155,7 @@ def _to_dlt_val(
 ) -> Any:
     """Converts decoderbuf's datum value into dlt-compatible data value."""
     if isinstance(data_type, int):
-        col_type: TColumnType = _type_mapper().from_db_type(_PG_TYPES[data_type])
+        col_type: TColumnType = _from_destination_type(_PG_TYPES[data_type])
         data_type = col_type["data_type"]
 
     datum = val.WhichOneof("datum")
@@ -152,8 +166,18 @@ def _to_dlt_val(
     if data_type in data_type_handlers:
         return data_type_handlers[data_type](raw_value)
 
-    return coerce_value(
-        to_type=data_type,
-        from_type=_DATUM_RAW_TYPES[datum],
-        value=raw_value,
-    )
+    try:
+        return coerce_value(
+            to_type=data_type,
+            from_type=_DATUM_RAW_TYPES[datum],
+            value=raw_value,
+        )
+    except ValueError:
+        # FIXME Hack to get it to work with 0.5.x and 1.x
+        if data_type == "json":
+            return coerce_value(
+                "complex",
+                from_type=_DATUM_RAW_TYPES[datum],
+                value=raw_value,
+            )
+        raise

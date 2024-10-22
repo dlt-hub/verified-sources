@@ -1,8 +1,8 @@
 from typing import List
 
 from dlt.common import Decimal
+from dlt.common.data_types.typing import DATA_TYPES
 from dlt.common.schema import TColumnSchema, TTableSchemaColumns
-
 
 TABLE_ROW_ALL_DATA_TYPES = {
     "col1": 989127831,
@@ -49,7 +49,7 @@ TABLE_UPDATE: List[TColumnSchema] = [
     {"name": "col6", "data_type": "decimal", "nullable": False},
     {"name": "col7", "data_type": "binary", "nullable": False},
     # {"name": "col8", "data_type": "wei", "nullable": False},
-    {"name": "col9", "data_type": "complex", "nullable": False, "variant": True},
+    {"name": "col9", "data_type": "json", "nullable": False, "variant": True},
     {"name": "col10", "data_type": "date", "nullable": False},
     {"name": "col11", "data_type": "time", "nullable": False},
     {"name": "col1_null", "data_type": "bigint", "nullable": True},
@@ -60,7 +60,7 @@ TABLE_UPDATE: List[TColumnSchema] = [
     {"name": "col6_null", "data_type": "decimal", "nullable": True},
     {"name": "col7_null", "data_type": "binary", "nullable": True},
     # {"name": "col8_null", "data_type": "wei", "nullable": True},
-    {"name": "col9_null", "data_type": "complex", "nullable": True, "variant": True},
+    {"name": "col9_null", "data_type": "json", "nullable": True, "variant": True},
     {"name": "col10_null", "data_type": "date", "nullable": True},
     {"name": "col11_null", "data_type": "time", "nullable": True},
     {
@@ -91,4 +91,10 @@ TABLE_UPDATE: List[TColumnSchema] = [
     },
     {"name": "col11_precision", "data_type": "time", "precision": 3, "nullable": False},
 ]
+
+if "complex" in DATA_TYPES:
+    for col_schema in TABLE_UPDATE:
+        if col_schema["data_type"] == "json":
+            col_schema["data_type"] = "complex"
+
 TABLE_UPDATE_COLUMNS_SCHEMA: TTableSchemaColumns = {t["name"]: t for t in TABLE_UPDATE}
