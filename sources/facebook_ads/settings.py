@@ -136,7 +136,23 @@ ALL_ACTION_ATTRIBUTION_WINDOWS = (
     "28d_view",
 )
 
-ALL_ACTION_BREAKDOWNS = ("action_type", "action_target_id", "action_destination")
+ALL_ACTION_BREAKDOWNS = (
+    "action_type", 
+    "action_target_id", 
+    "action_destination",
+    "action_device", 
+    "conversion_destination",
+    "matched_persona_id", 
+    "matched_persona_name", 
+    "signal_source_bucket", 
+    "standard_event_content_type", 
+    "action_canvas_component_name", 
+    "action_carousel_card_id", 
+    "action_carousel_card_name", 
+    "action_reaction", 
+    "action_video_sound", 
+    "action_video_type"
+)
 
 INSIGHTS_BREAKDOWNS_OPTIONS: Dict[TInsightsBreakdownOptions, Any] = {
     "ads_insights": {"breakdowns": (), "fields": ()},
