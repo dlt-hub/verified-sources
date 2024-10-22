@@ -24,7 +24,7 @@ def replicate_single_table() -> None:
         pipeline_name="pg_replication_pipeline",
         destination="duckdb",
         dataset_name="replicate_single_table",
-        full_refresh=True,
+        dev_mode=True,
     )
 
     # create table "my_source_table" in source to demonstrate replication
@@ -37,12 +37,16 @@ def replicate_single_table() -> None:
     init_replication(  # requires the Postgres user to have the REPLICATION attribute assigned
         slot_name=slot_name,
         schema=src_pl.dataset_name,
-        table_names=["my_source_table"],
+        table_names="my_source_table",
         reset=True,
     )
 
     # create a resource that generates items for each change in the source table
-    changes = replication_resource(slot_name)
+    changes = replication_resource(
+        slot_name=slot_name,
+        schema=src_pl.dataset_name,
+        table_names="my_source_table",
+    )
 
     # insert two records in source table and propagate changes to destination
     change_source_table(
@@ -74,7 +78,7 @@ def replicate_with_initial_load() -> None:
         pipeline_name="pg_replication_pipeline",
         destination="duckdb",
         dataset_name="replicate_with_initial_load",
-        full_refresh=True,
+        dev_mode=True,
     )
 
     # create table "my_source_table" in source to demonstrate replication
@@ -92,7 +96,7 @@ def replicate_with_initial_load() -> None:
     snapshot = init_replication(  # requires the Postgres user to have the REPLICATION attribute assigned
         slot_name=slot_name,
         schema=src_pl.dataset_name,
-        table_names=["my_source_table"],
+        table_names="my_source_table",
         take_snapshots=True,  # persist snapshot table(s) and let function return resource(s) for initial load
         reset=True,
     )
@@ -103,67 +107,71 @@ def replicate_with_initial_load() -> None:
 
     # insert record in source table and propagate change to destination
     change_source_table(src_pl, "INSERT INTO {table_name} VALUES (3, true);")
-    changes = replication_resource(slot_name)
+    changes = replication_resource(
+        slot_name=slot_name,
+        schema=src_pl.dataset_name,
+        table_names="my_source_table",
+    )
     dest_pl.run(changes)
     show_destination_table(dest_pl)
 
 
-def replicate_entire_schema() -> None:
-    """Demonstrates setup and usage of schema replication.
-
-    Schema replication requires a Postgres server version of 15 or higher. An
-    exception is raised if that's not the case.
-    """
-    # create source and destination pipelines
-    src_pl = get_postgres_pipeline()
-    dest_pl = dlt.pipeline(
-        pipeline_name="pg_replication_pipeline",
-        destination="duckdb",
-        dataset_name="replicate_entire_schema",
-        full_refresh=True,
-    )
-
-    # create two source tables to demonstrate schema replication
-    create_source_table(
-        src_pl,
-        "CREATE TABLE {table_name} (id integer PRIMARY KEY, val bool);",
-        "tbl_x",
-    )
-    create_source_table(
-        src_pl,
-        "CREATE TABLE {table_name} (id integer PRIMARY KEY, val varchar);",
-        "tbl_y",
-    )
-
-    # initialize schema replication by omitting the `table_names` argument
-    slot_name = "example_slot"
-    init_replication(  # initializing schema replication requires the Postgres user to be a superuser
-        slot_name=slot_name,
-        schema=src_pl.dataset_name,
-        reset=True,
-    )
-
-    # create a resource that generates items for each change in the schema's tables
-    changes = replication_resource(slot_name)
-
-    # insert records in source tables and propagate changes to destination
-    change_source_table(
-        src_pl, "INSERT INTO {table_name} VALUES (1, true), (2, false);", "tbl_x"
-    )
-    change_source_table(src_pl, "INSERT INTO {table_name} VALUES (1, 'foo');", "tbl_y")
-    dest_pl.run(changes)
-    show_destination_table(dest_pl, "tbl_x")
-    show_destination_table(dest_pl, "tbl_y")
-
-    # tables added to the schema later are also included in the replication
-    create_source_table(
-        src_pl, "CREATE TABLE {table_name} (id integer PRIMARY KEY, val date);", "tbl_z"
-    )
-    change_source_table(
-        src_pl, "INSERT INTO {table_name} VALUES (1, '2023-03-18');", "tbl_z"
-    )
-    dest_pl.run(changes)
-    show_destination_table(dest_pl, "tbl_z")
+# def replicate_entire_schema() -> None:
+#     """Demonstrates setup and usage of schema replication.
+#
+#     Schema replication requires a Postgres server version of 15 or higher. An
+#     exception is raised if that's not the case.
+#     """
+#     # create source and destination pipelines
+#     src_pl = get_postgres_pipeline()
+#     dest_pl = dlt.pipeline(
+#         pipeline_name="pg_replication_pipeline",
+#         destination="duckdb",
+#         dataset_name="replicate_entire_schema",
+#         dev_mode=True,
+#     )
+#
+#     # create two source tables to demonstrate schema replication
+#     create_source_table(
+#         src_pl,
+#         "CREATE TABLE {table_name} (id integer PRIMARY KEY, val bool);",
+#         "tbl_x",
+#     )
+#     create_source_table(
+#         src_pl,
+#         "CREATE TABLE {table_name} (id integer PRIMARY KEY, val varchar);",
+#         "tbl_y",
+#     )
+#
+#     # initialize schema replication by omitting the `table_names` argument
+#     slot_name = "example_slot"
+#     init_replication(  # initializing schema replication requires the Postgres user to be a superuser
+#         slot_name=slot_name,
+#         schema=src_pl.dataset_name,
+#         reset=True,
+#     )
+#
+#     # create a resource that generates items for each change in the schema's tables
+#     changes = replication_resource(slot_name)
+#
+#     # insert records in source tables and propagate changes to destination
+#     change_source_table(
+#         src_pl, "INSERT INTO {table_name} VALUES (1, true), (2, false);", "tbl_x"
+#     )
+#     change_source_table(src_pl, "INSERT INTO {table_name} VALUES (1, 'foo');", "tbl_y")
+#     dest_pl.run(changes)
+#     show_destination_table(dest_pl, "tbl_x")
+#     show_destination_table(dest_pl, "tbl_y")
+#
+#     # tables added to the schema later are also included in the replication
+#     create_source_table(
+#         src_pl, "CREATE TABLE {table_name} (id integer PRIMARY KEY, val date);", "tbl_z"
+#     )
+#     change_source_table(
+#         src_pl, "INSERT INTO {table_name} VALUES (1, '2023-03-18');", "tbl_z"
+#     )
+#     dest_pl.run(changes)
+#     show_destination_table(dest_pl, "tbl_z")
 
 
 def replicate_with_column_selection() -> None:
@@ -177,7 +185,7 @@ def replicate_with_column_selection() -> None:
         pipeline_name="pg_replication_pipeline",
         destination="duckdb",
         dataset_name="replicate_with_column_selection",
-        full_refresh=True,
+        dev_mode=True,
     )
 
     # create two source tables to demonstrate schema replication
@@ -204,6 +212,8 @@ def replicate_with_column_selection() -> None:
     # create a resource that generates items for each change in the schema's tables
     changes = replication_resource(
         slot_name=slot_name,
+        schema=src_pl.dataset_name,
+        table_names=["tbl_x", "tbl_y"],
         included_columns={
             "tbl_x": ["c1", "c2"]
         },  # columns not specified here are excluded from generated data items
@@ -240,7 +250,7 @@ def get_postgres_pipeline() -> dlt.Pipeline:
         pipeline_name="source_pipeline",
         destination=Destination.from_reference("postgres", credentials=PG_CREDS),
         dataset_name="source_dataset",
-        full_refresh=True,
+        dev_mode=True,
     )
     return pipe
 

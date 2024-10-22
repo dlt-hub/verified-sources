@@ -17,8 +17,8 @@ from .helpers import advance_slot, get_max_lsn, ItemGenerator
 )
 def replication_resource(
     slot_name: str,
-    schema: str = dlt.config.value,
-    table_names: List[str] = dlt.config.value,
+    schema: str,
+    table_names: Union[str, Sequence[str]],
     credentials: ConnectionStringCredentials = dlt.secrets.value,
     included_columns: Optional[Dict[str, TColumnNames]] = None,
     columns: Optional[Dict[str, TTableSchemaColumns]] = None,
@@ -83,6 +83,8 @@ def replication_resource(
     if upto_lsn is None:
         return
 
+    if isinstance(table_names, str):
+        table_names = [table_names]
     table_qnames = {f"{schema}.{table_name}" for table_name in table_names}
 
     # generate items in batches

@@ -42,8 +42,8 @@ from .schema_types import _epoch_micros_to_datetime, _to_dlt_column_schema, _to_
 @dlt.sources.config.with_config(sections=("sources", "pg_legacy_replication"))
 def init_replication(
     slot_name: str,
-    schema: str = dlt.config.value,
-    table_names: List[str] = dlt.config.value,
+    schema: str,
+    table_names: Union[str, Sequence[str]],
     credentials: ConnectionStringCredentials = dlt.secrets.value,
     take_snapshots: bool = False,
     included_columns: Optional[Dict[str, TColumnNames]] = None,
@@ -126,6 +126,8 @@ def init_replication(
             cur.execute("SET TRANSACTION ISOLATION LEVEL REPEATABLE READ")
             cur.execute(f"SET TRANSACTION SNAPSHOT '{slot['snapshot_name']}'")
 
+    if isinstance(table_names, str):
+        table_names = [table_names]
     included_columns = included_columns or {}
     columns = columns or {}
     return [

@@ -1,14 +1,14 @@
 from copy import deepcopy
-from typing import Dict, Set, Tuple
+from typing import Dict, Sequence, Tuple
 
 import dlt
 import pytest
+from dlt.common.schema.typing import TTableSchemaColumns
 from dlt.destinations.job_client_impl import SqlJobClientBase
 
 from sources.pg_legacy_replication import replication_resource
 from sources.pg_legacy_replication.helpers import (
     init_replication,
-    get_pg_version,
     cleanup_snapshot_resources,
 )
 from tests.utils import (
@@ -17,7 +17,7 @@ from tests.utils import (
     load_table_counts,
 )
 from .cases import TABLE_ROW_ALL_DATA_TYPES, TABLE_UPDATE_COLUMNS_SCHEMA
-from .utils import add_pk, assert_loaded_data, is_super_user
+from .utils import add_pk, assert_loaded_data
 
 
 @pytest.mark.parametrize("destination_name", ALL_DESTINATIONS)
@@ -255,7 +255,7 @@ def test_mapped_data_types(
     snapshot = init_replication(
         slot_name=slot_name,
         schema=src_pl.dataset_name,
-        table_names=("items",),
+        table_names="items",
         take_snapshots=init_load,
         columns={"items": column_schema} if give_hints else None,
     )
@@ -268,7 +268,7 @@ def test_mapped_data_types(
     changes = replication_resource(
         slot_name=slot_name,
         schema=src_pl.dataset_name,
-        table_names=("items",),
+        table_names="items",
         columns={"items": column_schema},
     )
 
@@ -361,12 +361,12 @@ def test_unmapped_data_types(
     init_replication(
         slot_name=slot_name,
         schema=src_pl.dataset_name,
-        table_names=("data_types",),
+        table_names="data_types",
     )
     changes = replication_resource(
         slot_name=slot_name,
         schema=src_pl.dataset_name,
-        table_names=("data_types",),
+        table_names="data_types",
     )
 
     # insert record in source table to create replication item
@@ -425,9 +425,9 @@ def test_included_columns(
     )
 
     # initialize replication and create resources
-    included_columns: Dict[str, Set[str]] = {
-        "tbl_x": {"id_x", "val_x"},
-        "tbl_y": {"id_y", "val_y"},
+    included_columns: Dict[str, Sequence[str]] = {
+        "tbl_x": ("id_x", "val_x"),
+        "tbl_y": ("id_y", "val_y"),
         # tbl_z is not specified, hence all columns should be included
     }
     snapshots = init_replication(
@@ -503,7 +503,7 @@ def test_column_hints(
     )
 
     # initialize replication and create resources
-    column_hints = {
+    column_hints: Dict[str, TTableSchemaColumns] = {
         "tbl_x": {"another_col_x": {"data_type": "double"}},
         "tbl_y": {"another_col_y": {"precision": 32}},
         # tbl_z is not specified, hence all columns should be included
@@ -594,14 +594,14 @@ def test_table_schema_change(
     init_replication(
         slot_name=slot_name,
         schema=src_pl.dataset_name,
-        table_names=("items",),
+        table_names="items",
     )
 
     # create resource and pipeline
     changes = replication_resource(
         slot_name=slot_name,
         schema=src_pl.dataset_name,
-        table_names=("items",),
+        table_names="items",
     )
     dest_pl = dlt.pipeline(
         pipeline_name="dest_pl", destination=destination_name, dev_mode=True
@@ -630,63 +630,63 @@ def test_table_schema_change(
     )
 
 
-def test_replicate_schema(src_config: Tuple[dlt.Pipeline, str]) -> None:
-    if get_pg_version() < 150000:
-        pytest.skip("incompatible Postgres server version")
-    if not is_super_user(src_config[0].sql_client):
-        pytest.skip("Postgres user needs to be superuser")
-
-    @dlt.resource
-    def tbl_x(data):
-        yield data
-
-    @dlt.resource
-    def tbl_y(data):
-        yield data
-
-    @dlt.resource
-    def tbl_z(data):
-        yield data
-
-    src_pl, slot_name = src_config
-
-    # create two postgres tables
-    src_pl.run(
-        [
-            tbl_x({"id_x": 1, "val_x": "foo"}),
-            tbl_y({"id_y": 1, "val_y": "foo"}),
-        ]
-    )
-
-    # initialize replication and create resource
-    init_replication(
-        slot_name=slot_name,
-        schema=src_pl.dataset_name,  # we only specify `schema`, not `table_names`
-        publish="insert",
-    )
-    changes = replication_resource(slot_name)
-
-    # change source tables and load to destination
-    src_pl.run(
-        [
-            tbl_x({"id_x": 2, "val_x": "foo"}),
-            tbl_y({"id_y": 2, "val_y": "foo"}),
-        ]
-    )
-    dest_pl = dlt.pipeline(pipeline_name="dest_pl", dev_mode=True)
-    dest_pl.extract(changes)
-    assert set(dest_pl.default_schema.data_table_names()) == {"tbl_x", "tbl_y"}
-
-    # introduce new table in source and assert it gets included in the replication
-    src_pl.run(
-        [
-            tbl_x({"id_x": 3, "val_x": "foo"}),
-            tbl_y({"id_y": 3, "val_y": "foo"}),
-            tbl_z({"id_z": 1, "val_z": "foo"}),
-        ]
-    )
-    dest_pl.extract(changes)
-    assert set(dest_pl.default_schema.data_table_names()) == {"tbl_x", "tbl_y", "tbl_z"}
+# def test_replicate_schema(src_config: Tuple[dlt.Pipeline, str]) -> None:
+#     if get_pg_version() < 150000:
+#         pytest.skip("incompatible Postgres server version")
+#     if not is_super_user(src_config[0].sql_client):
+#         pytest.skip("Postgres user needs to be superuser")
+#
+#     @dlt.resource
+#     def tbl_x(data):
+#         yield data
+#
+#     @dlt.resource
+#     def tbl_y(data):
+#         yield data
+#
+#     @dlt.resource
+#     def tbl_z(data):
+#         yield data
+#
+#     src_pl, slot_name = src_config
+#
+#     # create two postgres tables
+#     src_pl.run(
+#         [
+#             tbl_x({"id_x": 1, "val_x": "foo"}),
+#             tbl_y({"id_y": 1, "val_y": "foo"}),
+#         ]
+#     )
+#
+#     # initialize replication and create resource
+#     init_replication(
+#         slot_name=slot_name,
+#         schema=src_pl.dataset_name,  # we only specify `schema`, not `table_names`
+#         publish="insert",
+#     )
+#     changes = replication_resource(slot_name)
+#
+#     # change source tables and load to destination
+#     src_pl.run(
+#         [
+#             tbl_x({"id_x": 2, "val_x": "foo"}),
+#             tbl_y({"id_y": 2, "val_y": "foo"}),
+#         ]
+#     )
+#     dest_pl = dlt.pipeline(pipeline_name="dest_pl", dev_mode=True)
+#     dest_pl.extract(changes)
+#     assert set(dest_pl.default_schema.data_table_names()) == {"tbl_x", "tbl_y"}
+#
+#     # introduce new table in source and assert it gets included in the replication
+#     src_pl.run(
+#         [
+#             tbl_x({"id_x": 3, "val_x": "foo"}),
+#             tbl_y({"id_y": 3, "val_y": "foo"}),
+#             tbl_z({"id_z": 1, "val_z": "foo"}),
+#         ]
+#     )
+#     dest_pl.extract(changes)
+#     assert set(dest_pl.default_schema.data_table_names()) == {"tbl_x", "tbl_y", "tbl_z"}
 
 
 def test_batching(src_config: Tuple[dlt.Pipeline, str]) -> None:
@@ -702,12 +702,12 @@ def test_batching(src_config: Tuple[dlt.Pipeline, str]) -> None:
     init_replication(
         slot_name=slot_name,
         schema=src_pl.dataset_name,
-        table_names=["items"],
+        table_names="items",
     )
     changes = replication_resource(
         slot_name=slot_name,
         schema=src_pl.dataset_name,
-        table_names=["items"],
+        table_names="items",
         target_batch_size=50,
     )
 
