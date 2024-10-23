@@ -534,27 +534,33 @@ def infer_table_schema(
         if not included_columns or col.column_name in included_columns
     }
 
-    columns["lsn"] = {"data_type": "bigint", "nullable": True, "dedup_sort": "desc"}
-    columns["deleted_ts"] = {
-        "data_type": "timestamp",
-        "nullable": True,
-        "hard_delete": True,
-    }
+    # Add replication columns
+    columns["lsn"] = {"data_type": "bigint", "nullable": True}
+    columns["deleted_ts"] = {"data_type": "timestamp", "nullable": True}
 
-    table_name = msg.table.split(".")[1]
-    table_schema: TTableSchema = {
-        "name": table_name,
-        "columns": columns,
-    }
+    write_disposition = (
+        table_hints.get("write_disposition", "append") if table_hints else "append"
+    )
+
+    if write_disposition not in ("replace", "append"):
+        columns["lsn"]["dedup_sort"] = "desc"
+        columns["deleted_ts"]["hard_delete"] = True
+
+    schema, table = msg.table.split(".")
+    table_schema: TTableSchema = {"name": table, "columns": columns}
+
     if table_hints:
-        table_hints["name"] = table_name
+        table_hints["name"] = table
         # FIXME I dont't know why I have to do this, but merge_table doesn't work right or I'm missing something
-        if col_hints := table_hints.get("columns"):
-            table_hints["columns"] = {
+        col_hints = table_hints.get("columns")
+        if col_hints:
+            col_hints = {
                 col_name: merge_column(columns[col_name], col_schema)
                 for col_name, col_schema in col_hints.items()
+                if not included_columns or col_name in included_columns
             }
-        merge_table("decoderbufs", table_schema, table_hints)
+        merge_table(schema, table_schema, table_hints)
+
     return table_schema
 
 
