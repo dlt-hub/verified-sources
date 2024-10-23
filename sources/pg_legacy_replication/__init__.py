@@ -1,9 +1,9 @@
 """Replicates postgres tables in batch using logical decoding."""
 
-from typing import Dict, Sequence, Optional, Iterable, Union, List
+from typing import Dict, Sequence, Optional, Iterable, Union
 
 import dlt
-from dlt.common.schema.typing import TColumnNames, TTableSchemaColumns
+from dlt.common.schema.typing import TColumnNames, TTableSchema
 from dlt.common.typing import TDataItem
 from dlt.extract.items import DataItemWithMeta
 from dlt.sources.credentials import ConnectionStringCredentials
@@ -21,7 +21,7 @@ def replication_resource(
     table_names: Union[str, Sequence[str]],
     credentials: ConnectionStringCredentials = dlt.secrets.value,
     included_columns: Optional[Dict[str, TColumnNames]] = None,
-    columns: Optional[Dict[str, TTableSchemaColumns]] = None,
+    table_hints: Optional[Dict[str, TTableSchema]] = None,
     target_batch_size: int = 1000,
     flush_slot: bool = True,
 ) -> Iterable[Union[TDataItem, DataItemWithMeta]]:
@@ -98,7 +98,7 @@ def replication_resource(
             start_lsn=start_lsn,
             target_batch_size=target_batch_size,
             included_columns=included_columns,
-            columns=columns,
+            table_hints=table_hints,
         )
         yield from gen
         if gen.generated_all:

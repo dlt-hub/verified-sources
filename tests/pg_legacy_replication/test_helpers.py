@@ -15,87 +15,81 @@ from sources.pg_legacy_replication.pg_logicaldec_pb2 import RowMessage
 
 
 @pytest.mark.parametrize(
-    "data",
+    "data, table_hints, expected_schema",
     [
-        {
-            "transactionId": 969,
-            "commitTime": "1728662646949062",
-            "table": "src_pl_dataset_202410110404048747_staging.tbl_y",
-            "op": "INSERT",
-            "newTuple": [
-                {"columnName": "id_y", "columnType": "20", "datumInt64": 2},
-                {"columnName": "val_y", "columnType": "16", "datumBool": False},
-                {
-                    "columnName": "_dlt_load_id",
-                    "columnType": "1043",
-                    "datumString": "1728662646.2657657",
-                },
-                {
-                    "columnName": "_dlt_id",
-                    "columnType": "1043",
-                    "datumString": "gGjifTMTAUs5ag",
-                },
-            ],
-            "newTypeinfo": [
-                {"modifier": "bigint", "valueOptional": False},
-                {"modifier": "boolean", "valueOptional": True},
-                {"modifier": "character varying", "valueOptional": False},
-                {"modifier": "character varying", "valueOptional": False},
-            ],
-            "oldTuple": [],
-        },
-    ],
-)
-@pytest.mark.parametrize(
-    "column_hints",
-    [{"id_y": {"primary_key": True}}],
-)
-@pytest.mark.parametrize(
-    "expected_schema",
-    [
-        {
-            "name": "tbl_y",
-            "columns": {
-                "id_y": {
-                    "data_type": "bigint",
-                    "precision": 64,
-                    "name": "id_y",
-                    "nullable": False,
-                    "primary_key": True,
-                },
-                "val_y": {"data_type": "bool", "name": "val_y", "nullable": True},
-                "_dlt_load_id": {
-                    "data_type": "text",
-                    "name": "_dlt_load_id",
-                    "nullable": False,
-                },
-                "_dlt_id": {
-                    "data_type": "text",
-                    "name": "_dlt_id",
-                    "nullable": False,
-                },
-                "lsn": {
-                    "data_type": "bigint",
-                    "dedup_sort": "desc",
-                    "nullable": True,
-                },
-                "deleted_ts": {
-                    "data_type": "timestamp",
-                    "hard_delete": True,
-                    "nullable": True,
+        (
+            {
+                "transactionId": 969,
+                "commitTime": "1728662646949062",
+                "table": "src_pl_dataset_202410110404048747_staging.tbl_y",
+                "op": "INSERT",
+                "newTuple": [
+                    {"columnName": "id_y", "columnType": "20", "datumInt64": 2},
+                    {"columnName": "val_y", "columnType": "16", "datumBool": False},
+                    {
+                        "columnName": "_dlt_load_id",
+                        "columnType": "1043",
+                        "datumString": "1728662646.2657657",
+                    },
+                    {
+                        "columnName": "_dlt_id",
+                        "columnType": "1043",
+                        "datumString": "gGjifTMTAUs5ag",
+                    },
+                ],
+                "newTypeinfo": [
+                    {"modifier": "bigint", "valueOptional": False},
+                    {"modifier": "boolean", "valueOptional": True},
+                    {"modifier": "character varying", "valueOptional": False},
+                    {"modifier": "character varying", "valueOptional": False},
+                ],
+                "oldTuple": [],
+            },
+            {"columns": {"id_y": {"primary_key": True}}},
+            {
+                "name": "tbl_y",
+                "columns": {
+                    "id_y": {
+                        "data_type": "bigint",
+                        "precision": 64,
+                        "name": "id_y",
+                        "nullable": False,
+                        "primary_key": True,
+                    },
+                    "val_y": {"data_type": "bool", "name": "val_y", "nullable": True},
+                    "_dlt_load_id": {
+                        "data_type": "text",
+                        "name": "_dlt_load_id",
+                        "nullable": False,
+                    },
+                    "_dlt_id": {
+                        "data_type": "text",
+                        "name": "_dlt_id",
+                        "nullable": False,
+                    },
+                    "lsn": {
+                        "data_type": "bigint",
+                        "dedup_sort": "desc",
+                        "nullable": True,
+                    },
+                    "deleted_ts": {
+                        "data_type": "timestamp",
+                        "hard_delete": True,
+                        "nullable": True,
+                    },
                 },
             },
-        },
+        ),
     ],
 )
 def test_infer_table_schema(
     data,
-    column_hints: Optional[TTableSchemaColumns],
+    table_hints: Optional[TTableSchema],
     expected_schema: TTableSchema,
 ):
     row_msg = RowMessage()
     parse_dict(data, row_msg)
-    assert infer_table_schema(row_msg, column_hints=column_hints) == expected_schema
+    assert infer_table_schema(row_msg, table_hints=table_hints) == expected_schema
 
 
 LSN = random.randint(0, 10000)

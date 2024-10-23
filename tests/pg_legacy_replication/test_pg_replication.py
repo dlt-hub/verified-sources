@@ -3,7 +3,7 @@ from typing import Dict, Sequence, Tuple
 
 import dlt
 import pytest
-from dlt.common.schema.typing import TTableSchemaColumns
+from dlt.common.schema.typing import TTableSchema, TTableSchemaColumns
 from dlt.destinations.job_client_impl import SqlJobClientBase
 
 from sources.pg_legacy_replication import replication_resource
@@ -184,9 +184,9 @@ def test_without_init_load(
         slot_name=slot_name,
         schema=src_pl.dataset_name,
         table_names=("tbl_x", "tbl_y"),
-        columns={
-            "tbl_x": {"id_x": {"primary_key": True}},
-            "tbl_y": {"id_y": {"primary_key": True}},
+        table_hints={
+            "tbl_x": {"columns": {"id_x": {"primary_key": True}}},
+            "tbl_y": {"columns": {"id_y": {"primary_key": True}}},
         },
     )
 
@@ -251,25 +251,27 @@ def test_mapped_data_types(
     src_pl.run(items(data))
     add_pk(src_pl.sql_client, "items", "col1")
 
+    if give_hints:
+        column_schema["col1"]["primary_key"] = True
+    else:
+        column_schema = {"col1": {"primary_key": True}}
+
+    table_hints: Dict[str, TTableSchema] = {"items": {"columns": column_schema}}
+
     # initialize replication and create resources
     snapshot = init_replication(
         slot_name=slot_name,
         schema=src_pl.dataset_name,
         table_names="items",
         take_snapshots=init_load,
-        columns={"items": column_schema} if give_hints else None,
+        table_hints=table_hints if give_hints else None,
     )
-
-    if give_hints:
-        column_schema["col1"]["primary_key"] = True
-    else:
-        column_schema = {"col1": {"primary_key": True}}
 
     changes = replication_resource(
         slot_name=slot_name,
         schema=src_pl.dataset_name,
         table_names="items",
-        columns={"items": column_schema},
+        table_hints=table_hints,
     )
 
     # initial load
@@ -476,7 +478,7 @@ def test_included_columns(
 
 @pytest.mark.parametrize("destination_name", ALL_DESTINATIONS)
 @pytest.mark.parametrize("init_load", [True, False])
-def test_column_hints(
+def test_table_hints(
     src_config: Tuple[dlt.Pipeline, str], destination_name: str, init_load: bool
 ) -> None:
     @dlt.resource
@@ -503,23 +505,25 @@ def test_column_hints(
     )
 
     # initialize replication and create resources
-    column_hints: Dict[str, TTableSchemaColumns] = {
-        "tbl_x": {"another_col_x": {"data_type": "double"}},
-        "tbl_y": {"another_col_y": {"precision": 32}},
+    table_hints: Dict[str, TTableSchema] = {
+        "tbl_x": {"columns": {"another_col_x": {"data_type": "double"}}},
+        "tbl_y": {"columns": {"another_col_y": {"precision": 32}}},
         # tbl_z is not specified, hence all columns should be included
     }
+
     snapshots = init_replication(
         slot_name=slot_name,
         schema=src_pl.dataset_name,
         table_names=("tbl_x", "tbl_y", "tbl_z"),
         take_snapshots=init_load,
-        columns=column_hints,
+        table_hints=table_hints,
     )
+
     changes = replication_resource(
         slot_name=slot_name,
         schema=src_pl.dataset_name,
         table_names=("tbl_x", "tbl_y", "tbl_z"),
-        columns=column_hints,
+        table_hints=table_hints,
     )
 
     # update three postgres tables
