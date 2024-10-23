@@ -45,7 +45,7 @@ from sources.pg_legacy_replication.pg_logicaldec_pb2 import RowMessage
                 ],
                 "oldTuple": [],
             },
-            {"columns": {"id_y": {"primary_key": True}}},
+            {"columns": {"id_y": {"primary_key": True}}, "write_disposition": "merge"},
             {
                 "name": "tbl_y",
                 "columns": {
@@ -78,6 +78,7 @@ from sources.pg_legacy_replication.pg_logicaldec_pb2 import RowMessage
                         "nullable": True,
                     },
                 },
+                "write_disposition": "merge",
             },
         ),
     ],

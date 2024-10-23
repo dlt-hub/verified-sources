@@ -54,6 +54,10 @@ def test_core_functionality(
         slot_name=slot_name,
         schema=src_pl.dataset_name,
         table_names=("tbl_x", "tbl_y"),
+        table_hints={
+            "tbl_x": {"write_disposition": "merge"},
+            "tbl_y": {"write_disposition": "merge"},
+        },
     )
 
     src_pl.run(
@@ -78,7 +82,7 @@ def test_core_functionality(
     cleanup_snapshot_resources(snapshots)
 
     # process changes
-    info = dest_pl.run(changes, write_disposition="merge")
+    info = dest_pl.run(changes)
     assert_load_info(info)
     assert load_table_counts(dest_pl, "tbl_x", "tbl_y") == {"tbl_x": 3, "tbl_y": 2}
     exp_tbl_x = [
@@ -94,7 +98,7 @@ def test_core_functionality(
     src_pl.run(tbl_y({"id_y": 3, "val_y": True}))
 
     # process changes
-    info = dest_pl.run(changes, write_disposition="merge")
+    info = dest_pl.run(changes)
     assert_load_info(info)
     assert load_table_counts(dest_pl, "tbl_x", "tbl_y") == {"tbl_x": 3, "tbl_y": 3}
     exp_tbl_y = [
@@ -113,7 +117,7 @@ def test_core_functionality(
         c.execute_sql(f"UPDATE {qual_name} SET val_y = false WHERE id_y = 1;")
 
     # process changes
-    info = dest_pl.run(changes, write_disposition="merge")
+    info = dest_pl.run(changes)
     assert_load_info(info)
     assert load_table_counts(dest_pl, "tbl_x", "tbl_y") == {"tbl_x": 3, "tbl_y": 3}
     exp_tbl_x = [
@@ -185,8 +189,14 @@ def test_without_init_load(
         schema=src_pl.dataset_name,
         table_names=("tbl_x", "tbl_y"),
         table_hints={
-            "tbl_x": {"columns": {"id_x": {"primary_key": True}}},
-            "tbl_y": {"columns": {"id_y": {"primary_key": True}}},
+            "tbl_x": {
+                "columns": {"id_x": {"primary_key": True}},
+                "write_disposition": "merge",
+            },
+            "tbl_y": {
+                "columns": {"id_y": {"primary_key": True}},
+                "write_disposition": "merge",
+            },
         },
     )
 
@@ -203,7 +213,7 @@ def test_without_init_load(
     dest_pl = dlt.pipeline(
         pipeline_name="dest_pl", destination=destination_name, dev_mode=True
     )
-    info = dest_pl.run(changes, write_disposition="merge")
+    info = dest_pl.run(changes)
     assert_load_info(info)
     assert load_table_counts(dest_pl, "tbl_x", "tbl_y") == {"tbl_x": 2, "tbl_y": 1}
     exp_tbl_x = [{"id_x": 2, "val_x": "bar"}, {"id_x": 3, "val_x": "baz"}]
@@ -217,7 +227,7 @@ def test_without_init_load(
         c.execute_sql(f"DELETE FROM {qual_name} WHERE id_x = 2;")
 
     # process change and assert expectations
-    info = dest_pl.run(changes, write_disposition="merge")
+    info = dest_pl.run(changes)
     assert_load_info(info)
     assert load_table_counts(dest_pl, "tbl_x", "tbl_y") == {"tbl_x": 1, "tbl_y": 1}
     exp_tbl_x = [{"id_x": 3, "val_x": "baz"}]
@@ -256,7 +266,9 @@ def test_mapped_data_types(
     else:
         column_schema = {"col1": {"primary_key": True}}
 
-    table_hints: Dict[str, TTableSchema] = {"items": {"columns": column_schema}}
+    table_hints: Dict[str, TTableSchema] = {
+        "items": {"columns": column_schema, "write_disposition": "merge"}
+    }
 
     # initialize replication and create resources
     snapshot = init_replication(
@@ -290,7 +302,7 @@ def test_mapped_data_types(
     r2["col1"] = 2
     src_pl.run(items([r1, r2]))
 
-    info = dest_pl.run(changes, write_disposition="merge")
+    info = dest_pl.run(changes)
     assert_load_info(info)
     assert load_table_counts(dest_pl, "items")["items"] == 3 if init_load else 2
 
@@ -314,7 +326,7 @@ def test_mapped_data_types(
     src_pl.run(items([r1, r2]))
 
     # process changes and assert expectations
-    info = dest_pl.run(changes, write_disposition="merge")
+    info = dest_pl.run(changes)
     assert_load_info(info)
     assert load_table_counts(dest_pl, "items")["items"] == 3 if init_load else 2
     exp = [
@@ -336,7 +348,7 @@ def test_mapped_data_types(
         c.execute_sql(f"UPDATE {qual_name} SET col2 = 2.5 WHERE col1 = 2;")
 
     # process change and assert expectation
-    info = dest_pl.run(changes, write_disposition="merge")
+    info = dest_pl.run(changes)
     assert_load_info(info)
     assert load_table_counts(dest_pl, "items")["items"] == 3 if init_load else 2
     exp = [{"col1": 2, "col2": 2.5, "col3": False}]

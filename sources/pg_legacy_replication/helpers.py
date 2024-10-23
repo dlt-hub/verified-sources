@@ -23,7 +23,7 @@ from dlt.common.schema.typing import (
 from dlt.common.schema.utils import merge_column, merge_table
 from dlt.common.typing import TDataItem
 from dlt.extract.items import DataItemWithMeta
-from dlt.extract.resource import DltResource
+from dlt.extract.resource import DltResource, TResourceHints
 from dlt.sources.credentials import ConnectionStringCredentials
 from psycopg2.extensions import cursor, connection as ConnectionExt
 from psycopg2.extras import (
@@ -175,14 +175,13 @@ def _prepare_snapshot_resource(
         included_columns=included_columns,
     )
     if table_hints:
-        _apply_hints(t_rsrc, table_hints)
+        t_rsrc.merge_hints(_table_to_resource_hints(table_hints))
     return t_rsrc
 
 
-def _apply_hints(resource: DltResource, table_hints: TTableSchema) -> None:
-    return resource.apply_hints(
+def _table_to_resource_hints(table_hints: TTableSchema) -> TResourceHints:
+    return dlt.mark.make_hints(
         table_name=table_hints.get("name"),
-        parent_table_name=table_hints.get("parent"),
         write_disposition=table_hints.get("write_disposition"),
         columns=table_hints.get("columns"),
         schema_contract=table_hints.get("schema_contract"),
@@ -358,6 +357,10 @@ class MessageConsumer:
             else {}
         )
         self.table_hints = table_hints or {}
+        if table_hints:
+            for table_schema in table_hints.values():
+                if table_schema.get("columns") is None:
+                    table_schema["columns"] = {}
 
         self.consumed_all: bool = False
         # maps table names to list of data items
@@ -507,14 +510,11 @@ class ItemGenerator:
     ) -> Iterator[Union[TDataItem, DataItemWithMeta]]:
         self.last_commit_lsn = consumer.last_commit_lsn
         for table_name, data_items in consumer.data_items.items():
-            table_schema = consumer.last_table_schema.get(table_name)
-            if table_schema:
+            if table_schema := consumer.last_table_schema.get(table_name):
                 assert table_name == table_schema["name"]
-                yield dlt.mark.with_hints(  # meta item with column hints only, no data
-                    [],
-                    dlt.mark.make_hints(
-                        table_name=table_name, columns=table_schema["columns"]
-                    ),
+                yield dlt.mark.with_hints(
+                    [],  # meta item with column hints only, no data
+                    _table_to_resource_hints(table_schema),
                     create_table_variant=True,
                 )
             yield dlt.mark.with_table_name(data_items, table_name)
