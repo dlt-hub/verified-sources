@@ -294,6 +294,7 @@ def test_mapped_data_types(
         info = dest_pl.run(snapshot)
         assert_load_info(info)
         assert load_table_counts(dest_pl, "items")["items"] == 1
+    cleanup_snapshot_resources(snapshot)
 
     # insert two records in postgres table
     r1 = deepcopy(data)
@@ -476,6 +477,7 @@ def test_included_columns(
         assert get_cols(dest_pl, "tbl_x") == {"id_x", "val_x"}
         assert get_cols(dest_pl, "tbl_y") == {"id_y", "val_y"}
         assert get_cols(dest_pl, "tbl_z") == {"id_z", "val_z", "another_col_z"}
+    cleanup_snapshot_resources(snapshots)
     dest_pl.run(changes)
     assert get_cols(dest_pl, "tbl_x") == {"id_x", "val_x", "lsn", "deleted_ts"}
     assert get_cols(dest_pl, "tbl_y") == {"id_y", "val_y", "lsn", "deleted_ts"}
@@ -571,6 +573,7 @@ def test_table_hints(
             ]
             == "bigint"
         )
+    cleanup_snapshot_resources(snapshots)
     dest_pl.run(changes)
     assert (
         dest_pl.default_schema.get_table_columns("tbl_x")["another_col_x"]["data_type"]
