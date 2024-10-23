@@ -1,9 +1,8 @@
-import random
 from typing import Optional
 
 import pendulum
 import pytest
-from dlt.common.schema.typing import TTableSchema, TTableSchemaColumns
+from dlt.common.schema.typing import TTableSchema
 from dlt.common.typing import TDataItem
 from google.protobuf.json_format import ParseDict as parse_dict
 
@@ -91,9 +90,6 @@ def test_infer_table_schema(
     row_msg = RowMessage()
     parse_dict(data, row_msg)
     assert infer_table_schema(row_msg, table_hints=table_hints) == expected_schema
-
-
-LSN = random.randint(0, 10000)
 
 
 @pytest.mark.parametrize(
@@ -205,18 +201,6 @@ LSN = random.randint(0, 10000)
                 "col11": pendulum.parse("13:26:45.176451", strict=False).time(),
             },
         ),
-    ],
-)
-def test_gen_data_item(data, data_item: TDataItem):
-    row_msg = RowMessage()
-    parse_dict(data, row_msg)
-    column_schema = infer_table_schema(row_msg)["columns"]
-    assert gen_data_item(row_msg.new_tuple, column_schema=column_schema) == data_item
-
-
-@pytest.mark.parametrize(
-    "data, data_item",
-    [
         (
             {
                 "transactionId": 932,
@@ -243,11 +227,18 @@ def test_gen_data_item(data, data_item: TDataItem):
                     },
                 ],
             },
-            {"id_x": 1, "val_x": "", "_dlt_load_id": "", "_dlt_id": ""},
+            {
+                "id_x": 1,
+                "val_x": "",
+                "_dlt_load_id": "",
+                "_dlt_id": "",
+                "deleted_ts": pendulum.parse("2024-10-19T00:56:23.354856+00:00"),
+            },
         ),
     ],
 )
-def test_gen_delete_item(data, data_item: TDataItem):
+def test_gen_data_item(data, data_item: TDataItem):
     row_msg = RowMessage()
     parse_dict(data, row_msg)
-    assert gen_data_item(row_msg.old_tuple, for_delete=True) == data_item
+    column_schema = infer_table_schema(row_msg)["columns"]
+    assert gen_data_item(row_msg, column_schema=column_schema) == data_item

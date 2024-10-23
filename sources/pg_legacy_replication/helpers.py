@@ -348,19 +348,9 @@ class MessageConsumer:
         self.upto_lsn = upto_lsn
         self.table_qnames = table_qnames
         self.target_batch_size = target_batch_size
-        self.included_columns = (
-            {
-                table_name: _normalize_included_columns(columns)
-                for table_name, columns in included_columns.items()
-            }
-            if included_columns
-            else {}
-        )
-        self.table_hints = table_hints or {}
-        if table_hints:
-            for table_schema in table_hints.values():
-                if table_schema.get("columns") is None:
-                    table_schema["columns"] = {}
+
+        self.included_columns = self._normalize_columns(included_columns)
+        self.table_hints = self._normalize_hints(table_hints)
 
         self.consumed_all: bool = False
         # maps table names to list of data items
@@ -387,20 +377,15 @@ class MessageConsumer:
         row_msg = RowMessage()
         try:
             row_msg.ParseFromString(msg.payload)
-            op = row_msg.op
-            lsn = msg.data_start
-            if op == Op.BEGIN:
-                self.last_commit_ts = _epoch_micros_to_datetime(row_msg.commit_time)
-            elif op == Op.COMMIT:
-                self.process_commit(lsn)
-            elif op == Op.INSERT:
-                self.process_change(row_msg, lsn)
-            elif op == Op.UPDATE:
-                self.process_change(row_msg, lsn)
-            elif op == Op.DELETE:
-                self.process_delete(row_msg, lsn)
-            else:
+            if row_msg.op == Op.UNKNOWN:
                 raise AssertionError(f"Unsupported operation : {row_msg}")
+
+            if row_msg.op == Op.BEGIN:
+                self.last_commit_ts = _epoch_micros_to_datetime(row_msg.commit_time)
+            elif row_msg.op == Op.COMMIT:
+                self.process_commit(msg.data_start)
+            else:  # INSERT, UPDATE or DELETE
+                self.process_change(row_msg, msg.data_start)
         except StopReplication:
             raise
         except Exception:
@@ -424,42 +409,59 @@ class MessageConsumer:
             raise StopReplication
 
     def process_change(self, msg: RowMessage, lsn: int) -> None:
-        """Processes replication message of type Insert or Update"""
+        """Processes replication message of type Insert, Update or Delete"""
         if msg.table not in self.table_qnames:
             return
-        _, table_name = msg.table.split(".")
+        table_name = msg.table.split(".")[1]
+        if msg.op == Op.DELETE:
+            data_item = gen_data_item(msg)
+        else:
+            table_schema = self._get_table_schema(msg)
+            data_item = gen_data_item(
+                msg,
+                included_columns=self.included_columns.get(table_name),
+                column_schema=table_schema["columns"],
+            )
+        data_item["lsn"] = lsn
+        self.data_items[table_name].append(data_item)
+
+    def _get_table_schema(self, msg: RowMessage) -> TTableSchema:
+        table_name = msg.table.split(".")[1]
         last_table_schema = self.last_table_schema.get(table_name)
         table_schema = infer_table_schema(
             msg,
-            table_hints=self.table_hints.get(table_name),
             included_columns=self.included_columns.get(table_name),
+            table_hints=self.table_hints.get(table_name),
         )
         if last_table_schema is None:
             self.last_table_schema[table_name] = table_schema
         elif last_table_schema != table_schema:
             raise StopReplication  # table schema change
+        return table_schema
 
-        data_item = gen_data_item(
-            msg.new_tuple,
-            column_schema=table_schema["columns"],
-            included_columns=self.included_columns.get(table_name),
-        )
-        data_item["lsn"] = lsn
-        self.data_items[table_name].append(data_item)
+    @staticmethod
+    def _normalize_columns(
+        included_columns: Optional[Dict[str, TColumnNames]]
+    ) -> Dict[str, Set[str]]:
+        if not included_columns:
+            return {}
+        return {
+            table_name: {
+                col for col in ([columns] if isinstance(columns, str) else columns)
+            }
+            for table_name, columns in included_columns.items()
+        }
 
-    def process_delete(self, msg: RowMessage, lsn: int) -> None:
-        """Processes replication message of type Delete"""
-        if msg.table not in self.table_qnames:
-            return
-        _, table_name = msg.table.split(".")
-        data_item = gen_data_item(
-            msg.old_tuple,
-            for_delete=True,
-            included_columns=self.included_columns.get(table_name),
-        )
-        data_item["lsn"] = lsn
-        data_item["deleted_ts"] = _epoch_micros_to_datetime(msg.commit_time)
-        self.data_items[table_name].append(data_item)
+    @staticmethod
+    def _normalize_hints(
+        table_hints: Optional[Dict[str, TTableSchema]]
+    ) -> Dict[str, TTableSchema]:
+        """Normalize the hints by ensuring that each table schema has a 'columns' TTableSchemaColumns."""
+        if not table_hints:
+            return {}
+        for table_schema in table_hints.values():
+            table_schema.setdefault("columns", {})
+        return table_hints
 
 
 @dataclass
@@ -524,8 +526,8 @@ class ItemGenerator:
 def infer_table_schema(
     msg: RowMessage,
     *,
-    table_hints: Optional[TTableSchema] = None,
     included_columns: Optional[Set[str]] = None,
+    table_hints: Optional[TTableSchema] = None,
 ) -> TTableSchema:
     """Infers the table schema from the replication message and optional hints"""
     columns: TTableSchemaColumns = {
@@ -565,34 +567,30 @@ def infer_table_schema(
 
 
 def gen_data_item(
-    row: Sequence[DatumMessage],
+    msg: RowMessage,
     *,
     included_columns: Optional[Set[str]] = None,
     column_schema: Optional[TTableSchemaColumns] = None,
-    for_delete: bool = False,
 ) -> TDataItem:
-    """Generates data item from a row and corresponding metadata."""
+    """Generates data item from a row message and corresponding metadata."""
     data_item: TDataItem = {}
+    if msg.op != Op.DELETE:
+        row = msg.new_tuple
+    else:
+        row = msg.old_tuple
+        data_item["deleted_ts"] = _epoch_micros_to_datetime(msg.commit_time)
 
     for data in row:
         col_name = data.column_name
         if included_columns and col_name not in included_columns:
             continue
         data_type = (
-            column_schema[col_name]["data_type"] if column_schema else data.column_type
+            column_schema[col_name]["data_type"]
+            if column_schema and column_schema.get(col_name)
+            else data.column_type
         )
-        data_item[col_name] = _to_dlt_val(data, data_type, for_delete=for_delete)
+        data_item[col_name] = _to_dlt_val(
+            data, data_type, for_delete=msg.op == Op.DELETE
+        )
 
     return data_item
-
-
-def _normalize_included_columns(
-    included_columns: Optional[TColumnNames],
-) -> Optional[Set[str]]:
-    if included_columns is None:
-        return None
-    return (
-        {included_columns}
-        if isinstance(included_columns, str)
-        else set(included_columns)
-    )

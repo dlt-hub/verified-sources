@@ -27,9 +27,8 @@ def replication_resource(
 ) -> Iterable[Union[TDataItem, DataItemWithMeta]]:
     """Resource yielding data items for changes in one or more postgres tables.
 
-    - Relies on a replication slot and publication that publishes DML operations
-    (i.e. `insert`, `update`, and/or `delete`). Helper `init_replication` can be
-    used to set this up.
+    - Relies on a replication slot that publishes DML operations
+    (i.e. `insert`, `update`, and `delete`).
     - Maintains LSN of last consumed message in state to track progress.
     - At start of the run, advances the slot upto last consumed message in previous run.
     - Processes in batches to limit memory usage.
