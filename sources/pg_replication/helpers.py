@@ -573,9 +573,6 @@ class ItemGenerator:
             self.generated_all = consumer.consumed_all
 
 
-from devtools import debug
-
-
 class MessageConsumer:
     """Consumes messages from a ReplicationCursor sequentially.
 
@@ -679,8 +676,6 @@ class MessageConsumer:
             "columns": columns,
         }
 
-        debug(self.last_table_schema[decoded_msg.relation_id])
-
         # apply user input
         # 1) exclude columns
         include_columns = (
@@ -723,15 +718,6 @@ class MessageConsumer:
             ),
             create_table_variant=True,
         )
-        debug(decoded_msg)
-        debug(
-            {
-                "type": "_meta_item",
-                "table_name": table_name,
-                "write_disposition": write_disposition,
-                "columns": columns,
-            }
-        )
         self.data_items[decoded_msg.relation_id] = [meta_item]
 
     def process_change(
@@ -759,8 +745,6 @@ class MessageConsumer:
             ),
         )
         self.data_items[decoded_msg.relation_id].append(data_item)
-        debug(decoded_msg)
-        debug(data_item)
 
     @staticmethod
     def gen_data_item(

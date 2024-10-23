@@ -59,8 +59,9 @@ connectorx = ">=0.3.1"
 psycopg2-binary = ">=2.9.9"
 
 [tool.poetry.group.pg_legacy_replication.dependencies]
-psycopg2-binary = ">=2.9.9"
 protobuf = ">=4.25"
+psycopg2-binary = ">=2.9.9"
+sqlalchemy = ">=1.4"
 
 [tool.poetry.group.google_sheets.dependencies]
 google-api-python-client = "^2.78.0"
