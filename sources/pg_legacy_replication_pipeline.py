@@ -46,6 +46,12 @@ def replicate_single_table() -> None:
         slot_name=slot_name,
         schema=src_pl.dataset_name,
         table_names="my_source_table",
+        table_hints={
+            "my_source_table": {
+                "columns": {"id": {"primary_key": True}},
+                "write_disposition": "merge",
+            },
+        },
     )
 
     # insert two records in source table and propagate changes to destination
@@ -97,7 +103,7 @@ def replicate_with_initial_load() -> None:
         slot_name=slot_name,
         schema=src_pl.dataset_name,
         table_names="my_source_table",
-        take_snapshots=True,  # persist snapshot table(s) and let function return resource(s) for initial load
+        take_snapshots=True,  # let function return resource(s) for initial load
         reset=True,
     )
 
@@ -205,7 +211,7 @@ def replicate_with_column_selection() -> None:
     init_replication(  # requires the Postgres user to have the REPLICATION attribute assigned
         slot_name=slot_name,
         schema=src_pl.dataset_name,
-        table_names=["tbl_x", "tbl_y"],
+        table_names=("tbl_x", "tbl_y"),
         reset=True,
     )
 
@@ -282,8 +288,8 @@ def show_destination_table(
 ) -> None:
     with dest_pl.sql_client() as c:
         dest_qual_name = c.make_qualified_table_name(table_name)
-        dest_records = c.execute_sql(f"SELECT {column_names} FROM {dest_qual_name};")
-        print(table_name, ":", dest_records)
+        with c.execute_query(f"SELECT {column_names} FROM {dest_qual_name}") as curr:
+            print(table_name, ":\n", curr.df())
 
 
 if __name__ == "__main__":
