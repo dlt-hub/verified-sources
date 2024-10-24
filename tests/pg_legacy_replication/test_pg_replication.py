@@ -182,21 +182,13 @@ def test_without_init_load(
         table_names=("tbl_x", "tbl_y"),
     )
 
-    changes = replication_resource(
+    changes = replication_source(
         slot_name=slot_name,
         schema=src_pl.dataset_name,
         table_names=("tbl_x", "tbl_y"),
-        table_hints={
-            "tbl_x": {
-                "columns": {"id_x": {"primary_key": True}},
-                "write_disposition": "merge",
-            },
-            "tbl_y": {
-                "columns": {"id_y": {"primary_key": True}},
-                "write_disposition": "merge",
-            },
-        },
     )
+    changes.tbl_x.apply_hints(write_disposition="merge", primary_key="id_x")
+    changes.tbl_y.apply_hints(write_disposition="merge", primary_key="id_y")
 
     # change postgres table after replication has been initialized
     # these records should be in the replicated table
