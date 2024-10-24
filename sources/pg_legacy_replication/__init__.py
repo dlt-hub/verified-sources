@@ -4,11 +4,11 @@ from typing import Dict, Sequence, Optional, Iterable, Union
 
 import dlt
 from dlt.common.schema.typing import TColumnNames, TTableSchema
-from dlt.common.typing import TDataItem
-from dlt.extract.items import DataItemWithMeta
+from dlt.extract import DltResource
+from dlt.extract.items import DataItemWithMeta, TDataItem
 from dlt.sources.credentials import ConnectionStringCredentials
 
-from .helpers import advance_slot, get_max_lsn, ItemGenerator
+from .helpers import advance_slot, get_max_lsn, ItemGenerator, table_wal_handler
 
 
 @dlt.resource(
@@ -27,8 +27,7 @@ def replication_resource(
 ) -> Iterable[Union[TDataItem, DataItemWithMeta]]:
     """Resource yielding data items for changes in one or more postgres tables.
 
-    - Relies on a replication slot that publishes DML operations
-    (i.e. `insert`, `update`, and `delete`).
+    - Relies on a replication slot that publishes DML operations (i.e. `insert`, `update`, and `delete`).
     - Maintains LSN of last consumed message in state to track progress.
     - At start of the run, advances the slot upto last consumed message in previous run.
     - Processes in batches to limit memory usage.
@@ -104,3 +103,54 @@ def replication_resource(
             dlt.current.resource_state()["last_commit_lsn"] = gen.last_commit_lsn
             break
         start_lsn = gen.last_commit_lsn
+
+
+@dlt.source
+def replication_source(
+    slot_name: str,
+    schema: str,
+    table_names: Union[str, Sequence[str]],
+    credentials: ConnectionStringCredentials = dlt.secrets.value,
+    included_columns: Optional[Dict[str, TColumnNames]] = None,
+    table_hints: Optional[Dict[str, TTableSchema]] = None,
+    target_batch_size: int = 1000,
+    flush_slot: bool = True,
+) -> Sequence[DltResource]:
+    resources = []
+
+    wal_reader = replication_resource(
+        slot_name=slot_name,
+        schema=schema,
+        table_names=table_names,
+        target_batch_size=target_batch_size,
+        flush_slot=flush_slot,
+    )
+
+    for table in table_names:
+        xformer = dlt.transformer(
+            table_wal_handler(table),
+            data_from=wal_reader,
+            name=table,
+            table_name=table,
+            write_disposition=(
+                table_hints.get(table).get("write_disposition") if table_hints else None
+            ),
+            columns=table_hints.get(table).get("columns") if table_hints else None,
+            primary_key=None,
+            merge_key=None,
+            schema_contract=table_hints.get(table).get("schema_contract")
+            if table_hints
+            else None,
+            table_format=table_hints.get(table).get("table_format")
+            if table_hints
+            else None,
+            file_format=table_hints.get(table).get("file_format")
+            if table_hints
+            else None,
+            selected=True,
+            spec=None,
+            parallelized=False,
+        )
+        resources.append(xformer)
+
+    return resources

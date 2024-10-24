@@ -9,6 +9,10 @@ from typing import (
     List,
     Sequence,
     Any,
+    Iterable,
+    Tuple,
+    Callable,
+    TypedDict,
 )
 
 import dlt
@@ -21,7 +25,7 @@ from dlt.common.schema.typing import (
     TTableSchemaColumns,
 )
 from dlt.common.schema.utils import merge_column, merge_table
-from dlt.common.typing import TDataItem
+from dlt.common.typing import TDataItem, TDataItems
 from dlt.extract.items import DataItemWithMeta
 from dlt.extract.resource import DltResource, TResourceHints
 from dlt.sources.credentials import ConnectionStringCredentials
@@ -515,14 +519,31 @@ class ItemGenerator:
             # Retrieve the table schema if it exists (never for DELETEs)
             schema = consumer.last_table_schema.get(table)
             if schema:
-                yield dlt.mark.with_hints(
-                    [], _table_to_resource_hints(schema), create_table_variant=True
-                )
-
-            yield dlt.mark.with_table_name(items, table)
+                yield (table, schema)
+            yield (table, items)
 
         self.last_commit_lsn = consumer.last_commit_lsn
         self.generated_all = consumer.consumed_all
+
+
+def table_wal_handler(
+    table: str,
+) -> Callable[[TDataItem], Iterable[DataItemWithMeta]]:
+    def handle(
+        schema_or_batch: Tuple[str, Union[TTableSchema, List[TDataItem]]]
+    ) -> Iterable[DataItemWithMeta]:
+        table_name, items = schema_or_batch
+        if table_name != table:
+            return
+        if isinstance(items, Dict):
+            schema: TTableSchema = items
+            yield dlt.mark.with_hints(
+                [], _table_to_resource_hints(schema), create_table_variant=True
+            )
+        else:
+            yield dlt.mark.with_table_name(items, table)
+
+    return handle
 
 
 def infer_table_schema(
@@ -542,13 +563,13 @@ def infer_table_schema(
     columns["lsn"] = {"data_type": "bigint", "nullable": True}
     columns["deleted_ts"] = {"data_type": "timestamp", "nullable": True}
 
-    write_disposition = (
-        table_hints.get("write_disposition", "append") if table_hints else "append"
-    )
-
-    if write_disposition not in ("replace", "append"):
-        columns["lsn"]["dedup_sort"] = "desc"
-        columns["deleted_ts"]["hard_delete"] = True
+    # write_disposition = (
+    #     table_hints.get("write_disposition", "append") if table_hints else "append"
+    # )
+    #
+    # FIXME if write_disposition not in ("replace", "append"):
+    columns["lsn"]["dedup_sort"] = "desc"
+    columns["deleted_ts"]["hard_delete"] = True
 
     schema, table = msg.table.split(".")
     table_schema: TTableSchema = {"name": table, "columns": columns}

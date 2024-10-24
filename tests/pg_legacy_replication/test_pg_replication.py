@@ -6,7 +6,7 @@ import pytest
 from dlt.common.schema.typing import TTableSchema, TTableSchemaColumns
 from dlt.destinations.job_client_impl import SqlJobClientBase
 
-from sources.pg_legacy_replication import replication_resource
+from sources.pg_legacy_replication import replication_resource, replication_source
 from sources.pg_legacy_replication.helpers import (
     init_replication,
     cleanup_snapshot_resources,
@@ -50,15 +50,13 @@ def test_core_functionality(
         take_snapshots=True,
     )
 
-    changes = replication_resource(
+    changes = replication_source(
         slot_name=slot_name,
         schema=src_pl.dataset_name,
         table_names=("tbl_x", "tbl_y"),
-        table_hints={
-            "tbl_x": {"write_disposition": "merge"},
-            "tbl_y": {"write_disposition": "merge"},
-        },
     )
+    changes.tbl_x.apply_hints(write_disposition="merge", primary_key="id_x")
+    changes.tbl_y.apply_hints(write_disposition="merge", primary_key="id_y")
 
     src_pl.run(
         [
@@ -83,7 +81,7 @@ def test_core_functionality(
 
     # process changes
     info = dest_pl.run(changes)
-    assert_load_info(info)
+    assert_load_info(info, expected_load_packages=2)
     assert load_table_counts(dest_pl, "tbl_x", "tbl_y") == {"tbl_x": 3, "tbl_y": 2}
     exp_tbl_x = [
         {"id_x": 1, "val_x": "foo"},
@@ -99,7 +97,7 @@ def test_core_functionality(
 
     # process changes
     info = dest_pl.run(changes)
-    assert_load_info(info)
+    assert_load_info(info, expected_load_packages=2)
     assert load_table_counts(dest_pl, "tbl_x", "tbl_y") == {"tbl_x": 3, "tbl_y": 3}
     exp_tbl_y = [
         {"id_y": 1, "val_y": True},
@@ -118,7 +116,7 @@ def test_core_functionality(
 
     # process changes
     info = dest_pl.run(changes)
-    assert_load_info(info)
+    assert_load_info(info, expected_load_packages=2)
     assert load_table_counts(dest_pl, "tbl_x", "tbl_y") == {"tbl_x": 3, "tbl_y": 3}
     exp_tbl_x = [
         {"id_x": 1, "val_x": "foo_updated"},
@@ -140,7 +138,7 @@ def test_core_functionality(
 
     # process changes
     info = dest_pl.run(changes)
-    assert_load_info(info)
+    assert_load_info(info, expected_load_packages=2)
     assert load_table_counts(dest_pl, "tbl_x", "tbl_y") == {"tbl_x": 2, "tbl_y": 3}
     exp_tbl_x = [{"id_x": 2, "val_x": "bar"}, {"id_x": 3, "val_x": "baz"}]
     exp_tbl_y = [
