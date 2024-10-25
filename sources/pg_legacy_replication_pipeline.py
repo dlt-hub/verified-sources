@@ -3,7 +3,7 @@ import dlt
 from dlt.common.destination import Destination
 from dlt.destinations.impl.postgres.configuration import PostgresCredentials
 
-from pg_legacy_replication import replication_resource
+from pg_legacy_replication import replication_source
 from pg_legacy_replication.helpers import init_replication
 
 
@@ -42,7 +42,7 @@ def replicate_single_table() -> None:
     )
 
     # create a resource that generates items for each change in the source table
-    changes = replication_resource(
+    changes = replication_source(
         slot_name=slot_name,
         schema=src_pl.dataset_name,
         table_names="my_source_table",
@@ -113,7 +113,7 @@ def replicate_with_initial_load() -> None:
 
     # insert record in source table and propagate change to destination
     change_source_table(src_pl, "INSERT INTO {table_name} VALUES (3, true);")
-    changes = replication_resource(
+    changes = replication_source(
         slot_name=slot_name,
         schema=src_pl.dataset_name,
         table_names="my_source_table",
@@ -216,7 +216,7 @@ def replicate_with_column_selection() -> None:
     )
 
     # create a resource that generates items for each change in the schema's tables
-    changes = replication_resource(
+    changes = replication_source(
         slot_name=slot_name,
         schema=src_pl.dataset_name,
         table_names=["tbl_x", "tbl_y"],
