@@ -109,8 +109,6 @@ def replication_source(
     wal_reader = replication_resource(slot_name)
 
     return [
-        dlt.transformer(
-            table_wal_handler(table), data_from=wal_reader, name=table, table_name=table
-        )
+        dlt.transformer(table_wal_handler(table), data_from=wal_reader, name=table)
         for table in table_names
     ]

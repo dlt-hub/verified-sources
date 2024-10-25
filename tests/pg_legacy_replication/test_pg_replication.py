@@ -257,15 +257,6 @@ def test_mapped_data_types(
     src_pl.run(items(data))
     add_pk(src_pl.sql_client, "items", "col1")
 
-    if give_hints:
-        column_schema["col1"]["primary_key"] = True
-    else:
-        column_schema = {"col1": {"primary_key": True}}
-
-    table_hints: Dict[str, TTableSchema] = {
-        "items": {"columns": column_schema, "write_disposition": "merge"}
-    }
-
     # initialize replication and create resources
     snapshot = init_replication(
         slot_name=slot_name,
@@ -274,14 +265,16 @@ def test_mapped_data_types(
         take_snapshots=init_load,
     )
     if init_load and give_hints:
-        snapshot.items.apply_hints(write_disposition="merge", columns=column_schema)
+        snapshot.items.apply_hints(columns=column_schema)
 
     changes = replication_source(
         slot_name=slot_name,
         schema=src_pl.dataset_name,
         table_names="items",
-        table_hints=table_hints,
     )
+    changes.items.apply_hints(write_disposition="merge", primary_key="col1")
+    if give_hints:
+        changes.items.apply_hints(columns=column_schema)
 
     # initial load
     dest_pl = dlt.pipeline(
