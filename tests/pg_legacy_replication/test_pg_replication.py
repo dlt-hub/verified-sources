@@ -55,10 +55,6 @@ def test_core_functionality(
         slot_name=slot_name,
         schema=src_pl.dataset_name,
         table_names=("tbl_x", "tbl_y"),
-        table_hints={
-            "tbl_x": {"write_disposition": "merge"},
-            "tbl_y": {"write_disposition": "merge"},
-        },
     )
     changes.tbl_x.apply_hints(write_disposition="merge", primary_key="id_x")
     changes.tbl_y.apply_hints(write_disposition="merge", primary_key="id_y")
@@ -76,13 +72,13 @@ def test_core_functionality(
 
     # initial load
     info = dest_pl.run(snapshots)
+    cleanup_snapshot_resources(snapshots)
     assert_load_info(info)
     assert load_table_counts(dest_pl, "tbl_x", "tbl_y") == {"tbl_x": 1, "tbl_y": 1}
     exp_tbl_x = [{"id_x": 1, "val_x": "foo"}]
     exp_tbl_y = [{"id_y": 1, "val_y": True}]
     assert_loaded_data(dest_pl, "tbl_x", ["id_x", "val_x"], exp_tbl_x, "id_x")
     assert_loaded_data(dest_pl, "tbl_y", ["id_y", "val_y"], exp_tbl_y, "id_y")
-    cleanup_snapshot_resources(snapshots)
 
     # process changes
     info = dest_pl.run(changes)
@@ -276,8 +272,9 @@ def test_mapped_data_types(
         schema=src_pl.dataset_name,
         table_names="items",
         take_snapshots=init_load,
-        table_hints=table_hints if give_hints else None,
     )
+    if init_load and give_hints:
+        snapshot.items.apply_hints(write_disposition="merge", columns=column_schema)
 
     changes = replication_source(
         slot_name=slot_name,
@@ -292,9 +289,9 @@ def test_mapped_data_types(
     )
     if init_load:
         info = dest_pl.run(snapshot)
+        cleanup_snapshot_resources(snapshot)
         assert_load_info(info)
         assert load_table_counts(dest_pl, "items")["items"] == 1
-    cleanup_snapshot_resources(snapshot)
 
     # insert two records in postgres table
     r1 = deepcopy(data)
@@ -474,10 +471,11 @@ def test_included_columns(
     )
     if init_load:
         dest_pl.run(snapshots)
+        cleanup_snapshot_resources(snapshots)
         assert get_cols(dest_pl, "tbl_x") == {"id_x", "val_x"}
         assert get_cols(dest_pl, "tbl_y") == {"id_y", "val_y"}
         assert get_cols(dest_pl, "tbl_z") == {"id_z", "val_z", "another_col_z"}
-    cleanup_snapshot_resources(snapshots)
+
     dest_pl.run(changes)
     assert get_cols(dest_pl, "tbl_x") == {"id_x", "val_x", "lsn", "deleted_ts"}
     assert get_cols(dest_pl, "tbl_y") == {"id_y", "val_y", "lsn", "deleted_ts"}
@@ -530,8 +528,10 @@ def test_table_hints(
         schema=src_pl.dataset_name,
         table_names=("tbl_x", "tbl_y", "tbl_z"),
         take_snapshots=init_load,
-        table_hints=table_hints,
     )
+    if init_load:
+        snapshots.tbl_x.apply_hints(columns={"another_col_x": {"data_type": "double"}})
+        snapshots.tbl_y.apply_hints(columns={"another_col_y": {"precision": 32}})
 
     changes = replication_source(
         slot_name=slot_name,
@@ -553,8 +553,10 @@ def test_table_hints(
     dest_pl = dlt.pipeline(
         pipeline_name="dest_pl", destination=destination_name, dev_mode=True
     )
+
     if init_load:
         dest_pl.run(snapshots)
+        cleanup_snapshot_resources(snapshots)
         assert (
             dest_pl.default_schema.get_table_columns("tbl_x")["another_col_x"][
                 "data_type"
@@ -573,7 +575,7 @@ def test_table_hints(
             ]
             == "bigint"
         )
-    cleanup_snapshot_resources(snapshots)
+
     dest_pl.run(changes)
     assert (
         dest_pl.default_schema.get_table_columns("tbl_x")["another_col_x"]["data_type"]

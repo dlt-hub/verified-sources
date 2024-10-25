@@ -66,7 +66,7 @@ def replication_source(
 
         Yields:
             Data items for changes published in the publication.
-        """
+    """
     if isinstance(table_names, str):
         table_names = [table_names]
 
@@ -74,7 +74,6 @@ def replication_source(
     def replication_resource(
         slot_name: str,
     ) -> Iterable[Union[TDataItem, DataItemWithMeta]]:
-
         # start where we left off in previous run
         start_lsn = dlt.current.resource_state().get("last_commit_lsn", 0)
         if flush_slot:

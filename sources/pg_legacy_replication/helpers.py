@@ -27,7 +27,8 @@ from dlt.common.schema.typing import (
 from dlt.common.schema.utils import merge_column, merge_table
 from dlt.common.typing import TDataItem, TDataItems
 from dlt.extract.items import DataItemWithMeta
-from dlt.extract.resource import DltResource, TResourceHints
+from dlt.extract import DltSource, DltResource
+from dlt.extract.resource import TResourceHints
 from dlt.sources.credentials import ConnectionStringCredentials
 from psycopg2.extensions import cursor, connection as ConnectionExt
 from psycopg2.extras import (
@@ -44,6 +45,7 @@ from .schema_types import _epoch_micros_to_datetime, _to_dlt_column_schema, _to_
 
 
 @dlt.sources.config.with_config(sections=("sources", "pg_legacy_replication"))
+@dlt.source
 def init_replication(
     slot_name: str,
     schema: str,
@@ -51,9 +53,8 @@ def init_replication(
     credentials: ConnectionStringCredentials = dlt.secrets.value,
     take_snapshots: bool = False,
     included_columns: Optional[Dict[str, TColumnNames]] = None,
-    table_hints: Optional[Dict[str, TTableSchema]] = None,
     reset: bool = False,
-) -> Optional[List[DltResource]]:
+) -> Iterable[DltResource]:
     """Initializes replication for one, several, or all tables within a schema.
 
     Can be called repeatedly with the same `slot_name`:
@@ -112,7 +113,7 @@ def init_replication(
     # Close connection if no snapshots are needed
     if not take_snapshots:
         rep_conn.close()
-        return None
+        return
 
     # Ensure `sqlalchemy` and `sql_table` are available
     _import_sql_table_resource()
@@ -133,17 +134,13 @@ def init_replication(
     if isinstance(table_names, str):
         table_names = [table_names]
     included_columns = included_columns or {}
-    table_hints = table_hints or {}
-    return [
-        _prepare_snapshot_resource(
+    for table in table_names:
+        yield _prepare_snapshot_resource(
             engine,
-            table_name,
+            table,
             schema,
-            included_columns=included_columns.get(table_name),
-            table_hints=table_hints.get(table_name),
+            included_columns=included_columns.get(table),
         )
-        for table_name in table_names
-    ]
 
 
 def _configure_engine(
@@ -170,36 +167,22 @@ def _prepare_snapshot_resource(
     schema: str,
     *,
     included_columns: Optional[TColumnNames] = None,
-    table_hints: Optional[TTableSchema] = None,
 ) -> DltResource:
     t_rsrc: DltResource = sql_table(  # type: ignore[name-defined]
         credentials=engine,
         table=table_name,
         schema=schema,
         included_columns=included_columns,
-    )
-    if table_hints:
-        t_rsrc.merge_hints(_table_to_resource_hints(table_hints))
+    )f
     return t_rsrc
 
 
-def _table_to_resource_hints(table_hints: TTableSchema) -> TResourceHints:
-    return dlt.mark.make_hints(
-        table_name=table_hints.get("name"),
-        write_disposition=table_hints.get("write_disposition"),
-        columns=table_hints.get("columns"),
-        schema_contract=table_hints.get("schema_contract"),
-        table_format=table_hints.get("table_format"),
-        file_format=table_hints.get("file_format"),
-    )
-
-
-def cleanup_snapshot_resources(snapshots: List[DltResource]) -> None:
+def cleanup_snapshot_resources(snapshots: DltSource) -> None:
     """FIXME Awful hack to release the underlying SQL engine when snapshotting tables"""
-    if not snapshots:
-        return
-    engine: Engine = snapshots[0]._explicit_args["credentials"]
-    engine.dispose()
+    resources = snapshots.resources
+    if resources:
+        engine: Engine = next(iter(resources.values()))._explicit_args["credentials"]
+        engine.dispose()
 
 
 @dlt.sources.config.with_config(sections=("sources", "pg_legacy_replication"))
@@ -543,6 +526,17 @@ def table_wal_handler(
                 yield dlt.mark.with_table_name(items, table)
 
     return handle
+
+
+def _table_to_resource_hints(table_hints: TTableSchema) -> TResourceHints:
+    return dlt.mark.make_hints(
+        table_name=table_hints.get("name"),
+        write_disposition=table_hints.get("write_disposition"),
+        columns=table_hints.get("columns"),
+        schema_contract=table_hints.get("schema_contract"),
+        table_format=table_hints.get("table_format"),
+        file_format=table_hints.get("file_format"),
+    )
 
 
 def infer_table_schema(
