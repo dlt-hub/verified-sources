@@ -533,15 +533,14 @@ def table_wal_handler(
         schema_or_batch: Tuple[str, Union[TTableSchema, List[TDataItem]]]
     ) -> Iterable[DataItemWithMeta]:
         table_name, items = schema_or_batch
-        if table_name != table:
-            return
-        if isinstance(items, Dict):
-            schema: TTableSchema = items
-            yield dlt.mark.with_hints(
-                [], _table_to_resource_hints(schema), create_table_variant=True
-            )
-        else:
-            yield dlt.mark.with_table_name(items, table)
+        if table_name == table:
+            if isinstance(items, Dict):
+                schema: TTableSchema = items
+                yield dlt.mark.with_hints(
+                    [], _table_to_resource_hints(schema), create_table_variant=True
+                )
+            else:
+                yield dlt.mark.with_table_name(items, table)
 
     return handle
 

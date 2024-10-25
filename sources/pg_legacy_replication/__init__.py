@@ -11,11 +11,8 @@ from dlt.sources.credentials import ConnectionStringCredentials
 from .helpers import advance_slot, get_max_lsn, ItemGenerator, table_wal_handler
 
 
-@dlt.resource(
-    name=lambda args: args["slot_name"] + "_" + args["schema"],
-    standalone=True,
-)
-def replication_resource(
+@dlt.source
+def replication_source(
     slot_name: str,
     schema: str,
     table_names: Union[str, Sequence[str]],
@@ -24,8 +21,8 @@ def replication_resource(
     table_hints: Optional[Dict[str, TTableSchema]] = None,
     target_batch_size: int = 1000,
     flush_slot: bool = True,
-) -> Iterable[Union[TDataItem, DataItemWithMeta]]:
-    """Resource yielding data items for changes in one or more postgres tables.
+) -> Sequence[DltResource]:
+    """Source yielding data items for changes in one or more postgres tables.
 
     - Relies on a replication slot that publishes DML operations (i.e. `insert`, `update`, and `delete`).
     - Maintains LSN of last consumed message in state to track progress.
@@ -69,88 +66,52 @@ def replication_resource(
 
         Yields:
             Data items for changes published in the publication.
-    """
-    # start where we left off in previous run
-    start_lsn = dlt.current.resource_state().get("last_commit_lsn", 0)
-    if flush_slot:
-        advance_slot(start_lsn, slot_name, credentials)
-
-    # continue until last message in replication slot
-    options: Dict[str, str] = {}
-    upto_lsn = get_max_lsn(slot_name, credentials)
-    if upto_lsn is None:
-        return
-
+        """
     if isinstance(table_names, str):
         table_names = [table_names]
-    table_qnames = {f"{schema}.{table_name}" for table_name in table_names}
 
-    # generate items in batches
-    while True:
-        gen = ItemGenerator(
-            credentials=credentials,
-            slot_name=slot_name,
-            table_qnames=table_qnames,
-            options=options,
-            upto_lsn=upto_lsn,
-            start_lsn=start_lsn,
-            target_batch_size=target_batch_size,
-            included_columns=included_columns,
-            table_hints=table_hints,
+    @dlt.resource(name=lambda args: args["slot_name"], standalone=True)
+    def replication_resource(
+        slot_name: str,
+    ) -> Iterable[Union[TDataItem, DataItemWithMeta]]:
+
+        # start where we left off in previous run
+        start_lsn = dlt.current.resource_state().get("last_commit_lsn", 0)
+        if flush_slot:
+            advance_slot(start_lsn, slot_name, credentials)
+
+        # continue until last message in replication slot
+        options: Dict[str, str] = {}
+        upto_lsn = get_max_lsn(slot_name, credentials)
+        if upto_lsn is None:
+            return
+
+        table_qnames = {f"{schema}.{table_name}" for table_name in table_names}
+
+        # generate items in batches
+        while True:
+            gen = ItemGenerator(
+                credentials=credentials,
+                slot_name=slot_name,
+                table_qnames=table_qnames,
+                options=options,
+                upto_lsn=upto_lsn,
+                start_lsn=start_lsn,
+                target_batch_size=target_batch_size,
+                included_columns=included_columns,
+                table_hints=table_hints,
+            )
+            yield from gen
+            if gen.generated_all:
+                dlt.current.resource_state()["last_commit_lsn"] = gen.last_commit_lsn
+                break
+            start_lsn = gen.last_commit_lsn
+
+    wal_reader = replication_resource(slot_name)
+
+    return [
+        dlt.transformer(
+            table_wal_handler(table), data_from=wal_reader, name=table, table_name=table
         )
-        yield from gen
-        if gen.generated_all:
-            dlt.current.resource_state()["last_commit_lsn"] = gen.last_commit_lsn
-            break
-        start_lsn = gen.last_commit_lsn
-
-
-@dlt.source
-def replication_source(
-    slot_name: str,
-    schema: str,
-    table_names: Union[str, Sequence[str]],
-    credentials: ConnectionStringCredentials = dlt.secrets.value,
-    included_columns: Optional[Dict[str, TColumnNames]] = None,
-    table_hints: Optional[Dict[str, TTableSchema]] = None,
-    target_batch_size: int = 1000,
-    flush_slot: bool = True,
-) -> Sequence[DltResource]:
-    resources = []
-
-    wal_reader = replication_resource(
-        slot_name=slot_name,
-        schema=schema,
-        table_names=table_names,
-        target_batch_size=target_batch_size,
-        flush_slot=flush_slot,
-    )
-
-    for table in table_names:
-        xformer = dlt.transformer(
-            table_wal_handler(table),
-            data_from=wal_reader,
-            name=table,
-            table_name=table,
-            write_disposition=(
-                table_hints.get(table).get("write_disposition") if table_hints else None
-            ),
-            columns=table_hints.get(table).get("columns") if table_hints else None,
-            primary_key=None,
-            merge_key=None,
-            schema_contract=table_hints.get(table).get("schema_contract")
-            if table_hints
-            else None,
-            table_format=table_hints.get(table).get("table_format")
-            if table_hints
-            else None,
-            file_format=table_hints.get(table).get("file_format")
-            if table_hints
-            else None,
-            selected=True,
-            spec=None,
-            parallelized=False,
-        )
-        resources.append(xformer)
-
-    return resources
+        for table in table_names
+    ]
