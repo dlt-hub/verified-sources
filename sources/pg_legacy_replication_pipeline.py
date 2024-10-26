@@ -1,11 +1,9 @@
 import dlt
-
 from dlt.common.destination import Destination
 from dlt.destinations.impl.postgres.configuration import PostgresCredentials
 
 from pg_legacy_replication import replication_source
 from pg_legacy_replication.helpers import init_replication
-
 
 PG_CREDS = dlt.secrets.get("sources.pg_replication.credentials", PostgresCredentials)
 
@@ -46,13 +44,8 @@ def replicate_single_table() -> None:
         slot_name=slot_name,
         schema=src_pl.dataset_name,
         table_names="my_source_table",
-        table_hints={
-            "my_source_table": {
-                "columns": {"id": {"primary_key": True}},
-                "write_disposition": "merge",
-            },
-        },
     )
+    changes.my_source_table.apply_hints(write_disposition="merge", primary_key="id")
 
     # insert two records in source table and propagate changes to destination
     change_source_table(

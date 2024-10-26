@@ -3,7 +3,7 @@ from typing import Dict, Sequence, Tuple
 
 import dlt
 import pytest
-from dlt.common.schema.typing import TTableSchema
+from dlt.common.schema.typing import TTableSchemaColumns
 from dlt.destinations.job_client_impl import SqlJobClientBase
 
 from sources.pg_legacy_replication import replication_source
@@ -11,7 +11,6 @@ from sources.pg_legacy_replication.helpers import (
     init_replication,
     cleanup_snapshot_resources,
 )
-from sources.rest_api import exclude_keys
 from tests.utils import (
     ALL_DESTINATIONS,
     assert_load_info,
@@ -19,6 +18,11 @@ from tests.utils import (
 )
 from .cases import TABLE_ROW_ALL_DATA_TYPES, TABLE_UPDATE_COLUMNS_SCHEMA
 from .utils import add_pk, assert_loaded_data
+
+merge_hints: TTableSchemaColumns = {
+    "deleted_ts": {"hard_delete": True},
+    "lsn": {"dedup_sort": "desc"},
+}
 
 
 @pytest.mark.parametrize("destination_name", ALL_DESTINATIONS)
@@ -56,8 +60,12 @@ def test_core_functionality(
         schema=src_pl.dataset_name,
         table_names=("tbl_x", "tbl_y"),
     )
-    changes.tbl_x.apply_hints(write_disposition="merge", primary_key="id_x")
-    changes.tbl_y.apply_hints(write_disposition="merge", primary_key="id_y")
+    changes.tbl_x.apply_hints(
+        write_disposition="merge", primary_key="id_x", columns=merge_hints
+    )
+    changes.tbl_y.apply_hints(
+        write_disposition="merge", primary_key="id_y", columns=merge_hints
+    )
 
     src_pl.run(
         [
@@ -188,8 +196,12 @@ def test_without_init_load(
         schema=src_pl.dataset_name,
         table_names=("tbl_x", "tbl_y"),
     )
-    changes.tbl_x.apply_hints(write_disposition="merge", primary_key="id_x")
-    changes.tbl_y.apply_hints(write_disposition="merge", primary_key="id_y")
+    changes.tbl_x.apply_hints(
+        write_disposition="merge", primary_key="id_x", columns=merge_hints
+    )
+    changes.tbl_y.apply_hints(
+        write_disposition="merge", primary_key="id_y", columns=merge_hints
+    )
 
     # change postgres table after replication has been initialized
     # these records should be in the replicated table
@@ -272,7 +284,9 @@ def test_mapped_data_types(
         schema=src_pl.dataset_name,
         table_names="items",
     )
-    changes.items.apply_hints(write_disposition="merge", primary_key="col1")
+    changes.items.apply_hints(
+        write_disposition="merge", primary_key="col1", columns=merge_hints
+    )
     if give_hints:
         changes.items.apply_hints(columns=column_schema)
 
@@ -483,7 +497,7 @@ def test_included_columns(
 
 @pytest.mark.parametrize("destination_name", ALL_DESTINATIONS)
 @pytest.mark.parametrize("init_load", [True, False])
-def test_table_hints(
+def test_column_hints(
     src_config: Tuple[dlt.Pipeline, str], destination_name: str, init_load: bool
 ) -> None:
     @dlt.resource
@@ -510,9 +524,9 @@ def test_table_hints(
     )
 
     # initialize replication and create resources
-    table_hints: Dict[str, TTableSchema] = {
-        "tbl_x": {"columns": {"another_col_x": {"data_type": "double"}}},
-        "tbl_y": {"columns": {"another_col_y": {"precision": 32}}},
+    column_hints: Dict[str, TTableSchemaColumns] = {
+        "tbl_x": {"another_col_x": {"data_type": "double"}},
+        "tbl_y": {"another_col_y": {"precision": 32}},
         # tbl_z is not specified, hence all columns should be included
     }
 
@@ -530,7 +544,7 @@ def test_table_hints(
         slot_name=slot_name,
         schema=src_pl.dataset_name,
         table_names=("tbl_x", "tbl_y", "tbl_z"),
-        table_hints=table_hints,
+        column_hints=column_hints,
     )
 
     # update three postgres tables

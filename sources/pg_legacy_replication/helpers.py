@@ -10,9 +10,8 @@ from typing import (
     Sequence,
     Any,
     Iterable,
-    Tuple,
     Callable,
-    TypedDict,
+    NamedTuple,
 )
 
 import dlt
@@ -24,13 +23,12 @@ from dlt.common.schema.typing import (
     TTableSchema,
     TTableSchemaColumns,
 )
-from dlt.common.schema.utils import merge_column, merge_table
-from dlt.common.typing import TDataItem, TDataItems
-from dlt.extract.items import DataItemWithMeta
+from dlt.common.schema.utils import merge_column
+from dlt.common.typing import TDataItem
 from dlt.extract import DltSource, DltResource
-from dlt.extract.resource import TResourceHints
+from dlt.extract.items import DataItemWithMeta
 from dlt.sources.credentials import ConnectionStringCredentials
-from psycopg2.extensions import cursor, connection as ConnectionExt
+from psycopg2.extensions import connection as ConnectionExt
 from psycopg2.extras import (
     LogicalReplicationConnection,
     ReplicationCursor,
@@ -40,7 +38,7 @@ from psycopg2.extras import (
 from sqlalchemy import Connection as ConnectionSqla, Engine, event
 
 from .exceptions import SqlDatabaseSourceImportError
-from .pg_logicaldec_pb2 import DatumMessage, Op, RowMessage
+from .pg_logicaldec_pb2 import Op, RowMessage
 from .schema_types import _epoch_micros_to_datetime, _to_dlt_column_schema, _to_dlt_val
 
 
@@ -167,17 +165,6 @@ def cleanup_snapshot_resources(snapshots: DltSource) -> None:
     if resources:
         engine: Engine = next(iter(resources.values()))._explicit_args["credentials"]
         engine.dispose()
-
-
-@dlt.sources.config.with_config(sections=("sources", "pg_legacy_replication"))
-def get_pg_version(
-    cur: cursor = None,
-    credentials: ConnectionStringCredentials = dlt.secrets.value,
-) -> int:
-    """Returns Postgres server version as int."""
-    if cur is not None:
-        return cur.connection.server_version
-    return _get_conn(credentials).server_version
 
 
 def create_replication_slot(  # type: ignore[return]
@@ -314,14 +301,11 @@ class MessageConsumer:
         table_qnames: Set[str],
         target_batch_size: int = 1000,
         included_columns: Optional[Dict[str, TColumnNames]] = None,
-        table_hints: Optional[Dict[str, TTableSchema]] = None,
     ) -> None:
         self.upto_lsn = upto_lsn
         self.table_qnames = table_qnames
         self.target_batch_size = target_batch_size
-
         self.included_columns = self._normalize_columns(included_columns)
-        self.table_hints = self._normalize_hints(table_hints)
 
         self.consumed_all: bool = False
         # maps table names to list of data items
@@ -389,9 +373,7 @@ class MessageConsumer:
         else:
             table_schema = self._get_table_schema(msg)
             data_item = gen_data_item(
-                msg,
-                included_columns=self.included_columns.get(table_name),
-                column_schema=table_schema["columns"],
+                msg, self.included_columns.get(table_name), table_schema["columns"]
             )
         data_item["lsn"] = lsn
         self.data_items[table_name].append(data_item)
@@ -399,11 +381,7 @@ class MessageConsumer:
     def _get_table_schema(self, msg: RowMessage) -> TTableSchema:
         table_name = msg.table.split(".")[1]
         last_table_schema = self.last_table_schema.get(table_name)
-        table_schema = infer_table_schema(
-            msg,
-            included_columns=self.included_columns.get(table_name),
-            table_hints=self.table_hints.get(table_name),
-        )
+        table_schema = infer_table_schema(msg, self.included_columns.get(table_name))
         if last_table_schema is None:
             self.last_table_schema[table_name] = table_schema
         elif last_table_schema != table_schema:
@@ -423,16 +401,11 @@ class MessageConsumer:
             for table_name, columns in included_columns.items()
         }
 
-    @staticmethod
-    def _normalize_hints(
-        table_hints: Optional[Dict[str, TTableSchema]]
-    ) -> Dict[str, TTableSchema]:
-        """Normalize the hints by ensuring that each table schema has a 'columns' TTableSchemaColumns."""
-        if not table_hints:
-            return {}
-        for table_schema in table_hints.values():
-            table_schema.setdefault("columns", {})
-        return table_hints
+
+class TableItems(NamedTuple):
+    table: str
+    schema: Optional[TTableSchema]
+    items: List[TDataItem]
 
 
 @dataclass
@@ -440,16 +413,14 @@ class ItemGenerator:
     credentials: ConnectionStringCredentials
     slot_name: str
     table_qnames: Set[str]
-    options: Dict[str, str]
     upto_lsn: int
     start_lsn: int = 0
     target_batch_size: int = 1000
     included_columns: Optional[Dict[str, TColumnNames]] = None
-    table_hints: Optional[Dict[str, TTableSchema]] = None
     last_commit_lsn: Optional[int] = field(default=None, init=False)
     generated_all: bool = False
 
-    def __iter__(self) -> Iterator[Tuple[Union[str, TTableSchema], List[TDataItem]]]:
+    def __iter__(self) -> Iterator[TableItems]:
         """Yields replication messages from MessageConsumer.
 
         Starts replication of messages published by the publication from the replication slot.
@@ -459,17 +430,13 @@ class ItemGenerator:
         try:
             cur = _get_rep_conn(self.credentials).cursor()
             cur.start_replication(
-                slot_name=self.slot_name,
-                start_lsn=self.start_lsn,
-                decode=False,
-                options=self.options,
+                slot_name=self.slot_name, start_lsn=self.start_lsn, decode=False
             )
             consumer = MessageConsumer(
                 upto_lsn=self.upto_lsn,
                 table_qnames=self.table_qnames,
                 target_batch_size=self.target_batch_size,
                 included_columns=self.included_columns,
-                table_hints=self.table_hints,
             )
             cur.consume_stream(consumer)
         except StopReplication:  # completed batch or reached `upto_lsn`
@@ -477,51 +444,41 @@ class ItemGenerator:
         finally:
             cur.connection.close()
             for table, data_items in consumer.data_items.items():
-                # Yield schema if available; otherwise, yield the table name with items
-                yield (consumer.last_table_schema.get(table, table), data_items)
+                yield TableItems(
+                    table, consumer.last_table_schema.get(table), data_items
+                )
             # Update state after flush
             self.last_commit_lsn = consumer.last_commit_lsn
             self.generated_all = consumer.consumed_all
 
 
-def table_wal_handler(
-    table: str,
-) -> Callable[[TDataItem], Iterable[DataItemWithMeta]]:
-    def handle(
-        data_items: Tuple[Union[str, TTableSchema], List[TDataItem]]
-    ) -> Iterable[DataItemWithMeta]:
-        table_or_schema, items = data_items
-        if isinstance(table_or_schema, Dict):
-            table_name = table_or_schema["name"]
-            if table_name == table:
-                yield dlt.mark.with_hints(
-                    [],
-                    _table_to_resource_hints(table_or_schema),
-                    create_table_variant=True,
-                )
-                yield dlt.mark.with_table_name(items, table)
-        elif table_or_schema == table:
-            yield dlt.mark.with_table_name(items, table)
+def create_table_dispatch(
+    table: str, column_hints: Optional[TTableSchemaColumns] = None
+) -> Callable[[TableItems], Iterable[DataItemWithMeta]]:
+    """Creates a dispatch handler that processes data items based on a specified table and optional column hints."""
+
+    def handle(table_items: TableItems) -> Iterable[DataItemWithMeta]:
+        if table_items.table != table:
+            return
+        if schema := table_items.schema:
+            columns = schema["columns"]
+            if column_hints:
+                for col_name, col_hint in column_hints.items():
+                    columns[col_name] = merge_column(
+                        columns.get(col_name, {}), col_hint
+                    )
+            yield dlt.mark.with_hints(
+                [],
+                dlt.mark.make_hints(table_name=table, columns=columns),
+                create_table_variant=True,
+            )
+        yield dlt.mark.with_table_name(table_items.items, table)
 
     return handle
 
 
-def _table_to_resource_hints(table_hints: TTableSchema) -> TResourceHints:
-    return dlt.mark.make_hints(
-        table_name=table_hints.get("name"),
-        write_disposition=table_hints.get("write_disposition"),
-        columns=table_hints.get("columns"),
-        schema_contract=table_hints.get("schema_contract"),
-        table_format=table_hints.get("table_format"),
-        file_format=table_hints.get("file_format"),
-    )
-
-
 def infer_table_schema(
-    msg: RowMessage,
-    *,
-    included_columns: Optional[Set[str]] = None,
-    table_hints: Optional[TTableSchema] = None,
+    msg: RowMessage, included_columns: Optional[Set[str]] = None
 ) -> TTableSchema:
     """Infers the table schema from the replication message and optional hints"""
     columns: TTableSchemaColumns = {
@@ -534,35 +491,14 @@ def infer_table_schema(
     columns["lsn"] = {"data_type": "bigint", "nullable": True}
     columns["deleted_ts"] = {"data_type": "timestamp", "nullable": True}
 
-    # write_disposition = (
-    #     table_hints.get("write_disposition", "append") if table_hints else "append"
-    # )
-    #
-    # FIXME if write_disposition not in ("replace", "append"):
-    columns["lsn"]["dedup_sort"] = "desc"
-    columns["deleted_ts"]["hard_delete"] = True
-
-    schema, table = msg.table.split(".")
-    table_schema: TTableSchema = {"name": table, "columns": columns}
-
-    if table_hints:
-        table_hints["name"] = table
-        # FIXME I dont't know why I have to do this, but merge_table doesn't work right or I'm missing something
-        col_hints = table_hints.get("columns")
-        if col_hints:
-            col_hints = {
-                col_name: merge_column(columns[col_name], col_schema)
-                for col_name, col_schema in col_hints.items()
-                if not included_columns or col_name in included_columns
-            }
-        merge_table(schema, table_schema, table_hints)
-
-    return table_schema
+    return {
+        "name": (msg.table.split(".")[1]),
+        "columns": columns,
+    }
 
 
 def gen_data_item(
     msg: RowMessage,
-    *,
     included_columns: Optional[Set[str]] = None,
     column_schema: Optional[TTableSchemaColumns] = None,
 ) -> TDataItem:
