@@ -658,65 +658,6 @@ def test_table_schema_change(
     )
 
 
-# def test_replicate_schema(src_config: Tuple[dlt.Pipeline, str]) -> None:
-#     if get_pg_version() < 150000:
-#         pytest.skip("incompatible Postgres server version")
-#     if not is_super_user(src_config[0].sql_client):
-#         pytest.skip("Postgres user needs to be superuser")
-#
-#     @dlt.resource
-#     def tbl_x(data):
-#         yield data
-#
-#     @dlt.resource
-#     def tbl_y(data):
-#         yield data
-#
-#     @dlt.resource
-#     def tbl_z(data):
-#         yield data
-#
-#     src_pl, slot_name = src_config
-#
-#     # create two postgres tables
-#     src_pl.run(
-#         [
-#             tbl_x({"id_x": 1, "val_x": "foo"}),
-#             tbl_y({"id_y": 1, "val_y": "foo"}),
-#         ]
-#     )
-#
-#     # initialize replication and create resource
-#     init_replication(
-#         slot_name=slot_name,
-#         schema=src_pl.dataset_name,  # we only specify `schema`, not `table_names`
-#         publish="insert",
-#     )
-#     changes = replication_resource(slot_name)
-#
-#     # change source tables and load to destination
-#     src_pl.run(
-#         [
-#             tbl_x({"id_x": 2, "val_x": "foo"}),
-#             tbl_y({"id_y": 2, "val_y": "foo"}),
-#         ]
-#     )
-#     dest_pl = dlt.pipeline(pipeline_name="dest_pl", dev_mode=True)
-#     dest_pl.extract(changes)
-#     assert set(dest_pl.default_schema.data_table_names()) == {"tbl_x", "tbl_y"}
-#
-#     # introduce new table in source and assert it gets included in the replication
-#     src_pl.run(
-#         [
-#             tbl_x({"id_x": 3, "val_x": "foo"}),
-#             tbl_y({"id_y": 3, "val_y": "foo"}),
-#             tbl_z({"id_z": 1, "val_z": "foo"}),
-#         ]
-#     )
-#     dest_pl.extract(changes)
-#     assert set(dest_pl.default_schema.data_table_names()) == {"tbl_x", "tbl_y", "tbl_z"}
-
-
 def test_batching(src_config: Tuple[dlt.Pipeline, str]) -> None:
     # this test asserts the number of data items yielded by the replication resource
     # is not affected by `target_batch_size` and the number of replication messages per transaction

@@ -72,7 +72,7 @@ def init_replication(
         schema (str): Name of the schema to replicate tables from.
         table_names (Optional[Union[str, Sequence[str]]]):  Name(s) of the table(s)
           to include in the publication. If not provided, all tables in the schema
-          are included (also tables added to the schema after the publication was created).
+          are included.
         credentials (ConnectionStringCredentials): Postgres database credentials.
         take_snapshots (bool): Whether the table states in the snapshot exported
           during replication slot creation are persisted to tables. If true, a
@@ -305,7 +305,14 @@ class MessageConsumer:
         self.upto_lsn = upto_lsn
         self.table_qnames = table_qnames
         self.target_batch_size = target_batch_size
-        self.included_columns = self._normalize_columns(included_columns)
+        self.included_columns = (
+            {
+                table: {s for s in ([cols] if isinstance(cols, str) else cols)}
+                for table, cols in included_columns.items()
+            }
+            if included_columns
+            else {}
+        )
 
         self.consumed_all: bool = False
         # maps table names to list of data items
@@ -371,15 +378,14 @@ class MessageConsumer:
         if msg.op == Op.DELETE:
             data_item = gen_data_item(msg)
         else:
-            table_schema = self._get_table_schema(msg)
+            table_schema = self._get_table_schema(msg, table_name)
             data_item = gen_data_item(
                 msg, self.included_columns.get(table_name), table_schema["columns"]
             )
         data_item["lsn"] = lsn
         self.data_items[table_name].append(data_item)
 
-    def _get_table_schema(self, msg: RowMessage) -> TTableSchema:
-        table_name = msg.table.split(".")[1]
+    def _get_table_schema(self, msg: RowMessage, table_name: str) -> TTableSchema:
         last_table_schema = self.last_table_schema.get(table_name)
         table_schema = infer_table_schema(msg, self.included_columns.get(table_name))
         if last_table_schema is None:
@@ -387,19 +393,6 @@ class MessageConsumer:
         elif last_table_schema != table_schema:
             raise StopReplication  # table schema change
         return table_schema
-
-    @staticmethod
-    def _normalize_columns(
-        included_columns: Optional[Dict[str, TColumnNames]]
-    ) -> Dict[str, Set[str]]:
-        if not included_columns:
-            return {}
-        return {
-            table_name: {
-                col for col in ([columns] if isinstance(columns, str) else columns)
-            }
-            for table_name, columns in included_columns.items()
-        }
 
 
 class TableItems(NamedTuple):

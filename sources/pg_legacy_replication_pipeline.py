@@ -45,7 +45,14 @@ def replicate_single_table() -> None:
         schema=src_pl.dataset_name,
         table_names="my_source_table",
     )
-    changes.my_source_table.apply_hints(write_disposition="merge", primary_key="id")
+    changes.my_source_table.apply_hints(
+        write_disposition="merge",
+        primary_key="id",
+        columns={
+            "deleted_ts": {"hard_delete": True},
+            "lsn": {"dedup_sort": "desc"},
+        },
+    )
 
     # insert two records in source table and propagate changes to destination
     change_source_table(
@@ -115,64 +122,6 @@ def replicate_with_initial_load() -> None:
     show_destination_table(dest_pl)
 
 
-# def replicate_entire_schema() -> None:
-#     """Demonstrates setup and usage of schema replication.
-#
-#     Schema replication requires a Postgres server version of 15 or higher. An
-#     exception is raised if that's not the case.
-#     """
-#     # create source and destination pipelines
-#     src_pl = get_postgres_pipeline()
-#     dest_pl = dlt.pipeline(
-#         pipeline_name="pg_replication_pipeline",
-#         destination="duckdb",
-#         dataset_name="replicate_entire_schema",
-#         dev_mode=True,
-#     )
-#
-#     # create two source tables to demonstrate schema replication
-#     create_source_table(
-#         src_pl,
-#         "CREATE TABLE {table_name} (id integer PRIMARY KEY, val bool);",
-#         "tbl_x",
-#     )
-#     create_source_table(
-#         src_pl,
-#         "CREATE TABLE {table_name} (id integer PRIMARY KEY, val varchar);",
-#         "tbl_y",
-#     )
-#
-#     # initialize schema replication by omitting the `table_names` argument
-#     slot_name = "example_slot"
-#     init_replication(  # initializing schema replication requires the Postgres user to be a superuser
-#         slot_name=slot_name,
-#         schema=src_pl.dataset_name,
-#         reset=True,
-#     )
-#
-#     # create a resource that generates items for each change in the schema's tables
-#     changes = replication_resource(slot_name)
-#
-#     # insert records in source tables and propagate changes to destination
-#     change_source_table(
-#         src_pl, "INSERT INTO {table_name} VALUES (1, true), (2, false);", "tbl_x"
-#     )
-#     change_source_table(src_pl, "INSERT INTO {table_name} VALUES (1, 'foo');", "tbl_y")
-#     dest_pl.run(changes)
-#     show_destination_table(dest_pl, "tbl_x")
-#     show_destination_table(dest_pl, "tbl_y")
-#
-#     # tables added to the schema later are also included in the replication
-#     create_source_table(
-#         src_pl, "CREATE TABLE {table_name} (id integer PRIMARY KEY, val date);", "tbl_z"
-#     )
-#     change_source_table(
-#         src_pl, "INSERT INTO {table_name} VALUES (1, '2023-03-18');", "tbl_z"
-#     )
-#     dest_pl.run(changes)
-#     show_destination_table(dest_pl, "tbl_z")
-
-
 def replicate_with_column_selection() -> None:
     """Sets up replication with column selection.
 
@@ -212,9 +161,9 @@ def replicate_with_column_selection() -> None:
     changes = replication_source(
         slot_name=slot_name,
         schema=src_pl.dataset_name,
-        table_names=["tbl_x", "tbl_y"],
+        table_names=("tbl_x", "tbl_y"),
         included_columns={
-            "tbl_x": ["c1", "c2"]
+            "tbl_x": ("c1", "c2")
         },  # columns not specified here are excluded from generated data items
     )
 
@@ -288,5 +237,4 @@ def show_destination_table(
 if __name__ == "__main__":
     replicate_single_table()
     # replicate_with_initial_load()
-    # replicate_entire_schema()
     # replicate_with_column_selection()
