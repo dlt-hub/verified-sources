@@ -1,5 +1,6 @@
 from collections import defaultdict
 from dataclasses import dataclass, field
+from functools import partial
 from typing import (
     Optional,
     Dict,
@@ -15,6 +16,7 @@ from typing import (
 )
 
 import dlt
+import hashlib
 import psycopg2
 from dlt.common import logger
 from dlt.common.pendulum import pendulum
@@ -38,7 +40,7 @@ from psycopg2.extras import (
 from sqlalchemy import Connection as ConnectionSqla, Engine, event
 
 from .exceptions import SqlDatabaseSourceImportError
-from .pg_logicaldec_pb2 import Op, RowMessage
+from .pg_logicaldec_pb2 import Op, RowMessage, TypeInfo
 from .schema_types import _epoch_micros_to_datetime, _to_dlt_column_schema, _to_dlt_val
 
 
@@ -173,7 +175,7 @@ def create_replication_slot(  # type: ignore[return]
     """Creates a replication slot if it doesn't exist yet."""
     try:
         cur.create_replication_slot(name, output_plugin=output_plugin)
-        logger.info(f'Successfully created replication slot "{name}".')
+        logger.info("Successfully created replication slot '%s'", name)
         result = cur.fetchone()
         return {
             "slot_name": result[0],
@@ -183,7 +185,7 @@ def create_replication_slot(  # type: ignore[return]
         }
     except psycopg2.errors.DuplicateObject:  # the replication slot already exists
         logger.info(
-            f'Replication slot "{name}" cannot be created because it already exists.'
+            "Replication slot '%s' cannot be created because it already exists", name
         )
 
 
@@ -191,10 +193,10 @@ def drop_replication_slot(name: str, cur: ReplicationCursor) -> None:
     """Drops a replication slot if it exists."""
     try:
         cur.drop_replication_slot(name)
-        logger.info(f'Successfully dropped replication slot "{name}".')
+        logger.info("Successfully dropped replication slot '%s'", name)
     except psycopg2.errors.UndefinedObject:  # the replication slot does not exist
         logger.info(
-            f'Replication slot "{name}" cannot be dropped because it does not exist.'
+            "Replication slot '%s' cannot be dropped because it does not exist", name
         )
 
 
@@ -318,7 +320,8 @@ class MessageConsumer:
         # maps table names to list of data items
         self.data_items: Dict[str, List[TDataItem]] = defaultdict(list)
         # maps table name to table schema
-        self.last_table_schema: Dict[str, TTableSchema] = dict()
+        self.last_table_schema: Dict[str, TTableSchema] = {}
+        self.last_seen_schemas: Dict[str, int] = {}
         self.last_commit_ts: pendulum.DateTime
         self.last_commit_lsn: int
 
@@ -352,7 +355,7 @@ class MessageConsumer:
             raise
         except Exception:
             logger.error(
-                "A fatal error occured while processing a message: %s", row_msg
+                "A fatal error occurred while processing a message: %s", row_msg
             )
             raise
 
@@ -386,13 +389,35 @@ class MessageConsumer:
         self.data_items[table_name].append(data_item)
 
     def _get_table_schema(self, msg: RowMessage, table_name: str) -> TTableSchema:
-        last_table_schema = self.last_table_schema.get(table_name)
-        table_schema = infer_table_schema(msg, self.included_columns.get(table_name))
-        if last_table_schema is None:
-            self.last_table_schema[table_name] = table_schema
-        elif last_table_schema != table_schema:
-            raise StopReplication  # table schema change
-        return table_schema
+        current_hash = hash_typeinfo(msg.new_typeinfo)
+        cached_hash = self.last_seen_schemas.get(table_name)
+
+        # Return cached schema if hash matches
+        if cached_hash == current_hash:
+            return self.last_table_schema[table_name]
+
+        # Infer the current schema
+        inferred_schema = infer_table_schema(msg, self.included_columns.get(table_name))
+        cached_schema = self.last_table_schema.get(table_name)
+
+        if cached_schema is None:
+            # Cache the inferred schema and hash if it is not already cached
+            self.last_table_schema[table_name] = inferred_schema
+            self.last_seen_schemas[table_name] = current_hash
+        elif cached_schema != inferred_schema:
+            # Raise an exception if there's a schema mismatch
+            raise StopReplication("Table schema change detected")
+
+        return inferred_schema
+
+
+def hash_typeinfo(new_typeinfo: Sequence[TypeInfo]) -> int:
+    """Generate a hash for the entire new_typeinfo list by hashing each TypeInfo message."""
+    typeinfo_tuple = tuple(
+        (info.modifier, info.value_optional) for info in new_typeinfo
+    )
+    hash_obj = hashlib.blake2b(repr(typeinfo_tuple).encode(), digest_size=8)
+    return int(hash_obj.hexdigest(), 16)
 
 
 class TableItems(NamedTuple):
@@ -420,29 +445,33 @@ class ItemGenerator:
         Maintains LSN of last consumed Commit message in object state.
         Does not advance the slot.
         """
+        cur = _get_rep_conn(self.credentials).cursor()
+        ack_lsn = partial(cur.send_feedback, reply=True, force=True)
+        cur.start_replication(
+            slot_name=self.slot_name, start_lsn=self.start_lsn, decode=False
+        )
+        consumer = MessageConsumer(
+            upto_lsn=self.upto_lsn,
+            table_qnames=self.table_qnames,
+            target_batch_size=self.target_batch_size,
+            included_columns=self.included_columns,
+        )
         try:
-            cur = _get_rep_conn(self.credentials).cursor()
-            cur.start_replication(
-                slot_name=self.slot_name, start_lsn=self.start_lsn, decode=False
-            )
-            consumer = MessageConsumer(
-                upto_lsn=self.upto_lsn,
-                table_qnames=self.table_qnames,
-                target_batch_size=self.target_batch_size,
-                included_columns=self.included_columns,
-            )
             cur.consume_stream(consumer)
         except StopReplication:  # completed batch or reached `upto_lsn`
             pass
         finally:
-            cur.connection.close()
+            last_commit_lsn = consumer.last_commit_lsn
+            ack_lsn(write_lsn=last_commit_lsn)
             for table, data_items in consumer.data_items.items():
                 yield TableItems(
                     table, consumer.last_table_schema.get(table), data_items
                 )
             # Update state after flush
-            self.last_commit_lsn = consumer.last_commit_lsn
+            self.last_commit_lsn = last_commit_lsn
             self.generated_all = consumer.consumed_all
+            ack_lsn(flush_lsn=last_commit_lsn)
+            cur.connection.close()
 
 
 def create_table_dispatch(

@@ -71,9 +71,7 @@ def replication_source(
         table_names = [table_names]
 
     @dlt.resource(name=lambda args: args["slot_name"], standalone=True)
-    def replication_resource(
-        slot_name: str,
-    ) -> Iterable[TDataItem]:
+    def replication_resource(slot_name: str) -> Iterable[TDataItem]:
         # start where we left off in previous run
         start_lsn = dlt.current.resource_state().get("last_commit_lsn", 0)
         if flush_slot:

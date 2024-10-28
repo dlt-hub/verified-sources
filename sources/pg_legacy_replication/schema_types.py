@@ -8,6 +8,7 @@ from dlt.common.data_types.type_helpers import coerce_value
 from dlt.common.data_types.typing import TDataType
 from dlt.common.schema.typing import TColumnSchema, TColumnType
 from dlt.destinations import postgres
+from dlt.common import logger
 
 from .pg_logicaldec_pb2 import DatumMessage, TypeInfo
 
@@ -37,11 +38,17 @@ _PG_TYPES: Dict[int, str] = {
     1043: "character varying",
     1082: "date",
     1083: "time without time zone",
+    1114: "timestamp without time zone",
     1184: "timestamp with time zone",
     1700: "numeric",
     3802: "jsonb",
 }
 """Maps postgres type OID to type string. Only includes types present in PostgresTypeMapper."""
+
+_MISSING_TYPES: Dict[str, TDataType] = {
+    "timestamp without time zone": "timestamp",
+}
+# FIXME Missing types for old postgres versions
 
 _DATUM_RAW_TYPES: Dict[str, TDataType] = {
     "datum_int32": "bigint",
@@ -72,7 +79,7 @@ _VARYING_PRECISION_PATTERNS: Dict[int, str] = {
 
 def _get_precision_and_scale(
     type_id: int, modifier: str
-) -> Optional[Tuple[int, Optional[int]]]:
+) -> Optional[Tuple[Optional[int], Optional[int]]]:
     """Get precision from postgres type attributes and modifiers."""
     if type_id in _FIXED_PRECISION_TYPES:
         return _FIXED_PRECISION_TYPES[type_id]
@@ -82,28 +89,29 @@ def _get_precision_and_scale(
             groups = match.groups()
             precision = int(groups[0])
             scale = int(groups[1]) if len(groups) > 1 else None
-            return (precision, scale)
+            return precision, scale
 
-    return (None, None)
+    return None, None
 
 
 # FIXME Hack to get it to work with 0.5.x and 1.x
+@lru_cache(maxsize=None)
+def _from_db_type() -> Callable[[str, Optional[int], Optional[int]], TColumnType]:
+    try:
+        from dlt.destinations.impl.postgres.factory import PostgresTypeMapper  # type: ignore
+
+        type_mapper = PostgresTypeMapper(postgres().capabilities())
+        return type_mapper.from_destination_type  # type: ignore[no-any-return]
+    except ImportError:
+        from dlt.destinations.impl.postgres.postgres import PostgresTypeMapper
+
+        type_mapper = PostgresTypeMapper(postgres().capabilities())
+        return type_mapper.from_db_type  # type: ignore[no-any-return]
+
+
 def _from_destination_type(
     db_type: str, precision: Optional[int] = None, scale: Optional[int] = None
 ) -> TColumnType:
-    @lru_cache(maxsize=None)
-    def _from_db_type() -> Callable[[str, Optional[int], Optional[int]], TColumnType]:
-        try:
-            from dlt.destinations.impl.postgres.factory import PostgresTypeMapper  # type: ignore
-
-            type_mapper = PostgresTypeMapper(postgres().capabilities())
-            return type_mapper.from_destination_type  # type: ignore[no-any-return]
-        except ImportError:
-            from dlt.destinations.impl.postgres.postgres import PostgresTypeMapper
-
-            type_mapper = PostgresTypeMapper(postgres().capabilities())
-            return type_mapper.from_db_type  # type: ignore[no-any-return]
-
     return _from_db_type()(db_type, precision, scale)
 
 
@@ -113,6 +121,13 @@ def _to_dlt_column_type(type_id: int, modifier: str) -> TColumnType:
     Type OIDs not in _PG_TYPES mapping default to "text" type.
     """
     pg_type = _PG_TYPES.get(type_id)
+    if pg_type in _MISSING_TYPES:
+        return {"data_type": _MISSING_TYPES[pg_type]}
+    if pg_type is None:
+        logger.warning(
+            "No type found for type_id '%s' and modifier '%s'", type_id, modifier
+        )
+
     precision, scale = _get_precision_and_scale(type_id, modifier)
     return _from_destination_type(pg_type, precision, scale)
 
