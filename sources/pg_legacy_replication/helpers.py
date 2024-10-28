@@ -30,7 +30,7 @@ from dlt.common.typing import TDataItem
 from dlt.extract import DltSource, DltResource
 from dlt.extract.items import DataItemWithMeta
 from dlt.sources.credentials import ConnectionStringCredentials
-from psycopg2.extensions import connection as ConnectionExt
+from psycopg2.extensions import cursor, connection as ConnectionExt
 from psycopg2.extras import (
     LogicalReplicationConnection,
     ReplicationCursor,
@@ -169,6 +169,11 @@ def cleanup_snapshot_resources(snapshots: DltSource) -> None:
         engine.dispose()
 
 
+def get_pg_version(cur: cursor) -> int:
+    """Returns Postgres server version as int."""
+    return cur.connection.server_version
+
+
 def create_replication_slot(  # type: ignore[return]
     name: str, cur: ReplicationCursor, output_plugin: str = "decoderbufs"
 ) -> Optional[Dict[str, str]]:
@@ -211,8 +216,9 @@ def get_max_lsn(
     Raises error if the replication slot or publication does not exist.
     """
     cur = _get_conn(credentials).cursor()
+    lsn_field = "location" if get_pg_version(cur) < 100000 else "lsn"
     cur.execute(
-        "SELECT MAX(lsn) - '0/0' AS max_lsn "  # subtract '0/0' to convert pg_lsn type to int (https://stackoverflow.com/a/73738472)
+        f"SELECT MAX({lsn_field} - '0/0') AS max_lsn "  # subtract '0/0' to convert pg_lsn type to int (https://stackoverflow.com/a/73738472)
         f"FROM pg_logical_slot_peek_binary_changes('{slot_name}', NULL, NULL);"
     )
     lsn: int = cur.fetchone()[0]
@@ -239,9 +245,10 @@ def advance_slot(
     """
     if upto_lsn != 0:
         cur = _get_conn(credentials).cursor()
-        cur.execute(
-            f"SELECT * FROM pg_replication_slot_advance('{slot_name}', '{lsn_int_to_hex(upto_lsn)}');"
-        )
+        if get_pg_version(cur) > 100000:
+            cur.execute(
+                f"SELECT * FROM pg_replication_slot_advance('{slot_name}', '{lsn_int_to_hex(upto_lsn)}');"
+            )
         cur.connection.close()
 
 
