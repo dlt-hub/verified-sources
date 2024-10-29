@@ -49,7 +49,7 @@ from .schema_types import _epoch_micros_to_datetime, _to_dlt_column_schema, _to_
 def init_replication(
     slot_name: str,
     schema: str,
-    table_names: Union[str, Sequence[str]],
+    table_names: Optional[Union[str, Sequence[str]]] = None,
     credentials: ConnectionStringCredentials = dlt.secrets.value,
     take_snapshots: bool = False,
     included_columns: Optional[Dict[str, TColumnNames]] = None,
@@ -114,6 +114,8 @@ def init_replication(
     if not take_snapshots:
         rep_conn.close()
         return
+
+    assert table_names
 
     # Ensure `sqlalchemy` and `sql_table` are available
     _import_sql_table_resource()

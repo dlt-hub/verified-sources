@@ -8,7 +8,14 @@ from dlt.extract import DltResource
 from dlt.extract.items import TDataItem
 from dlt.sources.credentials import ConnectionStringCredentials
 
-from .helpers import advance_slot, get_max_lsn, ItemGenerator, create_table_dispatch
+from .helpers import (
+    advance_slot,
+    get_max_lsn,
+    ItemGenerator,
+    create_table_dispatch,
+    init_replication,
+    cleanup_snapshot_resources,
+)
 
 
 @dlt.source
@@ -112,3 +119,6 @@ def replication_source(
             data_from=wal_reader,
             name=table,
         )
+
+
+__all__ = ["cleanup_snapshot_resources", "init_replication", "replication_source"]

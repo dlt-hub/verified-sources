@@ -34,6 +34,7 @@ _PG_TYPES: Dict[int, str] = {
     20: "bigint",
     21: "smallint",
     23: "integer",
+    700: "real",
     701: "double precision",
     1043: "character varying",
     1082: "date",
@@ -46,6 +47,7 @@ _PG_TYPES: Dict[int, str] = {
 """Maps postgres type OID to type string. Only includes types present in PostgresTypeMapper."""
 
 _MISSING_TYPES: Dict[str, TDataType] = {
+    "real": "double",
     "timestamp without time zone": "timestamp",
 }
 # FIXME Missing types for old postgres versions
@@ -65,6 +67,7 @@ _FIXED_PRECISION_TYPES: Dict[int, Tuple[int, Optional[int]]] = {
     21: (16, None),  # smallint
     23: (32, None),  # integer
     20: (64, None),  # bigint
+    700: (32, None),  # real
 }
 """Dict for fixed precision types"""
 

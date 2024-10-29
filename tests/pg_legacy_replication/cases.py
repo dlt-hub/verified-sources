@@ -178,7 +178,8 @@ ROW_MESSAGES: List[dict] = [
                 "columnType": 1083,
                 "datumInt64": 48405176451,
             },
-            {"columnName": "alumnized_at", "columnType": 1114},
+            {"columnName": "col12", "columnType": 1114},
+            {"columnName": "col13", "columnType": 700},
         ],
         "newTypeinfo": [
             {"modifier": "timestamp with time zone", "valueOptional": False},
@@ -186,6 +187,7 @@ ROW_MESSAGES: List[dict] = [
             {"modifier": "date", "valueOptional": False},
             {"modifier": "time without time zone", "valueOptional": False},
             {"modifier": "timestamp without time zone", "valueOptional": True},
+            {"modifier": "real", "valueOptional": True},
         ],
     },
     {
@@ -223,7 +225,6 @@ DATA_ITEMS: List[TDataItem] = [
         "val_y": False,
     },
     {
-        "alumnized_at": None,
         "col4": pendulum.parse("2022-05-23T13:26:45.176451+00:00"),
         "col9": {
             "complex": [1, 2, 3, "a"],
@@ -234,6 +235,8 @@ DATA_ITEMS: List[TDataItem] = [
         },
         "col10": pendulum.parse("2023-02-27", strict=False).date(),
         "col11": pendulum.parse("13:26:45.176451", strict=False).time(),
+        "col12": None,
+        "col13": None,
     },
     {
         "id_x": 1,
@@ -268,15 +271,12 @@ TABLE_SCHEMAS: List[TTableSchema] = [
     {
         "name": "items",
         "columns": {
-            "alumnized_at": {
-                "data_type": "timestamp",
-                "name": "alumnized_at",
-                "nullable": True,
-            },
             "col4": {"data_type": "timestamp", "name": "col4", "nullable": False},
             "col9": {"data_type": "complex", "name": "col9", "nullable": False},
             "col10": {"data_type": "date", "name": "col10", "nullable": False},
             "col11": {"data_type": "time", "name": "col11", "nullable": False},
+            "col12": {"data_type": "timestamp", "name": "col12", "nullable": True},
+            "col13": {"data_type": "double", "name": "col13", "nullable": True},
             "lsn": {"data_type": "bigint", "nullable": True},
             "deleted_ts": {"data_type": "timestamp", "nullable": True},
         },
