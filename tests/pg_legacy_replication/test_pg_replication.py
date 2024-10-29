@@ -1,5 +1,5 @@
 from copy import deepcopy
-from typing import Dict, Sequence, Tuple
+from typing import Dict, Tuple
 
 import dlt
 import pytest
@@ -444,9 +444,9 @@ def test_included_columns(
     )
 
     # initialize replication and create resources
-    included_columns: Dict[str, Sequence[str]] = {
-        "tbl_x": ("id_x", "val_x"),
-        "tbl_y": ("id_y", "val_y"),
+    options = {
+        "tbl_x": {"included_columns": ["id_x", "val_x"]},
+        "tbl_y": {"included_columns": ["id_y", "val_y"]},
         # tbl_z is not specified, hence all columns should be included
     }
     snapshots = init_replication(
@@ -454,13 +454,13 @@ def test_included_columns(
         schema=src_pl.dataset_name,
         table_names=("tbl_x", "tbl_y", "tbl_z"),
         take_snapshots=init_load,
-        included_columns=included_columns,
+        table_options=options,
     )
     changes = replication_source(
         slot_name=slot_name,
         schema=src_pl.dataset_name,
         table_names=("tbl_x", "tbl_y", "tbl_z"),
-        included_columns=included_columns,
+        table_options=options,
     )
 
     # update three postgres tables

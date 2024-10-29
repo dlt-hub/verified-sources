@@ -3,7 +3,7 @@
 from typing import Dict, Sequence, Optional, Iterable, Union
 
 import dlt
-from dlt.common.schema.typing import TColumnNames, TTableSchemaColumns
+from dlt.common.schema.typing import TTableSchemaColumns
 from dlt.extract import DltResource
 from dlt.extract.items import TDataItem
 from dlt.sources.credentials import ConnectionStringCredentials
@@ -15,6 +15,7 @@ from .helpers import (
     create_table_dispatch,
     init_replication,
     cleanup_snapshot_resources,
+    ReplicationOptions,
 )
 
 
@@ -24,7 +25,7 @@ def replication_source(
     schema: str,
     table_names: Union[str, Sequence[str]],
     credentials: ConnectionStringCredentials = dlt.secrets.value,
-    included_columns: Optional[Dict[str, TColumnNames]] = None,
+    table_options: Optional[Dict[str, ReplicationOptions]] = None,
     column_hints: Optional[Dict[str, TTableSchemaColumns]] = None,
     target_batch_size: int = 1000,
     flush_slot: bool = True,
@@ -74,8 +75,7 @@ def replication_source(
         Yields:
             Data items for changes published in the publication.
     """
-    if isinstance(table_names, str):
-        table_names = [table_names]
+    table_names = [table_names] if isinstance(table_names, str) else table_names or []
 
     @dlt.resource(name=lambda args: args["slot_name"], standalone=True)
     def replication_resource(slot_name: str) -> Iterable[TDataItem]:
@@ -100,7 +100,7 @@ def replication_source(
                 upto_lsn=upto_lsn,
                 start_lsn=start_lsn,
                 target_batch_size=target_batch_size,
-                included_columns=included_columns,
+                table_options=table_options,
             )
             yield from gen
             if gen.generated_all:

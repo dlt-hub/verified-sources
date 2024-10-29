@@ -1,3 +1,4 @@
+import hashlib
 from collections import defaultdict
 from dataclasses import dataclass, field
 from functools import partial
@@ -13,18 +14,14 @@ from typing import (
     Iterable,
     Callable,
     NamedTuple,
+    TypedDict,
 )
 
 import dlt
-import hashlib
 import psycopg2
 from dlt.common import logger
 from dlt.common.pendulum import pendulum
-from dlt.common.schema.typing import (
-    TColumnNames,
-    TTableSchema,
-    TTableSchemaColumns,
-)
+from dlt.common.schema.typing import TTableSchema, TTableSchemaColumns
 from dlt.common.schema.utils import merge_column
 from dlt.common.typing import TDataItem
 from dlt.extract import DltSource, DltResource
@@ -37,11 +34,63 @@ from psycopg2.extras import (
     ReplicationMessage,
     StopReplication,
 )
-from sqlalchemy import Connection as ConnectionSqla, Engine, event
 
-from .exceptions import SqlDatabaseSourceImportError
+# Favoring 1.x over 0.5.x imports
+try:
+    from dlt.common.libs.sql_alchemy import (  # type: ignore[attr-defined]
+        Connection as ConnectionSqla,
+        Engine,
+        event,
+        Table,
+        MetaData,
+    )
+except ImportError:
+    from sqlalchemy import (
+        Connection as ConnectionSqla,
+        Engine,
+        event,
+        Table,
+        MetaData,
+    )
+
+try:
+    from dlt.sources.sql_database import (  # type: ignore[import-not-found]
+        sql_table,
+        engine_from_credentials,
+        TQueryAdapter,
+        TTypeAdapter,
+        ReflectionLevel,
+        TableBackend,
+    )
+except ImportError:
+    from ..sql_database import (  # type: ignore[import-untyped]
+        sql_table,
+        engine_from_credentials,
+        TQueryAdapter,
+        TTypeAdapter,
+        ReflectionLevel,
+        TableBackend,
+    )
+
 from .pg_logicaldec_pb2 import Op, RowMessage, TypeInfo
 from .schema_types import _epoch_micros_to_datetime, _to_dlt_column_schema, _to_dlt_val
+
+
+class ReplicationOptions(TypedDict, total=False):
+    included_columns: Optional[Sequence[str]]
+
+
+class SqlTableOptions(ReplicationOptions, total=False):
+    metadata: Optional[MetaData]
+    chunk_size: Optional[int]
+    backend: Optional[TableBackend]
+    detect_precision_hints: Optional[bool]
+    reflection_level: Optional[ReflectionLevel]
+    defer_table_reflect: Optional[bool]
+    table_adapter_callback: Optional[Callable[[Table], None]]
+    backend_kwargs: Optional[Dict[str, Any]]
+    type_adapter_callback: Optional[TTypeAdapter]
+    query_adapter_callback: Optional[TQueryAdapter]
 
 
 @dlt.sources.config.with_config(sections=("sources", "pg_legacy_replication"))
@@ -52,7 +101,7 @@ def init_replication(
     table_names: Optional[Union[str, Sequence[str]]] = None,
     credentials: ConnectionStringCredentials = dlt.secrets.value,
     take_snapshots: bool = False,
-    included_columns: Optional[Dict[str, TColumnNames]] = None,
+    table_options: Optional[Dict[str, SqlTableOptions]] = None,
     reset: bool = False,
 ) -> Iterable[DltResource]:
     """Initializes replication for one, several, or all tables within a schema.
@@ -115,10 +164,8 @@ def init_replication(
         rep_conn.close()
         return
 
-    assert table_names
+    assert table_names is not None
 
-    # Ensure `sqlalchemy` and `sql_table` are available
-    _import_sql_table_resource()
     engine = _configure_engine(credentials, rep_conn)
 
     @event.listens_for(engine, "begin")
@@ -133,16 +180,13 @@ def init_replication(
             cur.execute("SET TRANSACTION ISOLATION LEVEL REPEATABLE READ")
             cur.execute(f"SET TRANSACTION SNAPSHOT '{slot['snapshot_name']}'")
 
-    if isinstance(table_names, str):
-        table_names = [table_names]
+    table_names = [table_names] if isinstance(table_names, str) else table_names or []
 
     for table in table_names:
-        yield sql_table(  # type: ignore[name-defined]
-            credentials=engine,
-            table=table,
-            schema=schema,
-            included_columns=included_columns.get(table) if included_columns else None,
+        table_args = (
+            table_options[table] if table_options and table in table_options else {}
         )
+        yield sql_table(credentials=engine, table=table, schema=schema, **table_args)
 
 
 def _configure_engine(
@@ -152,7 +196,7 @@ def _configure_engine(
     Configures the SQLAlchemy engine.
     Also attaches the replication connection in order to prevent it being garbage collected and closed.
     """
-    engine: Engine = engine_from_credentials(credentials, may_dispose_after_use=False)  # type: ignore[name-defined]
+    engine: Engine = engine_from_credentials(credentials, may_dispose_after_use=False)
     engine.execution_options(stream_results=True, max_row_buffer=2 * 50000)
     setattr(engine, "rep_conn", rep_conn)  # noqa
 
@@ -254,24 +298,6 @@ def advance_slot(
         cur.connection.close()
 
 
-def _import_sql_table_resource() -> None:
-    """Imports external `sql_table` resource from `sql_database` source.
-
-    Raises error if `sql_database` source is not available.
-    """
-    global sql_table, engine_from_credentials
-    try:
-        from ..sql_database import sql_table, engine_from_credentials  # type: ignore[import-untyped]
-    except ImportError:
-        try:
-            from dlt.sources.sql_database import sql_table, engine_from_credentials  # type: ignore[import-not-found]
-        except ImportError:
-            try:
-                from sql_database import sql_table, engine_from_credentials
-            except ImportError as e:
-                raise SqlDatabaseSourceImportError from e
-
-
 def _get_conn(
     credentials: ConnectionStringCredentials,
     connection_factory: Optional[Any] = None,
@@ -311,19 +337,16 @@ class MessageConsumer:
         upto_lsn: int,
         table_qnames: Set[str],
         target_batch_size: int = 1000,
-        included_columns: Optional[Dict[str, TColumnNames]] = None,
+        table_options: Optional[Dict[str, ReplicationOptions]] = None,
     ) -> None:
         self.upto_lsn = upto_lsn
         self.table_qnames = table_qnames
         self.target_batch_size = target_batch_size
-        self.included_columns = (
-            {
-                table: {s for s in ([cols] if isinstance(cols, str) else cols)}
-                for table, cols in included_columns.items()
-            }
-            if included_columns
-            else {}
-        )
+        self.included_columns = {
+            table: set(options["included_columns"])
+            for table, options in (table_options or {}).items()
+            if options.get("included_columns")
+        }
 
         self.consumed_all: bool = False
         # maps table names to list of data items
@@ -443,7 +466,7 @@ class ItemGenerator:
     upto_lsn: int
     start_lsn: int = 0
     target_batch_size: int = 1000
-    included_columns: Optional[Dict[str, TColumnNames]] = None
+    table_options: Optional[Dict[str, ReplicationOptions]] = None
     last_commit_lsn: Optional[int] = field(default=None, init=False)
     generated_all: bool = False
 
@@ -463,7 +486,7 @@ class ItemGenerator:
             upto_lsn=self.upto_lsn,
             table_qnames=self.table_qnames,
             target_batch_size=self.target_batch_size,
-            included_columns=self.included_columns,
+            table_options=self.table_options,
         )
         try:
             cur.consume_stream(consumer)
