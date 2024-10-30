@@ -27,7 +27,7 @@ merge_hints: TTableSchemaColumns = {
 
 
 @pytest.mark.parametrize("destination_name", ALL_DESTINATIONS)
-@pytest.mark.parametrize("backend", ["sqlalchemy"])
+@pytest.mark.parametrize("backend", ["sqlalchemy", "pyarrow"])
 def test_core_functionality(
     src_config: Tuple[dlt.Pipeline, str], destination_name: str, backend: TableBackend
 ) -> None:

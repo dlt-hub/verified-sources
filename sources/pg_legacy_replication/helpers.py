@@ -409,30 +409,24 @@ class MessageConsumer:
         self.data_items[table_name].append(data_item)
 
     def get_table_schema(self, msg: RowMessage, table_name: str) -> TTableSchema:
-        cached = self.last_table_schema.get(table_name)
+        last_schema = self.last_table_schema.get(table_name)
         included_columns = self.included_columns.get(table_name)
-
-        # If DELETE try to fetch an already cached schema or infer a less precise one
-        if msg.op == Op.DELETE:
-            if cached:
-                return cached
-            return infer_table_schema(msg, included_columns)
 
         # Return cached schema if hash matches
         current_hash = hash_typeinfo(msg.new_typeinfo)
         if current_hash == self.last_table_hashes.get(table_name):
             return self.last_table_schema[table_name]
 
-        inferred = infer_table_schema(msg, included_columns)
-        if cached is None:
+        new_schema = infer_table_schema(msg, included_columns)
+        if last_schema is None:
             # Cache the inferred schema and hash if it is not already cached
-            self.last_table_schema[table_name] = inferred
+            self.last_table_schema[table_name] = new_schema
             self.last_table_hashes[table_name] = current_hash
-        elif cached != inferred:
+        elif last_schema != new_schema:
             # Raise an exception if there's a schema mismatch
             raise StopReplication("Table schema change detected")
 
-        return inferred
+        return new_schema
 
 
 def hash_typeinfo(new_typeinfo: Sequence[TypeInfo]) -> int:
@@ -446,7 +440,7 @@ def hash_typeinfo(new_typeinfo: Sequence[TypeInfo]) -> int:
 
 class TableItems(NamedTuple):
     table: str
-    schema: Optional[TTableSchema]
+    schema: TTableSchema
     items: List[TDataItem]
 
 
@@ -508,35 +502,35 @@ def create_table_dispatch(
     def handle(table_items: TableItems) -> Iterable[DataItemWithMeta]:
         if table_items.table != table:
             return
-        if schema := table_items.schema:
-            columns = schema["columns"]
-            if column_hints:
-                for col_name, col_hint in column_hints.items():
-                    columns[col_name] = merge_column(
-                        columns.get(col_name, {}), col_hint
-                    )
+        columns = table_items.schema["columns"]
+        if column_hints:
+            for col_name, col_hint in column_hints.items():
+                columns[col_name] = merge_column(columns.get(col_name, {}), col_hint)
+        backend = (
+            table_options.get("backend", "sqlalchemy")
+            if table_options
+            else "sqlalchemy"
+        )
+        if backend == "sqlalchemy":
             yield dlt.mark.with_hints(
                 [],
                 dlt.mark.make_hints(table_name=table, columns=columns),
                 create_table_variant=True,
             )
-        if table_options:
-            backend = table_options.get("backend")
-            backend_kwargs = table_options.get("backend_kwargs", {})
-            if backend == "pyarrow":
-                ordered_keys = list(columns.keys())
-                rows = [
-                    tuple(data_item.get(column, None) for column in ordered_keys)
-                    for data_item in table_items.items
-                ]
-                arrow_table = arrow.row_tuples_to_arrow(
-                    rows, columns, tz=backend_kwargs.get("tz", "UTC")
-                )
-                yield dlt.mark.with_table_name(arrow_table, table)
-            else:
-                yield dlt.mark.with_table_name(table_items.items, table)
-        else:
             yield dlt.mark.with_table_name(table_items.items, table)
+        elif backend == "pyarrow":
+            backend_kwargs = table_options.get("backend_kwargs", {})
+            ordered_keys = list(columns.keys())
+            rows = [
+                tuple(data_item.get(column, None) for column in ordered_keys)
+                for data_item in table_items.items
+            ]
+            arrow_table = arrow.row_tuples_to_arrow(
+                rows, columns, tz=backend_kwargs.get("tz", "UTC")
+            )
+            yield dlt.mark.with_table_name(arrow_table, table)
+        else:
+            raise NotImplementedError(f"Unsupported backend: {backend}")
 
     return handle
 
@@ -559,8 +553,12 @@ def infer_table_schema(
     }
 
     # Add replication columns
-    columns["lsn"] = {"data_type": "bigint", "nullable": True}
-    columns["deleted_ts"] = {"data_type": "timestamp", "nullable": True}
+    columns["lsn"] = {"data_type": "bigint", "name": "lsn", "nullable": True}
+    columns["deleted_ts"] = {
+        "data_type": "timestamp",
+        "name": "deleted_ts",
+        "nullable": True,
+    }
 
     return {
         "name": (msg.table.split(".")[1]),
@@ -585,13 +583,10 @@ def gen_data_item(
         col_name = data.column_name
         if included_columns and col_name not in included_columns:
             continue
-        data_type = (
-            column_schema[col_name]["data_type"]
-            if column_schema and column_schema.get(col_name)
-            else data.column_type
-        )
         data_item[col_name] = _to_dlt_val(
-            data, data_type, for_delete=msg.op == Op.DELETE
+            data,
+            column_schema[col_name]["data_type"],
+            for_delete=msg.op == Op.DELETE,
         )
 
     return data_item

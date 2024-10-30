@@ -264,8 +264,12 @@ TABLE_SCHEMAS: List[TTableSchema] = [
                 "name": "_dlt_load_id",
                 "nullable": False,
             },
-            "lsn": {"data_type": "bigint", "nullable": True},
-            "deleted_ts": {"data_type": "timestamp", "nullable": True},
+            "lsn": {"data_type": "bigint", "name": "lsn", "nullable": True},
+            "deleted_ts": {
+                "data_type": "timestamp",
+                "name": "deleted_ts",
+                "nullable": True,
+            },
         },
     },
     {
@@ -277,8 +281,12 @@ TABLE_SCHEMAS: List[TTableSchema] = [
             "col11": {"data_type": "time", "name": "col11", "nullable": False},
             "col12": {"data_type": "timestamp", "name": "col12", "nullable": True},
             "col13": {"data_type": "double", "name": "col13", "nullable": True},
-            "lsn": {"data_type": "bigint", "nullable": True},
-            "deleted_ts": {"data_type": "timestamp", "nullable": True},
+            "lsn": {"data_type": "bigint", "name": "lsn", "nullable": True},
+            "deleted_ts": {
+                "data_type": "timestamp",
+                "name": "deleted_ts",
+                "nullable": True,
+            },
         },
     },
     {
@@ -288,8 +296,12 @@ TABLE_SCHEMAS: List[TTableSchema] = [
             "val_x": {"data_type": "text", "name": "val_x"},
             "_dlt_id": {"data_type": "text", "name": "_dlt_id"},
             "_dlt_load_id": {"data_type": "text", "name": "_dlt_load_id"},
-            "lsn": {"data_type": "bigint", "nullable": True},
-            "deleted_ts": {"data_type": "timestamp", "nullable": True},
+            "lsn": {"data_type": "bigint", "name": "lsn", "nullable": True},
+            "deleted_ts": {
+                "data_type": "timestamp",
+                "name": "deleted_ts",
+                "nullable": True,
+            },
         },
     },
 ]

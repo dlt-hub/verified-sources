@@ -146,6 +146,8 @@ def _to_dlt_column_schema(
     # Set nullable attribute if type_info is available
     if type_info:
         column_schema["nullable"] = type_info.value_optional
+    elif datum.WhichOneof("datum"):  # Or simply guess as this is a very rare case
+        column_schema["nullable"] = False
 
     return column_schema
 
@@ -171,13 +173,9 @@ data_type_handlers: Dict[TDataType, Callable[[Any], Any]] = {
 
 
 def _to_dlt_val(
-    val: DatumMessage, data_type: Union[TDataType, int], *, for_delete: bool = False
+    val: DatumMessage, data_type: TDataType, *, for_delete: bool = False
 ) -> Any:
     """Converts decoderbuf's datum value into dlt-compatible data value."""
-    if isinstance(data_type, int):
-        col_type: TColumnType = _from_db_type()(_PG_TYPES[data_type])  # type: ignore[call-arg]
-        data_type = col_type["data_type"]
-
     datum = val.WhichOneof("datum")
     if datum is None:
         return _DUMMY_VALS[data_type] if for_delete else None
@@ -187,17 +185,9 @@ def _to_dlt_val(
         return data_type_handlers[data_type](raw_value)
 
     try:
-        return coerce_value(
-            to_type=data_type,
-            from_type=_DATUM_RAW_TYPES[datum],
-            value=raw_value,
-        )
+        return coerce_value(data_type, _DATUM_RAW_TYPES[datum], raw_value)
     except ValueError:
         # FIXME Hack to get it to work with 0.5.x and 1.x
         if data_type == "json":
-            return coerce_value(
-                "complex",
-                from_type=_DATUM_RAW_TYPES[datum],
-                value=raw_value,
-            )
+            return coerce_value("complex", _DATUM_RAW_TYPES[datum], raw_value)
         raise
