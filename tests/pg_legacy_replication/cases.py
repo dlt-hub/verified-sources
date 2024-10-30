@@ -292,7 +292,12 @@ TABLE_SCHEMAS: List[TTableSchema] = [
     {
         "name": "tbl_x",
         "columns": {
-            "id_x": {"data_type": "bigint", "name": "id_x", "precision": 64},
+            "id_x": {
+                "data_type": "bigint",
+                "name": "id_x",
+                "precision": 64,
+                "nullable": False,
+            },
             "val_x": {"data_type": "text", "name": "val_x"},
             "_dlt_id": {"data_type": "text", "name": "_dlt_id"},
             "_dlt_load_id": {"data_type": "text", "name": "_dlt_load_id"},

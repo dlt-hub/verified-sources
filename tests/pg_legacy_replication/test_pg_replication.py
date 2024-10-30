@@ -50,7 +50,10 @@ def test_core_functionality(
     add_pk(src_pl.sql_client, "tbl_x", "id_x")
     add_pk(src_pl.sql_client, "tbl_y", "id_y")
 
-    table_options = {"tbl_x": {"backend": backend}, "tbl_y": {"backend": backend}}
+    table_options: Dict[str, SqlTableOptions] = {
+        "tbl_x": {"backend": backend},
+        "tbl_y": {"backend": backend},
+    }
 
     snapshots = init_replication(
         slot_name=slot_name,
@@ -166,8 +169,9 @@ def test_core_functionality(
 
 
 @pytest.mark.parametrize("destination_name", ALL_DESTINATIONS)
+@pytest.mark.parametrize("backend", ["sqlalchemy", "pyarrow"])
 def test_without_init_load(
-    src_config: Tuple[dlt.Pipeline, str], destination_name: str
+    src_config: Tuple[dlt.Pipeline, str], destination_name: str, backend: TableBackend
 ) -> None:
     @dlt.resource(write_disposition="merge", primary_key="id_x")
     def tbl_x(data):
@@ -190,6 +194,11 @@ def test_without_init_load(
     add_pk(src_pl.sql_client, "tbl_x", "id_x")
     add_pk(src_pl.sql_client, "tbl_y", "id_y")
 
+    table_options: Dict[str, SqlTableOptions] = {
+        "tbl_x": {"backend": backend},
+        "tbl_y": {"backend": backend},
+    }
+
     # initialize replication and create resource for changes
     init_replication(
         slot_name=slot_name,
@@ -201,6 +210,7 @@ def test_without_init_load(
         slot_name=slot_name,
         schema=src_pl.dataset_name,
         table_names=("tbl_x", "tbl_y"),
+        table_options=table_options,
     )
     changes.tbl_x.apply_hints(
         write_disposition="merge", primary_key="id_x", columns=merge_hints
@@ -248,11 +258,13 @@ def test_without_init_load(
 @pytest.mark.parametrize("destination_name", ALL_DESTINATIONS)
 @pytest.mark.parametrize("give_hints", [True, False])
 @pytest.mark.parametrize("init_load", [True, False])
+@pytest.mark.parametrize("backend", ["sqlalchemy", "pyarrow"])
 def test_mapped_data_types(
     src_config: Tuple[dlt.Pipeline, str],
     destination_name: str,
     give_hints: bool,
     init_load: bool,
+    backend: TableBackend,
 ) -> None:
     """Assert common data types (the ones mapped in PostgresTypeMapper) are properly handled."""
 
@@ -275,12 +287,18 @@ def test_mapped_data_types(
     src_pl.run(items(data))
     add_pk(src_pl.sql_client, "items", "col1")
 
+    table_options: Dict[str, SqlTableOptions] = {
+        "tbl_x": {"backend": backend},
+        "tbl_y": {"backend": backend},
+    }
+
     # initialize replication and create resources
     snapshot = init_replication(
         slot_name=slot_name,
         schema=src_pl.dataset_name,
         table_names="items",
         take_snapshots=init_load,
+        table_options=table_options,
     )
     if init_load and give_hints:
         snapshot.items.apply_hints(columns=column_schema)
@@ -289,6 +307,7 @@ def test_mapped_data_types(
         slot_name=slot_name,
         schema=src_pl.dataset_name,
         table_names="items",
+        table_options=table_options,
     )
     changes.items.apply_hints(
         write_disposition="merge", primary_key="col1", columns=merge_hints

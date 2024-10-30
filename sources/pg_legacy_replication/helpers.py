@@ -21,7 +21,7 @@ import dlt
 import psycopg2
 from dlt.common import logger
 from dlt.common.pendulum import pendulum
-from dlt.common.schema.typing import TTableSchema, TTableSchemaColumns
+from dlt.common.schema.typing import TColumnSchema, TTableSchema, TTableSchemaColumns
 from dlt.common.schema.utils import merge_column
 from dlt.common.typing import TDataItem
 from dlt.extract import DltSource, DltResource
@@ -412,6 +412,10 @@ class MessageConsumer:
         last_schema = self.last_table_schema.get(table_name)
         included_columns = self.included_columns.get(table_name)
 
+        # Used cached schema if the operation is a delete since the inferred one will always be less precise
+        if msg.op == Op.DELETE and last_schema:
+            return last_schema
+
         # Return cached schema if hash matches
         current_hash = hash_typeinfo(msg.new_typeinfo)
         if current_hash == self.last_table_hashes.get(table_name):
@@ -422,9 +426,13 @@ class MessageConsumer:
             # Cache the inferred schema and hash if it is not already cached
             self.last_table_schema[table_name] = new_schema
             self.last_table_hashes[table_name] = current_hash
-        elif last_schema != new_schema:
-            # Raise an exception if there's a schema mismatch
-            raise StopReplication("Table schema change detected")
+        else:
+            try:
+                retained_schema = compare_schemas(last_schema, new_schema)
+                self.last_table_schema[table_name] = retained_schema
+            except AssertionError as e:
+                logger.warning(str(e))
+                raise StopReplication
 
         return new_schema
 
@@ -590,3 +598,49 @@ def gen_data_item(
         )
 
     return data_item
+
+
+ALLOWED_COL_SCHEMA_FIELDS: Set[str] = {
+    "name",
+    "data_type",
+    "nullable",
+    "precision",
+    "scale",
+}
+
+
+def compare_schemas(last: TTableSchema, new: TTableSchema) -> TTableSchema:
+    """Compares the last schema with the new one and chooses the more
+    precise one if they are relatively equal or else raises a
+    AssertionError due to an incompatible schema change"""
+    table_name = last["name"]
+    assert table_name == new["name"], "Table names do not match"
+
+    table_schema: TTableSchema = {"name": table_name, "columns": {}}
+
+    for name, s1 in last["columns"].items():
+        s2 = new["columns"].get(name)
+        assert (
+            s2 is not None and s1["data_type"] == s2["data_type"]
+        ), f"Incompatible schema for column '{name}'"
+
+        # Ensure new has no fields outside of allowed fields
+        extra_fields = set(s2.keys()) - ALLOWED_COL_SCHEMA_FIELDS
+        assert not extra_fields, f"Unexpected fields {extra_fields} in column '{name}'"
+
+        # Select the more precise schema by comparing nullable, precision, and scale
+        col_schema: TColumnSchema = {
+            "name": name,
+            "data_type": s1["data_type"],
+        }
+        if "nullable" in s1 or "nullable" in s2:
+            col_schema["nullable"] = s1.get("nullable", s2.get("nullable"))
+        if "precision" in s1 or "precision" in s2:
+            col_schema["precision"] = s1.get("precision", s2.get("precision"))
+        if "scale" in s1 or "scale" in s2:
+            col_schema["scale"] = s1.get("scale", s2.get("scale"))
+
+        # Update with the more detailed schema per column
+        table_schema["columns"][name] = col_schema
+
+    return table_schema
