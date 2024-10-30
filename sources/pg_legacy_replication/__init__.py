@@ -1,21 +1,20 @@
 """Replicates postgres tables in batch using logical decoding."""
 
-from typing import Dict, Sequence, Optional, Iterable, Union
+from typing import Any, Callable, Dict, Sequence, Optional, Iterable, Union
 
 import dlt
-from dlt.common.schema.typing import TTableSchemaColumns
 from dlt.extract import DltResource
 from dlt.extract.items import TDataItem
 from dlt.sources.credentials import ConnectionStringCredentials
 
 from .helpers import (
-    advance_slot,
-    get_max_lsn,
+    BackendHandler,
     ItemGenerator,
-    create_table_dispatch,
-    init_replication,
-    cleanup_snapshot_resources,
     SqlTableOptions,
+    advance_slot,
+    cleanup_snapshot_resources,
+    get_max_lsn,
+    init_replication,
 )
 
 
@@ -26,7 +25,6 @@ def replication_source(
     table_names: Union[str, Sequence[str]],
     credentials: ConnectionStringCredentials = dlt.secrets.value,
     table_options: Optional[Dict[str, SqlTableOptions]] = None,
-    column_hints: Optional[Dict[str, TTableSchemaColumns]] = None,
     target_batch_size: int = 1000,
     flush_slot: bool = True,
 ) -> Iterable[DltResource]:
@@ -111,15 +109,22 @@ def replication_source(
     wal_reader = replication_resource(slot_name)
 
     for table in table_names:
+        table_opts = table_options.get(table) if table_options else {}
         yield dlt.transformer(
-            create_table_dispatch(
-                table=table,
-                column_hints=column_hints.get(table) if column_hints else None,
-                table_options=table_options.get(table) if table_options else None,
-            ),
+            _create_table_dispatch(table=table, table_options=table_opts),
             data_from=wal_reader,
             name=table,
         )
+
+
+def _create_table_dispatch(
+    table: str, table_options: SqlTableOptions
+) -> Callable[[TDataItem], Any]:
+    """Creates a dispatch handler that processes data items based on a specified table and optional column hints."""
+    handler = BackendHandler(table, table_options)
+    # FIXME Uhhh.. why do I have to do this?
+    handler.__qualname__ = "BackendHandler.__call__"  # type: ignore[attr-defined]
+    return handler
 
 
 __all__ = ["cleanup_snapshot_resources", "init_replication", "replication_source"]

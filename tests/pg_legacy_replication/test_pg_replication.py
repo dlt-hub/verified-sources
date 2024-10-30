@@ -50,24 +50,25 @@ def test_core_functionality(
     add_pk(src_pl.sql_client, "tbl_x", "id_x")
     add_pk(src_pl.sql_client, "tbl_y", "id_y")
 
-    table_options: Dict[str, SqlTableOptions] = {
-        "tbl_x": {"backend": backend},
-        "tbl_y": {"backend": backend},
-    }
-
     snapshots = init_replication(
         slot_name=slot_name,
         schema=src_pl.dataset_name,
         table_names=("tbl_x", "tbl_y"),
         take_snapshots=True,
-        table_options=table_options,
+        table_options={
+            "tbl_x": {"backend": backend},
+            "tbl_y": {"backend": backend},
+        },
     )
 
     changes = replication_source(
         slot_name=slot_name,
         schema=src_pl.dataset_name,
         table_names=("tbl_x", "tbl_y"),
-        table_options=table_options,
+        table_options={
+            "tbl_x": {"backend": backend},
+            "tbl_y": {"backend": backend},
+        },
     )
     changes.tbl_x.apply_hints(
         write_disposition="merge", primary_key="id_x", columns=merge_hints
@@ -194,11 +195,6 @@ def test_without_init_load(
     add_pk(src_pl.sql_client, "tbl_x", "id_x")
     add_pk(src_pl.sql_client, "tbl_y", "id_y")
 
-    table_options: Dict[str, SqlTableOptions] = {
-        "tbl_x": {"backend": backend},
-        "tbl_y": {"backend": backend},
-    }
-
     # initialize replication and create resource for changes
     init_replication(
         slot_name=slot_name,
@@ -210,7 +206,10 @@ def test_without_init_load(
         slot_name=slot_name,
         schema=src_pl.dataset_name,
         table_names=("tbl_x", "tbl_y"),
-        table_options=table_options,
+        table_options={
+            "tbl_x": {"backend": backend},
+            "tbl_y": {"backend": backend},
+        },
     )
     changes.tbl_x.apply_hints(
         write_disposition="merge", primary_key="id_x", columns=merge_hints
@@ -287,18 +286,13 @@ def test_mapped_data_types(
     src_pl.run(items(data))
     add_pk(src_pl.sql_client, "items", "col1")
 
-    table_options: Dict[str, SqlTableOptions] = {
-        "tbl_x": {"backend": backend},
-        "tbl_y": {"backend": backend},
-    }
-
     # initialize replication and create resources
     snapshot = init_replication(
         slot_name=slot_name,
         schema=src_pl.dataset_name,
         table_names="items",
         take_snapshots=init_load,
-        table_options=table_options,
+        table_options={"items": {"backend": backend}},
     )
     if init_load and give_hints:
         snapshot.items.apply_hints(columns=column_schema)
@@ -307,7 +301,7 @@ def test_mapped_data_types(
         slot_name=slot_name,
         schema=src_pl.dataset_name,
         table_names="items",
-        table_options=table_options,
+        table_options={"items": {"backend": backend}},
     )
     changes.items.apply_hints(
         write_disposition="merge", primary_key="col1", columns=merge_hints
@@ -388,8 +382,9 @@ def test_mapped_data_types(
 
 
 @pytest.mark.parametrize("destination_name", ALL_DESTINATIONS)
+@pytest.mark.parametrize("backend", ["sqlalchemy", "pyarrow"])
 def test_unmapped_data_types(
-    src_config: Tuple[dlt.Pipeline, str], destination_name: str
+    src_config: Tuple[dlt.Pipeline, str], destination_name: str, backend: TableBackend
 ) -> None:
     """Assert postgres data types that aren't explicitly mapped default to "text" type."""
     src_pl, slot_name = src_config
@@ -411,6 +406,7 @@ def test_unmapped_data_types(
         slot_name=slot_name,
         schema=src_pl.dataset_name,
         table_names="data_types",
+        table_options={"data_types": {"backend": backend}},
     )
 
     # insert record in source table to create replication item
@@ -433,8 +429,12 @@ def test_unmapped_data_types(
 
 @pytest.mark.parametrize("destination_name", ALL_DESTINATIONS)
 @pytest.mark.parametrize("init_load", [True, False])
+@pytest.mark.parametrize("backend", ["sqlalchemy", "pyarrow"])
 def test_included_columns(
-    src_config: Tuple[dlt.Pipeline, str], destination_name: str, init_load: bool
+    src_config: Tuple[dlt.Pipeline, str],
+    destination_name: str,
+    init_load: bool,
+    backend: TableBackend,
 ) -> None:
     def get_cols(pipeline: dlt.Pipeline, table_name: str) -> set:
         with pipeline.destination_client(pipeline.default_schema_name) as client:
@@ -469,9 +469,10 @@ def test_included_columns(
     )
 
     # initialize replication and create resources
-    options = {
-        "tbl_x": SqlTableOptions(included_columns=["id_x", "val_x"]),
-        "tbl_y": SqlTableOptions(included_columns=["id_y", "val_y"]),
+    table_options = {
+        "tbl_x": SqlTableOptions(included_columns=["id_x", "val_x"], backend=backend),
+        "tbl_y": SqlTableOptions(included_columns=["id_y", "val_y"], backend=backend),
+        "tbl_z": SqlTableOptions(backend=backend),
         # tbl_z is not specified, hence all columns should be included
     }
     snapshots = init_replication(
@@ -479,13 +480,13 @@ def test_included_columns(
         schema=src_pl.dataset_name,
         table_names=("tbl_x", "tbl_y", "tbl_z"),
         take_snapshots=init_load,
-        table_options=options,
+        table_options=table_options,
     )
     changes = replication_source(
         slot_name=slot_name,
         schema=src_pl.dataset_name,
         table_names=("tbl_x", "tbl_y", "tbl_z"),
-        table_options=options,
+        table_options=table_options,
     )
 
     # update three postgres tables
@@ -522,8 +523,12 @@ def test_included_columns(
 
 @pytest.mark.parametrize("destination_name", ALL_DESTINATIONS)
 @pytest.mark.parametrize("init_load", [True, False])
+@pytest.mark.parametrize("backend", ["sqlalchemy", "pyarrow"])
 def test_column_hints(
-    src_config: Tuple[dlt.Pipeline, str], destination_name: str, init_load: bool
+    src_config: Tuple[dlt.Pipeline, str],
+    destination_name: str,
+    init_load: bool,
+    backend: TableBackend,
 ) -> None:
     @dlt.resource
     def tbl_x(data):
@@ -549,9 +554,16 @@ def test_column_hints(
     )
 
     # initialize replication and create resources
-    column_hints: Dict[str, TTableSchemaColumns] = {
-        "tbl_x": {"another_col_x": {"data_type": "double"}},
-        "tbl_y": {"another_col_y": {"precision": 32}},
+    table_options: Dict[str, SqlTableOptions] = {
+        "tbl_x": {
+            "backend": backend,
+            "column_hints": {"another_col_x": {"data_type": "double"}},
+        },
+        "tbl_y": {
+            "backend": backend,
+            "column_hints": {"another_col_y": {"precision": 32}},
+        },
+        "tbl_z": {"backend": backend},
         # tbl_z is not specified, hence all columns should be included
     }
 
@@ -560,6 +572,7 @@ def test_column_hints(
         schema=src_pl.dataset_name,
         table_names=("tbl_x", "tbl_y", "tbl_z"),
         take_snapshots=init_load,
+        table_options=table_options,
     )
     if init_load:
         snapshots.tbl_x.apply_hints(columns={"another_col_x": {"data_type": "double"}})
@@ -569,7 +582,7 @@ def test_column_hints(
         slot_name=slot_name,
         schema=src_pl.dataset_name,
         table_names=("tbl_x", "tbl_y", "tbl_z"),
-        column_hints=column_hints,
+        table_options=table_options,
     )
 
     # update three postgres tables
@@ -635,8 +648,9 @@ def test_column_hints(
 
 
 @pytest.mark.parametrize("destination_name", ALL_DESTINATIONS)
+@pytest.mark.parametrize("backend", ["sqlalchemy", "pyarrow"])
 def test_table_schema_change(
-    src_config: Tuple[dlt.Pipeline, str], destination_name: str
+    src_config: Tuple[dlt.Pipeline, str], destination_name: str, backend: TableBackend
 ) -> None:
     src_pl, slot_name = src_config
 
@@ -655,6 +669,7 @@ def test_table_schema_change(
         slot_name=slot_name,
         schema=src_pl.dataset_name,
         table_names="items",
+        table_options={"items": {"backend": backend}},
     )
     dest_pl = dlt.pipeline(
         pipeline_name="dest_pl", destination=destination_name, dev_mode=True
@@ -683,7 +698,8 @@ def test_table_schema_change(
     )
 
 
-def test_batching(src_config: Tuple[dlt.Pipeline, str]) -> None:
+@pytest.mark.parametrize("backend", ["sqlalchemy", "pyarrow"])
+def test_batching(src_config: Tuple[dlt.Pipeline, str], backend: TableBackend) -> None:
     # this test asserts the number of data items yielded by the replication resource
     # is not affected by `target_batch_size` and the number of replication messages per transaction
     src_pl, slot_name = src_config
@@ -703,6 +719,7 @@ def test_batching(src_config: Tuple[dlt.Pipeline, str]) -> None:
         schema=src_pl.dataset_name,
         table_names="items",
         target_batch_size=50,
+        table_options={"items": {"backend": backend}},
     )
 
     # create destination pipeline and resource
@@ -712,9 +729,6 @@ def test_batching(src_config: Tuple[dlt.Pipeline, str]) -> None:
     batch = [{**r, **{"id": key}} for r in [data] for key in range(1, 101)]
     src_pl.run(batch, table_name="items")
     extract_info = dest_pl.extract(changes)
-    from devtools import debug
-
-    debug(extract_info)
     assert extract_info.asdict()["job_metrics"][0]["items_count"] == 100
 
     # insert 100 records into source table in 5 transactions

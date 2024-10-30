@@ -70,17 +70,19 @@ from .schema_types import _epoch_micros_to_datetime, _to_dlt_column_schema, _to_
 class SqlTableOptions(TypedDict, total=False):
     # Used by both sql_table and replication resources
     included_columns: Optional[Sequence[str]]
+    backend: Optional[TableBackend]
+    backend_kwargs: Optional[Dict[str, Any]]
     # Used only by sql_table resource
     metadata: Optional[MetaData]
     chunk_size: Optional[int]
-    backend: Optional[TableBackend]
     detect_precision_hints: Optional[bool]
     reflection_level: Optional[ReflectionLevel]
     defer_table_reflect: Optional[bool]
     table_adapter_callback: Optional[Callable[[Table], None]]
-    backend_kwargs: Optional[Dict[str, Any]]
     type_adapter_callback: Optional[TTypeAdapter]
     query_adapter_callback: Optional[TQueryAdapter]
+    # Used only by replication resource
+    column_hints: Optional[TTableSchemaColumns]
 
 
 @dlt.sources.config.with_config(sections=("sources", "pg_legacy_replication"))
@@ -173,9 +175,8 @@ def init_replication(
     table_names = [table_names] if isinstance(table_names, str) else table_names or []
 
     for table in table_names:
-        table_args = (
-            table_options[table] if table_options and table in table_options else {}
-        )
+        table_args = (table_options or {}).get(table, {}).copy()
+        table_args.pop("column_hints", None)  # Remove "column_hints" if present
         yield sql_table(credentials=engine, table=table, schema=schema, **table_args)
 
 
@@ -447,7 +448,6 @@ def hash_typeinfo(new_typeinfo: Sequence[TypeInfo]) -> int:
 
 
 class TableItems(NamedTuple):
-    table: str
     schema: TTableSchema
     items: List[TDataItem]
 
@@ -490,9 +490,7 @@ class ItemGenerator:
             last_commit_lsn = consumer.last_commit_lsn
             ack_lsn(write_lsn=last_commit_lsn)
             for table, data_items in consumer.data_items.items():
-                yield TableItems(
-                    table, consumer.last_table_schema.get(table), data_items
-                )
+                yield TableItems(consumer.last_table_schema[table], data_items)
             # Update state after flush
             self.last_commit_lsn = last_commit_lsn
             self.generated_all = consumer.consumed_all
@@ -500,47 +498,66 @@ class ItemGenerator:
             cur.connection.close()
 
 
-def create_table_dispatch(
-    table: str,
-    column_hints: Optional[TTableSchemaColumns] = None,
-    table_options: Optional[SqlTableOptions] = None,
-) -> Callable[[TableItems], Iterable[DataItemWithMeta]]:
-    """Creates a dispatch handler that processes data items based on a specified table and optional column hints."""
+class BackendHandler:
+    def __init__(self, table: str, table_options: SqlTableOptions):
+        self.table = table
+        self.column_hints = table_options.get("column_hints")
+        self.backend = table_options.get("backend", "sqlalchemy")
+        self.backend_kwargs = table_options.get("backend_kwargs", {})
 
-    def handle(table_items: TableItems) -> Iterable[DataItemWithMeta]:
-        if table_items.table != table:
+    def __call__(self, table_items: TableItems) -> Iterable[DataItemWithMeta]:
+        """Yields replication messages from ItemGenerator.
+
+        Args:
+            table_items: An object containing schema and items for the table.
+
+        Yields:
+            DataItemWithMeta: Processed data items based on the table and backend.
+        """
+        schema = table_items.schema
+        if schema["name"] != self.table:
             return
-        columns = table_items.schema["columns"]
-        if column_hints:
-            for col_name, col_hint in column_hints.items():
-                columns[col_name] = merge_column(columns.get(col_name, {}), col_hint)
-        backend = (
-            table_options.get("backend", "sqlalchemy")
-            if table_options
-            else "sqlalchemy"
-        )
-        if backend == "sqlalchemy":
-            yield dlt.mark.with_hints(
-                [],
-                dlt.mark.make_hints(table_name=table, columns=columns),
-                create_table_variant=True,
-            )
-            yield dlt.mark.with_table_name(table_items.items, table)
-        elif backend == "pyarrow":
-            backend_kwargs = table_options.get("backend_kwargs", {})
-            ordered_keys = list(columns.keys())
-            rows = [
-                tuple(data_item.get(column, None) for column in ordered_keys)
-                for data_item in table_items.items
-            ]
-            arrow_table = arrow.row_tuples_to_arrow(
-                rows, columns, tz=backend_kwargs.get("tz", "UTC")
-            )
-            yield dlt.mark.with_table_name(arrow_table, table)
-        else:
-            raise NotImplementedError(f"Unsupported backend: {backend}")
 
-    return handle
+        # Apply column hints if provided
+        if self.column_hints:
+            self.apply_column_hints(schema["columns"])
+
+        # Process based on backend
+        if self.backend == "sqlalchemy":
+            yield from self.emit_schema_and_items(schema["columns"], table_items.items)
+        elif self.backend == "pyarrow":
+            yield from self.emit_arrow_table(schema["columns"], table_items.items)
+        else:
+            raise NotImplementedError(f"Unsupported backend: {self.backend}")
+
+    def apply_column_hints(self, columns: TTableSchemaColumns) -> None:
+        for col_name, col_hint in self.column_hints.items():
+            columns[col_name] = merge_column(columns.get(col_name, {}), col_hint)
+
+    def emit_schema_and_items(
+        self, columns: TTableSchemaColumns, items: List[TDataItem]
+    ) -> Iterator[DataItemWithMeta]:
+        yield dlt.mark.with_hints(
+            [],
+            dlt.mark.make_hints(table_name=self.table, columns=columns),
+            create_table_variant=True,
+        )
+        yield dlt.mark.with_table_name(items, self.table)
+
+    def emit_arrow_table(
+        self, columns: TTableSchemaColumns, items: List[TDataItem]
+    ) -> Iterator[DataItemWithMeta]:
+        # Create rows for pyarrow using ordered column keys
+        row_keys = list(columns.keys())
+        rows = [tuple(item.get(col, None) for col in row_keys) for item in items]
+        yield dlt.mark.with_table_name(
+            arrow.row_tuples_to_arrow(
+                rows,
+                columns,
+                tz=self.backend_kwargs.get("tz", "UTC"),
+            ),
+            self.table,
+        )
 
 
 def infer_table_schema(

@@ -235,9 +235,6 @@ def assert_load_info(info: LoadInfo, expected_load_packages: int = 1) -> None:
         # no failed jobs in any of the packages
         info.raise_on_failed_jobs()
     except AssertionError:
-        from devtools import debug
-
-        debug(info)
         raise
 
 
