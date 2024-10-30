@@ -6,11 +6,12 @@ import pytest
 from dlt.common.schema.typing import TTableSchemaColumns
 from dlt.destinations.job_client_impl import SqlJobClientBase
 
-from sources.pg_legacy_replication import replication_source
-from sources.pg_legacy_replication.helpers import (
+from sources.pg_legacy_replication import (
     init_replication,
     cleanup_snapshot_resources,
+    replication_source,
 )
+from sources.pg_legacy_replication.helpers import SqlTableOptions, TableBackend
 from tests.utils import (
     ALL_DESTINATIONS,
     assert_load_info,
@@ -26,8 +27,9 @@ merge_hints: TTableSchemaColumns = {
 
 
 @pytest.mark.parametrize("destination_name", ALL_DESTINATIONS)
+@pytest.mark.parametrize("backend", ["sqlalchemy"])
 def test_core_functionality(
-    src_config: Tuple[dlt.Pipeline, str], destination_name: str
+    src_config: Tuple[dlt.Pipeline, str], destination_name: str, backend: TableBackend
 ) -> None:
     @dlt.resource(write_disposition="merge", primary_key="id_x")
     def tbl_x(data):
@@ -48,17 +50,21 @@ def test_core_functionality(
     add_pk(src_pl.sql_client, "tbl_x", "id_x")
     add_pk(src_pl.sql_client, "tbl_y", "id_y")
 
+    table_options = {"tbl_x": {"backend": backend}, "tbl_y": {"backend": backend}}
+
     snapshots = init_replication(
         slot_name=slot_name,
         schema=src_pl.dataset_name,
         table_names=("tbl_x", "tbl_y"),
         take_snapshots=True,
+        table_options=table_options,
     )
 
     changes = replication_source(
         slot_name=slot_name,
         schema=src_pl.dataset_name,
         table_names=("tbl_x", "tbl_y"),
+        table_options=table_options,
     )
     changes.tbl_x.apply_hints(
         write_disposition="merge", primary_key="id_x", columns=merge_hints
@@ -445,8 +451,8 @@ def test_included_columns(
 
     # initialize replication and create resources
     options = {
-        "tbl_x": {"included_columns": ["id_x", "val_x"]},
-        "tbl_y": {"included_columns": ["id_y", "val_y"]},
+        "tbl_x": SqlTableOptions(included_columns=["id_x", "val_x"]),
+        "tbl_y": SqlTableOptions(included_columns=["id_y", "val_y"]),
         # tbl_z is not specified, hence all columns should be included
     }
     snapshots = init_replication(

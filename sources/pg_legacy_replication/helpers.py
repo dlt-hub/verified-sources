@@ -37,21 +37,10 @@ from psycopg2.extras import (
 
 # Favoring 1.x over 0.5.x imports
 try:
-    from dlt.common.libs.sql_alchemy import (  # type: ignore[attr-defined]
-        Connection as ConnectionSqla,
-        Engine,
-        event,
-        Table,
-        MetaData,
-    )
+    from dlt.common.libs.sql_alchemy import Engine, Table, MetaData  # type: ignore[attr-defined]
 except ImportError:
-    from sqlalchemy import (
-        Connection as ConnectionSqla,
-        Engine,
-        event,
-        Table,
-        MetaData,
-    )
+    from sqlalchemy import Engine, Table, MetaData
+from sqlalchemy import Connection as ConnectionSqla, event
 
 try:
     from dlt.sources.sql_database import (  # type: ignore[import-not-found]
@@ -61,6 +50,7 @@ try:
         TTypeAdapter,
         ReflectionLevel,
         TableBackend,
+        arrow_helpers as arrow,
     )
 except ImportError:
     from ..sql_database import (  # type: ignore[import-untyped]
@@ -70,17 +60,17 @@ except ImportError:
         TTypeAdapter,
         ReflectionLevel,
         TableBackend,
+        arrow_helpers as arrow,
     )
 
 from .pg_logicaldec_pb2 import Op, RowMessage, TypeInfo
 from .schema_types import _epoch_micros_to_datetime, _to_dlt_column_schema, _to_dlt_val
 
 
-class ReplicationOptions(TypedDict, total=False):
+class SqlTableOptions(TypedDict, total=False):
+    # Used by both sql_table and replication resources
     included_columns: Optional[Sequence[str]]
-
-
-class SqlTableOptions(ReplicationOptions, total=False):
+    # Used only by sql_table resource
     metadata: Optional[MetaData]
     chunk_size: Optional[int]
     backend: Optional[TableBackend]
@@ -337,7 +327,7 @@ class MessageConsumer:
         upto_lsn: int,
         table_qnames: Set[str],
         target_batch_size: int = 1000,
-        table_options: Optional[Dict[str, ReplicationOptions]] = None,
+        table_options: Optional[Dict[str, SqlTableOptions]] = None,
     ) -> None:
         self.upto_lsn = upto_lsn
         self.table_qnames = table_qnames
@@ -353,7 +343,8 @@ class MessageConsumer:
         self.data_items: Dict[str, List[TDataItem]] = defaultdict(list)
         # maps table name to table schema
         self.last_table_schema: Dict[str, TTableSchema] = {}
-        self.last_seen_schemas: Dict[str, int] = {}
+        # maps table names to new_typeinfo hashes
+        self.last_table_hashes: Dict[str, int] = {}
         self.last_commit_ts: pendulum.DateTime
         self.last_commit_lsn: int
 
@@ -410,37 +401,38 @@ class MessageConsumer:
         if msg.table not in self.table_qnames:
             return
         table_name = msg.table.split(".")[1]
-        if msg.op == Op.DELETE:
-            data_item = gen_data_item(msg)
-        else:
-            table_schema = self._get_table_schema(msg, table_name)
-            data_item = gen_data_item(
-                msg, self.included_columns.get(table_name), table_schema["columns"]
-            )
+        table_schema = self.get_table_schema(msg, table_name)
+        data_item = gen_data_item(
+            msg, table_schema["columns"], self.included_columns.get(table_name)
+        )
         data_item["lsn"] = lsn
         self.data_items[table_name].append(data_item)
 
-    def _get_table_schema(self, msg: RowMessage, table_name: str) -> TTableSchema:
-        current_hash = hash_typeinfo(msg.new_typeinfo)
-        cached_hash = self.last_seen_schemas.get(table_name)
+    def get_table_schema(self, msg: RowMessage, table_name: str) -> TTableSchema:
+        cached = self.last_table_schema.get(table_name)
+        included_columns = self.included_columns.get(table_name)
+
+        # If DELETE try to fetch an already cached schema or infer a less precise one
+        if msg.op == Op.DELETE:
+            if cached:
+                return cached
+            return infer_table_schema(msg, included_columns)
 
         # Return cached schema if hash matches
-        if cached_hash == current_hash:
+        current_hash = hash_typeinfo(msg.new_typeinfo)
+        if current_hash == self.last_table_hashes.get(table_name):
             return self.last_table_schema[table_name]
 
-        # Infer the current schema
-        inferred_schema = infer_table_schema(msg, self.included_columns.get(table_name))
-        cached_schema = self.last_table_schema.get(table_name)
-
-        if cached_schema is None:
+        inferred = infer_table_schema(msg, included_columns)
+        if cached is None:
             # Cache the inferred schema and hash if it is not already cached
-            self.last_table_schema[table_name] = inferred_schema
-            self.last_seen_schemas[table_name] = current_hash
-        elif cached_schema != inferred_schema:
+            self.last_table_schema[table_name] = inferred
+            self.last_table_hashes[table_name] = current_hash
+        elif cached != inferred:
             # Raise an exception if there's a schema mismatch
             raise StopReplication("Table schema change detected")
 
-        return inferred_schema
+        return inferred
 
 
 def hash_typeinfo(new_typeinfo: Sequence[TypeInfo]) -> int:
@@ -466,7 +458,7 @@ class ItemGenerator:
     upto_lsn: int
     start_lsn: int = 0
     target_batch_size: int = 1000
-    table_options: Optional[Dict[str, ReplicationOptions]] = None
+    table_options: Optional[Dict[str, SqlTableOptions]] = None
     last_commit_lsn: Optional[int] = field(default=None, init=False)
     generated_all: bool = False
 
@@ -507,7 +499,9 @@ class ItemGenerator:
 
 
 def create_table_dispatch(
-    table: str, column_hints: Optional[TTableSchemaColumns] = None
+    table: str,
+    column_hints: Optional[TTableSchemaColumns] = None,
+    table_options: Optional[SqlTableOptions] = None,
 ) -> Callable[[TableItems], Iterable[DataItemWithMeta]]:
     """Creates a dispatch handler that processes data items based on a specified table and optional column hints."""
 
@@ -526,7 +520,23 @@ def create_table_dispatch(
                 dlt.mark.make_hints(table_name=table, columns=columns),
                 create_table_variant=True,
             )
-        yield dlt.mark.with_table_name(table_items.items, table)
+        if table_options:
+            backend = table_options.get("backend")
+            backend_kwargs = table_options.get("backend_kwargs", {})
+            if backend == "pyarrow":
+                ordered_keys = list(columns.keys())
+                rows = [
+                    tuple(data_item.get(column, None) for column in ordered_keys)
+                    for data_item in table_items.items
+                ]
+                arrow_table = arrow.row_tuples_to_arrow(
+                    rows, columns, tz=backend_kwargs.get("tz", "UTC")
+                )
+                yield dlt.mark.with_table_name(arrow_table, table)
+            else:
+                yield dlt.mark.with_table_name(table_items.items, table)
+        else:
+            yield dlt.mark.with_table_name(table_items.items, table)
 
     return handle
 
@@ -535,9 +545,16 @@ def infer_table_schema(
     msg: RowMessage, included_columns: Optional[Set[str]] = None
 ) -> TTableSchema:
     """Infers the table schema from the replication message and optional hints"""
+    # Choose the correct source based on operation type
+    is_change = msg.op != Op.DELETE
+    tuples = msg.new_tuple if is_change else msg.old_tuple
+
+    # Filter and map columns, conditionally using `new_typeinfo` when available
     columns: TTableSchemaColumns = {
-        col.column_name: _to_dlt_column_schema(col, col_info)
-        for col, col_info in zip(msg.new_tuple, msg.new_typeinfo)
+        col.column_name: _to_dlt_column_schema(
+            col, msg.new_typeinfo[i] if is_change else None
+        )
+        for i, col in enumerate(tuples)
         if not included_columns or col.column_name in included_columns
     }
 
@@ -553,8 +570,8 @@ def infer_table_schema(
 
 def gen_data_item(
     msg: RowMessage,
+    column_schema: TTableSchemaColumns,
     included_columns: Optional[Set[str]] = None,
-    column_schema: Optional[TTableSchemaColumns] = None,
 ) -> TDataItem:
     """Generates data item from a row message and corresponding metadata."""
     data_item: TDataItem = {}

@@ -81,18 +81,21 @@ _VARYING_PRECISION_PATTERNS: Dict[int, str] = {
 
 
 def _get_precision_and_scale(
-    type_id: int, modifier: str
+    type_id: int, modifier: Optional[str]
 ) -> Optional[Tuple[Optional[int], Optional[int]]]:
     """Get precision from postgres type attributes and modifiers."""
     if type_id in _FIXED_PRECISION_TYPES:
         return _FIXED_PRECISION_TYPES[type_id]
 
-    if pattern := _VARYING_PRECISION_PATTERNS.get(type_id):
-        if match := re.search(pattern, modifier):
-            groups = match.groups()
-            precision = int(groups[0])
-            scale = int(groups[1]) if len(groups) > 1 else None
-            return precision, scale
+    # If modifier or pattern is missing, return defaults
+    if not modifier or (pattern := _VARYING_PRECISION_PATTERNS.get(type_id)) is None:
+        return None, None
+
+    if match := re.search(pattern, modifier):
+        groups = match.groups()
+        precision = int(groups[0])
+        scale = int(groups[1]) if len(groups) > 1 else None
+        return precision, scale
 
     return None, None
 
@@ -112,13 +115,7 @@ def _from_db_type() -> Callable[[str, Optional[int], Optional[int]], TColumnType
         return type_mapper.from_db_type  # type: ignore[no-any-return]
 
 
-def _from_destination_type(
-    db_type: str, precision: Optional[int] = None, scale: Optional[int] = None
-) -> TColumnType:
-    return _from_db_type()(db_type, precision, scale)
-
-
-def _to_dlt_column_type(type_id: int, modifier: str) -> TColumnType:
+def _to_dlt_column_type(type_id: int, modifier: Optional[str]) -> TColumnType:
     """Converts postgres type OID to dlt column type.
 
     Type OIDs not in _PG_TYPES mapping default to "text" type.
@@ -132,16 +129,25 @@ def _to_dlt_column_type(type_id: int, modifier: str) -> TColumnType:
         )
 
     precision, scale = _get_precision_and_scale(type_id, modifier)
-    return _from_destination_type(pg_type, precision, scale)
+    return _from_db_type()(pg_type, precision, scale)
 
 
-def _to_dlt_column_schema(datum: DatumMessage, type_info: TypeInfo) -> TColumnSchema:
+def _to_dlt_column_schema(
+    datum: DatumMessage, type_info: Optional[TypeInfo]
+) -> TColumnSchema:
     """Converts decoderbuf's datum value/typeinfo to dlt column schema."""
-    return {
+    column_schema: TColumnSchema = {
         "name": datum.column_name,
-        "nullable": type_info.value_optional,
-        **_to_dlt_column_type(datum.column_type, type_info.modifier),
+        **_to_dlt_column_type(
+            datum.column_type, type_info.modifier if type_info else None
+        ),
     }
+
+    # Set nullable attribute if type_info is available
+    if type_info:
+        column_schema["nullable"] = type_info.value_optional
+
+    return column_schema
 
 
 def _epoch_micros_to_datetime(microseconds_since_1970: int) -> pendulum.DateTime:
@@ -169,7 +175,7 @@ def _to_dlt_val(
 ) -> Any:
     """Converts decoderbuf's datum value into dlt-compatible data value."""
     if isinstance(data_type, int):
-        col_type: TColumnType = _from_destination_type(_PG_TYPES[data_type])
+        col_type: TColumnType = _from_db_type()(_PG_TYPES[data_type])  # type: ignore[call-arg]
         data_type = col_type["data_type"]
 
     datum = val.WhichOneof("datum")

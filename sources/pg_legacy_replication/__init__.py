@@ -15,7 +15,7 @@ from .helpers import (
     create_table_dispatch,
     init_replication,
     cleanup_snapshot_resources,
-    ReplicationOptions,
+    SqlTableOptions,
 )
 
 
@@ -25,7 +25,7 @@ def replication_source(
     schema: str,
     table_names: Union[str, Sequence[str]],
     credentials: ConnectionStringCredentials = dlt.secrets.value,
-    table_options: Optional[Dict[str, ReplicationOptions]] = None,
+    table_options: Optional[Dict[str, SqlTableOptions]] = None,
     column_hints: Optional[Dict[str, TTableSchemaColumns]] = None,
     target_batch_size: int = 1000,
     flush_slot: bool = True,
@@ -115,6 +115,7 @@ def replication_source(
             create_table_dispatch(
                 table=table,
                 column_hints=column_hints.get(table) if column_hints else None,
+                table_options=table_options.get(table) if table_options else None,
             ),
             data_from=wal_reader,
             name=table,
