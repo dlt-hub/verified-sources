@@ -185,6 +185,50 @@ def test_compare_schemas():
     }
     assert compare_schemas(s1, s2) == s1
     assert compare_schemas(s2, s1) == s1
+
+    s1 = {
+        "columns": {
+            "_dlt_id": {"data_type": "text", "name": "_dlt_id", "nullable": False},
+            "_dlt_load_id": {
+                "data_type": "text",
+                "name": "_dlt_load_id",
+                "nullable": False,
+            },
+            "c1": {
+                "data_type": "bigint",
+                "name": "c1",
+                "nullable": True,
+                "precision": 64,
+            },
+            "c2": {
+                "data_type": "bigint",
+                "name": "c2",
+                "nullable": True,
+                "precision": 64,
+            },
+            "c3": {
+                "data_type": "bigint",
+                "name": "c3",
+                "nullable": True,
+                "precision": 64,
+            },
+            "deleted_ts": {
+                "data_type": "timestamp",
+                "name": "deleted_ts",
+                "nullable": True,
+            },
+            "lsn": {"data_type": "bigint", "name": "lsn", "nullable": True},
+        },
+        "name": "items",
+    }
+    from copy import deepcopy
+
+    s2 = deepcopy(s1)
+    s2["columns"]["c4"] = {
+        "data_type": "bigint",
+        "name": "c4",
+        "nullable": True,
+        "precision": 64,
+    }
     with pytest.raises(AssertionError):
-        s1["columns"]["col12"] = {"name": "col12", "data_type": "text"}
         compare_schemas(s1, s2)

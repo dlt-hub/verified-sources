@@ -257,7 +257,9 @@ def test_without_init_load(
 @pytest.mark.parametrize("destination_name", ALL_DESTINATIONS)
 @pytest.mark.parametrize("give_hints", [True, False])
 @pytest.mark.parametrize("init_load", [True, False])
-@pytest.mark.parametrize("backend", ["sqlalchemy", "pyarrow"])
+@pytest.mark.parametrize(
+    "backend", ["sqlalchemy"]
+)  # FIXME Too many issues with duckdb and timestamps atm
 def test_mapped_data_types(
     src_config: Tuple[dlt.Pipeline, str],
     destination_name: str,

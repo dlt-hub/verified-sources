@@ -432,7 +432,7 @@ class MessageConsumer:
                 retained_schema = compare_schemas(last_schema, new_schema)
                 self.last_table_schema[table_name] = retained_schema
             except AssertionError as e:
-                logger.warning(str(e))
+                logger.debug(str(e))
                 raise StopReplication
 
         return new_schema
@@ -634,9 +634,13 @@ def compare_schemas(last: TTableSchema, new: TTableSchema) -> TTableSchema:
     assert table_name == new["name"], "Table names do not match"
 
     table_schema: TTableSchema = {"name": table_name, "columns": {}}
+    last_cols, new_cols = last["columns"], new["columns"]
+    assert len(last_cols) == len(
+        new_cols
+    ), f"Columns mismatch last:{last['columns']} new:{new['columns']}"
 
-    for name, s1 in last["columns"].items():
-        s2 = new["columns"].get(name)
+    for name, s1 in last_cols.items():
+        s2 = new_cols.get(name)
         assert (
             s2 is not None and s1["data_type"] == s2["data_type"]
         ), f"Incompatible schema for column '{name}'"
