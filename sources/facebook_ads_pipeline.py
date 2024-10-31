@@ -117,6 +117,38 @@ def load_insights() -> None:
     print(info)
 
 
+def load_actions_with_filter() -> None:
+    """Load action insights with a filter"""
+    pipeline = dlt.pipeline(
+        pipeline_name='facebook_insights_fb_pixel_purchase',
+        destination='duckdb',
+        dataset_name='facebook_insights_fb_pixel_purchases',
+        progress="log"
+    )
+
+    number_of_days = 3
+
+    fb_ads_insights = facebook_insights_source(
+        initial_load_past_days=number_of_days,
+        time_increment_days=1,
+        attribution_window_days_lag=7,
+        action_breakdowns=("action_type",),
+        action_attribution_windows=('7d_click', '1d_view'),
+        batch_size=50,
+        filtering=[
+            {"field": "action_type",
+             "operator":"IN",
+             "value":["offsite_conversion.fb_pixel_purchase"]}
+        ]
+    )
+    # In this example we filter by action type offsite_conversion.fb_pixel_purchase.
+    # This greatly speeds up the extraction since other action types (e.g. ad impressions) return a very large amount of records.
+    # Depending on your use case those action types may not be necessary or are better accessed without an action_type breakdown.
+
+    info = pipeline.run(fb_ads_insights)
+    print(info)
+
+
 if __name__ == "__main__":
     # load_all_ads_objects()
     merge_ads_objects()
@@ -124,3 +156,4 @@ if __name__ == "__main__":
     # load_only_disapproved_ads()
     # load_and_enrich_objects()
     # load_insights()
+    # load_actions_with_filter

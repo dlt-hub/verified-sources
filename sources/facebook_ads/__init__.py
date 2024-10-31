@@ -1,6 +1,6 @@
 """Loads campaigns, ads sets, ads, leads and insight data from Facebook Marketing API"""
 
-from typing import Iterator, Sequence
+from typing import Iterator, Sequence, List, Dict
 
 from facebook_business import FacebookAdsApi
 from facebook_business.api import FacebookResponse
@@ -133,6 +133,7 @@ def facebook_insights_source(
     batch_size: int = 50,
     request_timeout: int = 300,
     app_api_version: str = None,
+    filtering: List[Dict] = None
 ) -> DltResource:
     """Incrementally loads insight reports with defined granularity level, fields, breakdowns etc.
 
@@ -156,7 +157,7 @@ def facebook_insights_source(
         batch_size (int, optional): Page size when reading data from particular report. Defaults to 50.
         request_timeout (int, optional): Connection timeout. Defaults to 300.
         app_api_version(str, optional): A version of the facebook api required by the app for which the access tokens were issued ie. 'v17.0'. Defaults to the facebook_business library default version
-
+        filtering(List[Dict], optional): Allows you to filter the results returned by restricting on a column. Available operators are GREATER_THAN, IN, LESS_THAN, GREATER_THAN_OR_EQUAL.
     Returns:
         DltResource: facebook_insights
 
@@ -206,6 +207,7 @@ def facebook_insights_source(
                         ).to_date_string(),
                     }
                 ],
+                "filtering": filtering,
             }
             job = execute_job(account.get_insights(params=query, is_async=True))
             yield list(map(process_report_item, job.get_result()))
