@@ -1,7 +1,6 @@
 import hashlib
 from collections import defaultdict
 from dataclasses import dataclass, field
-from functools import partial
 from typing import (
     Optional,
     Dict,
@@ -472,7 +471,6 @@ class ItemGenerator:
         Does not advance the slot.
         """
         cur = _get_rep_conn(self.credentials).cursor()
-        ack_lsn = partial(cur.send_feedback, reply=True, force=True)
         cur.start_replication(
             slot_name=self.slot_name, start_lsn=self.start_lsn, decode=False
         )
@@ -487,15 +485,20 @@ class ItemGenerator:
         except StopReplication:  # completed batch or reached `upto_lsn`
             pass
         finally:
-            last_commit_lsn = consumer.last_commit_lsn
-            ack_lsn(write_lsn=last_commit_lsn)
             for table, data_items in consumer.data_items.items():
                 yield TableItems(consumer.last_table_schema[table], data_items)
             # Update state after flush
-            self.last_commit_lsn = last_commit_lsn
+            self.last_commit_lsn = consumer.last_commit_lsn
             self.generated_all = consumer.consumed_all
-            ack_lsn(flush_lsn=last_commit_lsn)
-            cur.connection.close()
+            self.ack_and_close(cur)
+
+    def ack_and_close(self, cur: ReplicationCursor) -> None:
+        if self.generated_all:
+            commit_lsn = self.last_commit_lsn
+            cur.send_feedback(
+                write_lsn=commit_lsn, flush_lsn=commit_lsn, reply=True, force=True
+            )
+        cur.connection.close()
 
 
 class BackendHandler:
@@ -519,16 +522,27 @@ class BackendHandler:
             return
 
         # Apply column hints if provided
+        columns = schema["columns"]
+        data = table_items.items
         if self.column_hints:
-            self.apply_column_hints(schema["columns"])
+            self.apply_column_hints(columns)
 
         # Process based on backend
-        if self.backend == "sqlalchemy":
-            yield from self.emit_schema_and_items(schema["columns"], table_items.items)
-        elif self.backend == "pyarrow":
-            yield from self.emit_arrow_table(schema["columns"], table_items.items)
-        else:
-            raise NotImplementedError(f"Unsupported backend: {self.backend}")
+        try:
+            if self.backend == "sqlalchemy":
+                yield from self.emit_schema_and_items(columns, data)
+            elif self.backend == "pyarrow":
+                yield from self.emit_arrow_table(columns, data)
+            else:
+                raise NotImplementedError(f"Unsupported backend: {self.backend}")
+        except Exception:
+            logger.error(
+                "A fatal error occurred while processing batch for '%s' (columns=%s, data=%s)",
+                self.table,
+                columns,
+                data,
+            )
+            raise
 
     def apply_column_hints(self, columns: TTableSchemaColumns) -> None:
         for col_name, col_hint in self.column_hints.items():

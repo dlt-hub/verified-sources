@@ -68,7 +68,7 @@ def replication_source(
           slot. Recommended value is True. Be careful when setting False—not flushing
           can eventually lead to a “disk full” condition on the server, because
           the server retains all the WAL segments that might be needed to stream
-          the changes via all of the currently open replication slots.
+          the changes via all the currently open replication slots.
 
         Yields:
             Data items for changes published in the publication.

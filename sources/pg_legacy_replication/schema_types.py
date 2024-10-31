@@ -1,14 +1,14 @@
 import re
 from functools import lru_cache
-from typing import Optional, Any, Dict, Callable, Union, Tuple
+from typing import Optional, Any, Dict, Callable, Tuple
 
 import pendulum
 from dlt.common import Decimal
+from dlt.common import logger
 from dlt.common.data_types.type_helpers import coerce_value
 from dlt.common.data_types.typing import TDataType
 from dlt.common.schema.typing import TColumnSchema, TColumnType
 from dlt.destinations import postgres
-from dlt.common import logger
 
 from .pg_logicaldec_pb2 import DatumMessage, TypeInfo
 
@@ -18,12 +18,12 @@ _DUMMY_VALS: Dict[TDataType, Any] = {
     "bool": True,
     "complex": [0],
     "json": [0],  # type: ignore[dict-item]
-    "date": "2000-01-01",
+    "date": pendulum.Date(1970, 1, 1),
     "decimal": Decimal(0),
     "double": 0.0,
     "text": "",
-    "time": "00:00:00",
-    "timestamp": "2000-01-01T00:00:00",
+    "time": pendulum.Time(0, 0, 0),
+    "timestamp": pendulum.from_timestamp(0),
     "wei": 0,
 }
 """Dummy values used to replace NULLs in NOT NULL columns in key-only delete records."""
@@ -44,7 +44,7 @@ _PG_TYPES: Dict[int, str] = {
     1700: "numeric",
     3802: "jsonb",
 }
-"""Maps postgres type OID to type string. Only includes types present in PostgresTypeMapper."""
+"""Maps postgres type OID to type string."""
 
 _MISSING_TYPES: Dict[str, TDataType] = {
     "real": "double",
@@ -184,10 +184,11 @@ def _to_dlt_val(
     if data_type in data_type_handlers:
         return data_type_handlers[data_type](raw_value)
 
+    raw_type = _DATUM_RAW_TYPES[datum]
     try:
-        return coerce_value(data_type, _DATUM_RAW_TYPES[datum], raw_value)
+        return coerce_value(data_type, raw_type, raw_value)
     except ValueError:
         # FIXME Hack to get it to work with 0.5.x and 1.x
         if data_type == "json":
-            return coerce_value("complex", _DATUM_RAW_TYPES[datum], raw_value)
+            return coerce_value("complex", raw_type, raw_value)
         raise
