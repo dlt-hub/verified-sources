@@ -74,7 +74,7 @@ TABLE_UPDATE: List[TColumnSchema] = [
     {
         "name": "col4_precision",
         "data_type": "timestamp",
-        "precision": 3,
+        "precision": 6,
         "nullable": False,
     },
     {"name": "col5_precision", "data_type": "text", "precision": 25, "nullable": False},
@@ -91,7 +91,7 @@ TABLE_UPDATE: List[TColumnSchema] = [
         "precision": 19,
         "nullable": False,
     },
-    {"name": "col11_precision", "data_type": "time", "precision": 3, "nullable": False},
+    {"name": "col11_precision", "data_type": "time", "precision": 6, "nullable": False},
 ]
 
 if "complex" in DATA_TYPES:

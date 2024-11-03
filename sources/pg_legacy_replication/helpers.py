@@ -252,11 +252,18 @@ def get_max_lsn(
     Raises error if the replication slot or publication does not exist.
     """
     cur = _get_conn(credentials).cursor()
-    lsn_field = "location" if get_pg_version(cur) < 100000 else "lsn"
-    cur.execute(
-        f"SELECT MAX({lsn_field} - '0/0') AS max_lsn "  # subtract '0/0' to convert pg_lsn type to int (https://stackoverflow.com/a/73738472)
-        f"FROM pg_logical_slot_peek_binary_changes('{slot_name}', NULL, NULL);"
+    loc_fn = (
+        "pg_current_xlog_location"
+        if get_pg_version(cur) < 100000
+        else "pg_current_wal_lsn"
     )
+    # subtract '0/0' to convert pg_lsn type to int (https://stackoverflow.com/a/73738472)
+    cur.execute(f"SELECT {loc_fn}() - '0/0' as max_lsn;")
+    # lsn_field = "location" if get_pg_version(cur) < 100000 else "lsn"
+    # cur.execute(
+    #     f"SELECT MAX({lsn_field} - '0/0') AS max_lsn "  # subtract '0/0' to convert pg_lsn type to int (https://stackoverflow.com/a/73738472)
+    #     f"FROM pg_logical_slot_peek_binary_changes('{slot_name}', NULL, NULL);"
+    # )
     lsn: int = cur.fetchone()[0]
     cur.connection.close()
     return lsn
@@ -483,9 +490,9 @@ class ItemGenerator:
         try:
             cur.consume_stream(consumer)
         except StopReplication:  # completed batch or reached `upto_lsn`
-            pass
-        finally:
             yield from self.flush_batch(cur, consumer)
+        finally:
+            cur.connection.close()
 
     def flush_batch(
         self, cur: ReplicationCursor, consumer: MessageConsumer
@@ -494,12 +501,17 @@ class ItemGenerator:
         consumed_all = consumer.consumed_all
         for table, data_items in consumer.data_items.items():
             yield TableItems(consumer.last_table_schema[table], data_items)
-        cur.send_feedback(write_lsn=last_commit_lsn, reply=True, force=True)
         if consumed_all:
-            cur.send_feedback(flush_lsn=last_commit_lsn, reply=True, force=True)
+            cur.send_feedback(
+                write_lsn=last_commit_lsn,
+                flush_lsn=last_commit_lsn,
+                reply=True,
+                force=True,
+            )
+        else:
+            cur.send_feedback(write_lsn=last_commit_lsn, reply=True, force=True)
         self.last_commit_lsn = last_commit_lsn
         self.generated_all = consumed_all
-        cur.connection.close()
 
 
 class BackendHandler:
