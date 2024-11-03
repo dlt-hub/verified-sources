@@ -485,19 +485,20 @@ class ItemGenerator:
         except StopReplication:  # completed batch or reached `upto_lsn`
             pass
         finally:
-            for table, data_items in consumer.data_items.items():
-                yield TableItems(consumer.last_table_schema[table], data_items)
-            # Update state after flush
-            self.last_commit_lsn = consumer.last_commit_lsn
-            self.generated_all = consumer.consumed_all
-            self.ack_and_close(cur)
+            yield from self.flush_batch(cur, consumer)
 
-    def ack_and_close(self, cur: ReplicationCursor) -> None:
-        if self.generated_all:
-            commit_lsn = self.last_commit_lsn
-            cur.send_feedback(
-                write_lsn=commit_lsn, flush_lsn=commit_lsn, reply=True, force=True
-            )
+    def flush_batch(
+        self, cur: ReplicationCursor, consumer: MessageConsumer
+    ) -> Iterator[TableItems]:
+        last_commit_lsn = consumer.last_commit_lsn
+        consumed_all = consumer.consumed_all
+        for table, data_items in consumer.data_items.items():
+            yield TableItems(consumer.last_table_schema[table], data_items)
+        cur.send_feedback(write_lsn=last_commit_lsn, reply=True, force=True)
+        if consumed_all:
+            cur.send_feedback(flush_lsn=last_commit_lsn, reply=True, force=True)
+        self.last_commit_lsn = last_commit_lsn
+        self.generated_all = consumed_all
         cur.connection.close()
 
 
