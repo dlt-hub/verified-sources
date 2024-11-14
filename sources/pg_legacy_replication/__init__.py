@@ -10,7 +10,7 @@ from dlt.sources.credentials import ConnectionStringCredentials
 from .helpers import (
     BackendHandler,
     ItemGenerator,
-    SqlTableOptions,
+    ReplicationOptions,
     advance_slot,
     cleanup_snapshot_resources,
     get_max_lsn,
@@ -24,7 +24,7 @@ def replication_source(
     schema: str,
     table_names: Union[str, Sequence[str]],
     credentials: ConnectionStringCredentials = dlt.secrets.value,
-    table_options: Optional[Dict[str, SqlTableOptions]] = None,
+    table_options: Optional[Dict[str, ReplicationOptions]] = None,
     target_batch_size: int = 1000,
     flush_slot: bool = True,
 ) -> Iterable[DltResource]:
@@ -118,7 +118,7 @@ def replication_source(
 
 
 def _create_table_dispatch(
-    table: str, table_options: SqlTableOptions
+    table: str, table_options: ReplicationOptions
 ) -> Callable[[TDataItem], Any]:
     """Creates a dispatch handler that processes data items based on a specified table and optional column hints."""
     handler = BackendHandler(table, table_options)
@@ -127,4 +127,9 @@ def _create_table_dispatch(
     return handler
 
 
-__all__ = ["cleanup_snapshot_resources", "init_replication", "replication_source"]
+__all__ = [
+    "ReplicationOptions",
+    "cleanup_snapshot_resources",
+    "init_replication",
+    "replication_source",
+]

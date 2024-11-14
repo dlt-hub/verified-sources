@@ -66,22 +66,27 @@ from .pg_logicaldec_pb2 import Op, RowMessage, TypeInfo
 from .schema_types import _epoch_micros_to_datetime, _to_dlt_column_schema, _to_dlt_val
 
 
-class SqlTableOptions(TypedDict, total=False):
-    # Used by both sql_table and replication resources
-    included_columns: Optional[Sequence[str]]
+class ReplicationOptions(TypedDict, total=False):
     backend: Optional[TableBackend]
     backend_kwargs: Optional[Dict[str, Any]]
-    # Used only by sql_table resource
-    metadata: Optional[MetaData]
+    column_hints: Optional[TTableSchemaColumns]
+    include_deleted_timestamp: Optional[bool]  # Default is true
+    include_lsn: Optional[bool]  # Default is true
+    included_columns: Optional[Set[str]]
+
+
+class SqlTableOptions(TypedDict, total=False):
+    backend: Optional[TableBackend]
+    backend_kwargs: Optional[Dict[str, Any]]
     chunk_size: Optional[int]
-    detect_precision_hints: Optional[bool]
-    reflection_level: Optional[ReflectionLevel]
     defer_table_reflect: Optional[bool]
+    detect_precision_hints: Optional[bool]
+    included_columns: Optional[Sequence[str]]
+    metadata: Optional[MetaData]
+    query_adapter_callback: Optional[TQueryAdapter]
+    reflection_level: Optional[ReflectionLevel]
     table_adapter_callback: Optional[Callable[[Table], None]]
     type_adapter_callback: Optional[TTypeAdapter]
-    query_adapter_callback: Optional[TQueryAdapter]
-    # Used only by replication resource
-    column_hints: Optional[TTableSchemaColumns]
 
 
 @dlt.sources.config.with_config(sections=("sources", "pg_legacy_replication"))
@@ -175,7 +180,6 @@ def init_replication(
 
     for table in table_names:
         table_args = (table_options or {}).get(table, {}).copy()
-        table_args.pop("column_hints", None)  # Remove "column_hints" if present
         yield sql_table(credentials=engine, table=table, schema=schema, **table_args)
 
 
@@ -334,7 +338,7 @@ class MessageConsumer:
         upto_lsn: int,
         table_qnames: Set[str],
         target_batch_size: int = 1000,
-        table_options: Optional[Dict[str, SqlTableOptions]] = None,
+        table_options: Optional[Dict[str, ReplicationOptions]] = None,
     ) -> None:
         self.upto_lsn = upto_lsn
         self.table_qnames = table_qnames
@@ -412,7 +416,7 @@ class MessageConsumer:
         data_item = gen_data_item(
             msg, table_schema["columns"], self.included_columns.get(table_name)
         )
-        data_item["lsn"] = lsn
+        data_item["_pg_lsn"] = lsn
         self.data_items[table_name].append(data_item)
 
     def get_table_schema(self, msg: RowMessage, table_name: str) -> TTableSchema:
@@ -466,7 +470,7 @@ class ItemGenerator:
     upto_lsn: int
     start_lsn: int = 0
     target_batch_size: int = 1000
-    table_options: Optional[Dict[str, SqlTableOptions]] = None
+    table_options: Optional[Dict[str, ReplicationOptions]] = None
     last_commit_lsn: Optional[int] = field(default=None, init=False)
     generated_all: bool = False
 
@@ -515,7 +519,7 @@ class ItemGenerator:
 
 
 class BackendHandler:
-    def __init__(self, table: str, table_options: SqlTableOptions):
+    def __init__(self, table: str, table_options: ReplicationOptions):
         self.table = table
         self.column_hints = table_options.get("column_hints")
         self.backend = table_options.get("backend", "sqlalchemy")
@@ -605,10 +609,10 @@ def infer_table_schema(
     }
 
     # Add replication columns
-    columns["lsn"] = {"data_type": "bigint", "name": "lsn", "nullable": True}
-    columns["deleted_ts"] = {
+    columns["_pg_lsn"] = {"data_type": "bigint", "name": "_pg_lsn", "nullable": True}
+    columns["_pg_deleted_ts"] = {
         "data_type": "timestamp",
-        "name": "deleted_ts",
+        "name": "_pg_deleted_ts",
         "nullable": True,
     }
 
@@ -629,7 +633,7 @@ def gen_data_item(
         row = msg.new_tuple
     else:
         row = msg.old_tuple
-        data_item["deleted_ts"] = _epoch_micros_to_datetime(msg.commit_time)
+        data_item["_pg_deleted_ts"] = _epoch_micros_to_datetime(msg.commit_time)
 
     for data in row:
         col_name = data.column_name

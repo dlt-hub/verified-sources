@@ -2,7 +2,6 @@ import pytest
 from dlt.common.schema.typing import TTableSchema
 from dlt.common.typing import TDataItem
 from google.protobuf.json_format import ParseDict as parse_dict
-from psycopg2.extras import StopReplication
 
 from sources.pg_legacy_replication.helpers import (
     infer_table_schema,
@@ -127,10 +126,10 @@ def test_compare_schemas():
                 "nullable": False,
             },
             "_dlt_id": {"name": "_dlt_id", "data_type": "text", "nullable": False},
-            "lsn": {"data_type": "bigint", "name": "lsn", "nullable": True},
-            "deleted_ts": {
+            "_pg_lsn": {"data_type": "bigint", "name": "_pg_lsn", "nullable": True},
+            "_pg_deleted_ts": {
                 "data_type": "timestamp",
-                "name": "deleted_ts",
+                "name": "_pg_deleted_ts",
                 "nullable": True,
             },
         },
@@ -175,10 +174,10 @@ def test_compare_schemas():
             "col11_precision": {"name": "col11_precision", "data_type": "time"},
             "_dlt_load_id": {"name": "_dlt_load_id", "data_type": "text"},
             "_dlt_id": {"name": "_dlt_id", "data_type": "text"},
-            "lsn": {"data_type": "bigint", "name": "lsn", "nullable": True},
-            "deleted_ts": {
+            "_pg_lsn": {"data_type": "bigint", "name": "_pg_lsn", "nullable": True},
+            "_pg_deleted_ts": {
                 "data_type": "timestamp",
-                "name": "deleted_ts",
+                "name": "_pg_deleted_ts",
                 "nullable": True,
             },
         },
@@ -212,12 +211,12 @@ def test_compare_schemas():
                 "nullable": True,
                 "precision": 64,
             },
-            "deleted_ts": {
+            "_pg_deleted_ts": {
                 "data_type": "timestamp",
-                "name": "deleted_ts",
+                "name": "_pg_deleted_ts",
                 "nullable": True,
             },
-            "lsn": {"data_type": "bigint", "name": "lsn", "nullable": True},
+            "_pg_lsn": {"data_type": "bigint", "name": "_pg_lsn", "nullable": True},
         },
         "name": "items",
     }

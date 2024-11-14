@@ -293,7 +293,7 @@ DATA_ITEMS: List[TDataItem] = [
         "col_tstz": pendulum.parse("1970-01-01T00:00:00+00:00"),
         "col_num": Decimal(0),
         "col_json": [0],
-        "deleted_ts": pendulum.parse("2024-10-19T00:56:23.354856+00:00"),
+        "_pg_deleted_ts": pendulum.parse("2024-10-19T00:56:23.354856+00:00"),
     },
 ]
 
@@ -314,10 +314,10 @@ TABLE_SCHEMAS: List[TTableSchema] = [
                 "name": "_dlt_load_id",
                 "nullable": False,
             },
-            "lsn": {"data_type": "bigint", "name": "lsn", "nullable": True},
-            "deleted_ts": {
+            "_pg_lsn": {"data_type": "bigint", "name": "_pg_lsn", "nullable": True},
+            "_pg_deleted_ts": {
                 "data_type": "timestamp",
-                "name": "deleted_ts",
+                "name": "_pg_deleted_ts",
                 "nullable": True,
             },
         },
@@ -331,10 +331,10 @@ TABLE_SCHEMAS: List[TTableSchema] = [
             "col11": {"data_type": "time", "name": "col11", "nullable": False},
             "col12": {"data_type": "timestamp", "name": "col12", "nullable": True},
             "col13": {"data_type": "double", "name": "col13", "nullable": True},
-            "lsn": {"data_type": "bigint", "name": "lsn", "nullable": True},
-            "deleted_ts": {
+            "_pg_lsn": {"data_type": "bigint", "name": "_pg_lsn", "nullable": True},
+            "_pg_deleted_ts": {
                 "data_type": "timestamp",
-                "name": "deleted_ts",
+                "name": "_pg_deleted_ts",
                 "nullable": True,
             },
         },
@@ -361,10 +361,10 @@ TABLE_SCHEMAS: List[TTableSchema] = [
             "col_tstz": {"data_type": "timestamp", "name": "col_tstz"},
             "col_num": {"data_type": "decimal", "name": "col_num"},
             "col_json": {"data_type": "complex", "name": "col_json"},
-            "lsn": {"data_type": "bigint", "name": "lsn", "nullable": True},
-            "deleted_ts": {
+            "_pg_lsn": {"data_type": "bigint", "name": "_pg_lsn", "nullable": True},
+            "_pg_deleted_ts": {
                 "data_type": "timestamp",
-                "name": "deleted_ts",
+                "name": "_pg_deleted_ts",
                 "nullable": True,
             },
         },

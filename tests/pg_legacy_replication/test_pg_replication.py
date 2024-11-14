@@ -10,6 +10,7 @@ from sources.pg_legacy_replication import (
     init_replication,
     cleanup_snapshot_resources,
     replication_source,
+    ReplicationOptions,
 )
 from sources.pg_legacy_replication.helpers import SqlTableOptions, TableBackend
 from tests.utils import (
@@ -21,8 +22,8 @@ from .cases import TABLE_ROW_ALL_DATA_TYPES, TABLE_UPDATE_COLUMNS_SCHEMA
 from .utils import add_pk, assert_loaded_data
 
 merge_hints: TTableSchemaColumns = {
-    "deleted_ts": {"hard_delete": True},
-    "lsn": {"dedup_sort": "desc"},
+    "_pg_deleted_ts": {"hard_delete": True},
+    "_pg_lsn": {"dedup_sort": "desc"},
 }
 
 
@@ -470,9 +471,9 @@ def test_included_columns(
 
     # initialize replication and create resources
     table_options = {
-        "tbl_x": SqlTableOptions(included_columns=["id_x", "val_x"], backend=backend),
-        "tbl_y": SqlTableOptions(included_columns=["id_y", "val_y"], backend=backend),
-        "tbl_z": SqlTableOptions(backend=backend),
+        "tbl_x": {"backend": backend, "included_columns": {"id_x", "val_x"}},
+        "tbl_y": {"backend": backend, "included_columns": {"id_y", "val_y"}},
+        "tbl_z": {"backend": backend},
         # tbl_z is not specified, hence all columns should be included
     }
     snapshots = init_replication(
@@ -510,14 +511,14 @@ def test_included_columns(
         assert get_cols(dest_pl, "tbl_z") == {"id_z", "val_z", "another_col_z"}
 
     dest_pl.run(changes)
-    assert get_cols(dest_pl, "tbl_x") == {"id_x", "val_x", "lsn", "deleted_ts"}
-    assert get_cols(dest_pl, "tbl_y") == {"id_y", "val_y", "lsn", "deleted_ts"}
+    assert get_cols(dest_pl, "tbl_x") == {"id_x", "val_x", "_pg_lsn", "_pg_deleted_ts"}
+    assert get_cols(dest_pl, "tbl_y") == {"id_y", "val_y", "_pg_lsn", "_pg_deleted_ts"}
     assert get_cols(dest_pl, "tbl_z") == {
         "id_z",
         "val_z",
         "another_col_z",
-        "lsn",
-        "deleted_ts",
+        "_pg_lsn",
+        "_pg_deleted_ts",
     }
 
 
@@ -554,7 +555,7 @@ def test_column_hints(
     )
 
     # initialize replication and create resources
-    table_options: Dict[str, SqlTableOptions] = {
+    table_options: Dict[str, ReplicationOptions] = {
         "tbl_x": {
             "backend": backend,
             "column_hints": {"another_col_x": {"data_type": "double"}},
@@ -572,7 +573,12 @@ def test_column_hints(
         schema=src_pl.dataset_name,
         table_names=("tbl_x", "tbl_y", "tbl_z"),
         take_snapshots=init_load,
-        table_options=table_options,
+        table_options={
+            "tbl_x": {"backend": backend},
+            "tbl_y": {"backend": backend},
+            "tbl_z": {"backend": backend},
+            # tbl_z is not specified, hence all columns should be included
+        },
     )
     if init_load:
         snapshots.tbl_x.apply_hints(columns={"another_col_x": {"data_type": "double"}})
