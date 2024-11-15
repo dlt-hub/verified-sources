@@ -259,10 +259,11 @@ ROW_MESSAGES: List[dict] = [
 
 DATA_ITEMS: List[TDataItem] = [
     {
-        "_dlt_id": "gGjifTMTAUs5ag",
-        "_dlt_load_id": "1728662646.2657657",
         "id_y": 2,
         "val_y": False,
+        "_dlt_id": "gGjifTMTAUs5ag",
+        "_dlt_load_id": "1728662646.2657657",
+        "_pg_lsn": 1,
     },
     {
         "col4": pendulum.parse("2022-05-23T13:26:45.176451+00:00"),
@@ -277,6 +278,7 @@ DATA_ITEMS: List[TDataItem] = [
         "col11": pendulum.parse("13:26:45.176451", strict=False).time(),
         "col12": None,
         "col13": None,
+        "_pg_lsn": 1,
     },
     {
         "id_x": 1,
@@ -294,6 +296,7 @@ DATA_ITEMS: List[TDataItem] = [
         "col_num": Decimal(0),
         "col_json": [0],
         "_pg_deleted_ts": pendulum.parse("2024-10-19T00:56:23.354856+00:00"),
+        "_pg_lsn": 1,
     },
 ]
 

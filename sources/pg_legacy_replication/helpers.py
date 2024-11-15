@@ -70,7 +70,7 @@ class ReplicationOptions(TypedDict, total=False):
     backend: Optional[TableBackend]
     backend_kwargs: Optional[Dict[str, Any]]
     column_hints: Optional[TTableSchemaColumns]
-    include_deleted_timestamp: Optional[bool]  # Default is true
+    include_deleted_ts: Optional[bool]  # Default is true
     include_lsn: Optional[bool]  # Default is true
     included_columns: Optional[Set[str]]
 
@@ -343,11 +343,7 @@ class MessageConsumer:
         self.upto_lsn = upto_lsn
         self.table_qnames = table_qnames
         self.target_batch_size = target_batch_size
-        self.included_columns = {
-            table: set(options["included_columns"])
-            for table, options in (table_options or {}).items()
-            if options.get("included_columns")
-        }
+        self.table_options = table_options or {}
 
         self.consumed_all: bool = False
         # maps table names to list of data items
@@ -414,14 +410,12 @@ class MessageConsumer:
         table_name = msg.table.split(".")[1]
         table_schema = self.get_table_schema(msg, table_name)
         data_item = gen_data_item(
-            msg, table_schema["columns"], self.included_columns.get(table_name)
+            msg, table_schema["columns"], lsn, **self.table_options.get(table_name)
         )
-        data_item["_pg_lsn"] = lsn
         self.data_items[table_name].append(data_item)
 
     def get_table_schema(self, msg: RowMessage, table_name: str) -> TTableSchema:
         last_schema = self.last_table_schema.get(table_name)
-        included_columns = self.included_columns.get(table_name)
 
         # Used cached schema if the operation is a delete since the inferred one will always be less precise
         if msg.op == Op.DELETE and last_schema:
@@ -432,7 +426,7 @@ class MessageConsumer:
         if current_hash == self.last_table_hashes.get(table_name):
             return self.last_table_schema[table_name]
 
-        new_schema = infer_table_schema(msg, included_columns)
+        new_schema = infer_table_schema(msg, **self.table_options.get(table_name))
         if last_schema is None:
             # Cache the inferred schema and hash if it is not already cached
             self.last_table_schema[table_name] = new_schema
@@ -521,9 +515,7 @@ class ItemGenerator:
 class BackendHandler:
     def __init__(self, table: str, table_options: ReplicationOptions):
         self.table = table
-        self.column_hints = table_options.get("column_hints")
-        self.backend = table_options.get("backend", "sqlalchemy")
-        self.backend_kwargs = table_options.get("backend_kwargs", {})
+        self.table_options = table_options
 
     def __call__(self, table_items: TableItems) -> Iterable[DataItemWithMeta]:
         """Yields replication messages from ItemGenerator.
@@ -540,18 +532,20 @@ class BackendHandler:
 
         # Apply column hints if provided
         columns = schema["columns"]
-        data = table_items.items
-        if self.column_hints:
-            self.apply_column_hints(columns)
+        if column_hints := self.table_options.get("column_hints"):
+            for col_name, col_hint in column_hints.items():
+                columns[col_name] = merge_column(columns.get(col_name, {}), col_hint)
 
         # Process based on backend
+        data = table_items.items
+        backend = self.table_options.get("backend", "sqlalchemy")
         try:
-            if self.backend == "sqlalchemy":
+            if backend == "sqlalchemy":
                 yield from self.emit_schema_and_items(columns, data)
-            elif self.backend == "pyarrow":
+            elif backend == "pyarrow":
                 yield from self.emit_arrow_table(columns, data)
             else:
-                raise NotImplementedError(f"Unsupported backend: {self.backend}")
+                raise NotImplementedError(f"Unsupported backend: {backend}")
         except Exception:
             logger.error(
                 "A fatal error occurred while processing batch for '%s' (columns=%s, data=%s)",
@@ -560,10 +554,6 @@ class BackendHandler:
                 data,
             )
             raise
-
-    def apply_column_hints(self, columns: TTableSchemaColumns) -> None:
-        for col_name, col_hint in self.column_hints.items():
-            columns[col_name] = merge_column(columns.get(col_name, {}), col_hint)
 
     def emit_schema_and_items(
         self, columns: TTableSchemaColumns, items: List[TDataItem]
@@ -579,20 +569,23 @@ class BackendHandler:
         self, columns: TTableSchemaColumns, items: List[TDataItem]
     ) -> Iterator[DataItemWithMeta]:
         # Create rows for pyarrow using ordered column keys
-        row_keys = list(columns.keys())
-        rows = [tuple(item.get(col, None) for col in row_keys) for item in items]
+        rows = [
+            tuple(item.get(column, None) for column in list(columns.keys()))
+            for item in items
+        ]
+        tz = self.table_options.get("backend_kwargs", {}).get("tz", "UTC")
         yield dlt.mark.with_table_name(
-            arrow.row_tuples_to_arrow(
-                rows,
-                columns,
-                tz=self.backend_kwargs.get("tz", "UTC"),
-            ),
+            arrow.row_tuples_to_arrow(rows, columns, tz=tz),
             self.table,
         )
 
 
 def infer_table_schema(
-    msg: RowMessage, included_columns: Optional[Set[str]] = None
+    msg: RowMessage,
+    include_deleted_ts: bool = True,
+    include_lsn: bool = True,
+    included_columns: Optional[Set[str]] = None,
+    **kwargs: Any,
 ) -> TTableSchema:
     """Infers the table schema from the replication message and optional hints"""
     # Choose the correct source based on operation type
@@ -602,22 +595,28 @@ def infer_table_schema(
     # Filter and map columns, conditionally using `new_typeinfo` when available
     columns: TTableSchemaColumns = {
         col.column_name: _to_dlt_column_schema(
-            col, msg.new_typeinfo[i] if is_change else None
+            col, msg.new_typeinfo[i] if is_change and msg.new_typeinfo else None
         )
         for i, col in enumerate(tuples)
         if not included_columns or col.column_name in included_columns
     }
 
     # Add replication columns
-    columns["_pg_lsn"] = {"data_type": "bigint", "name": "_pg_lsn", "nullable": True}
-    columns["_pg_deleted_ts"] = {
-        "data_type": "timestamp",
-        "name": "_pg_deleted_ts",
-        "nullable": True,
-    }
+    if include_lsn:
+        columns["_pg_lsn"] = {
+            "data_type": "bigint",
+            "name": "_pg_lsn",
+            "nullable": True,
+        }
+    if include_deleted_ts:
+        columns["_pg_deleted_ts"] = {
+            "data_type": "timestamp",
+            "name": "_pg_deleted_ts",
+            "nullable": True,
+        }
 
     return {
-        "name": (msg.table.split(".")[1]),
+        "name": msg.table.split(".")[1],
         "columns": columns,
     }
 
@@ -625,25 +624,28 @@ def infer_table_schema(
 def gen_data_item(
     msg: RowMessage,
     column_schema: TTableSchemaColumns,
+    lsn: int,
+    include_deleted_ts: bool = True,
+    include_lsn: bool = True,
     included_columns: Optional[Set[str]] = None,
+    **kwargs: Any,
 ) -> TDataItem:
     """Generates data item from a row message and corresponding metadata."""
-    data_item: TDataItem = {}
-    if msg.op != Op.DELETE:
-        row = msg.new_tuple
-    else:
-        row = msg.old_tuple
+    data_item: TDataItem = {"_pg_lsn": lsn} if include_lsn else {}
+
+    # Select the relevant row tuple based on operation type
+    row = msg.new_tuple if msg.op != Op.DELETE else msg.old_tuple
+    if msg.op == Op.DELETE and include_deleted_ts:
         data_item["_pg_deleted_ts"] = _epoch_micros_to_datetime(msg.commit_time)
 
     for data in row:
         col_name = data.column_name
-        if included_columns and col_name not in included_columns:
-            continue
-        data_item[col_name] = _to_dlt_val(
-            data,
-            column_schema[col_name]["data_type"],
-            for_delete=msg.op == Op.DELETE,
-        )
+        if not included_columns or col_name in included_columns:
+            data_item[col_name] = _to_dlt_val(
+                data,
+                column_schema[col_name]["data_type"],
+                for_delete=msg.op == Op.DELETE,
+            )
 
     return data_item
 

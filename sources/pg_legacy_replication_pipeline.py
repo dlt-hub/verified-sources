@@ -49,8 +49,8 @@ def replicate_single_table() -> None:
         write_disposition="merge",
         primary_key="id",
         columns={
-            "deleted_ts": {"hard_delete": True},
-            "lsn": {"dedup_sort": "desc"},
+            "_pg_deleted_ts": {"hard_delete": True},
+            "_pg_lsn": {"dedup_sort": "desc"},
         },
     )
 

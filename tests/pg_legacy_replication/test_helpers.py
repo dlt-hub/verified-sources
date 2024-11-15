@@ -27,7 +27,7 @@ def test_gen_data_item(data, data_item: TDataItem):
     row_msg = RowMessage()
     parse_dict(data, row_msg)
     column_schema = infer_table_schema(row_msg)["columns"]
-    assert gen_data_item(row_msg, column_schema) == data_item
+    assert gen_data_item(row_msg, column_schema, lsn=1) == data_item
 
 
 def test_compare_schemas():
