@@ -19,7 +19,7 @@ def test_infer_table_schema(
 ):
     row_msg = RowMessage()
     parse_dict(data, row_msg)
-    assert infer_table_schema(row_msg) == expected_schema
+    assert infer_table_schema(row_msg, include_tx_id=True) == expected_schema
 
 
 @pytest.mark.parametrize("data, data_item", zip(ROW_MESSAGES, DATA_ITEMS))
@@ -27,7 +27,7 @@ def test_gen_data_item(data, data_item: TDataItem):
     row_msg = RowMessage()
     parse_dict(data, row_msg)
     column_schema = infer_table_schema(row_msg)["columns"]
-    assert gen_data_item(row_msg, column_schema, lsn=1) == data_item
+    assert gen_data_item(row_msg, column_schema, lsn=1, include_tx_id=True) == data_item
 
 
 def test_compare_schemas():

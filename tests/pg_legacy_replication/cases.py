@@ -264,6 +264,7 @@ DATA_ITEMS: List[TDataItem] = [
         "_dlt_id": "gGjifTMTAUs5ag",
         "_dlt_load_id": "1728662646.2657657",
         "_pg_lsn": 1,
+        "_pg_tx_id": 969,
     },
     {
         "col4": pendulum.parse("2022-05-23T13:26:45.176451+00:00"),
@@ -279,6 +280,7 @@ DATA_ITEMS: List[TDataItem] = [
         "col12": None,
         "col13": None,
         "_pg_lsn": 1,
+        "_pg_tx_id": 2018,
     },
     {
         "id_x": 1,
@@ -297,6 +299,7 @@ DATA_ITEMS: List[TDataItem] = [
         "col_json": [0],
         "_pg_deleted_ts": pendulum.parse("2024-10-19T00:56:23.354856+00:00"),
         "_pg_lsn": 1,
+        "_pg_tx_id": 932,
     },
 ]
 
@@ -323,6 +326,12 @@ TABLE_SCHEMAS: List[TTableSchema] = [
                 "name": "_pg_deleted_ts",
                 "nullable": True,
             },
+            "_pg_tx_id": {
+                "data_type": "bigint",
+                "name": "_pg_tx_id",
+                "nullable": True,
+                "precision": 32,
+            },
         },
     },
     {
@@ -339,6 +348,12 @@ TABLE_SCHEMAS: List[TTableSchema] = [
                 "data_type": "timestamp",
                 "name": "_pg_deleted_ts",
                 "nullable": True,
+            },
+            "_pg_tx_id": {
+                "data_type": "bigint",
+                "name": "_pg_tx_id",
+                "nullable": True,
+                "precision": 32,
             },
         },
     },
@@ -369,6 +384,12 @@ TABLE_SCHEMAS: List[TTableSchema] = [
                 "data_type": "timestamp",
                 "name": "_pg_deleted_ts",
                 "nullable": True,
+            },
+            "_pg_tx_id": {
+                "data_type": "bigint",
+                "name": "_pg_tx_id",
+                "nullable": True,
+                "precision": 32,
             },
         },
     },

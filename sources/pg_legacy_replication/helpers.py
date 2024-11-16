@@ -584,6 +584,7 @@ def infer_table_schema(
     msg: RowMessage,
     include_deleted_ts: bool = True,
     include_lsn: bool = True,
+    include_tx_id: bool = False,
     included_columns: Optional[Set[str]] = None,
     **kwargs: Any,
 ) -> TTableSchema:
@@ -614,6 +615,13 @@ def infer_table_schema(
             "name": "_pg_deleted_ts",
             "nullable": True,
         }
+    if include_tx_id:
+        columns["_pg_tx_id"] = {
+            "data_type": "bigint",
+            "name": "_pg_tx_id",
+            "nullable": True,
+            "precision": 32,
+        }
 
     return {
         "name": msg.table.split(".")[1],
@@ -627,11 +635,16 @@ def gen_data_item(
     lsn: int,
     include_deleted_ts: bool = True,
     include_lsn: bool = True,
+    include_tx_id: bool = False,
     included_columns: Optional[Set[str]] = None,
     **kwargs: Any,
 ) -> TDataItem:
     """Generates data item from a row message and corresponding metadata."""
-    data_item: TDataItem = {"_pg_lsn": lsn} if include_lsn else {}
+    data_item: TDataItem = {}
+    if include_lsn:
+        data_item["_pg_lsn"] = lsn
+    if include_tx_id:
+        data_item["_pg_tx_id"] = msg.transaction_id
 
     # Select the relevant row tuple based on operation type
     row = msg.new_tuple if msg.op != Op.DELETE else msg.old_tuple
