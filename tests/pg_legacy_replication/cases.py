@@ -264,6 +264,7 @@ DATA_ITEMS: List[TDataItem] = [
         "_dlt_id": "gGjifTMTAUs5ag",
         "_dlt_load_id": "1728662646.2657657",
         "_pg_lsn": 1,
+        "_pg_commit_ts": pendulum.parse("2024-10-11T16:04:06.949062+00:00"),
         "_pg_tx_id": 969,
     },
     {
@@ -280,6 +281,7 @@ DATA_ITEMS: List[TDataItem] = [
         "col12": None,
         "col13": None,
         "_pg_lsn": 1,
+        "_pg_commit_ts": pendulum.parse("2024-10-21T09:37:03.666542+00:00"),
         "_pg_tx_id": 2018,
     },
     {
@@ -297,8 +299,9 @@ DATA_ITEMS: List[TDataItem] = [
         "col_tstz": pendulum.parse("1970-01-01T00:00:00+00:00"),
         "col_num": Decimal(0),
         "col_json": [0],
-        "_pg_deleted_ts": pendulum.parse("2024-10-19T00:56:23.354856+00:00"),
         "_pg_lsn": 1,
+        "_pg_deleted_ts": pendulum.parse("2024-10-19T00:56:23.354856+00:00"),
+        "_pg_commit_ts": pendulum.parse("2024-10-19T00:56:23.354856+00:00"),
         "_pg_tx_id": 932,
     },
 ]
@@ -326,6 +329,11 @@ TABLE_SCHEMAS: List[TTableSchema] = [
                 "name": "_pg_deleted_ts",
                 "nullable": True,
             },
+            "_pg_commit_ts": {
+                "data_type": "timestamp",
+                "name": "_pg_commit_ts",
+                "nullable": True,
+            },
             "_pg_tx_id": {
                 "data_type": "bigint",
                 "name": "_pg_tx_id",
@@ -347,6 +355,11 @@ TABLE_SCHEMAS: List[TTableSchema] = [
             "_pg_deleted_ts": {
                 "data_type": "timestamp",
                 "name": "_pg_deleted_ts",
+                "nullable": True,
+            },
+            "_pg_commit_ts": {
+                "data_type": "timestamp",
+                "name": "_pg_commit_ts",
                 "nullable": True,
             },
             "_pg_tx_id": {
@@ -383,6 +396,11 @@ TABLE_SCHEMAS: List[TTableSchema] = [
             "_pg_deleted_ts": {
                 "data_type": "timestamp",
                 "name": "_pg_deleted_ts",
+                "nullable": True,
+            },
+            "_pg_commit_ts": {
+                "data_type": "timestamp",
+                "name": "_pg_commit_ts",
                 "nullable": True,
             },
             "_pg_tx_id": {

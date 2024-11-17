@@ -70,8 +70,10 @@ class ReplicationOptions(TypedDict, total=False):
     backend: Optional[TableBackend]
     backend_kwargs: Optional[Dict[str, Any]]
     column_hints: Optional[TTableSchemaColumns]
-    include_deleted_ts: Optional[bool]  # Default is true
     include_lsn: Optional[bool]  # Default is true
+    include_deleted_ts: Optional[bool]  # Default is true
+    include_commit_ts: Optional[bool]
+    include_tx_id: Optional[bool]
     included_columns: Optional[Set[str]]
 
 
@@ -582,8 +584,9 @@ class BackendHandler:
 
 def infer_table_schema(
     msg: RowMessage,
-    include_deleted_ts: bool = True,
     include_lsn: bool = True,
+    include_deleted_ts: bool = True,
+    include_commit_ts: bool = False,
     include_tx_id: bool = False,
     included_columns: Optional[Set[str]] = None,
     **kwargs: Any,
@@ -615,6 +618,12 @@ def infer_table_schema(
             "name": "_pg_deleted_ts",
             "nullable": True,
         }
+    if include_commit_ts:
+        columns["_pg_commit_ts"] = {
+            "data_type": "timestamp",
+            "name": "_pg_commit_ts",
+            "nullable": True,
+        }
     if include_tx_id:
         columns["_pg_tx_id"] = {
             "data_type": "bigint",
@@ -633,8 +642,9 @@ def gen_data_item(
     msg: RowMessage,
     column_schema: TTableSchemaColumns,
     lsn: int,
-    include_deleted_ts: bool = True,
     include_lsn: bool = True,
+    include_deleted_ts: bool = True,
+    include_commit_ts: bool = False,
     include_tx_id: bool = False,
     included_columns: Optional[Set[str]] = None,
     **kwargs: Any,
@@ -643,6 +653,8 @@ def gen_data_item(
     data_item: TDataItem = {}
     if include_lsn:
         data_item["_pg_lsn"] = lsn
+    if include_commit_ts:
+        data_item["_pg_commit_ts"] = _epoch_micros_to_datetime(msg.commit_time)
     if include_tx_id:
         data_item["_pg_tx_id"] = msg.transaction_id
 
