@@ -48,6 +48,7 @@ _PG_TYPES: Dict[int, str] = {
 
 _MISSING_TYPES: Dict[str, TDataType] = {
     "real": "double",
+    "text": "text",
     "timestamp without time zone": "timestamp",
 }
 # FIXME Missing types for old postgres versions
@@ -179,6 +180,8 @@ def _to_dlt_val(
     datum = val.WhichOneof("datum")
     if datum is None:
         return _DUMMY_VALS[data_type] if for_delete else None
+    if datum == "datum_missing":
+        return None
 
     raw_value = getattr(val, datum)
     if data_type in data_type_handlers:
