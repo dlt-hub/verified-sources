@@ -490,6 +490,7 @@ class ItemGenerator:
         try:
             cur.consume_stream(consumer)
         except StopReplication:  # completed batch or reached `upto_lsn`
+            logger.info("Flushing batch of %s events", self.target_batch_size)
             yield from self.flush_batch(cur, consumer)
         finally:
             cur.connection.close()
@@ -500,6 +501,7 @@ class ItemGenerator:
         last_commit_lsn = consumer.last_commit_lsn
         consumed_all = consumer.consumed_all
         for table, data_items in consumer.data_items.items():
+            logger.info("Flushing %s events for table '%s'", len(data_items), table)
             yield TableItems(consumer.last_table_schema[table], data_items)
         if consumed_all:
             cur.send_feedback(
@@ -536,7 +538,8 @@ class BackendHandler:
         columns = schema["columns"]
         if column_hints := self.table_options.get("column_hints"):
             for col_name, col_hint in column_hints.items():
-                columns[col_name] = merge_column(columns.get(col_name, {}), col_hint)
+                if col_name in columns:
+                    columns[col_name] = merge_column(columns[col_name], col_hint)
 
         # Process based on backend
         data = table_items.items

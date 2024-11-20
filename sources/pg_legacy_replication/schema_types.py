@@ -34,6 +34,7 @@ _PG_TYPES: Dict[int, str] = {
     20: "bigint",
     21: "smallint",
     23: "integer",
+    25: "text",
     700: "real",
     701: "double precision",
     1043: "character varying",
