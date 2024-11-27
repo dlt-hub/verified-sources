@@ -2,18 +2,18 @@ import hashlib
 from collections import defaultdict
 from dataclasses import dataclass, field
 from typing import (
-    Optional,
-    Dict,
-    Set,
-    Iterator,
-    Union,
-    List,
-    Sequence,
     Any,
-    Iterable,
     Callable,
+    Dict,
+    Iterable,
+    Iterator,
+    List,
     NamedTuple,
+    Optional,
+    Sequence,
+    Set,
     TypedDict,
+    Union,
 )
 
 import dlt
@@ -23,10 +23,10 @@ from dlt.common.pendulum import pendulum
 from dlt.common.schema.typing import TColumnSchema, TTableSchema, TTableSchemaColumns
 from dlt.common.schema.utils import merge_column
 from dlt.common.typing import TDataItem
-from dlt.extract import DltSource, DltResource
+from dlt.extract import DltResource, DltSource
 from dlt.extract.items import DataItemWithMeta
 from dlt.sources.credentials import ConnectionStringCredentials
-from psycopg2.extensions import cursor, connection as ConnectionExt
+from psycopg2.extensions import connection as ConnectionExt, cursor
 from psycopg2.extras import (
     LogicalReplicationConnection,
     ReplicationCursor,
@@ -36,20 +36,21 @@ from psycopg2.extras import (
 
 # Favoring 1.x over 0.5.x imports
 try:
-    from dlt.common.libs.sql_alchemy import Engine, Table, MetaData  # type: ignore[attr-defined]
+    from dlt.common.libs.sql_alchemy import Engine, MetaData, Table  # type: ignore[attr-defined]
 except ImportError:
     from sqlalchemy import Engine, Table, MetaData
+
 from sqlalchemy import Connection as ConnectionSqla, event
 
 try:
     from dlt.sources.sql_database import (  # type: ignore[import-not-found]
-        sql_table,
-        engine_from_credentials,
-        TQueryAdapter,
-        TTypeAdapter,
         ReflectionLevel,
         TableBackend,
+        TQueryAdapter,
+        TTypeAdapter,
         arrow_helpers as arrow,
+        engine_from_credentials,
+        sql_table,
     )
 except ImportError:
     from ..sql_database import (  # type: ignore[import-untyped]
@@ -516,10 +517,10 @@ class ItemGenerator:
         self.generated_all = consumed_all
 
 
+@dataclass
 class BackendHandler:
-    def __init__(self, table: str, table_options: ReplicationOptions):
-        self.table = table
-        self.table_options = table_options
+    table: str
+    table_options: ReplicationOptions
 
     def __call__(self, table_items: TableItems) -> Iterable[DataItemWithMeta]:
         """Yields replication messages from ItemGenerator.

@@ -1,10 +1,9 @@
 import re
 from functools import lru_cache
-from typing import Optional, Any, Dict, Callable, Tuple
+from typing import Any, Callable, Dict, Optional, Tuple
 
 import pendulum
-from dlt.common import Decimal
-from dlt.common import logger
+from dlt.common import Decimal, logger
 from dlt.common.data_types.type_helpers import coerce_value
 from dlt.common.data_types.typing import TDataType
 from dlt.common.schema.typing import TColumnSchema, TColumnType

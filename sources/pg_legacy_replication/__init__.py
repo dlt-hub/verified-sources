@@ -1,6 +1,6 @@
 """Replicates postgres tables in batch using logical decoding."""
 
-from typing import Any, Callable, Dict, Sequence, Optional, Iterable, Union
+from typing import Any, Callable, Dict, Iterable, Optional, Sequence, Union
 
 import dlt
 from dlt.extract import DltResource
@@ -109,7 +109,7 @@ def replication_source(
     wal_reader = replication_resource(slot_name)
 
     for table in table_names:
-        table_opts = table_options.get(table) if table_options else {}
+        table_opts = table_options.get(table, {}) if table_options else {}
         yield dlt.transformer(
             _create_table_dispatch(table=table, table_options=table_opts),
             data_from=wal_reader,
