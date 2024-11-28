@@ -2,7 +2,6 @@ from unittest.mock import patch, ANY, call
 
 import dlt
 import pytest
-from itertools import chain
 from typing import Any
 from urllib.parse import urljoin
 
@@ -20,6 +19,7 @@ from sources.hubspot.settings import (
     CRM_TICKETS_ENDPOINT,
     CRM_QUOTES_ENDPOINT,
 )
+from sources.hubspot.utils import chunk_properties
 from tests.hubspot.mock_data import (
     mock_contacts_data,
     mock_companies_data,
@@ -416,3 +416,23 @@ def test_event_resources(destination_name: str) -> None:
     )
     print(load_info)
     assert_load_info(load_info)
+
+
+def test_chunk_properties():
+    properties = ["prop1", "prop2", "prop3", "prop4"]
+    max_length = 12
+    expected = [["prop1", "prop2"], ["prop3", "prop4"]]
+    result = list(chunk_properties(properties, max_length))
+    assert result == expected
+
+    properties = ["prop1", "prop2"]
+    max_length = len("prop1,prop2")
+    expected = [["prop1", "prop2"]]
+    result = list(chunk_properties(properties, max_length))
+    assert result == expected
+
+    properties = ["p1", "p2", "p3", "p4", "p5"]
+    max_length = 5  # Should accommodate 'p1,p2'
+    expected = [["p1", "p2"], ["p3", "p4"], ["p5"]]
+    result = list(chunk_properties(properties, max_length))
+    assert result == expected

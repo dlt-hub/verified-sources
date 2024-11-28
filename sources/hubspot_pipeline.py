@@ -27,6 +27,7 @@ def load_crm_data() -> None:
     # Print information about the pipeline run
     print(info)
 
+
 def load_crm_data_with_history() -> None:
     """
     Loads all HubSpot CRM resources and property change history for each entity.
@@ -97,7 +98,7 @@ def load_crm_objects_with_custom_properties() -> None:
     )
 
     load_data = hubspot()
-    #load_data.contacts.bind(props=["date_of_birth", "degree"], include_custom_props=True)
+    # load_data.contacts.bind(props=["date_of_birth", "degree"], include_custom_props=True)
     load_info = pipeline.run(load_data)
     print(load_info)
 
@@ -121,6 +122,7 @@ def load_pipelines() -> None:
     load_data = hubspot().with_resources("pipelines_deals", "stages_timing_deals")
     load_info = p.run(load_data)
     print(load_info)
+
 
 def load_web_analytics_events(
     object_type: THubspotObjectType, object_ids: List[str]

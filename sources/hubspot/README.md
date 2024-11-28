@@ -4,17 +4,18 @@ HubSpot is a customer relationship management (CRM) software and inbound marketi
 
 The `dlt` HubSpot verified source allows you to automatically load data from HubSpot into a [destination](https://dlthub.com/docs/dlt-ecosystem/destinations/) of your choice. It loads data from the following endpoints:
 
-| API | Data |
-| --- | --- |
-| Contacts | visitors, potential customers, leads |
-| Companies | information about organizations |
-| Deals | deal records, deal tracking |
-| Products | goods, services |
-| Tickets | requests for help from customers or users |
-| Quotes | pricing information of a product |
-| Web analytics | events |
-| Owners | information about account managers or users  |
-| Pipelines | stages and progress tracking | 
+| API | Data                                                            |
+| --- |-----------------------------------------------------------------|
+| Contacts | visitors, potential customers, leads                            |
+| Companies | information about organizations                                 |
+| Deals | deal records, deal tracking                                     |
+| Products | goods, services                                                 |
+| Tickets | requests for help from customers or users                       |
+| Quotes | pricing information of a product                                |
+| Web analytics | events                                                          |
+| Owners | information about account managers or users                     |
+| Pipelines | stages and progress tracking, separate resource for each object |
+| Properties | custom labels for properties with multiple choice |
 
 ## Initialize the pipeline with Hubspot verified source
 ```bash

@@ -1,7 +1,7 @@
 """Hubspot source helpers"""
 
 import urllib.parse
-from typing import Any, Dict, Iterator, List, Optional, Generator
+from typing import Any, Dict, Generator, Iterator, List, Optional
 
 from dlt.sources.helpers import requests
 
@@ -31,14 +31,16 @@ def _get_headers(api_key: str) -> Dict[str, str]:
     return dict(authorization=f"Bearer {api_key}")
 
 
-def pagination(_data: Dict[str, Any], headers: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+def pagination(
+    _data: Dict[str, Any], headers: Dict[str, Any]
+) -> Optional[Dict[str, Any]]:
     _next = _data.get("paging", {}).get("next", None)
     # _next = False
     if _next:
         next_url = _next["link"]
         # Get the next page response
         r = requests.get(next_url, headers=headers)
-        return r.json() # type: ignore
+        return r.json()  # type: ignore
     else:
         return None
 
@@ -148,8 +150,6 @@ def fetch_data(
         if "results" in _data:
             _objects: List[Dict[str, Any]] = []
             for _result in _data["results"]:
-                # if _result["properties"]["hs_merged_object_ids"] is not None:
-                #     _result["properties"]["hs_merged_object_ids"] = _result["properties"]["hs_merged_object_ids"].split(";")
                 _obj = _result.get("properties", _result)
                 if "id" not in _obj and "id" in _result:
                     # Move id from properties to top level
@@ -201,7 +201,9 @@ def _get_property_names(api_key: str, object_type: str) -> List[str]:
     return properties
 
 
-def get_properties_labels(api_key: str, object_type: str, property_name: str) -> Iterator[Dict[str, Any]]:
+def get_properties_labels(
+    api_key: str, object_type: str, property_name: str
+) -> Iterator[Dict[str, Any]]:
     endpoint = f"/crm/v3/properties/{object_type}/{property_name}"
     url = get_url(endpoint)
     headers = _get_headers(api_key)

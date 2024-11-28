@@ -60,14 +60,14 @@ DEFAULT_CONTACT_PROPS = [
 ]
 
 DEFAULT_DEAL_PROPS = [
-    #"amount",
-    #"closedate",
-    #"createdate",
+    # "amount",
+    # "closedate",
+    # "createdate",
     "dealname",
     "dealstage",
-    #"hs_lastmodifieddate",
-    #"hs_object_id",
-    #"pipeline",
+    # "hs_lastmodifieddate",
+    # "hs_object_id",
+    # "pipeline",
 ]
 
 DEFAULT_TICKET_PROPS = [
@@ -120,3 +120,4 @@ ARCHIVED_PARAM = {"archived": True}
 PREPROCESSING = {"split": ["hs_merged_object_ids"]}
 STAGE_PROPERTY_PREFIX = "hs_date_entered_"
 MAX_PROPS_LENGTH = 2000
+PROPERTIES_WITH_CUSTOM_LABELS = ()
