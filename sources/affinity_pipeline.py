@@ -9,7 +9,7 @@ def load_players_online_status() -> None:
         dev_mode=True
     )
     data = source()
-    data.add_limit(2)
+    #data.add_limit(1)
     info = pipeline.run(data)
     print(info)
 

@@ -1,8 +1,10 @@
 """A source loading player profiles and games from chess.com api"""
 
+from copy import deepcopy
 import typing as t
-from typing import Any, Callable, Dict, Iterable, Iterator, List, Sequence
+from typing import Any, Callable, Dict, Iterable, Iterator, List, Sequence, cast
 import operator
+from dlt.common.utils import uniq_id
 
 import dlt
 from dlt.common import pendulum
@@ -36,17 +38,26 @@ def __create_id_resource(entity: str) -> DltResource:
     name = f"{entity}_ids"
     @dlt.resource(
         write_disposition="replace",
-        primary_key="id",
-        columns={"id": {"data_type": "bigint"}},
-        name=name
+        # primary_key="id",
+        # columns={"id": {"data_type": "bigint"}},
+        name=name,
+        #parallelized=True
     )
     def __ids(
         api_key: str = dlt.secrets["affinity_api_key"],
     ) -> Iterable[TDataItem]:
+        yield [
+            {"id": 1515719},
+            {"id": 1515733}
+        ]
+        return
+
         rest_client = get_v2_rest_client(api_key)
         yield from rest_client.paginate(entity, json={
             "limit": 100
         })
+
+    __ids.add_limit(1)
     __ids.add_map(lambda item: {"id": item["id"] })
     __ids.__name__ = name
     __ids.__qualname__ = name
@@ -70,37 +81,114 @@ def get_v2_rest_client(api_key: str):
 
 @dlt.source(name="affinity")
 def source(
-
 ) -> Sequence[DltResource]:
     return (
-        companies_ids,
+        # companies_ids,
         companies,
-        persons_ids,
-        opportunities_ids,
+        # persons_ids,
+        # opportunities_ids,
         # companies(api_key)
     )
+
+def flatten_fields(data_item: Dict, meta):
+    print(data_item)
+    for field in data_item.pop("fields"):
+        data_item[field["name"]] = field["value"]["data"]
+    return data_item
 
 
 @dlt.transformer(
     data_from=companies_ids,
     write_disposition="replace",
-    #parallelized=True,
+    parallelized=True,
+    primary_key="id",
+    merge_key="id",
+    table_name="companies",
+
+    # columns={
+    #     "id": {
+    #         "data_type": "bigint",
+    #         "nullable": False
+    #     }
+    # }
 )
-@dlt.defer
 def companies(
     companies_ids_array: t.List[TDataItem],
     api_key: str = dlt.secrets["affinity_api_key"],
 ) -> Iterable[TDataItem]:
 
     rest_client = get_v2_rest_client(api_key)
-
     ids = [x["id"] for x in companies_ids_array]
-    response = rest_client.get("companies",json={
+    response = rest_client.get("companies",params={
         "limit": len(ids),
         "ids": ids,
         "fieldTypes": ["enriched", "global", "relationship-intelligence"],
     })
-    yield rest_client.extract_response(response,"data")
+    json: List[Dict] = rest_client.extract_response(response, "data")
+
+    for company in json:
+        table = deepcopy(company)
+        fields: List[Dict] = company.pop("fields")
+
+        yield dlt.mark.with_table_name(company,"companies")
+        company_id = company["id"]
+        assert company_id != None
+        for field in fields:
+            name = field.pop("name")
+            id = field.pop("id")
+            #id = field["id"] or uniq_id()
+            value = field.pop("value")
+            value_type = value.pop("type")
+            field = {"company_id": company_id} | field
+
+            data = value.get("data")
+            if data == None:
+                continue
+
+            if isinstance(data, Dict):
+                field = field | (data or {})
+            else:
+                field = field | { "value": data}
+
+            field["id"] = uniq_id()
+
+            if "id" in field and isinstance(field["id"], int):
+                primary_key = "id"
+            else:
+                primary_key = "company_id"
+
+            table_name = f"companies_{id}"
+
+
+            # if name == "Last Contact":
+            #     print(field)
+            # if table_name == "companies_last contact":
+            #     print(field)
+            #     print("---------------------")
+            yield dlt.mark.with_hints(
+                item=field,
+                hints=dlt.mark.make_hints(
+                    columns={
+                        "company_id": {
+                            "data_type": "bigint",
+                            "nullable": True,
+                        }
+                    },
+                    table_name=table_name,
+                    write_disposition="replace",
+                    # primary_key=primary_key,
+                    # merge_key=primary_key,
+                    # parent_table_name="companies",
+
+                    references = [{
+                            "columns": ["company_id"],
+                            "referenced_table": "companies",
+                            "referenced_columns": ["id"],
+                    }]
+                ),
+                # create_table_variant=True
+            )
+
 
 # @dlt.source(name="chess")
 # def source(
