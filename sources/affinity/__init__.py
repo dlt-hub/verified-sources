@@ -8,6 +8,7 @@ from dlt.common.utils import uniq_id
 
 import dlt
 from dlt.common import pendulum
+from dlt.common.time import parse_iso_like_datetime
 from dlt.common.typing import TDataItem
 from dlt.sources import DltResource
 from dlt.sources.helpers import requests
@@ -16,7 +17,8 @@ from dlt.sources.helpers import requests
 from dlt.sources.helpers.rest_client.auth import BearerTokenAuth
 from dlt.sources.helpers.rest_client.client import RESTClient
 from dlt.sources.helpers.rest_client.paginators import JSONLinkPaginator, HeaderLinkPaginator
-#.  client.rest_api.typing import RESTAPIConfig
+from enum import StrEnum
+
 
 from .helpers import get_path_with_retry, get_url_with_retry, validate_month_string
 from .settings import API_BASE, V2_PREFIX, COMPANIES_V2_ENDPOINT
@@ -30,6 +32,28 @@ logging.basicConfig(
     level=logging.DEBUG,  # Set the global logging level to DEBUG
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',  # Log format
 )
+
+
+class FieldType(StrEnum):
+    COMPANY_MULTI = "company-multi"
+    COMPANY = "company"
+    DATETIME = "datetime"
+    DROPDOWN = "dropdown"
+    DROPDOWN_MULTI = "dropdown-multi"
+    NUMBER = "number"
+    NUMBER_MULTI = "number-multi"
+    FORMULA_NUMBER = "formula-number"
+    INTERACTION = "interaction"
+    LOCATION = "location"
+    LOCATION_MULTI = "location-multi"
+    PERSON = "person"
+    PERSON_MULTI = "person-multi"
+    RANKED_DROWDOWN = "ranked-dropdown"
+    FILTERABLE_TEXT = "filterable-text"
+    TEXT = "text"
+    FILTERABLE_TEXT_MULTI = "filterable-text-multi"
+
+
 
 # Set urllib3 logging level to DEBUG
 logging.getLogger("urllib3").setLevel(logging.DEBUG)
@@ -104,6 +128,7 @@ def flatten_fields(data_item: Dict, meta):
     primary_key="id",
     merge_key="id",
     table_name="companies",
+    max_table_nesting=1
 
     # columns={
     #     "id": {
@@ -127,18 +152,93 @@ def companies(
     json: List[Dict] = rest_client.extract_response(response, "data")
 
     for company in json:
-        table = deepcopy(company)
         fields: List[Dict] = company.pop("fields")
-
-        yield dlt.mark.with_table_name(company,"companies")
-        company_id = company["id"]
+        company_id = company.get("id")
         assert company_id != None
+
         for field in fields:
             name = field.pop("name")
-            id = field.pop("id")
+            field_id: str = field.pop("id")
             #id = field["id"] or uniq_id()
             value = field.pop("value")
-            value_type = value.pop("type")
+            value_type = FieldType[value.pop("type").replace("-","_").upper()]
+            data = value.pop("data")
+
+            new_column = field_id
+            if field_id.startswith("field-"):
+                new_column = f"{name}-{field_id}"
+
+            match value_type:
+                case FieldType.DATETIME:
+                    company[new_column] = parse_iso_like_datetime(data) if data is not None else None
+                    continue
+                case FieldType.DROPDOWN:
+                    if data is not None:
+                        raise ValueError(f"Value type {value_type} not implemented")
+                    else:
+                        company[new_column] = None
+                    continue
+                case FieldType.DROPDOWN_MULTI:
+                    if data is not None and len(data) > 0:
+                        raise ValueError(f"Value type {value_type} not implemented")
+                    else:
+                        company[new_column] = []
+                    continue
+                case FieldType.FORMULA_NUMBER:
+                    raise ValueError(f"Value type {value_type} not implemented")
+                    break
+                case FieldType.INTERACTION:
+                    if data is not None:
+                        data["startTime"] = parse_iso_like_datetime(data["startTime"])
+                        data["endTime"] = parse_iso_like_datetime(data["endTime"])
+                        data["attendees"] = data.get("attendees", [])
+                        for attendee in data.get("attendees"):
+                            if attendee["person"] and "id" in attendee["person"]:
+                                attendee["person"] = attendee["person"]["id"]
+                        company[new_column] = data["id"]
+                        yield dlt.mark.with_hints(
+                            item=data,
+                            hints=dlt.mark.make_hints(
+                                # columns={
+                                #     "id": {
+                                #         "data_type": "bigint",
+                                #         "nullable": False,
+                                #     }
+                                # },
+                                table_name="interactions",
+                                write_disposition="merge",
+                                primary_key="id",
+                                # merge_key=primary_key,
+                                # parent_table_name="companies",
+
+                                # references = [{
+                                #         "columns": ["company_id"],
+                                #         "referenced_table": "companies",
+                                #         "referenced_columns": ["id"],
+                                # }]
+                            ),
+                            # create_table_variant=True
+                        )
+                    else:
+                        company[new_column] = None
+                    continue
+                case FieldType.PERSON | FieldType.COMPANY:
+                    if data is not None:
+                        company[new_column] = data["id"]
+                    else:
+                        company[new_column] = None
+                    continue
+                case FieldType.PERSON_MULTI | FieldType.COMPANY_MULTI:
+                    company[new_column] = [p["id"] for p in data]
+                    continue
+                case FieldType.RANKED_DROWDOWN:
+                    raise ValueError(f"Value type {value_type} not implemented")
+                    break
+                case FieldType.TEXT | FieldType.NUMBER | FieldType.FILTERABLE_TEXT | FieldType.FILTERABLE_TEXT_MULTI | FieldType.NUMBER_MULTI | FieldType.LOCATION | FieldType.LOCATION_MULTI:
+                    company[new_column] = data
+                    continue
+
+
             field = {"company_id": company_id} | field
 
             data = value.get("data")
@@ -188,6 +288,7 @@ def companies(
                 ),
                 # create_table_variant=True
             )
+        yield dlt.mark.with_table_name(company,"companies")
 
 
 # @dlt.source(name="chess")
