@@ -19,6 +19,8 @@ from dlt.sources.helpers.rest_client.client import RESTClient
 from dlt.sources.helpers.rest_client.paginators import JSONLinkPaginator, HeaderLinkPaginator
 from enum import StrEnum
 
+from pydantic import BaseModel
+
 
 from .helpers import get_path_with_retry, get_url_with_retry, validate_month_string
 from .settings import API_BASE, V2_PREFIX, COMPANIES_V2_ENDPOINT
@@ -70,15 +72,15 @@ def __create_id_resource(entity: str) -> DltResource:
     def __ids(
         api_key: str = dlt.secrets["affinity_api_key"],
     ) -> Iterable[TDataItem]:
-        yield [
-            {"id": 1515719},
-            {"id": 1515733}
-        ]
-        return
+        # yield [
+        #     {"id": 1515719},
+        #     {"id": 1515733}
+        # ]
+        # return
 
         rest_client = get_v2_rest_client(api_key)
         yield from rest_client.paginate(entity, json={
-            "limit": 100
+            "limit": 5
         })
 
     __ids.add_limit(1)
@@ -120,6 +122,30 @@ def flatten_fields(data_item: Dict, meta):
         data_item[field["name"]] = field["value"]["data"]
     return data_item
 
+def clean_date_field(data: Dict[str, Any], fields: List[str]):
+    for field in fields:
+        if data[field] is not None:
+            data[field] = parse_iso_like_datetime(data[field])
+
+def clean_person_list_field(data: Dict[str, Any], fields: List[str]):
+    for field in fields:
+        my_f: List[Dict[str, Any]] = data.get(field, [])
+        person_list_to_person_id_list(my_f)
+        data[field] = my_f
+
+def person_list_to_person_id_list(person_list: List[Dict[str, Any]]):
+    for person in person_list:
+        person_to_person_id(person)
+
+
+def person_to_person_id(person: Dict[str, Any]):
+    if p := person.pop("person", None):
+        person["person_id"] = p["id"]
+
+
+class Columns3(BaseModel):
+    a: List[int]
+    b: float
 
 @dlt.transformer(
     data_from=companies_ids,
@@ -127,8 +153,9 @@ def flatten_fields(data_item: Dict, meta):
     parallelized=True,
     primary_key="id",
     merge_key="id",
-    table_name="companies",
-    max_table_nesting=1
+    #table_name="companies",
+    max_table_nesting=3,
+    #table_name=lambda item: "companies", columns=lambda item: print(item)
 
     # columns={
     #     "id": {
@@ -173,14 +200,14 @@ def companies(
                     company[new_column] = parse_iso_like_datetime(data) if data is not None else None
                     continue
                 case FieldType.DROPDOWN:
-                    if data is not None:
-                        raise ValueError(f"Value type {value_type} not implemented")
-                    else:
-                        company[new_column] = None
+                    # { dropdownOptionId: 111, text: ... }
+                    company[new_column] = data
                     continue
                 case FieldType.DROPDOWN_MULTI:
                     if data is not None and len(data) > 0:
-                        raise ValueError(f"Value type {value_type} not implemented")
+                        # [{ dropdownOptionId: 111, text: ... }, ...]
+                        company[new_column] = data
+                        #raise ValueError(f"Value type {value_type} not implemented")
                     else:
                         company[new_column] = []
                     continue
@@ -189,35 +216,35 @@ def companies(
                     break
                 case FieldType.INTERACTION:
                     if data is not None:
-                        data["startTime"] = parse_iso_like_datetime(data["startTime"])
-                        data["endTime"] = parse_iso_like_datetime(data["endTime"])
-                        data["attendees"] = data.get("attendees", [])
-                        for attendee in data.get("attendees"):
-                            if attendee["person"] and "id" in attendee["person"]:
-                                attendee["person"] = attendee["person"]["id"]
+                        type = data.get("type")
+                        match type:
+                            case "meeting":
+                                clean_date_field(data, ["startTime", "endTime"])
+                                clean_person_list_field(data, ["attendees"])
+                            case "email":
+                                # {'id': 11458230203,
+                                # 'type': 'email',
+                                # 'subject': 'Planet A Ventures // intro makersite.io',
+                                # 'sentAt': '2022-03-11T08:13:14Z',
+                                # 'from': {'emailAddress': 'fridtjof@planet-a.com', 'person': {'id': 54530389, 'firstName': 'Fridtjof', 'lastName': 'Detzner', 'primaryEmailAddress': 'fridtjof@planet-a.com', 'type': 'internal'}},
+                                # 'to': [{'emailAddress': 'sderycker@accel.com', 'person': {'id': 83789426, 'firstName': 'Sonali', 'lastName': 'De Reyker', 'primaryEmailAddress': 'sderycker@accel.com', 'type': 'external'}}],
+                                # 'cc': [{'emailAddress': 'nick@planet-a.com', 'person': {'id': 54525452, 'firstName': 'Nick', 'lastName': 'de la Forge', 'primaryEmailAddress': 'nick@planet-a.com', 'type': 'internal'}}]}
+                                clean_date_field(data, ["sentAt"])
+                                person_to_person_id(data["from"])
+                                clean_person_list_field(data, ["to", "cc"])
+                            case _:
+                                raise ValueError(f"Interaction type {type} not implemented")
+
                         company[new_column] = data["id"]
                         yield dlt.mark.with_hints(
                             item=data,
                             hints=dlt.mark.make_hints(
-                                # columns={
-                                #     "id": {
-                                #         "data_type": "bigint",
-                                #         "nullable": False,
-                                #     }
-                                # },
+                                #table_name=lambda item: "interactions",
                                 table_name="interactions",
                                 write_disposition="merge",
                                 primary_key="id",
-                                # merge_key=primary_key,
-                                # parent_table_name="companies",
-
-                                # references = [{
-                                #         "columns": ["company_id"],
-                                #         "referenced_table": "companies",
-                                #         "referenced_columns": ["id"],
-                                # }]
                             ),
-                            # create_table_variant=True
+                            create_table_variant=True
                         )
                     else:
                         company[new_column] = None
