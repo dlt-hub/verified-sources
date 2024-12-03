@@ -79,11 +79,11 @@ def __create_id_resource(entity: str) -> DltResource:
         # return
 
         rest_client = get_v2_rest_client(api_key)
-        yield from rest_client.paginate(entity, json={
-            "limit": 5
+        yield from rest_client.paginate(entity, params={
+            "limit": 100
         })
 
-    __ids.add_limit(1)
+    __ids.add_limit(5)
     __ids.add_map(lambda item: {"id": item["id"] })
     __ids.__name__ = name
     __ids.__qualname__ = name
@@ -142,6 +142,28 @@ def person_to_person_id(person: Dict[str, Any]):
     if p := person.pop("person", None):
         person["person_id"] = p["id"]
 
+# { dropdownOptionId: 111, text: ... }
+def mark_dropdown_item(dropdown_item: Dict[str, Any], origin_field_id: str):
+    dropdown_option_id = dropdown_item.pop("dropdownOptionId")
+    return dlt.mark.with_hints(
+                            item={ "id": dropdown_option_id } | dropdown_item,
+                            hints=dlt.mark.make_hints(
+                                table_name=f"options_{origin_field_id}",
+                                write_disposition="merge",
+                                primary_key="id",
+                                merge_key="id",
+                                columns={
+                                    "id": {
+                                        "primary_key": True,
+                                        "unique": True,
+
+                                    },
+                                    "text": {
+                                        "data_type": "text"
+                                    }
+                                }
+                            ),
+                        )
 
 class Columns3(BaseModel):
     a: List[int]
@@ -202,11 +224,15 @@ def companies(
                 case FieldType.DROPDOWN:
                     # { dropdownOptionId: 111, text: ... }
                     company[new_column] = data
+                    if data is not None:
+                        yield mark_dropdown_item(data, field_id)
                     continue
                 case FieldType.DROPDOWN_MULTI:
                     if data is not None and len(data) > 0:
                         # [{ dropdownOptionId: 111, text: ... }, ...]
                         company[new_column] = data
+                        for d in data:
+                            yield mark_dropdown_item(d, field_id)
                         #raise ValueError(f"Value type {value_type} not implemented")
                     else:
                         company[new_column] = []
@@ -216,7 +242,7 @@ def companies(
                     break
                 case FieldType.INTERACTION:
                     if data is not None:
-                        type = data.get("type")
+                        type = data.pop("type")
                         match type:
                             case "meeting":
                                 clean_date_field(data, ["startTime", "endTime"])
@@ -235,16 +261,20 @@ def companies(
                             case _:
                                 raise ValueError(f"Interaction type {type} not implemented")
 
-                        company[new_column] = data["id"]
+                        company[new_column] = {
+                            "id": data["id"],
+                            "type": type,
+                        }
                         yield dlt.mark.with_hints(
                             item=data,
                             hints=dlt.mark.make_hints(
                                 #table_name=lambda item: "interactions",
-                                table_name="interactions",
+                                # parent_table_name="companies",
+                                table_name=f"interactions_{type}",
                                 write_disposition="merge",
                                 primary_key="id",
                             ),
-                            create_table_variant=True
+                            #create_table_variant=True
                         )
                     else:
                         company[new_column] = None
@@ -264,6 +294,8 @@ def companies(
                 case FieldType.TEXT | FieldType.NUMBER | FieldType.FILTERABLE_TEXT | FieldType.FILTERABLE_TEXT_MULTI | FieldType.NUMBER_MULTI | FieldType.LOCATION | FieldType.LOCATION_MULTI:
                     company[new_column] = data
                     continue
+                case _:
+                    raise ValueError(f"Value type {value_type} not implemented")
 
 
             field = {"company_id": company_id} | field
