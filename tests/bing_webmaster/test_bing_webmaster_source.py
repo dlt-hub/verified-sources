@@ -5,7 +5,7 @@ from sources.bing_webmaster import source
 from tests.utils import ALL_DESTINATIONS, assert_load_info
 
 
-def _make_pipeline(destination_name: str) -> dlt.pipeline:
+def _make_pipeline(destination_name: str) -> dlt.Pipeline:
     return dlt.pipeline(
         pipeline_name="bing_webmaster_test",
         destination=destination_name,

@@ -1,3 +1,4 @@
+import pendulum.testing
 import pytest
 from typing import List
 import dlt
@@ -285,6 +286,7 @@ def test_incrementing_reports(destination_name: str) -> None:
     )
 
     # load the rest of the data
+    # TODO: this is defunct, mock the pendulum.now method
     for incremental_end_date in INCREMENTAL_END_DATES:
         with pendulum.test(incremental_end_date):
             data = matomo_reports(queries=QUERIES, site_id=REPORTS_SITE_ID)

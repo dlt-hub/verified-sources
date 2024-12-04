@@ -1,6 +1,7 @@
 from typing import (
     Optional,
     Dict,
+    Mapping,
     Iterator,
     Union,
     List,
@@ -31,9 +32,12 @@ from dlt.common.schema.typing import (
 )
 from dlt.common.schema.utils import merge_column
 from dlt.common.data_writers.escape import escape_postgres_identifier
+
 from dlt.extract.items import DataItemWithMeta
 from dlt.extract.resource import DltResource
+
 from dlt.sources.credentials import ConnectionStringCredentials
+from dlt.sources.sql_database import sql_table
 
 from .schema_types import _to_dlt_column_schema, _to_dlt_val
 from .exceptions import IncompatiblePostgresVersionException
@@ -56,8 +60,8 @@ def init_replication(
     credentials: ConnectionStringCredentials = dlt.secrets.value,
     publish: str = "insert, update, delete",
     persist_snapshots: bool = False,
-    include_columns: Optional[Dict[str, Sequence[str]]] = None,
-    columns: Optional[Dict[str, TTableSchemaColumns]] = None,
+    include_columns: Optional[Mapping[str, Sequence[str]]] = None,
+    columns: Optional[Mapping[str, TTableSchemaColumns]] = None,
     reset: bool = False,
 ) -> Optional[Union[DltResource, List[DltResource]]]:
     """Initializes replication for one, several, or all tables within a schema.
@@ -109,7 +113,7 @@ def init_replication(
           For example:
           ```
           columns={
-              "table_x": {"col_a": {"data_type": "complex"}},
+              "table_x": {"col_a": {"data_type": "json"}},
               "table_y": {"col_y": {"precision": 32}},
           }
           ```
@@ -123,8 +127,6 @@ def init_replication(
         - a `DltResource` object or a list of `DltResource` objects for the snapshot
           table(s) if `persist_snapshots` is `True` and the replication slot did not yet exist
     """
-    if persist_snapshots:
-        _import_sql_table_resource()
     if isinstance(table_names, str):
         table_names = [table_names]
     cur = _get_rep_conn(credentials).cursor()
@@ -366,11 +368,11 @@ def snapshot_table_resource(
     Can be used to perform an initial load of the table, so all data that
     existed in the table prior to initializing replication is also captured.
     """
-    resource: DltResource = sql_table(  # type: ignore[name-defined]
+    resource: DltResource = sql_table(
         credentials=credentials,
         table=snapshot_table_name,
         schema=schema_name,
-        detect_precision_hints=True,
+        reflection_level="full_with_precision",
     )
     primary_key = _get_pk(table_name, schema_name, credentials)
     resource.apply_hints(
@@ -454,23 +456,6 @@ def advance_slot(
             f"SELECT * FROM pg_replication_slot_advance('{slot_name}', '{lsn_int_to_hex(upto_lsn)}');"
         )
         cur.connection.close()
-
-
-def _import_sql_table_resource() -> None:
-    """Imports external `sql_table` resource from `sql_database` source.
-
-    Raises error if `sql_database` source is not available.
-    """
-    global sql_table
-    try:
-        from ..sql_database import sql_table  # type: ignore[import-untyped]
-    except Exception:
-        try:
-            from sql_database import sql_table
-        except ImportError as e:
-            from .exceptions import SqlDatabaseSourceImportError
-
-            raise SqlDatabaseSourceImportError from e
 
 
 def _get_conn(

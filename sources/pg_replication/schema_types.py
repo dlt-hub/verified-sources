@@ -7,6 +7,8 @@ from dlt.common.data_types.typing import TDataType
 from dlt.common.data_types.type_helpers import coerce_value
 from dlt.common.schema.typing import TColumnSchema, TColumnType
 
+from dlt.destinations.impl.postgres.factory import PostgresTypeMapper
+
 from .decoders import ColumnType
 
 
@@ -14,7 +16,7 @@ _DUMMY_VALS: Dict[TDataType, Any] = {
     "bigint": 0,
     "binary": b" ",
     "bool": True,
-    "complex": [0],
+    "json": [0],
     "date": "2000-01-01",
     "decimal": Decimal(0),
     "double": 0.0,
@@ -77,13 +79,8 @@ def _get_scale(type_id: int, atttypmod: int) -> Optional[int]:
 
 
 @lru_cache(maxsize=None)
-def _type_mapper() -> Any:
+def _type_mapper() -> PostgresTypeMapper:
     from dlt.destinations import postgres
-
-    try:
-        from dlt.destinations.impl.postgres.postgres import PostgresTypeMapper
-    except ImportError:
-        from dlt.destinations.impl.postgres.factory import PostgresTypeMapper  # type: ignore
 
     return PostgresTypeMapper(postgres().capabilities())
 
@@ -96,7 +93,7 @@ def _to_dlt_column_type(type_id: int, atttypmod: int) -> TColumnType:
     pg_type = _PG_TYPES.get(type_id)
     precision = _get_precision(type_id, atttypmod)
     scale = _get_scale(type_id, atttypmod)
-    return _type_mapper().from_db_type(pg_type, precision, scale)  # type: ignore[no-any-return]
+    return _type_mapper().from_destination_type(pg_type, precision, scale)
 
 
 def _to_dlt_column_schema(col: ColumnType) -> TColumnSchema:
@@ -120,7 +117,7 @@ def _to_dlt_val(val: str, data_type: TDataType, byte1: str, for_delete: bool) ->
         if data_type == "binary":
             # https://www.postgresql.org/docs/current/datatype-binary.html#DATATYPE-BINARY-BYTEA-HEX-FORMAT
             return bytes.fromhex(val.replace("\\x", ""))
-        elif data_type == "complex":
+        elif data_type == "json":
             return json.loads(val)
         return coerce_value(data_type, "text", val)
     else:
