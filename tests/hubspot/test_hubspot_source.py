@@ -143,11 +143,13 @@ def test_resource_contacts_with_history(destination_name: str, mock_response) ->
             api_key="fake_key",
             include_history=True,
         )
-        load_info = pipeline.run(source.with_resources("contacts"))
+        load_info = pipeline.run(
+            source.with_resources("contacts", "contacts_property_history")
+        )
 
     assert_load_info(load_info)
 
-    assert m.call_count == 3
+    assert m.call_count == 4
 
     # Check that API is called with all properties listed
     m.assert_has_calls(
@@ -164,6 +166,11 @@ def test_resource_contacts_with_history(destination_name: str, mock_response) ->
                     "properties": expected_props,
                     "limit": 100,
                 },
+            ),
+            call(
+                urljoin(BASE_URL, "/crm/v3/properties/contacts"),
+                headers=ANY,
+                params=None,
             ),
             call(
                 urljoin(BASE_URL, CRM_CONTACTS_ENDPOINT),
@@ -184,9 +191,11 @@ def test_resource_contacts_with_history(destination_name: str, mock_response) ->
 @pytest.mark.parametrize("destination_name", ALL_DESTINATIONS)
 def test_too_many_properties(destination_name: str) -> None:
     with pytest.raises(ResourceExtractionError):
-        source = hubspot(api_key="fake_key", include_history=True)
-        source.contacts.bind(props=["property"] * 500)
-        list(source.with_resources("contacts"))
+        with patch(
+            "sources.hubspot.ENTITY_PROPERTIES", {"contact": ["property"] * 500}
+        ):
+            source = hubspot(api_key="fake_key", include_history=True)
+            list(source.with_resources("contacts"))
 
 
 @pytest.mark.parametrize("destination_name", ALL_DESTINATIONS)
@@ -205,26 +214,25 @@ def test_only_users_properties(destination_name: str, mock_response) -> None:
         dataset_name="hubspot_data",
         dev_mode=True,
     )
-    source = hubspot(api_key="fake_key")
-    source.contacts.bind(props=props, include_custom_props=False)
+    source = hubspot(api_key="fake_key", include_custom_props=False)
+    with patch("sources.hubspot.ENTITY_PROPERTIES", {"contact": props}):
+        with patch("dlt.sources.helpers.requests.get", side_effect=fake_get) as m:
+            load_info = pipeline.run(source.with_resources("contacts"))
 
-    with patch("dlt.sources.helpers.requests.get", side_effect=fake_get) as m:
-        load_info = pipeline.run(source.with_resources("contacts"))
+        assert_load_info(load_info)
 
-    assert_load_info(load_info)
-
-    m.assert_has_calls(
-        [
-            call(
-                urljoin(BASE_URL, CRM_CONTACTS_ENDPOINT),
-                headers=ANY,
-                params={
-                    "properties": expected_props,
-                    "limit": 100,
-                },
-            ),
-        ]
-    )
+        m.assert_has_calls(
+            [
+                call(
+                    urljoin(BASE_URL, CRM_CONTACTS_ENDPOINT),
+                    headers=ANY,
+                    params={
+                        "properties": expected_props,
+                        "limit": 100,
+                    },
+                ),
+            ]
+        )
 
 
 @pytest.mark.parametrize("destination_name", ALL_DESTINATIONS)
@@ -242,8 +250,7 @@ def test_only_default_props(destination_name: str, mock_response) -> None:
         dataset_name="hubspot_data",
         dev_mode=True,
     )
-    source = hubspot(api_key="fake_key")
-    source.contacts.bind(include_custom_props=False)
+    source = hubspot(api_key="fake_key", include_custom_props=False)
 
     with patch("dlt.sources.helpers.requests.get", side_effect=fake_get) as m:
         load_info = pipeline.run(source.with_resources("contacts"))
@@ -281,30 +288,29 @@ def test_users_and_custom_properties(destination_name: str, mock_response) -> No
         dev_mode=True,
     )
     source = hubspot(api_key="fake_key")
-    source.contacts.bind(props=props)
+    with patch("sources.hubspot.ENTITY_PROPERTIES", {"contact": props}):
+        with patch("dlt.sources.helpers.requests.get", side_effect=fake_get) as m:
+            load_info = pipeline.run(source.with_resources("contacts"))
 
-    with patch("dlt.sources.helpers.requests.get", side_effect=fake_get) as m:
-        load_info = pipeline.run(source.with_resources("contacts"))
+        assert_load_info(load_info)
 
-    assert_load_info(load_info)
-
-    m.assert_has_calls(
-        [
-            call(
-                urljoin(BASE_URL, "/crm/v3/properties/contacts"),
-                headers=ANY,
-                params=None,
-            ),
-            call(
-                urljoin(BASE_URL, CRM_CONTACTS_ENDPOINT),
-                headers=ANY,
-                params={
-                    "properties": expected_props,
-                    "limit": 100,
-                },
-            ),
-        ]
-    )
+        m.assert_has_calls(
+            [
+                call(
+                    urljoin(BASE_URL, "/crm/v3/properties/contacts"),
+                    headers=ANY,
+                    params=None,
+                ),
+                call(
+                    urljoin(BASE_URL, CRM_CONTACTS_ENDPOINT),
+                    headers=ANY,
+                    params={
+                        "properties": expected_props,
+                        "limit": 100,
+                    },
+                ),
+            ]
+        )
 
 
 @pytest.mark.parametrize("destination_name", ALL_DESTINATIONS)

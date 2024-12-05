@@ -110,7 +110,7 @@ def fetch_data_for_properties(
 
 def crm_objects(
     object_type: str,
-    api_key: str = dlt.secrets.value,
+    api_key: str,
     props: Optional[Sequence[str]] = None,
     include_custom_props: bool = True,
     archived: bool = False,
@@ -128,13 +128,15 @@ def crm_objects(
     Yields:
         Iterator[TDataItems]: Data items retrieved from the API.
     """
-    props = fetch_props(object_type, api_key, props, include_custom_props)
-    yield from fetch_data_for_properties(props, api_key, object_type, archived)
+    props_entry: Sequence[str] = props or ENTITY_PROPERTIES.get(object_type, [])
+    props_fetched = fetch_props(object_type, api_key, props_entry, include_custom_props)
+    yield from fetch_data_for_properties(props_fetched, api_key, object_type, archived)
 
 
 def crm_object_history(
     object_type: THubspotObjectType,
-    api_key: str = dlt.secrets.value,
+    api_key: str,
+    props: Optional[Sequence[str]] = None,
     include_custom_props: bool = True,
 ) -> Iterator[TDataItems]:
     """
@@ -143,6 +145,7 @@ def crm_object_history(
     Args:
         object_type (THubspotObjectType): Type of HubSpot object (e.g., 'company', 'contact').
         api_key (str, optional): API key for HubSpot authentication.
+        props (Optional[Sequence[str]], optional): List of properties to retrieve. Defaults to None.
         include_custom_props (bool, optional): Include custom properties in the result. Defaults to True.
 
     Yields:
@@ -150,70 +153,20 @@ def crm_object_history(
     """
 
     # Fetch the properties from ENTITY_PROPERTIES or default to "All"
-    props_entry: Union[List[str], str] = ENTITY_PROPERTIES.get(object_type, "All")
+    props_entry: Union[Sequence[str], str] = props or ENTITY_PROPERTIES.get(
+        object_type, ALL
+    )
 
     # Fetch the properties with the option to include custom properties
-    props: str = fetch_props(object_type, api_key, props_entry, include_custom_props)
+    props_fetched: str = fetch_props(
+        object_type, api_key, props_entry, include_custom_props
+    )
 
     # Yield the property history
     yield from fetch_property_history(
         CRM_OBJECT_ENDPOINTS[object_type],
         api_key,
-        props,
-    )
-
-
-def resource_template(
-    entity: THubspotObjectType,
-    api_key: str = dlt.config.value,
-    include_custom_props: bool = False,
-    soft_delete: bool = False,
-) -> Iterator[TDataItems]:
-    """
-    Template function to yield CRM resources for a specific HubSpot entity.
-
-    Args:
-        entity (THubspotObjectType): Type of HubSpot object (e.g., 'company', 'contact').
-        api_key (str, optional): HubSpot API key for authentication.
-        props (Optional[Sequence[str]], optional): List of properties to retrieve. Defaults to None.
-        include_custom_props (bool, optional): Include custom properties in the result. Defaults to False.
-        soft_delete (bool, optional): Fetch soft-deleted (archived) records. Defaults to False.
-
-    Yields:
-        Iterator[TDataItems]: CRM object data retrieved from the API.
-    """
-
-    # Use provided props or fetch from ENTITY_PROPERTIES if not provided
-    properties: List[str] = ENTITY_PROPERTIES.get(entity, [])
-
-    # Use these properties to yield the crm_objects
-    yield from crm_objects(
-        entity,
-        api_key,
-        props=properties,  # Pass the properties to the crm_objects function
-        include_custom_props=include_custom_props,
-        archived=soft_delete,
-    )
-
-
-def resource_history_template(
-    entity: THubspotObjectType,
-    api_key: str = dlt.config.value,
-    include_custom_props: bool = False,
-) -> Iterator[TDataItems]:
-    """
-    Template function to yield historical CRM resource data for a specific HubSpot entity.
-
-    Args:
-        entity (THubspotObjectType): Type of HubSpot object (e.g., 'company', 'contact').
-        api_key (str, optional): HubSpot API key for authentication.
-        include_custom_props (bool, optional): Include custom properties in the result. Defaults to False.
-
-    Yields:
-        Iterator[TDataItems]: Historical data for the CRM object.
-    """
-    yield from crm_object_history(
-        entity, api_key, include_custom_props=include_custom_props
+        props_fetched,
     )
 
 
@@ -251,7 +204,7 @@ def pivot_stages_properties(
 
 def stages_timing(
     object_type: str,
-    api_key: str = dlt.config.value,
+    api_key: str,
     soft_delete: bool = False,
 ) -> Iterator[TDataItems]:
     """
@@ -294,6 +247,7 @@ def hubspot(
     include_history: bool = False,
     soft_delete: bool = False,
     include_custom_props: bool = True,
+    properties: Optional[Dict[str, Any]] = None,
 ) -> Iterator[DltResource]:
     """
     A dlt source that retrieves data from the HubSpot API using the
@@ -301,7 +255,7 @@ def hubspot(
 
     This function retrieves data for several HubSpot API endpoints,
     including companies, contacts, deals, tickets, products and web
-    analytics events. It returns a tuple of Dlt resources, one for
+    analytics events. It returns a tuple of dlt resources, one for
     each endpoint.
 
     Args:
@@ -315,6 +269,10 @@ def hubspot(
             Whether to fetch deleted properties and mark them as `is_deleted`.
         include_custom_props (bool):
             Whether to include custom properties.
+        properties (Optional(dict)):
+            A dictionary containing lists of properties for all the resources.
+            Will override the default properties ENTITY_PROPERTIES from settings
+            For ex., {"contact": ["createdate", "email", "firstname", "hs_object_id", "lastmodifieddate", "lastname",]}
 
     Returns:
         Sequence[DltResource]: Dlt resources, one for each HubSpot API endpoint.
@@ -424,30 +382,40 @@ def hubspot(
                     name=name,
                     write_disposition="merge",
                     primary_key=["id", "stage"],
-                )(OBJECT_TYPE_SINGULAR[obj_type], soft_delete=soft_delete)
+                )(
+                    OBJECT_TYPE_SINGULAR[obj_type],
+                    api_key=api_key,
+                    soft_delete=soft_delete,
+                )
 
     # resources for all objects
     for obj in ALL_OBJECTS:
         yield dlt.resource(
-            resource_template,
+            crm_objects,
             name=OBJECT_TYPE_PLURAL[obj],
             write_disposition="merge",
             primary_key="id",
         )(
-            entity=obj,
+            object_type=obj,
+            api_key=api_key,
+            props=properties.get(obj) if properties else None,
             include_custom_props=include_custom_props,
-            soft_delete=soft_delete,
+            archived=soft_delete,
         )
 
     # corresponding history resources
     if include_history:
         for obj in ALL_OBJECTS:
             yield dlt.resource(
-                resource_history_template,
+                crm_object_history,
                 name=f"{OBJECT_TYPE_PLURAL[obj]}_property_history",
-                write_disposition="merge",
-                primary_key="object_id",
-            )(entity=obj, include_custom_props=include_custom_props)
+                write_disposition="append",
+            )(
+                object_type=obj,
+                api_key=api_key,
+                props=properties.get(obj) if properties else None,
+                include_custom_props=include_custom_props,
+            )
 
     # owners resource
     yield owners

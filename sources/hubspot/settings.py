@@ -112,9 +112,9 @@ ENTITY_PROPERTIES = {
 
 
 # 'ALL' represents a list of all available properties for all types
-ALL = [{"properties": "All"}]
+ALL = "All"
 
-PIPELINES_OBJECTS = ["deals"]
+PIPELINES_OBJECTS = ["deals", "tickets"]
 SOFT_DELETE_KEY = "is_deleted"
 ARCHIVED_PARAM = {"archived": True}
 PREPROCESSING = {"split": ["hs_merged_object_ids"]}
