@@ -90,6 +90,9 @@ def source(
     return (
         # companies_ids,
         companies,
+        # persons,
+        # lists(1234) # Dealflow
+        # list(567) # Portcos
         # persons_ids,
         # opportunities_ids,
         # companies(api_key)
@@ -119,7 +122,7 @@ def mark_dropdown_item(dropdown_item: Dropdown, field: FieldModel):
 
 
 # TODO use overload to match entity to type
-def process_and_yield_fields(entity: Company | Person, type: Literal[Type4.company, Type4.person], ret: Dict[str, Any]):
+def process_and_yield_fields(entity: Company | Person, type: Literal[Type4.COMPANY, Type4.PERSON], ret: Dict[str, Any]):
     if not entity.fields:
         return
     for field in entity.fields:
@@ -196,7 +199,7 @@ def companies(
     response = rest_client.get("companies", params={
         "limit": len(ids),
         "ids": ids,
-        "fieldTypes": [Type2.enriched.value, Type2.global_.value, Type2.relationship_intelligence.value],
+        "fieldTypes": [Type2.ENRICHED.value, Type2.GLOBAL_.value, Type2.RELATIONSHIP_INTELLIGENCE.value],
     })
 
     if response.status_code < 200 or response.status_code >= 300:
@@ -208,7 +211,7 @@ def companies(
     for company in companies.data:
         # TODO: improve value type - It's the `data` field of <ValueType>Data, e.g. `CompanyData.data`, etc.
         ret: Dict[str, Any] = {}
-        yield from process_and_yield_fields(company, Type4.company, ret)
+        yield from process_and_yield_fields(company, Type4.COMPANY, ret)
         yield dlt.mark.with_table_name(company.model_dump(exclude={"fields"}) | ret, "companies")
 
 
