@@ -8,7 +8,7 @@ from datetime import datetime
 from enum import Enum
 from typing import List, Literal
 
-from pydantic import BaseModel, EmailStr, Field, RootModel, constr
+from pydantic import BaseModel, EmailStr, Field, RootModel, constr, model_serializer
 from typing_extensions import Annotated
 
 
@@ -209,7 +209,7 @@ class DropdownValue(BaseModel):
 class DropdownsValue(BaseModel):
     type: Annotated[Literal['dropdown-multi'], Field(description='The type of value')]
     data: Annotated[
-        List[Dropdown], Field(description='The value for many dropdown items')
+        List[Dropdown] | None, Field(description='The value for many dropdown items')
     ]
 
 
@@ -311,6 +311,10 @@ class Attendee(BaseModel):
         ),
     ] = None
     person: PersonData | None = None
+
+    @model_serializer
+    def ser_model(self):
+        return {'emailAddress': self.emailAddress, 'person_id': getattr(self.person, 'id', None)}
 
 
 class Email(BaseModel):
@@ -485,12 +489,15 @@ class TextValue(BaseModel):
     ]
     data: Annotated[str | None, Field(description='The value for a string')] = None
 
+class LinkedInEntry(BaseModel):
+    link: Annotated[str, Field()]
+    text: Annotated[str, Field()]
 
 class TextsValue(BaseModel):
     type: Annotated[
         Literal['filterable-text-multi'], Field(description='The type of value')
     ]
-    data: Annotated[List[str], Field(description='The value for many strings')]
+    data: Annotated[List[str] | List[LinkedInEntry] | None, Field(description='The value for many strings')]
 
 
 class FieldValue(
