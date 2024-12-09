@@ -100,7 +100,7 @@ def mark_dropdown_item(dropdown_item: Dropdown, field: FieldModel):
     return dlt.mark.with_hints(
                             item={ "id": dropdown_item.dropdownOptionId, "text": dropdown_item.text },
                             hints=dlt.mark.make_hints(
-                                table_name=f"options_{field.id}",
+                                table_name=f"dropdown_options_{field.id}",
                                 write_disposition="merge",
                                 primary_key="id",
                                 merge_key="id",
