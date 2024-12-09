@@ -119,7 +119,7 @@ def mark_dropdown_item(dropdown_item: Dropdown, field: FieldModel):
 
 
 # TODO use overload to match entity to type
-def process_and_yield_fields(entity: Union[Company, Person], type: Literal[Type4.company, Type4.person], ret: Dict[str, Any]):
+def process_and_yield_fields(entity: Company | Person, type: Literal[Type4.company, Type4.person], ret: Dict[str, Any]):
     if not entity.fields:
         return
     for field in entity.fields:
