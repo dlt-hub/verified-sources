@@ -4,6 +4,6 @@ datamodel-codegen \
     --output __init__.py \
     --output-model-type pydantic_v2.BaseModel \
     --use-annotated \
-    --use-union-operator
-    #--capitalise-enum-members
-    #--use-field-description
+    --use-union-operator \
+    --capitalise-enum-members
+    # --use-field-description
