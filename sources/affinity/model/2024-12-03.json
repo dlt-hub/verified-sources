@@ -1,0 +1,4822 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "contact": {
+      "email": "support@affinity.co",
+      "name": "Affinity Support",
+      "url": "https://support.affinity.co"
+    },
+    "description": "# Introduction\n\nWelcome to Affinity API v2! This API provides a RESTful interface for building internal apps,\nautomated workflows, and other integrations on top of the core data models in Affinity, and for\nconnecting Affinity to the rest of your tech and data stack.\n\nPlease note that this new version of the API is not at feature parity with\n[Affinity API v1](https://api-docs.affinity.co/). We will add to this new version to cover more of\nv1's functionality over time. **This API version is also only available on select Affinity license\ntypes.** See\n[this Help Center article](https://support.affinity.co/hc/en-us/articles/5563700459533-Getting-started-with-the-Affinity-API-FAQs)\nor contact your Customer Success Manager for more information.\n\n# Getting Started\n\nAll Affinity API endpoints use the base URL `https://api.affinity.co`. All v2 endpoint paths start\nwith `/v2`. Requests must be sent over HTTPS.\n\n## Using These Docs\n\nThe first few sections of these docs cover general information on the API. Each subsequent section\ncovers a set of API endpoints.\n\nEach endpoint is documented with its accepted request parameters, expected response shapes, and a\nsample request and response. Please note that the shape of a given response can vary depending on\nwhat \"type\" of object or data is being returned. When this is the case, the response documentation\nwill include a dropdown that can be used to select the \"type\" for which to display the response\nshape.\n\n## Authentication\n\nAffinity API v2 uses API keys and **bearer authentication** (this is an important difference from\nAffinity API v1's use of basic authentication).\n\nTo generate an API key, navigate to the Settings page in the Affinity web app. You will need the\n\"Generate an API key\" role-based permission controlled by your Affinity admin to be able to do this.\nSee\n[this Help Center article](https://support.affinity.co/hc/en-us/articles/360032633992-How-to-obtain-your-API-Key)\nfor full instructions on API key generation, and\n[this article](https://support.affinity.co/hc/en-us/articles/360015976732-Account-Level-Permissions)\nfor more information on role-based permissions in Affinity.\n\nCurrently, we support one API key per user in your Affinity account. Your API key is able to read\ndata and perform actions in Affinity on your behalf, so keep it safe as you would a password.\n\nProvide your API key as your bearer authentication token to start making calls to Affinity API v2.\n\n## Permissions\n\n### Overall requirements\n\nYou must have the \"Generate an API key\" permission to be able to work with the Affinity API. Most\nusers in most Affinity accounts with API access have this by default — Contact your Affinity admin\nif you are not able to generate an API key, and see\n[this article](https://support.affinity.co/hc/en-us/articles/360015976732-Account-Level-Permissions)\nfor more information on role-based permissions in Affinity.\n\n### Resource-level permissions\n\nThe Affinity API respects sharing permissions that are set in-product. For example, if a given user\ndoes not have access to a list, note, or interaction in-product, they will not be able to see or\nmodify it via API.\n\n### Endpoint-level permissions\n\nMany API endpoints also require endpoint-specific permissions that map to permissions in-product.\nThese permissions, along with the \"Generate an API key\" permission, are managed by your Affinity\nadmin in the Settings page:\n\n| API v2 Endpoint                                            | Required Permission                  |\n| ---------------------------------------------------------- | ------------------------------------ |\n| GET `/v2/companies`                                        | \"Export All Organizations directory\" |\n| GET `/v2/companies/{id}`                                   | \"Export All Organizations directory\" |\n| GET `/v2/companies/{id}/list-entries`                      | \"Export data from Lists\"             |\n| GET `/v2/persons`                                          | \"Export All People directory\"        |\n| GET `/v2/persons/{id}`                                     | \"Export All People directory\"        |\n| GET `/v2/persons/{id}/list-entries`                        | \"Export data from Lists\"             |\n| GET `/v2/opportunities`                                    | \"Export data from Lists\"             |\n| GET `/v2/opportunities/{id}`                               | \"Export data from Lists\"             |\n| GET `/v2/lists/{listId}/list-entries`                      | \"Export data from Lists\"             |\n| GET `/v2/lists/{listId}/saved-views/{viewId}/list-entries` | \"Export data from Lists\"             |\n\n## Rate Limits\n\nThe Affinity API sets a limit on the number of calls that a user can make per minute, and that all\nthe users on an account can make per month. It also sets a reasonable limit on the number of\nconcurrent requests it will support from an account at one time.\n\nRequests to **both** Affinity API versions will count toward the one pool of requests allowed for a\nuser or account. Once a per-minute, monthly, or concurrent rate limit is hit, subsequent requests\nwill return an error code of 429. **We highly recommend designing your application to handle 429\nerrors.**\n\n### Per-Minute Limits (User-Level)\n\nTo help protect our systems, API requests will be halted at **900 per user, per minute.** We may\nalso lower this limit on a temporary basis to manage API availability.\n\n### Concurrent Request Limits (Account-Level)\n\nTo protect our systems and manage availability across customers, we set a reasonable limit on\nconcurrent requests at the account level. Customers should not expect to hit this limit unless they\nare hitting the API with heavy operations from many concurrent threads at once.\n\n### Monthly Plan Tier Limits (Account-Level)\n\nThe overall number of requests you can make per month will depend on your account's plan tier.\n**This monthly account-level limit resets at the end of each calendar month.** Current rate limits\nby plan tier are:\n\n| Plan Tier  | Calls Per Month |\n| ---------- | --------------- |\n| Essentials | None            |\n| Scale      | 100k            |\n| Advanced   | 100k            |\n| Enterprise | Unlimited\\*     |\n\n\\*Per-Minute and Concurrent Request Limits still apply.\n\n### Rate Limit Headers\n\nAll API calls will return the following response headers with information about per-minute and\nmonthly limits:\n\n| Header                           | Description                                             |\n| -------------------------------- | ------------------------------------------------------- |\n| X-Ratelimit-Limit-User           | Number of requests allowed per minute for the user      |\n| X-Ratelimit-Limit-User-Remaining | Number of requests remaining for the user               |\n| X-Ratelimit-Limit-User-Reset     | Time in seconds before the limit resets for the user    |\n| X-Ratelimit-Limit-Org            | Number of requests allowed per month for the account    |\n| X-Ratelimit-Limit-Org-Remaining  | Number of requests remaining for the account            |\n| X-Ratelimit-Limit-Org-Reset      | Time in seconds before the limit resets for the account |\n\n## Pagination\n\nWhen an endpoint is expected to return multiple results, we break the results up into pages to make\nthem easier to handle. To cycle forward through multiple pages of data, look for the `nextUrl`\nproperty in the `pagination` portion of an API response, and use it for your next request. See\nendpoint documentation for more information.\n\n## Error Codes\n\nHere is a list of the error codes this API will generally return if something goes wrong (see\nendpoint documentation for endpoint-specific error information):\n\n| Error Code | Meaning                                                                                                                                                                                                     |\n| ---------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |\n| 400        | Bad Request — See endpoint documentation for more information.                                                                                                                                              |\n| 401        | Unauthorized — Your API key is invalid.                                                                                                                                                                     |\n| 403        | Forbidden — Insufficient rights to a resource.                                                                                                                                                              |\n| 404        | Not Found — Requested resource does not exist. See endpoint documentation for more information.                                                                                                             |\n| 405        | Method Not Allowed — The method being used is not supported for this resource.                                                                                                                              |\n| 422        | Unprocessable Entity — Malformed parameters supplied. This can also happen in cases the parameters supplied logically cannot complete the request. In this case, an appropriate error message is delivered. |\n| 429        | Too Many Requests — You have exceeded the rate limit.                                                                                                                                                       |\n| 500        | Internal Server Error — We had a problem with our server. Try again later.                                                                                                                                  |\n| 503        | Service Unavailable — This shouldn't generally happen. Contact us if you encounter this error.                                                                                                              |\n\n# Data Model\n\n## The Basics\n\n- The three top-level objects in Affinity are **Persons, Companies, and Opportunities**. (Please\n  note: Companies are called Organizations in the Affinity web app.) These have profiles in the\n  Affinity web app and can be added to Lists.\n- A lot of the work of Affinity happens within Lists. A **List** is a spreadsheet-like collection of\n  rows tied to Persons, Companies, or Opportunities.\n- Each row on a List is a **List Entry**. A List Entry contains data and metadata about a given\n  Person, Company, or Opportunity in the context of a List. This includes list-specific field\ndata,\n  and information about who added the row to the List and when.\n  - Do note that a given entity can be added to a List more than once, i.e., it can have\nmultiple\n    List Entries on the same List. These List Entries can have different list-specific field\ndata\n    and List Entry-level metadata.\n- Each column on a List maps to a **Field**. Fields and field data also show up within Affinity\n  profile pages, extensions, and integrations.\n  - Some Fields are scoped to a single List — These are **list-specific fields**, and in the\nAPI,\n    their data can only be accessed through the List Entry resource. \"Global\" data from other\nFields\n    can be accessed both through the Person/Company/Opportunity resource and the List Entry\n    resource.\n\n## Working with Field Data\n\n### Field Types and IDs\n\nThere are a few types of Fields in Affinity, differentiated by the scope and source of their data:\n\n| Field&nbsp;Type             | Description                                                                                                                                                  | Example Fields                                                                                                                                              | Field ID Pattern                                                                                                                             |\n| --------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |\n| `enriched`                  | Firmographic, funding, and people Fields populated by Affinity. These can be \"Affinity Data\" Fields or come from distinct data partners.                     | \"Affinity Data: Description\", \"Dealroom: Number of Employees\"                                                                                               | A string representing the enrichment source, followed by the field name, e.g. `affinity-data-description` or `dealroom-number-of-employees`. |\n| `list`                      | Fields that are specific to the context of a given list. These can only be accessed through `*/list-entries` endpoints in this version of the API.           | Default \"Status\" and \"Amount\" columns, custom columns that pertain to a given List of deals or founders                                                     | `field-`, followed by a unique integer, e.g. `field-1234`                                                                                    |\n| `global`                    | Fields that persist across an Affinity account and are not list-specific.                                                                                    | \"My Firm's Founder Scoring Column\"                                                                                                                          | `field-`, followed by a unique integer, e.g. `field-1234`                                                                                    |\n| `relationship-intelligence` | Fields populated by Affinity from users' email and calendar data that provide insight into your firm's relationship with a given Person/Company/Opportunity. | \"Source of Introduction\", \"First Email\", \"Last Email\", \"First Event\", \"Last Event\", \"Next Event\", \"First Chat Message\", \"Last Chat Message\", \"Last Contact\" | A string similar to the field's name in-product, e.g. `source-of-introduction`                                                               |\n\n### Field Value Types\n\nField data can take a variety of shapes. These value types are described in the Affinity Help Center\n[here](https://support.affinity.co/hc/en-us/articles/115001608232-How-to-create-a-new-column-in-a-list).\nHere is a list of the same value types, as represented in this API. Notice how array types end with\n`-multi`:\n\n| Single Type         | Array Type                |\n| ------------------- | ------------------------- |\n| `text`              | Not supported in Affinity |\n| `number`            | `number-multi`            |\n| `datetime`          | Not supported in Affinity |\n| `location`          | `location-multi`          |\n| `dropdown`          | `dropdown-multi`          |\n| `ranked-dropdown`   | Not supported in Affinity |\n| `person`            | `person-multi`            |\n| `company`           | `company-multi`           |\n| `filterable-text`\\* | `filterable-text-multi`\\* |\n\n\\*Please note that `filterable-text` and `filterable-text-multi` are special types that operate\nsimilarly to `dropdown` and `dropdown-multi`. They are reserved for Affinity-populated Fields, and\nusers cannot create Fields with these types.\n\nWhen an array-typed value has no data in it, the API will return `null` (rather than an empty\narray).\n\n### Retrieving Field Data\n\nTo retrieve field data on companies, persons, or opportunities, call GET `/v2/companies`, GET\n`/v2/persons`, or one of our GET `*/list-entries` endpoints. (Note that Opportunities only have\nlist-specific Fields, so all their field data will live on the `*/list-entries` endpoints.) For most\nof these endpoints, you will need to specify the Fields for which you want data returned via the\n`fieldIds` or `fieldTypes` parameter — Otherwise, entities will be returned without any field data\nattached.\n\nThe GET `/v2/companies` and `/v2/persons` endpoints can return entities with enriched, global, and\nrelationship intelligence field data attached, but do not support list-specific field data. **To get\ncomprehensive field data including list-specific field data on Companies and Persons, use the GET\n`*/list-entries` endpoints.**\n\n### Specifying Desired Fields (Field Selection)\n\nAs mentioned above, you will need to specify the Fields (either by ID or by Type) for which you want\ndata returned when using the following endpoints:\n\n- GET `/v2/companies`\n- GET `/v2/companies/{id}`\n- GET `/v2/persons`\n- GET `/v2/persons/{id}`\n- GET `/v2/lists/{listId}/list-entries`\n\nEach of these endpoints has a `fieldIds` parameter that accepts an array of Field IDs, and a\n`fieldTypes` parameter that accepts an array of Field Types. Use the GET `*/fields` endpoints to get\nField IDs, Field Types, and other Field-level metadata:\n\n- Call GET `/v2/companies/fields` and `/v2/persons/fields` to get a list of the enriched, global,\n  and relationship intelligence (AKA non-list-specific) Fields that exist on Companies and\nPersons,\n  respectively. These are the Fields whose values are available to pull via GET `/v2/companies`,\nGET\n  `/v2/companies/{id}`, GET `/v2/persons`, and `/v2/persons/{id}`.\n\n- Call GET `/v2/lists/{listId}/fields` to get a list of the enriched, global, relationship\n  intelligence, **and list-specific** Fields for a given List. These are the Fields whose values\nare\n  available to pull via GET `/v2/lists/{listId}/list-entries`.\n\nThe following endpoints don't require field selection:\n\n- GET `/v2/lists/{listId}/saved-views/{viewId}/list-entries` — See below. This endpoint returns just\n  the field data that has been pulled into the given Saved View via UI.\n- GET `/v2/companies/{id}/list-entries` and GET `/v2/persons/{id}/list-entries` — These endpoints\n  return comprehensive field data for the given person or company in the context of each List\nEntry.\n### Saved Views\n\nA Saved View allows a user to configure the Fields they want to see in the UI for a given List, and\nset filters and sorts on the rows on that List. A List can have multiple Saved Views. In the context\nof this API, Saved Views can be useful for specifying the exact Fields for which data is needed. The\n`*/saved-views/{viewId}/list-entries` endpoint also respects the filters that have been set on the\ngiven Saved View in the Affinity web app. (It does not, however, respect sorts just yet.)\n\n### Partner Data Restrictions\n\nThis API supports pulling data from\n[Affinity Data](https://support.affinity.co/hc/en-us/articles/360058255052-Affinity-Data) fields and\nselect\n[Dealroom fields](https://support.affinity.co/hc/en-us/articles/6106558518797-Dealroom-co-data-in-Affinity#h_01G2N22SVH7TJR3DJV3NQDE9HQ).\nDue the agreements we have with some of our data partners, the API does not expose data from the\nfollowing sources:\n\n- Crunchbase, including Crunchbase UUID\n- Pitchbook\n- [Dealroom \"exclusive\" fields](https://support.affinity.co/hc/en-us/articles/6106558518797-Dealroom-co-data-in-Affinity#h_01G2N22YEAZJ5TC1X9ENKZFWF5)\n\n## A Note on Nested Associations\n\nSome GET endpoints return \"association\" data under `fields`. For example, the Persons GET endpoints\nreturn data about which Companies a Person is associated with in Affinity. The Opportunities GET\nendpoints return similar data about associated Companies and Persons. The List Entries GET endpoints\nalso return this data for Person and Opportunity List Entries.\n\nThe API truncates these nested arrays of Persons or Companies **at 100 entries**. For example, if an\nOpportunity is associated with 200 Persons in Affinity, only 100 of those Persons will be returned\nby the GET `/opportunities` or `/opportunities/{id}` endpoint.\n\n# User Guides\n\n## A Tour of Our GET Endpoints\n\n| Desired Data                                                | Relevant Endpoints                                                                                                                                                                                                                                                                                                                                    | Notes                                                                                     |\n| ----------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------- |\n| Company/Person/Opportunity rows from a List                 | Grab the List’s ID from its URL in the Affinity web app, then hit GET `/v2/lists/{listId}/list-entries`                                                                                                                                                                                                                                               | Data returned will be restricted to the rows on the requested List                        |\n| Company/Person/Opportunity rows from a Saved View           | In the Affinity web app, navigate to a List and [create a Saved View](https://support.affinity.co/hc/en-us/articles/115001508572-How-to-leverage-saved-views-within-a-list) with the desired field data and filters on it. Grab the List and Saved View IDs from the web app URL, then hit GET `/v2/lists/{listId}/saved-views/{viewId}/list-entries` | Data returned will be restricted to the rows and columns on the requested Saved View      |\n| Full rolodex of Companies or Persons in Affinity            | GET `/v2/companies`, GET `/v2/persons`                                                                                                                                                                                                                                                                                                                | Data from list-specific Fields will not be returned                                       |\n| All the rows for a given Company or Person across all Lists | GET `/v2/companies/{id}/list-entries`, GET `/v2/persons/{id}/list-entries`                                                                                                                                                                                                                                                                            |                                                                                           |\n| Metadata on Fields, including Field IDs                     | GET `/v2/companies/fields`, GET `/v2/persons/fields`, GET `/v2/lists/{listId}/fields`                                                                                                                                                                                                                                                                 | Metadata on list-specific Fields will only be returned by GET `/v2/lists/{listId}/fields` |\n| Metadata on Lists or Saved Views                            | GET `/v2/lists`, GET `/v2/lists/{listId}/saved-views`                                                                                                                                                                                                                                                                                                 |                                                                                           |\n| Opportunity data                                            | GET `/v2/opportunities` will only return Opportunity names and List IDs. For comprehensive Opportunity data, hit GET `/v2/lists/{listId}/list-entries` for an Opportunity List                                                                                                                                                                        |                                                                                           |\n\nTip: The ID for a List, Saved View, Person, Company, or Opportunity can always be found in its\nAffinity web app URL.\n\n# Changelog\n## September 25th, 2024\n\n- Upgrade schema to Openapi 3.1\n\n## August 5, 2024\n\n- Correct `opp` to `opportunity` to match documentation for the `List` `type` property.\n\n## July 24, 2024\n\n- More accurate documentation for response properties that are enums — Enums with `null` as a\n  possible value will have it listed as one.\n\n## March 25, 2024\n\n- Added the ability to retrieve the date and other details of your firm's \"First Email\", \"Last\n  Email\", \"First Event\", \"Last Event\", \"Next Event\", \"First Chat Message\", \"Last Chat Message\",\nand\n  \"Last Contact\" with a given entity. Use these timestamps to add relationship context to your\n  applications, and to identify founders and companies that need investors' attention.\n- Endpoints that previously required a `fieldIds` parameter to return field data, now accept either\n  `fieldIds` or `fieldTypes`, and will return field data accordingly. See the\n  [Specifying Desired Fields (Field Selection)](#section/Data-Model/Working-with-Field-Data)\nsection\n  of these docs for more information. The new `fieldTypes` parameter should make field data\n  retrieval easier for users looking to pull data from many similar Fields at a time.\n\n## January 4, 2023\n\n- Most endpoints that return field data now require the user to use the `fieldIds` parameter to\n  specify which Fields they want data for. Without `fieldIds` specified, these endpoints will\nreturn\n  basic entity data but not field data.\n\n## December 12, 2023\n\n- Added the ability to retrieve metadata (e.g. ID, name, type, enrichment source, and data type) on\n  Fields. See the [Retrieving Field Metadata](#section/Data-Model/Working-with-Field-Data)\nsection\n  of these docs for more information.\n",
+    "termsOfService": "https://www.affinity.co/legal/terms-of-use",
+    "title": "Affinity API v2",
+    "version": "2.0.0",
+    "x-logo": {
+      "url": "https://s3.us-west-2.amazonaws.com/assets.affinity.co/img/logos/full-color-svg.svg",
+      "altText": "Affinity logo"
+    }
+  },
+  "servers": [
+    {
+      "url": "https://api.affinity.co"
+    }
+  ],
+  "security": [
+    {
+      "bearerAuth": []
+    }
+  ],
+  "tags": [
+    {
+      "description": "Operations about auths",
+      "name": "auth"
+    },
+    {
+      "description": "Operations about companies",
+      "name": "companies"
+    },
+    {
+      "description": "Operations about lists",
+      "name": "lists"
+    },
+    {
+      "description": "Operations about opportunities",
+      "name": "opportunities"
+    },
+    {
+      "description": "Operations about persons",
+      "name": "persons"
+    }
+  ],
+  "paths": {
+    "/v2/auth/whoami": {
+      "get": {
+        "description": "Returns metadata about the current user.",
+        "summary": "Get current user",
+        "operationId": "getV2AuthWhoami",
+        "tags": [
+          "auth"
+        ],
+        "responses": {
+          "200": {
+            "description": "Get current user",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WhoAmI"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/401"
+          },
+          "404": {
+            "$ref": "#/components/responses/404"
+          }
+        }
+      }
+    },
+    "/v2/companies": {
+      "get": {
+        "description": "Paginate through Companies in Affinity.\nReturns basic information and non-list-specific field data on each Company.\n\nTo retrieve field data, you must use either the `fieldIds` or the `fieldTypes` parameter\nto specify the Fields for which you want data returned.\nThese Field IDs and Types can be found using the GET `/v2/companies/fields` endpoint.\nWhen no `fieldIds` or `fieldTypes` are provided, Companies will be returned without any field data attached.\nTo supply multiple `fieldIds` or `fieldTypes` parameters, generate a query string that looks like this:\n`?fieldIds=field-1234&fieldIds=affinity-data-location` or `?fieldTypes=enriched&fieldTypes=global`.\n\nRequires the \"Export All Organizations directory\" [permission](#section/Getting-Started/Permissions).",
+        "summary": "Get all Companies",
+        "operationId": "getV2Companies",
+        "tags": [
+          "companies"
+        ],
+        "parameters": [
+          {
+            "name": "cursor",
+            "description": "Cursor for the next or previous page",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "description": "Number of items to include in the page",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 100
+            }
+          },
+          {
+            "name": "ids",
+            "description": "Company IDs",
+            "in": "query",
+            "style": "form",
+            "explode": true,
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "integer",
+                "format": "int64",
+                "minimum": 1,
+                "maximum": 9223372036854776000
+              }
+            }
+          },
+          {
+            "name": "fieldIds",
+            "description": "Field IDs for which to return field data",
+            "in": "query",
+            "style": "form",
+            "explode": true,
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "format": "string"
+              }
+            }
+          },
+          {
+            "name": "fieldTypes",
+            "description": "Field Types for which to return field data",
+            "in": "query",
+            "style": "form",
+            "explode": true,
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "format": "string",
+                "enum": [
+                  "enriched",
+                  "global",
+                  "relationship-intelligence"
+                ]
+              }
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Get all Companies",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CompanyPaged"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/400"
+          },
+          "403": {
+            "$ref": "#/components/responses/403"
+          }
+        }
+      }
+    },
+    "/v2/companies/{id}": {
+      "get": {
+        "description": "Returns basic information and non-list-specific field data on the requested Company.\n\nTo retrieve field data, you must use either the `fieldIds` or the `fieldTypes` parameter\nto specify the Fields for which you want data returned.\nThese Field IDs and Types can be found using the GET `/v2/companies/fields` endpoint.\nWhen no `fieldIds` or `fieldTypes` are provided, Companies will be returned without any field data attached.\nTo supply multiple `fieldIds` or `fieldTypes` parameters, generate a query string that looks like this:\n`?fieldIds=field-1234&fieldIds=affinity-data-location` or `?fieldTypes=enriched&fieldTypes=global`.\n\nRequires the \"Export All Organizations directory\" [permission](#section/Getting-Started/Permissions).",
+        "summary": "Get a single Company",
+        "operationId": "getV2CompaniesId",
+        "tags": [
+          "companies"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "description": "Company ID",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64",
+              "minimum": 1,
+              "maximum": 9223372036854776000
+            }
+          },
+          {
+            "name": "fieldIds",
+            "description": "Field IDs for which to return field data",
+            "in": "query",
+            "style": "form",
+            "explode": true,
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "format": "string"
+              }
+            }
+          },
+          {
+            "name": "fieldTypes",
+            "description": "Field Types for which to return field data",
+            "in": "query",
+            "style": "form",
+            "explode": true,
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "format": "string",
+                "enum": [
+                  "enriched",
+                  "global",
+                  "relationship-intelligence"
+                ]
+              }
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Get a single Company",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Company"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/400"
+          },
+          "403": {
+            "$ref": "#/components/responses/403"
+          },
+          "404": {
+            "$ref": "#/components/responses/404"
+          }
+        }
+      }
+    },
+    "/v2/companies/fields": {
+      "get": {
+        "description": "Returns metadata on non-list-specific Company Fields.\n\nUse the returned Field IDs to request field data from the GET `/v2/companies` and GET `/v2/companies/{id}` endpoints.",
+        "summary": "Get metadata on Company Fields",
+        "operationId": "getV2CompaniesFields",
+        "tags": [
+          "companies"
+        ],
+        "parameters": [
+          {
+            "name": "cursor",
+            "description": "Cursor for the next or previous page",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "description": "Number of items to include in the page",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 100
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Get metadata on Company Fields",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FieldMetadataPaged"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/400"
+          }
+        }
+      }
+    },
+    "/v2/companies/{id}/lists": {
+      "get": {
+        "description": "Returns metadata for all the Lists on which the given Company appears.",
+        "summary": "Get a Company's Lists",
+        "operationId": "getV2CompaniesIdLists",
+        "tags": [
+          "companies"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "description": "Company ID",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64",
+              "minimum": 1,
+              "maximum": 9223372036854776000
+            }
+          },
+          {
+            "name": "cursor",
+            "description": "Cursor for the next or previous page",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "description": "Number of items to include in the page",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 100
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Get a Company's Lists",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ListPaged"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/400"
+          },
+          "404": {
+            "$ref": "#/components/responses/404"
+          }
+        }
+      }
+    },
+    "/v2/companies/{id}/list-entries": {
+      "get": {
+        "description": "Paginate through the List Entries (AKA rows) for the given Company across all Lists.\nEach List Entry includes field data for the Company, including list-specific field data.\nEach List Entry also includes metadata about its creation, i.e., when it was added to the List and by whom.\n\nRequires the \"Export data from Lists\" [permission](#section/Getting-Started/Permissions).",
+        "summary": "Get a Company's List Entries",
+        "operationId": "getV2CompaniesIdListEntries",
+        "tags": [
+          "companies"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "description": "Company ID",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64",
+              "minimum": 1,
+              "maximum": 9223372036854776000
+            }
+          },
+          {
+            "name": "cursor",
+            "description": "Cursor for the next or previous page",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "description": "Number of items to include in the page",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 100
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Get a Company's List Entries",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ListEntryPaged"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/400"
+          },
+          "403": {
+            "$ref": "#/components/responses/403"
+          },
+          "404": {
+            "$ref": "#/components/responses/404"
+          }
+        }
+      }
+    },
+    "/v2/lists": {
+      "get": {
+        "description": "Returns metadata on Lists.",
+        "summary": "Get metadata on all Lists",
+        "operationId": "getV2Lists",
+        "tags": [
+          "lists"
+        ],
+        "parameters": [
+          {
+            "name": "cursor",
+            "description": "Cursor for the next or previous page",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "description": "Number of items to include in the page",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 100
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Get metadata on all Lists",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ListWithTypePaged"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/400"
+          }
+        }
+      }
+    },
+    "/v2/lists/{listId}": {
+      "get": {
+        "description": "Returns metadata on a single List.",
+        "summary": "Get metadata on a single List",
+        "operationId": "getV2ListsListid",
+        "tags": [
+          "lists"
+        ],
+        "parameters": [
+          {
+            "name": "listId",
+            "description": "List ID",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64",
+              "minimum": 1,
+              "maximum": 9223372036854776000
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Get metadata on a single List",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ListWithType"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/400"
+          },
+          "404": {
+            "$ref": "#/components/responses/404"
+          }
+        }
+      }
+    },
+    "/v2/lists/{listId}/list-entries": {
+      "get": {
+        "description": "Paginate through the List Entries (AKA rows) on a given List.\nReturns basic information and field data, including list-specific\nfield data, on each Company, Person, or Opportunity on the List.\nList Entries also include metadata about their creation,\ni.e., when they were added to the List and by whom.\n\nTo retrieve field data, you must use either the `fieldIds` or the `fieldTypes` parameter\nto specify the Fields for which you want data returned.\nThese Field IDs and Types can be found using the GET `/v2/lists/{listId}/fields` endpoint.\nWhen no `fieldIds` or `fieldTypes` are provided, List Entries will be returned without any field data attached.\nTo supply multiple `fieldIds` or `fieldTypes` parameters, generate a query string that looks like this:\n`?fieldIds=field-1234&fieldIds=affinity-data-location` or `?fieldTypes=enriched&fieldTypes=global`.\n\nRequires the \"Export data from Lists\" [permission](#section/Getting-Started/Permissions).",
+        "summary": "Get all List Entries on a List",
+        "operationId": "getV2ListsListidListEntries",
+        "tags": [
+          "lists"
+        ],
+        "parameters": [
+          {
+            "name": "listId",
+            "description": "List ID",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64",
+              "minimum": 1,
+              "maximum": 9223372036854776000
+            }
+          },
+          {
+            "name": "cursor",
+            "description": "Cursor for the next or previous page",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "description": "Number of items to include in the page",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 100
+            }
+          },
+          {
+            "name": "fieldIds",
+            "description": "Field IDs for which to return field data",
+            "in": "query",
+            "style": "form",
+            "explode": true,
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "format": "string"
+              }
+            }
+          },
+          {
+            "name": "fieldTypes",
+            "description": "Field Types for which to return field data",
+            "in": "query",
+            "style": "form",
+            "explode": true,
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "format": "string",
+                "enum": [
+                  "enriched",
+                  "global",
+                  "list",
+                  "relationship-intelligence"
+                ]
+              }
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Get all List Entries on a List",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ListEntryWithEntityPaged"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/400"
+          },
+          "403": {
+            "$ref": "#/components/responses/403"
+          },
+          "404": {
+            "$ref": "#/components/responses/404"
+          }
+        }
+      }
+    },
+    "/v2/lists/{listId}/fields": {
+      "get": {
+        "description": "Returns metadata on the Fields available on a single List.\n\nUse the returned Field IDs to request field data from the GET `/v2/lists/{listId}/list-entries` endpoint.",
+        "summary": "Get metadata on a single List's Fields",
+        "operationId": "getV2ListsListidFields",
+        "tags": [
+          "lists"
+        ],
+        "parameters": [
+          {
+            "name": "listId",
+            "description": "List ID",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64",
+              "minimum": 1,
+              "maximum": 9223372036854776000
+            }
+          },
+          {
+            "name": "cursor",
+            "description": "Cursor for the next or previous page",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "description": "Number of items to include in the page",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 100
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Get metadata on a single List's Fields",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FieldMetadataPaged"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/400"
+          },
+          "404": {
+            "$ref": "#/components/responses/404"
+          }
+        }
+      }
+    },
+    "/v2/lists/{listId}/saved-views": {
+      "get": {
+        "description": "Returns metadata on the Saved Views on a List.",
+        "summary": "Get metadata on Saved Views",
+        "operationId": "getV2ListsListidSavedViews",
+        "tags": [
+          "lists"
+        ],
+        "parameters": [
+          {
+            "name": "listId",
+            "description": "List ID",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64",
+              "minimum": 1,
+              "maximum": 9223372036854776000
+            }
+          },
+          {
+            "name": "cursor",
+            "description": "Cursor for the next or previous page",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "description": "Number of items to include in the page",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 100
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Get metadata on Saved Views",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SavedViewPaged"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/400"
+          },
+          "404": {
+            "$ref": "#/components/responses/404"
+          }
+        }
+      }
+    },
+    "/v2/lists/{listId}/saved-views/{viewId}": {
+      "get": {
+        "description": "Returns metadata on a single Saved View.",
+        "summary": "Get metadata on a single Saved View",
+        "operationId": "getV2ListsListidSavedViewsViewid",
+        "tags": [
+          "lists"
+        ],
+        "parameters": [
+          {
+            "name": "listId",
+            "description": "List ID",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64",
+              "minimum": 1,
+              "maximum": 9223372036854776000
+            }
+          },
+          {
+            "name": "viewId",
+            "description": "Saved view ID",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64",
+              "minimum": 1,
+              "maximum": 9223372036854776000
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Get metadata on a single Saved View",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SavedView"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/400"
+          },
+          "404": {
+            "$ref": "#/components/responses/404"
+          }
+        }
+      }
+    },
+    "/v2/lists/{listId}/saved-views/{viewId}/list-entries": {
+      "get": {
+        "description": "Paginate through the List Entries (AKA rows) on a given Saved View.\nUse this endpoint when you need to filter entities or only want **some**\nfield data to be returned: This endpoint respects the filters set on a Saved View\nvia web app, and only returns field data corresponding to the columns that have been\npulled into the Saved View via web app.\n\nThough this endpoint respects the Saved View's filters and column/Field selection,\nit does not yet preserve sort order. This endpoint also only supports **sheet-type\nSaved Views**, and not board- or dashboard-type Saved Views.\n\nSee the [Data Model](#section/Data-Model) section for more information about Saved Views.\n\nRequires the \"Export data from Lists\" [permission](#section/Getting-Started/Permissions).",
+        "summary": "Get all List Entries on a Saved View",
+        "operationId": "getV2ListsListidSavedViewsViewidListEntries",
+        "tags": [
+          "lists"
+        ],
+        "parameters": [
+          {
+            "name": "listId",
+            "description": "List ID",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64",
+              "minimum": 1,
+              "maximum": 9223372036854776000
+            }
+          },
+          {
+            "name": "viewId",
+            "description": "Saved view ID",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64",
+              "minimum": 1,
+              "maximum": 9223372036854776000
+            }
+          },
+          {
+            "name": "cursor",
+            "description": "Cursor for the next or previous page",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "description": "Number of items to include in the page",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 100
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Get all List Entries on a Saved View",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ListEntryWithEntityPaged"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/400"
+          },
+          "403": {
+            "$ref": "#/components/responses/403"
+          },
+          "404": {
+            "$ref": "#/components/responses/404"
+          }
+        }
+      }
+    },
+    "/v2/opportunities": {
+      "get": {
+        "description": "Paginate through Opportunities in Affinity.\nReturns basic information but **not** field data on each Opportunity.\n\nTo access field data on Opportunities, use the `/lists/{list_id}/list-entries`\nor the `/v2/lists/{list_id}/saved-views/{view_id}/list-entries` GET endpoint.\n\nRequires the \"Export data from Lists\" [permission](#section/Getting-Started/Permissions).",
+        "summary": "Get all Opportunities",
+        "operationId": "getV2Opportunities",
+        "tags": [
+          "opportunities"
+        ],
+        "parameters": [
+          {
+            "name": "cursor",
+            "description": "Cursor for the next or previous page",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "description": "Number of items to include in the page",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 100
+            }
+          },
+          {
+            "name": "ids",
+            "description": "Opportunity IDs",
+            "in": "query",
+            "style": "form",
+            "explode": true,
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "integer",
+                "format": "int64",
+                "minimum": 1,
+                "maximum": 9223372036854776000
+              }
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Get all Opportunities",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OpportunityPaged"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/400"
+          },
+          "403": {
+            "$ref": "#/components/responses/403"
+          },
+          "404": {
+            "$ref": "#/components/responses/404"
+          }
+        }
+      }
+    },
+    "/v2/opportunities/{id}": {
+      "get": {
+        "description": "Returns basic information but **not** field data on the requested Opportunity.\n\nTo access field data on Opportunities, use the `/lists/{list_id}/list-entries`\nor the `/v2/lists/{list_id}/saved-views/{view_id}/list-entries` GET endpoint.\n\nRequires the \"Export data from Lists\" [permission](#section/Getting-Started/Permissions).",
+        "summary": "Get a single Opportunity",
+        "operationId": "getV2OpportunitiesId",
+        "tags": [
+          "opportunities"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "description": "Opportunity ID",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64",
+              "minimum": 1,
+              "maximum": 9223372036854776000
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Get a single Opportunity",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Opportunity"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/400"
+          },
+          "403": {
+            "$ref": "#/components/responses/403"
+          },
+          "404": {
+            "$ref": "#/components/responses/404"
+          }
+        }
+      }
+    },
+    "/v2/persons": {
+      "get": {
+        "description": "Paginate through Persons in Affinity.\nReturns basic information and non-list-specific field data on each Person.\n\nTo retrieve field data, you must use either the `fieldIds` or the `fieldTypes` parameter\nto specify the Fields for which you want data returned.\nThese Field IDs and Types can be found using the GET `/v2/persons/fields` endpoint.\nWhen no `fieldIds` or `fieldTypes` are provided, Persons will be returned without any field data attached.\nTo supply multiple `fieldIds` or `fieldTypes` parameters, generate a query string that looks like this:\n`?fieldIds=field-1234&fieldIds=affinity-data-location` or `?fieldTypes=enriched&fieldTypes=global`.\n\nRequires the \"Export All People directory\" [permission](#section/Getting-Started/Permissions).",
+        "summary": "Get all Persons",
+        "operationId": "getV2Persons",
+        "tags": [
+          "persons"
+        ],
+        "parameters": [
+          {
+            "name": "cursor",
+            "description": "Cursor for the next or previous page",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "description": "Number of items to include in the page",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 100
+            }
+          },
+          {
+            "name": "ids",
+            "description": "People IDs",
+            "in": "query",
+            "style": "form",
+            "explode": true,
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "integer",
+                "format": "int64",
+                "minimum": 1,
+                "maximum": 9223372036854776000
+              }
+            }
+          },
+          {
+            "name": "fieldIds",
+            "description": "Field IDs for which to return field data",
+            "in": "query",
+            "style": "form",
+            "explode": true,
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "format": "string"
+              }
+            }
+          },
+          {
+            "name": "fieldTypes",
+            "description": "Field Types for which to return field data",
+            "in": "query",
+            "style": "form",
+            "explode": true,
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "format": "string",
+                "enum": [
+                  "enriched",
+                  "global",
+                  "relationship-intelligence"
+                ]
+              }
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Get all Persons",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PersonPaged"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/400"
+          },
+          "403": {
+            "$ref": "#/components/responses/403"
+          }
+        }
+      }
+    },
+    "/v2/persons/{id}": {
+      "get": {
+        "description": "Returns basic information and non-list-specific field data on the requested Person.\n\nTo retrieve field data, you must use either the `fieldIds` or the `fieldTypes` parameter\nto specify the Fields for which you want data returned.\nThese Field IDs and Types can be found using the GET `/v2/persons/fields` endpoint.\nWhen no `fieldIds` or `fieldTypes` are provided, Persons will be returned without any field data attached.\nTo supply multiple `fieldIds` or `fieldTypes` parameters, generate a query string that looks like this:\n`?fieldIds=field-1234&fieldIds=affinity-data-location` or `?fieldTypes=enriched&fieldTypes=global`.\n\nRequires the \"Export All People directory\" [permission](#section/Getting-Started/Permissions).",
+        "summary": "Get a single Person",
+        "operationId": "getV2PersonsId",
+        "tags": [
+          "persons"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "description": "Person ID",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64",
+              "minimum": 1,
+              "maximum": 9223372036854776000
+            }
+          },
+          {
+            "name": "fieldIds",
+            "description": "Field IDs for which to return field data",
+            "in": "query",
+            "style": "form",
+            "explode": true,
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "format": "string"
+              }
+            }
+          },
+          {
+            "name": "fieldTypes",
+            "description": "Field Types for which to return field data",
+            "in": "query",
+            "style": "form",
+            "explode": true,
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "format": "string",
+                "enum": [
+                  "enriched",
+                  "global",
+                  "relationship-intelligence"
+                ]
+              }
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Get a single Person",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Person"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/400"
+          },
+          "403": {
+            "$ref": "#/components/responses/403"
+          },
+          "404": {
+            "$ref": "#/components/responses/404"
+          }
+        }
+      }
+    },
+    "/v2/persons/fields": {
+      "get": {
+        "description": "Returns metadata on non-list-specific Person Fields.\n\nUse the returned Field IDs to request field data from the GET `/v2/persons` and GET `/v2/persons/{id}` endpoints.",
+        "summary": "Get metadata on Person Fields",
+        "operationId": "getV2PersonsFields",
+        "tags": [
+          "persons"
+        ],
+        "parameters": [
+          {
+            "name": "cursor",
+            "description": "Cursor for the next or previous page",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "description": "Number of items to include in the page",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 100
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Get metadata on Person Fields",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FieldMetadataPaged"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/400"
+          }
+        }
+      }
+    },
+    "/v2/persons/{id}/lists": {
+      "get": {
+        "description": "Returns metadata for all the Lists on which the given Person appears.",
+        "summary": "Get a Person's Lists",
+        "operationId": "getV2PersonsIdLists",
+        "tags": [
+          "persons"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "description": "Persons ID",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64",
+              "minimum": 1,
+              "maximum": 9223372036854776000
+            }
+          },
+          {
+            "name": "cursor",
+            "description": "Cursor for the next or previous page",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "description": "Number of items to include in the page",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 100
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Get a Person's Lists",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ListPaged"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/400"
+          },
+          "404": {
+            "$ref": "#/components/responses/404"
+          }
+        }
+      }
+    },
+    "/v2/persons/{id}/list-entries": {
+      "get": {
+        "description": "Paginate through the List Entries (AKA rows) for the given Person across all Lists.\nEach List Entry includes field data for the Person, including list-specific field data.\nEach List Entry also includes metadata about its creation, i.e., when it was added to the List and by whom.\n\nRequires the \"Export data from Lists\" [permission](#section/Getting-Started/Permissions).",
+        "summary": "Get a Person's List Entries",
+        "operationId": "getV2PersonsIdListEntries",
+        "tags": [
+          "persons"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "description": "Persons ID",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64",
+              "minimum": 1,
+              "maximum": 9223372036854776000
+            }
+          },
+          {
+            "name": "cursor",
+            "description": "Cursor for the next or previous page",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "description": "Number of items to include in the page",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 100
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Get a Person's List Entries",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ListEntryPaged"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/400"
+          },
+          "403": {
+            "$ref": "#/components/responses/403"
+          },
+          "404": {
+            "$ref": "#/components/responses/404"
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "bearerAuth": {
+        "type": "http",
+        "scheme": "bearer"
+      }
+    },
+    "schemas": {
+      "BadRequestError": {
+        "type": "object",
+        "properties": {
+          "code": {
+            "description": "Error code",
+            "type": "string",
+            "const": "bad-request"
+          },
+          "message": {
+            "description": "Error message",
+            "type": "string"
+          }
+        },
+        "required": [
+          "code",
+          "message"
+        ],
+        "examples": [
+          {
+            "code": "bad-request",
+            "message": "🚨 Error! Sound the alarm! 🚨"
+          }
+        ]
+      },
+      "ConflictError": {
+        "type": "object",
+        "properties": {
+          "code": {
+            "description": "Error code",
+            "type": "string",
+            "const": "conflict"
+          },
+          "message": {
+            "description": "Error message",
+            "type": "string"
+          }
+        },
+        "required": [
+          "code",
+          "message"
+        ],
+        "examples": [
+          {
+            "code": "conflict",
+            "message": "🚨 Error! Sound the alarm! 🚨"
+          }
+        ]
+      },
+      "MethodNotAllowedError": {
+        "type": "object",
+        "properties": {
+          "code": {
+            "description": "Error code",
+            "type": "string",
+            "const": "method-not-allowed"
+          },
+          "message": {
+            "description": "Error message",
+            "type": "string"
+          }
+        },
+        "required": [
+          "code",
+          "message"
+        ],
+        "examples": [
+          {
+            "code": "method-not-allowed",
+            "message": "🚨 Error! Sound the alarm! 🚨"
+          }
+        ]
+      },
+      "NotAcceptableError": {
+        "type": "object",
+        "properties": {
+          "code": {
+            "description": "Error code",
+            "type": "string",
+            "const": "not-acceptable"
+          },
+          "message": {
+            "description": "Error message",
+            "type": "string"
+          }
+        },
+        "required": [
+          "code",
+          "message"
+        ],
+        "examples": [
+          {
+            "code": "not-acceptable",
+            "message": "🚨 Error! Sound the alarm! 🚨"
+          }
+        ]
+      },
+      "NotImplementedError": {
+        "type": "object",
+        "properties": {
+          "code": {
+            "description": "Error code",
+            "type": "string",
+            "const": "not-implemented"
+          },
+          "message": {
+            "description": "Error message",
+            "type": "string"
+          }
+        },
+        "required": [
+          "code",
+          "message"
+        ],
+        "examples": [
+          {
+            "code": "not-implemented",
+            "message": "🚨 Error! Sound the alarm! 🚨"
+          }
+        ]
+      },
+      "RateLimitError": {
+        "type": "object",
+        "properties": {
+          "code": {
+            "description": "Error code",
+            "type": "string",
+            "const": "rate-limit"
+          },
+          "message": {
+            "description": "Error message",
+            "type": "string"
+          }
+        },
+        "required": [
+          "code",
+          "message"
+        ],
+        "examples": [
+          {
+            "code": "rate-limit",
+            "message": "🚨 Error! Sound the alarm! 🚨"
+          }
+        ]
+      },
+      "ServerError": {
+        "type": "object",
+        "properties": {
+          "code": {
+            "description": "Error code",
+            "type": "string",
+            "const": "server"
+          },
+          "message": {
+            "description": "Error message",
+            "type": "string"
+          }
+        },
+        "required": [
+          "code",
+          "message"
+        ],
+        "examples": [
+          {
+            "code": "server",
+            "message": "🚨 Error! Sound the alarm! 🚨"
+          }
+        ]
+      },
+      "UnprocessableEntityError": {
+        "type": "object",
+        "properties": {
+          "code": {
+            "description": "Error code",
+            "type": "string",
+            "const": "unprocessable-entity"
+          },
+          "message": {
+            "description": "Error message",
+            "type": "string"
+          }
+        },
+        "required": [
+          "code",
+          "message"
+        ],
+        "examples": [
+          {
+            "code": "unprocessable-entity",
+            "message": "🚨 Error! Sound the alarm! 🚨"
+          }
+        ]
+      },
+      "UnsupportedMediaTypeError": {
+        "type": "object",
+        "properties": {
+          "code": {
+            "description": "Error code",
+            "type": "string",
+            "const": "unsupported-media-type"
+          },
+          "message": {
+            "description": "Error message",
+            "type": "string"
+          }
+        },
+        "required": [
+          "code",
+          "message"
+        ],
+        "examples": [
+          {
+            "code": "unsupported-media-type",
+            "message": "🚨 Error! Sound the alarm! 🚨"
+          }
+        ]
+      },
+      "Tenant": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "description": "The tenant's unique identifier",
+            "type": "integer",
+            "format": "int64",
+            "minimum": 1,
+            "maximum": 9007199254740991,
+            "examples": [
+              1
+            ]
+          },
+          "name": {
+            "description": "The name of the tenant",
+            "type": "string",
+            "examples": [
+              "Contoso Ltd."
+            ]
+          },
+          "subdomain": {
+            "description": "The tenant's subdomain under affinity.co",
+            "type": "string",
+            "format": "hostname",
+            "examples": [
+              "contoso"
+            ]
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "subdomain"
+        ],
+        "examples": [
+          {
+            "name": "Contoso Ltd.",
+            "subdomain": "contoso",
+            "id": 1
+          }
+        ]
+      },
+      "User": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "description": "The user's unique identifier",
+            "type": "integer",
+            "format": "int64",
+            "minimum": 1,
+            "maximum": 9007199254740991,
+            "examples": [
+              1
+            ]
+          },
+          "firstName": {
+            "description": "The user's first name",
+            "type": "string",
+            "examples": [
+              "John"
+            ]
+          },
+          "lastName": {
+            "description": "The user's last name",
+            "type": [
+              "string",
+              "null"
+            ],
+            "examples": [
+              "Smith"
+            ]
+          },
+          "emailAddress": {
+            "description": "The user's email address",
+            "type": "string",
+            "format": "email",
+            "examples": [
+              "john.smith@contoso.com"
+            ]
+          }
+        },
+        "required": [
+          "emailAddress",
+          "firstName",
+          "id",
+          "lastName"
+        ],
+        "examples": [
+          {
+            "firstName": "John",
+            "lastName": "Smith",
+            "emailAddress": "john.smith@contoso.com",
+            "id": 1
+          }
+        ]
+      },
+      "Grant": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "description": "The type of grant used to authenticate",
+            "type": "string",
+            "const": "api-key",
+            "examples": [
+              "api-key"
+            ]
+          },
+          "scopes": {
+            "description": "The scopes available to the current grant",
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "examples": [
+              [
+                "api"
+              ]
+            ]
+          },
+          "createdAt": {
+            "description": "When the grant was created",
+            "type": "string",
+            "format": "date-time",
+            "examples": [
+              "2023-01-01T00:00:00Z"
+            ]
+          }
+        },
+        "required": [
+          "createdAt",
+          "scopes",
+          "type"
+        ],
+        "examples": [
+          {
+            "createdAt": "2023-01-01 00:00:00.000000000 Z",
+            "scopes": [
+              "api"
+            ],
+            "type": "api-key"
+          }
+        ]
+      },
+      "WhoAmI": {
+        "description": "WhoAmI model",
+        "type": "object",
+        "properties": {
+          "tenant": {
+            "$ref": "#/components/schemas/Tenant"
+          },
+          "user": {
+            "$ref": "#/components/schemas/User"
+          },
+          "grant": {
+            "$ref": "#/components/schemas/Grant"
+          }
+        },
+        "required": [
+          "grant",
+          "tenant",
+          "user"
+        ],
+        "examples": [
+          {
+            "grant": {
+              "createdAt": "2023-01-01 00:00:00.000000000 Z",
+              "scopes": [
+                "api"
+              ],
+              "type": "api-key"
+            },
+            "user": {
+              "firstName": "John",
+              "lastName": "Smith",
+              "emailAddress": "john.smith@contoso.com",
+              "id": 1
+            },
+            "tenant": {
+              "name": "Contoso Ltd.",
+              "subdomain": "contoso",
+              "id": 1
+            }
+          }
+        ]
+      },
+      "AuthenticationError": {
+        "type": "object",
+        "properties": {
+          "code": {
+            "description": "Error code",
+            "type": "string",
+            "const": "authentication"
+          },
+          "message": {
+            "description": "Error message",
+            "type": "string"
+          }
+        },
+        "required": [
+          "code",
+          "message"
+        ],
+        "examples": [
+          {
+            "code": "authentication",
+            "message": "🚨 Error! Sound the alarm! 🚨"
+          }
+        ]
+      },
+      "AuthenticationErrors": {
+        "description": "AuthenticationErrors model",
+        "type": "object",
+        "properties": {
+          "errors": {
+            "description": "AuthenticationError errors",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AuthenticationError"
+            }
+          }
+        },
+        "required": [
+          "errors"
+        ],
+        "examples": [
+          {
+            "errors": [
+              {
+                "code": "authentication",
+                "message": "🚨 Error! Sound the alarm! 🚨"
+              },
+              {
+                "code": "authentication",
+                "message": "🚨 Error! Sound the alarm! 🚨"
+              }
+            ]
+          }
+        ]
+      },
+      "NotFoundError": {
+        "type": "object",
+        "properties": {
+          "code": {
+            "description": "Error code",
+            "type": "string",
+            "const": "not-found"
+          },
+          "message": {
+            "description": "Error message",
+            "type": "string"
+          }
+        },
+        "required": [
+          "code",
+          "message"
+        ],
+        "examples": [
+          {
+            "code": "not-found",
+            "message": "🚨 Error! Sound the alarm! 🚨"
+          }
+        ]
+      },
+      "NotFoundErrors": {
+        "description": "NotFoundErrors model",
+        "type": "object",
+        "properties": {
+          "errors": {
+            "description": "NotFoundError errors",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/NotFoundError"
+            }
+          }
+        },
+        "required": [
+          "errors"
+        ],
+        "examples": [
+          {
+            "errors": [
+              {
+                "code": "not-found",
+                "message": "🚨 Error! Sound the alarm! 🚨"
+              },
+              {
+                "code": "not-found",
+                "message": "🚨 Error! Sound the alarm! 🚨"
+              }
+            ]
+          }
+        ]
+      },
+      "CompanyData": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "description": "The company's unique identifier",
+            "type": "integer",
+            "format": "int64",
+            "minimum": 1,
+            "maximum": 9007199254740991,
+            "examples": [
+              1
+            ]
+          },
+          "name": {
+            "description": "The company's name",
+            "type": "string",
+            "examples": [
+              "Acme"
+            ]
+          },
+          "domain": {
+            "description": "The company's primary domain",
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "hostname",
+            "examples": [
+              "acme.co"
+            ]
+          }
+        },
+        "required": [
+          "domain",
+          "id",
+          "name"
+        ]
+      },
+      "CompaniesValue": {
+        "title": "CompaniesValue",
+        "type": "object",
+        "properties": {
+          "type": {
+            "description": "The type of value",
+            "type": "string",
+            "const": "company-multi"
+          },
+          "data": {
+            "description": "The values for many companies",
+            "type": [
+              "array",
+              "null"
+            ],
+            "items": {
+              "$ref": "#/components/schemas/CompanyData"
+            }
+          }
+        },
+        "required": [
+          "data",
+          "type"
+        ]
+      },
+      "CompanyValue": {
+        "title": "CompanyValue",
+        "type": "object",
+        "properties": {
+          "type": {
+            "description": "The type of value",
+            "type": "string",
+            "const": "company"
+          },
+          "data": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/CompanyData"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "data",
+          "type"
+        ]
+      },
+      "DateValue": {
+        "title": "DateValue",
+        "type": "object",
+        "properties": {
+          "type": {
+            "description": "The type of value",
+            "type": "string",
+            "const": "datetime"
+          },
+          "data": {
+            "description": "The value for a date",
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "data",
+          "type"
+        ]
+      },
+      "Dropdown": {
+        "type": "object",
+        "properties": {
+          "dropdownOptionId": {
+            "description": "Dropdown item's unique identifier",
+            "type": "integer",
+            "format": "int64",
+            "minimum": 1,
+            "maximum": 9007199254740991,
+            "examples": [
+              1
+            ]
+          },
+          "text": {
+            "description": "Dropdown item text",
+            "type": "string",
+            "examples": [
+              "first"
+            ]
+          }
+        },
+        "required": [
+          "dropdownOptionId",
+          "text"
+        ]
+      },
+      "DropdownValue": {
+        "title": "DropdownValue",
+        "type": "object",
+        "properties": {
+          "type": {
+            "description": "The type of value",
+            "type": "string",
+            "const": "dropdown"
+          },
+          "data": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/Dropdown"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "data",
+          "type"
+        ]
+      },
+      "DropdownsValue": {
+        "title": "DropdownsValue",
+        "type": "object",
+        "properties": {
+          "type": {
+            "description": "The type of value",
+            "type": "string",
+            "const": "dropdown-multi"
+          },
+          "data": {
+            "description": "The value for many dropdown items",
+            "type": [
+              "array",
+              "null"
+            ],
+            "items": {
+              "$ref": "#/components/schemas/Dropdown"
+            }
+          }
+        },
+        "required": [
+          "data",
+          "type"
+        ]
+      },
+      "FloatValue": {
+        "title": "FloatValue",
+        "type": "object",
+        "properties": {
+          "type": {
+            "description": "The type of value",
+            "type": "string",
+            "const": "number"
+          },
+          "data": {
+            "description": "The value for a number",
+            "type": [
+              "number",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "data",
+          "type"
+        ]
+      },
+      "FloatsValue": {
+        "title": "FloatsValue",
+        "type": "object",
+        "properties": {
+          "type": {
+            "description": "The type of value",
+            "type": "string",
+            "const": "number-multi"
+          },
+          "data": {
+            "description": "The value for many numbers",
+            "type": [
+              "array",
+              "null"
+            ],
+            "items": {
+              "type": "number"
+            }
+          }
+        },
+        "required": [
+          "data",
+          "type"
+        ]
+      },
+      "FormulaNumber": {
+        "type": "object",
+        "properties": {
+          "calculatedValue": {
+            "description": "Calculated value",
+            "type": [
+              "number",
+              "null"
+            ]
+          }
+        }
+      },
+      "FormulaValue": {
+        "title": "FormulaValue",
+        "type": "object",
+        "properties": {
+          "type": {
+            "description": "The type of value",
+            "type": "string",
+            "const": "formula-number"
+          },
+          "data": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/FormulaNumber"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "data",
+          "type"
+        ]
+      },
+      "PersonData": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "description": "The persons's unique identifier",
+            "type": "integer",
+            "format": "int64",
+            "minimum": 1,
+            "maximum": 9007199254740991,
+            "examples": [
+              1
+            ]
+          },
+          "firstName": {
+            "description": "The person's first name",
+            "type": [
+              "string",
+              "null"
+            ],
+            "examples": [
+              "Jane"
+            ]
+          },
+          "lastName": {
+            "description": "The person's last name",
+            "type": [
+              "string",
+              "null"
+            ],
+            "examples": [
+              "Doe"
+            ]
+          },
+          "primaryEmailAddress": {
+            "description": "The person's primary email address",
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "email",
+            "examples": [
+              "jane.doe@acme.co"
+            ]
+          },
+          "type": {
+            "description": "The person's type",
+            "type": "string",
+            "enum": [
+              "internal",
+              "external",
+              "collaborator"
+            ],
+            "examples": [
+              "internal"
+            ]
+          }
+        },
+        "required": [
+          "firstName",
+          "id",
+          "lastName",
+          "primaryEmailAddress",
+          "type"
+        ]
+      },
+      "ChatMessage": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "description": "The type of interaction",
+            "type": "string",
+            "const": "chat-message",
+            "examples": [
+              "chat-message"
+            ]
+          },
+          "id": {
+            "description": "The chat message's unique identifier",
+            "type": "integer",
+            "format": "int64",
+            "minimum": 1,
+            "maximum": 9007199254740991,
+            "examples": [
+              1
+            ]
+          },
+          "direction": {
+            "description": "The direction of the chat message",
+            "type": "string",
+            "enum": [
+              "received",
+              "sent"
+            ],
+            "examples": [
+              "outbound"
+            ]
+          },
+          "sentAt": {
+            "description": "The time the chat message was sent",
+            "type": "string",
+            "format": "date-time",
+            "examples": [
+              "2023-01-01T00:00:00Z"
+            ]
+          },
+          "manualCreator": {
+            "$ref": "#/components/schemas/PersonData"
+          },
+          "participants": {
+            "description": "The participants of the chat",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PersonData"
+            }
+          }
+        },
+        "required": [
+          "direction",
+          "id",
+          "manualCreator",
+          "participants",
+          "sentAt",
+          "type"
+        ]
+      },
+      "Attendee": {
+        "type": "object",
+        "properties": {
+          "emailAddress": {
+            "description": "The email addresses of the attendee",
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "email",
+            "examples": [
+              "john.smith@contoso.com"
+            ]
+          },
+          "person": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/PersonData"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "emailAddress",
+          "person"
+        ]
+      },
+      "Email": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "description": "The type of interaction",
+            "type": "string",
+            "const": "email",
+            "examples": [
+              "email"
+            ]
+          },
+          "id": {
+            "description": "The email's unique identifier",
+            "type": "integer",
+            "format": "int64",
+            "minimum": 1,
+            "maximum": 9007199254740991,
+            "examples": [
+              1
+            ]
+          },
+          "subject": {
+            "description": "The subject of the email",
+            "type": [
+              "string",
+              "null"
+            ],
+            "examples": [
+              "Acme Upsell $10k"
+            ]
+          },
+          "sentAt": {
+            "description": "The time the email was sent",
+            "type": "string",
+            "format": "date-time",
+            "examples": [
+              "2023-01-01T00:00:00Z"
+            ]
+          },
+          "from": {
+            "$ref": "#/components/schemas/Attendee"
+          },
+          "to": {
+            "description": "The recipients of the email",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Attendee"
+            }
+          },
+          "cc": {
+            "description": "The cc recipients of the email",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Attendee"
+            }
+          }
+        },
+        "required": [
+          "cc",
+          "from",
+          "id",
+          "sentAt",
+          "subject",
+          "to",
+          "type"
+        ]
+      },
+      "Meeting": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "description": "The type of interaction",
+            "type": "string",
+            "const": "meeting",
+            "examples": [
+              "meeting"
+            ]
+          },
+          "id": {
+            "description": "The meeting's unique identifier",
+            "type": "integer",
+            "format": "int64",
+            "minimum": 1,
+            "maximum": 9007199254740991,
+            "examples": [
+              1
+            ]
+          },
+          "title": {
+            "description": "The meeting's title",
+            "type": [
+              "string",
+              "null"
+            ],
+            "examples": [
+              "Acme Upsell $10k"
+            ]
+          },
+          "allDay": {
+            "description": "Whether the meeting is an all-day event",
+            "type": "boolean",
+            "examples": [
+              false
+            ]
+          },
+          "startTime": {
+            "description": "The meeting start time",
+            "type": "string",
+            "format": "date-time",
+            "examples": [
+              "2023-02-03T04:00:00Z"
+            ]
+          },
+          "endTime": {
+            "description": "The meeting end time",
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time",
+            "examples": [
+              "2023-02-03T05:00:00Z"
+            ]
+          },
+          "attendees": {
+            "description": "People attending the meeting",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Attendee"
+            }
+          }
+        },
+        "required": [
+          "allDay",
+          "attendees",
+          "endTime",
+          "id",
+          "startTime",
+          "title",
+          "type"
+        ]
+      },
+      "PhoneCall": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "description": "The type of interaction",
+            "type": "string",
+            "const": "call",
+            "examples": [
+              "call"
+            ]
+          },
+          "id": {
+            "description": "The phon_call's unique identifier",
+            "type": "integer",
+            "format": "int64",
+            "minimum": 1,
+            "maximum": 9007199254740991,
+            "examples": [
+              1
+            ]
+          },
+          "startTime": {
+            "description": "The call start time",
+            "type": "string",
+            "format": "date-time",
+            "examples": [
+              "2023-02-03T04:00:00Z"
+            ]
+          },
+          "attendees": {
+            "description": "People attending the call",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Attendee"
+            }
+          }
+        },
+        "required": [
+          "attendees",
+          "id",
+          "startTime",
+          "type"
+        ]
+      },
+      "Interaction": {
+        "oneOf": [
+          {
+            "$ref": "#/components/schemas/ChatMessage"
+          },
+          {
+            "$ref": "#/components/schemas/Email"
+          },
+          {
+            "$ref": "#/components/schemas/Meeting"
+          },
+          {
+            "$ref": "#/components/schemas/PhoneCall"
+          }
+        ],
+        "discriminator": {
+          "propertyName": "type",
+          "mapping": {
+            "chat-message": "#/components/schemas/ChatMessage",
+            "email": "#/components/schemas/Email",
+            "meeting": "#/components/schemas/Meeting",
+            "call": "#/components/schemas/PhoneCall"
+          }
+        }
+      },
+      "InteractionValue": {
+        "title": "InteractionValue",
+        "type": "object",
+        "properties": {
+          "type": {
+            "description": "The type of value",
+            "type": "string",
+            "const": "interaction"
+          },
+          "data": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/Interaction"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "data",
+          "type"
+        ]
+      },
+      "Location": {
+        "type": "object",
+        "properties": {
+          "streetAddress": {
+            "description": "Street address",
+            "type": [
+              "string",
+              "null"
+            ],
+            "examples": [
+              "170 Columbus Ave"
+            ]
+          },
+          "city": {
+            "description": "City",
+            "type": [
+              "string",
+              "null"
+            ],
+            "examples": [
+              "San Francisco"
+            ]
+          },
+          "state": {
+            "description": "State",
+            "type": [
+              "string",
+              "null"
+            ],
+            "examples": [
+              "California"
+            ]
+          },
+          "country": {
+            "description": "Country",
+            "type": [
+              "string",
+              "null"
+            ],
+            "examples": [
+              "United States"
+            ]
+          },
+          "continent": {
+            "description": "Continent",
+            "type": [
+              "string",
+              "null"
+            ],
+            "examples": [
+              "North America"
+            ]
+          }
+        },
+        "required": [
+          "city",
+          "continent",
+          "country",
+          "state",
+          "streetAddress"
+        ],
+        "examples": [
+          {
+            "continent": "North America",
+            "country": "United States",
+            "streetAddress": "170 Columbus Ave",
+            "city": "San Francisco",
+            "state": "California"
+          }
+        ]
+      },
+      "LocationValue": {
+        "title": "LocationValue",
+        "type": "object",
+        "properties": {
+          "type": {
+            "description": "The type of value",
+            "type": "string",
+            "const": "location"
+          },
+          "data": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/Location"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "data",
+          "type"
+        ]
+      },
+      "LocationsValue": {
+        "title": "LocationsValue",
+        "type": "object",
+        "properties": {
+          "type": {
+            "description": "The type of value",
+            "type": "string",
+            "const": "location-multi"
+          },
+          "data": {
+            "description": "The values for many locations",
+            "type": [
+              "array",
+              "null"
+            ],
+            "items": {
+              "$ref": "#/components/schemas/Location"
+            }
+          }
+        },
+        "required": [
+          "data",
+          "type"
+        ]
+      },
+      "PersonValue": {
+        "title": "PersonValue",
+        "type": "object",
+        "properties": {
+          "type": {
+            "description": "The type of value",
+            "type": "string",
+            "const": "person"
+          },
+          "data": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/PersonData"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "data",
+          "type"
+        ]
+      },
+      "PersonsValue": {
+        "title": "PersonsValue",
+        "type": "object",
+        "properties": {
+          "type": {
+            "description": "The type of value",
+            "type": "string",
+            "const": "person-multi"
+          },
+          "data": {
+            "description": "The values for many persons",
+            "type": [
+              "array",
+              "null"
+            ],
+            "items": {
+              "$ref": "#/components/schemas/PersonData"
+            }
+          }
+        },
+        "required": [
+          "data",
+          "type"
+        ]
+      },
+      "RankedDropdown": {
+        "type": "object",
+        "properties": {
+          "dropdownOptionId": {
+            "description": "Dropdown item's unique identifier",
+            "type": "integer",
+            "format": "int64",
+            "minimum": 1,
+            "maximum": 9007199254740991,
+            "examples": [
+              1
+            ]
+          },
+          "text": {
+            "description": "Dropdown item text",
+            "type": "string",
+            "examples": [
+              "first"
+            ]
+          },
+          "rank": {
+            "description": "Dropdown item rank",
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0,
+            "maximum": 9007199254740991,
+            "examples": [
+              0
+            ]
+          },
+          "color": {
+            "description": "Dropdown item color",
+            "type": [
+              "string",
+              "null"
+            ],
+            "examples": [
+              "white"
+            ]
+          }
+        },
+        "required": [
+          "color",
+          "dropdownOptionId",
+          "rank",
+          "text"
+        ]
+      },
+      "RankedDropdownValue": {
+        "title": "RankedDropdownValue",
+        "type": "object",
+        "properties": {
+          "type": {
+            "description": "The type of value",
+            "type": "string",
+            "const": "ranked-dropdown"
+          },
+          "data": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/RankedDropdown"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "data",
+          "type"
+        ]
+      },
+      "TextValue": {
+        "title": "TextValue",
+        "type": "object",
+        "properties": {
+          "type": {
+            "description": "The type of value",
+            "type": "string",
+            "enum": [
+              "filterable-text",
+              "text"
+            ],
+            "examples": [
+              "filterable-text"
+            ]
+          },
+          "data": {
+            "description": "The value for a string",
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "data",
+          "type"
+        ]
+      },
+      "TextsValue": {
+        "title": "TextsValue",
+        "type": "object",
+        "properties": {
+          "type": {
+            "description": "The type of value",
+            "type": "string",
+            "const": "filterable-text-multi"
+          },
+          "data": {
+            "description": "The value for many strings",
+            "type": [
+              "array",
+              "null"
+            ],
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "required": [
+          "data",
+          "type"
+        ]
+      },
+      "FieldValue": {
+        "oneOf": [
+          {
+            "$ref": "#/components/schemas/CompaniesValue"
+          },
+          {
+            "$ref": "#/components/schemas/CompanyValue"
+          },
+          {
+            "$ref": "#/components/schemas/DateValue"
+          },
+          {
+            "$ref": "#/components/schemas/DropdownValue"
+          },
+          {
+            "$ref": "#/components/schemas/DropdownsValue"
+          },
+          {
+            "$ref": "#/components/schemas/FloatValue"
+          },
+          {
+            "$ref": "#/components/schemas/FloatsValue"
+          },
+          {
+            "$ref": "#/components/schemas/FormulaValue"
+          },
+          {
+            "$ref": "#/components/schemas/InteractionValue"
+          },
+          {
+            "$ref": "#/components/schemas/LocationValue"
+          },
+          {
+            "$ref": "#/components/schemas/LocationsValue"
+          },
+          {
+            "$ref": "#/components/schemas/PersonValue"
+          },
+          {
+            "$ref": "#/components/schemas/PersonsValue"
+          },
+          {
+            "$ref": "#/components/schemas/RankedDropdownValue"
+          },
+          {
+            "$ref": "#/components/schemas/TextValue"
+          },
+          {
+            "$ref": "#/components/schemas/TextsValue"
+          }
+        ],
+        "discriminator": {
+          "propertyName": "type",
+          "mapping": {
+            "company-multi": "#/components/schemas/CompaniesValue",
+            "company": "#/components/schemas/CompanyValue",
+            "datetime": "#/components/schemas/DateValue",
+            "dropdown": "#/components/schemas/DropdownValue",
+            "dropdown-multi": "#/components/schemas/DropdownsValue",
+            "number": "#/components/schemas/FloatValue",
+            "number-multi": "#/components/schemas/FloatsValue",
+            "formula-number": "#/components/schemas/FormulaValue",
+            "interaction": "#/components/schemas/InteractionValue",
+            "location": "#/components/schemas/LocationValue",
+            "location-multi": "#/components/schemas/LocationsValue",
+            "person": "#/components/schemas/PersonValue",
+            "person-multi": "#/components/schemas/PersonsValue",
+            "ranked-dropdown": "#/components/schemas/RankedDropdownValue",
+            "filterable-text": "#/components/schemas/TextValue",
+            "text": "#/components/schemas/TextValue",
+            "filterable-text-multi": "#/components/schemas/TextsValue"
+          }
+        },
+        "examples": [
+          {
+            "data": {
+              "continent": "North America",
+              "country": "United States",
+              "streetAddress": "170 Columbus Ave",
+              "city": "San Francisco",
+              "state": "California"
+            },
+            "type": "location"
+          }
+        ]
+      },
+      "Field": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "description": "The field's unique identifier",
+            "type": "string",
+            "examples": [
+              "affinity-data-location"
+            ]
+          },
+          "name": {
+            "description": "The field's name",
+            "type": "string",
+            "examples": [
+              "Location"
+            ]
+          },
+          "type": {
+            "description": "The field's type",
+            "type": "string",
+            "enum": [
+              "enriched",
+              "global",
+              "list",
+              "relationship-intelligence"
+            ],
+            "examples": [
+              "enriched"
+            ]
+          },
+          "enrichmentSource": {
+            "description": "The source of the data in this Field (if it is enriched)",
+            "type": [
+              "string",
+              "null"
+            ],
+            "enum": [
+              "affinity-data",
+              "dealroom",
+              null
+            ],
+            "examples": [
+              "affinity-data"
+            ]
+          },
+          "value": {
+            "$ref": "#/components/schemas/FieldValue"
+          }
+        },
+        "required": [
+          "enrichmentSource",
+          "id",
+          "name",
+          "type",
+          "value"
+        ],
+        "examples": [
+          {
+            "enrichmentSource": "affinity-data",
+            "name": "Location",
+            "id": "affinity-data-location",
+            "type": "enriched",
+            "value": {
+              "data": {
+                "continent": "North America",
+                "country": "United States",
+                "streetAddress": "170 Columbus Ave",
+                "city": "San Francisco",
+                "state": "California"
+              },
+              "type": "location"
+            }
+          }
+        ]
+      },
+      "Company": {
+        "description": "Company model",
+        "type": "object",
+        "properties": {
+          "id": {
+            "description": "The company's unique identifier",
+            "type": "integer",
+            "format": "int64",
+            "minimum": 1,
+            "maximum": 9007199254740991,
+            "examples": [
+              1
+            ]
+          },
+          "name": {
+            "description": "The company's name",
+            "type": "string",
+            "examples": [
+              "Acme"
+            ]
+          },
+          "domain": {
+            "description": "The company's primary domain",
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "hostname",
+            "examples": [
+              "acme.co"
+            ]
+          },
+          "domains": {
+            "description": "All of the company's domains",
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "hostname"
+            },
+            "examples": [
+              [
+                "acme.co"
+              ]
+            ]
+          },
+          "isGlobal": {
+            "description": "Whether or not the company is org specific",
+            "type": "boolean",
+            "examples": [
+              true
+            ]
+          },
+          "fields": {
+            "description": "The fields associated with the company",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Field"
+            }
+          }
+        },
+        "required": [
+          "domain",
+          "domains",
+          "id",
+          "isGlobal",
+          "name"
+        ],
+        "examples": [
+          {
+            "domain": "acme.co",
+            "name": "Acme",
+            "isGlobal": true,
+            "domains": [
+              "acme.co"
+            ],
+            "id": 1,
+            "fields": [
+              {
+                "enrichmentSource": "affinity-data",
+                "name": "Location",
+                "id": "affinity-data-location",
+                "type": "enriched",
+                "value": {
+                  "data": {
+                    "continent": "North America",
+                    "country": "United States",
+                    "streetAddress": "170 Columbus Ave",
+                    "city": "San Francisco",
+                    "state": "California"
+                  },
+                  "type": "location"
+                }
+              },
+              {
+                "enrichmentSource": "affinity-data",
+                "name": "Location",
+                "id": "affinity-data-location",
+                "type": "enriched",
+                "value": {
+                  "data": {
+                    "continent": "North America",
+                    "country": "United States",
+                    "streetAddress": "170 Columbus Ave",
+                    "city": "San Francisco",
+                    "state": "California"
+                  },
+                  "type": "location"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "Pagination": {
+        "type": "object",
+        "properties": {
+          "prevUrl": {
+            "description": "URL for the previous page",
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "url",
+            "examples": [
+              "https://api.affinity.co/v2/foo?cursor=ICAgICAgYmVmb3JlOjo6Nw"
+            ]
+          },
+          "nextUrl": {
+            "description": "URL for the next page",
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "url",
+            "examples": [
+              "https://api.affinity.co/v2/foo?cursor=ICAgICAgIGFmdGVyOjo6NA"
+            ]
+          }
+        },
+        "examples": [
+          {
+            "prevUrl": "https://api.affinity.co/v2/foo?cursor=ICAgICAgYmVmb3JlOjo6Nw",
+            "nextUrl": "https://api.affinity.co/v2/foo?cursor=ICAgICAgIGFmdGVyOjo6NA"
+          }
+        ]
+      },
+      "CompanyPaged": {
+        "description": "CompanyPaged model",
+        "type": "object",
+        "properties": {
+          "data": {
+            "description": "A page of Company results",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Company"
+            }
+          },
+          "pagination": {
+            "$ref": "#/components/schemas/Pagination"
+          }
+        },
+        "required": [
+          "data",
+          "pagination"
+        ],
+        "examples": [
+          {
+            "pagination": {
+              "prevUrl": "https://api.affinity.co/v2/foo?cursor=ICAgICAgYmVmb3JlOjo6Nw",
+              "nextUrl": "https://api.affinity.co/v2/foo?cursor=ICAgICAgIGFmdGVyOjo6NA"
+            },
+            "data": [
+              {
+                "domain": "acme.co",
+                "name": "Acme",
+                "isGlobal": true,
+                "domains": [
+                  "acme.co"
+                ],
+                "id": 1,
+                "fields": [
+                  {
+                    "enrichmentSource": "affinity-data",
+                    "name": "Location",
+                    "id": "affinity-data-location",
+                    "type": "enriched",
+                    "value": {
+                      "data": {
+                        "continent": "North America",
+                        "country": "United States",
+                        "streetAddress": "170 Columbus Ave",
+                        "city": "San Francisco",
+                        "state": "California"
+                      },
+                      "type": "location"
+                    }
+                  },
+                  {
+                    "enrichmentSource": "affinity-data",
+                    "name": "Location",
+                    "id": "affinity-data-location",
+                    "type": "enriched",
+                    "value": {
+                      "data": {
+                        "continent": "North America",
+                        "country": "United States",
+                        "streetAddress": "170 Columbus Ave",
+                        "city": "San Francisco",
+                        "state": "California"
+                      },
+                      "type": "location"
+                    }
+                  }
+                ]
+              },
+              {
+                "domain": "acme.co",
+                "name": "Acme",
+                "isGlobal": true,
+                "domains": [
+                  "acme.co"
+                ],
+                "id": 1,
+                "fields": [
+                  {
+                    "enrichmentSource": "affinity-data",
+                    "name": "Location",
+                    "id": "affinity-data-location",
+                    "type": "enriched",
+                    "value": {
+                      "data": {
+                        "continent": "North America",
+                        "country": "United States",
+                        "streetAddress": "170 Columbus Ave",
+                        "city": "San Francisco",
+                        "state": "California"
+                      },
+                      "type": "location"
+                    }
+                  },
+                  {
+                    "enrichmentSource": "affinity-data",
+                    "name": "Location",
+                    "id": "affinity-data-location",
+                    "type": "enriched",
+                    "value": {
+                      "data": {
+                        "continent": "North America",
+                        "country": "United States",
+                        "streetAddress": "170 Columbus Ave",
+                        "city": "San Francisco",
+                        "state": "California"
+                      },
+                      "type": "location"
+                    }
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "ValidationError": {
+        "type": "object",
+        "properties": {
+          "code": {
+            "description": "Error code",
+            "type": "string",
+            "const": "validation"
+          },
+          "message": {
+            "description": "Error message",
+            "type": "string"
+          },
+          "param": {
+            "description": "Param the error refers to",
+            "type": "string"
+          }
+        },
+        "required": [
+          "code",
+          "message",
+          "param"
+        ],
+        "examples": [
+          {
+            "code": "validation",
+            "param": "limit",
+            "message": "🚨 Error! Sound the alarm! 🚨"
+          }
+        ]
+      },
+      "ValidationErrors": {
+        "description": "ValidationErrors model",
+        "type": "object",
+        "properties": {
+          "errors": {
+            "description": "ValidationError errors",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ValidationError"
+            }
+          }
+        },
+        "required": [
+          "errors"
+        ],
+        "examples": [
+          {
+            "errors": [
+              {
+                "code": "validation",
+                "param": "limit",
+                "message": "🚨 Error! Sound the alarm! 🚨"
+              },
+              {
+                "code": "validation",
+                "param": "limit",
+                "message": "🚨 Error! Sound the alarm! 🚨"
+              }
+            ]
+          }
+        ]
+      },
+      "AuthorizationError": {
+        "type": "object",
+        "properties": {
+          "code": {
+            "description": "Error code",
+            "type": "string",
+            "const": "authorization"
+          },
+          "message": {
+            "description": "Error message",
+            "type": "string"
+          }
+        },
+        "required": [
+          "code",
+          "message"
+        ],
+        "examples": [
+          {
+            "code": "authorization",
+            "message": "🚨 Error! Sound the alarm! 🚨"
+          }
+        ]
+      },
+      "AuthorizationErrors": {
+        "description": "AuthorizationErrors model",
+        "type": "object",
+        "properties": {
+          "errors": {
+            "description": "AuthorizationError errors",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AuthorizationError"
+            }
+          }
+        },
+        "required": [
+          "errors"
+        ],
+        "examples": [
+          {
+            "errors": [
+              {
+                "code": "authorization",
+                "message": "🚨 Error! Sound the alarm! 🚨"
+              },
+              {
+                "code": "authorization",
+                "message": "🚨 Error! Sound the alarm! 🚨"
+              }
+            ]
+          }
+        ]
+      },
+      "FieldMetadata": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "description": "The field's unique identifier",
+            "type": "string",
+            "examples": [
+              "affinity-data-location"
+            ]
+          },
+          "name": {
+            "description": "The field's name",
+            "type": "string",
+            "examples": [
+              "Location"
+            ]
+          },
+          "type": {
+            "description": "The field's type",
+            "type": "string",
+            "enum": [
+              "enriched",
+              "global",
+              "list",
+              "relationship-intelligence"
+            ],
+            "examples": [
+              "enriched"
+            ]
+          },
+          "enrichmentSource": {
+            "description": "The source of the data in this Field (if it is enriched)",
+            "type": [
+              "string",
+              "null"
+            ],
+            "enum": [
+              "affinity-data",
+              "dealroom",
+              null
+            ],
+            "examples": [
+              "affinity-data"
+            ]
+          },
+          "valueType": {
+            "description": "The type of the data in this Field",
+            "type": "string",
+            "enum": [
+              "person",
+              "person-multi",
+              "company",
+              "company-multi",
+              "filterable-text",
+              "filterable-text-multi",
+              "number",
+              "number-multi",
+              "datetime",
+              "location",
+              "location-multi",
+              "text",
+              "ranked-dropdown",
+              "dropdown",
+              "dropdown-multi",
+              "formula-number",
+              "interaction"
+            ],
+            "examples": [
+              "location"
+            ]
+          }
+        },
+        "required": [
+          "enrichmentSource",
+          "id",
+          "name",
+          "type",
+          "valueType"
+        ],
+        "examples": [
+          {
+            "enrichmentSource": "affinity-data",
+            "valueType": "location",
+            "name": "Location",
+            "id": "affinity-data-location",
+            "type": "enriched"
+          }
+        ]
+      },
+      "FieldMetadataPaged": {
+        "description": "FieldMetadataPaged model",
+        "type": "object",
+        "properties": {
+          "data": {
+            "description": "A page of FieldMetadata results",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/FieldMetadata"
+            }
+          },
+          "pagination": {
+            "$ref": "#/components/schemas/Pagination"
+          }
+        },
+        "required": [
+          "data",
+          "pagination"
+        ],
+        "examples": [
+          {
+            "pagination": {
+              "prevUrl": "https://api.affinity.co/v2/foo?cursor=ICAgICAgYmVmb3JlOjo6Nw",
+              "nextUrl": "https://api.affinity.co/v2/foo?cursor=ICAgICAgIGFmdGVyOjo6NA"
+            },
+            "data": [
+              {
+                "enrichmentSource": "affinity-data",
+                "valueType": "location",
+                "name": "Location",
+                "id": "affinity-data-location",
+                "type": "enriched"
+              },
+              {
+                "enrichmentSource": "affinity-data",
+                "valueType": "location",
+                "name": "Location",
+                "id": "affinity-data-location",
+                "type": "enriched"
+              }
+            ]
+          }
+        ]
+      },
+      "List": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "description": "The unique identifier for the list",
+            "type": "integer",
+            "format": "int64",
+            "minimum": 1,
+            "maximum": 9007199254740991,
+            "examples": [
+              1
+            ]
+          },
+          "name": {
+            "description": "The name of the list",
+            "type": "string",
+            "examples": [
+              "All companies"
+            ]
+          },
+          "creatorId": {
+            "description": "The ID of the user that created this list",
+            "type": "integer",
+            "format": "int64",
+            "minimum": 1,
+            "maximum": 9007199254740991,
+            "examples": [
+              1
+            ]
+          },
+          "ownerId": {
+            "description": "The ID of the user that owns this list",
+            "type": "integer",
+            "format": "int64",
+            "minimum": 1,
+            "maximum": 9007199254740991,
+            "examples": [
+              1
+            ]
+          },
+          "isPublic": {
+            "description": "Whether or not the list is public",
+            "type": "boolean",
+            "examples": [
+              false
+            ]
+          }
+        },
+        "required": [
+          "creatorId",
+          "id",
+          "isPublic",
+          "name",
+          "ownerId"
+        ],
+        "examples": [
+          {
+            "name": "All companies",
+            "creatorId": 1,
+            "isPublic": false,
+            "id": 1,
+            "ownerId": 1
+          }
+        ]
+      },
+      "ListPaged": {
+        "description": "ListPaged model",
+        "type": "object",
+        "properties": {
+          "data": {
+            "description": "A page of List results",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/List"
+            }
+          },
+          "pagination": {
+            "$ref": "#/components/schemas/Pagination"
+          }
+        },
+        "required": [
+          "data",
+          "pagination"
+        ],
+        "examples": [
+          {
+            "pagination": {
+              "prevUrl": "https://api.affinity.co/v2/foo?cursor=ICAgICAgYmVmb3JlOjo6Nw",
+              "nextUrl": "https://api.affinity.co/v2/foo?cursor=ICAgICAgIGFmdGVyOjo6NA"
+            },
+            "data": [
+              {
+                "name": "All companies",
+                "creatorId": 1,
+                "isPublic": false,
+                "id": 1,
+                "ownerId": 1
+              },
+              {
+                "name": "All companies",
+                "creatorId": 1,
+                "isPublic": false,
+                "id": 1,
+                "ownerId": 1
+              }
+            ]
+          }
+        ]
+      },
+      "ListEntry": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "description": "The list entry's unique identifier",
+            "type": "integer",
+            "format": "int64",
+            "minimum": 1,
+            "maximum": 9007199254740991,
+            "examples": [
+              1
+            ]
+          },
+          "listId": {
+            "description": "The ID of the list that this list entry belongs to",
+            "type": "integer",
+            "format": "int64",
+            "minimum": 1,
+            "maximum": 9007199254740991,
+            "examples": [
+              1
+            ]
+          },
+          "createdAt": {
+            "description": "The date that the list entry was created",
+            "type": "string",
+            "format": "date-time",
+            "examples": [
+              "2023-01-01T00:00:00Z"
+            ]
+          },
+          "creatorId": {
+            "description": "The ID of the user that created this list entry",
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64",
+            "minimum": 1,
+            "maximum": 9007199254740991,
+            "examples": [
+              1
+            ]
+          },
+          "fields": {
+            "description": "The fields associated with the list entry",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Field"
+            }
+          }
+        },
+        "required": [
+          "createdAt",
+          "creatorId",
+          "fields",
+          "id",
+          "listId"
+        ],
+        "examples": [
+          {
+            "listId": 1,
+            "createdAt": "2023-01-01T00:00:00Z",
+            "creatorId": 1,
+            "id": 1,
+            "fields": [
+              {
+                "enrichmentSource": "affinity-data",
+                "name": "Location",
+                "id": "affinity-data-location",
+                "type": "enriched",
+                "value": {
+                  "data": {
+                    "continent": "North America",
+                    "country": "United States",
+                    "streetAddress": "170 Columbus Ave",
+                    "city": "San Francisco",
+                    "state": "California"
+                  },
+                  "type": "location"
+                }
+              },
+              {
+                "enrichmentSource": "affinity-data",
+                "name": "Location",
+                "id": "affinity-data-location",
+                "type": "enriched",
+                "value": {
+                  "data": {
+                    "continent": "North America",
+                    "country": "United States",
+                    "streetAddress": "170 Columbus Ave",
+                    "city": "San Francisco",
+                    "state": "California"
+                  },
+                  "type": "location"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "ListEntryPaged": {
+        "description": "ListEntryPaged model",
+        "type": "object",
+        "properties": {
+          "data": {
+            "description": "A page of ListEntry results",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ListEntry"
+            }
+          },
+          "pagination": {
+            "$ref": "#/components/schemas/Pagination"
+          }
+        },
+        "required": [
+          "data",
+          "pagination"
+        ],
+        "examples": [
+          {
+            "pagination": {
+              "prevUrl": "https://api.affinity.co/v2/foo?cursor=ICAgICAgYmVmb3JlOjo6Nw",
+              "nextUrl": "https://api.affinity.co/v2/foo?cursor=ICAgICAgIGFmdGVyOjo6NA"
+            },
+            "data": [
+              {
+                "listId": 1,
+                "createdAt": "2023-01-01 00:00:00.000000000 Z",
+                "creatorId": 1,
+                "id": 1,
+                "fields": [
+                  {
+                    "enrichmentSource": "affinity-data",
+                    "name": "Location",
+                    "id": "affinity-data-location",
+                    "type": "enriched",
+                    "value": {
+                      "data": {
+                        "continent": "North America",
+                        "country": "United States",
+                        "streetAddress": "170 Columbus Ave",
+                        "city": "San Francisco",
+                        "state": "California"
+                      },
+                      "type": "location"
+                    }
+                  },
+                  {
+                    "enrichmentSource": "affinity-data",
+                    "name": "Location",
+                    "id": "affinity-data-location",
+                    "type": "enriched",
+                    "value": {
+                      "data": {
+                        "continent": "North America",
+                        "country": "United States",
+                        "streetAddress": "170 Columbus Ave",
+                        "city": "San Francisco",
+                        "state": "California"
+                      },
+                      "type": "location"
+                    }
+                  }
+                ]
+              },
+              {
+                "listId": 1,
+                "createdAt": "2023-01-01 00:00:00.000000000 Z",
+                "creatorId": 1,
+                "id": 1,
+                "fields": [
+                  {
+                    "enrichmentSource": "affinity-data",
+                    "name": "Location",
+                    "id": "affinity-data-location",
+                    "type": "enriched",
+                    "value": {
+                      "data": {
+                        "continent": "North America",
+                        "country": "United States",
+                        "streetAddress": "170 Columbus Ave",
+                        "city": "San Francisco",
+                        "state": "California"
+                      },
+                      "type": "location"
+                    }
+                  },
+                  {
+                    "enrichmentSource": "affinity-data",
+                    "name": "Location",
+                    "id": "affinity-data-location",
+                    "type": "enriched",
+                    "value": {
+                      "data": {
+                        "continent": "North America",
+                        "country": "United States",
+                        "streetAddress": "170 Columbus Ave",
+                        "city": "San Francisco",
+                        "state": "California"
+                      },
+                      "type": "location"
+                    }
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "ListWithType": {
+        "description": "ListWithType model",
+        "type": "object",
+        "properties": {
+          "id": {
+            "description": "The unique identifier for the list",
+            "type": "integer",
+            "format": "int64",
+            "minimum": 1,
+            "maximum": 9007199254740991,
+            "examples": [
+              1
+            ]
+          },
+          "name": {
+            "description": "The name of the list",
+            "type": "string",
+            "examples": [
+              "All companies"
+            ]
+          },
+          "creatorId": {
+            "description": "The ID of the user that created this list",
+            "type": "integer",
+            "format": "int64",
+            "minimum": 1,
+            "maximum": 9007199254740991,
+            "examples": [
+              1
+            ]
+          },
+          "ownerId": {
+            "description": "The ID of the user that owns this list",
+            "type": "integer",
+            "format": "int64",
+            "minimum": 1,
+            "maximum": 9007199254740991,
+            "examples": [
+              1
+            ]
+          },
+          "isPublic": {
+            "description": "Whether or not the list is public",
+            "type": "boolean",
+            "examples": [
+              false
+            ]
+          },
+          "type": {
+            "description": "The entity type for this list",
+            "type": "string",
+            "enum": [
+              "company",
+              "opportunity",
+              "person"
+            ],
+            "examples": [
+              "company"
+            ]
+          }
+        },
+        "required": [
+          "creatorId",
+          "id",
+          "isPublic",
+          "name",
+          "ownerId",
+          "type"
+        ],
+        "examples": [
+          {
+            "name": "All companies",
+            "creatorId": 1,
+            "isPublic": false,
+            "id": 1,
+            "ownerId": 1,
+            "type": "company"
+          }
+        ]
+      },
+      "ListWithTypePaged": {
+        "description": "ListWithTypePaged model",
+        "type": "object",
+        "properties": {
+          "data": {
+            "description": "A page of ListWithType results",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ListWithType"
+            }
+          },
+          "pagination": {
+            "$ref": "#/components/schemas/Pagination"
+          }
+        },
+        "required": [
+          "data",
+          "pagination"
+        ],
+        "examples": [
+          {
+            "pagination": {
+              "prevUrl": "https://api.affinity.co/v2/foo?cursor=ICAgICAgYmVmb3JlOjo6Nw",
+              "nextUrl": "https://api.affinity.co/v2/foo?cursor=ICAgICAgIGFmdGVyOjo6NA"
+            },
+            "data": [
+              {
+                "name": "All companies",
+                "creatorId": 1,
+                "isPublic": false,
+                "id": 1,
+                "ownerId": 1,
+                "type": "company"
+              },
+              {
+                "name": "All companies",
+                "creatorId": 1,
+                "isPublic": false,
+                "id": 1,
+                "ownerId": 1,
+                "type": "company"
+              }
+            ]
+          }
+        ]
+      },
+      "CompanyListEntry": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "description": "The list entry's unique identifier",
+            "type": "integer",
+            "format": "int64",
+            "minimum": 1,
+            "maximum": 9007199254740991,
+            "examples": [
+              1
+            ]
+          },
+          "type": {
+            "description": "The entity type for this list entry",
+            "type": "string",
+            "const": "company",
+            "examples": [
+              "company"
+            ]
+          },
+          "createdAt": {
+            "description": "The date that the list entry was created",
+            "type": "string",
+            "format": "date-time",
+            "examples": [
+              "2023-01-01T00:00:00Z"
+            ]
+          },
+          "creatorId": {
+            "description": "The ID of the user that created this list entry",
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64",
+            "minimum": 1,
+            "maximum": 9007199254740991,
+            "examples": [
+              1
+            ]
+          },
+          "entity": {
+            "$ref": "#/components/schemas/Company"
+          }
+        },
+        "required": [
+          "createdAt",
+          "creatorId",
+          "entity",
+          "id",
+          "type"
+        ]
+      },
+      "OpportunityWithFields": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "description": "The unique identifier for the opportunity",
+            "type": "integer",
+            "format": "int64",
+            "minimum": 1,
+            "maximum": 9007199254740991,
+            "examples": [
+              1
+            ]
+          },
+          "name": {
+            "description": "The name of the opportunity",
+            "type": "string",
+            "examples": [
+              "Acme Upsell $10k"
+            ]
+          },
+          "listId": {
+            "description": "The ID of the list that the opportunity belongs to",
+            "type": "integer",
+            "format": "int64",
+            "minimum": 1,
+            "maximum": 9007199254740991,
+            "examples": [
+              1
+            ]
+          },
+          "fields": {
+            "description": "The fields associated with the opportunity",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Field"
+            }
+          }
+        },
+        "required": [
+          "id",
+          "listId",
+          "name"
+        ]
+      },
+      "OpportunityListEntry": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "description": "The list entry's unique identifier",
+            "type": "integer",
+            "format": "int64",
+            "minimum": 1,
+            "maximum": 9007199254740991,
+            "examples": [
+              1
+            ]
+          },
+          "type": {
+            "description": "The entity type for this list entry",
+            "type": "string",
+            "const": "opportunity",
+            "examples": [
+              "opportunity"
+            ]
+          },
+          "createdAt": {
+            "description": "The date that the list entry was created",
+            "type": "string",
+            "format": "date-time",
+            "examples": [
+              "2023-01-01T00:00:00Z"
+            ]
+          },
+          "creatorId": {
+            "description": "The ID of the user that created this list entry",
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64",
+            "minimum": 1,
+            "maximum": 9007199254740991,
+            "examples": [
+              1
+            ]
+          },
+          "entity": {
+            "$ref": "#/components/schemas/OpportunityWithFields"
+          }
+        },
+        "required": [
+          "createdAt",
+          "creatorId",
+          "entity",
+          "id",
+          "type"
+        ]
+      },
+      "Person": {
+        "description": "Person model",
+        "type": "object",
+        "properties": {
+          "id": {
+            "description": "The persons's unique identifier",
+            "type": "integer",
+            "format": "int64",
+            "minimum": 1,
+            "maximum": 9007199254740991,
+            "examples": [
+              1
+            ]
+          },
+          "firstName": {
+            "description": "The person's first name",
+            "type": "string",
+            "examples": [
+              "Jane"
+            ]
+          },
+          "lastName": {
+            "description": "The person's last name",
+            "type": [
+              "string",
+              "null"
+            ],
+            "examples": [
+              "Doe"
+            ]
+          },
+          "primaryEmailAddress": {
+            "description": "The person's primary email address",
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "email",
+            "examples": [
+              "jane.doe@acme.co"
+            ]
+          },
+          "emailAddresses": {
+            "description": "All of the person's email addresses",
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "email"
+            },
+            "examples": [
+              [
+                "jane.doe@acme.co",
+                "janedoe@gmail.com"
+              ]
+            ]
+          },
+          "type": {
+            "description": "The person's type",
+            "type": "string",
+            "enum": [
+              "internal",
+              "external"
+            ],
+            "examples": [
+              "internal"
+            ]
+          },
+          "fields": {
+            "description": "The fields associated with the person",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Field"
+            }
+          }
+        },
+        "required": [
+          "emailAddresses",
+          "firstName",
+          "id",
+          "lastName",
+          "primaryEmailAddress",
+          "type"
+        ],
+        "examples": [
+          {
+            "firstName": "Jane",
+            "lastName": "Doe",
+            "emailAddresses": [
+              "jane.doe@acme.co",
+              "janedoe@gmail.com"
+            ],
+            "id": 1,
+            "type": "internal",
+            "fields": [
+              {
+                "enrichmentSource": "affinity-data",
+                "name": "Location",
+                "id": "affinity-data-location",
+                "type": "enriched",
+                "value": {
+                  "data": {
+                    "continent": "North America",
+                    "country": "United States",
+                    "streetAddress": "170 Columbus Ave",
+                    "city": "San Francisco",
+                    "state": "California"
+                  },
+                  "type": "location"
+                }
+              },
+              {
+                "enrichmentSource": "affinity-data",
+                "name": "Location",
+                "id": "affinity-data-location",
+                "type": "enriched",
+                "value": {
+                  "data": {
+                    "continent": "North America",
+                    "country": "United States",
+                    "streetAddress": "170 Columbus Ave",
+                    "city": "San Francisco",
+                    "state": "California"
+                  },
+                  "type": "location"
+                }
+              }
+            ],
+            "primaryEmailAddress": "jane.doe@acme.co"
+          }
+        ]
+      },
+      "PersonListEntry": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "description": "The list entry's unique identifier",
+            "type": "integer",
+            "format": "int64",
+            "minimum": 1,
+            "maximum": 9007199254740991,
+            "examples": [
+              1
+            ]
+          },
+          "type": {
+            "description": "The entity type for this list entry",
+            "type": "string",
+            "const": "person",
+            "examples": [
+              "person"
+            ]
+          },
+          "createdAt": {
+            "description": "The date that the list entry was created",
+            "type": "string",
+            "format": "date-time",
+            "examples": [
+              "2023-01-01T00:00:00Z"
+            ]
+          },
+          "creatorId": {
+            "description": "The ID of the user that created this list entry",
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64",
+            "minimum": 1,
+            "maximum": 9007199254740991,
+            "examples": [
+              1
+            ]
+          },
+          "entity": {
+            "$ref": "#/components/schemas/Person"
+          }
+        },
+        "required": [
+          "createdAt",
+          "creatorId",
+          "entity",
+          "id",
+          "type"
+        ]
+      },
+      "ListEntryWithEntity": {
+        "oneOf": [
+          {
+            "$ref": "#/components/schemas/CompanyListEntry"
+          },
+          {
+            "$ref": "#/components/schemas/OpportunityListEntry"
+          },
+          {
+            "$ref": "#/components/schemas/PersonListEntry"
+          }
+        ],
+        "discriminator": {
+          "propertyName": "type",
+          "mapping": {
+            "company": "#/components/schemas/CompanyListEntry",
+            "opportunity": "#/components/schemas/OpportunityListEntry",
+            "person": "#/components/schemas/PersonListEntry"
+          }
+        },
+        "examples": [
+          {
+            "createdAt": "2023-01-01 00:00:00.000000000 Z",
+            "creatorId": 1,
+            "id": 1,
+            "type": "company",
+            "entity": {
+              "domain": "acme.co",
+              "name": "Acme",
+              "isGlobal": true,
+              "domains": [
+                "acme.co"
+              ],
+              "id": 1,
+              "fields": [
+                {
+                  "enrichmentSource": "affinity-data",
+                  "name": "Location",
+                  "id": "affinity-data-location",
+                  "type": "enriched",
+                  "value": {
+                    "data": {
+                      "continent": "North America",
+                      "country": "United States",
+                      "streetAddress": "170 Columbus Ave",
+                      "city": "San Francisco",
+                      "state": "California"
+                    },
+                    "type": "location"
+                  }
+                },
+                {
+                  "enrichmentSource": "affinity-data",
+                  "name": "Location",
+                  "id": "affinity-data-location",
+                  "type": "enriched",
+                  "value": {
+                    "data": {
+                      "continent": "North America",
+                      "country": "United States",
+                      "streetAddress": "170 Columbus Ave",
+                      "city": "San Francisco",
+                      "state": "California"
+                    },
+                    "type": "location"
+                  }
+                }
+              ]
+            }
+          }
+        ]
+      },
+      "ListEntryWithEntityPaged": {
+        "description": "ListEntryWithEntityPaged model",
+        "type": "object",
+        "properties": {
+          "data": {
+            "description": "A page of ListEntryWithEntity results",
+            "type": [
+              "array",
+              "null"
+            ],
+            "items": {
+              "$ref": "#/components/schemas/ListEntryWithEntity"
+            }
+          },
+          "pagination": {
+            "$ref": "#/components/schemas/Pagination"
+          }
+        },
+        "required": [
+          "data",
+          "pagination"
+        ],
+        "examples": [
+          {
+            "pagination": {
+              "prevUrl": "https://api.affinity.co/v2/foo?cursor=ICAgICAgYmVmb3JlOjo6Nw",
+              "nextUrl": "https://api.affinity.co/v2/foo?cursor=ICAgICAgIGFmdGVyOjo6NA"
+            },
+            "data": [
+              {
+                "createdAt": "2023-01-01 00:00:00.000000000 Z",
+                "creatorId": 1,
+                "id": 1,
+                "type": "company",
+                "entity": {
+                  "domain": "acme.co",
+                  "name": "Acme",
+                  "isGlobal": true,
+                  "domains": [
+                    "acme.co"
+                  ],
+                  "id": 1,
+                  "fields": [
+                    {
+                      "enrichmentSource": "affinity-data",
+                      "name": "Location",
+                      "id": "affinity-data-location",
+                      "type": "enriched",
+                      "value": {
+                        "data": {
+                          "continent": "North America",
+                          "country": "United States",
+                          "streetAddress": "170 Columbus Ave",
+                          "city": "San Francisco",
+                          "state": "California"
+                        },
+                        "type": "location"
+                      }
+                    },
+                    {
+                      "enrichmentSource": "affinity-data",
+                      "name": "Location",
+                      "id": "affinity-data-location",
+                      "type": "enriched",
+                      "value": {
+                        "data": {
+                          "continent": "North America",
+                          "country": "United States",
+                          "streetAddress": "170 Columbus Ave",
+                          "city": "San Francisco",
+                          "state": "California"
+                        },
+                        "type": "location"
+                      }
+                    }
+                  ]
+                }
+              },
+              {
+                "createdAt": "2023-01-01 00:00:00.000000000 Z",
+                "creatorId": 1,
+                "id": 1,
+                "type": "company",
+                "entity": {
+                  "domain": "acme.co",
+                  "name": "Acme",
+                  "isGlobal": true,
+                  "domains": [
+                    "acme.co"
+                  ],
+                  "id": 1,
+                  "fields": [
+                    {
+                      "enrichmentSource": "affinity-data",
+                      "name": "Location",
+                      "id": "affinity-data-location",
+                      "type": "enriched",
+                      "value": {
+                        "data": {
+                          "continent": "North America",
+                          "country": "United States",
+                          "streetAddress": "170 Columbus Ave",
+                          "city": "San Francisco",
+                          "state": "California"
+                        },
+                        "type": "location"
+                      }
+                    },
+                    {
+                      "enrichmentSource": "affinity-data",
+                      "name": "Location",
+                      "id": "affinity-data-location",
+                      "type": "enriched",
+                      "value": {
+                        "data": {
+                          "continent": "North America",
+                          "country": "United States",
+                          "streetAddress": "170 Columbus Ave",
+                          "city": "San Francisco",
+                          "state": "California"
+                        },
+                        "type": "location"
+                      }
+                    }
+                  ]
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "SavedView": {
+        "description": "SavedView model",
+        "type": "object",
+        "properties": {
+          "id": {
+            "description": "The saved view's unique identifier",
+            "type": "integer",
+            "format": "int64",
+            "minimum": 1,
+            "maximum": 9007199254740991,
+            "examples": [
+              28
+            ]
+          },
+          "name": {
+            "description": "The saved view's name",
+            "type": "string",
+            "examples": [
+              "my interesting companies"
+            ]
+          },
+          "type": {
+            "description": "The type for this saved view",
+            "type": "string",
+            "enum": [
+              "sheet",
+              "board",
+              "dashboard"
+            ],
+            "examples": [
+              "sheet"
+            ]
+          },
+          "createdAt": {
+            "description": "The date that the saved view was created",
+            "type": "string",
+            "format": "date-time",
+            "examples": [
+              "2023-01-01T00:00:00Z"
+            ]
+          }
+        },
+        "required": [
+          "createdAt",
+          "id",
+          "name",
+          "type"
+        ],
+        "examples": [
+          {
+            "createdAt": "2023-01-01T00:00:00Z",
+            "name": "my interesting companies",
+            "id": 28,
+            "type": "sheet"
+          }
+        ]
+      },
+      "SavedViewPaged": {
+        "description": "SavedViewPaged model",
+        "type": "object",
+        "properties": {
+          "data": {
+            "description": "A page of SavedView results",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SavedView"
+            }
+          },
+          "pagination": {
+            "$ref": "#/components/schemas/Pagination"
+          }
+        },
+        "required": [
+          "data",
+          "pagination"
+        ],
+        "examples": [
+          {
+            "pagination": {
+              "prevUrl": "https://api.affinity.co/v2/foo?cursor=ICAgICAgYmVmb3JlOjo6Nw",
+              "nextUrl": "https://api.affinity.co/v2/foo?cursor=ICAgICAgIGFmdGVyOjo6NA"
+            },
+            "data": [
+              {
+                "createdAt": "2023-01-01 00:00:00.000000000 Z",
+                "name": "my interesting companies",
+                "id": 28,
+                "type": "sheet"
+              },
+              {
+                "createdAt": "2023-01-01 00:00:00.000000000 Z",
+                "name": "my interesting companies",
+                "id": 28,
+                "type": "sheet"
+              }
+            ]
+          }
+        ]
+      },
+      "Opportunity": {
+        "description": "Opportunity model",
+        "type": "object",
+        "properties": {
+          "id": {
+            "description": "The unique identifier for the opportunity",
+            "type": "integer",
+            "format": "int64",
+            "minimum": 1,
+            "maximum": 9007199254740991,
+            "examples": [
+              1
+            ]
+          },
+          "name": {
+            "description": "The name of the opportunity",
+            "type": "string",
+            "examples": [
+              "Acme Upsell $10k"
+            ]
+          },
+          "listId": {
+            "description": "The ID of the list that the opportunity belongs to",
+            "type": "integer",
+            "format": "int64",
+            "minimum": 1,
+            "maximum": 9007199254740991,
+            "examples": [
+              1
+            ]
+          }
+        },
+        "required": [
+          "id",
+          "listId",
+          "name"
+        ],
+        "examples": [
+          {
+            "listId": 1,
+            "name": "Acme Upsell $10k",
+            "id": 1
+          }
+        ]
+      },
+      "OpportunityPaged": {
+        "description": "OpportunityPaged model",
+        "type": "object",
+        "properties": {
+          "data": {
+            "description": "A page of Opportunity results",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Opportunity"
+            }
+          },
+          "pagination": {
+            "$ref": "#/components/schemas/Pagination"
+          }
+        },
+        "required": [
+          "data",
+          "pagination"
+        ],
+        "examples": [
+          {
+            "pagination": {
+              "prevUrl": "https://api.affinity.co/v2/foo?cursor=ICAgICAgYmVmb3JlOjo6Nw",
+              "nextUrl": "https://api.affinity.co/v2/foo?cursor=ICAgICAgIGFmdGVyOjo6NA"
+            },
+            "data": [
+              {
+                "listId": 1,
+                "name": "Acme Upsell $10k",
+                "id": 1
+              },
+              {
+                "listId": 1,
+                "name": "Acme Upsell $10k",
+                "id": 1
+              }
+            ]
+          }
+        ]
+      },
+      "PersonPaged": {
+        "description": "PersonPaged model",
+        "type": "object",
+        "properties": {
+          "data": {
+            "description": "A page of Person results",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Person"
+            }
+          },
+          "pagination": {
+            "$ref": "#/components/schemas/Pagination"
+          }
+        },
+        "required": [
+          "data",
+          "pagination"
+        ],
+        "examples": [
+          {
+            "pagination": {
+              "prevUrl": "https://api.affinity.co/v2/foo?cursor=ICAgICAgYmVmb3JlOjo6Nw",
+              "nextUrl": "https://api.affinity.co/v2/foo?cursor=ICAgICAgIGFmdGVyOjo6NA"
+            },
+            "data": [
+              {
+                "firstName": "Jane",
+                "lastName": "Doe",
+                "emailAddresses": [
+                  "jane.doe@acme.co",
+                  "janedoe@gmail.com"
+                ],
+                "id": 1,
+                "type": "internal",
+                "fields": [
+                  {
+                    "enrichmentSource": "affinity-data",
+                    "name": "Location",
+                    "id": "affinity-data-location",
+                    "type": "enriched",
+                    "value": {
+                      "data": {
+                        "continent": "North America",
+                        "country": "United States",
+                        "streetAddress": "170 Columbus Ave",
+                        "city": "San Francisco",
+                        "state": "California"
+                      },
+                      "type": "location"
+                    }
+                  },
+                  {
+                    "enrichmentSource": "affinity-data",
+                    "name": "Location",
+                    "id": "affinity-data-location",
+                    "type": "enriched",
+                    "value": {
+                      "data": {
+                        "continent": "North America",
+                        "country": "United States",
+                        "streetAddress": "170 Columbus Ave",
+                        "city": "San Francisco",
+                        "state": "California"
+                      },
+                      "type": "location"
+                    }
+                  }
+                ],
+                "primaryEmailAddress": "jane.doe@acme.co"
+              },
+              {
+                "firstName": "Jane",
+                "lastName": "Doe",
+                "emailAddresses": [
+                  "jane.doe@acme.co",
+                  "janedoe@gmail.com"
+                ],
+                "id": 1,
+                "type": "internal",
+                "fields": [
+                  {
+                    "enrichmentSource": "affinity-data",
+                    "name": "Location",
+                    "id": "affinity-data-location",
+                    "type": "enriched",
+                    "value": {
+                      "data": {
+                        "continent": "North America",
+                        "country": "United States",
+                        "streetAddress": "170 Columbus Ave",
+                        "city": "San Francisco",
+                        "state": "California"
+                      },
+                      "type": "location"
+                    }
+                  },
+                  {
+                    "enrichmentSource": "affinity-data",
+                    "name": "Location",
+                    "id": "affinity-data-location",
+                    "type": "enriched",
+                    "value": {
+                      "data": {
+                        "continent": "North America",
+                        "country": "United States",
+                        "streetAddress": "170 Columbus Ave",
+                        "city": "San Francisco",
+                        "state": "California"
+                      },
+                      "type": "location"
+                    }
+                  }
+                ],
+                "primaryEmailAddress": "jane.doe@acme.co"
+              }
+            ]
+          }
+        ]
+      }
+    },
+    "responses": {
+      "400": {
+        "description": "Bad Request",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ValidationErrors"
+            }
+          }
+        }
+      },
+      "401": {
+        "description": "Unauthorized",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/AuthenticationErrors"
+            }
+          }
+        }
+      },
+      "403": {
+        "description": "Forbidden",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/AuthorizationErrors"
+            }
+          }
+        }
+      },
+      "404": {
+        "description": "Not Found",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/NotFoundErrors"
+            }
+          }
+        }
+      }
+    }
+  }
+}
