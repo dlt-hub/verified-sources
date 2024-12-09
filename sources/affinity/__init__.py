@@ -20,6 +20,7 @@ from dlt.sources.helpers.rest_client.paginators import JSONLinkPaginator, Header
 from enum import StrEnum
 
 from pydantic import BaseModel
+from .model import *
 
 
 from .helpers import get_path_with_retry, get_url_with_retry, validate_month_string
@@ -34,28 +35,6 @@ logging.basicConfig(
     level=logging.DEBUG,  # Set the global logging level to DEBUG
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',  # Log format
 )
-
-
-class FieldType(StrEnum):
-    COMPANY_MULTI = "company-multi"
-    COMPANY = "company"
-    DATETIME = "datetime"
-    DROPDOWN = "dropdown"
-    DROPDOWN_MULTI = "dropdown-multi"
-    NUMBER = "number"
-    NUMBER_MULTI = "number-multi"
-    FORMULA_NUMBER = "formula-number"
-    INTERACTION = "interaction"
-    LOCATION = "location"
-    LOCATION_MULTI = "location-multi"
-    PERSON = "person"
-    PERSON_MULTI = "person-multi"
-    RANKED_DROWDOWN = "ranked-dropdown"
-    FILTERABLE_TEXT = "filterable-text"
-    TEXT = "text"
-    FILTERABLE_TEXT_MULTI = "filterable-text-multi"
-
-
 
 # Set urllib3 logging level to DEBUG
 logging.getLogger("urllib3").setLevel(logging.DEBUG)
@@ -116,39 +95,12 @@ def source(
         # companies(api_key)
     )
 
-def flatten_fields(data_item: Dict, meta):
-    print(data_item)
-    for field in data_item.pop("fields"):
-        data_item[field["name"]] = field["value"]["data"]
-    return data_item
-
-def clean_date_field(data: Dict[str, Any], fields: List[str]):
-    for field in fields:
-        if data[field] is not None:
-            data[field] = parse_iso_like_datetime(data[field])
-
-def clean_person_list_field(data: Dict[str, Any], fields: List[str]):
-    for field in fields:
-        my_f: List[Dict[str, Any]] = data.get(field, [])
-        person_list_to_person_id_list(my_f)
-        data[field] = my_f
-
-def person_list_to_person_id_list(person_list: List[Dict[str, Any]]):
-    for person in person_list:
-        person_to_person_id(person)
-
-
-def person_to_person_id(person: Dict[str, Any]):
-    if p := person.pop("person", None):
-        person["person_id"] = p["id"]
-
 # { dropdownOptionId: 111, text: ... }
-def mark_dropdown_item(dropdown_item: Dict[str, Any], origin_field_id: str):
-    dropdown_option_id = dropdown_item.pop("dropdownOptionId")
+def mark_dropdown_item(dropdown_item: Dropdown, field: FieldModel):
     return dlt.mark.with_hints(
-                            item={ "id": dropdown_option_id } | dropdown_item,
+                            item={ "id": dropdown_item.dropdownOptionId, "text": dropdown_item.text },
                             hints=dlt.mark.make_hints(
-                                table_name=f"options_{origin_field_id}",
+                                table_name=f"options_{field.id}",
                                 write_disposition="merge",
                                 primary_key="id",
                                 merge_key="id",
@@ -165,9 +117,57 @@ def mark_dropdown_item(dropdown_item: Dict[str, Any], origin_field_id: str):
                             ),
                         )
 
-class Columns3(BaseModel):
-    a: List[int]
-    b: float
+
+# TODO use overload to match entity to type
+def process_and_yield_fields(entity: Union[Company, Person], type: Literal[Type4.company, Type4.person], ret: Dict[str, Any]):
+    if not entity.fields:
+        return
+    for field in entity.fields:
+
+        new_column = f"{field.name}-{field.id}" if field.id.startswith("field-") else field.id
+        value = field.value.root
+        match value:
+            case DateValue():
+                ret[new_column] = value.data
+            case DropdownValue():
+                # { dropdownOptionId: 111, text: ... }
+                ret[new_column] = value.data
+                if value.data is not None:
+                    yield mark_dropdown_item(value.data, field)
+            case DropdownsValue():
+                if value.data is None or len(value.data) == 0:
+                    ret[new_column] = []
+                    continue
+                ret[new_column] = value.data
+                for d in value.data:
+                    yield mark_dropdown_item(d, field)
+            case FormulaValue():
+                ret[new_column] = value.data.calculatedValue
+                raise ValueError(f"Value type {value} not implemented")
+            case InteractionValue():
+                if value.data is None:
+                    ret[new_column] = None
+                    continue
+                interaction = value.data.root
+                ret[new_column] = interaction.model_dump(include={"id", "type"})
+                yield dlt.mark.with_hints(
+                    item=value.data,
+                    hints=dlt.mark.make_hints(
+                        table_name=f"interactions_{interaction.type}",
+                        write_disposition="merge",
+                        primary_key="id",
+                    ),
+                )
+            case PersonValue() | CompanyValue():
+                ret[new_column] = value.data.id if value.data else None
+            case PersonsValue() | CompaniesValue():
+                ret[f"{new_column}_id"] = [e.id for e in value.data]
+            case RankedDropdownValue():
+                raise ValueError(f"Value type {value} not implemented")
+            case TextValue() | FloatValue() | TextValue() | TextsValue() | FloatsValue() | LocationValue() | LocationsValue():
+                ret[new_column] = value.data
+            case _:
+                raise ValueError(f"Value type {value} not implemented")
 
 @dlt.transformer(
     data_from=companies_ids,
@@ -193,161 +193,23 @@ def companies(
 
     rest_client = get_v2_rest_client(api_key)
     ids = [x["id"] for x in companies_ids_array]
-    response = rest_client.get("companies",params={
+    response = rest_client.get("companies", params={
         "limit": len(ids),
         "ids": ids,
-        "fieldTypes": ["enriched", "global", "relationship-intelligence"],
+        "fieldTypes": [Type2.enriched.value, Type2.global_.value, Type2.relationship_intelligence.value],
     })
-    json: List[Dict] = rest_client.extract_response(response, "data")
 
-    for company in json:
-        fields: List[Dict] = company.pop("fields")
-        company_id = company.get("id")
-        assert company_id != None
+    if response.status_code < 200 or response.status_code >= 300:
+    # TODO error handling here
+        print(response.text)
+        raise Exception()
+    companies = CompanyPaged.model_validate_json(json_data=response.text)
 
-        for field in fields:
-            name = field.pop("name")
-            field_id: str = field.pop("id")
-            #id = field["id"] or uniq_id()
-            value = field.pop("value")
-            value_type = FieldType[value.pop("type").replace("-","_").upper()]
-            data = value.pop("data")
-
-            new_column = field_id
-            if field_id.startswith("field-"):
-                new_column = f"{name}-{field_id}"
-
-            match value_type:
-                case FieldType.DATETIME:
-                    company[new_column] = parse_iso_like_datetime(data) if data is not None else None
-                    continue
-                case FieldType.DROPDOWN:
-                    # { dropdownOptionId: 111, text: ... }
-                    company[new_column] = data
-                    if data is not None:
-                        yield mark_dropdown_item(data, field_id)
-                    continue
-                case FieldType.DROPDOWN_MULTI:
-                    if data is not None and len(data) > 0:
-                        # [{ dropdownOptionId: 111, text: ... }, ...]
-                        company[new_column] = data
-                        for d in data:
-                            yield mark_dropdown_item(d, field_id)
-                        #raise ValueError(f"Value type {value_type} not implemented")
-                    else:
-                        company[new_column] = []
-                    continue
-                case FieldType.FORMULA_NUMBER:
-                    raise ValueError(f"Value type {value_type} not implemented")
-                    break
-                case FieldType.INTERACTION:
-                    if data is not None:
-                        type = data.pop("type")
-                        match type:
-                            case "meeting":
-                                clean_date_field(data, ["startTime", "endTime"])
-                                clean_person_list_field(data, ["attendees"])
-                            case "email":
-                                # {'id': 11458230203,
-                                # 'type': 'email',
-                                # 'subject': 'Planet A Ventures // intro makersite.io',
-                                # 'sentAt': '2022-03-11T08:13:14Z',
-                                # 'from': {'emailAddress': 'fridtjof@planet-a.com', 'person': {'id': 54530389, 'firstName': 'Fridtjof', 'lastName': 'Detzner', 'primaryEmailAddress': 'fridtjof@planet-a.com', 'type': 'internal'}},
-                                # 'to': [{'emailAddress': 'sderycker@accel.com', 'person': {'id': 83789426, 'firstName': 'Sonali', 'lastName': 'De Reyker', 'primaryEmailAddress': 'sderycker@accel.com', 'type': 'external'}}],
-                                # 'cc': [{'emailAddress': 'nick@planet-a.com', 'person': {'id': 54525452, 'firstName': 'Nick', 'lastName': 'de la Forge', 'primaryEmailAddress': 'nick@planet-a.com', 'type': 'internal'}}]}
-                                clean_date_field(data, ["sentAt"])
-                                person_to_person_id(data["from"])
-                                clean_person_list_field(data, ["to", "cc"])
-                            case _:
-                                raise ValueError(f"Interaction type {type} not implemented")
-
-                        company[new_column] = {
-                            "id": data["id"],
-                            "type": type,
-                        }
-                        yield dlt.mark.with_hints(
-                            item=data,
-                            hints=dlt.mark.make_hints(
-                                #table_name=lambda item: "interactions",
-                                # parent_table_name="companies",
-                                table_name=f"interactions_{type}",
-                                write_disposition="merge",
-                                primary_key="id",
-                            ),
-                            #create_table_variant=True
-                        )
-                    else:
-                        company[new_column] = None
-                    continue
-                case FieldType.PERSON | FieldType.COMPANY:
-                    if data is not None:
-                        company[new_column] = data["id"]
-                    else:
-                        company[new_column] = None
-                    continue
-                case FieldType.PERSON_MULTI | FieldType.COMPANY_MULTI:
-                    company[new_column] = [p["id"] for p in data]
-                    continue
-                case FieldType.RANKED_DROWDOWN:
-                    raise ValueError(f"Value type {value_type} not implemented")
-                    break
-                case FieldType.TEXT | FieldType.NUMBER | FieldType.FILTERABLE_TEXT | FieldType.FILTERABLE_TEXT_MULTI | FieldType.NUMBER_MULTI | FieldType.LOCATION | FieldType.LOCATION_MULTI:
-                    company[new_column] = data
-                    continue
-                case _:
-                    raise ValueError(f"Value type {value_type} not implemented")
-
-
-            field = {"company_id": company_id} | field
-
-            data = value.get("data")
-            if data == None:
-                continue
-
-            if isinstance(data, Dict):
-                field = field | (data or {})
-            else:
-                field = field | { "value": data}
-
-            field["id"] = uniq_id()
-
-            if "id" in field and isinstance(field["id"], int):
-                primary_key = "id"
-            else:
-                primary_key = "company_id"
-
-            table_name = f"companies_{id}"
-
-
-            # if name == "Last Contact":
-            #     print(field)
-            # if table_name == "companies_last contact":
-            #     print(field)
-            #     print("---------------------")
-            yield dlt.mark.with_hints(
-                item=field,
-                hints=dlt.mark.make_hints(
-                    columns={
-                        "company_id": {
-                            "data_type": "bigint",
-                            "nullable": True,
-                        }
-                    },
-                    table_name=table_name,
-                    write_disposition="replace",
-                    # primary_key=primary_key,
-                    # merge_key=primary_key,
-                    # parent_table_name="companies",
-
-                    references = [{
-                            "columns": ["company_id"],
-                            "referenced_table": "companies",
-                            "referenced_columns": ["id"],
-                    }]
-                ),
-                # create_table_variant=True
-            )
-        yield dlt.mark.with_table_name(company,"companies")
+    for company in companies.data:
+        # TODO: improve value type - It's the `data` field of <ValueType>Data, e.g. `CompanyData.data`, etc.
+        ret: Dict[str, Any] = {}
+        yield from process_and_yield_fields(company, Type4.company, ret)
+        yield dlt.mark.with_table_name(company.model_dump(exclude={"fields"}) | ret, "companies")
 
 
 # @dlt.source(name="chess")
