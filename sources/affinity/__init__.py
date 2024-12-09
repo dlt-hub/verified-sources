@@ -19,7 +19,7 @@ from dlt.sources.helpers.rest_client.client import RESTClient
 from dlt.sources.helpers.rest_client.paginators import JSONLinkPaginator, HeaderLinkPaginator
 from enum import StrEnum
 
-from pydantic import BaseModel
+from pydantic import BaseModel, TypeAdapter
 from .model import *
 
 
@@ -50,7 +50,7 @@ def __create_id_resource(entity: str) -> DltResource:
     )
     def __ids(
         api_key: str = dlt.secrets["affinity_api_key"],
-    ) -> Iterable[TDataItem]:
+    ) -> Iterable[Company]:
         # yield [
         #     {"id": 1515719},
         #     {"id": 1515733}
@@ -58,12 +58,15 @@ def __create_id_resource(entity: str) -> DltResource:
         # return
 
         rest_client = get_v2_rest_client(api_key)
-        yield from rest_client.paginate(entity, params={
+        company_list_adapter = TypeAdapter(list[Company])
+
+        for companies in rest_client.paginate(entity, params={
             "limit": 100
-        })
+        }):
+            yield company_list_adapter.validate_python(companies)
 
     __ids.add_limit(5)
-    __ids.add_map(lambda item: {"id": item["id"] })
+    __ids.add_map(lambda company: {"id": company.id })
     __ids.__name__ = name
     __ids.__qualname__ = name
     return __ids
@@ -122,7 +125,7 @@ def mark_dropdown_item(dropdown_item: Dropdown, field: FieldModel):
 
 
 # TODO use overload to match entity to type
-def process_and_yield_fields(entity: Company | Person, type: Literal[Type4.COMPANY, Type4.PERSON], ret: Dict[str, Any]):
+def process_and_yield_fields(entity: Company | Person, ret: Dict[str, Any]):
     if not entity.fields:
         return
     for field in entity.fields:
@@ -133,7 +136,6 @@ def process_and_yield_fields(entity: Company | Person, type: Literal[Type4.COMPA
             case DateValue():
                 ret[new_column] = value.data
             case DropdownValue():
-                # { dropdownOptionId: 111, text: ... }
                 ret[new_column] = value.data
                 if value.data is not None:
                     yield mark_dropdown_item(value.data, field)
@@ -178,40 +180,26 @@ def process_and_yield_fields(entity: Company | Person, type: Literal[Type4.COMPA
     parallelized=True,
     primary_key="id",
     merge_key="id",
-    #table_name="companies",
     max_table_nesting=3,
-    #table_name=lambda item: "companies", columns=lambda item: print(item)
-
-    # columns={
-    #     "id": {
-    #         "data_type": "bigint",
-    #         "nullable": False
-    #     }
-    # }
 )
 def companies(
-    companies_ids_array: t.List[TDataItem],
+    ids_array: t.List[TDataItem],
     api_key: str = dlt.secrets["affinity_api_key"],
 ) -> Iterable[TDataItem]:
 
     rest_client = get_v2_rest_client(api_key)
-    ids = [x["id"] for x in companies_ids_array]
+    ids = [x["id"] for x in ids_array]
     response = rest_client.get("companies", params={
         "limit": len(ids),
         "ids": ids,
         "fieldTypes": [Type2.ENRICHED.value, Type2.GLOBAL_.value, Type2.RELATIONSHIP_INTELLIGENCE.value],
     })
-
-    if response.status_code < 200 or response.status_code >= 300:
-    # TODO error handling here
-        print(response.text)
-        raise Exception()
+    response.raise_for_status()
     companies = CompanyPaged.model_validate_json(json_data=response.text)
 
     for company in companies.data:
-        # TODO: improve value type - It's the `data` field of <ValueType>Data, e.g. `CompanyData.data`, etc.
         ret: Dict[str, Any] = {}
-        yield from process_and_yield_fields(company, Type4.COMPANY, ret)
+        yield from process_and_yield_fields(company, ret)
         yield dlt.mark.with_table_name(company.model_dump(exclude={"fields"}) | ret, "companies")
 
 
