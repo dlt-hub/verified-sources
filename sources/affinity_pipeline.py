@@ -1,5 +1,5 @@
 import dlt
-from affinity import source
+from affinity import ListReference, source
 
 
 def load_players_online_status() -> None:
@@ -8,7 +8,16 @@ def load_players_online_status() -> None:
         destination="duckdb",
         dev_mode=True
     )
-    data = source()
+    data = source(
+        list_refs=[
+            ListReference(248283),
+
+            # Following yields: {"errors":[{"message":"Saved view must be a sheet saved view.","code":"not-found"}]}
+            # ListReference(247888, 1696853)
+            ListReference(247888, 1869904)
+
+        ]
+    )
     #data.add_limit(1)
     info = pipeline.run(data)
     print(info)

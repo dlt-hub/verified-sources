@@ -1,31 +1,24 @@
 """A source loading player profiles and games from chess.com api"""
 
-from copy import deepcopy
+from dataclasses import field
 import typing as t
-from typing import Any, Callable, Dict, Generator, Iterable, Iterator, List, Sequence, cast
-import operator
-from dlt.common.utils import uniq_id
+from typing import Any, Dict, Generator, Iterable, List, Sequence, Union
 
 import dlt
-from dlt.common import pendulum
-from dlt.common.time import parse_iso_like_datetime
 from dlt.common.typing import TDataItem
 from dlt.sources import DltResource
-from dlt.sources.helpers import requests
 from dlt.extract.items import DataItemWithMeta
 
 
 from dlt.sources.helpers.rest_client.auth import BearerTokenAuth
-from dlt.sources.helpers.rest_client.client import RESTClient
-from dlt.sources.helpers.rest_client.paginators import JSONLinkPaginator, HeaderLinkPaginator
-from enum import StrEnum
+from dlt.sources.helpers.rest_client.client import RESTClient, Response, raise_for_status
+from dlt.sources.helpers.rest_client.paginators import JSONLinkPaginator
 
-from pydantic import BaseModel, TypeAdapter
+from pydantic import TypeAdapter
+
 from .model import *
-
-
-from .helpers import get_path_with_retry, get_url_with_retry, validate_month_string
-from .settings import API_BASE, V2_PREFIX, COMPANIES_V2_ENDPOINT
+from .helpers import ListReference, generate_list_entries_path
+from .settings import API_BASE, V2_PREFIX
 
 #from ..rest_api import rest_api_resources
 
@@ -40,10 +33,11 @@ logging.basicConfig(
 # Set urllib3 logging level to DEBUG
 logging.getLogger("urllib3").setLevel(logging.DEBUG)
 
-ENTITY = Literal['companies', 'persons', 'lists', 'opportunities']
+LISTS_LITERAL = Literal['lists']
+ENTITY = Literal['companies', 'persons', 'opportunities']
 MAX_PAGE_LIMIT = 100
 
-def get_entity_data_class(entity: ENTITY):
+def get_entity_data_class(entity: ENTITY | LISTS_LITERAL):
     match entity:
         case "companies":
             return Company
@@ -63,18 +57,19 @@ def get_entity_data_class_paged(entity: ENTITY):
             return PersonPaged
         case "opportunities":
             return OpportunityPaged
-        case "lists":
-            return ListPaged
+        # case "lists":
+        #     return ListPaged
 
 
-def __create_id_resource(entity: ENTITY, name_override: str | None = None) -> DltResource:
-    name = name_override if name_override is not None else f"{entity}_ids"
+def __create_id_resource(entity: ENTITY | LISTS_LITERAL, is_id_generator: bool = True) -> DltResource:
+    name = f"{entity}_ids" if is_id_generator else entity
     datacls = get_entity_data_class(entity)
 
     @dlt.resource(
         write_disposition="replace",
         primary_key="id",
         # columns={"id": {"data_type": "bigint"}},
+        columns=datacls,
         name=name,
         parallelized=True
     )
@@ -101,8 +96,8 @@ def __create_id_resource(entity: ENTITY, name_override: str | None = None) -> Dl
 # without any data, so we can parallelize the more expensive data fetching
 # whilst not hitting the API limits so fast and we can parallelize
 # because we don't need to page with cursors
-companies_ids = __create_id_resource("companies")
-persons_ids = __create_id_resource("persons")
+# companies_ids = __create_id_resource("companies", True)
+# persons_ids = __create_id_resource("persons", True)
 
 def get_v2_rest_client(api_key: str):
     return RESTClient(
@@ -112,20 +107,22 @@ def get_v2_rest_client(api_key: str):
         paginator=JSONLinkPaginator("pagination.nextUrl"),
     )
 
+
 @dlt.source(name="affinity")
 def source(
+    list_refs: List[ListReference] = field(default_factory=list)
 ) -> Sequence[DltResource]:
+
+    list_resources = [__create_list_entries_resource(ref) for ref in list_refs]
+
+    print(list_resources)
+
     return (
-        # companies_ids,
-        companies,
-        persons,
-        opportunities,
-        lists
-        # lists(1234) # Dealflow
-        # list(567) # Portcos
-        # persons_ids,
-        # opportunities_ids,
-        # companies(api_key)
+        # companies,
+        # persons,
+        # opportunities,
+        # lists,
+        *list_resources,
     )
 
 # { dropdownOptionId: 111, text: ... }
@@ -151,10 +148,19 @@ def mark_dropdown_item(dropdown_item: Dropdown, field: FieldModel) -> DataItemWi
                         )
 
 
-def process_and_yield_fields(entity: Company | Person, ret: Dict[str, Any]) -> Generator[DataItemWithMeta, None, None]:
+def process_and_yield_fields(entity: Company | Person | OpportunityWithFields, ret: Dict[str, Any]) -> Generator[DataItemWithMeta, None, None]:
     if not entity.fields:
         return
     for field in entity.fields:
+        yield dlt.mark.with_hints(
+            item=field.model_dump(include={"id","name"}),
+            hints=dlt.mark.make_hints(
+                table_name=f"fields_{field.type}",
+                write_disposition="merge",
+                primary_key="id",
+                merge_key="id",
+            )
+        )
         new_column = f"{field.id}_{field.name}" if field.id.startswith("field-") else field.id
         value = field.value.root
         match value:
@@ -200,8 +206,9 @@ def process_and_yield_fields(entity: Company | Person, ret: Dict[str, Any]) -> G
                 raise ValueError(f"Value type {value} not implemented")
 
 
-def __create_entity_resource(entity_name: ENTITY, additional_params: Dict[str, Any]) -> DltResource:
+def __create_entity_resource(entity_name: ENTITY) -> DltResource:
     datacls = get_entity_data_class_paged(entity_name)
+    name = entity_name
     @dlt.transformer(
         #data_from=globals[f"{entity}_ids"],
         data_from=__create_id_resource(entity_name),
@@ -211,43 +218,114 @@ def __create_entity_resource(entity_name: ENTITY, additional_params: Dict[str, A
         merge_key="id",
         max_table_nesting=3,
         #table_name=entity
-        name=entity_name
+        name=name
     )
     def __entities(
-        entity_arr: t.List[Company | Person | Opportunity | ListModel],
+        entity_arr: t.List[Company | Person | Opportunity],
         api_key: str = dlt.secrets["affinity_api_key"],
     ) -> Iterable[TDataItem]:
 
         rest_client = get_v2_rest_client(api_key)
-        ids = [x.id for x in entity_arr]
+        ids = [x["id"] for x in entity_arr]
         response = rest_client.get(entity_name, params={
             "limit": len(ids),
             "ids": ids,
-        } | additional_params)
+            "fieldTypes": [Type2.ENRICHED.value, Type2.GLOBAL_.value, Type2.RELATIONSHIP_INTELLIGENCE.value]
+        })
         response.raise_for_status()
         entities = datacls.model_validate_json(json_data=response.text)
 
         for e in entities.data:
             ret: Dict[str, Any] = {}
             yield from process_and_yield_fields(e, ret)
-            yield dlt.mark.with_table_name(e.model_dump(exclude={"fields"}) | ret, entity_name)
+            yield dlt.mark.with_table_name(e.model_dump(exclude={"fields"}) | ret, name)
 
-    __entities.__name__ = entity_name
-    __entities.__qualname__ = entity_name
+    __entities.__name__ = name
+    __entities.__qualname__ = name
     return __entities
 
 
-companies = __create_entity_resource('companies', {
-    "fieldTypes": [Type2.ENRICHED.value, Type2.GLOBAL_.value, Type2.RELATIONSHIP_INTELLIGENCE.value]
-})
+companies = __create_entity_resource('companies')
+persons = __create_entity_resource('persons')
+opportunities = __create_id_resource("opportunities", False)
+lists = __create_id_resource("lists", False)
 
-persons = __create_entity_resource('persons', {
-    "fieldTypes": [Type2.ENRICHED.value, Type2.GLOBAL_.value, Type2.RELATIONSHIP_INTELLIGENCE.value]
-})
 
-opportunities = __create_id_resource("opportunities", "opportunities")
-lists = __create_id_resource("lists", "lists")
 
+# TODO: other errors
+# class Error(BaseModel):
+#     errors: List[BadRequestError | ConflictError |MethodNotAllowedError | NotAcceptableError | NotImplementedError | RateLimitError | ServerError | UnprocessableEntityError | UnsupportedMediaTypeError] = Field(discriminator="code")
+
+def raise_if_error(response: Response, *args: Any, **kwargs: Any) -> None:
+    if response.status_code < 200 or response.status_code >= 300:
+        error_adapter = TypeAdapter(AuthenticationErrors | NotFoundErrors | AuthorizationErrors | ValidationErrors)
+        error = error_adapter.validate_json(response.text)
+        response.reason = "\n".join([e.message for e in error.errors])
+        response.raise_for_status()
+
+hooks = {
+    "response": [raise_if_error]
+}
+
+
+def __create_list_entries_resource(list_ref: ListReference):
+    name = f"list-entries-{list_ref}"
+    endpoint = generate_list_entries_path(list_ref)
+    @dlt.resource(
+        write_disposition="replace",
+        parallelized=True,
+        primary_key="id",
+        merge_key="id",
+        max_table_nesting=3,
+        name=name
+    )
+    def __list_entries(
+        api_key: str = dlt.secrets["affinity_api_key"],
+    ) -> Iterable[TDataItem]:
+
+        rest_client = get_v2_rest_client(api_key)
+        list_adapter = TypeAdapter(list[ListEntryWithEntity])
+
+        for list_entries in (
+            list_adapter.validate_python(entities)
+            for entities in rest_client.paginate(endpoint, params={
+                "limit": MAX_PAGE_LIMIT,
+                "fieldTypes": [Type2.ENRICHED.value, Type2.GLOBAL_.value, Type2.RELATIONSHIP_INTELLIGENCE.value, Type2.LIST.value]
+            }, hooks=hooks)
+        ):
+            print(list_entries)
+            for list_entry in list_entries:
+                e = list_entry.root
+                ret: Dict[str, Any] = {
+                    "entity_id": e.entity.id
+                }
+                yield from process_and_yield_fields(e.entity, ret)
+                yield dlt.mark.with_table_name(e.model_dump(exclude={"entity"}) | ret, name)
+
+    __list_entries.__name__ = name
+    __list_entries.__qualname__ = name
+    return __list_entries
+
+        # yield dlt.mark.with_hints(
+        #                     item={ "id": dropdown_item.dropdownOptionId, "text": dropdown_item.text },
+        #                     hints=dlt.mark.make_hints(
+        #                         table_name=f"{field.id}_dropdown_options",
+        #                         write_disposition="merge",
+        #                         primary_key="id",
+        #                         merge_key="id",
+        #                         columns={
+        #                             "id": {
+        #                                 "primary_key": True,
+        #                                 "unique": True,
+
+        #                             },
+        #                             "text": {
+        #                                 "data_type": "text"
+        #                             }
+        #                         }
+        #                     ),
+        #                 )
+        # print(l)
 
 
 # @dlt.source(name="chess")
