@@ -2,7 +2,7 @@
 
 from copy import deepcopy
 import typing as t
-from typing import Any, Callable, Dict, Iterable, Iterator, List, Sequence, cast
+from typing import Any, Callable, Dict, Generator, Iterable, Iterator, List, Sequence, cast
 import operator
 from dlt.common.utils import uniq_id
 
@@ -12,6 +12,7 @@ from dlt.common.time import parse_iso_like_datetime
 from dlt.common.typing import TDataItem
 from dlt.sources import DltResource
 from dlt.sources.helpers import requests
+from dlt.extract.items import DataItemWithMeta
 
 
 from dlt.sources.helpers.rest_client.auth import BearerTokenAuth
@@ -39,7 +40,7 @@ logging.basicConfig(
 # Set urllib3 logging level to DEBUG
 logging.getLogger("urllib3").setLevel(logging.DEBUG)
 
-ENTITY = Literal['companies', 'persons']
+ENTITY = Literal['companies', 'persons', 'lists', 'opportunities']
 MAX_PAGE_LIMIT = 100
 
 def get_entity_data_class(entity: ENTITY):
@@ -50,6 +51,8 @@ def get_entity_data_class(entity: ENTITY):
             return Person
         case "opportunities":
             return Opportunity
+        case "lists":
+            return ListModel
 
 
 def get_entity_data_class_paged(entity: ENTITY):
@@ -60,34 +63,36 @@ def get_entity_data_class_paged(entity: ENTITY):
             return PersonPaged
         case "opportunities":
             return OpportunityPaged
+        case "lists":
+            return ListPaged
 
 
-def __create_id_resource(entity: ENTITY) -> DltResource:
-    name = f"{entity}_ids"
+def __create_id_resource(entity: ENTITY, name_override: str | None = None) -> DltResource:
+    name = name_override if name_override is not None else f"{entity}_ids"
     datacls = get_entity_data_class(entity)
 
     @dlt.resource(
         write_disposition="replace",
-        # primary_key="id",
+        primary_key="id",
         # columns={"id": {"data_type": "bigint"}},
         name=name,
-        #parallelized=True
+        parallelized=True
     )
     def __ids(
         api_key: str = dlt.secrets["affinity_api_key"],
     ) -> Iterable[TDataItem]:
         rest_client = get_v2_rest_client(api_key)
-        company_list_adapter = TypeAdapter(list[datacls])
+        list_adapter = TypeAdapter(list[datacls])
 
         yield from (
-            company_list_adapter.validate_python(entities)
+            list_adapter.validate_python(entities)
             for entities in rest_client.paginate(entity, params={
                 "limit": MAX_PAGE_LIMIT
             })
         )
 
     __ids.add_limit(5)
-    __ids.add_map(lambda entity: {"id": entity.id })
+    #__ids.add_map(lambda entity: {"id": entity.id })
     __ids.__name__ = name
     __ids.__qualname__ = name
     return __ids
@@ -114,7 +119,8 @@ def source(
         # companies_ids,
         companies,
         persons,
-        opportunities
+        opportunities,
+        lists
         # lists(1234) # Dealflow
         # list(567) # Portcos
         # persons_ids,
@@ -123,7 +129,7 @@ def source(
     )
 
 # { dropdownOptionId: 111, text: ... }
-def mark_dropdown_item(dropdown_item: Dropdown, field: FieldModel):
+def mark_dropdown_item(dropdown_item: Dropdown, field: FieldModel) -> DataItemWithMeta:
     return dlt.mark.with_hints(
                             item={ "id": dropdown_item.dropdownOptionId, "text": dropdown_item.text },
                             hints=dlt.mark.make_hints(
@@ -145,8 +151,7 @@ def mark_dropdown_item(dropdown_item: Dropdown, field: FieldModel):
                         )
 
 
-# TODO use overload to match entity to type
-def process_and_yield_fields(entity: Company | Person, ret: Dict[str, Any]):
+def process_and_yield_fields(entity: Company | Person, ret: Dict[str, Any]) -> Generator[DataItemWithMeta, None, None]:
     if not entity.fields:
         return
     for field in entity.fields:
@@ -209,12 +214,12 @@ def __create_entity_resource(entity_name: ENTITY, additional_params: Dict[str, A
         name=entity_name
     )
     def __entities(
-        ids_array: t.List[TDataItem],
+        entity_arr: t.List[Company | Person | Opportunity | ListModel],
         api_key: str = dlt.secrets["affinity_api_key"],
     ) -> Iterable[TDataItem]:
 
         rest_client = get_v2_rest_client(api_key)
-        ids = [x["id"] for x in ids_array]
+        ids = [x.id for x in entity_arr]
         response = rest_client.get(entity_name, params={
             "limit": len(ids),
             "ids": ids,
@@ -240,24 +245,9 @@ persons = __create_entity_resource('persons', {
     "fieldTypes": [Type2.ENRICHED.value, Type2.GLOBAL_.value, Type2.RELATIONSHIP_INTELLIGENCE.value]
 })
 
+opportunities = __create_id_resource("opportunities", "opportunities")
+lists = __create_id_resource("lists", "lists")
 
-@dlt.resource(
-    write_disposition="replace",
-    primary_key="id",
-    parallelized=True
-)
-def opportunities(
-    api_key: str = dlt.secrets["affinity_api_key"],
-) -> Iterable[Opportunity]:
-    rest_client = get_v2_rest_client(api_key)
-    opportunity_list_adapter = TypeAdapter(list[Opportunity])
-
-    yield from (
-        opportunity_list_adapter.validate_python(entities)
-        for entities in rest_client.paginate("opportunities", params={
-            "limit": MAX_PAGE_LIMIT
-        })
-    )
 
 
 # @dlt.source(name="chess")
