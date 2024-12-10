@@ -39,8 +39,33 @@ logging.basicConfig(
 # Set urllib3 logging level to DEBUG
 logging.getLogger("urllib3").setLevel(logging.DEBUG)
 
-def __create_id_resource(entity: str) -> DltResource:
+ENTITY = Literal['companies', 'persons']
+MAX_PAGE_LIMIT = 100
+
+def get_entity_data_class(entity: ENTITY):
+    match entity:
+        case "companies":
+            return Company
+        case "persons":
+            return Person
+        case "opportunities":
+            return Opportunity
+
+
+def get_entity_data_class_paged(entity: ENTITY):
+    match entity:
+        case "companies":
+            return CompanyPaged
+        case "persons":
+            return PersonPaged
+        case "opportunities":
+            return OpportunityPaged
+
+
+def __create_id_resource(entity: ENTITY) -> DltResource:
     name = f"{entity}_ids"
+    datacls = get_entity_data_class(entity)
+
     @dlt.resource(
         write_disposition="replace",
         # primary_key="id",
@@ -50,23 +75,19 @@ def __create_id_resource(entity: str) -> DltResource:
     )
     def __ids(
         api_key: str = dlt.secrets["affinity_api_key"],
-    ) -> Iterable[Company]:
-        # yield [
-        #     {"id": 1515719},
-        #     {"id": 1515733}
-        # ]
-        # return
-
+    ) -> Iterable[TDataItem]:
         rest_client = get_v2_rest_client(api_key)
-        company_list_adapter = TypeAdapter(list[Company])
+        company_list_adapter = TypeAdapter(list[datacls])
 
-        for companies in rest_client.paginate(entity, params={
-            "limit": 100
-        }):
-            yield company_list_adapter.validate_python(companies)
+        yield from (
+            company_list_adapter.validate_python(entities)
+            for entities in rest_client.paginate(entity, params={
+                "limit": MAX_PAGE_LIMIT
+            })
+        )
 
     __ids.add_limit(5)
-    __ids.add_map(lambda company: {"id": company.id })
+    __ids.add_map(lambda entity: {"id": entity.id })
     __ids.__name__ = name
     __ids.__qualname__ = name
     return __ids
@@ -77,7 +98,6 @@ def __create_id_resource(entity: str) -> DltResource:
 # because we don't need to page with cursors
 companies_ids = __create_id_resource("companies")
 persons_ids = __create_id_resource("persons")
-opportunities_ids = __create_id_resource("opportunities")
 
 def get_v2_rest_client(api_key: str):
     return RESTClient(
@@ -93,7 +113,8 @@ def source(
     return (
         # companies_ids,
         companies,
-        # persons,
+        persons,
+        opportunities
         # lists(1234) # Dealflow
         # list(567) # Portcos
         # persons_ids,
@@ -106,7 +127,7 @@ def mark_dropdown_item(dropdown_item: Dropdown, field: FieldModel):
     return dlt.mark.with_hints(
                             item={ "id": dropdown_item.dropdownOptionId, "text": dropdown_item.text },
                             hints=dlt.mark.make_hints(
-                                table_name=f"dropdown_options_{field.id}",
+                                table_name=f"{field.id}_dropdown_options",
                                 write_disposition="merge",
                                 primary_key="id",
                                 merge_key="id",
@@ -129,8 +150,7 @@ def process_and_yield_fields(entity: Company | Person, ret: Dict[str, Any]):
     if not entity.fields:
         return
     for field in entity.fields:
-
-        new_column = f"{field.name}-{field.id}" if field.id.startswith("field-") else field.id
+        new_column = f"{field.id}_{field.name}" if field.id.startswith("field-") else field.id
         value = field.value.root
         match value:
             case DateValue():
@@ -174,33 +194,70 @@ def process_and_yield_fields(entity: Company | Person, ret: Dict[str, Any]):
             case _:
                 raise ValueError(f"Value type {value} not implemented")
 
-@dlt.transformer(
-    data_from=companies_ids,
+
+def __create_entity_resource(entity_name: ENTITY, additional_params: Dict[str, Any]) -> DltResource:
+    datacls = get_entity_data_class_paged(entity_name)
+    @dlt.transformer(
+        #data_from=globals[f"{entity}_ids"],
+        data_from=__create_id_resource(entity_name),
+        write_disposition="replace",
+        parallelized=True,
+        primary_key="id",
+        merge_key="id",
+        max_table_nesting=3,
+        #table_name=entity
+        name=entity_name
+    )
+    def __entities(
+        ids_array: t.List[TDataItem],
+        api_key: str = dlt.secrets["affinity_api_key"],
+    ) -> Iterable[TDataItem]:
+
+        rest_client = get_v2_rest_client(api_key)
+        ids = [x["id"] for x in ids_array]
+        response = rest_client.get(entity_name, params={
+            "limit": len(ids),
+            "ids": ids,
+        } | additional_params)
+        response.raise_for_status()
+        entities = datacls.model_validate_json(json_data=response.text)
+
+        for e in entities.data:
+            ret: Dict[str, Any] = {}
+            yield from process_and_yield_fields(e, ret)
+            yield dlt.mark.with_table_name(e.model_dump(exclude={"fields"}) | ret, entity_name)
+
+    __entities.__name__ = entity_name
+    __entities.__qualname__ = entity_name
+    return __entities
+
+
+companies = __create_entity_resource('companies', {
+    "fieldTypes": [Type2.ENRICHED.value, Type2.GLOBAL_.value, Type2.RELATIONSHIP_INTELLIGENCE.value]
+})
+
+persons = __create_entity_resource('persons', {
+    "fieldTypes": [Type2.ENRICHED.value, Type2.GLOBAL_.value, Type2.RELATIONSHIP_INTELLIGENCE.value]
+})
+
+
+@dlt.resource(
     write_disposition="replace",
-    parallelized=True,
     primary_key="id",
-    merge_key="id",
-    max_table_nesting=3,
+    parallelized=True
 )
-def companies(
-    ids_array: t.List[TDataItem],
+def opportunities(
     api_key: str = dlt.secrets["affinity_api_key"],
-) -> Iterable[TDataItem]:
-
+) -> Iterable[Opportunity]:
     rest_client = get_v2_rest_client(api_key)
-    ids = [x["id"] for x in ids_array]
-    response = rest_client.get("companies", params={
-        "limit": len(ids),
-        "ids": ids,
-        "fieldTypes": [Type2.ENRICHED.value, Type2.GLOBAL_.value, Type2.RELATIONSHIP_INTELLIGENCE.value],
-    })
-    response.raise_for_status()
-    companies = CompanyPaged.model_validate_json(json_data=response.text)
+    opportunity_list_adapter = TypeAdapter(list[Opportunity])
 
-    for company in companies.data:
-        ret: Dict[str, Any] = {}
-        yield from process_and_yield_fields(company, ret)
-        yield dlt.mark.with_table_name(company.model_dump(exclude={"fields"}) | ret, "companies")
+    yield from (
+        opportunity_list_adapter.validate_python(entities)
+        for entities in rest_client.paginate("opportunities", params={
+            "limit": MAX_PAGE_LIMIT
+        })
+    )
 
 
 # @dlt.source(name="chess")
