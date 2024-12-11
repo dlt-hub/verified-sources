@@ -68,8 +68,8 @@ def __create_id_resource(entity: ENTITY | LISTS_LITERAL, is_id_generator: bool =
     @dlt.resource(
         write_disposition="replace",
         primary_key="id",
-        # columns={"id": {"data_type": "bigint"}},
-        columns=datacls,
+        # can't use this yet, due to https://github.com/dlt-hub/dlt/pull/2109
+        # columns=datacls,
         name=name,
         parallelized=True
     )
@@ -110,32 +110,33 @@ def source(
     list_resources = [__create_list_entries_resource(ref) for ref in list_refs]
 
     return (
-        # companies,
-        # persons,
-        # opportunities,
-        # lists,
+        companies,
+        persons,
+        opportunities,
+        lists,
         *list_resources,
     )
 
 # { dropdownOptionId: 111, text: ... }
-def mark_dropdown_item(dropdown_item: Dropdown, field: FieldModel) -> DataItemWithMeta:
+def mark_dropdown_item(dropdown_item: Dropdown | RankedDropdown, field: FieldModel) -> DataItemWithMeta:
     return dlt.mark.with_hints(
-                            item={ "id": dropdown_item.dropdownOptionId, "text": dropdown_item.text },
+                            item={ "id": dropdown_item.dropdownOptionId } | dropdown_item.model_dump(exclude={"dropdownOptionId"}),
                             hints=dlt.mark.make_hints(
                                 table_name=f"{field.id}_dropdown_options",
                                 write_disposition="merge",
                                 primary_key="id",
                                 merge_key="id",
-                                columns={
-                                    "id": {
-                                        "primary_key": True,
-                                        "unique": True,
+                                # can't use this yet, due to https://github.com/dlt-hub/dlt/pull/2109
+                                # columns={
+                                #     "id": {
+                                #         "primary_key": True,
+                                #         "unique": True,
 
-                                    },
-                                    "text": {
-                                        "data_type": "text"
-                                    }
-                                }
+                                #     },
+                                #     "text": {
+                                #         "data_type": "text"
+                                #     }
+                                # }
                             ),
                         )
 
@@ -145,9 +146,9 @@ def process_and_yield_fields(entity: Company | Person | OpportunityWithFields, r
         return
     for field in entity.fields:
         yield dlt.mark.with_hints(
-            item=field.model_dump(include={"id","name"}),
+            item=field.model_dump(exclude={"value"}) | { "value_type": field.value.root.type },
             hints=dlt.mark.make_hints(
-                table_name=f"fields_{field.type}",
+                table_name=f"fields",
                 write_disposition="merge",
                 primary_key="id",
                 merge_key="id",
@@ -158,8 +159,8 @@ def process_and_yield_fields(entity: Company | Person | OpportunityWithFields, r
         match value:
             case DateValue():
                 ret[new_column] = value.data
-            case DropdownValue():
-                ret[new_column] = value.data
+            case DropdownValue() | RankedDropdownValue():
+                ret[f"{new_column}_dropdown_option_id"] = value.data.dropdownOptionId if value.data is not None else None
                 if value.data is not None:
                     yield mark_dropdown_item(value.data, field)
             case DropdownsValue():
@@ -190,8 +191,6 @@ def process_and_yield_fields(entity: Company | Person | OpportunityWithFields, r
                 ret[new_column] = value.data.id if value.data else None
             case PersonsValue() | CompaniesValue():
                 ret[f"{new_column}_id"] = [e.id for e in value.data]
-            case RankedDropdownValue():
-                raise ValueError(f"Value type {value} not implemented")
             case TextValue() | FloatValue() | TextValue() | TextsValue() | FloatsValue() | LocationValue() | LocationsValue():
                 ret[new_column] = value.data
             case _:
@@ -288,7 +287,6 @@ def __create_list_entries_resource(list_ref: ListReference):
                 "fieldTypes": [Type2.ENRICHED.value, Type2.GLOBAL_.value, Type2.RELATIONSHIP_INTELLIGENCE.value, Type2.LIST.value]
             }, hooks=hooks)
         ):
-            print(list_entries)
             for list_entry in list_entries:
                 e = list_entry.root
                 ret: Dict[str, Any] = {
@@ -300,28 +298,6 @@ def __create_list_entries_resource(list_ref: ListReference):
     __list_entries.__name__ = name
     __list_entries.__qualname__ = name
     return __list_entries
-
-        # yield dlt.mark.with_hints(
-        #                     item={ "id": dropdown_item.dropdownOptionId, "text": dropdown_item.text },
-        #                     hints=dlt.mark.make_hints(
-        #                         table_name=f"{field.id}_dropdown_options",
-        #                         write_disposition="merge",
-        #                         primary_key="id",
-        #                         merge_key="id",
-        #                         columns={
-        #                             "id": {
-        #                                 "primary_key": True,
-        #                                 "unique": True,
-
-        #                             },
-        #                             "text": {
-        #                                 "data_type": "text"
-        #                             }
-        #                         }
-        #                     ),
-        #                 )
-        # print(l)
-
 
 # @dlt.source(name="chess")
 # def source(
