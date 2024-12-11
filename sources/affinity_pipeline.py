@@ -19,7 +19,7 @@ def load_players_online_status() -> None:
         ]
     )
     #data.add_limit(1)
-    info = pipeline.run(data)
+    info = pipeline.run(data, refresh="drop_sources")
     print(info)
 
 if __name__ == "__main__":

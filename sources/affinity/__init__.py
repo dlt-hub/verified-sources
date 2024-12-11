@@ -92,12 +92,6 @@ def __create_id_resource(entity: ENTITY | LISTS_LITERAL, is_id_generator: bool =
     __ids.__qualname__ = name
     return __ids
 
-# we fetch IDs for all entities first,
-# without any data, so we can parallelize the more expensive data fetching
-# whilst not hitting the API limits so fast and we can parallelize
-# because we don't need to page with cursors
-# companies_ids = __create_id_resource("companies", True)
-# persons_ids = __create_id_resource("persons", True)
 
 def get_v2_rest_client(api_key: str):
     return RESTClient(
@@ -114,8 +108,6 @@ def source(
 ) -> Sequence[DltResource]:
 
     list_resources = [__create_list_entries_resource(ref) for ref in list_refs]
-
-    print(list_resources)
 
     return (
         # companies,
@@ -210,7 +202,10 @@ def __create_entity_resource(entity_name: ENTITY) -> DltResource:
     datacls = get_entity_data_class_paged(entity_name)
     name = entity_name
     @dlt.transformer(
-        #data_from=globals[f"{entity}_ids"],
+        # we fetch IDs for all entities first,
+        # without any data, so we can parallelize the more expensive data fetching
+        # whilst not hitting the API limits so fast and we can parallelize
+        # because we don't need to page with cursors
         data_from=__create_id_resource(entity_name),
         write_disposition="replace",
         parallelized=True,

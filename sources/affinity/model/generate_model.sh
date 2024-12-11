@@ -1,4 +1,7 @@
 #!/usr/bin/env bash
+
+set -euo pipefail
+
 datamodel-codegen \
     --input *.json \
     --output __init__.py \
