@@ -122,7 +122,7 @@ def mark_dropdown_item(dropdown_item: Dropdown | RankedDropdown, field: FieldMod
     return dlt.mark.with_hints(
                             item={ "id": dropdown_item.dropdownOptionId } | dropdown_item.model_dump(exclude={"dropdownOptionId"}),
                             hints=dlt.mark.make_hints(
-                                table_name=f"{field.id}_dropdown_options",
+                                table_name=f"dropdown_options_{field.id}",
                                 write_disposition="merge",
                                 primary_key="id",
                                 merge_key="id",
@@ -220,9 +220,9 @@ def __create_entity_resource(entity_name: ENTITY) -> DltResource:
     ) -> Iterable[TDataItem]:
 
         rest_client = get_v2_rest_client(api_key)
-        ids = [x["id"] for x in entity_arr]
+        ids = [x.id for x in entity_arr]
         response = rest_client.get(entity_name, params={
-            "limit": len(ids),
+            # "limit": len(ids),
             "ids": ids,
             "fieldTypes": [Type2.ENRICHED.value, Type2.GLOBAL_.value, Type2.RELATIONSHIP_INTELLIGENCE.value]
         })
@@ -263,7 +263,7 @@ hooks = {
 
 
 def __create_list_entries_resource(list_ref: ListReference):
-    name = f"list-entries-{list_ref}"
+    name = f"lists-{list_ref}-entries"
     endpoint = generate_list_entries_path(list_ref)
     @dlt.resource(
         write_disposition="replace",
