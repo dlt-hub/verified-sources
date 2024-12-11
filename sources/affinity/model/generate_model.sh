@@ -10,5 +10,6 @@ datamodel-codegen \
     --use-union-operator \
     --capitalise-enum-members \
     --use-field-description \
+    --input-file-type openapi \
     --additional-imports pydantic.model_serializer,pydantic.SkipValidation \
     --field-constraints
