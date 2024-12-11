@@ -86,8 +86,7 @@ def __create_id_resource(entity: ENTITY | LISTS_LITERAL, is_id_generator: bool =
             })
         )
 
-    __ids.add_limit(5)
-    #__ids.add_map(lambda entity: {"id": entity.id })
+    #__ids.add_limit(5)
     __ids.__name__ = name
     __ids.__qualname__ = name
     return __ids

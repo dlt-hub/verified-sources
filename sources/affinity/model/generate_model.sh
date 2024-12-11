@@ -9,4 +9,6 @@ datamodel-codegen \
     --use-annotated \
     --use-union-operator \
     --capitalise-enum-members \
-    --use-field-description
+    --use-field-description \
+    --additional-imports pydantic.model_serializer,pydantic.SkipValidation \
+    --field-constraints
