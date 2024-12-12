@@ -36,6 +36,37 @@ LISTS_LITERAL = Literal['lists']
 ENTITY = Literal['companies', 'persons', 'opportunities']
 MAX_PAGE_LIMIT = 100
 
+ErrorUnion = Field(
+    Union[
+        BadRequestError,
+        ConflictError,
+        MethodNotAllowedError,
+        NotAcceptableError,
+        NotImplementedError,
+        RateLimitError,
+        ServerError,
+        UnprocessableEntityError,
+        UnsupportedMediaTypeError,
+    ],
+    discriminator="code"
+)
+
+class Errors(BaseModel):
+    model_config = ConfigDict(arbitrary_types_allowed=True)  # Allow arbitrary types
+    errors: List[ErrorUnion]  # type: ignore
+
+def raise_if_error(response: Response, *args: Any, **kwargs: Any) -> None:
+    if response.status_code < 200 or response.status_code >= 300:
+        error_adapter = TypeAdapter(AuthenticationErrors | NotFoundErrors | AuthorizationErrors | ValidationErrors | Errors)
+        error = error_adapter.validate_json(response.text)
+        response.reason = "\n".join([e.message for e in error.errors])
+        response.raise_for_status()
+
+hooks = {
+    "response": [raise_if_error]
+}
+
+
 def get_entity_data_class(entity: ENTITY | LISTS_LITERAL):
     match entity:
         case "companies":
@@ -80,7 +111,7 @@ def __create_id_resource(entity: ENTITY | LISTS_LITERAL, is_id_generator: bool =
             list_adapter.validate_python(entities)
             for entities in rest_client.paginate(entity, params={
                 "limit": MAX_PAGE_LIMIT
-            })
+            }, hooks=hooks)
         )
 
     #__ids.add_limit(5)
@@ -220,7 +251,7 @@ def __create_entity_resource(entity_name: ENTITY) -> DltResource:
             # "limit": len(ids),
             "ids": ids,
             "fieldTypes": [Type2.ENRICHED.value, Type2.GLOBAL_.value, Type2.RELATIONSHIP_INTELLIGENCE.value]
-        })
+        }, hooks=hooks)
         response.raise_for_status()
         entities = datacls.model_validate_json(json_data=response.text)
 
@@ -238,40 +269,6 @@ companies = __create_entity_resource('companies')
 persons = __create_entity_resource('persons')
 opportunities = __create_id_resource("opportunities", False)
 lists = __create_id_resource("lists", False)
-
-
-
-ErrorUnion = Field(
-    Union[
-        BadRequestError,
-        ConflictError,
-        MethodNotAllowedError,
-        NotAcceptableError,
-        NotImplementedError,
-        RateLimitError,
-        ServerError,
-        UnprocessableEntityError,
-        UnsupportedMediaTypeError,
-    ],
-    discriminator="code"
-)
-
-# TODO: other errors?
-class Errors(BaseModel):
-    model_config = ConfigDict(arbitrary_types_allowed=True)  # Allow arbitrary types
-    errors: List[ErrorUnion]  # type: ignore
-
-def raise_if_error(response: Response, *args: Any, **kwargs: Any) -> None:
-    if response.status_code < 200 or response.status_code >= 300:
-        error_adapter = TypeAdapter(AuthenticationErrors | NotFoundErrors | AuthorizationErrors | ValidationErrors | Errors)
-        error = error_adapter.validate_json(response.text)
-        response.reason = "\n".join([e.message for e in error.errors])
-        response.raise_for_status()
-
-hooks = {
-    "response": [raise_if_error]
-}
-
 
 def __create_list_entries_resource(list_ref: ListReference):
     name = f"lists-{list_ref}-entries"
