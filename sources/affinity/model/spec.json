@@ -3095,7 +3095,7 @@
               "string",
               "null"
             ],
-            "format": "uri",
+            "format": "url",
             "examples": [
               "https://api.affinity.co/v2/foo?cursor=ICAgICAgYmVmb3JlOjo6Nw"
             ]
@@ -3106,7 +3106,7 @@
               "string",
               "null"
             ],
-            "format": "uri",
+            "format": "url",
             "examples": [
               "https://api.affinity.co/v2/foo?cursor=ICAgICAgIGFmdGVyOjo6NA"
             ]
