@@ -5,7 +5,7 @@ set -euo pipefail
 # TODO: This is currently not fully generating a valid model,
 # due to https://github.com/koxudaxi/datamodel-code-generator/pull/2216
 datamodel-codegen \
-    --input *.json \
+    --input spec.json \
     --output __init__.py \
     --output-model-type pydantic_v2.BaseModel \
     --use-annotated \
