@@ -22,7 +22,7 @@ from typing_extensions import Annotated
 
 
 class BadRequestError(BaseModel):
-    code: Literal['bad-request']
+    code: Literal["bad-request"]
     """
     Error code
     """
@@ -33,7 +33,7 @@ class BadRequestError(BaseModel):
 
 
 class ConflictError(BaseModel):
-    code: Literal['conflict']
+    code: Literal["conflict"]
     """
     Error code
     """
@@ -44,7 +44,7 @@ class ConflictError(BaseModel):
 
 
 class MethodNotAllowedError(BaseModel):
-    code: Literal['method-not-allowed']
+    code: Literal["method-not-allowed"]
     """
     Error code
     """
@@ -55,7 +55,7 @@ class MethodNotAllowedError(BaseModel):
 
 
 class NotAcceptableError(BaseModel):
-    code: Literal['not-acceptable']
+    code: Literal["not-acceptable"]
     """
     Error code
     """
@@ -66,7 +66,7 @@ class NotAcceptableError(BaseModel):
 
 
 class NotImplementedError(BaseModel):
-    code: Literal['not-implemented']
+    code: Literal["not-implemented"]
     """
     Error code
     """
@@ -77,7 +77,7 @@ class NotImplementedError(BaseModel):
 
 
 class RateLimitError(BaseModel):
-    code: Literal['rate-limit']
+    code: Literal["rate-limit"]
     """
     Error code
     """
@@ -88,7 +88,7 @@ class RateLimitError(BaseModel):
 
 
 class ServerError(BaseModel):
-    code: Literal['server']
+    code: Literal["server"]
     """
     Error code
     """
@@ -99,7 +99,7 @@ class ServerError(BaseModel):
 
 
 class UnprocessableEntityError(BaseModel):
-    code: Literal['unprocessable-entity']
+    code: Literal["unprocessable-entity"]
     """
     Error code
     """
@@ -110,7 +110,7 @@ class UnprocessableEntityError(BaseModel):
 
 
 class UnsupportedMediaTypeError(BaseModel):
-    code: Literal['unsupported-media-type']
+    code: Literal["unsupported-media-type"]
     """
     Error code
     """
@@ -125,15 +125,15 @@ class Tenant(BaseModel):
     """
     The tenant's unique identifier
     """
-    name: Annotated[str, Field(examples=['Contoso Ltd.'])]
+    name: Annotated[str, Field(examples=["Contoso Ltd."])]
     """
     The name of the tenant
     """
     subdomain: Annotated[
         constr(
-            pattern=r'^(([a-zA-Z0-9]|[a-zA-Z0-9][a-zA-Z0-9\-]{0,61}[a-zA-Z0-9])\.)*([A-Za-z0-9]|[A-Za-z0-9][A-Za-z0-9\-]{0,61}[A-Za-z0-9])$'
+            pattern=r"^(([a-zA-Z0-9]|[a-zA-Z0-9][a-zA-Z0-9\-]{0,61}[a-zA-Z0-9])\.)*([A-Za-z0-9]|[A-Za-z0-9][A-Za-z0-9\-]{0,61}[A-Za-z0-9])$"
         ),
-        Field(examples=['contoso']),
+        Field(examples=["contoso"]),
     ]
     """
     The tenant's subdomain under affinity.co
@@ -145,30 +145,30 @@ class User(BaseModel):
     """
     The user's unique identifier
     """
-    firstName: Annotated[str, Field(examples=['John'])]
+    firstName: Annotated[str, Field(examples=["John"])]
     """
     The user's first name
     """
-    lastName: Annotated[str | None, Field(examples=['Smith'])] = None
+    lastName: Annotated[str | None, Field(examples=["Smith"])] = None
     """
     The user's last name
     """
-    emailAddress: Annotated[EmailStr, Field(examples=['john.smith@contoso.com'])]
+    emailAddress: Annotated[EmailStr, Field(examples=["john.smith@contoso.com"])]
     """
     The user's email address
     """
 
 
 class Grant(BaseModel):
-    type: Annotated[Literal['api-key'], Field(examples=['api-key'])]
+    type: Annotated[Literal["api-key"], Field(examples=["api-key"])]
     """
     The type of grant used to authenticate
     """
-    scopes: Annotated[List[str], Field(examples=[['api']])]
+    scopes: Annotated[List[str], Field(examples=[["api"]])]
     """
     The scopes available to the current grant
     """
-    createdAt: Annotated[datetime, Field(examples=['2023-01-01T00:00:00Z'])]
+    createdAt: Annotated[datetime, Field(examples=["2023-01-01T00:00:00Z"])]
     """
     When the grant was created
     """
@@ -181,7 +181,7 @@ class WhoAmI(BaseModel):
 
 
 class AuthenticationError(BaseModel):
-    code: Literal['authentication']
+    code: Literal["authentication"]
     """
     Error code
     """
@@ -199,7 +199,7 @@ class AuthenticationErrors(BaseModel):
 
 
 class NotFoundError(BaseModel):
-    code: Literal['not-found']
+    code: Literal["not-found"]
     """
     Error code
     """
@@ -221,18 +221,18 @@ class CompanyData(BaseModel):
     """
     The company's unique identifier
     """
-    name: Annotated[str, Field(examples=['Acme'])]
+    name: Annotated[str, Field(examples=["Acme"])]
     """
     The company's name
     """
     domain: Annotated[
         SkipValidation[
-        constr(
-            pattern=r'^(([a-zA-Z0-9]|[a-zA-Z0-9][a-zA-Z0-9\-]{0,61}[a-zA-Z0-9])\.)*([A-Za-z0-9]|[A-Za-z0-9][A-Za-z0-9\-]{0,61}[A-Za-z0-9])$'
-        )
+            constr(
+                pattern=r"^(([a-zA-Z0-9]|[a-zA-Z0-9][a-zA-Z0-9\-]{0,61}[a-zA-Z0-9])\.)*([A-Za-z0-9]|[A-Za-z0-9][A-Za-z0-9\-]{0,61}[A-Za-z0-9])$"
+            )
         ]
         | None,
-        Field(examples=['acme.co']),
+        Field(examples=["acme.co"]),
     ] = None
     """
     The company's primary domain
@@ -240,7 +240,7 @@ class CompanyData(BaseModel):
 
 
 class CompaniesValue(BaseModel):
-    type: Literal['company-multi']
+    type: Literal["company-multi"]
     """
     The type of value
     """
@@ -251,7 +251,7 @@ class CompaniesValue(BaseModel):
 
 
 class CompanyValue(BaseModel):
-    type: Literal['company']
+    type: Literal["company"]
     """
     The type of value
     """
@@ -259,7 +259,7 @@ class CompanyValue(BaseModel):
 
 
 class DateValue(BaseModel):
-    type: Literal['datetime']
+    type: Literal["datetime"]
     """
     The type of value
     """
@@ -274,14 +274,14 @@ class Dropdown(BaseModel):
     """
     Dropdown item's unique identifier
     """
-    text: Annotated[str, Field(examples=['first'])]
+    text: Annotated[str, Field(examples=["first"])]
     """
     Dropdown item text
     """
 
 
 class DropdownValue(BaseModel):
-    type: Literal['dropdown']
+    type: Literal["dropdown"]
     """
     The type of value
     """
@@ -289,7 +289,7 @@ class DropdownValue(BaseModel):
 
 
 class DropdownsValue(BaseModel):
-    type: Literal['dropdown-multi']
+    type: Literal["dropdown-multi"]
     """
     The type of value
     """
@@ -300,7 +300,7 @@ class DropdownsValue(BaseModel):
 
 
 class FloatValue(BaseModel):
-    type: Literal['number']
+    type: Literal["number"]
     """
     The type of value
     """
@@ -311,7 +311,7 @@ class FloatValue(BaseModel):
 
 
 class FloatsValue(BaseModel):
-    type: Literal['number-multi']
+    type: Literal["number-multi"]
     """
     The type of value
     """
@@ -329,7 +329,7 @@ class FormulaNumber(BaseModel):
 
 
 class FormulaValue(BaseModel):
-    type: Literal['formula-number']
+    type: Literal["formula-number"]
     """
     The type of value
     """
@@ -337,9 +337,9 @@ class FormulaValue(BaseModel):
 
 
 class Type(Enum):
-    INTERNAL = 'internal'
-    EXTERNAL = 'external'
-    COLLABORATOR = 'collaborator'
+    INTERNAL = "internal"
+    EXTERNAL = "external"
+    COLLABORATOR = "collaborator"
 
 
 class PersonData(BaseModel):
@@ -347,33 +347,33 @@ class PersonData(BaseModel):
     """
     The persons's unique identifier
     """
-    firstName: Annotated[str | None, Field(examples=['Jane'])] = None
+    firstName: Annotated[str | None, Field(examples=["Jane"])] = None
     """
     The person's first name
     """
-    lastName: Annotated[str | None, Field(examples=['Doe'])] = None
+    lastName: Annotated[str | None, Field(examples=["Doe"])] = None
     """
     The person's last name
     """
     primaryEmailAddress: Annotated[
-        SkipValidation[EmailStr] | None, Field(examples=['jane.doe@acme.co'])
+        SkipValidation[EmailStr] | None, Field(examples=["jane.doe@acme.co"])
     ] = None
     """
     The person's primary email address
     """
-    type: Annotated[Type, Field(examples=['internal'])]
+    type: Annotated[Type, Field(examples=["internal"])]
     """
     The person's type
     """
 
 
 class Direction(Enum):
-    RECEIVED = 'received'
-    SENT = 'sent'
+    RECEIVED = "received"
+    SENT = "sent"
 
 
 class ChatMessage(BaseModel):
-    type: Annotated[Literal['chat-message'], Field(examples=['chat-message'])]
+    type: Annotated[Literal["chat-message"], Field(examples=["chat-message"])]
     """
     The type of interaction
     """
@@ -381,11 +381,11 @@ class ChatMessage(BaseModel):
     """
     The chat message's unique identifier
     """
-    direction: Annotated[Direction, Field(examples=['outbound'])]
+    direction: Annotated[Direction, Field(examples=["outbound"])]
     """
     The direction of the chat message
     """
-    sentAt: Annotated[datetime, Field(examples=['2023-01-01T00:00:00Z'])]
+    sentAt: Annotated[datetime, Field(examples=["2023-01-01T00:00:00Z"])]
     """
     The time the chat message was sent
     """
@@ -398,7 +398,7 @@ class ChatMessage(BaseModel):
 
 class Attendee(BaseModel):
     emailAddress: Annotated[
-        SkipValidation[EmailStr] | None, Field(examples=['john.smith@contoso.com'])
+        SkipValidation[EmailStr] | None, Field(examples=["john.smith@contoso.com"])
     ] = None
     """
     The email addresses of the attendee
@@ -407,11 +407,14 @@ class Attendee(BaseModel):
 
     @model_serializer
     def ser_model(self):
-        return {'emailAddress': self.emailAddress, 'person_id': getattr(self.person, 'id', None)}
+        return {
+            "emailAddress": self.emailAddress,
+            "person_id": getattr(self.person, "id", None),
+        }
 
 
 class Email(BaseModel):
-    type: Annotated[Literal['email'], Field(examples=['email'])]
+    type: Annotated[Literal["email"], Field(examples=["email"])]
     """
     The type of interaction
     """
@@ -419,15 +422,15 @@ class Email(BaseModel):
     """
     The email's unique identifier
     """
-    subject: Annotated[str | None, Field(examples=['Acme Upsell $10k'])] = None
+    subject: Annotated[str | None, Field(examples=["Acme Upsell $10k"])] = None
     """
     The subject of the email
     """
-    sentAt: Annotated[datetime, Field(examples=['2023-01-01T00:00:00Z'])]
+    sentAt: Annotated[datetime, Field(examples=["2023-01-01T00:00:00Z"])]
     """
     The time the email was sent
     """
-    from_: Annotated[Attendee, Field(alias='from')]
+    from_: Annotated[Attendee, Field(alias="from")]
     to: List[Attendee]
     """
     The recipients of the email
@@ -439,7 +442,7 @@ class Email(BaseModel):
 
 
 class Meeting(BaseModel):
-    type: Annotated[Literal['meeting'], Field(examples=['meeting'])]
+    type: Annotated[Literal["meeting"], Field(examples=["meeting"])]
     """
     The type of interaction
     """
@@ -447,7 +450,7 @@ class Meeting(BaseModel):
     """
     The meeting's unique identifier
     """
-    title: Annotated[str | None, Field(examples=['Acme Upsell $10k'])] = None
+    title: Annotated[str | None, Field(examples=["Acme Upsell $10k"])] = None
     """
     The meeting's title
     """
@@ -455,11 +458,11 @@ class Meeting(BaseModel):
     """
     Whether the meeting is an all-day event
     """
-    startTime: Annotated[datetime, Field(examples=['2023-02-03T04:00:00Z'])]
+    startTime: Annotated[datetime, Field(examples=["2023-02-03T04:00:00Z"])]
     """
     The meeting start time
     """
-    endTime: Annotated[datetime | None, Field(examples=['2023-02-03T05:00:00Z'])] = None
+    endTime: Annotated[datetime | None, Field(examples=["2023-02-03T05:00:00Z"])] = None
     """
     The meeting end time
     """
@@ -470,7 +473,7 @@ class Meeting(BaseModel):
 
 
 class PhoneCall(BaseModel):
-    type: Annotated[Literal['call'], Field(examples=['call'])]
+    type: Annotated[Literal["call"], Field(examples=["call"])]
     """
     The type of interaction
     """
@@ -478,7 +481,7 @@ class PhoneCall(BaseModel):
     """
     The phon_call's unique identifier
     """
-    startTime: Annotated[datetime, Field(examples=['2023-02-03T04:00:00Z'])]
+    startTime: Annotated[datetime, Field(examples=["2023-02-03T04:00:00Z"])]
     """
     The call start time
     """
@@ -490,12 +493,12 @@ class PhoneCall(BaseModel):
 
 class Interaction(RootModel[ChatMessage | Email | Meeting | PhoneCall]):
     root: Annotated[
-        ChatMessage | Email | Meeting | PhoneCall, Field(discriminator='type')
+        ChatMessage | Email | Meeting | PhoneCall, Field(discriminator="type")
     ]
 
 
 class InteractionValue(BaseModel):
-    type: Literal['interaction']
+    type: Literal["interaction"]
     """
     The type of value
     """
@@ -503,30 +506,30 @@ class InteractionValue(BaseModel):
 
 
 class Location(BaseModel):
-    streetAddress: Annotated[str | None, Field(examples=['170 Columbus Ave'])] = None
+    streetAddress: Annotated[str | None, Field(examples=["170 Columbus Ave"])] = None
     """
     Street address
     """
-    city: Annotated[str | None, Field(examples=['San Francisco'])] = None
+    city: Annotated[str | None, Field(examples=["San Francisco"])] = None
     """
     City
     """
-    state: Annotated[str | None, Field(examples=['California'])] = None
+    state: Annotated[str | None, Field(examples=["California"])] = None
     """
     State
     """
-    country: Annotated[str | None, Field(examples=['United States'])] = None
+    country: Annotated[str | None, Field(examples=["United States"])] = None
     """
     Country
     """
-    continent: Annotated[str | None, Field(examples=['North America'])] = None
+    continent: Annotated[str | None, Field(examples=["North America"])] = None
     """
     Continent
     """
 
 
 class LocationValue(BaseModel):
-    type: Literal['location']
+    type: Literal["location"]
     """
     The type of value
     """
@@ -534,7 +537,7 @@ class LocationValue(BaseModel):
 
 
 class LocationsValue(BaseModel):
-    type: Literal['location-multi']
+    type: Literal["location-multi"]
     """
     The type of value
     """
@@ -545,7 +548,7 @@ class LocationsValue(BaseModel):
 
 
 class PersonValue(BaseModel):
-    type: Literal['person']
+    type: Literal["person"]
     """
     The type of value
     """
@@ -553,7 +556,7 @@ class PersonValue(BaseModel):
 
 
 class PersonsValue(BaseModel):
-    type: Literal['person-multi']
+    type: Literal["person-multi"]
     """
     The type of value
     """
@@ -568,7 +571,7 @@ class RankedDropdown(BaseModel):
     """
     Dropdown item's unique identifier
     """
-    text: Annotated[str, Field(examples=['first'])]
+    text: Annotated[str, Field(examples=["first"])]
     """
     Dropdown item text
     """
@@ -576,14 +579,14 @@ class RankedDropdown(BaseModel):
     """
     Dropdown item rank
     """
-    color: Annotated[str | None, Field(examples=['white'])] = None
+    color: Annotated[str | None, Field(examples=["white"])] = None
     """
     Dropdown item color
     """
 
 
 class RankedDropdownValue(BaseModel):
-    type: Literal['ranked-dropdown']
+    type: Literal["ranked-dropdown"]
     """
     The type of value
     """
@@ -591,13 +594,13 @@ class RankedDropdownValue(BaseModel):
 
 
 class Type1(Enum):
-    FILTERABLE_TEXT = 'filterable-text'
-    TEXT = 'text'
+    FILTERABLE_TEXT = "filterable-text"
+    TEXT = "text"
 
 
 class TextValue(BaseModel):
     type: Annotated[
-        Literal['filterable-text', 'text'], Field(examples=['filterable-text'])
+        Literal["filterable-text", "text"], Field(examples=["filterable-text"])
     ]
     """
     The type of value
@@ -614,7 +617,7 @@ class LinkedInEntry(BaseModel):
 
 
 class TextsValue(BaseModel):
-    type: Literal['filterable-text-multi']
+    type: Literal["filterable-text-multi"]
     """
     The type of value
     """
@@ -662,17 +665,17 @@ class FieldValue(
         | TextValue
         | TextsValue,
         Field(
-            discriminator='type',
+            discriminator="type",
             examples=[
                 {
-                    'data': {
-                        'continent': 'North America',
-                        'country': 'United States',
-                        'streetAddress': '170 Columbus Ave',
-                        'city': 'San Francisco',
-                        'state': 'California',
+                    "data": {
+                        "continent": "North America",
+                        "country": "United States",
+                        "streetAddress": "170 Columbus Ave",
+                        "city": "San Francisco",
+                        "state": "California",
                     },
-                    'type': 'location',
+                    "type": "location",
                 }
             ],
         ),
@@ -680,32 +683,32 @@ class FieldValue(
 
 
 class Type2(Enum):
-    ENRICHED = 'enriched'
-    GLOBAL_ = 'global'
-    LIST = 'list'
-    RELATIONSHIP_INTELLIGENCE = 'relationship-intelligence'
+    ENRICHED = "enriched"
+    GLOBAL_ = "global"
+    LIST = "list"
+    RELATIONSHIP_INTELLIGENCE = "relationship-intelligence"
 
 
 class EnrichmentSource(Enum):
-    AFFINITY_DATA = 'affinity-data'
-    DEALROOM = 'dealroom'
+    AFFINITY_DATA = "affinity-data"
+    DEALROOM = "dealroom"
     NONE_TYPE_NONE = None
 
 
 class FieldModel(BaseModel):
-    id: Annotated[str, Field(examples=['affinity-data-location'])]
+    id: Annotated[str, Field(examples=["affinity-data-location"])]
     """
     The field's unique identifier
     """
-    name: Annotated[str, Field(examples=['Location'])]
+    name: Annotated[str, Field(examples=["Location"])]
     """
     The field's name
     """
-    type: Annotated[Type2, Field(examples=['enriched'])]
+    type: Annotated[Type2, Field(examples=["enriched"])]
     """
     The field's type
     """
-    enrichmentSource: Annotated[EnrichmentSource, Field(examples=['affinity-data'])]
+    enrichmentSource: Annotated[EnrichmentSource, Field(examples=["affinity-data"])]
     """
     The source of the data in this Field (if it is enriched)
     """
@@ -717,18 +720,18 @@ class Company(BaseModel):
     """
     The company's unique identifier
     """
-    name: Annotated[str, Field(examples=['Acme'])]
+    name: Annotated[str, Field(examples=["Acme"])]
     """
     The company's name
     """
     domain: Annotated[
         SkipValidation[
-        constr(
-            pattern=r'^(([a-zA-Z0-9]|[a-zA-Z0-9][a-zA-Z0-9\-]{0,61}[a-zA-Z0-9])\.)*([A-Za-z0-9]|[A-Za-z0-9][A-Za-z0-9\-]{0,61}[A-Za-z0-9])$'
-        )
+            constr(
+                pattern=r"^(([a-zA-Z0-9]|[a-zA-Z0-9][a-zA-Z0-9\-]{0,61}[a-zA-Z0-9])\.)*([A-Za-z0-9]|[A-Za-z0-9][A-Za-z0-9\-]{0,61}[A-Za-z0-9])$"
+            )
         ]
         | None,
-        Field(examples=['acme.co']),
+        Field(examples=["acme.co"]),
     ] = None
     """
     The company's primary domain
@@ -736,12 +739,12 @@ class Company(BaseModel):
     domains: Annotated[
         List[
             SkipValidation[
-            constr(
-                pattern=r'^(([a-zA-Z0-9]|[a-zA-Z0-9][a-zA-Z0-9\-]{0,61}[a-zA-Z0-9])\.)*([A-Za-z0-9]|[A-Za-z0-9][A-Za-z0-9\-]{0,61}[A-Za-z0-9])$'
-            )
+                constr(
+                    pattern=r"^(([a-zA-Z0-9]|[a-zA-Z0-9][a-zA-Z0-9\-]{0,61}[a-zA-Z0-9])\.)*([A-Za-z0-9]|[A-Za-z0-9][A-Za-z0-9\-]{0,61}[A-Za-z0-9])$"
+                )
             ]
         ],
-        Field(examples=[['acme.co']]),
+        Field(examples=[["acme.co"]]),
     ]
     """
     All of the company's domains
@@ -760,7 +763,7 @@ class Pagination(BaseModel):
     prevUrl: Annotated[
         AnyUrl | None,
         Field(
-            examples=['https://api.affinity.co/v2/foo?cursor=ICAgICAgYmVmb3JlOjo6Nw']
+            examples=["https://api.affinity.co/v2/foo?cursor=ICAgICAgYmVmb3JlOjo6Nw"]
         ),
     ] = None
     """
@@ -769,7 +772,7 @@ class Pagination(BaseModel):
     nextUrl: Annotated[
         AnyUrl | None,
         Field(
-            examples=['https://api.affinity.co/v2/foo?cursor=ICAgICAgIGFmdGVyOjo6NA']
+            examples=["https://api.affinity.co/v2/foo?cursor=ICAgICAgIGFmdGVyOjo6NA"]
         ),
     ] = None
     """
@@ -786,7 +789,7 @@ class CompanyPaged(BaseModel):
 
 
 class ValidationError(BaseModel):
-    code: Literal['validation']
+    code: Literal["validation"]
     """
     Error code
     """
@@ -808,7 +811,7 @@ class ValidationErrors(BaseModel):
 
 
 class AuthorizationError(BaseModel):
-    code: Literal['authorization']
+    code: Literal["authorization"]
     """
     Error code
     """
@@ -826,43 +829,43 @@ class AuthorizationErrors(BaseModel):
 
 
 class ValueType(Enum):
-    PERSON = 'person'
-    PERSON_MULTI = 'person-multi'
-    COMPANY = 'company'
-    COMPANY_MULTI = 'company-multi'
-    FILTERABLE_TEXT = 'filterable-text'
-    FILTERABLE_TEXT_MULTI = 'filterable-text-multi'
-    NUMBER = 'number'
-    NUMBER_MULTI = 'number-multi'
-    DATETIME = 'datetime'
-    LOCATION = 'location'
-    LOCATION_MULTI = 'location-multi'
-    TEXT = 'text'
-    RANKED_DROPDOWN = 'ranked-dropdown'
-    DROPDOWN = 'dropdown'
-    DROPDOWN_MULTI = 'dropdown-multi'
-    FORMULA_NUMBER = 'formula-number'
-    INTERACTION = 'interaction'
+    PERSON = "person"
+    PERSON_MULTI = "person-multi"
+    COMPANY = "company"
+    COMPANY_MULTI = "company-multi"
+    FILTERABLE_TEXT = "filterable-text"
+    FILTERABLE_TEXT_MULTI = "filterable-text-multi"
+    NUMBER = "number"
+    NUMBER_MULTI = "number-multi"
+    DATETIME = "datetime"
+    LOCATION = "location"
+    LOCATION_MULTI = "location-multi"
+    TEXT = "text"
+    RANKED_DROPDOWN = "ranked-dropdown"
+    DROPDOWN = "dropdown"
+    DROPDOWN_MULTI = "dropdown-multi"
+    FORMULA_NUMBER = "formula-number"
+    INTERACTION = "interaction"
 
 
 class FieldMetadata(BaseModel):
-    id: Annotated[str, Field(examples=['affinity-data-location'])]
+    id: Annotated[str, Field(examples=["affinity-data-location"])]
     """
     The field's unique identifier
     """
-    name: Annotated[str, Field(examples=['Location'])]
+    name: Annotated[str, Field(examples=["Location"])]
     """
     The field's name
     """
-    type: Annotated[Type2, Field(examples=['enriched'])]
+    type: Annotated[Type2, Field(examples=["enriched"])]
     """
     The field's type
     """
-    enrichmentSource: Annotated[EnrichmentSource, Field(examples=['affinity-data'])]
+    enrichmentSource: Annotated[EnrichmentSource, Field(examples=["affinity-data"])]
     """
     The source of the data in this Field (if it is enriched)
     """
-    valueType: Annotated[ValueType, Field(examples=['location'])]
+    valueType: Annotated[ValueType, Field(examples=["location"])]
     """
     The type of the data in this Field
     """
@@ -881,7 +884,7 @@ class ListModel(BaseModel):
     """
     The unique identifier for the list
     """
-    name: Annotated[str, Field(examples=['All companies'])]
+    name: Annotated[str, Field(examples=["All companies"])]
     """
     The name of the list
     """
@@ -916,7 +919,7 @@ class ListEntry(BaseModel):
     """
     The ID of the list that this list entry belongs to
     """
-    createdAt: Annotated[datetime, Field(examples=['2023-01-01T00:00:00Z'])]
+    createdAt: Annotated[datetime, Field(examples=["2023-01-01T00:00:00Z"])]
     """
     The date that the list entry was created
     """
@@ -941,9 +944,9 @@ class ListEntryPaged(BaseModel):
 
 
 class Type4(Enum):
-    COMPANY = 'company'
-    OPPORTUNITY = 'opportunity'
-    PERSON = 'person'
+    COMPANY = "company"
+    OPPORTUNITY = "opportunity"
+    PERSON = "person"
 
 
 class ListWithType(BaseModel):
@@ -951,7 +954,7 @@ class ListWithType(BaseModel):
     """
     The unique identifier for the list
     """
-    name: Annotated[str, Field(examples=['All companies'])]
+    name: Annotated[str, Field(examples=["All companies"])]
     """
     The name of the list
     """
@@ -967,7 +970,7 @@ class ListWithType(BaseModel):
     """
     Whether or not the list is public
     """
-    type: Annotated[Type4, Field(examples=['company'])]
+    type: Annotated[Type4, Field(examples=["company"])]
     """
     The entity type for this list
     """
@@ -986,11 +989,11 @@ class CompanyListEntry(BaseModel):
     """
     The list entry's unique identifier
     """
-    type: Annotated[Literal['company'], Field(examples=['company'])]
+    type: Annotated[Literal["company"], Field(examples=["company"])]
     """
     The entity type for this list entry
     """
-    createdAt: Annotated[datetime, Field(examples=['2023-01-01T00:00:00Z'])]
+    createdAt: Annotated[datetime, Field(examples=["2023-01-01T00:00:00Z"])]
     """
     The date that the list entry was created
     """
@@ -1008,7 +1011,7 @@ class OpportunityWithFields(BaseModel):
     """
     The unique identifier for the opportunity
     """
-    name: Annotated[str, Field(examples=['Acme Upsell $10k'])]
+    name: Annotated[str, Field(examples=["Acme Upsell $10k"])]
     """
     The name of the opportunity
     """
@@ -1027,11 +1030,11 @@ class OpportunityListEntry(BaseModel):
     """
     The list entry's unique identifier
     """
-    type: Annotated[Literal['opportunity'], Field(examples=['opportunity'])]
+    type: Annotated[Literal["opportunity"], Field(examples=["opportunity"])]
     """
     The entity type for this list entry
     """
-    createdAt: Annotated[datetime, Field(examples=['2023-01-01T00:00:00Z'])]
+    createdAt: Annotated[datetime, Field(examples=["2023-01-01T00:00:00Z"])]
     """
     The date that the list entry was created
     """
@@ -1045,8 +1048,8 @@ class OpportunityListEntry(BaseModel):
 
 
 class Type5(Enum):
-    INTERNAL = 'internal'
-    EXTERNAL = 'external'
+    INTERNAL = "internal"
+    EXTERNAL = "external"
 
 
 class Person(BaseModel):
@@ -1054,27 +1057,28 @@ class Person(BaseModel):
     """
     The persons's unique identifier
     """
-    firstName: Annotated[str, Field(examples=['Jane'])]
+    firstName: Annotated[str, Field(examples=["Jane"])]
     """
     The person's first name
     """
-    lastName: Annotated[str | None, Field(examples=['Doe'])] = None
+    lastName: Annotated[str | None, Field(examples=["Doe"])] = None
     """
     The person's last name
     """
     primaryEmailAddress: Annotated[
-        SkipValidation[EmailStr] | None, Field(examples=['jane.doe@acme.co'])
+        SkipValidation[EmailStr] | None, Field(examples=["jane.doe@acme.co"])
     ] = None
     """
     The person's primary email address
     """
     emailAddresses: Annotated[
-        List[SkipValidation[EmailStr]], Field(examples=[['jane.doe@acme.co', 'janedoe@gmail.com']])
+        List[SkipValidation[EmailStr]],
+        Field(examples=[["jane.doe@acme.co", "janedoe@gmail.com"]]),
     ]
     """
     All of the person's email addresses
     """
-    type: Annotated[Type5, Field(examples=['internal'])]
+    type: Annotated[Type5, Field(examples=["internal"])]
     """
     The person's type
     """
@@ -1089,11 +1093,11 @@ class PersonListEntry(BaseModel):
     """
     The list entry's unique identifier
     """
-    type: Annotated[Literal['person'], Field(examples=['person'])]
+    type: Annotated[Literal["person"], Field(examples=["person"])]
     """
     The entity type for this list entry
     """
-    createdAt: Annotated[datetime, Field(examples=['2023-01-01T00:00:00Z'])]
+    createdAt: Annotated[datetime, Field(examples=["2023-01-01T00:00:00Z"])]
     """
     The date that the list entry was created
     """
@@ -1112,50 +1116,50 @@ class ListEntryWithEntity(
     root: Annotated[
         CompanyListEntry | OpportunityListEntry | PersonListEntry,
         Field(
-            discriminator='type',
+            discriminator="type",
             examples=[
                 {
-                    'createdAt': '2023-01-01 00:00:00.000000000 Z',
-                    'creatorId': 1,
-                    'id': 1,
-                    'type': 'company',
-                    'entity': {
-                        'domain': 'acme.co',
-                        'name': 'Acme',
-                        'isGlobal': True,
-                        'domains': ['acme.co'],
-                        'id': 1,
-                        'fields': [
+                    "createdAt": "2023-01-01 00:00:00.000000000 Z",
+                    "creatorId": 1,
+                    "id": 1,
+                    "type": "company",
+                    "entity": {
+                        "domain": "acme.co",
+                        "name": "Acme",
+                        "isGlobal": True,
+                        "domains": ["acme.co"],
+                        "id": 1,
+                        "fields": [
                             {
-                                'enrichmentSource': 'affinity-data',
-                                'name': 'Location',
-                                'id': 'affinity-data-location',
-                                'type': 'enriched',
-                                'value': {
-                                    'data': {
-                                        'continent': 'North America',
-                                        'country': 'United States',
-                                        'streetAddress': '170 Columbus Ave',
-                                        'city': 'San Francisco',
-                                        'state': 'California',
+                                "enrichmentSource": "affinity-data",
+                                "name": "Location",
+                                "id": "affinity-data-location",
+                                "type": "enriched",
+                                "value": {
+                                    "data": {
+                                        "continent": "North America",
+                                        "country": "United States",
+                                        "streetAddress": "170 Columbus Ave",
+                                        "city": "San Francisco",
+                                        "state": "California",
                                     },
-                                    'type': 'location',
+                                    "type": "location",
                                 },
                             },
                             {
-                                'enrichmentSource': 'affinity-data',
-                                'name': 'Location',
-                                'id': 'affinity-data-location',
-                                'type': 'enriched',
-                                'value': {
-                                    'data': {
-                                        'continent': 'North America',
-                                        'country': 'United States',
-                                        'streetAddress': '170 Columbus Ave',
-                                        'city': 'San Francisco',
-                                        'state': 'California',
+                                "enrichmentSource": "affinity-data",
+                                "name": "Location",
+                                "id": "affinity-data-location",
+                                "type": "enriched",
+                                "value": {
+                                    "data": {
+                                        "continent": "North America",
+                                        "country": "United States",
+                                        "streetAddress": "170 Columbus Ave",
+                                        "city": "San Francisco",
+                                        "state": "California",
                                     },
-                                    'type': 'location',
+                                    "type": "location",
                                 },
                             },
                         ],
@@ -1175,9 +1179,9 @@ class ListEntryWithEntityPaged(BaseModel):
 
 
 class Type6(Enum):
-    SHEET = 'sheet'
-    BOARD = 'board'
-    DASHBOARD = 'dashboard'
+    SHEET = "sheet"
+    BOARD = "board"
+    DASHBOARD = "dashboard"
 
 
 class SavedView(BaseModel):
@@ -1185,15 +1189,15 @@ class SavedView(BaseModel):
     """
     The saved view's unique identifier
     """
-    name: Annotated[str, Field(examples=['my interesting companies'])]
+    name: Annotated[str, Field(examples=["my interesting companies"])]
     """
     The saved view's name
     """
-    type: Annotated[Type6, Field(examples=['sheet'])]
+    type: Annotated[Type6, Field(examples=["sheet"])]
     """
     The type for this saved view
     """
-    createdAt: Annotated[datetime, Field(examples=['2023-01-01T00:00:00Z'])]
+    createdAt: Annotated[datetime, Field(examples=["2023-01-01T00:00:00Z"])]
     """
     The date that the saved view was created
     """
@@ -1212,7 +1216,7 @@ class Opportunity(BaseModel):
     """
     The unique identifier for the opportunity
     """
-    name: Annotated[str, Field(examples=['Acme Upsell $10k'])]
+    name: Annotated[str, Field(examples=["Acme Upsell $10k"])]
     """
     The name of the opportunity
     """

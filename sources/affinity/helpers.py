@@ -6,8 +6,10 @@ from typing import NamedTuple
 
 from .settings import API_BASE
 
+
 class ListReference(NamedTuple):
-    """ Represents a reference to an Affinity list, optionally a view """
+    """Represents a reference to an Affinity list, optionally a view"""
+
     list_id: int
     """
     The ID of the list
@@ -22,6 +24,7 @@ class ListReference(NamedTuple):
 
     def __repr__(self):
         return f"<List: {self.list_id}, View: {self.view_id}>"
+
 
 def generate_list_entries_path(list_ref: ListReference):
     is_view = list_ref.view_id is not None
