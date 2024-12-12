@@ -1,0 +1,140 @@
+diff --git a/sources/affinity/model/spec.json b/sources/affinity/model/spec.json
+index df150660..97c2863c 100644
+--- a/sources/affinity/model/spec.json
++++ b/sources/affinity/model/spec.json
+@@ -1635,7 +1635,6 @@
+           "emailAddress": {
+             "description": "The user's email address",
+             "type": "string",
+-            "format": "email",
+             "examples": [
+               "john.smith@contoso.com"
+             ]
+@@ -1879,7 +1878,6 @@
+               "string",
+               "null"
+             ],
+-            "format": "hostname",
+             "examples": [
+               "acme.co"
+             ]
+@@ -2163,7 +2161,6 @@
+               "string",
+               "null"
+             ],
+-            "format": "email",
+             "examples": [
+               "jane.doe@acme.co"
+             ]
+@@ -2258,7 +2255,6 @@
+               "string",
+               "null"
+             ],
+-            "format": "email",
+             "examples": [
+               "john.smith@contoso.com"
+             ]
+@@ -2787,6 +2783,18 @@
+           "type"
+         ]
+       },
++      "LinkedInEntry": {
++        "title": "LinkedInEntry",
++        "type": "object",
++        "properties": {
++          "link": {
++            "type": "string"
++          },
++          "text": {
++            "type": "string"
++          }
++        }
++      },
+       "TextsValue": {
+         "title": "TextsValue",
+         "type": "object",
+@@ -2798,13 +2806,23 @@
+           },
+           "data": {
+             "description": "The value for many strings",
+-            "type": [
+-              "array",
+-              "null"
+-            ],
+-            "items": {
+-              "type": "string"
+-            }
++            "oneOf":[
++                {
++                    "type": "array",
++                    "items": {
++                        "$ref":"#/components/schemas/LinkedInEntry"
++                    }
++                },
++                {
++                    "type": "array",
++                    "items": {
++                        "type": "string"
++                    }
++                },
++                {
++                    "type": "null"
++                }
++            ]
+           }
+         },
+         "required": [
+@@ -3000,7 +3018,6 @@
+               "string",
+               "null"
+             ],
+-            "format": "hostname",
+             "examples": [
+               "acme.co"
+             ]
+@@ -3009,8 +3026,7 @@
+             "description": "All of the company's domains",
+             "type": "array",
+             "items": {
+-              "type": "string",
+-              "format": "hostname"
++              "type": "string"
+             },
+             "examples": [
+               [
+@@ -3095,7 +3111,7 @@
+               "string",
+               "null"
+             ],
+-            "format": "url",
++            "format": "uri",
+             "examples": [
+               "https://api.affinity.co/v2/foo?cursor=ICAgICAgYmVmb3JlOjo6Nw"
+             ]
+@@ -3106,7 +3122,7 @@
+               "string",
+               "null"
+             ],
+-            "format": "url",
++            "format": "uri",
+             "examples": [
+               "https://api.affinity.co/v2/foo?cursor=ICAgICAgIGFmdGVyOjo6NA"
+             ]
+@@ -4120,7 +4136,6 @@
+               "string",
+               "null"
+             ],
+-            "format": "email",
+             "examples": [
+               "jane.doe@acme.co"
+             ]
+@@ -4129,8 +4144,7 @@
+             "description": "All of the person's email addresses",
+             "type": "array",
+             "items": {
+-              "type": "string",
+-              "format": "email"
++              "type": "string"
+             },
+             "examples": [
+               [

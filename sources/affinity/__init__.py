@@ -10,12 +10,17 @@ from dlt.sources import DltResource
 from dlt.extract.items import DataItemWithMeta
 
 
-from dlt.sources.helpers.rest_client.auth import BearerTokenAuth
+from dlt.sources.helpers.rest_client.auth import BearerTokenAuth, HttpBasicAuth
 from dlt.sources.helpers.rest_client.client import RESTClient, Response
-from dlt.sources.helpers.rest_client.paginators import JSONLinkPaginator
+from dlt.sources.helpers.rest_client.paginators import (
+    JSONLinkPaginator,
+    JSONResponseCursorPaginator,
+)
 from dlt.common.logger import log_level, is_logging
 
 from pydantic import BaseModel, TypeAdapter
+
+from .model.v1 import Note
 
 from .model import *
 from .helpers import ListReference, generate_list_entries_path
@@ -23,18 +28,18 @@ from .settings import API_BASE, V2_PREFIX
 
 import logging
 
-if is_logging():
-    # Configure the root logger
+if is_logging() or True:
     logging.basicConfig(
         level=logging.DEBUG,  # Set the global logging level to DEBUG
         format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",  # Log format
     )
 
-    logging.getLogger("urllib3").setLevel(log_level())
+    logging.getLogger("urllib3").setLevel(logging.DEBUG or log_level())
 
 LISTS_LITERAL = Literal["lists"]
 ENTITY = Literal["companies", "persons", "opportunities"]
-MAX_PAGE_LIMIT = 100
+MAX_PAGE_LIMIT_V1 = 500
+MAX_PAGE_LIMIT_V2 = 100
 
 
 class Error(
@@ -67,6 +72,7 @@ class Error(
 class Errors(BaseModel):
     errors: List[Error]
 
+
 error_adapter = TypeAdapter(
     AuthenticationErrors
     | NotFoundErrors
@@ -74,6 +80,7 @@ error_adapter = TypeAdapter(
     | ValidationErrors
     | Errors
 )
+
 
 def raise_if_error(response: Response, *args: Any, **kwargs: Any) -> None:
     if response.status_code < 200 or response.status_code >= 300:
@@ -84,6 +91,7 @@ def raise_if_error(response: Response, *args: Any, **kwargs: Any) -> None:
 
 hooks = {"response": [raise_if_error]}
 list_adapter = TypeAdapter(list[ListEntryWithEntity])
+note_adapter = TypeAdapter(list[Note])
 
 
 def get_entity_data_class(entity: ENTITY | LISTS_LITERAL):
@@ -130,7 +138,7 @@ def __create_id_resource(
         yield from (
             list_adapter.validate_python(entities)
             for entities in rest_client.paginate(
-                entity, params={"limit": MAX_PAGE_LIMIT}, hooks=hooks
+                entity, params={"limit": MAX_PAGE_LIMIT_V2}, hooks=hooks
             )
         )
 
@@ -149,6 +157,16 @@ def get_v2_rest_client(api_key: str):
     )
 
 
+def get_v1_rest_client(api_key: str):
+    return RESTClient(
+        base_url=API_BASE,
+        auth=HttpBasicAuth("", api_key),
+        paginator=JSONResponseCursorPaginator(
+            cursor_path="next_page_token", cursor_param="page_token"
+        ),
+    )
+
+
 @dlt.source(name="affinity")
 def source(
     list_refs: List[ListReference] = field(default_factory=list),
@@ -157,10 +175,34 @@ def source(
 
     return (
         companies,
+        notes,
         persons,
         opportunities,
         lists,
         *list_resources,
+    )
+
+
+@dlt.resource(
+    primary_key="id",
+    # using the pydantic model here means that the table nesting is not respected
+    # columns=Note,
+    max_table_nesting=1,
+    write_disposition="replace",
+)
+def notes(
+    api_key: str = dlt.secrets["affinity_api_key"],
+):
+    rest_client = get_v1_rest_client(api_key)
+
+    yield from (
+        note_adapter.validate_python(notes)
+        for notes in rest_client.paginate(
+            "notes",
+            params={
+                "page_size": MAX_PAGE_LIMIT_V1,
+            },
+        )
     )
 
 
@@ -232,7 +274,7 @@ def process_and_yield_fields(
                         table_name=f"interactions_{interaction.type}",
                         write_disposition="merge",
                         primary_key="id",
-                        merge_key="id"
+                        merge_key="id",
                     ),
                     create_table_variant=True,
                 )
@@ -269,7 +311,6 @@ def __create_entity_resource(entity_name: ENTITY) -> DltResource:
     ) -> Iterable[TDataItem]:
         rest_client = get_v2_rest_client(api_key)
 
-
         # TODO: Workaround for the fact that when `add_limit` is used, the yielded entities
         # become dicts instead of first-class entities
         def get_id(obj):
@@ -277,12 +318,11 @@ def __create_entity_resource(entity_name: ENTITY) -> DltResource:
                 return obj.get("id")
             return getattr(obj, "id", None)
 
-
         ids = [get_id(x) for x in entity_arr]
         response = rest_client.get(
             entity_name,
             params={
-                # "limit": len(ids),
+                "limit": len(ids),
                 "ids": ids,
                 "fieldTypes": [
                     Type2.ENRICHED.value,
@@ -310,6 +350,7 @@ persons = __create_entity_resource("persons")
 opportunities = __create_id_resource("opportunities", False)
 lists = __create_id_resource("lists", False)
 
+
 def __create_list_entries_resource(list_ref: ListReference):
     name = f"lists-{list_ref}-entries"
     endpoint = generate_list_entries_path(list_ref)
@@ -331,7 +372,7 @@ def __create_list_entries_resource(list_ref: ListReference):
             for entities in rest_client.paginate(
                 endpoint,
                 params={
-                    "limit": MAX_PAGE_LIMIT,
+                    "limit": MAX_PAGE_LIMIT_V2,
                     "fieldTypes": [
                         Type2.ENRICHED.value,
                         Type2.GLOBAL_.value,
