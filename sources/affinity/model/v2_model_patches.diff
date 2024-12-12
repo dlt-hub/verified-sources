@@ -1,7 +1,7 @@
-diff --git a/sources/affinity/model/__init__.py b/sources/affinity/model/__init__.py
+diff --git a/sources/affinity/model/v2.py b/sources/affinity/model/v2.py
 index 76cdeeef..06e64771 100644
---- a/sources/affinity/model/__init__.py
-+++ b/sources/affinity/model/__init__.py
+--- a/sources/affinity/model/v2.py
++++ b/sources/affinity/model/v2.py
 @@ -278,7 +278,7 @@ class DropdownsValue(MyBaseModel):
      """
      The type of value

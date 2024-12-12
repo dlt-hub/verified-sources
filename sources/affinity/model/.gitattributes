@@ -1,2 +1,2 @@
-__init__.py linguist-generated=true
-*.json linguist-vendored=true
+v2.py linguist-generated=true
+*_spec.json linguist-vendored=true

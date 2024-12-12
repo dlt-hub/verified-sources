@@ -5,8 +5,8 @@ set -euo pipefail
 # TODO: This is currently not fully generating a valid model,
 # due to https://github.com/koxudaxi/datamodel-code-generator/pull/2216
 datamodel-codegen \
-    --input spec.json \
-    --output __init__.py \
+    --input v2_spec.json \
+    --output v2.py \
     --output-model-type pydantic_v2.BaseModel \
     --use-annotated \
     --use-union-operator \
@@ -15,7 +15,7 @@ datamodel-codegen \
     --input-file-type openapi \
     --field-constraints \
     --use-double-quotes \
-    --base-class .base_model.MyBaseModel \
+    --base-class .MyBaseModel \
     --disable-timestamp
 
-git apply ./after_generation.diff
+git apply ./v2_model_patches.diff

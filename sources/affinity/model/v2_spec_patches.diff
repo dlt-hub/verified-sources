@@ -1,7 +1,7 @@
-diff --git a/sources/affinity/model/spec.json b/sources/affinity/model/spec.json
+diff --git a/sources/affinity/model/v2_spec.json b/sources/affinity/model/v2_spec.json
 index df150660..97c2863c 100644
---- a/sources/affinity/model/spec.json
-+++ b/sources/affinity/model/spec.json
+--- a/sources/affinity/model/v2_spec.json
++++ b/sources/affinity/model/v2_spec.json
 @@ -1635,7 +1635,6 @@
            "emailAddress": {
              "description": "The user's email address",
