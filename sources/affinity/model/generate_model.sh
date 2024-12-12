@@ -15,4 +15,7 @@ datamodel-codegen \
     --input-file-type openapi \
     --field-constraints \
     --use-double-quotes \
-    --base-class .base_model.MyBaseModel
+    --base-class .base_model.MyBaseModel \
+    --disable-timestamp
+
+git apply ./after_generation.diff
