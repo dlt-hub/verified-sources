@@ -15,7 +15,7 @@ from dlt.sources.helpers.rest_client.client import RESTClient, Response
 from dlt.sources.helpers.rest_client.paginators import JSONLinkPaginator
 from dlt.common.logger import log_level, is_logging
 
-from pydantic import ConfigDict, TypeAdapter
+from pydantic import BaseModel, TypeAdapter
 
 from .model import *
 from .helpers import ListReference, generate_list_entries_path

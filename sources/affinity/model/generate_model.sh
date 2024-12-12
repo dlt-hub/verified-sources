@@ -13,6 +13,6 @@ datamodel-codegen \
     --capitalise-enum-members \
     --use-field-description \
     --input-file-type openapi \
-    --additional-imports pydantic.model_serializer,pydantic.SkipValidation \
     --field-constraints \
-    --use-double-quotes
+    --use-double-quotes \
+    --base-class .base_model.MyBaseModel
