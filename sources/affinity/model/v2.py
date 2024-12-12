@@ -5,11 +5,11 @@ from __future__ import annotations
 
 from datetime import datetime
 from enum import Enum
-from typing import List, Literal
+from typing import Annotated, List, Literal
 
-import MyBaseModel
 from pydantic import AnyUrl, Field, RootModel, constr
-from typing_extensions import Annotated
+
+from . import MyBaseModel
 
 
 class BadRequestError(MyBaseModel):

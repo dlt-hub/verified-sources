@@ -22,7 +22,7 @@ from pydantic import BaseModel, TypeAdapter
 
 from .model.v1 import Note
 
-from .model import *
+from .model.v2 import *
 from .helpers import ListReference, generate_list_entries_path
 from .settings import API_BASE, V2_PREFIX
 
@@ -189,6 +189,7 @@ def source(
     # columns=Note,
     max_table_nesting=1,
     write_disposition="replace",
+    parallelized=True,
 )
 def notes(
     api_key: str = dlt.secrets["affinity_api_key"],
