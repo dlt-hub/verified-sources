@@ -117,8 +117,7 @@ def __create_id_resource(
     @dlt.resource(
         write_disposition="replace",
         primary_key="id",
-        # Blocked via https://github.com/dlt-hub/dlt/pull/2109
-        # columns=datacls,
+        columns=datacls,
         name=name,
         parallelized=True,
     )
@@ -169,17 +168,15 @@ def mark_dropdown_item(
     dropdown_item: Dropdown | RankedDropdown, field: FieldModel
 ) -> DataItemWithMeta:
     return dlt.mark.with_hints(
-        item={"id": dropdown_item.dropdownOptionId}
-        | dropdown_item.model_dump(exclude={"dropdownOptionId"}),
+        item=dropdown_item.model_dump(),
         hints=dlt.mark.make_hints(
             table_name=f"dropdown_options_{field.id}",
             write_disposition="merge",
-            primary_key="id",
-            merge_key="id",
-            # Blocked via https://github.com/dlt-hub/dlt/pull/2109
-            # columns=type(dropdown_item),
+            primary_key="dropdownOptionId",
+            merge_key="dropdownOptionId",
+            columns=type(dropdown_item),
         ),
-        # create_table_variant=True,
+        create_table_variant=True,
     )
 
 
@@ -198,7 +195,7 @@ def process_and_yield_fields(
                 primary_key="id",
                 merge_key="id",
             ),
-            # create_table_variant=True,
+            create_table_variant=True,
         )
         new_column = (
             f"{field.id}_{field.name}" if field.id.startswith("field-") else field.id
@@ -235,8 +232,9 @@ def process_and_yield_fields(
                         table_name=f"interactions_{interaction.type}",
                         write_disposition="merge",
                         primary_key="id",
+                        merge_key="id"
                     ),
-                    # create_table_variant=True,
+                    create_table_variant=True,
                 )
             case PersonValue() | CompanyValue():
                 ret[new_column] = value.data.id if value.data else None
@@ -263,7 +261,6 @@ def __create_entity_resource(entity_name: ENTITY) -> DltResource:
         primary_key="id",
         merge_key="id",
         max_table_nesting=3,
-        # table_name=entity
         name=name,
     )
     def __entities(
