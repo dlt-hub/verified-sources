@@ -67,22 +67,23 @@ class Error(
 class Errors(BaseModel):
     errors: List[Error]
 
+error_adapter = TypeAdapter(
+    AuthenticationErrors
+    | NotFoundErrors
+    | AuthorizationErrors
+    | ValidationErrors
+    | Errors
+)
 
 def raise_if_error(response: Response, *args: Any, **kwargs: Any) -> None:
     if response.status_code < 200 or response.status_code >= 300:
-        error_adapter = TypeAdapter(
-            AuthenticationErrors
-            | NotFoundErrors
-            | AuthorizationErrors
-            | ValidationErrors
-            | Errors
-        )
         error = error_adapter.validate_json(response.text)
         response.reason = "\n".join([e.message for e in error.errors])
         response.raise_for_status()
 
 
 hooks = {"response": [raise_if_error]}
+list_adapter = TypeAdapter(list[ListEntryWithEntity])
 
 
 def get_entity_data_class(entity: ENTITY | LISTS_LITERAL):
@@ -312,7 +313,6 @@ persons = __create_entity_resource("persons")
 opportunities = __create_id_resource("opportunities", False)
 lists = __create_id_resource("lists", False)
 
-
 def __create_list_entries_resource(list_ref: ListReference):
     name = f"lists-{list_ref}-entries"
     endpoint = generate_list_entries_path(list_ref)
@@ -329,8 +329,6 @@ def __create_list_entries_resource(list_ref: ListReference):
         api_key: str = dlt.secrets["affinity_api_key"],
     ) -> Iterable[TDataItem]:
         rest_client = get_v2_rest_client(api_key)
-        list_adapter = TypeAdapter(list[ListEntryWithEntity])
-
         for list_entries in (
             list_adapter.validate_python(entities)
             for entities in rest_client.paginate(
