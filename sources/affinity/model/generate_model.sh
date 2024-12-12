@@ -14,4 +14,5 @@ datamodel-codegen \
     --use-field-description \
     --input-file-type openapi \
     --additional-imports pydantic.model_serializer,pydantic.SkipValidation \
-    --field-constraints
+    --field-constraints \
+    --use-double-quotes
