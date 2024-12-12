@@ -9,6 +9,7 @@ from enum import Enum
 from typing import List, Literal
 
 from pydantic import (
+    AnyUrl,
     BaseModel,
     EmailStr,
     Field,
@@ -355,7 +356,7 @@ class PersonData(BaseModel):
     The person's last name
     """
     primaryEmailAddress: Annotated[
-        EmailStr | None, Field(examples=['jane.doe@acme.co'])
+        SkipValidation[EmailStr] | None, Field(examples=['jane.doe@acme.co'])
     ] = None
     """
     The person's primary email address
@@ -757,7 +758,7 @@ class Company(BaseModel):
 
 class Pagination(BaseModel):
     prevUrl: Annotated[
-        str | None,
+        AnyUrl | None,
         Field(
             examples=['https://api.affinity.co/v2/foo?cursor=ICAgICAgYmVmb3JlOjo6Nw']
         ),
@@ -766,7 +767,7 @@ class Pagination(BaseModel):
     URL for the previous page
     """
     nextUrl: Annotated[
-        str | None,
+        AnyUrl | None,
         Field(
             examples=['https://api.affinity.co/v2/foo?cursor=ICAgICAgIGFmdGVyOjo6NA']
         ),
@@ -1062,13 +1063,13 @@ class Person(BaseModel):
     The person's last name
     """
     primaryEmailAddress: Annotated[
-        EmailStr | None, Field(examples=['jane.doe@acme.co'])
+        SkipValidation[EmailStr] | None, Field(examples=['jane.doe@acme.co'])
     ] = None
     """
     The person's primary email address
     """
     emailAddresses: Annotated[
-        List[EmailStr], Field(examples=[['jane.doe@acme.co', 'janedoe@gmail.com']])
+        List[SkipValidation[EmailStr]], Field(examples=[['jane.doe@acme.co', 'janedoe@gmail.com']])
     ]
     """
     All of the person's email addresses
