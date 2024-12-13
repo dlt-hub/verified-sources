@@ -2,8 +2,7 @@
 
 from dataclasses import field
 import typing as t
-from typing import Any, Dict, Generator, Iterable, List, Sequence, Union
-
+from typing import Any, Dict, Generator, Iterable, List, Sequence
 import dlt
 from dlt.common.typing import TDataItem
 from dlt.sources import DltResource
@@ -185,8 +184,7 @@ def source(
 
 @dlt.resource(
     primary_key="id",
-    # using the pydantic model here means that the table nesting is not respected
-    # columns=Note,
+    columns=Note,
     max_table_nesting=1,
     write_disposition="replace",
     parallelized=True,

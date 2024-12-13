@@ -1,7 +1,9 @@
 from enum import IntEnum
 from pydantic import BaseModel, ConfigDict, Field
-from typing import List, Union, Annotated
+from typing import ClassVar, List, Annotated
 from datetime import datetime
+
+from dlt.common.libs.pydantic import DltConfig
 
 
 class NoteType(IntEnum):
@@ -27,6 +29,7 @@ class InteractionType(IntEnum):
 class Note(
     BaseModel,
 ):
+    dlt_config: ClassVar[DltConfig] = {"skip_nested_types": True}
     model_config = ConfigDict(
         json_encoders={InteractionType: lambda x: x.name, NoteType: lambda x: x.name}
     )
