@@ -11,7 +11,13 @@ from dlt.common.logger import log_level, is_logging
 
 from pydantic import TypeAdapter
 
-from .rest_client import get_v1_rest_client, get_v2_rest_client, hooks
+from .rest_client import (
+    get_v1_rest_client,
+    get_v2_rest_client,
+    hooks,
+    MAX_PAGE_LIMIT_V1,
+    MAX_PAGE_LIMIT_V2,
+)
 from .type_adapters import note_adapter, list_adapter
 from .model.v1 import Note
 from .model.v2 import *
@@ -28,8 +34,6 @@ if is_logging() or True:
 
 LISTS_LITERAL = Literal["lists"]
 ENTITY = Literal["companies", "persons", "opportunities"]
-MAX_PAGE_LIMIT_V1 = 500
-MAX_PAGE_LIMIT_V2 = 100
 
 
 def get_entity_data_class(entity: ENTITY | LISTS_LITERAL):

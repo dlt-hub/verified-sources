@@ -38,3 +38,5 @@ def raise_if_error(response: Response, *args: Any, **kwargs: Any) -> None:
 
 
 hooks = {"response": [raise_if_error]}
+MAX_PAGE_LIMIT_V1 = 500
+MAX_PAGE_LIMIT_V2 = 100
