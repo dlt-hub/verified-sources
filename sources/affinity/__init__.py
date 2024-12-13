@@ -1,31 +1,22 @@
 """A source loading entities and lists from Affinity CRM (affinity.co)"""
 
 from dataclasses import field
-import typing as t
 from typing import Any, Dict, Generator, Iterable, List, Sequence
+import logging
 import dlt
 from dlt.common.typing import TDataItem
 from dlt.sources import DltResource
 from dlt.extract.items import DataItemWithMeta
-
-
-from dlt.sources.helpers.rest_client.auth import BearerTokenAuth, HttpBasicAuth
-from dlt.sources.helpers.rest_client.client import RESTClient, Response
-from dlt.sources.helpers.rest_client.paginators import (
-    JSONLinkPaginator,
-    JSONResponseCursorPaginator,
-)
 from dlt.common.logger import log_level, is_logging
 
-from pydantic import BaseModel, TypeAdapter
+from pydantic import TypeAdapter
 
+from .rest_client import get_v1_rest_client, get_v2_rest_client, hooks
+from .type_adapters import note_adapter, list_adapter
 from .model.v1 import Note
-
 from .model.v2 import *
 from .helpers import ListReference, generate_list_entries_path
-from .settings import API_BASE, V2_PREFIX
 
-import logging
 
 if is_logging() or True:
     logging.basicConfig(
@@ -39,58 +30,6 @@ LISTS_LITERAL = Literal["lists"]
 ENTITY = Literal["companies", "persons", "opportunities"]
 MAX_PAGE_LIMIT_V1 = 500
 MAX_PAGE_LIMIT_V2 = 100
-
-
-class Error(
-    RootModel[
-        BadRequestError
-        | ConflictError
-        | MethodNotAllowedError
-        | NotAcceptableError
-        | NotImplementedError
-        | RateLimitError
-        | ServerError
-        | UnprocessableEntityError
-        | UnsupportedMediaTypeError
-    ]
-):
-    root: Annotated[
-        BadRequestError
-        | ConflictError
-        | MethodNotAllowedError
-        | NotAcceptableError
-        | NotImplementedError
-        | RateLimitError
-        | ServerError
-        | UnprocessableEntityError
-        | UnsupportedMediaTypeError,
-        Field(discriminator="code"),
-    ]
-
-
-class Errors(BaseModel):
-    errors: List[Error]
-
-
-error_adapter = TypeAdapter(
-    AuthenticationErrors
-    | NotFoundErrors
-    | AuthorizationErrors
-    | ValidationErrors
-    | Errors
-)
-
-
-def raise_if_error(response: Response, *args: Any, **kwargs: Any) -> None:
-    if response.status_code < 200 or response.status_code >= 300:
-        error = error_adapter.validate_json(response.text)
-        response.reason = "\n".join([e.message for e in error.errors])
-        response.raise_for_status()
-
-
-hooks = {"response": [raise_if_error]}
-list_adapter = TypeAdapter(list[ListEntryWithEntity])
-note_adapter = TypeAdapter(list[Note])
 
 
 def get_entity_data_class(entity: ENTITY | LISTS_LITERAL):
@@ -145,25 +84,6 @@ def __create_id_resource(
     __ids.__name__ = name
     __ids.__qualname__ = name
     return __ids
-
-
-def get_v2_rest_client(api_key: str):
-    return RESTClient(
-        base_url=f"{API_BASE}{V2_PREFIX}",
-        auth=BearerTokenAuth(api_key),
-        data_selector="data",
-        paginator=JSONLinkPaginator("pagination.nextUrl"),
-    )
-
-
-def get_v1_rest_client(api_key: str):
-    return RESTClient(
-        base_url=API_BASE,
-        auth=HttpBasicAuth("", api_key),
-        paginator=JSONResponseCursorPaginator(
-            cursor_path="next_page_token", cursor_param="page_token"
-        ),
-    )
 
 
 @dlt.source(name="affinity")
@@ -305,7 +225,7 @@ def __create_entity_resource(entity_name: ENTITY) -> DltResource:
         name=name,
     )
     def __entities(
-        entity_arr: t.List[Company | Person | Opportunity],
+        entity_arr: List[Company | Person | Opportunity],
         api_key: str = dlt.secrets["affinity_api_key"],
     ) -> Iterable[TDataItem]:
         rest_client = get_v2_rest_client(api_key)

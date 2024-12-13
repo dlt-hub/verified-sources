@@ -12,7 +12,7 @@ def load_affinity_data() -> None:
             ListReference(247888, 1869904),
         ]
     )
-    data.add_limit(1)
+    # data.add_limit(1)
     info = pipeline.run(data, refresh="drop_sources")
     print(info)
 
