@@ -7,8 +7,6 @@ main() {
     local python_version
     python_version=$(./current_python_major_minor.py)
 
-    # TODO: This is currently not fully generating a valid model,
-    # due to https://github.com/koxudaxi/datamodel-code-generator/pull/2216
     datamodel-codegen \
         --input v2_spec.json \
         --output v2.py \
@@ -24,7 +22,9 @@ main() {
         --disable-timestamp \
         --target-python-version "${python_version}"
 
-    git apply ./v2_model_patches.diff
+    git apply \
+        --allow-empty \
+        ./v2_model_patches.diff
 }
 
 main "$@"

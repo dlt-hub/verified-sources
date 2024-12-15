@@ -227,7 +227,7 @@ class CompaniesValue(MyBaseModel):
     """
     The type of value
     """
-    data: List[CompanyData]
+    data: List[CompanyData] | None
     """
     The values for many companies
     """
@@ -298,7 +298,7 @@ class FloatsValue(MyBaseModel):
     """
     The type of value
     """
-    data: List[float]
+    data: List[float] | None
     """
     The value for many numbers
     """
@@ -517,7 +517,7 @@ class LocationsValue(MyBaseModel):
     """
     The type of value
     """
-    data: List[Location]
+    data: List[Location] | None
     """
     The values for many locations
     """
@@ -536,7 +536,7 @@ class PersonsValue(MyBaseModel):
     """
     The type of value
     """
-    data: List[PersonData]
+    data: List[PersonData] | None
     """
     The values for many persons
     """
@@ -684,7 +684,9 @@ class FieldModel(MyBaseModel):
     """
     The field's type
     """
-    enrichmentSource: Annotated[EnrichmentSource, Field(examples=["affinity-data"])]
+    enrichmentSource: Annotated[
+        EnrichmentSource | None, Field(examples=["affinity-data"])
+    ]
     """
     The source of the data in this Field (if it is enriched)
     """
@@ -820,7 +822,9 @@ class FieldMetadata(MyBaseModel):
     """
     The field's type
     """
-    enrichmentSource: Annotated[EnrichmentSource, Field(examples=["affinity-data"])]
+    enrichmentSource: Annotated[
+        EnrichmentSource | None, Field(examples=["affinity-data"])
+    ]
     """
     The source of the data in this Field (if it is enriched)
     """
@@ -1129,7 +1133,7 @@ class ListEntryWithEntity(
 
 
 class ListEntryWithEntityPaged(MyBaseModel):
-    data: List[ListEntryWithEntity]
+    data: List[ListEntryWithEntity] | None
     """
     A page of ListEntryWithEntity results
     """

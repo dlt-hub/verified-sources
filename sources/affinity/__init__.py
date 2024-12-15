@@ -204,7 +204,7 @@ def process_and_yield_fields(
             case PersonValue() | CompanyValue():
                 ret[new_column] = value.data.id if value.data else None
             case PersonsValue() | CompaniesValue():
-                ret[f"{new_column}_id"] = [e.id for e in value.data]
+                ret[f"{new_column}_id"] = [e.id for e in value.data] if value.data else []
             case TextValue() | FloatValue() | TextValue() | TextsValue() | FloatsValue() | LocationValue() | LocationsValue():
                 ret[new_column] = value.data
             case _:

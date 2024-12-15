@@ -1,1 +1,1 @@
-datamodel-code-generator>=0.26.3
+datamodel-code-generator>=0.26.4

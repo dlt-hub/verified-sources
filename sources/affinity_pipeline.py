@@ -10,6 +10,9 @@ def load_affinity_data() -> None:
         list_refs=[
             ListReference(248283),
             ListReference(247888, 1869904),
+            ListReference(69224, 351112),
+            ListReference(126638, 1133940),
+            ListReference(157541, 831583)
         ]
     )
     # data.add_limit(1)
