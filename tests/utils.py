@@ -1,4 +1,5 @@
 import os
+import sys
 import platform
 import pytest
 from typing import Any, Iterator, List, Sequence, Dict, Optional, Set
@@ -6,21 +7,24 @@ from os import environ
 from unittest.mock import patch
 
 import dlt
-from dlt.common import json
+from dlt.common import json, known_env
 from dlt.common.data_types import py_type_to_sc_type
 from dlt.common.typing import DictStrAny, TDataItem
 from dlt.common.configuration.container import Container
-from dlt.common.configuration.specs.config_providers_context import (
-    ConfigProvidersContext,
-)
+from dlt.common.configuration.specs import PluggableRunContext
 from dlt.common.configuration.providers import (
     EnvironProvider,
     ConfigTomlProvider,
     SecretsTomlProvider,
 )
+from dlt.common.configuration.specs.pluggable_run_context import (
+    SupportsRunContext,
+)
+from dlt.common.runtime.run_context import DOT_DLT, RunContext
 from dlt.common.pipeline import LoadInfo, PipelineContext, ExtractInfo
 from dlt.common.storages import FileStorage
 from dlt.common.schema.typing import TTableSchema
+from dlt.common.utils import set_working_dir
 
 from dlt.pipeline.exceptions import SqlClientNotAvailable
 
@@ -46,37 +50,72 @@ def drop_pipeline() -> Iterator[None]:
 
 
 @pytest.fixture(autouse=True, scope="session")
-def test_config_providers() -> Iterator[ConfigProvidersContext]:
+def test_config_providers():
     """Creates set of config providers where tomls are loaded from tests/.dlt"""
     config_root = "./sources/.dlt"
-    ctx = ConfigProvidersContext()
-    ctx.providers.clear()
-    ctx.add_provider(EnvironProvider())
-    ctx.add_provider(
-        SecretsTomlProvider(project_dir=config_root, add_global_config=False)
-    )
-    ctx.add_provider(
-        ConfigTomlProvider(project_dir=config_root, add_global_config=False)
-    )
-    # replace in container
-    Container()[ConfigProvidersContext] = ctx
-    # extras work when container updated
-    ctx.add_extras()
+
+    # inject provider context so the original providers are restored at the end
+    def _initial_providers(self):
+        return [
+            EnvironProvider(),
+            SecretsTomlProvider(settings_dir=config_root),
+            ConfigTomlProvider(settings_dir=config_root),
+        ]
+
+    with patch(
+        "dlt.common.runtime.run_context.RunContext.initial_providers",
+        _initial_providers,
+    ):
+        Container()[PluggableRunContext].reload_providers()
+        yield
+
+
+class MockableRunContext(RunContext):
+    @property
+    def name(self) -> str:
+        return self._name
+
+    @property
+    def global_dir(self) -> str:
+        return self._global_dir
+
+    @property
+    def run_dir(self) -> str:
+        return os.environ.get(known_env.DLT_PROJECT_DIR, self._run_dir)
+
+    @property
+    def data_dir(self) -> str:
+        return os.environ.get(known_env.DLT_DATA_DIR, self._data_dir)
+
+    _name: str
+    _global_dir: str
+    _run_dir: str
+    _settings_dir: str
+    _data_dir: str
+
+    @classmethod
+    def from_context(cls, ctx: SupportsRunContext) -> "MockableRunContext":
+        cls_ = cls(ctx.run_dir)
+        cls_._name = ctx.name
+        cls_._global_dir = ctx.global_dir
+        cls_._run_dir = ctx.run_dir
+        cls_._settings_dir = ctx.settings_dir
+        cls_._data_dir = ctx.data_dir
+        return cls_
 
 
 @pytest.fixture(autouse=True)
 def patch_pipeline_working_dir() -> Iterator[None]:
     """Puts the pipeline working directory into test storage"""
-    try:
-        with patch(
-            "dlt.common.configuration.paths._get_user_home_dir"
-        ) as _get_home_dir:
-            _get_home_dir.return_value = os.path.abspath(TEST_STORAGE_ROOT)
-            yield
-    except ModuleNotFoundError:
-        with patch("dlt.common.pipeline._get_home_dir") as _get_home_dir:
-            _get_home_dir.return_value = os.path.abspath(TEST_STORAGE_ROOT)
-            yield
+    ctx = PluggableRunContext()
+    mock = MockableRunContext.from_context(ctx.context)
+    mock._global_dir = mock._data_dir = os.path.join(
+        os.path.abspath(TEST_STORAGE_ROOT), DOT_DLT
+    )
+    ctx.context = mock
+
+    with Container().injectable_context(ctx):
+        yield
 
 
 @pytest.fixture(autouse=True)
@@ -145,7 +184,7 @@ def clean_test_storage(
     if init_loader:
         from dlt.common.storages import LoadStorage
 
-        LoadStorage(True, "jsonl", LoadStorage.ALL_SUPPORTED_FILE_FORMATS)
+        LoadStorage(True, LoadStorage.ALL_SUPPORTED_FILE_FORMATS)
     return storage
 
 
@@ -278,7 +317,7 @@ def assert_schema_on_data(
     table_schema: TTableSchema,
     rows: List[Dict[str, Any]],
     requires_nulls: bool,
-    check_complex: bool,
+    check_json: bool,
 ) -> None:
     """Asserts that `rows` conform to `table_schema`. Fields and their order must conform to columns. Null values and
     python data types are checked.
@@ -300,13 +339,13 @@ def assert_schema_on_data(
                 columns_with_nulls.add(key)
                 continue
             expected_dt = table_columns[key]["data_type"]
-            # allow complex strings
-            if expected_dt == "complex":
-                if check_complex:
+            # allow json strings
+            if expected_dt == "json":
+                if check_json:
                     # NOTE: we expect a dict or a list here. simple types of null will fail the test
                     value = json.loads(value)
                 else:
-                    # skip checking complex types
+                    # skip checking json types
                     continue
             actual_dt = py_type_to_sc_type(type(value))
             assert actual_dt == expected_dt
