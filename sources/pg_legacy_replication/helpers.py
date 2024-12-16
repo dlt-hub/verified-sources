@@ -34,34 +34,18 @@ from psycopg2.extras import (
     StopReplication,
 )
 
-# Favoring 1.x over 0.5.x imports
-try:
-    from dlt.common.libs.sql_alchemy import Engine, MetaData, Table  # type: ignore[attr-defined]
-except ImportError:
-    from sqlalchemy import Engine, Table, MetaData
 
+from dlt.common.libs.sql_alchemy import Engine, MetaData, Table
 from sqlalchemy import Connection as ConnectionSqla, event
-
-try:
-    from dlt.sources.sql_database import (  # type: ignore[import-not-found]
-        ReflectionLevel,
-        TableBackend,
-        TQueryAdapter,
-        TTypeAdapter,
-        arrow_helpers as arrow,
-        engine_from_credentials,
-        sql_table,
-    )
-except ImportError:
-    from ..sql_database import (  # type: ignore[import-untyped]
-        sql_table,
-        engine_from_credentials,
-        TQueryAdapter,
-        TTypeAdapter,
-        ReflectionLevel,
-        TableBackend,
-        arrow_helpers as arrow,
-    )
+from dlt.sources.sql_database import (
+    ReflectionLevel,
+    TableBackend,
+    TQueryAdapter,
+    TTypeAdapter,
+    arrow_helpers as arrow,
+    engine_from_credentials,
+    sql_table,
+)
 
 from .pg_logicaldec_pb2 import Op, RowMessage, TypeInfo
 from .schema_types import _epoch_micros_to_datetime, _to_dlt_column_schema, _to_dlt_val
@@ -84,7 +68,7 @@ class SqlTableOptions(TypedDict, total=False):
     chunk_size: Optional[int]
     defer_table_reflect: Optional[bool]
     detect_precision_hints: Optional[bool]
-    included_columns: Optional[Sequence[str]]
+    included_columns: Optional[List[str]]
     metadata: Optional[MetaData]
     query_adapter_callback: Optional[TQueryAdapter]
     reflection_level: Optional[ReflectionLevel]

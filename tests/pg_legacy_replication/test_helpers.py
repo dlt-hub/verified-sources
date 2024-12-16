@@ -68,7 +68,7 @@ def test_compare_schemas():
                 "nullable": False,
             },
             "col7": {"name": "col7", "data_type": "binary", "nullable": False},
-            "col9": {"name": "col9", "data_type": "complex", "nullable": False},
+            "col9": {"name": "col9", "data_type": "json", "nullable": False},
             "col10": {"name": "col10", "data_type": "date", "nullable": False},
             "col11": {"name": "col11", "data_type": "time", "nullable": False},
             "col1_null": {
@@ -95,7 +95,7 @@ def test_compare_schemas():
             "col7_null": {"name": "col7_null", "data_type": "binary", "nullable": True},
             "col9_null": {
                 "name": "col9_null",
-                "data_type": "complex",
+                "data_type": "json",
                 "nullable": True,
             },
             "col10_null": {"name": "col10_null", "data_type": "date", "nullable": True},
@@ -165,7 +165,7 @@ def test_compare_schemas():
             "col5": {"name": "col5", "data_type": "text"},
             "col6": {"name": "col6", "data_type": "decimal"},
             "col7": {"name": "col7", "data_type": "binary"},
-            "col9": {"name": "col9", "data_type": "complex"},
+            "col9": {"name": "col9", "data_type": "json"},
             "col10": {"name": "col10", "data_type": "date"},
             "col11": {"name": "col11", "data_type": "time"},
             "col1_null": {"name": "col1_null", "data_type": "bigint", "precision": 64},
@@ -175,7 +175,7 @@ def test_compare_schemas():
             "col5_null": {"name": "col5_null", "data_type": "text"},
             "col6_null": {"name": "col6_null", "data_type": "decimal"},
             "col7_null": {"name": "col7_null", "data_type": "binary"},
-            "col9_null": {"name": "col9_null", "data_type": "complex"},
+            "col9_null": {"name": "col9_null", "data_type": "json"},
             "col10_null": {"name": "col10_null", "data_type": "date"},
             "col11_null": {"name": "col11_null", "data_type": "time"},
             "col1_precision": {

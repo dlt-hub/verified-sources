@@ -16,7 +16,7 @@ TABLE_ROW_ALL_DATA_TYPES = {
     "col7": b"binary data \n \r \x8e",
     # "col8": 2**56 + 92093890840,  # TODO: uncommment and make it work
     "col9": {
-        "complex": [1, 2, 3, "a"],
+        "json": [1, 2, 3, "a"],
         "link": (
             "?commen\ntU\nrn=urn%3Ali%3Acomment%3A%28acti\012 \6"
             " \\vity%3A69'08444473\n\n551163392%2C6n \r \x8e9085"
@@ -51,7 +51,7 @@ TABLE_UPDATE: List[TColumnSchema] = [
     {"name": "col6", "data_type": "decimal", "nullable": False},
     {"name": "col7", "data_type": "binary", "nullable": False},
     # {"name": "col8", "data_type": "wei", "nullable": False},
-    {"name": "col9", "data_type": "json", "nullable": False, "variant": True},  # type: ignore[typeddict-item]
+    {"name": "col9", "data_type": "json", "nullable": False, "variant": True},
     {"name": "col10", "data_type": "date", "nullable": False},
     {"name": "col11", "data_type": "time", "nullable": False},
     {"name": "col1_null", "data_type": "bigint", "nullable": True},
@@ -62,7 +62,7 @@ TABLE_UPDATE: List[TColumnSchema] = [
     {"name": "col6_null", "data_type": "decimal", "nullable": True},
     {"name": "col7_null", "data_type": "binary", "nullable": True},
     # {"name": "col8_null", "data_type": "wei", "nullable": True},
-    {"name": "col9_null", "data_type": "json", "nullable": True, "variant": True},  # type: ignore[typeddict-item]
+    {"name": "col9_null", "data_type": "json", "nullable": True, "variant": True},
     {"name": "col10_null", "data_type": "date", "nullable": True},
     {"name": "col11_null", "data_type": "time", "nullable": True},
     {
@@ -93,11 +93,6 @@ TABLE_UPDATE: List[TColumnSchema] = [
     },
     {"name": "col11_precision", "data_type": "time", "precision": 6, "nullable": False},
 ]
-
-if "complex" in DATA_TYPES:
-    for col_schema in TABLE_UPDATE:
-        if col_schema["data_type"] == "json":
-            col_schema["data_type"] = "complex"
 
 TABLE_UPDATE_COLUMNS_SCHEMA: TTableSchemaColumns = {t["name"]: t for t in TABLE_UPDATE}
 
@@ -165,7 +160,7 @@ ROW_MESSAGES: List[dict] = [
                 "columnType": 3802,
                 "datumString": (
                     '{"link": "?commen\\ntU\\nrn=urn%3Ali%3Acomment%3A%28acti\\n \\u0006 \\\\vity%3A69\'08444473\\n\\n551163392'
-                    '%2C6n \\r \x8e9085", "complex": [1, 2, 3, "a"]}'
+                    '%2C6n \\r \x8e9085", "json": [1, 2, 3, "a"]}'
                 ),
             },
             {
@@ -270,7 +265,7 @@ DATA_ITEMS: List[TDataItem] = [
     {
         "col4": pendulum.parse("2022-05-23T13:26:45.176451+00:00"),
         "col9": {
-            "complex": [1, 2, 3, "a"],
+            "json": [1, 2, 3, "a"],
             "link": (
                 "?commen\ntU\nrn=urn%3Ali%3Acomment%3A%28acti\012 \6"
                 " \\vity%3A69'08444473\n\n551163392%2C6n \r \x8e9085"
@@ -346,7 +341,7 @@ TABLE_SCHEMAS: List[TTableSchema] = [
         "name": "items",
         "columns": {
             "col4": {"data_type": "timestamp", "name": "col4", "nullable": False},
-            "col9": {"data_type": "complex", "name": "col9", "nullable": False},
+            "col9": {"data_type": "json", "name": "col9", "nullable": False},
             "col10": {"data_type": "date", "name": "col10", "nullable": False},
             "col11": {"data_type": "time", "name": "col11", "nullable": False},
             "col12": {"data_type": "timestamp", "name": "col12", "nullable": True},
@@ -391,7 +386,7 @@ TABLE_SCHEMAS: List[TTableSchema] = [
             "col_ts": {"data_type": "timestamp", "name": "col_ts"},
             "col_tstz": {"data_type": "timestamp", "name": "col_tstz"},
             "col_num": {"data_type": "decimal", "name": "col_num"},
-            "col_json": {"data_type": "complex", "name": "col_json"},
+            "col_json": {"data_type": "json", "name": "col_json"},
             "_pg_lsn": {"data_type": "bigint", "name": "_pg_lsn", "nullable": True},
             "_pg_deleted_ts": {
                 "data_type": "timestamp",

@@ -8,6 +8,7 @@ from dlt.common.data_types.type_helpers import coerce_value
 from dlt.common.data_types.typing import TDataType
 from dlt.common.schema.typing import TColumnSchema, TColumnType
 from dlt.destinations import postgres
+from dlt.destinations.impl.postgres.factory import PostgresTypeMapper
 
 from .pg_logicaldec_pb2 import DatumMessage, TypeInfo
 
@@ -15,8 +16,7 @@ _DUMMY_VALS: Dict[TDataType, Any] = {
     "bigint": 0,
     "binary": b" ",
     "bool": True,
-    "complex": [0],
-    "json": [0],  # type: ignore[dict-item]
+    "json": [0],
     "date": pendulum.Date(1970, 1, 1),
     "decimal": Decimal(0),
     "double": 0.0,
@@ -101,19 +101,11 @@ def _get_precision_and_scale(
     return None, None
 
 
-# FIXME Hack to get it to work with 0.5.x and 1.x
 @lru_cache(maxsize=None)
 def _from_db_type() -> Callable[[str, Optional[int], Optional[int]], TColumnType]:
-    try:
-        from dlt.destinations.impl.postgres.factory import PostgresTypeMapper  # type: ignore
-
-        type_mapper = PostgresTypeMapper(postgres().capabilities())
-        return type_mapper.from_destination_type  # type: ignore[no-any-return]
-    except ImportError:
-        from dlt.destinations.impl.postgres.postgres import PostgresTypeMapper
-
-        type_mapper = PostgresTypeMapper(postgres().capabilities())
-        return type_mapper.from_db_type  # type: ignore[no-any-return]
+    """Gets column type from db type"""
+    type_mapper = PostgresTypeMapper(postgres().capabilities())
+    return type_mapper.from_destination_type
 
 
 def _to_dlt_column_type(type_id: int, modifier: Optional[str]) -> TColumnType:
@@ -188,10 +180,4 @@ def _to_dlt_val(
         return data_type_handlers[data_type](raw_value)
 
     raw_type = _DATUM_RAW_TYPES[datum]
-    try:
-        return coerce_value(data_type, raw_type, raw_value)
-    except ValueError:
-        # FIXME Hack to get it to work with 0.5.x and 1.x
-        if data_type == "json":
-            return coerce_value("complex", raw_type, raw_value)
-        raise
+    return coerce_value(data_type, raw_type, raw_value)
