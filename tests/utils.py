@@ -228,14 +228,11 @@ def assert_query_data(
 
 def assert_load_info(info: LoadInfo, expected_load_packages: int = 1) -> None:
     """Asserts that expected number of packages was loaded and there are no failed jobs"""
-    try:
-        assert len(info.loads_ids) == expected_load_packages
-        # all packages loaded
-        assert all(package.state == "loaded" for package in info.load_packages) is True
-        # no failed jobs in any of the packages
-        info.raise_on_failed_jobs()
-    except AssertionError:
-        raise
+    assert len(info.loads_ids) == expected_load_packages
+    # all packages loaded
+    assert all(package.state == "loaded" for package in info.load_packages) is True
+    # no failed jobs in any of the packages
+    info.raise_on_failed_jobs()
 
 
 def load_table_counts(p: dlt.Pipeline, *table_names: str) -> DictStrAny:
