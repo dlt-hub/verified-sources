@@ -375,8 +375,7 @@ class MessageConsumer:
         row_msg = RowMessage()
         try:
             row_msg.ParseFromString(msg.payload)
-            if row_msg.op == Op.UNKNOWN:
-                raise AssertionError(f"Unsupported operation : {row_msg}")
+            assert row_msg.op != Op.UNKNOWN, f"Unsupported operation : {row_msg}"
 
             if row_msg.op == Op.BEGIN:
                 self.last_commit_ts = _epoch_micros_to_datetime(row_msg.commit_time)
@@ -581,7 +580,7 @@ class BackendHandler:
         ]
         tz = self.table_options.get("backend_kwargs", {}).get("tz", "UTC")
         yield dlt.mark.with_table_name(
-            arrow.row_tuples_to_arrow(rows, columns, tz=tz),
+            arrow.row_tuples_to_arrow(rows, columns=columns, tz=tz),
             self.table,
         )
 
