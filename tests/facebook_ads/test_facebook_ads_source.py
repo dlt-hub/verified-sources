@@ -98,7 +98,7 @@ def test_load_insights_weekly() -> None:
     assert len(list(i_weekly)) == 0
 
 
-def test_get_start_date() -> pendulum.DateTime:
+def test_get_start_date() -> None:
     # Test with an ISO datetime string
     input_value = "2023-08-09T12:30:00"
     result = get_start_date(

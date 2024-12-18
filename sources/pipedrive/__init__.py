@@ -150,7 +150,7 @@ def create_state(pipedrive_api_key: str) -> Iterator[Dict[str, Any]]:
 @dlt.transformer(
     name="custom_fields_mapping",
     write_disposition="replace",
-    columns={"options": {"data_type": "complex"}},
+    columns={"options": {"data_type": "json"}},
 )
 def parsed_mapping(
     custom_fields_mapping: Dict[str, Any]

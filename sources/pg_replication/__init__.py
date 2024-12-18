@@ -52,7 +52,7 @@ def replication_resource(
           table name(s) to column hints to apply on the replicated table(s). For example:
           ```
           columns={
-              "table_x": {"col_a": {"data_type": "complex"}},
+              "table_x": {"col_a": {"data_type": "json"}},
               "table_y": {"col_y": {"precision": 32}},
           }
           ```

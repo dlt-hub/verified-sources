@@ -1,12 +1,13 @@
 import pytest
 import os
 import sys
-from typing import Any, List
+from typing import Any, Iterator, List
 
 from dlt.common.configuration.providers import SecretsTomlProvider
 from dlt.common.storages.file_storage import FileStorage
-from dlt.extract.decorators import _SOURCES
 from dlt.common.utils import set_working_dir
+
+from dlt.extract.source import SourceReference
 
 from dlt.cli import init_command, echo
 from dlt.cli.init_command import SOURCES_MODULE_NAME, utils as cli_utils, files_ops
@@ -18,10 +19,11 @@ from tests.utils import TEST_STORAGE_ROOT
 
 INIT_REPO_LOCATION = os.path.abspath(".")  # scan this very repo
 PROJECT_DIR = os.path.join(TEST_STORAGE_ROOT, "project")
+CORE_SOURCES = {"filesystem", "rest_api", "sql_database"}
 
 
 @pytest.fixture(autouse=True)
-def echo_default_choice() -> None:
+def echo_default_choice() -> Iterator[None]:
     """Always answer default in CLI interactions"""
     echo.ALWAYS_CHOOSE_DEFAULT = True
     yield
@@ -42,20 +44,23 @@ def get_pipeline_candidates() -> List[str]:
     """Get all pipelines in `sources` folder"""
     pipelines_storage = FileStorage(os.path.join(".", SOURCES_MODULE_NAME))
     # enumerate all candidate pipelines
-    return files_ops.get_verified_source_names(pipelines_storage)
+    return files_ops.get_sources_names(pipelines_storage, "verified")
+
+
+PIPELINE_CANDIDATES = set(get_pipeline_candidates())
 
 
 def get_project_files() -> FileStorage:
-    _SOURCES.clear()
+    SourceReference.SOURCES.clear()
     # project dir
     return FileStorage(PROJECT_DIR, makedirs=True)
 
 
-@pytest.mark.parametrize("candidate", get_pipeline_candidates())
+@pytest.mark.parametrize("candidate", PIPELINE_CANDIDATES - CORE_SOURCES)
 def test_init_all_pipelines(candidate: str) -> None:
     files = get_project_files()
     with set_working_dir(files.storage_path):
-        init_command.init_command(candidate, "bigquery", False, INIT_REPO_LOCATION)
+        init_command.init_command(candidate, "bigquery", INIT_REPO_LOCATION)
         assert_pipeline_files(files, candidate, "bigquery")
         assert_requests_txt(files)
 
@@ -63,7 +68,7 @@ def test_init_all_pipelines(candidate: str) -> None:
 def test_init_list_pipelines() -> None:
     pipelines = init_command._list_verified_sources(INIT_REPO_LOCATION)
     # a few known pipelines must be there
-    assert set(get_pipeline_candidates()) == set(pipelines.keys())
+    assert PIPELINE_CANDIDATES == set(pipelines.keys())
     # check docstrings
     for k_p in pipelines:
         assert pipelines[
@@ -96,6 +101,6 @@ def assert_pipeline_files(
         else:
             assert destination.value == destination_name
     # load secrets
-    secrets = SecretsTomlProvider()
+    secrets = SecretsTomlProvider(settings_dir=".dlt")
     if destination_name != "duckdb":
         assert secrets.get_value(destination_name, Any, "destination") is not None
