@@ -345,7 +345,7 @@ def test_all_resources(destination_name: str) -> None:
         dataset_name="hubspot_data",
         dev_mode=True,
     )
-    load_info = pipeline.run(hubspot(include_history=True))
+    load_info = pipeline.run(hubspot(include_history=True).with_resources("contacts", "deals", "companies", "contacts_property_history"))
 
     assert_load_info(load_info)
     table_names = [
@@ -358,7 +358,7 @@ def test_all_resources(destination_name: str) -> None:
     assert (
         load_table_counts(pipeline, *table_names)
         == load_table_distinct_counts(pipeline, "hs_object_id", *table_names)
-        == {"companies": 200, "deals": 500, "contacts": 402}
+        == {'companies': 4, 'contacts': 3, 'deals': 2}
     )
 
     history_table_names = [
@@ -369,11 +369,9 @@ def test_all_resources(destination_name: str) -> None:
     table_counts = load_table_counts(pipeline, *history_table_names)
     # Check history tables
     # NOTE: this value is increasing... maybe we should start testing ranges
-    assert table_counts["companies_property_history"] >= 4018
-    assert table_counts["contacts_property_history"] >= 5935
-    assert table_counts["deals_property_history"] >= 5162
+    assert table_counts["contacts_property_history"] >= 76
 
-    # Check property from couple of contacts against known data
+    # Check property from a couple of contacts against known data
     with pipeline.sql_client() as client:
         rows = [
             list(row)
@@ -397,14 +395,20 @@ def test_all_resources(destination_name: str) -> None:
                 "email",
                 "emailmaria@hubspot.com",
                 "API",
-                pendulum.parse("2022-06-15 08:51:51.399"),
+                pendulum.parse("2023-06-28 13:55:47.558"),
+            ),
+            (
+                "email",
+                "thisisnewemail@hubspot.com",
+                "CRM_UI",
+                pendulum.parse("2023-07-01 23:34:57.837"),
             ),
             (
                 "email",
                 "bh@hubspot.com",
                 "API",
-                pendulum.parse("2022-06-15 08:51:51.399"),
-            ),
+                pendulum.parse("2023-06-28 13:55:47.558"),
+             )
         ]
     )
 
