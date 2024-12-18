@@ -60,14 +60,14 @@ DEFAULT_CONTACT_PROPS = [
 ]
 
 DEFAULT_DEAL_PROPS = [
-    # "amount",
-    # "closedate",
-    # "createdate",
+    "amount",
+    "closedate",
+    "createdate",
     "dealname",
     "dealstage",
-    # "hs_lastmodifieddate",
-    # "hs_object_id",
-    # "pipeline",
+    "hs_lastmodifieddate",
+    "hs_object_id",
+    "pipeline",
 ]
 
 DEFAULT_TICKET_PROPS = [

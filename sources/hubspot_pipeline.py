@@ -18,7 +18,7 @@ def load_crm_data() -> None:
     p = dlt.pipeline(
         pipeline_name="hubspot",
         dataset_name="hubspot_dataset",
-        destination="bigquery",
+        destination="duckdb",
     )
 
     # Run the pipeline with the HubSpot source connector
@@ -42,7 +42,7 @@ def load_crm_data_with_history() -> None:
     p = dlt.pipeline(
         pipeline_name="hubspot",
         dataset_name="hubspot_dataset",
-        destination="bigquery",
+        destination="duckdb",
     )
 
     # Configure the source with `include_history` to enable property history load, history is disabled by default
@@ -68,7 +68,7 @@ def load_crm_data_with_soft_delete() -> None:
     p = dlt.pipeline(
         pipeline_name="hubspot",
         dataset_name="hubspot_dataset",
-        destination="bigquery",
+        destination="duckdb",
     )
 
     # Configure the source to load soft-deleted (archived) records.
@@ -94,11 +94,10 @@ def load_crm_objects_with_custom_properties() -> None:
     pipeline = dlt.pipeline(
         pipeline_name="hubspot",
         dataset_name="hubspot_dataset",
-        destination="bigquery",
+        destination="duckdb",
     )
 
-    load_data = hubspot()
-    # load_data.contacts.bind(props=["date_of_birth", "degree"], include_custom_props=True)
+    load_data = hubspot(properties={"contact": ("date_of_birth", "degree")}, include_custom_props=True)
     load_info = pipeline.run(load_data)
     print(load_info)
 
@@ -115,7 +114,7 @@ def load_pipelines() -> None:
     p = dlt.pipeline(
         pipeline_name="hubspot",
         dataset_name="hubspot_dataset",
-        destination="bigquery",
+        destination="duckdb",
         dev_mode=False,
     )
     # To load data from pipelines in "deals" endpoint
@@ -138,7 +137,7 @@ def load_web_analytics_events(
     p = dlt.pipeline(
         pipeline_name="hubspot",
         dataset_name="hubspot_dataset",
-        destination="bigquery",
+        destination="duckdb",
         dev_mode=False,
     )
 
