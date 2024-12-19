@@ -19,6 +19,7 @@ from typing import (
 import dlt
 import psycopg2
 from dlt.common import logger
+from dlt.common.libs.sql_alchemy import Engine, MetaData, Table, sa
 from dlt.common.pendulum import pendulum
 from dlt.common.schema.typing import TColumnSchema, TTableSchema, TTableSchemaColumns
 from dlt.common.schema.utils import merge_column
@@ -26,17 +27,6 @@ from dlt.common.typing import TDataItem
 from dlt.extract import DltResource, DltSource
 from dlt.extract.items import DataItemWithMeta
 from dlt.sources.credentials import ConnectionStringCredentials
-from psycopg2.extensions import connection as ConnectionExt, cursor
-from psycopg2.extras import (
-    LogicalReplicationConnection,
-    ReplicationCursor,
-    ReplicationMessage,
-    StopReplication,
-)
-
-
-from dlt.common.libs.sql_alchemy import Engine, MetaData, Table
-from sqlalchemy import Connection as ConnectionSqla, event
 from dlt.sources.sql_database import (
     ReflectionLevel,
     TableBackend,
@@ -46,8 +36,15 @@ from dlt.sources.sql_database import (
     engine_from_credentials,
     sql_table,
 )
+from psycopg2.extensions import connection as ConnectionExt, cursor
+from psycopg2.extras import (
+    LogicalReplicationConnection,
+    ReplicationCursor,
+    ReplicationMessage,
+    StopReplication,
+)
 
-from .pg_logicaldec_pb2 import Op, RowMessage, TypeInfo
+from .pg_logicaldec_pb2 import DatumMessage, Op, RowMessage, TypeInfo
 from .schema_types import _epoch_micros_to_datetime, _to_dlt_column_schema, _to_dlt_val
 
 
@@ -151,8 +148,8 @@ def init_replication(
 
     engine = _configure_engine(credentials, rep_conn)
 
-    @event.listens_for(engine, "begin")
-    def on_begin(conn: ConnectionSqla) -> None:
+    @sa.event.listens_for(engine, "begin")
+    def on_begin(conn: sa.Connection) -> None:
         cur = conn.connection.cursor()
         if slot is None:
             # Using the same isolation level that pg_backup uses
@@ -181,7 +178,7 @@ def _configure_engine(
     engine.execution_options(stream_results=True, max_row_buffer=2 * 50000)
     setattr(engine, "rep_conn", rep_conn)  # noqa
 
-    @event.listens_for(engine, "engine_disposed")
+    @sa.event.listens_for(engine, "engine_disposed")
     def on_engine_disposed(engine: Engine) -> None:
         delattr(engine, "rep_conn")
 
@@ -584,12 +581,13 @@ def infer_table_schema(
     tuples = msg.new_tuple if is_change else msg.old_tuple
 
     # Filter and map columns, conditionally using `new_typeinfo` when available
-    columns: TTableSchemaColumns = {
-        col.column_name: _to_dlt_column_schema(
-            col, msg.new_typeinfo[i] if is_change and msg.new_typeinfo else None
+    columns = {
+        col_name: _to_dlt_column_schema(
+            col_name, datum=col, type_info=msg.new_typeinfo[i] if is_change else None
         )
         for i, col in enumerate(tuples)
-        if not included_columns or col.column_name in included_columns
+        if (col_name := _actual_column_name(col))
+        and (not included_columns or col_name in included_columns)
     }
 
     # Add replication columns
@@ -651,7 +649,7 @@ def gen_data_item(
         data_item["_pg_deleted_ts"] = _epoch_micros_to_datetime(msg.commit_time)
 
     for data in row:
-        col_name = data.column_name
+        col_name = _actual_column_name(data)
         if not included_columns or col_name in included_columns:
             data_item[col_name] = _to_dlt_val(
                 data,
@@ -660,6 +658,15 @@ def gen_data_item(
             )
 
     return data_item
+
+
+def _actual_column_name(column: DatumMessage) -> str:
+    """Certain column names are quoted since they are reserved keywords,
+    however let the destination decide on how to normalize them"""
+    col_name = column.column_name
+    if col_name.startswith('"') and col_name.endswith('"'):
+        col_name = col_name[1:-1]
+    return col_name
 
 
 ALLOWED_COL_SCHEMA_FIELDS: Set[str] = {

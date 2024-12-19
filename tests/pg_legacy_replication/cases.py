@@ -105,22 +105,27 @@ ROW_MESSAGES: List[dict] = [
         "newTuple": [
             {
                 "columnName": "id_y",
-                "columnType": "20",
-                "datumInt64": "2",
+                "columnType": 20,
+                "datumInt64": 2,
             },
             {
                 "columnName": "val_y",
-                "columnType": "16",
+                "columnType": 16,
                 "datumBool": False,
             },
             {
+                "columnName": '"primary"',
+                "columnType": 16,
+                "datumBool": True,
+            },
+            {
                 "columnName": "_dlt_load_id",
-                "columnType": "1043",
+                "columnType": 1043,
                 "datumString": "1728662646.2657657",
             },
             {
                 "columnName": "_dlt_id",
-                "columnType": "1043",
+                "columnType": 1043,
                 "datumString": "gGjifTMTAUs5ag",
             },
         ],
@@ -128,6 +133,10 @@ ROW_MESSAGES: List[dict] = [
             {
                 "modifier": "bigint",
                 "valueOptional": False,
+            },
+            {
+                "modifier": "boolean",
+                "valueOptional": True,
             },
             {
                 "modifier": "boolean",
@@ -256,6 +265,7 @@ DATA_ITEMS: List[TDataItem] = [
     {
         "id_y": 2,
         "val_y": False,
+        "primary": True,
         "_dlt_id": "gGjifTMTAUs5ag",
         "_dlt_load_id": "1728662646.2657657",
         "_pg_lsn": 1,
@@ -312,6 +322,7 @@ TABLE_SCHEMAS: List[TTableSchema] = [
                 "precision": 64,
             },
             "val_y": {"data_type": "bool", "name": "val_y", "nullable": True},
+            "primary": {"data_type": "bool", "name": "primary", "nullable": True},
             "_dlt_id": {"data_type": "text", "name": "_dlt_id", "nullable": False},
             "_dlt_load_id": {
                 "data_type": "text",

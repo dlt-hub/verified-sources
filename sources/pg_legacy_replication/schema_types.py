@@ -7,7 +7,6 @@ from dlt.common import Decimal, logger
 from dlt.common.data_types.type_helpers import coerce_value
 from dlt.common.data_types.typing import TDataType
 from dlt.common.schema.typing import TColumnSchema, TColumnType
-from dlt.destinations import postgres
 from dlt.destinations.impl.postgres.factory import PostgresTypeMapper
 
 from .pg_logicaldec_pb2 import DatumMessage, TypeInfo
@@ -102,10 +101,10 @@ def _get_precision_and_scale(
 
 
 @lru_cache(maxsize=None)
-def _from_db_type() -> Callable[[str, Optional[int], Optional[int]], TColumnType]:
-    """Gets column type from db type"""
-    type_mapper = PostgresTypeMapper(postgres().capabilities())
-    return type_mapper.from_destination_type
+def _type_mapper() -> PostgresTypeMapper:
+    from dlt.destinations import postgres
+
+    return PostgresTypeMapper(postgres().capabilities())
 
 
 def _to_dlt_column_type(type_id: int, modifier: Optional[str]) -> TColumnType:
@@ -122,15 +121,15 @@ def _to_dlt_column_type(type_id: int, modifier: Optional[str]) -> TColumnType:
         )
 
     precision, scale = _get_precision_and_scale(type_id, modifier)
-    return _from_db_type()(pg_type, precision, scale)
+    return _type_mapper().from_destination_type(pg_type, precision, scale)
 
 
 def _to_dlt_column_schema(
-    datum: DatumMessage, type_info: Optional[TypeInfo]
+    col_name: str, datum: DatumMessage, type_info: Optional[TypeInfo]
 ) -> TColumnSchema:
     """Converts decoderbuf's datum value/typeinfo to dlt column schema."""
     column_schema: TColumnSchema = {
-        "name": datum.column_name,
+        "name": col_name,
         **_to_dlt_column_type(
             datum.column_type, type_info.modifier if type_info else None
         ),
