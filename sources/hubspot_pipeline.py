@@ -1,4 +1,5 @@
 from typing import List
+
 import dlt
 
 from hubspot import hubspot, hubspot_events_for_objects, THubspotObjectType
@@ -13,7 +14,7 @@ def load_crm_data() -> None:
     """
 
     # Create a DLT pipeline object with the pipeline name, dataset name, and destination database type
-    # Add dev_mode=(True or False) if you need your pipeline to create the dataset in your destination
+    # Add full_refresh=(True or False) if you need your pipeline to create the dataset in your destination
     p = dlt.pipeline(
         pipeline_name="hubspot",
         dataset_name="hubspot_dataset",
@@ -37,7 +38,7 @@ def load_crm_data_with_history() -> None:
     """
 
     # Create a DLT pipeline object with the pipeline name, dataset name, and destination database type
-    # Add dev_mode=(True or False) if you need your pipeline to create the dataset in your destination
+    # Add full_refresh=(True or False) if you need your pipeline to create the dataset in your destination
     p = dlt.pipeline(
         pipeline_name="hubspot",
         dataset_name="hubspot_dataset",
@@ -54,6 +55,33 @@ def load_crm_data_with_history() -> None:
     print(info)
 
 
+def load_crm_data_with_soft_delete() -> None:
+    """
+    Loads all HubSpot CRM resources, including soft-deleted (archived) records for each entity.
+    By default, only the current state of the records is loaded; property change history is not included unless explicitly enabled.
+
+    Soft-deleted records are retrieved and marked appropriately, allowing both active and archived data to be processed.
+    """
+
+    # Create a DLT pipeline object with the pipeline name, dataset name, and destination database type.
+    # You can add `full_refresh=True` if the pipeline should recreate the dataset at the destination.
+    p = dlt.pipeline(
+        pipeline_name="hubspot",
+        dataset_name="hubspot_dataset",
+        destination="duckdb",
+    )
+
+    # Configure the source to load soft-deleted (archived) records.
+    # Property change history is disabled by default unless configured separately.
+    data = hubspot(soft_delete=True)
+
+    # Run the pipeline with the HubSpot source connector.
+    info = p.run(data)
+
+    # Print information about the pipeline run.
+    print(info)
+
+
 def load_crm_objects_with_custom_properties() -> None:
     """
     Loads CRM objects, reading only properties defined by the user.
@@ -61,30 +89,38 @@ def load_crm_objects_with_custom_properties() -> None:
 
     # Create a DLT pipeline object with the pipeline name,
     # dataset name, properties to read and destination database
-    # type Add dev_mode=(True or False) if you need your
+    # type Add full_refresh=(True or False) if you need your
     # pipeline to create the dataset in your destination
-    p = dlt.pipeline(
+    pipeline = dlt.pipeline(
         pipeline_name="hubspot",
         dataset_name="hubspot_dataset",
         destination="duckdb",
     )
 
-    source = hubspot()
+    load_data = hubspot(properties={"contact": ("date_of_birth", "degree")}, include_custom_props=True)
+    load_info = pipeline.run(load_data)
+    print(load_info)
 
-    # By default, all the custom properties of a CRM object are extracted,
-    # ignoring those driven by Hubspot (prefixed with `hs_`).
 
-    # To read fields in addition to the custom ones:
-    # source.contacts.bind(props=["date_of_birth", "degree"])
+def load_pipelines() -> None:
+    """
+    This function loads web analytics events for a list objects in `object_ids` of type `object_type`
 
-    # To read only two particular fields:
-    source.contacts.bind(props=["date_of_birth", "degree"], include_custom_props=False)
+    Returns:
+        None
+    """
 
-    # Run the pipeline with the HubSpot source connector
-    info = p.run(source)
-
-    # Print information about the pipeline run
-    print(info)
+    # Create a DLT pipeline object with the pipeline name, dataset name, and destination database type
+    p = dlt.pipeline(
+        pipeline_name="hubspot",
+        dataset_name="hubspot_dataset",
+        destination="duckdb",
+        dev_mode=False,
+    )
+    # To load data from pipelines in "deals" endpoint
+    load_data = hubspot().with_resources("pipelines_deals", "stages_timing_deals")
+    load_info = p.run(load_data)
+    print(load_info)
 
 
 def load_web_analytics_events(
@@ -115,8 +151,9 @@ def load_web_analytics_events(
 
 
 if __name__ == "__main__":
-    # Call the functions to load HubSpot data into the database with and without company events enabled
     load_crm_data()
     load_crm_data_with_history()
-    load_web_analytics_events("company", ["7086461639", "7086464459"])
     load_crm_objects_with_custom_properties()
+    load_pipelines()
+    load_crm_data_with_soft_delete()
+    load_web_analytics_events("company", ["7086461639", "7086464459"])

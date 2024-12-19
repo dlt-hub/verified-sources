@@ -1,7 +1,7 @@
 """Hubspot source helpers"""
 
 import urllib.parse
-from typing import Any, Dict, Iterator, List, Optional
+from typing import Any, Dict, Generator, Iterator, List, Optional
 
 from dlt.sources.helpers import requests
 
@@ -29,6 +29,20 @@ def _get_headers(api_key: str) -> Dict[str, str]:
     """
     # Construct the dictionary of HTTP headers to use for API requests
     return dict(authorization=f"Bearer {api_key}")
+
+
+def pagination(
+    _data: Dict[str, Any], headers: Dict[str, Any]
+) -> Optional[Dict[str, Any]]:
+    _next = _data.get("paging", {}).get("next", None)
+    # _next = False
+    if _next:
+        next_url = _next["link"]
+        # Get the next page response
+        r = requests.get(next_url, headers=headers)
+        return r.json()  # type: ignore
+    else:
+        return None
 
 
 def extract_property_history(objects: List[Dict[str, Any]]) -> Iterator[Dict[str, Any]]:
@@ -90,7 +104,10 @@ def fetch_property_history(
 
 
 def fetch_data(
-    endpoint: str, api_key: str, params: Optional[Dict[str, Any]] = None
+    endpoint: str,
+    api_key: str,
+    params: Optional[Dict[str, Any]] = None,
+    context: Optional[Dict[str, Any]] = None,
 ) -> Iterator[List[Dict[str, Any]]]:
     """
     Fetch data from HUBSPOT endpoint using a specified API key and yield the properties of each result.
@@ -99,7 +116,8 @@ def fetch_data(
     Args:
         endpoint (str): The endpoint to fetch data from, as a string.
         api_key (str): The API key to use for authentication, as a string.
-        params: Optional dict of query params to include in the request
+        params: Optional dict of query params to include in the request.
+        context (Optional[Dict[str, Any]]): Additional data which need to be added in the resulting page.
 
     Yields:
         A List of CRM object dicts
@@ -152,18 +170,13 @@ def fetch_data(
                         ]
 
                         _obj[association] = __values
+                if context:
+                    _obj.update(context)
                 _objects.append(_obj)
             yield _objects
 
         # Follow pagination links if they exist
-        _next = _data.get("paging", {}).get("next", None)
-        if _next:
-            next_url = _next["link"]
-            # Get the next page response
-            r = requests.get(next_url, headers=headers)
-            _data = r.json()
-        else:
-            _data = None
+        _data = pagination(_data, headers)
 
 
 def _get_property_names(api_key: str, object_type: str) -> List[str]:
@@ -186,3 +199,16 @@ def _get_property_names(api_key: str, object_type: str) -> List[str]:
         properties.extend([prop["name"] for prop in page])
 
     return properties
+
+
+def get_properties_labels(
+    api_key: str, object_type: str, property_name: str
+) -> Iterator[Dict[str, Any]]:
+    endpoint = f"/crm/v3/properties/{object_type}/{property_name}"
+    url = get_url(endpoint)
+    headers = _get_headers(api_key)
+    r = requests.get(url, headers=headers)
+    _data: Optional[Dict[str, Any]] = r.json()
+    while _data is not None:
+        yield _data
+        _data = pagination(_data, headers)
