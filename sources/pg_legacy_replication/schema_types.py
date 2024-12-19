@@ -82,7 +82,7 @@ _VARYING_PRECISION_PATTERNS: Dict[int, str] = {
 
 def _get_precision_and_scale(
     type_id: int, modifier: Optional[str]
-) -> Optional[Tuple[Optional[int], Optional[int]]]:
+) -> Tuple[Optional[int], Optional[int]]:
     """Get precision from postgres type attributes and modifiers."""
     if type_id in _FIXED_PRECISION_TYPES:
         return _FIXED_PRECISION_TYPES[type_id]
@@ -119,6 +119,7 @@ def _to_dlt_column_type(type_id: int, modifier: Optional[str]) -> TColumnType:
         logger.warning(
             "No type found for type_id '%s' and modifier '%s'", type_id, modifier
         )
+        pg_type = "character varying"
 
     precision, scale = _get_precision_and_scale(type_id, modifier)
     return _type_mapper().from_destination_type(pg_type, precision, scale)

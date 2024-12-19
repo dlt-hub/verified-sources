@@ -60,9 +60,9 @@ class ReplicationOptions(TypedDict, total=False):
 
 
 class SqlTableOptions(TypedDict, total=False):
-    backend: Optional[TableBackend]
+    backend: TableBackend
     backend_kwargs: Optional[Dict[str, Any]]
-    chunk_size: Optional[int]
+    chunk_size: int
     defer_table_reflect: Optional[bool]
     detect_precision_hints: Optional[bool]
     included_columns: Optional[List[str]]
@@ -393,7 +393,7 @@ class MessageConsumer:
         table_name = msg.table.split(".")[1]
         table_schema = self.get_table_schema(msg, table_name)
         data_item = gen_data_item(
-            msg, table_schema["columns"], lsn, **self.table_options.get(table_name)
+            msg, table_schema["columns"], lsn, **self.table_options.get(table_name, {})
         )
         self.data_items[table_name].append(data_item)
 
@@ -409,7 +409,7 @@ class MessageConsumer:
         if current_hash == self.last_table_hashes.get(table_name):
             return self.last_table_schema[table_name]
 
-        new_schema = infer_table_schema(msg, **self.table_options.get(table_name))
+        new_schema = infer_table_schema(msg, **self.table_options.get(table_name, {}))
         if last_schema is None:
             # Cache the inferred schema and hash if it is not already cached
             self.last_table_schema[table_name] = new_schema
@@ -573,7 +573,7 @@ def infer_table_schema(
     include_commit_ts: bool = False,
     include_tx_id: bool = False,
     included_columns: Optional[Set[str]] = None,
-    **kwargs: Any,
+    **_: Any,
 ) -> TTableSchema:
     """Infers the table schema from the replication message and optional hints"""
     # Choose the correct source based on operation type
@@ -632,7 +632,7 @@ def gen_data_item(
     include_commit_ts: bool = False,
     include_tx_id: bool = False,
     included_columns: Optional[Set[str]] = None,
-    **kwargs: Any,
+    **_: Any,
 ) -> TDataItem:
     """Generates data item from a row message and corresponding metadata."""
     data_item: TDataItem = {}
