@@ -1,11 +1,12 @@
 """Replicates postgres tables in batch using logical decoding."""
 
-from typing import Any, Callable, Dict, Iterable, Optional, Sequence, Union
+from typing import Any, Callable, Dict, Iterable, Mapping, Optional, Sequence, Union
 
 import dlt
 from dlt.extract import DltResource
 from dlt.extract.items import TDataItem
 from dlt.sources.credentials import ConnectionStringCredentials
+from collections import defaultdict
 
 from .helpers import (
     BackendHandler,
@@ -24,7 +25,7 @@ def replication_source(
     schema: str,
     table_names: Union[str, Sequence[str]],
     credentials: ConnectionStringCredentials = dlt.secrets.value,
-    table_options: Optional[Dict[str, ReplicationOptions]] = None,
+    table_options: Optional[Mapping[str, ReplicationOptions]] = None,
     target_batch_size: int = 1000,
     flush_slot: bool = True,
 ) -> Iterable[DltResource]:
@@ -74,6 +75,7 @@ def replication_source(
             Data items for changes published in the publication.
     """
     table_names = [table_names] if isinstance(table_names, str) else table_names or []
+    table_options = defaultdict(lambda: ReplicationOptions(), table_options or {})
 
     @dlt.resource(name=lambda args: args["slot_name"], standalone=True)
     def replication_resource(slot_name: str) -> Iterable[TDataItem]:
@@ -97,8 +99,8 @@ def replication_source(
                 table_qnames=table_qnames,
                 upto_lsn=upto_lsn,
                 start_lsn=start_lsn,
-                target_batch_size=target_batch_size,
                 table_options=table_options,
+                target_batch_size=target_batch_size,
             )
             yield from gen
             if gen.generated_all:
@@ -109,9 +111,8 @@ def replication_source(
     wal_reader = replication_resource(slot_name)
 
     for table in table_names:
-        table_opts = table_options.get(table, {}) if table_options else {}
         yield dlt.transformer(
-            _create_table_dispatch(table=table, table_options=table_opts),
+            _create_table_dispatch(table, table_options=table_options.get(table)),
             data_from=wal_reader,
             name=table,
         )

@@ -8,6 +8,7 @@ from typing import (
     Iterable,
     Iterator,
     List,
+    Mapping,
     NamedTuple,
     Optional,
     Sequence,
@@ -81,7 +82,7 @@ def init_replication(
     table_names: Optional[Union[str, Sequence[str]]] = None,
     credentials: ConnectionStringCredentials = dlt.secrets.value,
     take_snapshots: bool = False,
-    table_options: Optional[Dict[str, SqlTableOptions]] = None,
+    table_options: Optional[Mapping[str, SqlTableOptions]] = None,
     reset: bool = False,
 ) -> Iterable[DltResource]:
     """Initializes replication for one, several, or all tables within a schema.
@@ -174,7 +175,7 @@ def _configure_engine(
     Configures the SQLAlchemy engine.
     Also attaches the replication connection in order to prevent it being garbage collected and closed.
     """
-    engine: Engine = engine_from_credentials(credentials, may_dispose_after_use=False)
+    engine: Engine = engine_from_credentials(credentials)
     engine.execution_options(stream_results=True, max_row_buffer=2 * 50000)
     setattr(engine, "rep_conn", rep_conn)  # noqa
 
@@ -321,13 +322,13 @@ class MessageConsumer:
         self,
         upto_lsn: int,
         table_qnames: Set[str],
+        table_options: Mapping[str, ReplicationOptions],
         target_batch_size: int = 1000,
-        table_options: Optional[Dict[str, ReplicationOptions]] = None,
     ) -> None:
         self.upto_lsn = upto_lsn
         self.table_qnames = table_qnames
         self.target_batch_size = target_batch_size
-        self.table_options = table_options or {}
+        self.table_options = table_options
 
         self.consumed_all: bool = False
         # maps table names to list of data items
@@ -393,7 +394,7 @@ class MessageConsumer:
         table_name = msg.table.split(".")[1]
         table_schema = self.get_table_schema(msg, table_name)
         data_item = gen_data_item(
-            msg, table_schema["columns"], lsn, **self.table_options.get(table_name, {})
+            msg, table_schema["columns"], lsn, **self.table_options.get(table_name)
         )
         self.data_items[table_name].append(data_item)
 
@@ -409,7 +410,7 @@ class MessageConsumer:
         if current_hash == self.last_table_hashes.get(table_name):
             return self.last_table_schema[table_name]
 
-        new_schema = infer_table_schema(msg, **self.table_options.get(table_name, {}))
+        new_schema = infer_table_schema(msg, **self.table_options.get(table_name))
         if last_schema is None:
             # Cache the inferred schema and hash if it is not already cached
             self.last_table_schema[table_name] = new_schema
@@ -445,9 +446,9 @@ class ItemGenerator:
     slot_name: str
     table_qnames: Set[str]
     upto_lsn: int
-    start_lsn: int = 0
+    start_lsn: int
+    table_options: Mapping[str, ReplicationOptions]
     target_batch_size: int = 1000
-    table_options: Optional[Dict[str, ReplicationOptions]] = None
     last_commit_lsn: Optional[int] = field(default=None, init=False)
     generated_all: bool = False
 
@@ -465,8 +466,8 @@ class ItemGenerator:
         consumer = MessageConsumer(
             upto_lsn=self.upto_lsn,
             table_qnames=self.table_qnames,
-            target_batch_size=self.target_batch_size,
             table_options=self.table_options,
+            target_batch_size=self.target_batch_size,
         )
         try:
             cur.consume_stream(consumer)
