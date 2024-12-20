@@ -66,7 +66,7 @@ def test_core_functionality(
         slot_name=slot_name,
         schema=src_pl.dataset_name,
         table_names=("tbl_x", "tbl_y"),
-        table_options={
+        repl_options={
             "tbl_x": {"backend": backend},
             "tbl_y": {"backend": backend},
         },
@@ -207,7 +207,7 @@ def test_without_init_load(
         slot_name=slot_name,
         schema=src_pl.dataset_name,
         table_names=("tbl_x", "tbl_y"),
-        table_options={
+        repl_options={
             "tbl_x": {"backend": backend},
             "tbl_y": {"backend": backend},
         },
@@ -302,7 +302,7 @@ def test_mapped_data_types(
         slot_name=slot_name,
         schema=src_pl.dataset_name,
         table_names="items",
-        table_options={"items": {"backend": backend}},
+        repl_options={"items": {"backend": backend}},
     )
     changes.items.apply_hints(
         write_disposition="merge", primary_key="col1", columns=merge_hints
@@ -407,7 +407,7 @@ def test_unmapped_data_types(
         slot_name=slot_name,
         schema=src_pl.dataset_name,
         table_names="data_types",
-        table_options={"data_types": {"backend": backend}},
+        repl_options={"data_types": {"backend": backend}},
     )
 
     # insert record in source table to create replication item
@@ -487,7 +487,7 @@ def test_included_columns(
         slot_name=slot_name,
         schema=src_pl.dataset_name,
         table_names=("tbl_x", "tbl_y", "tbl_z"),
-        table_options=table_options,
+        repl_options=table_options,
     )
 
     # update three postgres tables
@@ -555,19 +555,6 @@ def test_column_hints(
     )
 
     # initialize replication and create resources
-    table_options: Dict[str, ReplicationOptions] = {
-        "tbl_x": {
-            "backend": backend,
-            "column_hints": {"another_col_x": {"data_type": "double"}},
-        },
-        "tbl_y": {
-            "backend": backend,
-            "column_hints": {"another_col_y": {"precision": 32}},
-        },
-        "tbl_z": {"backend": backend},
-        # tbl_z is not specified, hence all columns should be included
-    }
-
     snapshots = init_replication(
         slot_name=slot_name,
         schema=src_pl.dataset_name,
@@ -577,7 +564,6 @@ def test_column_hints(
             "tbl_x": {"backend": backend},
             "tbl_y": {"backend": backend},
             "tbl_z": {"backend": backend},
-            # tbl_z is not specified, hence all columns should be included
         },
     )
     if init_load:
@@ -588,7 +574,17 @@ def test_column_hints(
         slot_name=slot_name,
         schema=src_pl.dataset_name,
         table_names=("tbl_x", "tbl_y", "tbl_z"),
-        table_options=table_options,
+        repl_options={
+            "tbl_x": {
+                "backend": backend,
+                "column_hints": {"another_col_x": {"data_type": "double"}},
+            },
+            "tbl_y": {
+                "backend": backend,
+                "column_hints": {"another_col_y": {"precision": 32}},
+            },
+            "tbl_z": {"backend": backend},
+        },
     )
 
     # update three postgres tables
@@ -604,7 +600,6 @@ def test_column_hints(
     dest_pl = dlt.pipeline(
         pipeline_name="dest_pl", destination=destination_name, dev_mode=True
     )
-
     if init_load:
         dest_pl.run(snapshots)
         cleanup_snapshot_resources(snapshots)
@@ -626,7 +621,6 @@ def test_column_hints(
             ]
             == "bigint"
         )
-
     dest_pl.run(changes)
     assert (
         dest_pl.default_schema.get_table_columns("tbl_x")["another_col_x"]["data_type"]
@@ -675,7 +669,7 @@ def test_table_schema_change(
         slot_name=slot_name,
         schema=src_pl.dataset_name,
         table_names="items",
-        table_options={"items": {"backend": backend}},
+        repl_options={"items": {"backend": backend}},
     )
     dest_pl = dlt.pipeline(
         pipeline_name="dest_pl", destination=destination_name, dev_mode=True
@@ -725,7 +719,7 @@ def test_batching(src_config: Tuple[dlt.Pipeline, str], backend: TableBackend) -
         schema=src_pl.dataset_name,
         table_names="items",
         target_batch_size=50,
-        table_options={"items": {"backend": backend}},
+        repl_options={"items": {"backend": backend}},
     )
 
     # create destination pipeline and resource

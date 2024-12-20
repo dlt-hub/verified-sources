@@ -25,7 +25,7 @@ def replication_source(
     schema: str,
     table_names: Union[str, Sequence[str]],
     credentials: ConnectionStringCredentials = dlt.secrets.value,
-    table_options: Optional[Mapping[str, ReplicationOptions]] = None,
+    repl_options: Optional[Mapping[str, ReplicationOptions]] = None,
     target_batch_size: int = 1000,
     flush_slot: bool = True,
 ) -> Iterable[DltResource]:
@@ -75,7 +75,7 @@ def replication_source(
             Data items for changes published in the publication.
     """
     table_names = [table_names] if isinstance(table_names, str) else table_names or []
-    table_options = defaultdict(lambda: ReplicationOptions(), table_options or {})
+    repl_options = defaultdict(lambda: ReplicationOptions(), repl_options or {})
 
     @dlt.resource(name=lambda args: args["slot_name"], standalone=True)
     def replication_resource(slot_name: str) -> Iterable[TDataItem]:
@@ -99,7 +99,7 @@ def replication_source(
                 table_qnames=table_qnames,
                 upto_lsn=upto_lsn,
                 start_lsn=start_lsn,
-                table_options=table_options,
+                repl_options=repl_options,
                 target_batch_size=target_batch_size,
             )
             yield from gen
@@ -112,17 +112,17 @@ def replication_source(
 
     for table in table_names:
         yield dlt.transformer(
-            _create_table_dispatch(table, table_options=table_options.get(table)),
+            _create_table_dispatch(table, repl_options=repl_options.get(table)),
             data_from=wal_reader,
             name=table,
         )
 
 
 def _create_table_dispatch(
-    table: str, table_options: ReplicationOptions
+    table: str, repl_options: ReplicationOptions
 ) -> Callable[[TDataItem], Any]:
     """Creates a dispatch handler that processes data items based on a specified table and optional column hints."""
-    handler = BackendHandler(table, table_options)
+    handler = BackendHandler(table, repl_options)
     # FIXME Uhhh.. why do I have to do this?
     handler.__qualname__ = "BackendHandler.__call__"  # type: ignore[attr-defined]
     return handler

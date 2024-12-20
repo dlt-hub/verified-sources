@@ -162,7 +162,7 @@ def replicate_with_column_selection() -> None:
         slot_name=slot_name,
         schema=src_pl.dataset_name,
         table_names=("tbl_x", "tbl_y"),
-        table_options={
+        repl_options={
             "tbl_x": {"included_columns": {"c1", "c2"}}
         },  # columns not specified here are excluded from generated data items
     )

@@ -51,7 +51,7 @@ from .schema_types import _epoch_micros_to_datetime, _to_dlt_column_schema, _to_
 
 class ReplicationOptions(TypedDict, total=False):
     backend: Optional[TableBackend]
-    backend_kwargs: Optional[Dict[str, Any]]
+    backend_kwargs: Optional[Mapping[str, Any]]
     column_hints: Optional[TTableSchemaColumns]
     include_lsn: Optional[bool]  # Default is true
     include_deleted_ts: Optional[bool]  # Default is true
@@ -322,13 +322,13 @@ class MessageConsumer:
         self,
         upto_lsn: int,
         table_qnames: Set[str],
-        table_options: Mapping[str, ReplicationOptions],
+        repl_options: Mapping[str, ReplicationOptions],
         target_batch_size: int = 1000,
     ) -> None:
         self.upto_lsn = upto_lsn
         self.table_qnames = table_qnames
         self.target_batch_size = target_batch_size
-        self.table_options = table_options
+        self.repl_options = repl_options
 
         self.consumed_all: bool = False
         # maps table names to list of data items
@@ -394,14 +394,14 @@ class MessageConsumer:
         table_name = msg.table.split(".")[1]
         table_schema = self.get_table_schema(msg, table_name)
         data_item = gen_data_item(
-            msg, table_schema["columns"], lsn, **self.table_options.get(table_name)
+            msg, table_schema["columns"], lsn, **self.repl_options.get(table_name)
         )
         self.data_items[table_name].append(data_item)
 
     def get_table_schema(self, msg: RowMessage, table_name: str) -> TTableSchema:
         last_schema = self.last_table_schema.get(table_name)
 
-        # Used cached schema if the operation is a delete since the inferred one will always be less precise
+        # Used cached schema if the operation is a DELETE since the inferred one will always be less precise
         if msg.op == Op.DELETE and last_schema:
             return last_schema
 
@@ -410,7 +410,7 @@ class MessageConsumer:
         if current_hash == self.last_table_hashes.get(table_name):
             return self.last_table_schema[table_name]
 
-        new_schema = infer_table_schema(msg, **self.table_options.get(table_name))
+        new_schema = infer_table_schema(msg, **self.repl_options.get(table_name))
         if last_schema is None:
             # Cache the inferred schema and hash if it is not already cached
             self.last_table_schema[table_name] = new_schema
@@ -447,7 +447,7 @@ class ItemGenerator:
     table_qnames: Set[str]
     upto_lsn: int
     start_lsn: int
-    table_options: Mapping[str, ReplicationOptions]
+    repl_options: Mapping[str, ReplicationOptions]
     target_batch_size: int = 1000
     last_commit_lsn: Optional[int] = field(default=None, init=False)
     generated_all: bool = False
@@ -460,13 +460,11 @@ class ItemGenerator:
         Does not advance the slot.
         """
         cur = _get_rep_conn(self.credentials).cursor()
-        cur.start_replication(
-            slot_name=self.slot_name, start_lsn=self.start_lsn, decode=False
-        )
+        cur.start_replication(slot_name=self.slot_name, start_lsn=self.start_lsn)
         consumer = MessageConsumer(
             upto_lsn=self.upto_lsn,
             table_qnames=self.table_qnames,
-            table_options=self.table_options,
+            repl_options=self.repl_options,
             target_batch_size=self.target_batch_size,
         )
         try:
@@ -501,7 +499,7 @@ class ItemGenerator:
 @dataclass
 class BackendHandler:
     table: str
-    table_options: ReplicationOptions
+    repl_options: ReplicationOptions
 
     def __call__(self, table_items: TableItems) -> Iterable[DataItemWithMeta]:
         """Yields replication messages from ItemGenerator.
@@ -518,14 +516,14 @@ class BackendHandler:
 
         # Apply column hints if provided
         columns = schema["columns"]
-        if column_hints := self.table_options.get("column_hints"):
+        if column_hints := self.repl_options.get("column_hints"):
             for col_name, col_hint in column_hints.items():
                 if col_name in columns:
                     columns[col_name] = merge_column(columns[col_name], col_hint)
 
         # Process based on backend
         data = table_items.items
-        backend = self.table_options.get("backend", "sqlalchemy")
+        backend = self.repl_options.get("backend", "sqlalchemy")
         try:
             if backend == "sqlalchemy":
                 yield from self.emit_schema_and_items(columns, data)
@@ -560,7 +558,7 @@ class BackendHandler:
             tuple(item.get(column, None) for column in list(columns.keys()))
             for item in items
         ]
-        tz = self.table_options.get("backend_kwargs", {}).get("tz", "UTC")
+        tz = self.repl_options.get("backend_kwargs", {}).get("tz", "UTC")
         yield dlt.mark.with_table_name(
             arrow.row_tuples_to_arrow(rows, columns=columns, tz=tz),
             self.table,
