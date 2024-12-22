@@ -20,7 +20,7 @@ _DUMMY_VALS: Dict[TDataType, Any] = {
     "decimal": Decimal(0),
     "double": 0.0,
     "text": "",
-    "time": pendulum.Time(0, 0, 0),
+    "time": pendulum.Time(),
     "timestamp": pendulum.from_timestamp(0),
     "wei": 0,
 }
@@ -108,7 +108,8 @@ def _type_mapper() -> PostgresTypeMapper:
 
 
 def _to_dlt_column_type(type_id: int, modifier: Optional[str]) -> TColumnType:
-    """Converts postgres type OID to dlt column type.
+    """
+    Converts postgres type OID to dlt column type.
 
     Type OIDs not in _PG_TYPES mapping default to "text" type.
     """
@@ -150,7 +151,7 @@ def _epoch_micros_to_datetime(microseconds_since_1970: int) -> pendulum.DateTime
 
 
 def _microseconds_to_time(microseconds: int) -> pendulum.Time:
-    return pendulum.Time(0).add(microseconds=microseconds)
+    return pendulum.Time().add(microseconds=microseconds)
 
 
 def _epoch_days_to_date(epoch_days: int) -> pendulum.Date:

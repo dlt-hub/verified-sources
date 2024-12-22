@@ -85,54 +85,39 @@ def init_replication(
     table_options: Optional[Mapping[str, SqlTableOptions]] = None,
     reset: bool = False,
 ) -> Iterable[DltResource]:
-    """Initializes replication for one, several, or all tables within a schema.
-
-    Can be called repeatedly with the same `slot_name`:
-    - creates a replication slot and publication with provided names if they do not exist yet
-    - skips creation of slot and publication if they already exist (unless`reset` is set to `False`)
-    - supports addition of new tables by extending `table_names`
-    - removing tables is not supported, i.e. exluding a table from `table_names`
-      will not remove it from the publication
-    - switching from a table selection to an entire schema is possible by omitting
-      the `table_names` argument
-    - changing `publish` has no effect (altering the published DML operations is not supported)
-    - table snapshots can only be persisted on the first call (because the snapshot
-      is exported when the slot is created)
+    """
+    Initializes a replication session for Postgres using logical replication.
+    Optionally, snapshots of specified tables can be taken during initialization.
 
     Args:
-        slot_name (str): Name of the replication slot to create if it does not exist yet.
-        schema (str): Name of the schema to replicate tables from.
-        table_names (Optional[Union[str, Sequence[str]]]):  Name(s) of the table(s)
-          to include in the publication. If not provided, all tables in the schema
-          are included.
-        credentials (ConnectionStringCredentials): Postgres database credentials.
-        take_snapshots (bool): Whether the table states in the snapshot exported
-          during replication slot creation are persisted to tables. If true, a
-          snapshot table is created in Postgres for all included tables, and corresponding
-          resources (`DltResource` objects) for these tables are created and returned.
-          The resources can be used to perform an initial load of all data present
-          in the tables at the moment the replication slot got created.
-        included_columns (Optional[Dict[str, Sequence[str]]]): Maps table name(s) to
-          sequence of names of columns to include in the snapshot table(s).
-          Any column not in the sequence is excluded. If not provided, all columns
-          are included. For example:
-          ```
-          included_columns={
-              "table_x": ["col_a", "col_c"],
-              "table_y": ["col_x", "col_y", "col_z"],
-          }
-          ```
-          Argument is only used if `take_snapshots` is `True`.
-          ```
-          Argument is only used if `take_snapshots` is `True`.
-        reset (bool): If set to True, the existing slot and publication are dropped
-          and recreated. Has no effect if a slot and publication with the provided
-          names do not yet exist.
+        slot_name (str):
+            The name of the logical replication slot to be used or created.
+        schema (str):
+            Name of the schema to replicate tables from.
+        table_names (Optional[Union[str, Sequence[str]]]):
+            The name(s) of the table(s) to replicate. Can be a single table name or a list of table names.
+            If not provided, no tables will be replicated unless `take_snapshots` is `True`.
+        credentials (ConnectionStringCredentials):
+            Database credentials for connecting to the Postgres instance.
+        take_snapshots (bool):
+            Whether to take initial snapshots of the specified tables.
+            Defaults to `False`.
+        table_options (Optional[Mapping[str, SqlTableOptions]]):
+            Additional options for configuring replication for specific tables.
+            These are the exact same parameters for the `dlt.sources.sql_database.sql_table` function.
+            Argument is only used if `take_snapshots` is `True`.
+        reset (bool, optional):
+            If `True`, drops the existing replication slot before creating a new one.
+            Use with caution, as this will clear existing replication state.
+            Defaults to `False`.
 
     Returns:
         - None if `take_snapshots` is `False`
-        - a `DltResource` object or a list of `DltResource` objects for the snapshot
-          table(s) if `take_snapshots` is `True` and the replication slot did not yet exist
+        - a list of `DltResource` objects for the snapshot table(s) if `take_snapshots` is `True`.
+
+    Notes:
+        - If `reset` is `True`, the existing replication slot will be dropped before creating a new one.
+        - When `take_snapshots` is `True`, the function configures a snapshot isolation level for consistent table snapshots.
     """
     rep_conn = _get_rep_conn(credentials)
     rep_cur = rep_conn.cursor()
@@ -180,8 +165,8 @@ def _configure_engine(
     setattr(engine, "rep_conn", rep_conn)  # noqa
 
     @sa.event.listens_for(engine, "engine_disposed")
-    def on_engine_disposed(engine: Engine) -> None:
-        delattr(engine, "rep_conn")
+    def on_engine_disposed(e: Engine) -> None:
+        delattr(e, "rep_conn")
 
     return engine
 
@@ -230,15 +215,12 @@ def drop_replication_slot(name: str, cur: ReplicationCursor) -> None:
         )
 
 
-def get_max_lsn(
-    slot_name: str,
-    credentials: ConnectionStringCredentials,
-) -> Optional[int]:
-    """Returns maximum Log Sequence Number (LSN) in replication slot.
+def get_max_lsn(credentials: ConnectionStringCredentials) -> Optional[int]:
+    """
+    Returns maximum Log Sequence Number (LSN).
 
     Returns None if the replication slot is empty.
     Does not consume the slot, i.e. messages are not flushed.
-    Raises error if the replication slot or publication does not exist.
     """
     cur = _get_conn(credentials).cursor()
     loc_fn = (
@@ -248,18 +230,13 @@ def get_max_lsn(
     )
     # subtract '0/0' to convert pg_lsn type to int (https://stackoverflow.com/a/73738472)
     cur.execute(f"SELECT {loc_fn}() - '0/0' as max_lsn;")
-    # lsn_field = "location" if get_pg_version(cur) < 100000 else "lsn"
-    # cur.execute(
-    #     f"SELECT MAX({lsn_field} - '0/0') AS max_lsn "  # subtract '0/0' to convert pg_lsn type to int (https://stackoverflow.com/a/73738472)
-    #     f"FROM pg_logical_slot_peek_binary_changes('{slot_name}', NULL, NULL);"
-    # )
     lsn: int = cur.fetchone()[0]
     cur.connection.close()
     return lsn
 
 
 def lsn_int_to_hex(lsn: int) -> str:
-    """Convert integer LSN to postgres' hexadecimal representation."""
+    """Convert integer LSN to postgres hexadecimal representation."""
     # https://stackoverflow.com/questions/66797767/lsn-external-representation.
     return f"{lsn >> 32 & 4294967295:X}/{lsn & 4294967295:08X}"
 
@@ -269,7 +246,8 @@ def advance_slot(
     slot_name: str,
     credentials: ConnectionStringCredentials,
 ) -> None:
-    """Advances position in the replication slot.
+    """
+    Advances position in the replication slot.
 
     Flushes all messages upto (and including) the message with LSN = `upto_lsn`.
     This function is used as alternative to psycopg2's `send_feedback` method, because
@@ -303,7 +281,8 @@ def _get_conn(
 def _get_rep_conn(
     credentials: ConnectionStringCredentials,
 ) -> LogicalReplicationConnection:
-    """Returns a psycopg2 LogicalReplicationConnection to interact with postgres replication functionality.
+    """
+    Returns a psycopg2 LogicalReplicationConnection to interact with postgres replication functionality.
 
     Raises error if the user does not have the REPLICATION attribute assigned.
     """
@@ -311,7 +290,8 @@ def _get_rep_conn(
 
 
 class MessageConsumer:
-    """Consumes messages from a ReplicationCursor sequentially.
+    """
+    Consumes messages from a ReplicationCursor sequentially.
 
     Generates data item for each `insert`, `update`, and `delete` message.
     Processes in batches to limit memory usage.
@@ -360,11 +340,12 @@ class MessageConsumer:
             assert row_msg.op != Op.UNKNOWN, f"Unsupported operation : {row_msg}"
 
             if row_msg.op == Op.BEGIN:
-                self.last_commit_ts = _epoch_micros_to_datetime(row_msg.commit_time)
+                # self.last_commit_ts = _epoch_micros_to_datetime(row_msg.commit_time)
+                pass
             elif row_msg.op == Op.COMMIT:
-                self.process_commit(msg.data_start)
+                self.process_commit(lsn=msg.data_start)
             else:  # INSERT, UPDATE or DELETE
-                self.process_change(row_msg, msg.data_start)
+                self.process_change(row_msg, lsn=msg.data_start)
         except StopReplication:
             raise
         except Exception:
@@ -374,7 +355,8 @@ class MessageConsumer:
             raise
 
     def process_commit(self, lsn: int) -> None:
-        """Updates object state when Commit message is observed.
+        """
+        Updates object state when Commit message is observed.
 
         Raises StopReplication when `upto_lsn` or `target_batch_size` is reached.
         """
@@ -399,6 +381,7 @@ class MessageConsumer:
         self.data_items[table_name].append(data_item)
 
     def get_table_schema(self, msg: RowMessage, table_name: str) -> TTableSchema:
+        """Given a row message, calculates or fetches a table schema."""
         last_schema = self.last_table_schema.get(table_name)
 
         # Used cached schema if the operation is a DELETE since the inferred one will always be less precise
@@ -453,11 +436,12 @@ class ItemGenerator:
     generated_all: bool = False
 
     def __iter__(self) -> Iterator[TableItems]:
-        """Yields replication messages from MessageConsumer.
+        """
+        Yields data items/schema from MessageConsumer.
 
-        Starts replication of messages published by the publication from the replication slot.
-        Maintains LSN of last consumed Commit message in object state.
-        Does not advance the slot.
+        Starts replication of messages from the replication slot.
+        Maintains LSN of last consumed commit message in object state.
+        Advances the slot only when all messages have been consumed.
         """
         cur = _get_rep_conn(self.credentials).cursor()
         cur.start_replication(slot_name=self.slot_name, start_lsn=self.start_lsn)
@@ -470,7 +454,6 @@ class ItemGenerator:
         try:
             cur.consume_stream(consumer)
         except StopReplication:  # completed batch or reached `upto_lsn`
-            logger.info("Flushing batch of %s events", self.target_batch_size)
             yield from self.flush_batch(cur, consumer)
         finally:
             cur.connection.close()
@@ -498,24 +481,22 @@ class ItemGenerator:
 
 @dataclass
 class BackendHandler:
+    """
+    Consumes messages from ItemGenerator once a batch is ready for emitting.
+
+    It is mainly responsible for emitting schema and dict data times or transforming
+    into arrow tables.
+    """
+
     table: str
     repl_options: ReplicationOptions
 
     def __call__(self, table_items: TableItems) -> Iterable[DataItemWithMeta]:
-        """Yields replication messages from ItemGenerator.
-
-        Args:
-            table_items: An object containing schema and items for the table.
-
-        Yields:
-            DataItemWithMeta: Processed data items based on the table and backend.
-        """
-        schema = table_items.schema
-        if schema["name"] != self.table:
+        if table_items.schema["name"] != self.table:
             return
 
         # Apply column hints if provided
-        columns = schema["columns"]
+        columns = table_items.schema["columns"]
         if column_hints := self.repl_options.get("column_hints"):
             for col_name, col_hint in column_hints.items():
                 if col_name in columns:
@@ -574,13 +555,14 @@ def infer_table_schema(
     included_columns: Optional[Set[str]] = None,
     **_: Any,
 ) -> TTableSchema:
-    """Infers the table schema from the replication message and optional hints"""
+    """Infers the table schema from the replication message and optional hints."""
     # Choose the correct source based on operation type
     is_change = msg.op != Op.DELETE
     tuples = msg.new_tuple if is_change else msg.old_tuple
+    schema = TTableSchema(name=msg.table.split(".")[1])
 
     # Filter and map columns, conditionally using `new_typeinfo` when available
-    columns = {
+    schema["columns"] = {
         col_name: _to_dlt_column_schema(
             col_name, datum=col, type_info=msg.new_typeinfo[i] if is_change else None
         )
@@ -591,35 +573,32 @@ def infer_table_schema(
 
     # Add replication columns
     if include_lsn:
-        columns["_pg_lsn"] = {
+        schema["columns"]["_pg_lsn"] = {
             "data_type": "bigint",
             "name": "_pg_lsn",
             "nullable": True,
         }
     if include_deleted_ts:
-        columns["_pg_deleted_ts"] = {
+        schema["columns"]["_pg_deleted_ts"] = {
             "data_type": "timestamp",
             "name": "_pg_deleted_ts",
             "nullable": True,
         }
     if include_commit_ts:
-        columns["_pg_commit_ts"] = {
+        schema["columns"]["_pg_commit_ts"] = {
             "data_type": "timestamp",
             "name": "_pg_commit_ts",
             "nullable": True,
         }
     if include_tx_id:
-        columns["_pg_tx_id"] = {
+        schema["columns"]["_pg_tx_id"] = {
             "data_type": "bigint",
             "name": "_pg_tx_id",
             "nullable": True,
             "precision": 32,
         }
 
-    return {
-        "name": msg.table.split(".")[1],
-        "columns": columns,
-    }
+    return schema
 
 
 def gen_data_item(
@@ -643,25 +622,26 @@ def gen_data_item(
         data_item["_pg_tx_id"] = msg.transaction_id
 
     # Select the relevant row tuple based on operation type
-    row = msg.new_tuple if msg.op != Op.DELETE else msg.old_tuple
-    if msg.op == Op.DELETE and include_deleted_ts:
+    is_delete = msg.op == Op.DELETE
+    row = msg.old_tuple if is_delete else msg.new_tuple
+    if is_delete and include_deleted_ts:
         data_item["_pg_deleted_ts"] = _epoch_micros_to_datetime(msg.commit_time)
 
     for data in row:
         col_name = _actual_column_name(data)
         if not included_columns or col_name in included_columns:
             data_item[col_name] = _to_dlt_val(
-                data,
-                column_schema[col_name]["data_type"],
-                for_delete=msg.op == Op.DELETE,
+                data, column_schema[col_name]["data_type"], for_delete=is_delete
             )
 
     return data_item
 
 
 def _actual_column_name(column: DatumMessage) -> str:
-    """Certain column names are quoted since they are reserved keywords,
-    however let the destination decide on how to normalize them"""
+    """
+    Certain column names are quoted since they are reserved keywords,
+    however let the destination decide on how to normalize them
+    """
     col_name = column.column_name
     if col_name.startswith('"') and col_name.endswith('"'):
         col_name = col_name[1:-1]
@@ -678,13 +658,15 @@ ALLOWED_COL_SCHEMA_FIELDS: Set[str] = {
 
 
 def compare_schemas(last: TTableSchema, new: TTableSchema) -> TTableSchema:
-    """Compares the last schema with the new one and chooses the more
+    """
+    Compares the last schema with the new one and chooses the more
     precise one if they are relatively equal or else raises a
-    AssertionError due to an incompatible schema change"""
+    AssertionError due to an incompatible schema change
+    """
     table_name = last["name"]
     assert table_name == new["name"], "Table names do not match"
 
-    table_schema: TTableSchema = {"name": table_name, "columns": {}}
+    table_schema = TTableSchema(name=table_name, columns={})
     last_cols, new_cols = last["columns"], new["columns"]
     assert len(last_cols) == len(
         new_cols
@@ -696,15 +678,12 @@ def compare_schemas(last: TTableSchema, new: TTableSchema) -> TTableSchema:
             s2 is not None and s1["data_type"] == s2["data_type"]
         ), f"Incompatible schema for column '{name}'"
 
-        # Ensure new has no fields outside of allowed fields
+        # Ensure new has no fields outside allowed fields
         extra_fields = set(s2.keys()) - ALLOWED_COL_SCHEMA_FIELDS
         assert not extra_fields, f"Unexpected fields {extra_fields} in column '{name}'"
 
         # Select the more precise schema by comparing nullable, precision, and scale
-        col_schema: TColumnSchema = {
-            "name": name,
-            "data_type": s1["data_type"],
-        }
+        col_schema = TColumnSchema(name=name, data_type=s1["data_type"])
         if "nullable" in s1 or "nullable" in s2:
             col_schema["nullable"] = s1.get("nullable", s2.get("nullable"))
         if "precision" in s1 or "precision" in s2:

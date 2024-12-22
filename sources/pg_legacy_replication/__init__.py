@@ -29,50 +29,54 @@ def replication_source(
     target_batch_size: int = 1000,
     flush_slot: bool = True,
 ) -> Iterable[DltResource]:
-    """Source yielding data items for changes in one or more postgres tables.
+    """
+    Defines a dlt source for replicating Postgres tables using logical replication.
+    This source reads from a replication slot and pipes the changes using transformers.
 
     - Relies on a replication slot that publishes DML operations (i.e. `insert`, `update`, and `delete`).
     - Maintains LSN of last consumed message in state to track progress.
-    - At start of the run, advances the slot upto last consumed message in previous run.
+    - At start of the run, advances the slot upto last consumed message in previous run (for pg>10 only)
     - Processes in batches to limit memory usage.
 
     Args:
-        slot_name (str): Name of the replication slot to consume replication messages from.
-        credentials (ConnectionStringCredentials): Postgres database credentials.
-        included_columns (Optional[Dict[str, TColumnNames]]): Maps table name(s) to
-          sequence of names of columns to include in the generated data items.
-          Any column not in the sequence is excluded. If not provided, all columns
-          are included. For example:
-          ```
-          include_columns={
-              "table_x": ["col_a", "col_c"],
-              "table_y": ["col_x", "col_y", "col_z"],
-          }
-          ```
-        columns (Optional[Dict[str, TTableSchemaColumns]]): Maps
-          table name(s) to column hints to apply on the replicated table(s). For example:
-          ```
-          columns={
-              "table_x": {"col_a": {"data_type": "complex"}},
-              "table_y": {"col_y": {"precision": 32}},
-          }
-          ```
-        target_batch_size (int): Desired number of data items yielded in a batch.
-          Can be used to limit the data items in memory. Note that the number of
-          data items yielded can be (far) greater than `target_batch_size`, because
-          all messages belonging to the same transaction are always processed in
-          the same batch, regardless of the number of messages in the transaction
-          and regardless of the value of `target_batch_size`. The number of data
-          items can also be smaller than `target_batch_size` when the replication
-          slot is exhausted before a batch is full.
-        flush_slot (bool): Whether processed messages are discarded from the replication
-          slot. Recommended value is True. Be careful when setting False—not flushing
-          can eventually lead to a “disk full” condition on the server, because
-          the server retains all the WAL segments that might be needed to stream
-          the changes via all the currently open replication slots.
+        slot_name (str):
+            The name of the logical replication slot used to fetch WAL changes.
+        schema (str):
+            Name of the schema to replicate tables from.
+        table_names (Union[str, Sequence[str]]):
+            The name(s) of the tables to replicate. Can be a single table name or a list of table names.
+        credentials (ConnectionStringCredentials):
+            Database credentials for connecting to the Postgres instance.
+        repl_options (Optional[Mapping[str, ReplicationOptions]], optional):
+            A mapping of table names to `ReplicationOptions`, allowing for fine-grained control over
+            replication behavior for each table.
 
-        Yields:
-            Data items for changes published in the publication.
+            Each `ReplicationOptions` dictionary can include the following keys:
+                - `backend` (Optional[TableBackend]): Specifies the backend to use for table replication.
+                - `backend_kwargs` (Optional[Mapping[str, Any]]): Additional configuration options for the backend.
+                - `column_hints` (Optional[TTableSchemaColumns]): A dictionary of hints for column types or properties.
+                - `include_lsn` (Optional[bool]): Whether to include the LSN (Log Sequence Number)
+                  in the replicated data. Defaults to `True`.
+                - `include_deleted_ts` (Optional[bool]): Whether to include a timestamp for deleted rows.
+                  Defaults to `True`.
+                - `include_commit_ts` (Optional[bool]): Whether to include the commit timestamp of each change.
+                - `include_tx_id` (Optional[bool]): Whether to include the transaction ID of each change.
+                - `included_columns` (Optional[Set[str]]): A set of specific columns to include in the replication.
+                  If not specified, all columns are included.
+        target_batch_size (int, optional):
+            The target size of each batch of replicated data items. Defaults to `1000`.
+        flush_slot (bool, optional):
+            If `True`, advances the replication slot to the last processed LSN
+            to prevent replaying already replicated changes. Defaults to `True`.
+
+    Yields:
+        Iterable[DltResource]:
+            A collection of `DltResource` objects, each corresponding to a table being replicated.
+
+    Notes:
+        - The `repl_options` parameter allows fine-tuning of replication behavior, such as column filtering
+          or write disposition configuration, per table.
+        - The replication process is incremental, ensuring only new changes are processed after the last commit LSN.
     """
     table_names = [table_names] if isinstance(table_names, str) else table_names or []
     repl_options = defaultdict(lambda: ReplicationOptions(), repl_options or {})
@@ -85,7 +89,7 @@ def replication_source(
             advance_slot(start_lsn, slot_name, credentials)
 
         # continue until last message in replication slot
-        upto_lsn = get_max_lsn(slot_name, credentials)
+        upto_lsn = get_max_lsn(credentials)
         if upto_lsn is None:
             return
 
