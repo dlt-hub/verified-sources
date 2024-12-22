@@ -4,6 +4,7 @@ from dataclasses import dataclass, field
 from typing import (
     Any,
     Callable,
+    DefaultDict,
     Dict,
     Iterable,
     Iterator,
@@ -302,7 +303,7 @@ class MessageConsumer:
         self,
         upto_lsn: int,
         table_qnames: Set[str],
-        repl_options: Mapping[str, ReplicationOptions],
+        repl_options: DefaultDict[str, ReplicationOptions],
         target_batch_size: int = 1000,
     ) -> None:
         self.upto_lsn = upto_lsn
@@ -376,7 +377,7 @@ class MessageConsumer:
         table_name = msg.table.split(".")[1]
         table_schema = self.get_table_schema(msg, table_name)
         data_item = gen_data_item(
-            msg, table_schema["columns"], lsn, **self.repl_options.get(table_name)
+            msg, table_schema["columns"], lsn, **self.repl_options[table_name]
         )
         self.data_items[table_name].append(data_item)
 
@@ -393,7 +394,7 @@ class MessageConsumer:
         if current_hash == self.last_table_hashes.get(table_name):
             return self.last_table_schema[table_name]
 
-        new_schema = infer_table_schema(msg, **self.repl_options.get(table_name))
+        new_schema = infer_table_schema(msg, **self.repl_options[table_name])
         if last_schema is None:
             # Cache the inferred schema and hash if it is not already cached
             self.last_table_schema[table_name] = new_schema
@@ -430,7 +431,7 @@ class ItemGenerator:
     table_qnames: Set[str]
     upto_lsn: int
     start_lsn: int
-    repl_options: Mapping[str, ReplicationOptions]
+    repl_options: DefaultDict[str, ReplicationOptions]
     target_batch_size: int = 1000
     last_commit_lsn: Optional[int] = field(default=None, init=False)
     generated_all: bool = False

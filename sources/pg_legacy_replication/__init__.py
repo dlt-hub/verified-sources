@@ -116,7 +116,7 @@ def replication_source(
 
     for table in table_names:
         yield dlt.transformer(
-            _create_table_dispatch(table, repl_options=repl_options.get(table)),
+            _create_table_dispatch(table, repl_options=repl_options[table]),
             data_from=wal_reader,
             name=table,
         )
