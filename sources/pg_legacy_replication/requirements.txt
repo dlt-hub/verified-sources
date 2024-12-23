@@ -1,4 +1,4 @@
-dlt>=0.5.12
+dlt>=1.3.0
 psycopg2-binary>=2.9.9
 protobuf>=5
 sqlalchemy>=1.4
