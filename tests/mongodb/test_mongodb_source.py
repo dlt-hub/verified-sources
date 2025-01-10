@@ -410,6 +410,106 @@ def test_filter_intersect(destination_name):
 
 
 @pytest.mark.parametrize("destination_name", ALL_DESTINATIONS)
+def test_projection_list_inclusion(destination_name):
+    pipeline = dlt.pipeline(
+        pipeline_name="mongodb_test",
+        destination=destination_name,
+        dataset_name="mongodb_test_data",
+        full_refresh=True,
+    )
+    collection_name = "movies"
+    projection = ["title", "poster"]
+    expected_columns = projection + ["_id", "_dlt_id", "_dlt_load_id"]
+
+    movies = mongodb_collection(
+        collection=collection_name,
+        projection=projection,
+        limit=2
+    )
+    pipeline.run(movies)
+    loaded_columns = pipeline.default_schema.get_table_columns(collection_name).keys()
+
+    assert set(loaded_columns) == set(expected_columns)
+
+
+@pytest.mark.parametrize("destination_name", ALL_DESTINATIONS)
+def test_projection_dict_inclusion(destination_name):
+    pipeline = dlt.pipeline(
+        pipeline_name="mongodb_test",
+        destination=destination_name,
+        dataset_name="mongodb_test_data",
+        full_refresh=True,
+    )
+    collection_name = "movies"
+    projection = {"title": 1, "poster": 1}
+    expected_columns = list(projection.keys()) + ["_id", "_dlt_id", "_dlt_load_id"]
+
+    movies = mongodb_collection(
+        collection=collection_name,
+        projection=projection,
+        limit=2
+    )
+    pipeline.run(movies)
+    loaded_columns = pipeline.default_schema.get_table_columns(collection_name).keys()
+
+    assert set(loaded_columns) == set(expected_columns)
+
+
+@pytest.mark.parametrize("destination_name", ALL_DESTINATIONS)
+def test_projection_dict_exclusion(destination_name):
+    pipeline = dlt.pipeline(
+        pipeline_name="mongodb_test",
+        destination=destination_name,
+        dataset_name="mongodb_test_data",
+        full_refresh=True,
+    )
+    collection_name = "movies"
+    columns_to_exclude = [
+        "runtime", "released", "year", "plot", "fullplot", "lastupdated", "type",
+        "directors", "imdb", "cast", "countries", "genres", "tomatoes", "num_mflix_comments",
+        "rated", "awards"
+    ]
+    projection = {col: 0 for col in columns_to_exclude}
+    expected_columns = ["title", "poster", "_id", "_dlt_id", "_dlt_load_id"]
+
+    movies = mongodb_collection(
+        collection=collection_name,
+        projection=projection,
+        limit=2
+    )
+    pipeline.run(movies)
+    loaded_columns = pipeline.default_schema.get_table_columns(collection_name).keys()
+
+    assert set(loaded_columns) == set(expected_columns)
+
+
+@pytest.mark.parametrize("destination_name", ALL_DESTINATIONS)
+def test_projection_nested_field(destination_name):
+    pipeline = dlt.pipeline(
+        pipeline_name="mongodb_test",
+        destination=destination_name,
+        dataset_name="mongodb_test_data",
+        full_refresh=True,
+    )
+    collection_name = "movies"
+    projection = ["imdb.votes", "poster"]
+    expected_columns = ["imdb__votes", "poster", "_id", "_dlt_id", "_dlt_load_id"]
+    # other documents nested under `imdb` shouldn't be loaded
+    not_expected_columns = ["imdb__rating", "imdb__id"]
+
+    movies = mongodb_collection(
+        collection=collection_name,
+        projection=projection,
+        limit=2
+    )
+    pipeline.run(movies)
+    loaded_columns = pipeline.default_schema.get_table_columns(collection_name).keys()
+
+    assert set(loaded_columns) == set(expected_columns)
+    assert len(set(loaded_columns).intersection(not_expected_columns)) == 0
+
+
+@pytest.mark.parametrize("destination_name", ALL_DESTINATIONS)
 @pytest.mark.parametrize("data_item_format", ["object", "arrow"])
 def test_mongodb_without_pymongoarrow(
     destination_name: str, data_item_format: str

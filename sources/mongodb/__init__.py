@@ -1,6 +1,6 @@
 """Source that loads collections form any a mongo database, supports incremental loads."""
 
-from typing import Any, Dict, Iterable, List, Optional
+from typing import Any, Dict, Iterable, List, Optional, Union, Mapping
 
 import dlt
 from dlt.common.data_writers import TDataItemFormat
@@ -73,6 +73,7 @@ def mongodb(
             parallel=parallel,
             limit=limit,
             filter_=filter_ or {},
+            projection=None,
         )
 
 
@@ -90,6 +91,7 @@ def mongodb_collection(
     chunk_size: Optional[int] = 10000,
     data_item_format: Optional[TDataItemFormat] = "object",
     filter_: Optional[Dict[str, Any]] = None,
+    projection: Optional[Union[Mapping[str, Any], Iterable[str]]] = None,
 ) -> Any:
     """
     A DLT source which loads a collection from a mongo database using PyMongo.
@@ -109,6 +111,12 @@ def mongodb_collection(
                 object - Python objects (dicts, lists).
                 arrow - Apache Arrow tables.
         filter_ (Optional[Dict[str, Any]]): The filter to apply to the collection.
+        projection: (Optional[Union[Mapping[str, Any], Iterable[str]]]): The projection to select columns
+            when loading the collection. Supported inputs:
+                include (list) - ["year", "title"]
+                include (dict) - {"year": 1, "title": 1}
+                exclude (dict) - {"released": 0, "runtime": 0}
+            Note: Can't mix include and exclude statements '{"title": 1, "released": 0}`
 
     Returns:
         Iterable[DltResource]: A list of DLT resources for each collection to be loaded.
@@ -136,4 +144,5 @@ def mongodb_collection(
         chunk_size=chunk_size,
         data_item_format=data_item_format,
         filter_=filter_ or {},
+        projection=projection,
     )

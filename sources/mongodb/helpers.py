@@ -1,7 +1,7 @@
 """Mongo database source helpers"""
 
 from itertools import islice
-from typing import TYPE_CHECKING, Any, Dict, Iterator, List, Optional, Tuple
+from typing import TYPE_CHECKING, Any, Dict, Iterator, List, Optional, Tuple, Union, Iterable, Mapping
 
 import dlt
 from bson.decimal128 import Decimal128
@@ -18,6 +18,7 @@ from pendulum import _datetime
 from pymongo import ASCENDING, DESCENDING, MongoClient
 from pymongo.collection import Collection
 from pymongo.cursor import Cursor
+from pymongo.helpers import _fields_list_to_dict
 
 
 if TYPE_CHECKING:
@@ -106,6 +107,41 @@ class CollectionLoader:
                 filt[self.cursor_field]["$gt"] = self.incremental.end_value
 
         return filt
+    
+    def _projection_op(self, projection) -> Optional[Dict[str, Any]]:
+        """Build a projection operator.
+        
+        A tuple of fields to include or a dict specifying fields to include or exclude.
+        The incremental `primary_key` needs to be handle differently for inclusion
+        and exclusion projections.
+
+        Returns:
+            Tuple[str, ...] | Dict[str, Any]: A tuple or dictionary with the projection operator.
+        """
+        if projection is None:
+            return None
+
+        projection_dict = dict(_fields_list_to_dict(projection, "projection"))
+
+        # NOTE we can still filter on primary_key if it's excluded from projection
+        if self.incremental:
+            # this is an inclusion projection
+            if any(v == 1 for v in projection.values()):
+                # ensure primary_key is included
+                projection_dict.update({self.incremental.primary_key: 1})
+            # this is an exclusion projection
+            else:
+                try:
+                    # ensure primary_key isn't excluded
+                    projection_dict.pop(self.incremental.primary_key)
+                except KeyError:
+                    pass  # primary_key was properly not included in exclusion projection
+                else:
+                    dlt.common.logger.warn(
+                        f"Primary key `{self.incremental.primary_key} was removed from exclusion projection"
+                    )
+
+        return projection_dict
 
     def _limit(self, cursor: Cursor, limit: Optional[int] = None) -> TCursor:  # type: ignore
         """Apply a limit to the cursor, if needed.
@@ -128,7 +164,10 @@ class CollectionLoader:
         return cursor
 
     def load_documents(
-        self, filter_: Dict[str, Any], limit: Optional[int] = None
+        self,
+        filter_: Dict[str, Any],
+        limit: Optional[int] = None,
+        projection: Optional[Union[Mapping[str, Any], Iterable[str]]] = None,
     ) -> Iterator[TDataItem]:
         """Construct the query and load the documents from the collection.
 
@@ -143,7 +182,9 @@ class CollectionLoader:
         _raise_if_intersection(filter_op, filter_)
         filter_op.update(filter_)
 
-        cursor = self.collection.find(filter=filter_op)
+        projection_op = self._projection_op(projection)
+
+        cursor = self.collection.find(filter=filter_op, projection=projection_op)
         if self._sort_op:
             cursor = cursor.sort(self._sort_op)
 
@@ -171,7 +212,11 @@ class CollectionLoaderParallel(CollectionLoader):
 
         return batches
 
-    def _get_cursor(self, filter_: Dict[str, Any]) -> TCursor:
+    def _get_cursor(
+        self,
+        filter_: Dict[str, Any],
+        projection: Optional[Union[Mapping[str, Any], Iterable[str]]] = None,
+    ) -> TCursor:
         """Get a reading cursor for the collection.
 
         Args:
@@ -184,7 +229,9 @@ class CollectionLoaderParallel(CollectionLoader):
         _raise_if_intersection(filter_op, filter_)
         filter_op.update(filter_)
 
-        cursor = self.collection.find(filter=filter_op)
+        projection_op = self._projection_op(projection)
+
+        cursor = self.collection.find(filter=filter_op, projection=projection_op)
         if self._sort_op:
             cursor = cursor.sort(self._sort_op)
 
@@ -201,7 +248,10 @@ class CollectionLoaderParallel(CollectionLoader):
         return data
 
     def _get_all_batches(
-        self, filter_: Dict[str, Any], limit: Optional[int] = None
+        self,
+        filter_: Dict[str, Any],
+        limit: Optional[int] = None,
+        projection: Optional[Union[Mapping[str, Any], Iterable[str]]] = None,
     ) -> Iterator[TDataItem]:
         """Load all documents from the collection in parallel batches.
 
@@ -213,13 +263,16 @@ class CollectionLoaderParallel(CollectionLoader):
             Iterator[TDataItem]: An iterator of the loaded documents.
         """
         batches = self._create_batches(limit=limit)
-        cursor = self._get_cursor(filter_=filter_)
+        cursor = self._get_cursor(filter_=filter_, projection=projection)
 
         for batch in batches:
             yield self._run_batch(cursor=cursor, batch=batch)
 
     def load_documents(
-        self, filter_: Dict[str, Any], limit: Optional[int] = None
+        self,
+        filter_: Dict[str, Any],
+        limit: Optional[int] = None,
+        projection: Optional[Union[Mapping[str, Any], Iterable[str]]] = None,
     ) -> Iterator[TDataItem]:
         """Load documents from the collection in parallel.
 
@@ -230,7 +283,9 @@ class CollectionLoaderParallel(CollectionLoader):
         Yields:
             Iterator[TDataItem]: An iterator of the loaded documents.
         """
-        for document in self._get_all_batches(limit=limit, filter_=filter_):
+        for document in self._get_all_batches(
+            limit=limit, filter_=filter_, projection=projection
+        ):
             yield document
 
 
@@ -241,7 +296,10 @@ class CollectionArrowLoader(CollectionLoader):
     """
 
     def load_documents(
-        self, filter_: Dict[str, Any], limit: Optional[int] = None
+        self,
+        filter_: Dict[str, Any],
+        limit: Optional[int] = None,
+        projection: Optional[Union[Mapping[str, Any], Iterable[str]]] = None,
     ) -> Iterator[Any]:
         """
         Load documents from the collection in Apache Arrow format.
@@ -264,7 +322,12 @@ class CollectionArrowLoader(CollectionLoader):
         _raise_if_intersection(filter_op, filter_)
         filter_op.update(filter_)
 
-        cursor = self.collection.find_raw_batches(filter_, batch_size=self.chunk_size)
+        projection_op = self._projection_op(projection)
+
+        # NOTE the `filter_op` isn't passed
+        cursor = self.collection.find_raw_batches(
+            filter_, batch_size=self.chunk_size, projection=projection_op
+        )
         if self._sort_op:
             cursor = cursor.sort(self._sort_op)  # type: ignore
 
@@ -283,7 +346,11 @@ class CollectionArrowLoaderParallel(CollectionLoaderParallel):
     Apache Arrow for data processing.
     """
 
-    def _get_cursor(self, filter_: Dict[str, Any]) -> TCursor:
+    def _get_cursor(
+        self,
+        filter_: Dict[str, Any],
+        projection: Optional[Union[Mapping[str, Any], Iterable[str]]] = None,
+    ) -> TCursor:
         """Get a reading cursor for the collection.
 
         Args:
@@ -296,8 +363,10 @@ class CollectionArrowLoaderParallel(CollectionLoaderParallel):
         _raise_if_intersection(filter_op, filter_)
         filter_op.update(filter_)
 
+        projection_op = self._projection_op(projection)
+
         cursor = self.collection.find_raw_batches(
-            filter=filter_op, batch_size=self.chunk_size
+            filter=filter_op, batch_size=self.chunk_size, projection=projection_op
         )
         if self._sort_op:
             cursor = cursor.sort(self._sort_op)  # type: ignore
@@ -326,6 +395,7 @@ def collection_documents(
     client: TMongoClient,
     collection: TCollection,
     filter_: Dict[str, Any],
+    projection: Union[Dict[str, Any], List[str]],  # TODO kwargs reserved for dlt?
     incremental: Optional[dlt.sources.incremental[Any]] = None,
     parallel: bool = False,
     limit: Optional[int] = None,
@@ -348,6 +418,12 @@ def collection_documents(
             Supported formats:
                 object - Python objects (dicts, lists).
                 arrow - Apache Arrow tables.
+        projection: (Optional[Union[Mapping[str, Any], Iterable[str]]]): The projection to select columns
+            when loading the collection. Supported inputs:
+                include (list) - ["year", "title"]
+                include (dict) - {"year": 1, "title": 1}
+                exclude (dict) - {"released": 0, "runtime": 0}
+            Note: Can't mix include and exclude statements '{"title": 1, "released": 0}`
 
     Returns:
         Iterable[DltResource]: A list of DLT resources for each collection to be loaded.
@@ -372,7 +448,7 @@ def collection_documents(
     loader = LoaderClass(
         client, collection, incremental=incremental, chunk_size=chunk_size
     )
-    for data in loader.load_documents(limit=limit, filter_=filter_):
+    for data in loader.load_documents(limit=limit, filter_=filter_, projection=projection):
         yield data
 
 
