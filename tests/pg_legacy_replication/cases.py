@@ -1,8 +1,8 @@
+from base64 import b64encode
 from typing import List
 
 import pendulum
 from dlt.common import Decimal
-from dlt.common.data_types.typing import DATA_TYPES
 from dlt.common.schema import TColumnSchema, TTableSchema, TTableSchemaColumns
 from dlt.common.typing import TDataItem
 
@@ -259,6 +259,49 @@ ROW_MESSAGES: List[dict] = [
             },
         ],
     },
+    {
+        "transactionId": 754,
+        "commitTime": "1736873892023448",
+        "table": "src_pl_dataset_202501140458116348.data_types",
+        "op": "INSERT",
+        "newTuple": [
+            {"columnName": "bit_col", "columnType": 1560, "datumString": "1"},
+            {
+                "columnName": "box_col",
+                "columnType": 603,
+                "datumBytes": b64encode(b"(1,1),(0,0)").decode(),
+            },
+            {
+                "columnName": "uuid_col",
+                "columnType": 2950,
+                "datumString": "6e1f5de1-1093-4bfe-98e4-62ac56b2db54",
+            },
+            {
+                "columnName": "text_a",
+                "columnType": 1009,
+                "datumBytes": b64encode(b"{a,b}").decode(),
+            },
+        ],
+        "newTypeinfo": [
+            {
+                "modifier": "bit(1)",
+                "valueOptional": True,
+            },
+            {
+                "modifier": "box",
+                "valueOptional": True,
+            },
+            {
+                "modifier": "uuid",
+                "valueOptional": True,
+            },
+            {
+                "modifier": "text[]",
+                "valueOptional": True,
+            },
+        ],
+        "oldTuple": [],
+    },
 ]
 
 DATA_ITEMS: List[TDataItem] = [
@@ -308,6 +351,15 @@ DATA_ITEMS: List[TDataItem] = [
         "_pg_deleted_ts": pendulum.parse("2024-10-19T00:56:23.354856+00:00"),
         "_pg_commit_ts": pendulum.parse("2024-10-19T00:56:23.354856+00:00"),
         "_pg_tx_id": 932,
+    },
+    {
+        "bit_col": "1",
+        "box_col": "KDEsMSksKDAsMCk=",
+        "uuid_col": "6e1f5de1-1093-4bfe-98e4-62ac56b2db54",
+        "text_a": ["a", "b"],
+        "_pg_lsn": 1,
+        "_pg_commit_ts": pendulum.parse("2025-01-14T16:58:12.023448+00:00"),
+        "_pg_tx_id": 754,
     },
 ]
 
@@ -398,6 +450,32 @@ TABLE_SCHEMAS: List[TTableSchema] = [
             "col_tstz": {"data_type": "timestamp", "name": "col_tstz"},
             "col_num": {"data_type": "decimal", "name": "col_num"},
             "col_json": {"data_type": "json", "name": "col_json"},
+            "_pg_lsn": {"data_type": "bigint", "name": "_pg_lsn", "nullable": True},
+            "_pg_deleted_ts": {
+                "data_type": "timestamp",
+                "name": "_pg_deleted_ts",
+                "nullable": True,
+            },
+            "_pg_commit_ts": {
+                "data_type": "timestamp",
+                "name": "_pg_commit_ts",
+                "nullable": True,
+            },
+            "_pg_tx_id": {
+                "data_type": "bigint",
+                "name": "_pg_tx_id",
+                "nullable": True,
+                "precision": 32,
+            },
+        },
+    },
+    {
+        "name": "data_types",
+        "columns": {
+            "bit_col": {"data_type": "text", "name": "bit_col", "nullable": True},
+            "box_col": {"data_type": "text", "name": "box_col", "nullable": True},
+            "uuid_col": {"data_type": "text", "name": "uuid_col", "nullable": True},
+            "text_a": {"data_type": "json", "name": "text_a", "nullable": True},
             "_pg_lsn": {"data_type": "bigint", "name": "_pg_lsn", "nullable": True},
             "_pg_deleted_ts": {
                 "data_type": "timestamp",

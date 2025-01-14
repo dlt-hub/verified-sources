@@ -116,6 +116,8 @@ def _to_dlt_column_type(type_id: int, modifier: Optional[str]) -> TColumnType:
     pg_type = _PG_TYPES.get(type_id)
     if pg_type in _MISSING_TYPES:
         return {"data_type": _MISSING_TYPES[pg_type]}
+    if modifier and modifier.endswith("[]"):
+        return {"data_type": "json"}
     if pg_type is None:
         logger.warning(
             "No type found for type_id '%s' and modifier '%s'", type_id, modifier
@@ -181,4 +183,30 @@ def _to_dlt_val(
         return data_type_handlers[data_type](raw_value)
 
     raw_type = _DATUM_RAW_TYPES[datum]
+    if _is_scalar_pg_array(data_type, raw_type, raw_value):
+        raw_type, raw_value = "text", _pg_array_to_json_str(raw_value)
+
     return coerce_value(data_type, raw_type, raw_value)
+
+
+def _is_scalar_pg_array(
+    data_type: TDataType, raw_type: TDataType, raw_value: Any
+) -> bool:
+    return (
+        data_type == "json"
+        and raw_type == "binary"
+        and raw_value.startswith(b"{")
+        and raw_value.endswith(b"}")
+    )
+
+
+def _pg_array_to_json_str(raw_value: bytes) -> str:
+    """
+    Decode the byte string to a regular string and strip the curly braces
+    """
+    content = raw_value[1:-1].decode()
+    csv = ",".join(
+        f'"{element}"' if element.isalpha() else element
+        for element in content.split(",")
+    )
+    return f"[{csv}]"
