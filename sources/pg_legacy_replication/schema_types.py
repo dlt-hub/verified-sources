@@ -183,20 +183,19 @@ def _to_dlt_val(
         return data_type_handlers[data_type](raw_value)
 
     raw_type = _DATUM_RAW_TYPES[datum]
-    if _is_scalar_pg_array(data_type, raw_type, raw_value):
-        raw_type, raw_value = "text", _pg_array_to_json_str(raw_value)
+    if raw_type == "binary" and _is_scalar_pg_array(data_type, raw_value):
+        raw_type = "text"
+        raw_value = _pg_array_to_json_str(raw_value)
 
     return coerce_value(data_type, raw_type, raw_value)
 
 
-def _is_scalar_pg_array(
-    data_type: TDataType, raw_type: TDataType, raw_value: Any
-) -> bool:
+def _is_scalar_pg_array(data_type: TDataType, raw_value: bytes) -> bool:
     return (
-        data_type == "json"
-        and raw_type == "binary"
-        and raw_value.startswith(b"{")
-        and raw_value.endswith(b"}")
+        len(raw_value) > 1
+        and data_type == "json"
+        and raw_value[0] == ord("{")
+        and raw_value[-1] == ord("}")
     )
 
 
@@ -204,9 +203,6 @@ def _pg_array_to_json_str(raw_value: bytes) -> str:
     """
     Decode the byte string to a regular string and strip the curly braces
     """
-    content = raw_value[1:-1].decode()
-    csv = ",".join(
-        f'"{element}"' if element.isalpha() else element
-        for element in content.split(",")
-    )
+    without_braces = raw_value[1:-1].decode()
+    csv = ",".join(f'"{x}"' if x.isalpha() else x for x in without_braces.split(","))
     return f"[{csv}]"
