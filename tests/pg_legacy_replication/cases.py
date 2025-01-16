@@ -279,7 +279,9 @@ ROW_MESSAGES: List[dict] = [
             {
                 "columnName": "text_a",
                 "columnType": 1009,
-                "datumBytes": b64encode(b"{a,b}").decode(),
+                "datumBytes": b64encode(
+                    b'{"Network administration",GNS3,BGP}'
+                ).decode(),
             },
         ],
         "newTypeinfo": [
@@ -356,7 +358,7 @@ DATA_ITEMS: List[TDataItem] = [
         "bit_col": "1",
         "box_col": "KDEsMSksKDAsMCk=",
         "uuid_col": "6e1f5de1-1093-4bfe-98e4-62ac56b2db54",
-        "text_a": ["a", "b"],
+        "text_a": ["Network administration", "GNS3", "BGP"],
         "_pg_lsn": 1,
         "_pg_commit_ts": pendulum.parse("2025-01-14T16:58:12.023448+00:00"),
         "_pg_tx_id": 754,

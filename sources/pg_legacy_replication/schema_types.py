@@ -1,6 +1,7 @@
+import json
 import re
 from functools import lru_cache
-from typing import Any, Callable, Dict, Optional, Tuple
+from typing import Any, Callable, List, Dict, Optional, Tuple
 
 import pendulum
 from dlt.common import Decimal, logger
@@ -184,8 +185,7 @@ def _to_dlt_val(
 
     raw_type = _DATUM_RAW_TYPES[datum]
     if raw_type == "binary" and _is_scalar_pg_array(data_type, raw_value):
-        raw_type = "text"
-        raw_value = _pg_array_to_json_str(raw_value)
+        return _pg_array_to_json_array(raw_value)
 
     return coerce_value(data_type, raw_type, raw_value)
 
@@ -199,10 +199,16 @@ def _is_scalar_pg_array(data_type: TDataType, raw_value: bytes) -> bool:
     )
 
 
-def _pg_array_to_json_str(raw_value: bytes) -> str:
+def _pg_array_to_json_array(raw_value: bytes) -> List[Any]:
     """
-    Decode the byte string to a regular string and strip the curly braces
+    Decode the byte string into a scalar array
     """
     without_braces = raw_value[1:-1].decode()
-    csv = ",".join(f'"{x}"' if x.isalpha() else x for x in without_braces.split(","))
-    return f"[{csv}]"
+
+    def safe_load(x: str) -> Any:
+        try:
+            return json.loads(x)
+        except json.JSONDecodeError:
+            return x
+
+    return [safe_load(x) for x in without_braces.split(",")]
