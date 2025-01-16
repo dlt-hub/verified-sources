@@ -18,7 +18,7 @@ from pendulum import _datetime
 from pymongo import ASCENDING, DESCENDING, MongoClient
 from pymongo.collection import Collection
 from pymongo.cursor import Cursor
-from pymongo.helpers import _fields_list_to_dict
+from pymongo.helpers_shared import _fields_list_to_dict
 
 
 if TYPE_CHECKING:
@@ -312,11 +312,7 @@ class CollectionArrowLoader(CollectionLoader):
             Iterator[Any]: An iterator of the loaded documents.
         """
         from pymongoarrow.context import PyMongoArrowContext  # type: ignore
-        from pymongoarrow.lib import process_bson_stream  # type: ignore
-
-        context = PyMongoArrowContext.from_schema(
-            None, codec_options=self.collection.codec_options
-        )
+        from pymongoarrow.lib import process_bson_stream
 
         filter_op = self._filter_op
         _raise_if_intersection(filter_op, filter_)
@@ -333,9 +329,11 @@ class CollectionArrowLoader(CollectionLoader):
 
         cursor = self._limit(cursor, limit)  # type: ignore
 
+        context = PyMongoArrowContext.from_schema(
+            None, codec_options=self.collection.codec_options
+        )
         for batch in cursor:
             process_bson_stream(batch, context)
-
             table = context.finish()
             yield convert_arrow_columns(table)
 
@@ -345,7 +343,6 @@ class CollectionArrowLoaderParallel(CollectionLoaderParallel):
     Mongo DB collection parallel loader, which uses
     Apache Arrow for data processing.
     """
-
     def _get_cursor(
         self,
         filter_: Dict[str, Any],
@@ -383,10 +380,8 @@ class CollectionArrowLoaderParallel(CollectionLoaderParallel):
         context = PyMongoArrowContext.from_schema(
             None, codec_options=self.collection.codec_options
         )
-
         for chunk in cursor.skip(batch["skip"]).limit(batch["limit"]):
             process_bson_stream(chunk, context)
-
             table = context.finish()
             yield convert_arrow_columns(table)
 
