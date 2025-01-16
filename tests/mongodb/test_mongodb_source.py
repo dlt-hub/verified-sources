@@ -422,9 +422,7 @@ def test_projection_list_inclusion(destination_name):
     expected_columns = projection + ["_id", "_dlt_id", "_dlt_load_id"]
 
     movies = mongodb_collection(
-        collection=collection_name,
-        projection=projection,
-        limit=2
+        collection=collection_name, projection=projection, limit=2
     )
     pipeline.run(movies)
     loaded_columns = pipeline.default_schema.get_table_columns(collection_name).keys()
@@ -445,9 +443,7 @@ def test_projection_dict_inclusion(destination_name):
     expected_columns = list(projection.keys()) + ["_id", "_dlt_id", "_dlt_load_id"]
 
     movies = mongodb_collection(
-        collection=collection_name,
-        projection=projection,
-        limit=2
+        collection=collection_name, projection=projection, limit=2
     )
     pipeline.run(movies)
     loaded_columns = pipeline.default_schema.get_table_columns(collection_name).keys()
@@ -465,17 +461,28 @@ def test_projection_dict_exclusion(destination_name):
     )
     collection_name = "movies"
     columns_to_exclude = [
-        "runtime", "released", "year", "plot", "fullplot", "lastupdated", "type",
-        "directors", "imdb", "cast", "countries", "genres", "tomatoes", "num_mflix_comments",
-        "rated", "awards"
+        "runtime",
+        "released",
+        "year",
+        "plot",
+        "fullplot",
+        "lastupdated",
+        "type",
+        "directors",
+        "imdb",
+        "cast",
+        "countries",
+        "genres",
+        "tomatoes",
+        "num_mflix_comments",
+        "rated",
+        "awards",
     ]
     projection = {col: 0 for col in columns_to_exclude}
     expected_columns = ["title", "poster", "_id", "_dlt_id", "_dlt_load_id"]
 
     movies = mongodb_collection(
-        collection=collection_name,
-        projection=projection,
-        limit=2
+        collection=collection_name, projection=projection, limit=2
     )
     pipeline.run(movies)
     loaded_columns = pipeline.default_schema.get_table_columns(collection_name).keys()
