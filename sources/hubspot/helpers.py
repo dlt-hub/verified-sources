@@ -45,7 +45,12 @@ def pagination(
         return None
 
 
-def extract_association_data(_obj, data, association, headers):
+def extract_association_data(
+    _obj: Dict[str, Any],
+    data: Dict[str, Any],
+    association: str,
+    headers: Dict[str, Any]
+) -> List[Dict[str, Any]]:
     values = []
 
     while data is not None:
