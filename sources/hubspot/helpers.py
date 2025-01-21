@@ -45,6 +45,21 @@ def pagination(
         return None
 
 
+def extract_association_data(_obj, data, association, headers):
+    values = []
+
+    while data is not None:
+        for r in data["results"]:
+            values.append(
+                {
+                    "value": _obj["hs_object_id"],
+                    f"{association}_id": r["id"],
+                }
+            )
+        data = pagination(data, headers)
+    return values
+
+
 def extract_property_history(objects: List[Dict[str, Any]]) -> Iterator[Dict[str, Any]]:
     for item in objects:
         history = item.get("propertiesWithHistory")
@@ -156,13 +171,11 @@ def fetch_data(
                     _obj["id"] = _result["id"]
                 if "associations" in _result:
                     for association in _result["associations"]:
-                        __values = [
-                            {
-                                "value": _obj["hs_object_id"],
-                                f"{association}_id": __r["id"],
-                            }
-                            for __r in _result["associations"][association]["results"]
-                        ]
+                        __data = _result["associations"][association]
+
+                        __values = extract_association_data(
+                            _obj, __data, association, headers
+                        )
 
                         # remove duplicates from list of dicts
                         __values = [
