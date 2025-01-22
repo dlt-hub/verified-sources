@@ -133,19 +133,9 @@ def init_replication(
 
     assert table_names is not None
 
-    engine = _configure_engine(credentials, rep_conn)
-
-    @sa.event.listens_for(engine, "begin")
-    def on_begin(conn: sa.Connection) -> None:
-        cur = conn.connection.cursor()
-        if slot is None:
-            # Using the same isolation level that pg_backup uses
-            cur.execute(
-                "SET TRANSACTION ISOLATION LEVEL SERIALIZABLE, READ ONLY, DEFERRABLE"
-            )
-        else:
-            cur.execute("SET TRANSACTION ISOLATION LEVEL REPEATABLE READ")
-            cur.execute(f"SET TRANSACTION SNAPSHOT '{slot['snapshot_name']}'")
+    engine = _configure_engine(
+        credentials, rep_conn, slot.get("snapshot_name") if slot else None
+    )
 
     table_names = [table_names] if isinstance(table_names, str) else table_names or []
 
@@ -155,15 +145,33 @@ def init_replication(
 
 
 def _configure_engine(
-    credentials: ConnectionStringCredentials, rep_conn: LogicalReplicationConnection
+    credentials: ConnectionStringCredentials,
+    rep_conn: LogicalReplicationConnection,
+    snapshot_name: Optional[str],
 ) -> Engine:
     """
     Configures the SQLAlchemy engine.
     Also attaches the replication connection in order to prevent it being garbage collected and closed.
+
+    Args:
+        snapshot_name (str, optional): This is used during the initial first table snapshot allowing
+            all transactions to run with the same consistent snapshot.
     """
     engine: Engine = engine_from_credentials(credentials)
     engine.execution_options(stream_results=True, max_row_buffer=2 * 50000)
     setattr(engine, "rep_conn", rep_conn)  # noqa
+
+    @sa.event.listens_for(engine, "begin")
+    def on_begin(conn: sa.Connection) -> None:
+        cur = conn.connection.cursor()
+        if snapshot_name is None:
+            # Using the same isolation level that pg_backup uses
+            cur.execute(
+                "SET TRANSACTION ISOLATION LEVEL SERIALIZABLE, READ ONLY, DEFERRABLE"
+            )
+        else:
+            cur.execute("SET TRANSACTION ISOLATION LEVEL REPEATABLE READ")
+            cur.execute(f"SET TRANSACTION SNAPSHOT '{snapshot_name}'")
 
     @sa.event.listens_for(engine, "engine_disposed")
     def on_engine_disposed(e: Engine) -> None:
