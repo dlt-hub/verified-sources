@@ -231,17 +231,17 @@ def get_max_lsn(credentials: ConnectionStringCredentials) -> Optional[int]:
     Returns None if the replication slot is empty.
     Does not consume the slot, i.e. messages are not flushed.
     """
-    cur = _get_conn(credentials).cursor()
-    loc_fn = (
-        "pg_current_xlog_location"
-        if get_pg_version(cur) < 100000
-        else "pg_current_wal_lsn"
-    )
-    # subtract '0/0' to convert pg_lsn type to int (https://stackoverflow.com/a/73738472)
-    cur.execute(f"SELECT {loc_fn}() - '0/0' as max_lsn;")
-    lsn: int = cur.fetchone()[0]
-    cur.connection.close()
-    return lsn
+    with _get_conn(credentials) as conn:
+        cur = conn.cursor()
+        loc_fn = (
+            "pg_current_xlog_location"
+            if get_pg_version(cur) < 100000
+            else "pg_current_wal_lsn"
+        )
+        # subtract '0/0' to convert pg_lsn type to int (https://stackoverflow.com/a/73738472)
+        cur.execute(f"SELECT {loc_fn}() - '0/0' as max_lsn;")
+        lsn: int = cur.fetchone()[0]
+        return lsn
 
 
 def lsn_int_to_hex(lsn: int) -> str:
@@ -262,13 +262,14 @@ def advance_slot(
     This function is used as alternative to psycopg2's `send_feedback` method, because
     the behavior of that method seems odd when used outside of `consume_stream`.
     """
-    if upto_lsn != 0:
-        cur = _get_conn(credentials).cursor()
+    assert upto_lsn > 0
+    with _get_conn(credentials) as conn:
+        cur = conn.cursor()
+        # There is unfortunately no way in pg9.6 to manually advance the replication slot
         if get_pg_version(cur) > 100000:
             cur.execute(
                 f"SELECT * FROM pg_replication_slot_advance('{slot_name}', '{lsn_int_to_hex(upto_lsn)}');"
             )
-        cur.connection.close()
 
 
 def _get_conn(
@@ -452,20 +453,19 @@ class ItemGenerator:
         Maintains LSN of last consumed commit message in object state.
         Advances the slot only when all messages have been consumed.
         """
-        cur = _get_rep_conn(self.credentials).cursor()
-        cur.start_replication(slot_name=self.slot_name, start_lsn=self.start_lsn)
-        consumer = MessageConsumer(
-            upto_lsn=self.upto_lsn,
-            table_qnames=self.table_qnames,
-            repl_options=self.repl_options,
-            target_batch_size=self.target_batch_size,
-        )
-        try:
-            cur.consume_stream(consumer)
-        except StopReplication:  # completed batch or reached `upto_lsn`
-            yield from self.flush_batch(cur, consumer)
-        finally:
-            cur.connection.close()
+        with _get_rep_conn(self.credentials) as conn:
+            cur = conn.cursor()
+            cur.start_replication(slot_name=self.slot_name, start_lsn=self.start_lsn)
+            consumer = MessageConsumer(
+                upto_lsn=self.upto_lsn,
+                table_qnames=self.table_qnames,
+                repl_options=self.repl_options,
+                target_batch_size=self.target_batch_size,
+            )
+            try:
+                cur.consume_stream(consumer)
+            except StopReplication:  # completed batch or reached `upto_lsn`
+                yield from self.flush_batch(cur, consumer)
 
     def flush_batch(
         self, cur: ReplicationCursor, consumer: MessageConsumer

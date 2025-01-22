@@ -85,7 +85,7 @@ def replication_source(
     def replication_resource(slot_name: str) -> Iterable[TDataItem]:
         # start where we left off in previous run
         start_lsn = dlt.current.resource_state().get("last_commit_lsn", 0)
-        if flush_slot:
+        if flush_slot and start_lsn > 0:
             advance_slot(start_lsn, slot_name, credentials)
 
         # continue until last message in replication slot
