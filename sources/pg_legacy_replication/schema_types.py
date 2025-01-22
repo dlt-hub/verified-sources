@@ -1,7 +1,7 @@
 import json
 import re
 from functools import lru_cache
-from typing import Any, Callable, List, Dict, Optional, Tuple
+from typing import Any, Callable, Dict, List, Optional, Tuple
 
 import pendulum
 from dlt.common import Decimal, logger

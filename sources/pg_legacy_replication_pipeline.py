@@ -2,8 +2,7 @@ import dlt
 from dlt.common.destination import Destination
 from dlt.destinations.impl.postgres.configuration import PostgresCredentials
 
-from pg_legacy_replication import replication_source
-from pg_legacy_replication.helpers import init_replication
+from pg_legacy_replication import init_replication, replication_source
 
 PG_CREDS = dlt.secrets.get("sources.pg_replication.credentials", PostgresCredentials)
 
