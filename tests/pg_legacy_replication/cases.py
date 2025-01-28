@@ -1,5 +1,6 @@
 from base64 import b64encode
-from typing import List
+from enum import IntEnum
+from typing import List, Tuple
 
 import pendulum
 from dlt.common import Decimal
@@ -433,12 +434,7 @@ TABLE_SCHEMAS: List[TTableSchema] = [
     {
         "name": "tbl_x",
         "columns": {
-            "id_x": {
-                "data_type": "bigint",
-                "name": "id_x",
-                "precision": 64,
-                "nullable": False,
-            },
+            "id_x": {"data_type": "bigint", "name": "id_x", "precision": 64},
             "val_x": {"data_type": "text", "name": "val_x"},
             "col_bool": {"data_type": "bool", "name": "col_bool"},
             "col_bytea": {"data_type": "binary", "name": "col_bytea"},
@@ -497,4 +493,509 @@ TABLE_SCHEMAS: List[TTableSchema] = [
             },
         },
     },
+]
+
+
+class SchemaChoice(IntEnum):
+    first = 0
+    second = 1
+    error = -1
+
+
+SIMILAR_SCHEMAS: List[Tuple[TTableSchema, TTableSchema, SchemaChoice]] = [
+    (
+        {
+            "name": "items",
+            "columns": {
+                "col1": {
+                    "name": "col1",
+                    "data_type": "bigint",
+                    "precision": 64,
+                    "nullable": False,
+                },
+                "col2": {"name": "col2", "data_type": "double", "nullable": False},
+                "col3": {"name": "col3", "data_type": "bool", "nullable": False},
+                "col4": {"name": "col4", "data_type": "timestamp", "nullable": False},
+                "col5": {"name": "col5", "data_type": "text", "nullable": False},
+                "col6": {
+                    "name": "col6",
+                    "data_type": "decimal",
+                    "precision": 38,
+                    "scale": 9,
+                    "nullable": False,
+                },
+                "col7": {"name": "col7", "data_type": "binary", "nullable": False},
+                "col9": {"name": "col9", "data_type": "json", "nullable": False},
+                "col10": {"name": "col10", "data_type": "date", "nullable": False},
+                "col11": {"name": "col11", "data_type": "time", "nullable": False},
+                "col1_null": {
+                    "name": "col1_null",
+                    "data_type": "bigint",
+                    "precision": 64,
+                    "nullable": True,
+                },
+                "col2_null": {
+                    "name": "col2_null",
+                    "data_type": "double",
+                    "nullable": True,
+                },
+                "col3_null": {
+                    "name": "col3_null",
+                    "data_type": "bool",
+                    "nullable": True,
+                },
+                "col4_null": {
+                    "name": "col4_null",
+                    "data_type": "timestamp",
+                    "nullable": True,
+                },
+                "col5_null": {
+                    "name": "col5_null",
+                    "data_type": "text",
+                    "nullable": True,
+                },
+                "col6_null": {
+                    "name": "col6_null",
+                    "data_type": "decimal",
+                    "precision": 38,
+                    "scale": 9,
+                    "nullable": True,
+                },
+                "col7_null": {
+                    "name": "col7_null",
+                    "data_type": "binary",
+                    "nullable": True,
+                },
+                "col9_null": {
+                    "name": "col9_null",
+                    "data_type": "json",
+                    "nullable": True,
+                },
+                "col10_null": {
+                    "name": "col10_null",
+                    "data_type": "date",
+                    "nullable": True,
+                },
+                "col11_null": {
+                    "name": "col11_null",
+                    "data_type": "time",
+                    "nullable": True,
+                },
+                "col1_precision": {
+                    "name": "col1_precision",
+                    "data_type": "bigint",
+                    "precision": 16,
+                    "nullable": False,
+                },
+                "col4_precision": {
+                    "name": "col4_precision",
+                    "data_type": "timestamp",
+                    "precision": 3,
+                    "nullable": False,
+                },
+                "col5_precision": {
+                    "name": "col5_precision",
+                    "data_type": "text",
+                    "precision": 25,
+                    "nullable": False,
+                },
+                "col6_precision": {
+                    "name": "col6_precision",
+                    "data_type": "decimal",
+                    "precision": 6,
+                    "scale": 2,
+                    "nullable": False,
+                },
+                "col7_precision": {
+                    "name": "col7_precision",
+                    "data_type": "binary",
+                    "nullable": False,
+                },
+                "col11_precision": {
+                    "name": "col11_precision",
+                    "data_type": "time",
+                    "precision": 3,
+                    "nullable": False,
+                },
+                "_dlt_load_id": {
+                    "name": "_dlt_load_id",
+                    "data_type": "text",
+                    "nullable": False,
+                },
+                "_dlt_id": {"name": "_dlt_id", "data_type": "text", "nullable": False},
+                "_pg_lsn": {"data_type": "bigint", "name": "_pg_lsn", "nullable": True},
+                "_pg_deleted_ts": {
+                    "data_type": "timestamp",
+                    "name": "_pg_deleted_ts",
+                    "nullable": True,
+                },
+            },
+        },
+        {
+            "name": "items",
+            "columns": {
+                "col1": {
+                    "name": "col1",
+                    "data_type": "bigint",
+                    "precision": 64,
+                    "nullable": False,
+                },
+                "col2": {"name": "col2", "data_type": "double"},
+                "col3": {"name": "col3", "data_type": "bool"},
+                "col4": {"name": "col4", "data_type": "timestamp"},
+                "col5": {"name": "col5", "data_type": "text"},
+                "col6": {"name": "col6", "data_type": "decimal"},
+                "col7": {"name": "col7", "data_type": "binary"},
+                "col9": {"name": "col9", "data_type": "json"},
+                "col10": {"name": "col10", "data_type": "date"},
+                "col11": {"name": "col11", "data_type": "time"},
+                "col1_null": {
+                    "name": "col1_null",
+                    "data_type": "bigint",
+                    "precision": 64,
+                },
+                "col2_null": {"name": "col2_null", "data_type": "double"},
+                "col3_null": {"name": "col3_null", "data_type": "bool"},
+                "col4_null": {"name": "col4_null", "data_type": "timestamp"},
+                "col5_null": {"name": "col5_null", "data_type": "text"},
+                "col6_null": {"name": "col6_null", "data_type": "decimal"},
+                "col7_null": {"name": "col7_null", "data_type": "binary"},
+                "col9_null": {"name": "col9_null", "data_type": "json"},
+                "col10_null": {"name": "col10_null", "data_type": "date"},
+                "col11_null": {"name": "col11_null", "data_type": "time"},
+                "col1_precision": {
+                    "name": "col1_precision",
+                    "data_type": "bigint",
+                    "precision": 16,
+                },
+                "col4_precision": {"name": "col4_precision", "data_type": "timestamp"},
+                "col5_precision": {"name": "col5_precision", "data_type": "text"},
+                "col6_precision": {"name": "col6_precision", "data_type": "decimal"},
+                "col7_precision": {"name": "col7_precision", "data_type": "binary"},
+                "col11_precision": {"name": "col11_precision", "data_type": "time"},
+                "_dlt_load_id": {"name": "_dlt_load_id", "data_type": "text"},
+                "_dlt_id": {"name": "_dlt_id", "data_type": "text"},
+                "_pg_lsn": {"data_type": "bigint", "name": "_pg_lsn", "nullable": True},
+                "_pg_deleted_ts": {
+                    "data_type": "timestamp",
+                    "name": "_pg_deleted_ts",
+                    "nullable": True,
+                },
+            },
+        },
+        SchemaChoice.first,
+    ),
+    (
+        {
+            "name": "items",
+            "columns": {
+                "_dlt_id": {"data_type": "text", "name": "_dlt_id", "nullable": False},
+                "_dlt_load_id": {
+                    "data_type": "text",
+                    "name": "_dlt_load_id",
+                    "nullable": False,
+                },
+                "c1": {
+                    "data_type": "bigint",
+                    "name": "c1",
+                    "nullable": True,
+                    "precision": 64,
+                },
+                "c2": {
+                    "data_type": "bigint",
+                    "name": "c2",
+                    "nullable": True,
+                    "precision": 64,
+                },
+                "c3": {
+                    "data_type": "bigint",
+                    "name": "c3",
+                    "nullable": True,
+                    "precision": 64,
+                },
+                "_pg_deleted_ts": {
+                    "data_type": "timestamp",
+                    "name": "_pg_deleted_ts",
+                    "nullable": True,
+                },
+                "_pg_lsn": {"data_type": "bigint", "name": "_pg_lsn", "nullable": True},
+            },
+        },
+        {
+            "name": "items",
+            "columns": {
+                "_dlt_id": {"data_type": "text", "name": "_dlt_id", "nullable": False},
+                "_dlt_load_id": {
+                    "data_type": "text",
+                    "name": "_dlt_load_id",
+                    "nullable": False,
+                },
+                "c1": {
+                    "data_type": "bigint",
+                    "name": "c1",
+                    "nullable": True,
+                    "precision": 64,
+                },
+                "c2": {
+                    "data_type": "bigint",
+                    "name": "c2",
+                    "nullable": True,
+                    "precision": 64,
+                },
+                "c3": {
+                    "data_type": "bigint",
+                    "name": "c3",
+                    "nullable": True,
+                    "precision": 64,
+                },
+                # Added c4 column
+                "c4": {
+                    "data_type": "bigint",
+                    "name": "c4",
+                    "nullable": True,
+                    "precision": 64,
+                },
+                "_pg_deleted_ts": {
+                    "data_type": "timestamp",
+                    "name": "_pg_deleted_ts",
+                    "nullable": True,
+                },
+                "_pg_lsn": {"data_type": "bigint", "name": "_pg_lsn", "nullable": True},
+            },
+        },
+        SchemaChoice.error,
+    ),
+    (
+        {
+            "name": "scale_teams",
+            "columns": {
+                "id": {
+                    "name": "id",
+                    "nullable": False,
+                    "data_type": "bigint",
+                    "precision": 32,
+                },
+                "user_id": {
+                    "name": "user_id",
+                    "nullable": False,
+                    "data_type": "bigint",
+                    "precision": 32,
+                },
+                "begin_at": {
+                    "name": "begin_at",
+                    "nullable": False,
+                    "data_type": "timestamp",
+                    "precision": 6,
+                },
+                "created_at": {
+                    "name": "created_at",
+                    "nullable": False,
+                    "data_type": "timestamp",
+                    "precision": 6,
+                },
+                "updated_at": {
+                    "name": "updated_at",
+                    "nullable": False,
+                    "data_type": "timestamp",
+                    "precision": 6,
+                },
+                "scale_id": {
+                    "name": "scale_id",
+                    "nullable": False,
+                    "data_type": "bigint",
+                    "precision": 32,
+                },
+                "team_id": {
+                    "name": "team_id",
+                    "nullable": False,
+                    "data_type": "bigint",
+                    "precision": 32,
+                },
+                "comment": {"name": "comment", "nullable": True, "data_type": "text"},
+                "old_feedback": {
+                    "name": "old_feedback",
+                    "nullable": True,
+                    "data_type": "text",
+                },
+                "feedback_rating": {
+                    "name": "feedback_rating",
+                    "nullable": True,
+                    "data_type": "bigint",
+                    "precision": 32,
+                },
+                "final_mark": {
+                    "name": "final_mark",
+                    "nullable": True,
+                    "data_type": "bigint",
+                    "precision": 32,
+                },
+                "truant_id": {
+                    "name": "truant_id",
+                    "nullable": True,
+                    "data_type": "bigint",
+                    "precision": 32,
+                },
+                "flag_id": {
+                    "name": "flag_id",
+                    "nullable": False,
+                    "data_type": "bigint",
+                    "precision": 32,
+                },
+                "token": {"name": "token", "nullable": True, "data_type": "text"},
+                "ip": {"name": "ip", "nullable": True, "data_type": "text"},
+                "internship_id": {
+                    "name": "internship_id",
+                    "nullable": True,
+                    "data_type": "bigint",
+                    "precision": 32,
+                },
+                "filled_at": {
+                    "name": "filled_at",
+                    "nullable": True,
+                    "data_type": "timestamp",
+                    "precision": 6,
+                },
+                "_pg_lsn": {"name": "_pg_lsn", "nullable": True, "data_type": "bigint"},
+                "_pg_deleted_ts": {
+                    "name": "_pg_deleted_ts",
+                    "nullable": True,
+                    "data_type": "timestamp",
+                    "precision": 6,
+                },
+                "_pg_commit_ts": {
+                    "name": "_pg_commit_ts",
+                    "nullable": True,
+                    "data_type": "timestamp",
+                    "precision": 6,
+                },
+                "_pg_tx_id": {
+                    "name": "_pg_tx_id",
+                    "nullable": True,
+                    "data_type": "bigint",
+                    "precision": 32,
+                },
+                "_dlt_load_id": {
+                    "name": "_dlt_load_id",
+                    "data_type": "text",
+                    "nullable": False,
+                },
+            },
+        },
+        {
+            "name": "scale_teams",
+            "columns": {
+                "id": {
+                    "name": "id",
+                    "nullable": False,
+                    "data_type": "bigint",
+                    "precision": 32,
+                },
+                "user_id": {
+                    "name": "user_id",
+                    "nullable": True,
+                    "data_type": "bigint",
+                    "precision": 32,
+                },
+                "begin_at": {
+                    "name": "begin_at",
+                    "nullable": True,
+                    "data_type": "timestamp",
+                    "precision": 6,
+                },
+                "created_at": {
+                    "name": "created_at",
+                    "nullable": False,
+                    "data_type": "timestamp",
+                    "precision": 6,
+                },
+                "updated_at": {
+                    "name": "updated_at",
+                    "nullable": False,
+                    "data_type": "timestamp",
+                    "precision": 6,
+                },
+                "scale_id": {
+                    "name": "scale_id",
+                    "nullable": True,
+                    "data_type": "bigint",
+                    "precision": 32,
+                },
+                "team_id": {
+                    "name": "team_id",
+                    "nullable": True,
+                    "data_type": "bigint",
+                    "precision": 32,
+                },
+                "comment": {"name": "comment", "nullable": True, "data_type": "text"},
+                "old_feedback": {
+                    "name": "old_feedback",
+                    "nullable": True,
+                    "data_type": "text",
+                },
+                "feedback_rating": {
+                    "name": "feedback_rating",
+                    "nullable": True,
+                    "data_type": "bigint",
+                    "precision": 32,
+                },
+                "final_mark": {
+                    "name": "final_mark",
+                    "nullable": True,
+                    "data_type": "bigint",
+                    "precision": 32,
+                },
+                "truant_id": {
+                    "name": "truant_id",
+                    "nullable": True,
+                    "data_type": "bigint",
+                    "precision": 32,
+                },
+                "flag_id": {
+                    "name": "flag_id",
+                    "nullable": True,
+                    "data_type": "bigint",
+                    "precision": 32,
+                },
+                "token": {"name": "token", "nullable": True, "data_type": "text"},
+                "ip": {"name": "ip", "nullable": True, "data_type": "text"},
+                "internship_id": {
+                    "name": "internship_id",
+                    "nullable": True,
+                    "data_type": "bigint",
+                    "precision": 32,
+                },
+                "filled_at": {
+                    "name": "filled_at",
+                    "nullable": True,
+                    "data_type": "timestamp",
+                    "precision": 6,
+                },
+                "_pg_lsn": {"name": "_pg_lsn", "nullable": True, "data_type": "bigint"},
+                "_pg_deleted_ts": {
+                    "name": "_pg_deleted_ts",
+                    "nullable": True,
+                    "data_type": "timestamp",
+                    "precision": 6,
+                },
+                "_pg_commit_ts": {
+                    "name": "_pg_commit_ts",
+                    "nullable": True,
+                    "data_type": "timestamp",
+                    "precision": 6,
+                },
+                "_pg_tx_id": {
+                    "name": "_pg_tx_id",
+                    "nullable": True,
+                    "data_type": "bigint",
+                    "precision": 32,
+                },
+                "_dlt_load_id": {
+                    "name": "_dlt_load_id",
+                    "data_type": "text",
+                    "nullable": False,
+                },
+            },
+        },
+        SchemaChoice.second,
+    ),
 ]

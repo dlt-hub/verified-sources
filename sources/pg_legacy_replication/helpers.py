@@ -569,7 +569,7 @@ def gen_data_item(
         col_name = _actual_column_name(data)
         if not included_columns or col_name in included_columns:
             data_item[col_name] = _to_dlt_val(
-                data, column_schema[col_name]["data_type"], for_delete=is_delete
+                data, column_schema[col_name], for_delete=is_delete
             )
 
     return data_item
@@ -601,19 +601,18 @@ def compare_schemas(last: TTableSchema, new: TTableSchema) -> TTableSchema:
     precise one if they are relatively equal or else raises a
     AssertionError due to an incompatible schema change
     """
-    table_name = last["name"]
-    assert table_name == new["name"], "Table names do not match"
+    assert last["name"] == new["name"], "Table names do not match"
 
-    table_schema = TTableSchema(name=table_name, columns={})
+    table_schema = TTableSchema(name=last["name"], columns={})
     last_cols, new_cols = last["columns"], new["columns"]
     assert len(last_cols) == len(
         new_cols
-    ), f"Columns mismatch last:{last['columns']} new:{new['columns']}"
+    ), f"Columns mismatch last:{last_cols} new:{new_cols}"
 
     for name, s1 in last_cols.items():
         s2 = new_cols.get(name)
         assert (
-            s2 is not None and s1["data_type"] == s2["data_type"]
+            s2 and s1["data_type"] == s2["data_type"]
         ), f"Incompatible schema for column '{name}'"
 
         # Ensure new has no fields outside allowed fields
@@ -623,7 +622,13 @@ def compare_schemas(last: TTableSchema, new: TTableSchema) -> TTableSchema:
         # Select the more precise schema by comparing nullable, precision, and scale
         col_schema = TColumnSchema(name=name, data_type=s1["data_type"])
         if "nullable" in s1 or "nullable" in s2:
-            col_schema["nullable"] = s1.get("nullable", s2.get("nullable"))
+            # Get nullable values (could be True, False, or None)
+            s1_null = s1.get("nullable")
+            s2_null = s2.get("nullable")
+            if s1_null is not None and s2_null is not None:
+                col_schema["nullable"] = s1_null or s2_null  # Default is True
+            else:
+                col_schema["nullable"] = s1_null if s1_null is not None else s2_null
         if "precision" in s1 or "precision" in s2:
             col_schema["precision"] = s1.get("precision", s2.get("precision"))
         if "scale" in s1 or "scale" in s2:
