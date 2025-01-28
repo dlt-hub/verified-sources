@@ -143,8 +143,6 @@ def _to_dlt_column_schema(
     # Set nullable attribute if type_info is available
     if type_info:
         column_schema["nullable"] = type_info.value_optional
-    elif datum.WhichOneof("datum"):  # Or simply guess as this is a very rare case
-        column_schema["nullable"] = False
 
     return column_schema
 
@@ -170,13 +168,16 @@ data_type_handlers: Dict[TDataType, Callable[[Any], Any]] = {
 
 
 def _to_dlt_val(
-    val: DatumMessage, data_type: TDataType, *, for_delete: bool = False
+    val: DatumMessage, col_schema: TColumnSchema, *, for_delete: bool = False
 ) -> Any:
     """Converts decoderbuf's datum value into dlt-compatible data value."""
-    datum = val.WhichOneof("datum")
+    data_type = col_schema["data_type"]
+    assert data_type is not None
+    datum = _get_datum_attr(val)
     if datum is None:
-        return _DUMMY_VALS[data_type] if for_delete else None
-    if datum == "datum_missing":
+        nullable = col_schema.get("nullable", False)
+        if for_delete and not nullable:
+            return _DUMMY_VALS[data_type]
         return None
 
     raw_value = getattr(val, datum)
@@ -212,3 +213,8 @@ def _pg_array_to_json_array(raw_value: bytes) -> List[Any]:
             return x
 
     return [safe_load(x) for x in without_braces.split(",")]
+
+
+def _get_datum_attr(val: DatumMessage) -> Optional[str]:
+    datum = val.WhichOneof("datum")
+    return None if datum is None and datum == "datum_missing" else datum
