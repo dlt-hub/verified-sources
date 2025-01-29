@@ -13,6 +13,10 @@ from tests.utils import (
 )
 
 
+def test_always_true():
+    assert True
+
+
 @pytest.mark.parametrize("destination_name", ALL_DESTINATIONS)
 def test_github_reactions(destination_name: str) -> None:
     pipeline = dlt.pipeline(
