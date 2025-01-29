@@ -16,7 +16,7 @@ install-poetry:
 ifneq ($(VIRTUAL_ENV),)
 	$(error you cannot be under virtual environment $(VIRTUAL_ENV))
 endif
-	curl -sSL https://install.python-poetry.org | python3 -
+	curl -sSL https://install.python-poetry.org | python3 - --version 1.8.5
 
 has-poetry:
 	poetry --version
