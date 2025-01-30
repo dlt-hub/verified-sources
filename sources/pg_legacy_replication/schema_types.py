@@ -217,4 +217,6 @@ def _pg_array_to_json_array(raw_value: bytes) -> List[Any]:
 
 def _get_datum_attr(val: DatumMessage) -> Optional[str]:
     datum = val.WhichOneof("datum")
-    return None if datum is None and datum == "datum_missing" else datum
+    if datum is None or datum == "datum_missing":
+        return None
+    return datum

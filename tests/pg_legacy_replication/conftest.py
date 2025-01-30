@@ -1,9 +1,14 @@
+import faulthandler
 import pytest
 
 from typing import Iterator, Tuple
 
 import dlt
 from dlt.common.utils import uniq_id
+
+
+def pytest_configure():
+    faulthandler.enable()
 
 
 @pytest.fixture()

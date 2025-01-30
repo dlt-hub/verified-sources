@@ -185,6 +185,7 @@ ROW_MESSAGES: List[dict] = [
             },
             {"columnName": "col12", "columnType": 1114},
             {"columnName": "col13", "columnType": 700},
+            {"columnName": "col14", "columnType": 1043, "datum_missing": True},
         ],
         "newTypeinfo": [
             {"modifier": "timestamp with time zone", "valueOptional": False},
@@ -193,6 +194,7 @@ ROW_MESSAGES: List[dict] = [
             {"modifier": "time without time zone", "valueOptional": False},
             {"modifier": "timestamp without time zone", "valueOptional": True},
             {"modifier": "real", "valueOptional": True},
+            {"modifier": "character varying", "valueOptional": True},
         ],
     },
     {
@@ -331,6 +333,7 @@ DATA_ITEMS: List[TDataItem] = [
         "col11": pendulum.parse("13:26:45.176451", strict=False).time(),
         "col12": None,
         "col13": None,
+        "col14": None,
         "_pg_lsn": 1,
         "_pg_commit_ts": pendulum.parse("2024-10-21T09:37:03.666542+00:00"),
         "_pg_tx_id": 2018,
@@ -412,6 +415,7 @@ TABLE_SCHEMAS: List[TTableSchema] = [
             "col11": {"data_type": "time", "name": "col11", "nullable": False},
             "col12": {"data_type": "timestamp", "name": "col12", "nullable": True},
             "col13": {"data_type": "double", "name": "col13", "nullable": True},
+            "col14": {"data_type": "text", "name": "col14", "nullable": True},
             "_pg_lsn": {"data_type": "bigint", "name": "_pg_lsn", "nullable": True},
             "_pg_deleted_ts": {
                 "data_type": "timestamp",
