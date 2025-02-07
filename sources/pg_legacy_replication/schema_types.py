@@ -34,6 +34,7 @@ _PG_TYPES: Dict[int, str] = {
     21: "smallint",
     23: "integer",
     25: "text",
+    114: "json",
     700: "real",
     701: "double precision",
     1043: "character varying",
@@ -47,6 +48,7 @@ _PG_TYPES: Dict[int, str] = {
 """Maps postgres type OID to type string."""
 
 _MISSING_TYPES: Dict[str, TDataType] = {
+    "json": "json",
     "real": "double",
     "text": "text",
     "timestamp without time zone": "timestamp",
