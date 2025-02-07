@@ -268,7 +268,11 @@ ROW_MESSAGES: List[dict] = [
         "table": "src_pl_dataset_202501140458116348.data_types",
         "op": "INSERT",
         "newTuple": [
-            {"columnName": "bit_col", "columnType": 1560, "datumString": "1"},
+            {
+                "columnName": "bit_col",
+                "columnType": 1560,
+                "datumString": "1",
+            },
             {
                 "columnName": "box_col",
                 "columnType": 603,
@@ -286,6 +290,11 @@ ROW_MESSAGES: List[dict] = [
                     b'{"Network administration",GNS3,BGP}'
                 ).decode(),
             },
+            {
+                "columnName": "json_col",
+                "columnType": 114,
+                "datum_string": '{"a":[null,1]}',
+            },
         ],
         "newTypeinfo": [
             {
@@ -302,6 +311,10 @@ ROW_MESSAGES: List[dict] = [
             },
             {
                 "modifier": "text[]",
+                "valueOptional": True,
+            },
+            {
+                "modifier": "json",
                 "valueOptional": True,
             },
         ],
@@ -363,6 +376,7 @@ DATA_ITEMS: List[TDataItem] = [
         "box_col": "KDEsMSksKDAsMCk=",
         "uuid_col": "6e1f5de1-1093-4bfe-98e4-62ac56b2db54",
         "text_a": ["Network administration", "GNS3", "BGP"],
+        "json_col": {"a": [None, 1]},
         "_pg_lsn": 1,
         "_pg_commit_ts": pendulum.parse("2025-01-14T16:58:12.023448+00:00"),
         "_pg_tx_id": 754,
@@ -478,6 +492,7 @@ TABLE_SCHEMAS: List[TTableSchema] = [
             "box_col": {"data_type": "text", "name": "box_col", "nullable": True},
             "uuid_col": {"data_type": "text", "name": "uuid_col", "nullable": True},
             "text_a": {"data_type": "json", "name": "text_a", "nullable": True},
+            "json_col": {"data_type": "json", "name": "json_col", "nullable": True},
             "_pg_lsn": {"data_type": "bigint", "name": "_pg_lsn", "nullable": True},
             "_pg_deleted_ts": {
                 "data_type": "timestamp",
