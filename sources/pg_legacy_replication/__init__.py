@@ -94,7 +94,7 @@ def replication_source(
             advance_slot(start_lsn, slot_name, credentials)
 
         # continue until last message in replication slot
-        upto_lsn = get_max_lsn(credentials)
+        upto_lsn = get_max_lsn(credentials, slot_name)
         if upto_lsn is None:
             return
 
@@ -182,10 +182,10 @@ def init_replication(
         - When `take_snapshots` is `True`, the function configures a snapshot isolation level for consistent table snapshots.
     """
     rep_conn = get_rep_conn(credentials)
-    rep_cur = rep_conn.cursor()
-    if reset:
-        drop_replication_slot(slot_name, rep_cur)
-    slot = create_replication_slot(slot_name, rep_cur)
+    with rep_conn.cursor() as rep_cur:
+        if reset:
+            drop_replication_slot(slot_name, rep_cur)
+        slot = create_replication_slot(slot_name, rep_cur)
 
     # Close connection if no snapshots are needed
     if not take_snapshots:
