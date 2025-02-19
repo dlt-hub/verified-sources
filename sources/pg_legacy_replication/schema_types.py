@@ -84,14 +84,14 @@ _VARYING_PRECISION_PATTERNS: Dict[int, str] = {
 
 
 def _get_precision_and_scale(
-    type_id: int, modifier: Optional[str]
+    type_id: int, modifier: str
 ) -> Tuple[Optional[int], Optional[int]]:
     """Get precision from postgres type attributes and modifiers."""
     if type_id in _FIXED_PRECISION_TYPES:
         return _FIXED_PRECISION_TYPES[type_id]
 
-    # If modifier or pattern is missing, return defaults
-    if not modifier or (pattern := _VARYING_PRECISION_PATTERNS.get(type_id)) is None:
+    # If pattern is missing, return defaults
+    if (pattern := _VARYING_PRECISION_PATTERNS.get(type_id)) is None:
         return None, None
 
     if match := re.search(pattern, modifier):
@@ -110,7 +110,7 @@ def _type_mapper() -> PostgresTypeMapper:
     return PostgresTypeMapper(postgres().capabilities())
 
 
-def _to_dlt_column_type(type_id: int, modifier: Optional[str]) -> TColumnType:
+def _to_dlt_column_type(type_id: int, modifier: str) -> TColumnType:
     """
     Converts postgres type OID to dlt column type.
 
@@ -119,7 +119,7 @@ def _to_dlt_column_type(type_id: int, modifier: Optional[str]) -> TColumnType:
     pg_type = _PG_TYPES.get(type_id)
     if pg_type in _MISSING_TYPES:
         return {"data_type": _MISSING_TYPES[pg_type]}
-    if modifier and modifier.endswith("[]"):
+    if modifier.endswith("[]"):
         return {"data_type": "json"}
     if pg_type is None:
         logger.warning(
@@ -132,21 +132,14 @@ def _to_dlt_column_type(type_id: int, modifier: Optional[str]) -> TColumnType:
 
 
 def _to_dlt_column_schema(
-    col_name: str, datum: DatumMessage, type_info: Optional[TypeInfo]
+    col_name: str, datum: DatumMessage, type_info: TypeInfo
 ) -> TColumnSchema:
     """Converts decoderbuf's datum value/typeinfo to dlt column schema."""
-    column_schema: TColumnSchema = {
+    return {
         "name": col_name,
-        **_to_dlt_column_type(
-            datum.column_type, type_info.modifier if type_info else None
-        ),
+        "nullable": type_info.value_optional,
+        **_to_dlt_column_type(datum.column_type, type_info.modifier),
     }
-
-    # Set nullable attribute if type_info is available
-    if type_info:
-        column_schema["nullable"] = type_info.value_optional
-
-    return column_schema
 
 
 def _epoch_micros_to_datetime(microseconds_since_1970: int) -> pendulum.DateTime:

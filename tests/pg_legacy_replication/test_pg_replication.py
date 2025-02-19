@@ -744,3 +744,66 @@ def test_batching(src_config: Tuple[dlt.Pipeline, str], backend: TableBackend) -
     src_pl.run(batch, table_name="items")
     extract_info = dest_pl.extract(changes)
     assert extract_info.asdict()["job_metrics"][0]["items_count"] == 100
+
+
+@pytest.mark.parametrize("destination_name", ALL_DESTINATIONS)
+@pytest.mark.parametrize("backend", ["sqlalchemy", "pyarrow"])
+def test_delete_schema_bug(
+    src_config: Tuple[dlt.Pipeline, str], destination_name: str, backend: TableBackend
+) -> None:
+    src_pl, slot_name = src_config
+
+    # create postgres table with 100 records
+    data = [{"id": key, "val": True} for key in range(1, 101)]
+    src_pl.run(data, table_name="items")
+
+    add_pk(src_pl.sql_client, "items", "id")
+
+    snapshots = init_replication(
+        slot_name=slot_name,
+        schema=src_pl.dataset_name,
+        table_names=("items",),
+        take_snapshots=True,
+        table_options={"items": {"backend": backend}},
+    )
+
+    dest_pl = dlt.pipeline(
+        pipeline_name="dest_pl", destination=destination_name, dev_mode=True
+    )
+
+    # initial load
+    info = dest_pl.run(snapshots)
+    cleanup_snapshot_resources(snapshots)
+    assert_load_info(info)
+    assert load_table_counts(dest_pl, "items") == {"items": 100}
+    assert_loaded_data(dest_pl, "items", ["id", "val"], data, "id")
+
+    changes = replication_source(
+        slot_name=slot_name,
+        schema=src_pl.dataset_name,
+        table_names=("items",),
+        target_batch_size=10,
+        repl_options={"items": {"backend": backend}},
+    )
+    changes.items.apply_hints(
+        write_disposition="merge", primary_key="id", columns=merge_hints
+    )
+
+    # process changes
+    info = dest_pl.run(changes)
+    assert_load_info(info, expected_load_packages=1)
+    assert load_table_counts(dest_pl, "items") == {"items": 100}
+    assert_loaded_data(dest_pl, "items", ["id", "val"], data, "id")
+
+    # delete the first 50 rows and update the next 50 rows
+    with src_pl.sql_client() as c:
+        qual_name = src_pl.sql_client().make_qualified_table_name("items")
+        to_delete = ",".join([str(x) for x in range(1, 51)])
+        c.execute_sql(f"DELETE FROM {qual_name} WHERE id IN ({to_delete});")
+        to_update = ",".join([str(x) for x in range(51, 101)])
+        c.execute_sql(f"UPDATE {qual_name} SET val = false WHERE id IN ({to_update});")
+
+    # process changes
+    info = dest_pl.run(changes)
+    assert_load_info(info, expected_load_packages=2)
+    assert load_table_counts(dest_pl, "items") == {"items": 50}
