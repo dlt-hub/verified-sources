@@ -22,7 +22,7 @@ from pymongo.cursor import Cursor
 
 if TYPE_CHECKING:
     TMongoClient = MongoClient[Any]
-    TCollection = Collection[Any]  # type: ignore
+    TCollection = Collection[Any]
     TCursor = Cursor[Any]
 else:
     TMongoClient = Any

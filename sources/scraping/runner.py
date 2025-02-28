@@ -4,19 +4,19 @@ import typing as t
 import dlt
 
 from dlt.common import logger
-from pydispatch import dispatcher  # type: ignore
+from pydispatch import dispatcher
 from typing_extensions import Self
 
-from scrapy import signals, Item, Spider  # type: ignore
-from scrapy.crawler import CrawlerProcess  # type: ignore
+from scrapy import signals, Item, Spider
+from scrapy.crawler import CrawlerProcess
 
-from .types import AnyDict, Runnable, P
+from .types import AnyDict, Runnable
 from .queue import ScrapingQueue
 
-T = t.TypeVar("T")
+T = t.TypeVar("T", bound=Item)
 
 
-class Signals:
+class Signals(t.Generic[T]):
     """Signals context wrapper
 
     This wrapper is also a callable which accepts `CrawlerProcess` instance
@@ -28,7 +28,7 @@ class Signals:
         self.queue = queue
         self.pipeline_name = pipeline_name
 
-    def on_item_scraped(self, item: Item) -> None:
+    def on_item_scraped(self, item: T) -> None:
         if not self.queue.is_closed:
             self.queue.put(item)
         else:
@@ -71,14 +71,14 @@ class ScrapyRunner(Runnable):
         spider: t.Type[Spider],
         start_urls: t.List[str],
         settings: AnyDict,
-        signals: Signals,
+        signals: Signals[T],
     ) -> None:
         self.spider = spider
         self.start_urls = start_urls
         self.crawler = CrawlerProcess(settings=settings)
         self.signals = signals
 
-    def run(self, *args: P.args, **kwargs: P.kwargs) -> None:
+    def run(self, *args: t.Any, **kwargs: t.Any) -> None:
         """Runs scrapy crawler process
 
         All `kwargs` are forwarded to `crawler.crawl(**kwargs)`.
@@ -133,8 +133,8 @@ class PipelineRunner(Runnable):
 
     def run(
         self,
-        *args: P.args,
-        **kwargs: P.kwargs,
+        *args: t.Any,
+        **kwargs: t.Any,
     ) -> threading.Thread:
         """You can use all regular dlt.pipeline.run() arguments
 
@@ -154,7 +154,7 @@ class PipelineRunner(Runnable):
 
         def run() -> None:
             try:
-                self.pipeline.run(self.scraping_resource, **kwargs)  # type: ignore[arg-type]
+                self.pipeline.run(self.scraping_resource, **kwargs)
             except Exception:
                 logger.error("Error during pipeline.run call, closing the queue")
                 raise
@@ -181,8 +181,8 @@ class ScrapingHost:
 
     def run(
         self,
-        *args: P.args,
-        **kwargs: P.kwargs,
+        *args: t.Any,
+        **kwargs: t.Any,
     ) -> None:
         """You can pass kwargs which are passed to `pipeline.run`"""
         logger.info("Starting pipeline")
