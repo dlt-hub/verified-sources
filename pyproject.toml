@@ -115,6 +115,9 @@ default-groups = [
     "scrapy",
 ]
 
+# [tool.uv.sources]
+# dlt = { path = "../dlt", editable = true }
+
 [tool.hatch.build.targets.sdist]
 include = ["sources"]
 

@@ -5,6 +5,7 @@ from typing import Any, Dict, Iterable, List, Optional
 import dlt
 from dlt.common.data_writers import TDataItemFormat
 from dlt.sources import DltResource
+from dlt.common.configuration.specs.config_section_context import ConfigSectionContext
 
 from .helpers import (
     MongoDbCollectionConfiguration,
@@ -76,8 +77,10 @@ def mongodb(
         )
 
 
-@dlt.common.configuration.with_config(
-    sections=("sources", "mongodb"), spec=MongoDbCollectionResourceConfiguration
+@dlt.resource(
+    name=lambda args: args["collection"],
+    standalone=True,
+    spec=MongoDbCollectionResourceConfiguration,
 )
 def mongodb_collection(
     connection_url: str = dlt.secrets.value,
