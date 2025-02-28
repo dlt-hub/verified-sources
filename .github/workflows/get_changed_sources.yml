@@ -15,7 +15,7 @@ jobs:
       sources_list: ${{ steps.get_changed_sources.outputs.sources_list }}
     steps:
       - name: Checkout code
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
         with:
           ref: ${{ github.event.pull_request.head.sha || github.ref }}
           fetch-depth: 0
