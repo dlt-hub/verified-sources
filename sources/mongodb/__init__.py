@@ -26,7 +26,7 @@ def mongodb(
     limit: Optional[int] = None,
     filter_: Optional[Dict[str, Any]] = None,
     projection: Optional[Union[Mapping[str, Any], Iterable[str]]] = None,
-    pymongoarrow_schema: Optional[Any] = None
+    pymongoarrow_schema: Optional[Any] = None,
 ) -> Iterable[DltResource]:
     """
     A DLT source which loads data from a mongo database using PyMongo.
@@ -105,7 +105,7 @@ def mongodb_collection(
     data_item_format: Optional[TDataItemFormat] = "object",
     filter_: Optional[Dict[str, Any]] = None,
     projection: Optional[Union[Mapping[str, Any], Iterable[str]]] = dlt.config.value,
-    pymongoarrow_schema: Optional[Any] = None
+    pymongoarrow_schema: Optional[Any] = None,
 ) -> Any:
     """
     A DLT source which loads a collection from a mongo database using PyMongo.

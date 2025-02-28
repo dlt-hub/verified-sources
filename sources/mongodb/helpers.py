@@ -1,7 +1,18 @@
 """Mongo database source helpers"""
 
 from itertools import islice
-from typing import TYPE_CHECKING, Any, Dict, Iterator, List, Optional, Tuple, Union, Iterable, Mapping
+from typing import (
+    TYPE_CHECKING,
+    Any,
+    Dict,
+    Iterator,
+    List,
+    Optional,
+    Tuple,
+    Union,
+    Iterable,
+    Mapping,
+)
 
 import dlt
 from bson.decimal128 import Decimal128
@@ -108,7 +119,9 @@ class CollectionLoader:
 
         return filt
 
-    def _projection_op(self, projection:Optional[Union[Mapping[str, Any], Iterable[str]]]) -> Optional[Dict[str, Any]]:
+    def _projection_op(
+        self, projection: Optional[Union[Mapping[str, Any], Iterable[str]]]
+    ) -> Optional[Dict[str, Any]]:
         """Build a projection operator.
 
         A tuple of fields to include or a dict specifying fields to include or exclude.
@@ -334,8 +347,7 @@ class CollectionArrowLoader(CollectionLoader):
         cursor = self._limit(cursor, limit)  # type: ignore
 
         context = PyMongoArrowContext.from_schema(
-            schema=pymongoarrow_schema,
-            codec_options=self.collection.codec_options
+            schema=pymongoarrow_schema, codec_options=self.collection.codec_options
         )
         for batch in cursor:
             process_bson_stream(batch, context)
@@ -348,6 +360,7 @@ class CollectionArrowLoaderParallel(CollectionLoaderParallel):
     Mongo DB collection parallel loader, which uses
     Apache Arrow for data processing.
     """
+
     def load_documents(
         self,
         filter_: Dict[str, Any],
@@ -370,7 +383,7 @@ class CollectionArrowLoaderParallel(CollectionLoaderParallel):
             limit=limit,
             filter_=filter_,
             projection=projection,
-            pymongoarrow_schema=pymongoarrow_schema
+            pymongoarrow_schema=pymongoarrow_schema,
         )
 
     def _get_all_batches(
@@ -441,8 +454,7 @@ class CollectionArrowLoaderParallel(CollectionLoaderParallel):
         cursor = cursor.clone()
 
         context = PyMongoArrowContext.from_schema(
-            schema=pymongoarrow_schema,
-            codec_options=self.collection.codec_options
+            schema=pymongoarrow_schema, codec_options=self.collection.codec_options
         )
         for chunk in cursor.skip(batch["skip"]).limit(batch["limit"]):
             process_bson_stream(chunk, context)
@@ -507,7 +519,6 @@ def collection_documents(
             "create a projection to select fields, `projection` will be ignored."
         )
 
-
     if parallel:
         if data_item_format == "arrow":
             LoaderClass = CollectionArrowLoaderParallel
@@ -530,7 +541,9 @@ def collection_documents(
             pymongoarrow_schema=pymongoarrow_schema,
         )
     else:
-        yield from loader.load_documents(limit=limit, filter_=filter_, projection=projection)
+        yield from loader.load_documents(
+            limit=limit, filter_=filter_, projection=projection
+        )
 
 
 def convert_mongo_objs(value: Any) -> Any:
@@ -561,7 +574,12 @@ def convert_arrow_columns(table: Any) -> Any:
         Pymongoarrow converts ObjectId to `fixed_size_binary[12]`, which can't be
         converted to a string as a vectorized operation because it contains ASCII characters.
 
-        Instead, you need to loop over values using: `value.as_buffer().hex().decode()`
+        Instead, you need to loop over values using:
+        ```python
+        pyarrow.array([v.as_buffer().hex() for v in object_id_array], type=pyarrow.string())
+        # pymongoarrow simplifies this by allowing this syntax
+        [str(v) for v in object_id_array]
+        ```
 
     Args:
         table (pyarrow.lib.Table): The table to convert.
