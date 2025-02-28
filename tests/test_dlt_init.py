@@ -1,13 +1,12 @@
 import pytest
 import os
-import sys
 from typing import Any, Iterator, List
 
 from dlt.common.configuration.providers import SecretsTomlProvider
 from dlt.common.storages.file_storage import FileStorage
 from dlt.common.utils import set_working_dir
 
-from dlt.extract.source import SourceReference
+from dlt.sources import SourceReference
 
 from dlt.cli import init_command, echo
 from dlt.cli.init_command import SOURCES_MODULE_NAME, utils as cli_utils, files_ops
