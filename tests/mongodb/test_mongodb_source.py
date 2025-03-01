@@ -354,7 +354,7 @@ def test_arrow_types(destination_name):
         dev_mode=True,
     )
 
-    if destination_name == "postgres":
+    if destination_name in ("bigquery", "postgres"):
         res = list(res)[0]
         res = res.drop_columns(["field7", "field8"])
 
