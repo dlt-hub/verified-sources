@@ -298,11 +298,14 @@ def test_mapped_data_types(
     if init_load and give_hints:
         snapshot.items.apply_hints(columns=column_schema)
 
+    repl_options = {"items": {"backend": backend}}
+    if give_hints:
+        repl_options["items"]["column_hints"] = column_schema
     changes = replication_source(
         slot_name=slot_name,
         schema=src_pl.dataset_name,
         table_names="items",
-        repl_options={"items": {"backend": backend}},
+        repl_options=repl_options,
     )
     changes.items.apply_hints(
         write_disposition="merge", primary_key="col1", columns=merge_hints

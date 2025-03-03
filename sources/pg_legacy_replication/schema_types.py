@@ -67,10 +67,10 @@ _DATUM_RAW_TYPES: Dict[str, TDataType] = {
 """Maps decoderbuf's datum msg type to dlt type."""
 
 _FIXED_PRECISION_TYPES: Dict[int, Tuple[int, Optional[int]]] = {
-    21: (16, None),  # smallint
-    23: (32, None),  # integer
+    21: (32, None),  # smallint
+    23: (64, None),  # integer
     20: (64, None),  # bigint
-    700: (32, None),  # real
+    700: (64, None),  # real
 }
 """Dict for fixed precision types"""
 

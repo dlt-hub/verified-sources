@@ -40,7 +40,7 @@ TABLE_ROW_ALL_DATA_TYPES = {
     "col4_precision": "2022-05-23T13:26:46.167231+00:00",
     "col5_precision": "string data 2 \n \r \x8e 🦆",
     "col6_precision": Decimal("2323.34"),
-    "col7_precision": b"binary data 2 \n \r \x8e",
+    # "col7_precision": b"binary data 2 \n \r \x8e", # FIXME This is no longer possible in pyarrow and it's absurd to begin with
     "col11_precision": "13:26:45.176451",
 }
 TABLE_UPDATE: List[TColumnSchema] = [
@@ -86,12 +86,12 @@ TABLE_UPDATE: List[TColumnSchema] = [
         "scale": 2,
         "nullable": False,
     },
-    {
-        "name": "col7_precision",
-        "data_type": "binary",
-        "precision": 19,
-        "nullable": False,
-    },
+    # {
+    #     "name": "col7_precision",
+    #     "data_type": "binary",
+    #     "precision": 19,
+    #     "nullable": False,
+    # }, # FIXME See comment above
     {"name": "col11_precision", "data_type": "time", "precision": 6, "nullable": False},
 ]
 
@@ -987,6 +987,7 @@ SIMILAR_SCHEMAS: List[Tuple[TTableSchema, TTableSchema, SchemaChoice]] = [
                     "name": "filled_at",
                     "nullable": True,
                     "data_type": "timestamp",
+                    "timezone": True,
                     "precision": 6,
                 },
                 "_pg_lsn": {"name": "_pg_lsn", "nullable": True, "data_type": "bigint"},
