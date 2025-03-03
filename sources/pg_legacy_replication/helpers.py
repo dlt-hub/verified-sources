@@ -1,5 +1,6 @@
 import hashlib
 from collections import defaultdict
+from contextlib import closing
 from dataclasses import dataclass, field
 from functools import partial
 from typing import (
@@ -164,8 +165,7 @@ def get_max_lsn(
     Returns None if the replication slot is empty.
     Does not consume the slot, i.e. messages are not flushed.
     """
-    conn = _get_conn(credentials)
-    try:
+    with closing(_get_conn(credentials)) as conn:
         with conn.cursor() as cur:
             pg_version = get_pg_version(cur)
             lsn_field = "lsn" if pg_version >= 100000 else "location"
@@ -181,8 +181,6 @@ def get_max_lsn(
             )
             row = cur.fetchone()
             return row[0] if row else None  # type: ignore[no-any-return]
-    finally:
-        conn.close()
 
 
 def lsn_int_to_hex(lsn: int) -> str:
@@ -204,16 +202,13 @@ def advance_slot(
     the behavior of that method seems odd when used outside of `consume_stream`.
     """
     assert upto_lsn > 0
-    conn = _get_conn(credentials)
-    try:
+    with closing(_get_conn(credentials)) as conn:
         with conn.cursor() as cur:
             # There is unfortunately no way in pg9.6 to manually advance the replication slot
             if get_pg_version(cur) > 100000:
                 cur.execute(
                     f"SELECT * FROM pg_replication_slot_advance('{slot_name}', '{lsn_int_to_hex(upto_lsn)}');"
                 )
-    finally:
-        conn.close()
 
 
 def _get_conn(
@@ -371,7 +366,7 @@ class MessageConsumer:
                 retained_schema = compare_schemas(last_schema, new_schema)
                 self.last_table_schema[table_name] = retained_schema
             except AssertionError as e:
-                logger.debug(str(e))
+                logger.info(str(e))
                 raise StopReplication
 
         return new_schema
@@ -381,13 +376,14 @@ class MessageConsumer:
     ) -> TTableSchema:
         """Last resort function used to fetch the table schema from the database"""
         engine = engine_from_credentials(self.credentials)
+        options = self.repl_options[table_name]
         to_col_schema = partial(
-            sqla_col_to_column_schema, reflection_level="full_with_precision"
+            sqla_col_to_column_schema,
+            reflection_level=options.get("reflection_level", "full"),
         )
         try:
             metadata = MetaData(schema=schema)
             table = Table(table_name, metadata, autoload_with=engine)
-            options = self.repl_options[table_name]
             included_columns = options.get("included_columns")
             columns = {
                 col["name"]: col
@@ -427,6 +423,7 @@ class ItemGenerator:
     start_lsn: int
     repl_options: DefaultDict[str, ReplicationOptions]
     target_batch_size: int = 1000
+    keepalive_interval: Optional[int] = None
     last_commit_lsn: Optional[int] = field(default=None, init=False)
     generated_all: bool = False
 
@@ -438,30 +435,27 @@ class ItemGenerator:
         Maintains LSN of last consumed commit message in object state.
         Advances the slot only when all messages have been consumed.
         """
-        conn = get_rep_conn(self.credentials)
-        consumer = MessageConsumer(
-            credentials=self.credentials,
-            upto_lsn=self.upto_lsn,
-            table_qnames=self.table_qnames,
-            repl_options=self.repl_options,
-            target_batch_size=self.target_batch_size,
-        )
-
-        cur = conn.cursor()
-        try:
-            cur.start_replication(slot_name=self.slot_name, start_lsn=self.start_lsn)
-            cur.consume_stream(consumer)
-        except StopReplication:  # completed batch or reached `upto_lsn`
-            yield from self.flush_batch(cur, consumer)
-        finally:
-            logger.debug(
-                "Closing connection... last_commit_lsn: %s, generated_all: %s, feedback_ts: %s",
-                self.last_commit_lsn,
-                self.generated_all,
-                cur.feedback_timestamp,
-            )
-            cur.close()
-            conn.close()
+        with closing(get_rep_conn(self.credentials)) as rep_conn:
+            with rep_conn.cursor() as rep_cur:
+                try:
+                    consumer = MessageConsumer(
+                        credentials=self.credentials,
+                        upto_lsn=self.upto_lsn,
+                        table_qnames=self.table_qnames,
+                        repl_options=self.repl_options,
+                        target_batch_size=self.target_batch_size,
+                    )
+                    rep_cur.start_replication(self.slot_name, start_lsn=self.start_lsn)
+                    rep_cur.consume_stream(consumer, self.keepalive_interval)
+                except StopReplication:  # completed batch or reached `upto_lsn`
+                    yield from self.flush_batch(rep_cur, consumer)
+                finally:
+                    logger.debug(
+                        "Closing connection... last_commit_lsn: %s, generated_all: %s, feedback_ts: %s",
+                        self.last_commit_lsn,
+                        self.generated_all,
+                        rep_cur.feedback_timestamp,
+                    )
 
     def flush_batch(
         self, cur: ReplicationCursor, consumer: MessageConsumer
@@ -662,6 +656,7 @@ ALLOWED_COL_SCHEMA_FIELDS: Set[str] = {
     "nullable",
     "precision",
     "scale",
+    "timezone",
 }
 
 
@@ -703,6 +698,8 @@ def compare_schemas(last: TTableSchema, new: TTableSchema) -> TTableSchema:
             col_schema["precision"] = s1.get("precision", s2.get("precision"))
         if "scale" in s1 or "scale" in s2:
             col_schema["scale"] = s1.get("scale", s2.get("scale"))
+        if "timezone" in s1 or "timezone" in s2:
+            col_schema["timezone"] = s1.get("timezone", s2.get("timezone"))
 
         # Update with the more detailed schema per column
         table_schema["columns"][name] = col_schema
