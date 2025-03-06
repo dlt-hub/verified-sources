@@ -22,7 +22,7 @@ from pymongo.cursor import Cursor
 
 if TYPE_CHECKING:
     TMongoClient = MongoClient[Any]
-    TCollection = Collection[Any]  # type: ignore
+    TCollection = Collection[Any]
     TCursor = Cursor[Any]
 else:
     TMongoClient = Any
@@ -462,7 +462,7 @@ class MongoDbCollectionConfiguration(BaseConfiguration):
 
 @configspec
 class MongoDbCollectionResourceConfiguration(BaseConfiguration):
-    connection_url: str = dlt.secrets.value
+    connection_url: dlt.TSecretValue = dlt.secrets.value
     database: Optional[str] = dlt.config.value
     collection: str = dlt.config.value
     incremental: Optional[dlt.sources.incremental] = None  # type: ignore[type-arg]

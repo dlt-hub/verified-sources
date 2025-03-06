@@ -2,29 +2,28 @@
 
 Integrates Dlt and Scrapy to facilitate scraping pipelines.
 """
-import inspect
 import typing as t
 
 import dlt
 
 from dlt.sources import DltResource
 
-from scrapy import Spider  # type: ignore
+from scrapy import Spider
 
 from .helpers import ScrapingConfig, create_pipeline_runner
-from .types import P, AnyDict
+from .types import AnyDict
 
 
-def run_pipeline(  # type: ignore[valid-type]
+def run_pipeline(
     pipeline: dlt.Pipeline,
     spider: t.Type[Spider],
-    *args: P.args,
+    *args: t.Any,
     on_before_start: t.Callable[[DltResource], None] = None,
     scrapy_settings: t.Optional[AnyDict] = None,
     batch_size: t.Optional[int] = None,
     queue_size: t.Optional[int] = None,
     queue_result_timeout: t.Optional[float] = None,
-    **kwargs: P.kwargs,
+    **kwargs: t.Any,
 ) -> None:
     """Simple runner for the scraping pipeline
 

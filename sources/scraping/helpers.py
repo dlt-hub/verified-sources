@@ -8,7 +8,7 @@ from dlt.common.configuration.specs.base_configuration import (
     BaseConfiguration,
 )
 
-from scrapy import Spider  # type: ignore
+from scrapy import Spider
 
 from .queue import ScrapingQueue
 from .settings import SOURCE_SCRAPY_QUEUE_SIZE, SOURCE_SCRAPY_SETTINGS

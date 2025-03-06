@@ -2,7 +2,7 @@ from functools import lru_cache
 import json
 from typing import Optional, Any, Dict
 
-from dlt.common import Decimal
+from dlt.common import Decimal, logger
 from dlt.common.data_types.typing import TDataType
 from dlt.common.data_types.type_helpers import coerce_value
 from dlt.common.schema.typing import TColumnSchema, TColumnType
@@ -91,6 +91,11 @@ def _to_dlt_column_type(type_id: int, atttypmod: int) -> TColumnType:
     Type OIDs not in _PG_TYPES mapping default to "text" type.
     """
     pg_type = _PG_TYPES.get(type_id)
+    if pg_type is None:
+        logger.warning(
+            f"Type OID {type_id} is unknown and will be converted to `text` dlt type"
+        )
+        pg_type = "character varying"
     precision = _get_precision(type_id, atttypmod)
     scale = _get_scale(type_id, atttypmod)
     return _type_mapper().from_destination_type(pg_type, precision, scale)
