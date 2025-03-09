@@ -1,119 +1,132 @@
-# do not add any other tools within the tables belonging to tool.poetry. add them at the end.
-# see blake at the bottom
-
-[tool.poetry]
+[project]
 name = "dlt-verified-sources"
 version = "0.1.0"
 description = "Initial set of dlt sources with demo pipelines installable with `dlt init` command"
-authors = ["Various Authors <team@dlthub.com>"]
-license = "MIT"
+authors = [{ name = "Various Authors", email = "team@dlthub.com" }]
+requires-python = ">=3.9"
 readme = "README.md"
-packages = [{include = "sources"}]
+license = "MIT"
+dependencies = [
+    "dlt[bigquery, duckdb]>=1.7.0",
+]
 
-[tool.poetry.dependencies]
-python = ">=3.8.1,<3.13"
-dlt = {version = "1.3.0", allow-prereleases = true, extras = ["redshift", "bigquery", "postgres", "duckdb"]}
-graphlib-backport = {version = "*", python = "<3.9"}
+[dependency-groups]
+dltpure = ["dlt>=1.7.0"]
+pytest = [
+    "pytest>=7.2.0,<8",
+    "pytest-mock>=3.12.0,<4",
+    "pytest-forked>=1.6.0,<2",
+]
+dev = [
+    "mypy>=1.10.0,<2",
+    "flake8>=6.0.0,<7",
+    "pytest>=7.2.0,<8",
+    "bandit>=1.7.4,<2",
+    "flake8-bugbear>=22.12.6,<23",
+    "flake8-tidy-imports>=4.8.0,<5",
+    "flake8-encodings>=0.5.0.post1,<0.6",
+    "flake8-builtins>=2.1.0,<3",
+    "types-requests>=2.28.11.7,<3",
+    "mimesis>=7.0.0,<8",
+    "requests-mock>=1.10.0,<2",
+    "pandas-stubs>=2.0.0,<3",
+    "black>=23.3.0,<24",
+    "pypdf2>=3.0.1,<4",
+    "greenlet>=3.1",
+    "confluent-kafka>=2.3.0,<2.8",
+    "types-psycopg2>=2.9.0,<3",
+    "pytest-mock>=3.12.0,<4",
+    "twisted==22.10.0",
+    "pytest-forked>=1.6.0,<2",
+    "pendulum>=3.0.0,<4",
+    "psycopg2-binary>=2.9.9",
+]
+sql_database = [
+    "sqlalchemy>=1.4",
+    "pymysql>=1.0.3,<2",
+    'connectorx>=0.3.3; python_version >= "3.9"',
+    'connectorx>=0.4.0; python_version >= "3.10"',
+]
+pg_replication = ["psycopg2-binary>=2.9.9"]
+google_sheets = ["google-api-python-client>=2.78.0,<3"]
+google_analytics = [
+    "google-analytics-data>=0.16.2,<0.17",
+    "google-api-python-client>=2.86.0,<3",
+    "google-auth-oauthlib>=1.0.0,<2",
+    "requests-oauthlib>=1.3.1,<2",
+]
+stripe_analytics = [
+    "pandas>=2.0.0,<3",
+    "stripe>=5.0.0,<6",
+    "types-stripe>=3.5.2.14,<4",
+]
+asana_dlt = ["asana>=3.2.1,<4"]
+facebook_ads = ["facebook-business>=17.0.2,<18"]
+google_ads = [
+    "google-ads>=21.1.0,<22",
+    "google-api-python-client>=2.129.0,<3",
+]
+salesforce = ["simple-salesforce>=1.12.4,<2"]
+unstructured_data_lint = [
+    "langchain>=0.0.219,<0.0.220",
+    "openai>=0.27.8,<0.28",
+]
+unstructured_data = [
+    "langchain>=0.0.219,<0.0.220",
+    "unstructured>=0.7.10,<0.8",
+    "openai>=0.27.8,<0.28",
+    "chromadb>=0.3.26,<0.4",
+    "tiktoken>=0.4.0,<0.5",
+]
+mongodb = [
+    "pymongo>=4.3.3,<5",
+    "pymongoarrow>=1.3.0",
+]
+airtable = ["pyairtable>=2.1.0.post1,<3"]
+filesystem = [
+    "fsspec>=2023.10.0",
+    "adlfs>=2023.10.0",
+    "s3fs>=2022.4.0",
+    "gcsfs>=2022.4.0",
+]
+scrapy = [
+    "scrapy>=2.11.0,<3",
+    "twisted==22.10.0",
+]
 
-[tool.poetry.group.dltpure.dependencies]
-dlt = {version = "1.3.0", allow-prereleases = true}
+[tool.uv]
+default-groups = [
+    "dltpure",
+    "pytest",
+    "dev",
+    "sql_database",
+    "pg_replication",
+    "google_sheets",
+    "google_analytics",
+    "stripe_analytics",
+    "asana_dlt",
+    "facebook_ads",
+    "google_ads",
+    "salesforce",
+    "unstructured_data_lint",
+    "mongodb",
+    "airtable",
+    "filesystem",
+    "scrapy",
+]
 
-[tool.poetry.group.pytest.dependencies]
-pytest = "^7.2.0"
-pytest-mock = "^3.12.0"
-pytest-forked = "^1.6.0"
+# [tool.uv.sources]
+# dlt = { path = "../dlt", editable = true }
 
-[tool.poetry.group.dev.dependencies]
-mypy = "^1.10.0"
-flake8 = "^6.0.0"
-pytest = "^7.2.0"
-bandit = "^1.7.4"
-flake8-bugbear = "^22.12.6"
-flake8-tidy-imports = "^4.8.0"
-flake8-encodings = "^0.5.0.post1"
-flake8-builtins = "^2.1.0"
-types-requests = "^2.28.11.7"
-mimesis = "^7.0.0"
-requests-mock = "^1.10.0"
-pandas-stubs = "^2.0.0"
-black = "^23.3.0"
-pypdf2 = "^3.0.1"
-greenlet = "<3.0.0"
-confluent-kafka = "^2.3.0"
-types-psycopg2 = "^2.9.0"
-pytest-mock = "^3.12.0"
-twisted = "22.10.0"
-pytest-forked = "^1.6.0"
-pendulum = "^3.0.0"
+[tool.hatch.build.targets.sdist]
+include = ["sources"]
 
-[tool.poetry.group.sql_database.dependencies]
-sqlalchemy = ">=1.4"
-pymysql = "^1.0.3"
-connectorx = ">=0.3.1"
-
-[tool.poetry.group.pg_replication.dependencies]
-psycopg2-binary = ">=2.9.9"
-
-[tool.poetry.group.google_sheets.dependencies]
-google-api-python-client = "^2.78.0"
-
-[tool.poetry.group.google_analytics.dependencies]
-google-analytics-data = "^0.16.2"
-google-api-python-client = "^2.86.0"
-google-auth-oauthlib = "^1.0.0"
-requests-oauthlib = "^1.3.1"
-
-[tool.poetry.group.stripe_analytics.dependencies]
-pandas = "^2.0.0"
-stripe = "^5.0.0"
-types-stripe = "^3.5.2.14"
-
-[tool.poetry.group.asana_dlt.dependencies]
-asana = "^3.2.1"
-
-[tool.poetry.group.facebook_ads.dependencies]
-facebook-business = "^17.0.2"
-
-[tool.poetry.group.google_ads.dependencies]
-google-ads = "^21.1.0"
-google-api-python-client = "^2.129.0"
-
-[tool.poetry.group.salesforce.dependencies]
-simple-salesforce = "^1.12.4"
-
-[tool.poetry.group.unstructured_data_lint.dependencies]
-langchain = "^0.0.219"
-openai = "^0.27.8"
-
-[tool.poetry.group.unstructured_data.dependencies]
-langchain = "^0.0.219"
-unstructured = "^0.7.10"
-openai = "^0.27.8"
-chromadb = "^0.3.26"
-tiktoken = "^0.4.0"
-
-[tool.poetry.group.mongodb.dependencies]
-pymongo = "^4.3.3"
-pymongoarrow = ">=1.3.0"
-
-[tool.poetry.group.airtable.dependencies]
-pyairtable = "^2.1.0.post1"
-
-
-[tool.poetry.group.filesystem.dependencies]
-fsspec = ">=2023.10.0"
-adlfs = ">=2023.10.0"
-s3fs = {version = ">=2022.4.0"}
-gcsfs = {version = ">=2022.4.0"}
-
-
-[tool.poetry.group.scrapy.dependencies]
-scrapy = "^2.11.0"
-twisted = "22.10.0"
+[tool.hatch.build.targets.wheel]
+include = ["sources"]
 
 [build-system]
-requires = ["poetry-core"]
-build-backend = "poetry.core.masonry.api"
+requires = ["hatchling"]
+build-backend = "hatchling.build"
 
 [tool.black]
 include = '.*py$'

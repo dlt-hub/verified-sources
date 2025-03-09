@@ -2,8 +2,8 @@ from typing import Any
 
 import dlt
 from dlt.sources import DltResource
-from scrapy import Spider  # type: ignore
-from scrapy.http import Response  # type: ignore
+from scrapy import Spider
+from scrapy.http import Response
 
 from scraping import run_pipeline
 from scraping.helpers import create_pipeline_runner
@@ -13,7 +13,7 @@ class MySpider(Spider):
     def parse(self, response: Response, **kwargs: Any) -> Any:
         for next_page in response.css("li.next a::attr(href)"):
             if next_page:
-                yield response.follow(next_page, self.parse)
+                yield response.follow(next_page.get(), self.parse)
 
         for quote in response.css("div.quote"):
             result = {

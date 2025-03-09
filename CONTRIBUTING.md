@@ -110,22 +110,19 @@ ensure you have a working setup.
 
 ### 2. Prepare the development environment
 
-Development on the verified sources repository depends on Python 3.8 or higher and poetry being
+Development on the verified sources repository depends on Python 3.9 or higher and `uv` being
 available as well as the needed dependencies being installed. Make is used to automate tasks.
 
-1. Install poetry:
-    ```sh
-    make install-poetry
-    ```
+1. Install uv: https://docs.astral.sh/uv/getting-started/installation/
 
 2. Install the python dependencies:
     ```sh
     make dev
     ```
 
-3. Activate the poetry shell:
+3. Activate the virtual environment (Linux example):
     ```sh
-    poetry shell
+    activate .venv/bin/activate
     ```
 
 4. To verify that the dependencies are set up correctly you can run the linter / formatter:
@@ -153,9 +150,9 @@ dlt>=0.3.5,<0.4.0
 If your source requires additional dependencies that are not available in `dlt` they may be added as
 follows:
 
-1. Use `poetry` to add it to the group with the same name as the source. Example: the chess source uses
+1. Use `uv` to add it to the group with the same name as the source. Example: the chess source uses
    `python-chess` to decode game moves. The dependency was added with
-   `poetry add -G chess python-chess`.
+   `uv add --group chess python-chess`.
 2. Add the dependency to the `requirements.txt` file in the **source folder**.
 
 ### 2. Make sure you use relative imports in your source module
@@ -352,17 +349,16 @@ We are happy to add you as contributor to avoid the hurdles of setting up creden
 
 ### Ensuring the correct Python version
 
-Use Python 3.8 for development which is the lowest supported version for `python-dlt`. You'll need
+Use Python 3.9 for development which is the lowest supported version for `dlt`. You'll need
 `distutils` and `venv`:
 
 ```shell
-sudo apt-get install python3.8
-sudo apt-get install python3.8-distutils
-sudo apt install python3.8-venv
+sudo apt-get install python3.9
+sudo apt-get install python3.9-distutils
+sudo apt install python3.9-venv
 ```
 
-You may also use `pyenv` as [poetry](https://python-poetry.org/docs/managing-environments/)
-suggests.
+`uv` will manage virtual environments for you.
 
 ### Destination credentials
 

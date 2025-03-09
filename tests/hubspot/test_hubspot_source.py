@@ -345,7 +345,11 @@ def test_all_resources(destination_name: str) -> None:
         dataset_name="hubspot_data",
         dev_mode=True,
     )
-    load_info = pipeline.run(hubspot(include_history=True).with_resources("contacts", "deals", "companies", "contacts_property_history"))
+    load_info = pipeline.run(
+        hubspot(include_history=True).with_resources(
+            "contacts", "deals", "companies", "contacts_property_history"
+        )
+    )
 
     assert_load_info(load_info)
     table_names = [
@@ -358,7 +362,7 @@ def test_all_resources(destination_name: str) -> None:
     assert (
         load_table_counts(pipeline, *table_names)
         == load_table_distinct_counts(pipeline, "hs_object_id", *table_names)
-        == {'companies': 4, 'contacts': 3, 'deals': 2}
+        == {"companies": 4, "contacts": 3, "deals": 2}
     )
 
     history_table_names = [
@@ -408,7 +412,7 @@ def test_all_resources(destination_name: str) -> None:
                 "bh@hubspot.com",
                 "API",
                 pendulum.parse("2023-06-28 13:55:47.558"),
-             )
+            ),
         ]
     )
 

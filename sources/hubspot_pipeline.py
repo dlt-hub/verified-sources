@@ -97,7 +97,9 @@ def load_crm_objects_with_custom_properties() -> None:
         destination="duckdb",
     )
 
-    load_data = hubspot(properties={"contact": ("date_of_birth", "degree")}, include_custom_props=True)
+    load_data = hubspot(
+        properties={"contact": ("date_of_birth", "degree")}, include_custom_props=True
+    )
     load_info = pipeline.run(load_data)
     print(load_info)
 
