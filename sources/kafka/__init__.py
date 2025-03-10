@@ -50,7 +50,7 @@ def kafka_consumer(
             is taken from secrets.
         msg_processor(Optional[Callable]): A function-converter,
             which'll process every Kafka message after it's read and
-            before it's transfered to the destination.
+            before it's transferred to the destination.
         batch_size (Optional[int]): Messages batch size to read at once.
         batch_timeout (Optional[int]): Maximum time to wait for a batch
             consume, in seconds.
