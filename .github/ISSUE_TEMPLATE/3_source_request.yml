@@ -28,6 +28,18 @@ body:
       required: true
   - type: dropdown
     attributes:
+      label: Current status.
+      description: Please tell us what is the current status of this source.
+      multiple: false
+      options:
+        - "I plan to write it"
+        - "I've written it and run it for my hobby project"
+        - "I've written it and run it in production"
+        - "I want to request a source and don't plan to write it"
+    validations:
+      required: true
+  - type: dropdown
+    attributes:
       label: What is your plan for this source.
       description: Please tell us what is the purpose of this source.
       multiple: false
