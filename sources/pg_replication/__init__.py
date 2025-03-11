@@ -4,6 +4,7 @@ from typing import Dict, Sequence, Optional, Iterable, Union
 
 import dlt
 
+from dlt.common import logger
 from dlt.common.typing import TDataItem
 from dlt.common.schema.typing import TTableSchemaColumns
 from dlt.extract.items import DataItemWithMeta
@@ -13,7 +14,7 @@ from .helpers import advance_slot, get_max_lsn, ItemGenerator
 
 
 @dlt.resource(
-    name=lambda args: args["slot_name"] + "_" + args["pub_name"],
+    name=lambda args: args["slot_name"],
     standalone=True,
 )
 def replication_resource(
@@ -75,7 +76,7 @@ def replication_resource(
     """
     # start where we left off in previous run
     start_lsn = dlt.current.resource_state().get("last_commit_lsn", 0)
-    if flush_slot:
+    if flush_slot and start_lsn:
         advance_slot(start_lsn, slot_name, credentials)
 
     # continue until last message in replication slot
@@ -83,7 +84,9 @@ def replication_resource(
     upto_lsn = get_max_lsn(slot_name, options, credentials)
     if upto_lsn is None:
         return
-
+    logger.info(
+        f"Replicating slot {slot_name} publication {pub_name} from {start_lsn} to {upto_lsn}"
+    )
     # generate items in batches
     while True:
         gen = ItemGenerator(

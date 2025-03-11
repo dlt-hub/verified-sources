@@ -14,11 +14,107 @@ from tests.utils import (
     get_table_metrics,
 )
 from sources.pg_replication import replication_resource
-from sources.pg_replication.helpers import init_replication, get_pg_version
+from sources.pg_replication.helpers import (
+    init_replication,
+    get_pg_version,
+)
 from sources.pg_replication.exceptions import IncompatiblePostgresVersionException
 
 from .cases import TABLE_ROW_ALL_DATA_TYPES, TABLE_UPDATE_COLUMNS_SCHEMA
 from .utils import add_pk, assert_loaded_data, is_super_user
+
+
+@pytest.mark.parametrize("destination_name", ALL_DESTINATIONS)
+def test_schema_replication(
+    src_config: Tuple[dlt.Pipeline, str, str], destination_name: str
+) -> None:
+    @dlt.resource(write_disposition="merge", primary_key="id_x")
+    def tbl_x(data):
+        yield data
+
+    @dlt.resource(write_disposition="merge", primary_key="id_y")
+    def tbl_y(data):
+        yield data
+
+    src_pl, slot_name, pub_name = src_config
+
+    src_pl.run(
+        [
+            tbl_x({"id_x": 1, "val_x": "foo"}),
+            tbl_y({"id_y": 1, "val_y": True}),
+        ]
+    )
+    add_pk(src_pl.sql_client, "tbl_x", "id_x")
+    add_pk(src_pl.sql_client, "tbl_y", "id_y")
+
+    snapshots = init_replication(
+        slot_name=slot_name,
+        pub_name=pub_name,
+        table_names=None,  # will initialize schema replication and get list of snapshots from sql_database
+        schema_name=src_pl.dataset_name,
+        persist_snapshots=True,
+    )
+
+    changes = replication_resource(slot_name, pub_name)
+
+    src_pl.run(
+        [
+            tbl_x([{"id_x": 2, "val_x": "bar"}, {"id_x": 3, "val_x": "baz"}]),
+            tbl_y({"id_y": 2, "val_y": False}),
+        ]
+    )
+
+    dest_pl = dlt.pipeline(
+        pipeline_name="dest_pl", destination=destination_name, dev_mode=True
+    )
+
+    info = dest_pl.run(snapshots)
+    assert_load_info(info)
+    assert load_table_counts(dest_pl, "tbl_x", "tbl_y") == {"tbl_x": 1, "tbl_y": 1}
+    exp_tbl_x = [{"id_x": 1, "val_x": "foo"}]
+    exp_tbl_y = [{"id_y": 1, "val_y": True}]
+    assert_loaded_data(dest_pl, "tbl_x", ["id_x", "val_x"], exp_tbl_x, "id_x")
+    assert_loaded_data(dest_pl, "tbl_y", ["id_y", "val_y"], exp_tbl_y, "id_y")
+
+    # process changes
+    print("process changes")
+    info = dest_pl.run(changes)
+    assert_load_info(info)
+    assert load_table_counts(dest_pl, "tbl_x", "tbl_y") == {"tbl_x": 3, "tbl_y": 2}
+    exp_tbl_x = [
+        {"id_x": 1, "val_x": "foo"},
+        {"id_x": 2, "val_x": "bar"},
+        {"id_x": 3, "val_x": "baz"},
+    ]
+    exp_tbl_y = [{"id_y": 1, "val_y": True}, {"id_y": 2, "val_y": False}]
+    assert_loaded_data(dest_pl, "tbl_x", ["id_x", "val_x"], exp_tbl_x, "id_x")
+    assert_loaded_data(dest_pl, "tbl_y", ["id_y", "val_y"], exp_tbl_y, "id_y")
+
+    # add new table and load data, we should receive it in publication slot
+    # because we track the whole schema
+    @dlt.resource(write_disposition="append", primary_key="id_z")
+    def tbl_z(data):
+        yield data
+
+    src_pl.run(tbl_z([{"id_z": 2, "val_x": "bar"}, {"id_z": 3}]))
+    add_pk(src_pl.sql_client, "tbl_z", "id_z")
+    # for some reason I need to add data to see that PK was added
+    src_pl.run(tbl_z([{"id_z": 4, "val_x": "bar"}, {"id_z": 5}]))
+
+    info = dest_pl.run(replication_resource(slot_name, pub_name))
+    assert_load_info(info)
+    assert load_table_counts(dest_pl, "tbl_x", "tbl_y", "tbl_z") == {
+        "tbl_x": 3,
+        "tbl_y": 2,
+        "tbl_z": 4,
+    }
+    # make sure PK was added
+    assert (
+        dest_pl.default_schema.tables["tbl_x"]["columns"]["id_x"]["primary_key"] is True
+    )
+    assert (
+        dest_pl.default_schema.tables["tbl_z"]["columns"]["id_z"]["primary_key"] is True
+    )
 
 
 @pytest.mark.parametrize("destination_name", ALL_DESTINATIONS)
@@ -726,7 +822,7 @@ def test_init_replication(src_config: Tuple[dlt.Pipeline, str, str]) -> None:
         pub_name=pub_name,
         schema_name=src_pl.dataset_name,
         table_names=("tbl_x", "tbl_y"),
-        persist_snapshots=True,
+        persist_snapshots=False,
     )
     assert snapshots is None
     assert get_table_names_in_pub() == {"tbl_x", "tbl_y"}

@@ -44,3 +44,12 @@ def pytest_configure(config):
     # disable azure logging
     for log in ["azure.core.pipeline.policies.http_logging_policy"]:
         logging.getLogger(log).setLevel("ERROR")
+
+    # disable httpx request logging
+    logging.getLogger("httpx").setLevel("WARNING")
+
+    # disable googleapiclient logging
+    logging.getLogger("googleapiclient.discovery_cache").setLevel("WARNING")
+
+    # disable pyiceberg logging
+    logging.getLogger("pyiceberg").setLevel("WARNING")
