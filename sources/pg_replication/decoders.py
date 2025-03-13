@@ -6,7 +6,7 @@ import io
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
-from typing import List, Optional, Union
+from typing import List, NamedTuple, Optional, Union
 
 # integer byte lengths
 INT8 = 1
@@ -28,8 +28,7 @@ def convert_bytes_to_utf8(_in_bytes: Union[bytes, bytearray]) -> str:
     return (_in_bytes).decode("utf-8")
 
 
-@dataclass(frozen=True)
-class ColumnData:
+class ColumnData(NamedTuple):
     # col_data_category is NOT the type. it means null value/toasted(not sent)/text formatted
     col_data_category: Optional[str]
     col_data_length: Optional[int] = None
@@ -39,8 +38,7 @@ class ColumnData:
         return f"[col_data_category='{self.col_data_category}', col_data_length={self.col_data_length}, col_data='{self.col_data}']"
 
 
-@dataclass(frozen=True)
-class ColumnType:
+class ColumnType(NamedTuple):
     """https://www.postgresql.org/docs/12/catalog-pg-attribute.html"""
 
     part_of_pkey: int
@@ -49,8 +47,7 @@ class ColumnType:
     atttypmod: int
 
 
-@dataclass(frozen=True)
-class TupleData:
+class TupleData(NamedTuple):
     n_columns: int
     column_data: List[ColumnData]
 
@@ -58,6 +55,10 @@ class TupleData:
         return f"n_columns: {self.n_columns}, data: {self.column_data}"
 
 
+# TODO: you can make decoding way faster by
+# - moving all the decoding core to PgoutputMessage
+# - use struct unpack and increase offset manually to reduce calls
+# - use tuples to represent data, separate data from decoding!
 class PgoutputMessage(ABC):
     def __init__(self, buffer: bytes):
         self.buffer: io.BytesIO = io.BytesIO(buffer)

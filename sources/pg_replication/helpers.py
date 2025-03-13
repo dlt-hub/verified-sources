@@ -20,24 +20,30 @@ from psycopg2.extras import (
 )
 
 import dlt
-
 from dlt.common import logger
 from dlt.common.typing import TDataItem
 from dlt.common.pendulum import pendulum
+from dlt.common.normalizers.naming.snake_case import NamingConvention
 from dlt.common.schema.typing import (
     TTableSchema,
     TTableSchemaColumns,
     TColumnNames,
     TWriteDisposition,
+    DLT_NAME_PREFIX,
 )
 from dlt.common.schema.utils import merge_column
+from dlt.common.configuration.specs.config_section_context import ConfigSectionContext
 from dlt.common.data_writers.escape import escape_postgres_identifier
 
 from dlt.extract.items import DataItemWithMeta
-from dlt.extract.resource import DltResource
+from dlt.extract import DltResource
 
+from dlt.sources.config import with_config
 from dlt.sources.credentials import ConnectionStringCredentials
-from dlt.sources.sql_database import sql_table
+from dlt.sources.sql_database import (
+    sql_table as core_sql_table,
+    sql_database as core_sql_datbase,
+)
 
 from .schema_types import _to_dlt_column_schema, _to_dlt_val
 from .exceptions import IncompatiblePostgresVersionException
@@ -50,13 +56,36 @@ from .decoders import (
     ColumnData,
 )
 
+__source_name__ = "pg_replication"
 
-@dlt.sources.config.with_config(sections=("sources", "pg_replication"))
+
+@with_config(
+    sections=("sources", "pg_replication"),
+    sections_merge_style=ConfigSectionContext.resource_merge_style,
+    section_arg_name="slot_name",
+)
+def replication_connection(
+    slot_name: str, credentials: ConnectionStringCredentials = dlt.secrets.value
+) -> LogicalReplicationConnection:
+    """Returns a psycopg2 LogicalReplicationConnection to interact with postgres replication functionality.
+
+    Requires `slot_name` to be passed in order to generate compatible configuraiton section.
+
+    Raises error if the user does not have the REPLICATION attribute assigned.
+    """
+    return _get_rep_conn(credentials)
+
+
+@with_config(
+    sections=("sources", "pg_replication"),
+    sections_merge_style=ConfigSectionContext.resource_merge_style,
+    section_arg_name="slot_name",
+)
 def init_replication(
-    slot_name: str,
-    pub_name: str,
-    schema_name: str,
-    table_names: Optional[Union[str, Sequence[str]]] = None,
+    slot_name: str = dlt.config.value,
+    pub_name: str = dlt.config.value,
+    schema_name: str = dlt.config.value,
+    table_names: Optional[Union[str, Sequence[str]]] = dlt.config.value,
     credentials: ConnectionStringCredentials = dlt.secrets.value,
     publish: str = "insert, update, delete",
     persist_snapshots: bool = False,
@@ -83,8 +112,9 @@ def init_replication(
         pub_name (str): Name of the publication to create if it does not exist yet.
         schema_name (str): Name of the schema to replicate tables from.
         table_names (Optional[Union[str, Sequence[str]]]):  Name(s) of the table(s)
-          to include in the publication. If not provided, all tables in the schema
-          are included (also tables added to the schema after the publication was created).
+          to include in the publication. If not provided, the whole schema with `schema_name` will be replicated
+          (also tables added to the schema after the publication was created). You need superuser privileges
+          for the schema replication.
         credentials (ConnectionStringCredentials): Postgres database credentials.
         publish (str): Comma-separated string of DML operations. Can be used to
           control which changes are included in the publication. Allowed operations
@@ -129,55 +159,89 @@ def init_replication(
     """
     if isinstance(table_names, str):
         table_names = [table_names]
-    cur = _get_rep_conn(credentials).cursor()
-    if reset:
-        drop_replication_slot(slot_name, cur)
-        drop_publication(pub_name, cur)
-    create_publication(pub_name, cur, publish)
-    if table_names is None:
-        add_schema_to_publication(schema_name, pub_name, cur)
+
+    rep_conn = _get_rep_conn(credentials)
+    try:
+        with rep_conn.cursor() as cur:
+            if reset:
+                drop_replication_slot(slot_name, cur)
+                drop_publication(pub_name, cur)
+            create_publication(pub_name, cur, publish)
+            if table_names is None:
+                add_schema_to_publication(schema_name, pub_name, cur)
+            else:
+                add_tables_to_publication(table_names, schema_name, pub_name, cur)
+
+            slot = create_replication_slot(slot_name, cur)
+            if persist_snapshots:
+                if slot is None:
+                    raise RuntimeError(
+                        f"Cannot create snapshots because slot {slot_name} is already created."
+                    )
+
+                # get list of tables via sql_database if not provided
+                if table_names is None:
+                    # do not include dlt tables
+                    table_names = [
+                        table_name
+                        for table_name in core_sql_datbase(
+                            credentials, schema=schema_name, reflection_level="minimal"
+                        ).resources.keys()
+                        if not table_name.lower().startswith(DLT_NAME_PREFIX)
+                    ]
+
+                # need separate session to read the snapshot: https://stackoverflow.com/q/75852587
+                with _get_conn(credentials) as conn:
+                    with conn.cursor() as cur_snap:
+                        # set the snapshot to the snaphost of the newly created replication slot
+                        cur_snap.execute(
+                            f"""
+                            START TRANSACTION ISOLATION LEVEL REPEATABLE READ;
+                            SET TRANSACTION SNAPSHOT '{slot["snapshot_name"]}';
+                        """
+                        )
+                        snapshot_tables = [
+                            (
+                                table_name,
+                                persist_snapshot_table(
+                                    snapshot_name=slot["snapshot_name"],
+                                    table_name=table_name,
+                                    schema_name=schema_name,
+                                    cur=cur_snap,
+                                    include_columns=(
+                                        None
+                                        if include_columns is None
+                                        else include_columns.get(table_name)
+                                    ),
+                                ),
+                                _get_pk(cur_snap, table_name, schema_name),
+                            )
+                            for table_name in table_names
+                        ]
+                    # commit all tables before creating resources that will reflect them
+                    conn.commit()
+                snapshot_table_resources = [
+                    snapshot_table_resource(
+                        snapshot_table_name=snapshot_table_name,
+                        schema_name=schema_name,
+                        table_name=table_name,
+                        write_disposition="append" if publish == "insert" else "merge",
+                        columns=None if columns is None else columns.get(table_name),
+                        primary_key=primary_key,
+                        credentials=credentials,
+                    )
+                    for table_name, snapshot_table_name, primary_key in snapshot_tables
+                ]
+                if len(snapshot_table_resources) == 1:
+                    return snapshot_table_resources[0]
+                return snapshot_table_resources
+    except Exception:
+        rep_conn.rollback()
+        raise
     else:
-        add_tables_to_publication(table_names, schema_name, pub_name, cur)
-    slot = create_replication_slot(slot_name, cur)
-    if persist_snapshots:
-        if slot is None:
-            logger.info(
-                "Cannot persist snapshots because they do not exist. "
-                f'The replication slot "{slot_name}" already existed prior to calling this function.'
-            )
-        else:
-            # need separate session to read the snapshot: https://stackoverflow.com/q/75852587
-            cur_snap = _get_conn(credentials).cursor()
-            snapshot_table_names = [
-                persist_snapshot_table(
-                    snapshot_name=slot["snapshot_name"],
-                    table_name=table_name,
-                    schema_name=schema_name,
-                    cur=cur_snap,
-                    include_columns=(
-                        None
-                        if include_columns is None
-                        else include_columns.get(table_name)
-                    ),
-                )
-                for table_name in table_names
-            ]
-            snapshot_table_resources = [
-                snapshot_table_resource(
-                    snapshot_table_name=snapshot_table_name,
-                    schema_name=schema_name,
-                    table_name=table_name,
-                    write_disposition="append" if publish == "insert" else "merge",
-                    columns=None if columns is None else columns.get(table_name),
-                    credentials=credentials,
-                )
-                for table_name, snapshot_table_name in zip(
-                    table_names, snapshot_table_names
-                )
-            ]
-            if len(snapshot_table_resources) == 1:
-                return snapshot_table_resources[0]
-            return snapshot_table_resources
+        rep_conn.commit()
+    finally:
+        rep_conn.close()
     return None
 
 
@@ -189,7 +253,8 @@ def get_pg_version(
     """Returns Postgres server version as int."""
     if cur is not None:
         return cur.connection.server_version
-    return _get_conn(credentials).server_version
+    with _get_conn(credentials) as conn:
+        return conn.server_version
 
 
 def create_publication(
@@ -318,7 +383,6 @@ def drop_publication(name: str, cur: ReplicationCursor) -> None:
     esc_name = escape_postgres_identifier(name)
     try:
         cur.execute(f"DROP PUBLICATION {esc_name};")
-        cur.connection.commit()
         logger.info(f"Successfully dropped publication {esc_name}.")
     except psycopg2.errors.UndefinedObject:  # the publication does not exist
         logger.info(
@@ -340,17 +404,19 @@ def persist_snapshot_table(
     col_str = "*"
     if include_columns is not None:
         col_str = ", ".join(map(escape_postgres_identifier, include_columns))
-    snapshot_table_name = f"{table_name}_snapshot_{snapshot_name}"
+    # make sure to shorten identifier
+    naming = NamingConvention(63)
+    # name must start with _dlt so we skip this table when replicating
+    snapshot_table_name = naming.normalize_table_identifier(
+        f"_dlt_{table_name}_s_{snapshot_name}"
+    )
     snapshot_qual_name = _make_qualified_table_name(snapshot_table_name, schema_name)
     qual_name = _make_qualified_table_name(table_name, schema_name)
     cur.execute(
         f"""
-        START TRANSACTION ISOLATION LEVEL REPEATABLE READ;
-        SET TRANSACTION SNAPSHOT '{snapshot_name}';
         CREATE TABLE {snapshot_qual_name} AS SELECT {col_str} FROM {qual_name};
-    """
+        """
     )
-    cur.connection.commit()
     logger.info(f"Successfully persisted snapshot table state in {snapshot_qual_name}.")
     return snapshot_table_name
 
@@ -359,6 +425,7 @@ def snapshot_table_resource(
     snapshot_table_name: str,
     schema_name: str,
     table_name: str,
+    primary_key: TColumnNames,
     write_disposition: TWriteDisposition,
     columns: TTableSchemaColumns = None,
     credentials: ConnectionStringCredentials = dlt.secrets.value,
@@ -368,13 +435,12 @@ def snapshot_table_resource(
     Can be used to perform an initial load of the table, so all data that
     existed in the table prior to initializing replication is also captured.
     """
-    resource: DltResource = sql_table(
+    resource: DltResource = core_sql_table(
         credentials=credentials,
         table=snapshot_table_name,
         schema=schema_name,
         reflection_level="full_with_precision",
     )
-    primary_key = _get_pk(table_name, schema_name, credentials)
     resource.apply_hints(
         table_name=table_name,
         write_disposition=write_disposition,
@@ -399,22 +465,22 @@ def get_max_lsn(
     options_str = ", ".join(
         f"'{x}'" for xs in list(map(list, options.items())) for x in xs
     )
-    cur = _get_conn(credentials).cursor()
-    cur.execute(
-        "SELECT MAX(lsn) - '0/0' AS max_lsn "  # subtract '0/0' to convert pg_lsn type to int (https://stackoverflow.com/a/73738472)
-        f"FROM pg_logical_slot_peek_binary_changes('{slot_name}', NULL, NULL, {options_str});"
-    )
-    lsn: int = cur.fetchone()[0]
-    cur.connection.close()
-    return lsn
+    with _get_conn(credentials) as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                "SELECT MAX(lsn) - '0/0' AS max_lsn "  # subtract '0/0' to convert pg_lsn type to int (https://stackoverflow.com/a/73738472)
+                f"FROM pg_logical_slot_peek_binary_changes('{slot_name}', NULL, NULL, {options_str});"
+            )
+            lsn: int = cur.fetchone()[0]
+        return lsn
 
 
 def get_pub_ops(
     pub_name: str,
-    credentials: ConnectionStringCredentials,
+    cur: cursor,
 ) -> Dict[str, bool]:
     """Returns dictionary of DML operations and their publish status."""
-    cur = _get_conn(credentials).cursor()
+
     cur.execute(
         f"""
         SELECT pubinsert, pubupdate, pubdelete, pubtruncate
@@ -422,7 +488,7 @@ def get_pub_ops(
     """
     )
     result = cur.fetchone()
-    cur.connection.close()
+    # credentials.connection.commit()
     if result is None:
         raise ValueError(f'Publication "{pub_name}" does not exist.')
     return {
@@ -451,11 +517,11 @@ def advance_slot(
     the behavior of that method seems odd when used outside of `consume_stream`.
     """
     if upto_lsn != 0:
-        cur = _get_conn(credentials).cursor()
-        cur.execute(
-            f"SELECT * FROM pg_replication_slot_advance('{slot_name}', '{lsn_int_to_hex(upto_lsn)}');"
-        )
-        cur.connection.close()
+        with _get_conn(credentials) as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    f"SELECT * FROM pg_replication_slot_advance('{slot_name}', '{lsn_int_to_hex(upto_lsn)}');"
+                )
 
 
 def _get_conn(
@@ -463,15 +529,13 @@ def _get_conn(
     connection_factory: Optional[Any] = None,
 ) -> ConnectionExt:
     """Returns a psycopg2 connection to interact with postgres."""
-    return psycopg2.connect(  # type: ignore[no-any-return]
-        database=credentials.database,
-        user=credentials.username,
-        password=credentials.password,
-        host=credentials.host,
-        port=credentials.port,
+    conn = psycopg2.connect(
+        dsn=credentials.to_native_representation(),
         connection_factory=connection_factory,
-        **({} if credentials.query is None else credentials.query),
     )
+    if connection_factory is not LogicalReplicationConnection:
+        conn.autocommit = False
+    return conn  # type: ignore[no-any-return]
 
 
 def _get_rep_conn(
@@ -494,16 +558,15 @@ def _make_qualified_table_name(table_name: str, schema_name: str) -> str:
 
 
 def _get_pk(
+    cur: cursor,
     table_name: str,
     schema_name: str,
-    credentials: ConnectionStringCredentials,
 ) -> Optional[TColumnNames]:
     """Returns primary key column(s) for postgres table.
 
     Returns None if no primary key columns exist.
     """
     qual_name = _make_qualified_table_name(table_name, schema_name)
-    cur = _get_conn(credentials).cursor()
     # https://wiki.postgresql.org/wiki/Retrieve_primary_key_columns
     cur.execute(
         f"""
@@ -515,7 +578,6 @@ def _get_pk(
     """
     )
     result = [tup[0] for tup in cur.fetchall()]
-    cur.connection.close()
     if len(result) == 0:
         return None
     elif len(result) == 1:
@@ -545,6 +607,7 @@ class ItemGenerator:
         """
         try:
             cur = _get_rep_conn(self.credentials).cursor()
+            pub_ops = get_pub_ops(self.options["publication_names"], cur)
             cur.start_replication(
                 slot_name=self.slot_name,
                 start_lsn=self.start_lsn,
@@ -553,9 +616,7 @@ class ItemGenerator:
             )
             consumer = MessageConsumer(
                 upto_lsn=self.upto_lsn,
-                pub_ops=get_pub_ops(
-                    self.options["publication_names"], self.credentials
-                ),
+                pub_ops=pub_ops,
                 target_batch_size=self.target_batch_size,
                 include_columns=self.include_columns,
                 columns=self.columns,
@@ -565,12 +626,16 @@ class ItemGenerator:
             pass
         finally:
             cur.connection.close()
-            self.last_commit_lsn = consumer.last_commit_lsn
-            for rel_id, data_items in consumer.data_items.items():
-                table_name = consumer.last_table_schema[rel_id]["name"]
-                yield data_items[0]  # meta item with column hints only, no data
-                yield dlt.mark.with_table_name(data_items[1:], table_name)
-            self.generated_all = consumer.consumed_all
+        self.last_commit_lsn = consumer.last_commit_lsn
+        for rel_id, data_items in consumer.data_items.items():
+            table_name = consumer.last_table_schema[rel_id]["name"]
+            # skip dlt internal tables
+            # TODO: normalize the prefix. low prio. on postgres we should have lower case
+            if table_name.lower().startswith(DLT_NAME_PREFIX):
+                continue
+            yield data_items[0]  # meta item with column hints only, no data
+            yield dlt.mark.with_table_name(data_items[1:], table_name)
+        self.generated_all = consumer.consumed_all
 
 
 class MessageConsumer:
@@ -621,24 +686,26 @@ class MessageConsumer:
         - `target_batch_size` is reached
         - a table's schema has changed
         """
-        op = msg.payload[:1]
-        if op == b"I":
+        op = msg.payload[0]
+        if op == 73:  # ASCII for 'I'
             self.process_change(Insert(msg.payload), msg.data_start)
-        elif op == b"U":
+        elif op == 85:  # ASCII for 'U'
             self.process_change(Update(msg.payload), msg.data_start)
-        elif op == b"D":
+        elif op == 68:  # ASCII for 'D'
             self.process_change(Delete(msg.payload), msg.data_start)
-        elif op == b"B":
+        elif op == 66:  # ASCII for 'B'
             self.last_commit_ts = Begin(msg.payload).commit_ts  # type: ignore[assignment]
-        elif op == b"C":
+        elif op == 67:  # ASCII for 'C'
             self.process_commit(msg)
-        elif op == b"R":
+        elif op == 82:  # ASCII for 'R'
             self.process_relation(Relation(msg.payload))
-        elif op == b"T":
+        elif op == 84:  # ASCII for 'T'
             logger.warning(
                 "The truncate operation is currently not supported. "
                 "Truncate replication messages are ignored."
             )
+        else:
+            raise ValueError(f"Unknown replication op {op}")
 
     def process_commit(self, msg: ReplicationMessage) -> None:
         """Updates object state when Commit message is observed.
@@ -671,6 +738,7 @@ class MessageConsumer:
         columns: TTableSchemaColumns = {
             c.name: _to_dlt_column_schema(c) for c in decoded_msg.columns
         }
+
         self.last_table_schema[decoded_msg.relation_id] = {
             "name": table_name,
             "columns": columns,
