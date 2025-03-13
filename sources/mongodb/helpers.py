@@ -1,7 +1,18 @@
 """Mongo database source helpers"""
 
 from itertools import islice
-from typing import TYPE_CHECKING, Any, Dict, Iterator, List, Optional, Tuple
+from typing import (
+    TYPE_CHECKING,
+    Any,
+    Dict,
+    Iterator,
+    List,
+    Optional,
+    Tuple,
+    Union,
+    Iterable,
+    Mapping,
+)
 
 import dlt
 from bson.decimal128 import Decimal128
@@ -18,6 +29,7 @@ from pendulum import _datetime
 from pymongo import ASCENDING, DESCENDING, MongoClient
 from pymongo.collection import Collection
 from pymongo.cursor import Cursor
+from pymongo.helpers_shared import _fields_list_to_dict
 
 
 if TYPE_CHECKING:
@@ -107,6 +119,43 @@ class CollectionLoader:
 
         return filt
 
+    def _projection_op(
+        self, projection: Optional[Union[Mapping[str, Any], Iterable[str]]]
+    ) -> Optional[Dict[str, Any]]:
+        """Build a projection operator.
+
+        Args:
+            projection (Optional[Union[Mapping[str, Any], Iterable[str]]]): A tuple of fields to include or a dict specifying fields to include or exclude.
+            The incremental `primary_key` needs to be handle differently for inclusion
+            and exclusion projections.
+
+        Returns:
+            Tuple[str, ...] | Dict[str, Any]: A tuple or dictionary with the projection operator.
+        """
+        if projection is None:
+            return None
+
+        projection_dict = dict(_fields_list_to_dict(projection, "projection"))
+
+        if self.incremental:
+            # this is an inclusion projection
+            if any(v == 1 for v in projection_dict.values()):
+                # ensure primary_key is included
+                projection_dict.update(m={self.incremental.primary_key: 1})
+            # this is an exclusion projection
+            else:
+                try:
+                    # ensure primary_key isn't excluded
+                    projection_dict.pop(self.incremental.primary_key)  # type: ignore
+                except KeyError:
+                    pass  # primary_key was properly not included in exclusion projection
+                else:
+                    dlt.common.logger.warn(
+                        f"Primary key `{self.incremental.primary_key}` was removed from exclusion projection"
+                    )
+
+        return projection_dict
+
     def _limit(self, cursor: Cursor, limit: Optional[int] = None) -> TCursor:  # type: ignore
         """Apply a limit to the cursor, if needed.
 
@@ -128,13 +177,17 @@ class CollectionLoader:
         return cursor
 
     def load_documents(
-        self, filter_: Dict[str, Any], limit: Optional[int] = None
+        self,
+        filter_: Dict[str, Any],
+        limit: Optional[int] = None,
+        projection: Optional[Union[Mapping[str, Any], Iterable[str]]] = None,
     ) -> Iterator[TDataItem]:
         """Construct the query and load the documents from the collection.
 
         Args:
             filter_ (Dict[str, Any]): The filter to apply to the collection.
             limit (Optional[int]): The number of documents to load.
+            projection (Optional[Union[Mapping[str, Any], Iterable[str]]]): The projection to select fields to create the Cursor.
 
         Yields:
             Iterator[TDataItem]: An iterator of the loaded documents.
@@ -143,7 +196,9 @@ class CollectionLoader:
         _raise_if_intersection(filter_op, filter_)
         filter_op.update(filter_)
 
-        cursor = self.collection.find(filter=filter_op)
+        projection_op = self._projection_op(projection)
+
+        cursor = self.collection.find(filter=filter_op, projection=projection_op)
         if self._sort_op:
             cursor = cursor.sort(self._sort_op)
 
@@ -171,11 +226,16 @@ class CollectionLoaderParallel(CollectionLoader):
 
         return batches
 
-    def _get_cursor(self, filter_: Dict[str, Any]) -> TCursor:
+    def _get_cursor(
+        self,
+        filter_: Dict[str, Any],
+        projection: Optional[Union[Mapping[str, Any], Iterable[str]]] = None,
+    ) -> TCursor:
         """Get a reading cursor for the collection.
 
         Args:
             filter_ (Dict[str, Any]): The filter to apply to the collection.
+            projection (Optional[Union[Mapping[str, Any], Iterable[str]]]): The projection to select fields to create the Cursor.
 
         Returns:
             Cursor: The cursor for the collection.
@@ -184,7 +244,9 @@ class CollectionLoaderParallel(CollectionLoader):
         _raise_if_intersection(filter_op, filter_)
         filter_op.update(filter_)
 
-        cursor = self.collection.find(filter=filter_op)
+        projection_op = self._projection_op(projection)
+
+        cursor = self.collection.find(filter=filter_op, projection=projection_op)
         if self._sort_op:
             cursor = cursor.sort(self._sort_op)
 
@@ -201,36 +263,46 @@ class CollectionLoaderParallel(CollectionLoader):
         return data
 
     def _get_all_batches(
-        self, filter_: Dict[str, Any], limit: Optional[int] = None
+        self,
+        filter_: Dict[str, Any],
+        limit: Optional[int] = None,
+        projection: Optional[Union[Mapping[str, Any], Iterable[str]]] = None,
     ) -> Iterator[TDataItem]:
         """Load all documents from the collection in parallel batches.
 
         Args:
             filter_ (Dict[str, Any]): The filter to apply to the collection.
             limit (Optional[int]): The maximum number of documents to load.
+            projection (Optional[Union[Mapping[str, Any], Iterable[str]]]): The projection to select fields to create the Cursor.
 
         Yields:
             Iterator[TDataItem]: An iterator of the loaded documents.
         """
         batches = self._create_batches(limit=limit)
-        cursor = self._get_cursor(filter_=filter_)
+        cursor = self._get_cursor(filter_=filter_, projection=projection)
 
         for batch in batches:
             yield self._run_batch(cursor=cursor, batch=batch)
 
     def load_documents(
-        self, filter_: Dict[str, Any], limit: Optional[int] = None
+        self,
+        filter_: Dict[str, Any],
+        limit: Optional[int] = None,
+        projection: Optional[Union[Mapping[str, Any], Iterable[str]]] = None,
     ) -> Iterator[TDataItem]:
         """Load documents from the collection in parallel.
 
         Args:
             filter_ (Dict[str, Any]): The filter to apply to the collection.
             limit (Optional[int]): The number of documents to load.
+            projection (Optional[Union[Mapping[str, Any], Iterable[str]]]): The projection to select fields to create the Cursor.
 
         Yields:
             Iterator[TDataItem]: An iterator of the loaded documents.
         """
-        for document in self._get_all_batches(limit=limit, filter_=filter_):
+        for document in self._get_all_batches(
+            limit=limit, filter_=filter_, projection=projection
+        ):
             yield document
 
 
@@ -241,7 +313,11 @@ class CollectionArrowLoader(CollectionLoader):
     """
 
     def load_documents(
-        self, filter_: Dict[str, Any], limit: Optional[int] = None
+        self,
+        filter_: Dict[str, Any],
+        limit: Optional[int] = None,
+        projection: Optional[Union[Mapping[str, Any], Iterable[str]]] = None,
+        pymongoarrow_schema: Any = None,
     ) -> Iterator[Any]:
         """
         Load documents from the collection in Apache Arrow format.
@@ -249,6 +325,8 @@ class CollectionArrowLoader(CollectionLoader):
         Args:
             filter_ (Dict[str, Any]): The filter to apply to the collection.
             limit (Optional[int]): The number of documents to load.
+            projection (Optional[Union[Mapping[str, Any], Iterable[str]]]): The projection to select fields to create the Cursor.
+            pymongoarrow_schema (Any): The mapping of field types to convert BSON to Arrow.
 
         Yields:
             Iterator[Any]: An iterator of the loaded documents.
@@ -256,23 +334,26 @@ class CollectionArrowLoader(CollectionLoader):
         from pymongoarrow.context import PyMongoArrowContext  # type: ignore
         from pymongoarrow.lib import process_bson_stream  # type: ignore
 
-        context = PyMongoArrowContext.from_schema(
-            None, codec_options=self.collection.codec_options
-        )
-
         filter_op = self._filter_op
         _raise_if_intersection(filter_op, filter_)
         filter_op.update(filter_)
 
-        cursor = self.collection.find_raw_batches(filter_, batch_size=self.chunk_size)
+        projection_op = self._projection_op(projection)
+
+        # NOTE the `filter_op` isn't passed
+        cursor = self.collection.find_raw_batches(
+            filter_, batch_size=self.chunk_size, projection=projection_op
+        )
         if self._sort_op:
             cursor = cursor.sort(self._sort_op)  # type: ignore
 
         cursor = self._limit(cursor, limit)  # type: ignore
 
+        context = PyMongoArrowContext.from_schema(
+            schema=pymongoarrow_schema, codec_options=self.collection.codec_options
+        )
         for batch in cursor:
             process_bson_stream(batch, context)
-
             table = context.finish()
             yield convert_arrow_columns(table)
 
@@ -283,11 +364,68 @@ class CollectionArrowLoaderParallel(CollectionLoaderParallel):
     Apache Arrow for data processing.
     """
 
-    def _get_cursor(self, filter_: Dict[str, Any]) -> TCursor:
+    def load_documents(
+        self,
+        filter_: Dict[str, Any],
+        limit: Optional[int] = None,
+        projection: Optional[Union[Mapping[str, Any], Iterable[str]]] = None,
+        pymongoarrow_schema: Any = None,
+    ) -> Iterator[TDataItem]:
+        """Load documents from the collection in parallel.
+
+        Args:
+            filter_ (Dict[str, Any]): The filter to apply to the collection.
+            limit (Optional[int]): The number of documents to load.
+            projection (Optional[Union[Mapping[str, Any], Iterable[str]]]): The projection to select fields to create the Cursor.
+            pymongoarrow_schema (Any): The mapping of field types to convert BSON to Arrow.
+
+        Yields:
+            Iterator[TDataItem]: An iterator of the loaded documents.
+        """
+        yield from self._get_all_batches(
+            limit=limit,
+            filter_=filter_,
+            projection=projection,
+            pymongoarrow_schema=pymongoarrow_schema,
+        )
+
+    def _get_all_batches(
+        self,
+        filter_: Dict[str, Any],
+        limit: Optional[int] = None,
+        projection: Optional[Union[Mapping[str, Any], Iterable[str]]] = None,
+        pymongoarrow_schema: Any = None,
+    ) -> Iterator[TDataItem]:
+        """Load all documents from the collection in parallel batches.
+
+        Args:
+            filter_ (Dict[str, Any]): The filter to apply to the collection.
+            limit (Optional[int]): The maximum number of documents to load.
+            projection (Optional[Union[Mapping[str, Any], Iterable[str]]]): The projection to select fields to create the Cursor.
+            pymongoarrow_schema (Any): The mapping of field types to convert BSON to Arrow.
+
+        Yields:
+            Iterator[TDataItem]: An iterator of the loaded documents.
+        """
+        batches = self._create_batches(limit=limit)
+        cursor = self._get_cursor(filter_=filter_, projection=projection)
+        for batch in batches:
+            yield self._run_batch(
+                cursor=cursor,
+                batch=batch,
+                pymongoarrow_schema=pymongoarrow_schema,
+            )
+
+    def _get_cursor(
+        self,
+        filter_: Dict[str, Any],
+        projection: Optional[Union[Mapping[str, Any], Iterable[str]]] = None,
+    ) -> TCursor:
         """Get a reading cursor for the collection.
 
         Args:
             filter_ (Dict[str, Any]): The filter to apply to the collection.
+            projection (Optional[Union[Mapping[str, Any], Iterable[str]]]): The projection to select fields to create the Cursor.
 
         Returns:
             Cursor: The cursor for the collection.
@@ -296,8 +434,10 @@ class CollectionArrowLoaderParallel(CollectionLoaderParallel):
         _raise_if_intersection(filter_op, filter_)
         filter_op.update(filter_)
 
+        projection_op = self._projection_op(projection)
+
         cursor = self.collection.find_raw_batches(
-            filter=filter_op, batch_size=self.chunk_size
+            filter=filter_op, batch_size=self.chunk_size, projection=projection_op
         )
         if self._sort_op:
             cursor = cursor.sort(self._sort_op)  # type: ignore
@@ -305,19 +445,22 @@ class CollectionArrowLoaderParallel(CollectionLoaderParallel):
         return cursor
 
     @dlt.defer
-    def _run_batch(self, cursor: TCursor, batch: Dict[str, int]) -> TDataItem:
+    def _run_batch(
+        self,
+        cursor: TCursor,
+        batch: Dict[str, int],
+        pymongoarrow_schema: Any = None,
+    ) -> TDataItem:
         from pymongoarrow.context import PyMongoArrowContext
         from pymongoarrow.lib import process_bson_stream
 
         cursor = cursor.clone()
 
         context = PyMongoArrowContext.from_schema(
-            None, codec_options=self.collection.codec_options
+            schema=pymongoarrow_schema, codec_options=self.collection.codec_options
         )
-
         for chunk in cursor.skip(batch["skip"]).limit(batch["limit"]):
             process_bson_stream(chunk, context)
-
             table = context.finish()
             yield convert_arrow_columns(table)
 
@@ -326,6 +469,8 @@ def collection_documents(
     client: TMongoClient,
     collection: TCollection,
     filter_: Dict[str, Any],
+    projection: Union[Dict[str, Any], List[str]],
+    pymongoarrow_schema: "pymongoarrow.schema.Schema",
     incremental: Optional[dlt.sources.incremental[Any]] = None,
     parallel: bool = False,
     limit: Optional[int] = None,
@@ -340,6 +485,13 @@ def collection_documents(
         client (MongoClient): The PyMongo client `pymongo.MongoClient` instance.
         collection (Collection): The collection `pymongo.collection.Collection` to load.
         filter_ (Dict[str, Any]): The filter to apply to the collection.
+        projection (Optional[Union[Mapping[str, Any], Iterable[str]]]): The projection to select fields to create the Cursor.
+            when loading the collection. Supported inputs:
+                include (list) - ["year", "title"]
+                include (dict) - {"year": True, "title": True}
+                exclude (dict) - {"released": False, "runtime": False}
+            Note: Can't mix include and exclude statements '{"title": True, "released": False}`
+        pymongoarrow_schema (pymongoarrow.schema.Schema): The mapping of field types to convert BSON to Arrow.
         incremental (Optional[dlt.sources.incremental[Any]]): The incremental configuration.
         parallel (bool): Option to enable parallel loading for the collection. Default is False.
         limit (Optional[int]): The maximum number of documents to load.
@@ -358,6 +510,18 @@ def collection_documents(
         )
         data_item_format = "object"
 
+    if data_item_format != "arrow" and pymongoarrow_schema:
+        dlt.common.logger.warn(
+            "Received value for `pymongoarrow_schema`, but `data_item_format=='object'` "
+            "Use `data_item_format=='arrow'` to enforce schema."
+        )
+
+    if data_item_format == "arrow" and pymongoarrow_schema and projection:
+        dlt.common.logger.warn(
+            "Received values for both `pymongoarrow_schema` and `projection`. Since both "
+            "create a projection to select fields, `projection` will be ignored."
+        )
+
     if parallel:
         if data_item_format == "arrow":
             LoaderClass = CollectionArrowLoaderParallel
@@ -372,11 +536,26 @@ def collection_documents(
     loader = LoaderClass(
         client, collection, incremental=incremental, chunk_size=chunk_size
     )
-    for data in loader.load_documents(limit=limit, filter_=filter_):
-        yield data
+    if isinstance(loader, (CollectionArrowLoader, CollectionArrowLoaderParallel)):
+        yield from loader.load_documents(
+            limit=limit,
+            filter_=filter_,
+            projection=projection,
+            pymongoarrow_schema=pymongoarrow_schema,
+        )
+    else:
+        yield from loader.load_documents(
+            limit=limit, filter_=filter_, projection=projection
+        )
 
 
 def convert_mongo_objs(value: Any) -> Any:
+    """MongoDB to dlt type conversion when using Python loaders.
+
+    Notes:
+        The method `ObjectId.__str__()` creates a hexstring using `binascii.hexlify(__id).decode()`
+
+    """
     if isinstance(value, (ObjectId, Decimal128)):
         return str(value)
     if isinstance(value, _datetime.datetime):
@@ -392,6 +571,18 @@ def convert_mongo_objs(value: Any) -> Any:
 
 def convert_arrow_columns(table: Any) -> Any:
     """Convert the given table columns to Python types.
+
+    Notes:
+        Calling str() matches the `convert_mongo_obs()` used in non-arrow code.
+        Pymongoarrow converts ObjectId to `fixed_size_binary[12]`, which can't be
+        converted to a string as a vectorized operation because it contains ASCII characters.
+
+        Instead, you need to loop over values using:
+        ```python
+        pyarrow.array([v.as_buffer().hex() for v in object_id_array], type=pyarrow.string())
+        # pymongoarrow simplifies this by allowing this syntax
+        [str(v) for v in object_id_array]
+        ```
 
     Args:
         table (pyarrow.lib.Table): The table to convert.
@@ -468,6 +659,7 @@ class MongoDbCollectionResourceConfiguration(BaseConfiguration):
     incremental: Optional[dlt.sources.incremental] = None  # type: ignore[type-arg]
     write_disposition: Optional[str] = dlt.config.value
     parallel: Optional[bool] = False
+    projection: Optional[Union[Mapping[str, Any], Iterable[str]]] = dlt.config.value
 
 
 __source_name__ = "mongodb"
