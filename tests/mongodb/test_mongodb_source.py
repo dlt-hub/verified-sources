@@ -374,7 +374,7 @@ def test_filter(destination_name):
         pipeline_name="mongodb_test",
         destination=destination_name,
         dataset_name="mongodb_test_data",
-        full_refresh=True,
+        dev_mode=True,
     )
     movies = mongodb_collection(
         collection="movies",
@@ -397,7 +397,7 @@ def test_filter_intersect(destination_name):
         pipeline_name="mongodb_test",
         destination=destination_name,
         dataset_name="mongodb_test_data",
-        full_refresh=True,
+        dev_mode=True,
     )
     movies = mongodb_collection(
         collection="movies",
@@ -415,7 +415,7 @@ def test_projection_list_inclusion(destination_name):
         pipeline_name="mongodb_test",
         destination=destination_name,
         dataset_name="mongodb_test_data",
-        full_refresh=True,
+        dev_mode=True,
     )
     collection_name = "movies"
     projection = ["title", "poster"]
@@ -436,7 +436,7 @@ def test_projection_dict_inclusion(destination_name):
         pipeline_name="mongodb_test",
         destination=destination_name,
         dataset_name="mongodb_test_data",
-        full_refresh=True,
+        dev_mode=True,
     )
     collection_name = "movies"
     projection = {"title": 1, "poster": 1}
@@ -457,7 +457,7 @@ def test_projection_dict_exclusion(destination_name):
         pipeline_name="mongodb_test",
         destination=destination_name,
         dataset_name="mongodb_test_data",
-        full_refresh=True,
+        dev_mode=True,
     )
     collection_name = "movies"
     columns_to_exclude = [
@@ -496,7 +496,7 @@ def test_projection_nested_field(destination_name):
         pipeline_name="mongodb_test",
         destination=destination_name,
         dataset_name="mongodb_test_data",
-        full_refresh=True,
+        dev_mode=True,
     )
     collection_name = "movies"
     projection = ["imdb.votes", "poster"]
@@ -526,7 +526,7 @@ def test_mongodb_without_pymongoarrow(
             pipeline_name="test_mongodb_without_pymongoarrow",
             destination=destination_name,
             dataset_name="test_mongodb_without_pymongoarrow_data",
-            full_refresh=True,
+            dev_mode=True,
         )
 
         comments = mongodb_collection(

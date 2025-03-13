@@ -124,9 +124,10 @@ class CollectionLoader:
     ) -> Optional[Dict[str, Any]]:
         """Build a projection operator.
 
-        A tuple of fields to include or a dict specifying fields to include or exclude.
-        The incremental `primary_key` needs to be handle differently for inclusion
-        and exclusion projections.
+        Args:
+            projection (Optional[Union[Mapping[str, Any], Iterable[str]]]): A tuple of fields to include or a dict specifying fields to include or exclude.
+            The incremental `primary_key` needs to be handle differently for inclusion
+            and exclusion projections.
 
         Returns:
             Tuple[str, ...] | Dict[str, Any]: A tuple or dictionary with the projection operator.
@@ -150,7 +151,7 @@ class CollectionLoader:
                     pass  # primary_key was properly not included in exclusion projection
                 else:
                     dlt.common.logger.warn(
-                        f"Primary key `{self.incremental.primary_key} was removed from exclusion projection"
+                        f"Primary key `{self.incremental.primary_key}` was removed from exclusion projection"
                     )
 
         return projection_dict
@@ -186,7 +187,7 @@ class CollectionLoader:
         Args:
             filter_ (Dict[str, Any]): The filter to apply to the collection.
             limit (Optional[int]): The number of documents to load.
-            projection: selection of fields to create Cursor
+            projection (Optional[Union[Mapping[str, Any], Iterable[str]]]): The projection to select fields to create the Cursor.
 
         Yields:
             Iterator[TDataItem]: An iterator of the loaded documents.
@@ -234,6 +235,7 @@ class CollectionLoaderParallel(CollectionLoader):
 
         Args:
             filter_ (Dict[str, Any]): The filter to apply to the collection.
+            projection (Optional[Union[Mapping[str, Any], Iterable[str]]]): The projection to select fields to create the Cursor.
 
         Returns:
             Cursor: The cursor for the collection.
@@ -271,6 +273,7 @@ class CollectionLoaderParallel(CollectionLoader):
         Args:
             filter_ (Dict[str, Any]): The filter to apply to the collection.
             limit (Optional[int]): The maximum number of documents to load.
+            projection (Optional[Union[Mapping[str, Any], Iterable[str]]]): The projection to select fields to create the Cursor.
 
         Yields:
             Iterator[TDataItem]: An iterator of the loaded documents.
@@ -292,7 +295,7 @@ class CollectionLoaderParallel(CollectionLoader):
         Args:
             filter_ (Dict[str, Any]): The filter to apply to the collection.
             limit (Optional[int]): The number of documents to load.
-            projection: selection of fields to create Cursor
+            projection (Optional[Union[Mapping[str, Any], Iterable[str]]]): The projection to select fields to create the Cursor.
 
         Yields:
             Iterator[TDataItem]: An iterator of the loaded documents.
@@ -322,8 +325,8 @@ class CollectionArrowLoader(CollectionLoader):
         Args:
             filter_ (Dict[str, Any]): The filter to apply to the collection.
             limit (Optional[int]): The number of documents to load.
-            projection: selection of fields to create Cursor
-            pymongoarrow_schema: mapping of field types to convert BSON to Arrow
+            projection (Optional[Union[Mapping[str, Any], Iterable[str]]]): The projection to select fields to create the Cursor.
+            pymongoarrow_schema (Any): The mapping of field types to convert BSON to Arrow.
 
         Yields:
             Iterator[Any]: An iterator of the loaded documents.
@@ -373,8 +376,8 @@ class CollectionArrowLoaderParallel(CollectionLoaderParallel):
         Args:
             filter_ (Dict[str, Any]): The filter to apply to the collection.
             limit (Optional[int]): The number of documents to load.
-            projection: selection of fields to create Cursor
-            pymongoarrow_schema: mapping of field types to convert BSON to Arrow
+            projection (Optional[Union[Mapping[str, Any], Iterable[str]]]): The projection to select fields to create the Cursor.
+            pymongoarrow_schema (Any): The mapping of field types to convert BSON to Arrow.
 
         Yields:
             Iterator[TDataItem]: An iterator of the loaded documents.
@@ -398,8 +401,8 @@ class CollectionArrowLoaderParallel(CollectionLoaderParallel):
         Args:
             filter_ (Dict[str, Any]): The filter to apply to the collection.
             limit (Optional[int]): The maximum number of documents to load.
-            projection: selection of fields to create Cursor
-            pymongoarrow_schema: mapping of field types to convert BSON to Arrow
+            projection (Optional[Union[Mapping[str, Any], Iterable[str]]]): The projection to select fields to create the Cursor.
+            pymongoarrow_schema (Any): The mapping of field types to convert BSON to Arrow.
 
         Yields:
             Iterator[TDataItem]: An iterator of the loaded documents.
@@ -422,7 +425,7 @@ class CollectionArrowLoaderParallel(CollectionLoaderParallel):
 
         Args:
             filter_ (Dict[str, Any]): The filter to apply to the collection.
-            projection: selection of fields to create Cursor
+            projection (Optional[Union[Mapping[str, Any], Iterable[str]]]): The projection to select fields to create the Cursor.
 
         Returns:
             Cursor: The cursor for the collection.
@@ -482,6 +485,13 @@ def collection_documents(
         client (MongoClient): The PyMongo client `pymongo.MongoClient` instance.
         collection (Collection): The collection `pymongo.collection.Collection` to load.
         filter_ (Dict[str, Any]): The filter to apply to the collection.
+        projection (Optional[Union[Mapping[str, Any], Iterable[str]]]): The projection to select fields to create the Cursor.
+            when loading the collection. Supported inputs:
+                include (list) - ["year", "title"]
+                include (dict) - {"year": True, "title": True}
+                exclude (dict) - {"released": False, "runtime": False}
+            Note: Can't mix include and exclude statements '{"title": True, "released": False}`
+        pymongoarrow_schema (pymongoarrow.schema.Schema): The mapping of field types to convert BSON to Arrow.
         incremental (Optional[dlt.sources.incremental[Any]]): The incremental configuration.
         parallel (bool): Option to enable parallel loading for the collection. Default is False.
         limit (Optional[int]): The maximum number of documents to load.
@@ -490,13 +500,6 @@ def collection_documents(
             Supported formats:
                 object - Python objects (dicts, lists).
                 arrow - Apache Arrow tables.
-        projection: (Optional[Union[Mapping[str, Any], Iterable[str]]]): The projection to select fields
-            when loading the collection. Supported inputs:
-                include (list) - ["year", "title"]
-                include (dict) - {"year": True, "title": True}
-                exclude (dict) - {"released": False, "runtime": False}
-            Note: Can't mix include and exclude statements '{"title": True, "released": False}`
-        pymongoarrow_schema (pymongoarrow.schema.Schema): Mapping of expected field types of a collection to convert BSON to Arrow
 
     Returns:
         Iterable[DltResource]: A list of DLT resources for each collection to be loaded.
@@ -550,7 +553,7 @@ def convert_mongo_objs(value: Any) -> Any:
     """MongoDB to dlt type conversion when using Python loaders.
 
     Notes:
-        The method `ObjectId.__str__()` creates an hexstring using `binascii.hexlify(__id).decode()`
+        The method `ObjectId.__str__()` creates a hexstring using `binascii.hexlify(__id).decode()`
 
     """
     if isinstance(value, (ObjectId, Decimal128)):
