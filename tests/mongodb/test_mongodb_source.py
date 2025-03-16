@@ -505,9 +505,7 @@ def test_projection_nested_field(destination_name):
     not_expected_columns = ["imdb__rating", "imdb__id"]
 
     movies = mongodb_collection(
-        collection=collection_name,
-        projection=projection,
-        limit=2
+        collection=collection_name, projection=projection, limit=2
     )
     pipeline.run(movies)
     loaded_columns = pipeline.default_schema.get_table_columns(collection_name).keys()
@@ -537,3 +535,63 @@ def test_mongodb_without_pymongoarrow(
         assert load_info.loads_ids != []
         table_counts = load_table_counts(pipeline, "comments")
         assert table_counts["comments"] == 10
+
+
+@pytest.mark.parametrize("convert_to_string", [True, False])
+@pytest.mark.parametrize("destination_name", ALL_DESTINATIONS)
+def test_pymongoarrow_schema(convert_to_string: bool, destination_name: str):
+    """Tests that the provided schema is correctly applied."""
+    from pymongoarrow.api import Schema
+    from pymongoarrow.types import BinaryType
+
+    expected_schema = {
+        "_id": bson.objectid.ObjectId,
+        "field2": pyarrow.bool_(),
+        "field3": pyarrow.int32(),
+        "field4": pyarrow.int64(),
+        "field5": pyarrow.float64(),
+        "field6": pyarrow.string(),
+        "field7": pyarrow.list_(pyarrow.int32()),
+        "field8": pyarrow.struct({"key": pyarrow.string()}),
+        "field9": pyarrow.timestamp("ms"),
+        "field10": pyarrow.string(),
+        "field12": pyarrow.string(),
+        "field13": pyarrow.string(),
+        "field14": pyarrow.timestamp("ms"),
+        "field15": pyarrow.string(),
+        "field11": pyarrow.string()
+        if convert_to_string
+        else BinaryType(subtype=0),  # Generic binary subtype
+        "field16": pyarrow.string()
+        if convert_to_string
+        else BinaryType(subtype=0),  # Generic binary subtype
+    }
+
+    res = mongodb_collection(
+        collection="types_test",
+        data_item_format="arrow",
+        pymongoarrow_schema=Schema(expected_schema),
+    )
+
+    actual_schema = list(res)[0].schema
+
+    for field, expected_type in expected_schema.items():
+        actual_type = actual_schema.field(field).type
+        if field == "_id":
+            # ObjectId is converted to a hex string
+            assert actual_type == pyarrow.string()
+        elif isinstance(expected_type, BinaryType):
+            # Binary fields are specifically converted to pyarrow binary
+            assert actual_type == pyarrow.binary()
+        else:
+            assert actual_type == expected_type
+
+    pipeline = dlt.pipeline(
+        pipeline_name="mongodb_test",
+        destination=destination_name,
+        dataset_name="mongodb_test_data",
+        dev_mode=True,
+    )
+
+    info = pipeline.run(res)
+    assert info.loads_ids != []
