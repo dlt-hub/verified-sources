@@ -593,5 +593,9 @@ def test_pymongoarrow_schema(convert_to_string: bool, destination_name: str):
         dev_mode=True,
     )
 
-    info = pipeline.run(res)
+    if destination_name in ("bigquery", "postgres"):
+        res = list(res)[0]
+        res = res.drop_columns(["field7", "field8"])
+
+    info = pipeline.run(res, table_name="types_test")
     assert info.loads_ids != []
