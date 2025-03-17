@@ -374,7 +374,7 @@ def test_filter(destination_name):
         pipeline_name="mongodb_test",
         destination=destination_name,
         dataset_name="mongodb_test_data",
-        full_refresh=True,
+        dev_mode=True,
     )
     movies = mongodb_collection(
         collection="movies",
@@ -397,7 +397,7 @@ def test_filter_intersect(destination_name):
         pipeline_name="mongodb_test",
         destination=destination_name,
         dataset_name="mongodb_test_data",
-        full_refresh=True,
+        dev_mode=True,
     )
     movies = mongodb_collection(
         collection="movies",
@@ -410,6 +410,111 @@ def test_filter_intersect(destination_name):
 
 
 @pytest.mark.parametrize("destination_name", ALL_DESTINATIONS)
+def test_projection_list_inclusion(destination_name):
+    pipeline = dlt.pipeline(
+        pipeline_name="mongodb_test",
+        destination=destination_name,
+        dataset_name="mongodb_test_data",
+        dev_mode=True,
+    )
+    collection_name = "movies"
+    projection = ["title", "poster"]
+    expected_columns = projection + ["_id", "_dlt_id", "_dlt_load_id"]
+
+    movies = mongodb_collection(
+        collection=collection_name, projection=projection, limit=2
+    )
+    pipeline.run(movies)
+    loaded_columns = pipeline.default_schema.get_table_columns(collection_name).keys()
+
+    assert set(loaded_columns) == set(expected_columns)
+
+
+@pytest.mark.parametrize("destination_name", ALL_DESTINATIONS)
+def test_projection_dict_inclusion(destination_name):
+    pipeline = dlt.pipeline(
+        pipeline_name="mongodb_test",
+        destination=destination_name,
+        dataset_name="mongodb_test_data",
+        dev_mode=True,
+    )
+    collection_name = "movies"
+    projection = {"title": 1, "poster": 1}
+    expected_columns = list(projection.keys()) + ["_id", "_dlt_id", "_dlt_load_id"]
+
+    movies = mongodb_collection(
+        collection=collection_name, projection=projection, limit=2
+    )
+    pipeline.run(movies)
+    loaded_columns = pipeline.default_schema.get_table_columns(collection_name).keys()
+
+    assert set(loaded_columns) == set(expected_columns)
+
+
+@pytest.mark.parametrize("destination_name", ALL_DESTINATIONS)
+def test_projection_dict_exclusion(destination_name):
+    pipeline = dlt.pipeline(
+        pipeline_name="mongodb_test",
+        destination=destination_name,
+        dataset_name="mongodb_test_data",
+        dev_mode=True,
+    )
+    collection_name = "movies"
+    columns_to_exclude = [
+        "runtime",
+        "released",
+        "year",
+        "plot",
+        "fullplot",
+        "lastupdated",
+        "type",
+        "directors",
+        "imdb",
+        "cast",
+        "countries",
+        "genres",
+        "tomatoes",
+        "num_mflix_comments",
+        "rated",
+        "awards",
+    ]
+    projection = {col: 0 for col in columns_to_exclude}
+    expected_columns = ["title", "poster", "_id", "_dlt_id", "_dlt_load_id"]
+
+    movies = mongodb_collection(
+        collection=collection_name, projection=projection, limit=2
+    )
+    pipeline.run(movies)
+    loaded_columns = pipeline.default_schema.get_table_columns(collection_name).keys()
+
+    assert set(loaded_columns) == set(expected_columns)
+
+
+@pytest.mark.parametrize("destination_name", ALL_DESTINATIONS)
+def test_projection_nested_field(destination_name):
+    pipeline = dlt.pipeline(
+        pipeline_name="mongodb_test",
+        destination=destination_name,
+        dataset_name="mongodb_test_data",
+        dev_mode=True,
+    )
+    collection_name = "movies"
+    projection = ["imdb.votes", "poster"]
+    expected_columns = ["imdb__votes", "poster", "_id", "_dlt_id", "_dlt_load_id"]
+    # other documents nested under `imdb` shouldn't be loaded
+    not_expected_columns = ["imdb__rating", "imdb__id"]
+
+    movies = mongodb_collection(
+        collection=collection_name, projection=projection, limit=2
+    )
+    pipeline.run(movies)
+    loaded_columns = pipeline.default_schema.get_table_columns(collection_name).keys()
+
+    assert set(loaded_columns) == set(expected_columns)
+    assert len(set(loaded_columns).intersection(not_expected_columns)) == 0
+
+
+@pytest.mark.parametrize("destination_name", ALL_DESTINATIONS)
 @pytest.mark.parametrize("data_item_format", ["object", "arrow"])
 def test_mongodb_without_pymongoarrow(
     destination_name: str, data_item_format: str
@@ -419,7 +524,7 @@ def test_mongodb_without_pymongoarrow(
             pipeline_name="test_mongodb_without_pymongoarrow",
             destination=destination_name,
             dataset_name="test_mongodb_without_pymongoarrow_data",
-            full_refresh=True,
+            dev_mode=True,
         )
 
         comments = mongodb_collection(
@@ -430,3 +535,67 @@ def test_mongodb_without_pymongoarrow(
         assert load_info.loads_ids != []
         table_counts = load_table_counts(pipeline, "comments")
         assert table_counts["comments"] == 10
+
+
+@pytest.mark.parametrize("convert_to_string", [True, False])
+@pytest.mark.parametrize("destination_name", ALL_DESTINATIONS)
+def test_pymongoarrow_schema(convert_to_string: bool, destination_name: str):
+    """Tests that the provided schema is correctly applied."""
+    from pymongoarrow.api import Schema
+    from pymongoarrow.types import BinaryType
+
+    expected_schema = {
+        "_id": bson.objectid.ObjectId,
+        "field2": pyarrow.bool_(),
+        "field3": pyarrow.int32(),
+        "field4": pyarrow.int64(),
+        "field5": pyarrow.float64(),
+        "field6": pyarrow.string(),
+        "field7": pyarrow.list_(pyarrow.int32()),
+        "field8": pyarrow.struct({"key": pyarrow.string()}),
+        "field9": pyarrow.timestamp("ms"),
+        "field10": pyarrow.string(),
+        "field12": pyarrow.string(),
+        "field13": pyarrow.string(),
+        "field14": pyarrow.timestamp("ms"),
+        "field15": pyarrow.string(),
+        "field11": pyarrow.string()
+        if convert_to_string
+        else BinaryType(subtype=0),  # Generic binary subtype
+        "field16": pyarrow.string()
+        if convert_to_string
+        else BinaryType(subtype=0),  # Generic binary subtype
+    }
+
+    res = mongodb_collection(
+        collection="types_test",
+        data_item_format="arrow",
+        pymongoarrow_schema=Schema(expected_schema),
+    )
+
+    actual_schema = list(res)[0].schema
+
+    for field, expected_type in expected_schema.items():
+        actual_type = actual_schema.field(field).type
+        if field == "_id":
+            # ObjectId is converted to a hex string
+            assert actual_type == pyarrow.string()
+        elif isinstance(expected_type, BinaryType):
+            # Binary fields are specifically converted to pyarrow binary
+            assert actual_type == pyarrow.binary()
+        else:
+            assert actual_type == expected_type
+
+    pipeline = dlt.pipeline(
+        pipeline_name="mongodb_test",
+        destination=destination_name,
+        dataset_name="mongodb_test_data",
+        dev_mode=True,
+    )
+
+    if destination_name in ("bigquery", "postgres"):
+        res = list(res)[0]
+        res = res.drop_columns(["field7", "field8"])
+
+    info = pipeline.run(res, table_name="types_test")
+    assert info.loads_ids != []

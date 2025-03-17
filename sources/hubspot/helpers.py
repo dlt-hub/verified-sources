@@ -49,7 +49,7 @@ def extract_association_data(
     _obj: Dict[str, Any],
     data: Dict[str, Any],
     association: str,
-    headers: Dict[str, Any]
+    headers: Dict[str, Any],
 ) -> List[Dict[str, Any]]:
     values = []
 
