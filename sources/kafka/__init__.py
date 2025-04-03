@@ -35,6 +35,7 @@ def kafka_consumer(
     batch_size: Optional[int] = 3000,
     batch_timeout: Optional[int] = 3,
     start_from: Optional[TAnyDateTime] = None,
+    end_time: Optional[TAnyDateTime] = None,
 ) -> Iterable[TDataItem]:
     """Extract recent messages from the given Kafka topics.
 
@@ -56,6 +57,8 @@ def kafka_consumer(
             consume, in seconds.
         start_from (Optional[TAnyDateTime]): A timestamp, at which to start
             reading. Older messages are ignored.
+        end_time (Optional[TAnyDateTime]): A timestamp, at which to stop
+            reading. Newer messages are ignored.
 
     Yields:
         Iterable[TDataItem]: Kafka messages.
@@ -78,7 +81,23 @@ def kafka_consumer(
     if start_from is not None:
         start_from = ensure_pendulum_datetime(start_from)
 
-    tracker = OffsetTracker(consumer, topics, dlt.current.resource_state(), start_from)
+    if end_time is not None:
+        end_time = ensure_pendulum_datetime(end_time)
+
+        if start_from is None:
+            raise ValueError("`start_from` must be provided if `end_time` is provided")
+
+        if start_from > end_time:
+            raise ValueError("`start_from` must be before `end_time`")
+
+        tracker = OffsetTracker(
+            consumer, topics, dlt.current.resource_state(), start_from, end_time
+        )
+
+    else:
+        tracker = OffsetTracker(
+            consumer, topics, dlt.current.resource_state(), start_from
+        )
 
     # read messages up to the maximum offsets,
     # not waiting for new messages
@@ -97,7 +116,19 @@ def kafka_consumer(
                     else:
                         raise err
                 else:
-                    batch.append(msg_processor(msg))
-                    tracker.renew(msg)
+                    topic = msg.topic()
+                    partition = str(msg.partition())
+                    current_offset = msg.offset()
+                    max_offset = tracker[topic][partition]["max"]
+
+                    # Only process the message if it's within the partition's max offset
+                    if current_offset < max_offset:
+                        batch.append(msg_processor(msg))
+                        tracker.renew(msg)
+                    else:
+                        logger.info(
+                            f"Skipping message on {topic} partition {partition} at offset {current_offset} "
+                            f"- beyond max offset {max_offset}"
+                        )
 
             yield batch
