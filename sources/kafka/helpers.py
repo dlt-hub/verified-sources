@@ -1,4 +1,4 @@
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
 from confluent_kafka import Consumer, Message, TopicPartition  # type: ignore
 from confluent_kafka.admin import TopicMetadata  # type: ignore
@@ -8,7 +8,7 @@ from dlt.common import pendulum
 from dlt.common.configuration import configspec
 from dlt.common.configuration.specs import CredentialsConfiguration
 from dlt.common.time import ensure_pendulum_datetime
-from dlt.common.typing import DictStrAny, TSecretValue, TAnyDateTime
+from dlt.common.typing import DictStrAny, TSecretValue
 from dlt.common.utils import digest128
 
 
@@ -231,9 +231,11 @@ class KafkaCredentials(CredentialsConfiguration):
     bootstrap_servers: str = config.value
     group_id: str = config.value
     security_protocol: str = config.value
-    sasl_mechanisms: str = config.value
-    sasl_username: str = config.value
-    sasl_password: TSecretValue = secrets.value
+
+    # Optional SASL credentials
+    sasl_mechanisms: Optional[str] = config.value
+    sasl_username: Optional[str] = config.value
+    sasl_password: Optional[TSecretValue] = secrets.value
 
     def init_consumer(self) -> Consumer:
         """Init a Kafka consumer from this credentials.
@@ -245,9 +247,16 @@ class KafkaCredentials(CredentialsConfiguration):
             "bootstrap.servers": self.bootstrap_servers,
             "group.id": self.group_id,
             "security.protocol": self.security_protocol,
-            "sasl.mechanisms": self.sasl_mechanisms,
-            "sasl.username": self.sasl_username,
-            "sasl.password": self.sasl_password,
             "auto.offset.reset": "earliest",
         }
+
+        if self.sasl_mechanisms and self.sasl_username and self.sasl_password:
+            config.update(
+                {
+                    "sasl.mechanisms": self.sasl_mechanisms,
+                    "sasl.username": self.sasl_username,
+                    "sasl.password": self.sasl_password,
+                }
+            )
+
         return Consumer(config)
