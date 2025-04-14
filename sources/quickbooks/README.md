@@ -29,7 +29,7 @@ To grab credentials and initialize the verified source, please refer to the [ful
     [sources.quickbooks]
     client_id=""
     client_secret=""
-a   ccess_token=""
+    access_token=""
     refresh_token= ""
     ```
     
