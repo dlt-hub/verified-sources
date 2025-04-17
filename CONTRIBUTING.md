@@ -88,6 +88,13 @@ your source will be distributed to other users once it is accepted into our repo
 
 6. Proceed to the pull request section to [create a pull request to the main repo](#making-a-pull-request-to-the-main-repo-from-fork).
 
+## Walkthrough: Modify or add rules files for LLM-enabled IDEs
+In this section, you will learn how to contribute rules files.
+1. Follow the [coding prerequesites](#coding-prerequisites) to setup the repository
+2. On your branch, add or modify rules files under the `/ai` directory
+3. Verify that the rules are properly formatted and work with the target IDE.
+4. Proceed to the pull request section to [create a pull request to the main repo](#making-a-pull-request-to-the-main-repo-from-fork). Please explain for what use cases these rules are useful and share what IDE version you're using.
+
 ## Coding Prerequisites
 
 To start development in the verified sources repository, there are a few steps you need to do to

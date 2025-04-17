@@ -37,4 +37,7 @@ Find step by step instruction as well as troubleshooting help in [CONTRIBUTING.m
 ## Building blocks
 Find a list of the building blocks of dlt with links to our official documentation in [BUILDING-BLOCKS.md](docs/BUILDING-BLOCKS.md).
 
+## Building with LLMs
+The `/ai` directory includes [rules files](https://github.com/PatrickJS/awesome-cursorrules) for popular LLM-enabled IDEs (Cursor, Continue, Cline, Claude, etc.). Add them to your project using the `dlt ai setup $IDE` command ([reference](https://dlthub.com/docs/reference/command-line-interface#dlt-ai-setup)). If you want to share useful rules, follow the instructions in [CONTRIBUTING.md](CONTRIBUTING.md).
+
 
