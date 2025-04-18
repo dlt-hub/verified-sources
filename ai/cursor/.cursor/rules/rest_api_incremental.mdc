@@ -1,0 +1,211 @@
+---
+description: 
+globs: 
+alwaysApply: false
+---
+# REST API Incremental Loading Guide
+
+This rule explains how to properly configure incremental loading for REST API sources in dlt.
+
+## 1. Basic Incremental Configuration
+
+### 1.1 Timestamp-based Incremental
+```python
+"incremental": {
+    "start_param": "updated_since",    # Query parameter name
+    "cursor_path": "data.last_updated", # Path to timestamp in response
+    "initial_value": "2024-01-01T00:00:00Z",  # Starting point
+    "date_format": "%Y-%m-%dT%H:%M:%SZ"  # Format of timestamps
+}
+```
+
+### 1.2 ID-based Incremental
+```python
+"incremental": {
+    "start_param": "min_id",           # Query parameter name
+    "cursor_path": "data.id",          # Path to ID in response
+    "initial_value": 0,                # Starting ID
+    "type": "integer"                  # Data type of ID
+}
+```
+
+### 1.3 Cursor-based Incremental
+```python
+"incremental": {
+    "cursor_path": "meta.next_cursor", # Path to cursor in response
+    "start_param": "cursor",           # Query parameter name
+    "initial_value": None,             # Starting cursor
+    "type": "string"                   # Data type of cursor
+}
+```
+
+## 2. Common Incremental Patterns
+
+### 2.1 Pipedrive-style (Recents Endpoint)
+```python
+"incremental": {
+    "start_param": "since_timestamp",
+    "cursor_path": "update_time",
+    "initial_value": "2023-01-01 00:00:00",
+    "date_format": "%Y-%m-%d %H:%M:%S"
+}
+```
+
+### 2.2 GitHub-style (Updated Since)
+```python
+"incremental": {
+    "start_param": "since",
+    "cursor_path": "updated_at",
+    "initial_value": "2023-01-01T00:00:00Z",
+    "date_format": "%Y-%m-%dT%H:%M:%SZ"
+}
+```
+
+### 2.3 Stripe-style (Starting After)
+```python
+"incremental": {
+    "start_param": "starting_after",
+    "cursor_path": "data.id",
+    "initial_value": None,
+    "type": "string"
+}
+```
+
+## 3. Configuration Examples
+
+### 3.1 Resource-level Incremental
+```python
+"resources": [
+    {
+        "name": "items",
+        "endpoint": {
+            "incremental": {
+                "start_param": "updated_since",
+                "cursor_path": "data.updated_at",
+                "initial_value": "2023-01-01T00:00:00Z"
+            }
+        }
+    }
+]
+```
+
+### 3.2 Multiple Incremental Parameters
+```python
+"incremental": {
+    "start_param": "updated_since",
+    "end_param": "updated_until",      # Optional end parameter
+    "cursor_path": "data.updated_at",
+    "initial_value": "2023-01-01T00:00:00Z",
+    "date_format": "%Y-%m-%dT%H:%M:%SZ"
+}
+```
+
+## 4. State Management
+
+### 4.1 Basic State Storage
+```python
+pipeline = dlt.pipeline(
+    pipeline_name="incremental_api",
+    destination="duckdb",
+    dataset_name="api_data"
+)
+
+info = pipeline.run(source, write_disposition="merge")
+current_state = info.load_state
+```
+
+### 4.2 Custom State Management
+```python
+"state_management": {
+    "store_state": True,
+    "state_key": "last_processed_id",
+    "resume_from_state": True
+}
+```
+
+## 5. Best Practices
+
+1. **Initial Value Selection**:
+   - Choose appropriate starting point
+   - Consider data volume and API limits
+   - Use historical data if needed
+
+2. **Date Format Handling**:
+   - Match API's timestamp format
+   - Handle timezone information
+   - Consider daylight saving time
+
+3. **State Management**:
+   - Store state between runs
+   - Handle state resets
+   - Implement recovery mechanisms
+
+4. **Error Handling**:
+   - Handle API timeouts
+   - Implement retry logic
+   - Log incremental progress
+
+## 6. Testing
+
+### 6.1 Basic Test
+```python
+def test_incremental():
+    pipeline = dlt.pipeline(...)
+    info = pipeline.run(source)
+    assert info.load_packages > 0
+```
+
+### 6.2 State Verification
+```python
+def test_state_management():
+    pipeline = dlt.pipeline(...)
+    info1 = pipeline.run(source)
+    state = info1.load_state
+    
+    info2 = pipeline.run(source)
+    assert info2.load_packages > 0
+    assert info2.load_state != state
+```
+
+## 7. Troubleshooting
+
+### 7.1 Common Issues
+- **Missing Updates**: Check cursor path and date format
+- **Duplicate Data**: Verify state management
+- **API Limits**: Adjust batch sizes and timing
+
+### 7.2 Debugging
+```python
+def verify_incremental(response):
+    print("Response structure:", response.json())
+    print("Cursor value:", response.json()["data"]["updated_at"])
+    return response
+```
+
+## 8. Advanced Patterns
+
+### 8.1 Multiple Cursor Paths
+```python
+"incremental": {
+    "start_param": "since",
+    "cursor_paths": [
+        "data.updated_at",
+        "data.created_at"
+    ],
+    "initial_value": "2023-01-01T00:00:00Z"
+}
+```
+
+### 8.2 Custom State Processing
+```python
+def process_state(state):
+    if state is None:
+        return "2023-01-01T00:00:00Z"
+    return state
+
+"incremental": {
+    "start_param": "since",
+    "cursor_path": "data.updated_at",
+    "initial_value": process_state
+}
+``` 
