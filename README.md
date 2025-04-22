@@ -37,4 +37,5 @@ Find step by step instruction as well as troubleshooting help in [CONTRIBUTING.m
 ## Building blocks
 Find a list of the building blocks of dlt with links to our official documentation in [BUILDING-BLOCKS.md](docs/BUILDING-BLOCKS.md).
 
-
+## Building with LLMs
+See README [`ai`](ai/README.md) folder for details.
