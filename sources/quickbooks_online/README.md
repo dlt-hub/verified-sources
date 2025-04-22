@@ -11,7 +11,7 @@ QuickBooks is a cloud-based accounting software designed for small to medium-siz
 
 ## Initialize the pipeline with Quickbooks verified source
 ```bash
-dlt init quickbooks duckdb
+dlt init quickbooks_online duckdb
 ```
 
 Here, we chose DuckDB as the destination. Alternatively, you can also choose redshift, snowflake, or any of the other [destinations.](https://dlthub.com/docs/dlt-ecosystem/destinations/)
@@ -32,7 +32,7 @@ To grab credentials and initialize the verified source, please refer to the [ful
     access_token=""
     refresh_token= ""
     ```
-    
+
 3. Enter credentials for your chosen destination as per the [docs.](https://dlthub.com/docs/dlt-ecosystem/destinations/)
 
 ## Run the pipeline example
@@ -41,16 +41,16 @@ To grab credentials and initialize the verified source, please refer to the [ful
     ```bash
     pip install -r requirements.txt
     ```
-    
+
 2. Now the pipeline can be run by using the command:
     ```bash
     python3 quickbooks_pipeline.py
     ```
-    
+
 3. To make sure that everything is loaded as expected, use the command:
     ```bash
     dlt pipeline <pipeline_name> show
     ```
-    
+
     For example, the pipeline_name for the above pipeline is `quickbooks`, you may also use any custom name instead.
 
