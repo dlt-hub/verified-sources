@@ -1,7 +1,7 @@
 """Source for Quickbooks depending on the quickbooks_online-python python package.
 
 Quickbooks-python docs: https://github.com/ej2/python-quickbooks
-Quickbooks api docs: https://developer.salesforce.com/docs/apis
+Quickbooks api docs: https://developer.intuit.com/app/developer/qbo/docs/api/accounting/all-entities/
 Quickbooks company id: https://quickbooks.intuit.com/learn-support/en-uk/help-article/customer-company-settings/find-quickbooks-online-company-id/L7lp8O9yU_GB_en_GB
 To get API credentials: https://developer.intuit.com/app/developer/qbo/docs/get-started/start-developing-your-app
 Get oAuth Authorization code from: https://developer.intuit.com/app/developer/playground
