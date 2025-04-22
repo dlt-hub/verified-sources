@@ -25,8 +25,8 @@ def quickbooks_online(
     client_secret: str = dlt.secrets.value,
     access_token: str = dlt.secrets.value,
     refresh_token: str = dlt.secrets.value,
-    company_id: str = dlt.secrets.value,  # also called realm_id
-    redirect_uri: str = dlt.secrets.value  # get from quickbooks_online dev portal
+    company_id: str = dlt.secrets.value,
+    redirect_uri: str = dlt.secrets.value
 ) -> Iterable[DltResource]:
     """
     Retrieves data from Quickbooks using the Quickbooks API.
