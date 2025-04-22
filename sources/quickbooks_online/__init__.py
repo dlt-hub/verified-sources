@@ -25,8 +25,8 @@ def quickbooks_online(
     client_secret: str = dlt.secrets.value,
     access_token: str = dlt.secrets.value,
     refresh_token: str = dlt.secrets.value,
-    company_id: str = dlt.secrets.value, # also called realm_id
-    redirect_uri: str = dlt.secrets.value # get from quickbooks_online dev portal
+    company_id: str = dlt.secrets.value,  # also called realm_id
+    redirect_uri: str = dlt.secrets.value,  # get from quickbooks_online dev portal
 ) -> Iterable[DltResource]:
     """
     Retrieves data from Quickbooks using the Quickbooks API.
@@ -48,19 +48,16 @@ def quickbooks_online(
         environment=environment,
         redirect_uri=redirect_uri,
         access_token=access_token,
-
     )
 
     client = QuickBooks(
-        auth_client=auth_client,
-        refresh_token=refresh_token,
-        company_id=company_id
+        auth_client=auth_client, refresh_token=refresh_token, company_id=company_id
     )
 
     # define resources
     @dlt.resource
     def customer() -> Iterable[TDataItem]:
-        customer = Customer.all(qb=client) # returns a list of iterables
+        customer = Customer.all(qb=client)  # returns a list of iterables
         for record in customer:
             yield record.to_dict()
 

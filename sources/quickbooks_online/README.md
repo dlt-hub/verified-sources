@@ -23,14 +23,17 @@ To grab credentials and initialize the verified source, please refer to the [ful
 ## Add credentials
 
 1. Open `.dlt/secrets.toml`.
-2. Enter the user name, password and security token:
+2. Put these credentials in, these can be sourced from quickbooks developer portal and quickbooks oauth playground:
     ```toml
     # put your secret values and credentials here. do not share this file and do not push it to github
-    [sources.quickbooks]
+    [sources.quickbooks_online]
+    environment=""
+    company_id=""
     client_id=""
     client_secret=""
     access_token=""
-    refresh_token= ""
+    refresh_token=""
+    redirect_uri=""
     ```
 
 3. Enter credentials for your chosen destination as per the [docs.](https://dlthub.com/docs/dlt-ecosystem/destinations/)
@@ -44,7 +47,7 @@ To grab credentials and initialize the verified source, please refer to the [ful
 
 2. Now the pipeline can be run by using the command:
     ```bash
-    python3 quickbooks_pipeline.py
+    python3 quickbooks_online_pipeline.py
     ```
 
 3. To make sure that everything is loaded as expected, use the command:
@@ -52,5 +55,5 @@ To grab credentials and initialize the verified source, please refer to the [ful
     dlt pipeline <pipeline_name> show
     ```
 
-    For example, the pipeline_name for the above pipeline is `quickbooks`, you may also use any custom name instead.
+    For example, the pipeline_name for the above pipeline is `quickbooks_online`, you may also use any custom name instead.
 
