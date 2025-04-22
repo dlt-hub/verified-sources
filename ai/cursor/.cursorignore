@@ -1,7 +1,6 @@
-# ignore secrets, virtual environments and typical python compilation artifacts
-secrets.toml
-# ignore basic python artifacts
+# virtual environments and typical python compilation artifacts
 .env
+.venv
 **/__pycache__/
 **/venv/
 **/virtualenv/

@@ -1,7 +1,7 @@
 ---
-description: General guidelines and best practices for using the dlt Python library.
-globs: **/*.py
-alwaysApply: false
+description: 
+globs: 
+alwaysApply: true
 ---
 
 # Guidelines

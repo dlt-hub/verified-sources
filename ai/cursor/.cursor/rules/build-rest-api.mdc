@@ -3,9 +3,34 @@ description:
 globs: 
 alwaysApply: true
 ---
-Cursor Rule for REST API Pipeline Configuration
+## Prerequisities to writing a source
 
-1. Look for Required Client Settings
+1. VERY IMPORTANT. When writing new source, you should have example available in rest_api_pipeline.py file. Use github rest api source for the general structure of the code. If you do not see this file, ask user to add it
+2. Recall OpenAPI spec. You will need to figure out the same information that OpenAPI spec contains on each API.
+3. In particular:
+- API base url
+- type of authentication
+- list of endpoints with method GET (you can read data for those)
+4. You will need to figure additional information that is required for successful data extraction
+- type of pagination
+- if data from an endpoint can be loaded incrementally
+- unwrapping end user data from a response
+- write disposition of the endpoint: append, replace, merge
+- in case of merge, you need to find primary key that can be compound
+5. Some endpoints take data from other endpoints. For example `comments` endpoint needs `post id` to get list of comments per particular post. You'll need to figure out such connections
+6. **ASK USER IF YOU MISS CRUCIAL INFORMATION** You should make sure user provided you with enough information to figure out the above. Below are the most common possibilities
+- open api spec (file or link)
+- any other api definition, for example Airbyte low code yaml
+- a source code in Python, java or c# of such connector or API client
+- a documentation of the api or endpoint
+7. In case you find more than 10 endpoints and you do not get instructions which you should add to the source, ask user.
+8. please make sure you use right pagination and you use exactly the arguments that are available in pagination guide. do not try to guess anything. remember that we have many paginator types that are configured differently
+9. When creating pipeline instance add progress="log" as parameter
+10. When fixing a bug report focus only on a single cause. ie. incremental, pagination or authentication or wrong dict fields
+11. You should have references for paginator types, authenticator types and general reference for rest api in you context. **DO NOT GUESS. DO NOT INVENT CODE. YOU SHOULD HAVE DOCUMENTATION FOR EVERYTHING YOU NEED. IF NOT - ASK USER**
+
+
+## Look for Required Client Settings
 When scanning docs or legacy code, first extract the API-level configuration including:
 
 Base URL:
@@ -19,7 +44,7 @@ Authentication:
 Headers (optional):
 • Check if any custom headers are required.
 
-2. Authentication Methods
+## Authentication Methods
 Configure the appropriate authentication method:
 
 API Key Authentication:
@@ -60,19 +85,18 @@ OAuth2 Authentication:
 }
 ```
 
-3. Explicit Cursor-Based Pagination Setup
-For cursor-based pagination, be explicit in your configuration:
+## Find right pagination type
+These are the available paginator types to be used in `paginator` field of `endpoint`:
 
-Paginator Section (at Client or Endpoint Level):
-• Type: Always set this to "cursor".
-• Cursor Path:
-– Look for the JSONPath (or analogous reference) that extracts the next-cursor value from the response (e.g., "additional_data.pagination.next_start" or similar).
-• Query Parameter Mappings:
-– If provided in legacy code or docs, set the names for cursor parameters like "offset_param" (e.g. "start") and, if available, "limit_param" (e.g. "limit").
-• Verification:
-– Ensure that the cursor parameter only drives pagination and does not mix with other pagination methods.
+* `json_link`: The link to the next page is in the body (JSON) of the response
+* `header_link`: The links to the next page are in the response headers
+* `offset`: The pagination is based on an offset parameter, with the total items count either in the response body or explicitly provided
+* `page_number`: The pagination is based on a page number parameter, with the total pages count either in the response body or explicitly provided
+* `cursor`: The pagination is based on a cursor parameter, with the value of the cursor in the response body (JSON)
+* `single_page`: The response will be interpreted as a single-page response, ignoring possible pagination metadata
 
-4. Multiple Pagination Strategies
+
+## Different Paginations per Endpoint are possible
 When analyzing the API documentation, carefully check for multiple pagination strategies:
 
 • Different Endpoint Types:
@@ -93,8 +117,20 @@ When analyzing the API documentation, carefully check for multiple pagination st
   - Document which endpoints use which pagination strategy
   - Test pagination separately for each endpoint type
 
+## Select the right data from the response
+In each endpoint the interesting data (typically an array of objects) may be wrapped
+differently. You can unwrap this data by using `data_selector`
 
-5. Resource Defaults & Endpoint Details
+Data Selection Patterns:
+```python
+"endpoint": {
+    "data_selector": "data.items.*",  # Basic array selection
+    "data_selector": "data.*.items",  # Nested array selection
+    "data_selector": "data.{id,name,created_at}",  # Field selection
+}
+```
+
+## Resource Defaults & Endpoint Details
 Ensure that the default settings applied across all resources are clearly delineated:
 
 Defaults:
@@ -106,147 +142,28 @@ Resource-Specific Configurations:
 • For each resource, extract the endpoint path, method, and any additional query parameters.
 • If incremental loading is supported, include the minimal incremental configuration (using fields like "start_param", "cursor_path", and "initial_value"), but try to keep it within the REST API config portion.
 
-6. Incremental Loading Configuration
-Configure incremental loading for efficient data extraction:
+## Incremental Loading Configuration
+Configure incremental loading for efficient data extraction. Your task is to get only new data from
+the endpoint.
 
-Timestamp-Based:
-```python
-"incremental": {
-    "start_param": "updated_since",
-    "cursor_path": "data.last_updated",
-    "initial_value": "2024-01-01T00:00:00Z",
-    "date_format": "%Y-%m-%dT%H:%M:%SZ"
-}
-```
+Typically you will identify query parameter that allows to get items that are newer than certain date:
 
-ID-Based:
-```python
-"incremental": {
-    "start_param": "min_id",
-    "cursor_path": "data.id",
-    "initial_value": 0,
-    "type": "integer"
-}
-```
-
-Cursor-Based:
-```python
-"incremental": {
-    "cursor_path": "meta.next_cursor",
-    "start_param": "cursor",
-    "initial_value": None,
-    "type": "string"
-}
-```
-
-7. State Management
-Implement proper state management for long-running processes:
-
-Basic State Storage:
-```python
-pipeline = dlt.pipeline(
-    pipeline_name="incremental_api",
-    destination="duckdb",
-    dataset_name="api_data"
-)
-
-info = pipeline.run(source, write_disposition="merge")
-current_state = info.load_state
-```
-
-Custom State Management:
-```python
-"state_management": {
-    "store_state": True,
-    "state_key": "last_processed_id",
-    "resume_from_state": True
-}
-```
-
-8. Rate Limiting and Backoff
-Configure rate limiting to prevent API throttling:
-
-Basic Rate Limiting:
-```python
-"rate_limit": {
-    "calls": 100,
-    "period": 60  # seconds
-}
-```
-
-Advanced Rate Limiting:
-```python
-"rate_limit": {
-    "strategy": "adaptive",
-    "initial_calls": 100,
-    "period": 60,
-    "backoff_factor": 2,
-    "max_retries": 5,
-    "retry_statuses": [429, 503]
-}
-```
-
-9. Dependent Resources
-Configure resources that depend on data from other resources:
-
-Parent-Child Relationships:
-```python
-"resources": [
-    {
-        "name": "organizations",
-        "endpoint": {
-            "path": "v1/organizations",
-            "data_selector": "data.*"
-        }
+```py
+{
+    "path": "posts",
+    "data_selector": "results",
+    "params": {
+        "created_since": "{incremental.start_value}",  # Uses cursor value in query parameter
     },
-    {
-        "name": "repositories",
-        "endpoint": {
-            "path": "v1/organizations/{resources.organizations.id}/repositories",
-            "data_selector": "data.*",
-            "depends_on": ["organizations"],
-            "parameters": {
-                "org_id": "{resources.organizations.id}"
-            }
-        }
-    }
-]
+    "incremental": {
+        "cursor_path": "created_at",
+        "initial_value": "2024-01-25T00:00:00Z",
+    },
+}
 ```
 
-10. Testing and Troubleshooting
-Implement comprehensive testing:
 
-Mock Response Testing:
-```python
-def test_api_pagination():
-    mock_responses = [
-        {"data": [{"id": 1}], "next_cursor": "cursor1"},
-        {"data": [{"id": 2}], "next_cursor": None}
-    ]
-    
-    with patch('requests.get') as mock_get:
-        mock_get.side_effect = [
-            type('Response', (), {'json': lambda: r, 'status_code': 200})
-            for r in mock_responses
-        ]
-        
-        pipeline = dlt.pipeline(...)
-        info = pipeline.run(source)
-        assert info.load_packages == 2
-```
-
-11. Best Practices
-• Use appropriate pagination methods for your API
-• Implement proper error handling and retry logic
-• Monitor API usage and rate limits
-• Use incremental loading where possible
-• Implement proper state management
-• Test thoroughly with mock responses
-• Handle dependent resources carefully
-• Use appropriate batch sizes
-• Monitor and log API interactions
-
-12. Template Example
+## End to end example
 Below is an annotated template that illustrates how your output should look. Use it as a reference to guide your extraction:
 
 ```python
@@ -281,6 +198,7 @@ source = rest_api_source({
                 "method": "GET",                    # HTTP method (default is GET)
                 "params": {
                     "items": "deal"
+                    "since_timestamp": "{incremental.start_value}"
                 },
                 "data_selector": "data.*",          # JSONPath to extract the actual data
                 "paginator": {                      # Endpoint-specific paginator
@@ -289,7 +207,6 @@ source = rest_api_source({
                     "limit": 100
                 },
                 "incremental": {                    # Optional incremental configuration
-                    "start_param": "since_timestamp",
                     "cursor_path": "update_time",
                     "initial_value": "2023-01-01 00:00:00"
                 }
@@ -307,7 +224,7 @@ if __name__ == "__main__":
     pipeline.run(source)
 ```
 
-13. How to Apply This Rule
+## How to Apply This Rule
 Extraction:
 • Search both the REST API docs and any legacy pipeline code for all mentions of "cursor" or "pagination".
 • Identify the exact keys and JSONPath expressions needed for the cursor field.
@@ -335,442 +252,4 @@ Customization:
 • Adjust batch sizes and pagination parameters as needed.
 • Implement custom error handling and retry logic where necessary.
 • Handle different pagination strategies appropriately.
-
-14. Advanced Resource Configuration
-Enhance your resource configurations with these patterns:
-
-Data Selection Patterns:
-```python
-"endpoint": {
-    "data_selector": "data.items.*",  # Basic array selection
-    "data_selector": "data.*.items",  # Nested array selection
-    "data_selector": "data.{id,name,created_at}",  # Field selection
-    "data_selector": "data[?(@.status=='active')]",  # Filtered selection
-    "data_selector": "data.* | [?(@.amount > 1000)]"  # Complex filtering
-}
-```
-
-Response Transformation:
-```python
-def transform_response(response_data):
-    """Custom response transformation"""
-    return [
-        {
-            "id": item["id"],
-            "full_name": f"{item['first_name']} {item['last_name']}",
-            "active": item["status"] == "active",
-            "metadata": {
-                "source": "api",
-                "processed_at": datetime.now().isoformat()
-            }
-        }
-        for item in response_data["data"]["items"]
-    ]
-
-source = rest_api_source({
-    "resources": [
-        {
-            "name": "users",
-            "endpoint": {
-                "path": "users",
-                "transform": transform_response
-            }
-        }
-    ]
-})
-```
-
-Resource-Level Error Handling:
-```python
-"endpoint": {
-    "error_handler": {
-        "retry_on_status": [429, 500, 502, 503, 504],
-        "max_retries": 3,
-        "backoff_factor": 2,
-        "custom_handler": "lambda response: handle_custom_error(response)"
-    }
-}
-```
-
-15. Advanced Authentication Scenarios
-Handle complex authentication requirements:
-
-Custom Authenticator:
-```python
-from dlt.sources.helpers.rest_client.auth import BaseAuthenticator
-
-class CustomTokenAuthenticator(BaseAuthenticator):
-    def __init__(self, token_provider):
-        self.token_provider = token_provider
-        self._token = None
-        self._token_expiry = None
-
-    def apply_auth(self, request):
-        if self._token is None or self._is_token_expired():
-            self._refresh_token()
-        request.headers["Authorization"] = f"Bearer {self._token}"
-        return request
-
-    def _is_token_expired(self):
-        return self._token_expiry and datetime.now() >= self._token_expiry
-
-    def _refresh_token(self):
-        token_data = self.token_provider.get_token()
-        self._token = token_data["access_token"]
-        self._token_expiry = datetime.now() + timedelta(seconds=token_data["expires_in"])
-
-source = rest_api_source({
-    "client": {
-        "auth": CustomTokenAuthenticator(token_provider)
-    }
-})
-```
-
-Multi-Step Authentication:
-```python
-class MultiStepAuthenticator(BaseAuthenticator):
-    def __init__(self, credentials):
-        self.credentials = credentials
-        self._session_token = None
-
-    def apply_auth(self, request):
-        if not self._session_token:
-            self._perform_initial_auth()
-        request.headers["X-Session-Token"] = self._session_token
-        return request
-
-    def _perform_initial_auth(self):
-        # Step 1: Get temporary token
-        temp_token = self._get_temp_token()
-        # Step 2: Exchange for session token
-        self._session_token = self._exchange_for_session(temp_token)
-```
-
-16. Response Processing
-Handle complex response scenarios:
-
-Response Validation:
-```python
-def validate_response(response):
-    """Custom response validation"""
-    if response.status_code == 200:
-        data = response.json()
-        if "errors" in data:
-            raise ValueError(f"API returned errors: {data['errors']}")
-        if not data.get("items"):
-            raise ValueError("No items in response")
-        return response
-    elif response.status_code == 429:
-        retry_after = int(response.headers.get("Retry-After", 60))
-        raise RateLimitError(f"Rate limit exceeded. Retry after {retry_after} seconds")
-    return response
-
-source = rest_api_source({
-    "client": {
-        "response_validator": validate_response
-    }
-})
-```
-
-Data Processing Pipeline:
-```python
-def process_data_pipeline(data):
-    """Multi-step data processing"""
-    # Step 1: Clean data
-    cleaned = clean_data(data)
-    # Step 2: Transform
-    transformed = transform_data(cleaned)
-    # Step 3: Enrich
-    enriched = enrich_data(transformed)
-    return enriched
-
-source = rest_api_source({
-    "resources": [
-        {
-            "name": "processed_data",
-            "endpoint": {
-                "path": "data",
-                "data_processor": process_data_pipeline
-            }
-        }
-    ]
-})
-```
-
-Error Recovery:
-```python
-def handle_error(response, retry_count):
-    """Custom error recovery"""
-    if response.status_code == 429:
-        retry_after = int(response.headers.get("Retry-After", 60))
-        time.sleep(retry_after)
-        return True  # Retry the request
-    elif response.status_code == 500 and retry_count < 3:
-        time.sleep(2 ** retry_count)  # Exponential backoff
-        return True
-    return False  # Don't retry
-
-source = rest_api_source({
-    "client": {
-        "error_recovery": handle_error
-    }
-})
-```
-
-17. Feature Extraction from API Responses
-Extract and process features from REST API responses with these patterns:
-
-Common API Response Patterns:
-```python
-# Standard REST API response pattern
-{
-    "data": {
-        "items": [...],      # Array of items
-        "total": 100,        # Total count
-        "page": 1,           # Current page
-        "per_page": 10       # Items per page
-    },
-    "meta": {
-        "status": "success",
-        "code": 200
-    }
-}
-
-# Nested resource pattern
-{
-    "data": {
-        "user": {
-            "id": 1,
-            "profile": {
-                "name": "John",
-                "preferences": {...}
-            },
-            "relationships": {
-                "organizations": [...]
-            }
-        }
-    }
-}
-
-# Bulk response pattern
-{
-    "results": [
-        {"id": 1, "data": {...}},
-        {"id": 2, "data": {...}}
-    ],
-    "summary": {
-        "total": 2,
-        "success": 2,
-        "failed": 0
-    }
-}
-```
-
-Feature Extraction from Common Patterns:
-```python
-# Standard REST response feature extraction
-"endpoint": {
-    "features": {
-        "items": "data.items.*",                    # Extract all items
-        "total_count": "data.total",                # Extract total count
-        "current_page": "data.page",                # Extract pagination info
-        "items_per_page": "data.per_page",
-        "status": "meta.status"                     # Extract metadata
-    }
-}
-
-# Nested resource feature extraction
-"endpoint": {
-    "features": {
-        "user_id": "data.user.id",
-        "user_name": "data.user.profile.name",
-        "preferences": "data.user.profile.preferences",
-        "organizations": "data.user.relationships.organizations"
-    }
-}
-
-# Bulk response feature extraction
-"endpoint": {
-    "features": {
-        "results": "results.*.data",                # Extract all result data
-        "summary": "summary",                       # Extract summary
-        "success_count": "summary.success",
-        "failed_count": "summary.failed"
-    }
-}
-```
-
-API-Specific Feature Processing:
-```python
-def process_api_features(response_data):
-    """Process features from API-specific response format"""
-    features = {}
-    
-    # Handle standard REST response
-    if "data" in response_data:
-        features.update({
-            "items": response_data["data"].get("items", []),
-            "pagination": {
-                "total": response_data["data"].get("total", 0),
-                "page": response_data["data"].get("page", 1),
-                "per_page": response_data["data"].get("per_page", 10)
-            }
-        })
-    
-    # Handle nested resources
-    if "data" in response_data and "user" in response_data["data"]:
-        user_data = response_data["data"]["user"]
-        features.update({
-            "user": {
-                "id": user_data.get("id"),
-                "profile": user_data.get("profile", {}),
-                "relationships": user_data.get("relationships", {})
-            }
-        })
-    
-    # Handle bulk responses
-    if "results" in response_data:
-        features.update({
-            "results": [item["data"] for item in response_data["results"]],
-            "summary": response_data.get("summary", {})
-        })
-    
-    return features
-
-source = rest_api_source({
-    "resources": [
-        {
-            "name": "api_features",
-            "endpoint": {
-                "path": "data",
-                "feature_processor": process_api_features
-            }
-        }
-    ]
-})
-```
-
-Paginated Response Feature Extraction:
-```python
-def extract_paginated_features(response_data, page_info):
-    """Extract features from paginated responses"""
-    features = {
-        "items": response_data.get("items", []),
-        "current_page": page_info.get("page", 1),
-        "total_pages": page_info.get("total_pages", 1),
-        "has_next": page_info.get("has_next", False),
-        "next_cursor": page_info.get("next_cursor")
-    }
-    
-    # Add metadata about the extraction
-    features["_metadata"] = {
-        "extracted_at": datetime.now().isoformat(),
-        "page_number": page_info.get("page", 1),
-        "batch_size": len(features["items"])
-    }
-    
-    return features
-
-source = rest_api_source({
-    "resources": [
-        {
-            "name": "paginated_data",
-            "endpoint": {
-                "path": "items",
-                "paginator": {
-                    "type": "cursor",
-                    "cursor_path": "meta.next_cursor"
-                },
-                "feature_extractor": extract_paginated_features
-            }
-        }
-    ]
-})
-```
-
-Error Handling in Feature Extraction:
-```python
-def handle_api_errors(response):
-    """Handle API-specific errors during feature extraction"""
-    if response.status_code != 200:
-        error_data = response.json()
-        if "error" in error_data:
-            raise ValueError(f"API Error: {error_data['error']}")
-        elif "errors" in error_data:
-            raise ValueError(f"API Errors: {', '.join(error_data['errors'])}")
-        else:
-            raise ValueError(f"Unknown API Error: {response.status_code}")
-    
-    return response.json()
-
-def extract_features_with_error_handling(data):
-    """Extract features with comprehensive error handling"""
-    try:
-        # Basic feature extraction
-        features = {
-            "id": data["id"],
-            "name": data.get("name", "Unknown"),
-            "status": data.get("status", "inactive")
-        }
-        
-        # Handle nested data with error checking
-        if "metadata" in data:
-            try:
-                features["metadata"] = {
-                    "created_at": datetime.fromisoformat(data["metadata"]["created_at"]),
-                    "updated_at": datetime.fromisoformat(data["metadata"]["updated_at"])
-                }
-            except (KeyError, ValueError) as e:
-                features["metadata"] = {"error": str(e)}
-        
-        return features
-    except Exception as e:
-        raise ValueError(f"Feature extraction failed: {str(e)}")
-
-source = rest_api_source({
-    "client": {
-        "error_handler": handle_api_errors
-    },
-    "resources": [
-        {
-            "name": "error_handled_features",
-            "endpoint": {
-                "path": "data",
-                "feature_extractor": extract_features_with_error_handling
-            }
-        }
-    ]
-})
-```
-
-API Feature Extraction Best Practices:
-1. **Response Structure Understanding**:
-   - Study the API documentation for response patterns
-   - Identify common data structures
-   - Note any variations in response formats
-
-2. **Feature Mapping**:
-   - Map API fields to feature names consistently
-   - Document the mapping for reference
-   - Handle missing or null values appropriately
-
-3. **Error Handling**:
-   - Implement comprehensive error handling
-   - Log feature extraction errors
-   - Provide fallback values where appropriate
-
-4. **Performance Optimization**:
-   - Extract only needed features
-   - Use efficient data structures
-   - Consider batch processing for large datasets
-
-5. **Validation**:
-   - Validate extracted features against API schema
-   - Check for required fields
-   - Verify data types and formats
-
-6. **Documentation**:
-   - Document feature extraction patterns
-   - Note any API-specific considerations
-   - Include examples of common response formats
 
