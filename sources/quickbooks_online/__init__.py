@@ -26,19 +26,19 @@ def quickbooks_online(
     access_token: str = dlt.secrets.value,
     refresh_token: str = dlt.secrets.value,
     company_id: str = dlt.secrets.value,  # also called realm_id
-    redirect_uri: str = dlt.secrets.value,  # get from quickbooks_online dev portal
+    redirect_uri: str = dlt.secrets.value  # get from quickbooks_online dev portal
 ) -> Iterable[DltResource]:
     """
     Retrieves data from Quickbooks using the Quickbooks API.
 
     Args:
         environment (str): The environment used for authentication ('sandbox' or 'production')
-        client_id (str): The client id provided by quickbooks_online for authentication. Defaults to the value in the `dlt.secrets` object.
-        client_secret (str): The client secret provided by quickbooks_online for authentication. Defaults to the value in the `dlt.secrets` object.
-        access_token (str): The access token provided by quickbooks_online oAuth playground for authentication. Defaults to the value in the `dlt.secrets` object.
-        refresh_token (str): The refresh token provided by quickbooks_online oAuth playground for authentication. Defaults to the value in the `dlt.secrets` object.
-        company_id (str): The company id provided by quickbooks_online. Defaults to the value in the `dlt.secrets` object.
-
+        client_id (str): The client id provided by quickbooks for authentication. Defaults to the value in the `dlt.secrets` object.
+        client_secret (str): The client secret provided by quickbooks for authentication. Defaults to the value in the `dlt.secrets` object.
+        access_token (str): The access token provided by quickbooks oAuth playground for authentication. Defaults to the value in the `dlt.secrets` object.
+        refresh_token (str): The refresh token provided by quickbooks oAuth playground for authentication. Defaults to the value in the `dlt.secrets` object.
+        company_id (str): The company id / realm id provided by quickbooks. Defaults to the value in the `dlt.secrets` object.
+        redirect_uri (str): The redirect uri provided by quickbooks, found in the developer application created. Defaults to the value in the `dlt.secrets` object.
     Yields:
         DltResource: Data resources from Quickbooks.
     """
