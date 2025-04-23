@@ -16,7 +16,7 @@ def test_quickbooks_online(destination_name: str) -> None:
     load_info = pipeline.run(data)
     assert_load_info(load_info)
 
-    expected_tables = ["customer"]
+    expected_tables = ["customer", "invoice"]
     # only those tables in the schema
     assert set(t["name"] for t in pipeline.default_schema.data_tables()) == set(
         expected_tables

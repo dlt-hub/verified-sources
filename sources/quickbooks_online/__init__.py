@@ -9,13 +9,14 @@ Get oAuth Authorization code from: https://developer.intuit.com/app/developer/pl
 
 from dlt.sources import DltResource
 
-from typing import Iterable
+from typing import Iterable, Sequence
 
 import dlt
 from dlt.common.typing import TDataItem
 from intuitlib.client import AuthClient
 from quickbooks import QuickBooks
 from quickbooks.objects.customer import Customer
+from quickbooks.objects.invoice import Invoice
 
 
 @dlt.source(name="quickbooks_online")
@@ -27,7 +28,7 @@ def quickbooks_online(
     refresh_token: str = dlt.secrets.value,
     company_id: str = dlt.secrets.value,
     redirect_uri: str = dlt.secrets.value,
-) -> Iterable[DltResource]:
+) -> Sequence[DltResource]:
     """
     Retrieves data from Quickbooks using the Quickbooks API.
 
@@ -61,4 +62,10 @@ def quickbooks_online(
         for record in customer:
             yield record.to_dict()
 
-    return customer
+    @dlt.resource
+    def invoice() -> Iterable[TDataItem]:
+        invoice = Invoice.all(qb=client)
+        for record in invoice:
+            yield record.to_dict()
+
+    return [customer, invoice]
