@@ -26,7 +26,7 @@ def pdf_to_text(file_items: Sequence[FileItemDict]) -> Iterator[Dict[str, Any]]:
                 yield page_item
 
 
-def imap_read_messages(senders: Sequence[str]) -> dlt.Pipeline:
+def imap_read_messages(senders: Sequence[str] = None) -> dlt.Pipeline:
     pipeline = dlt.pipeline(
         pipeline_name="standard_inbox",
         destination="duckdb",
@@ -45,7 +45,7 @@ def imap_read_messages(senders: Sequence[str]) -> dlt.Pipeline:
     return pipeline
 
 
-def imap_get_attachments(senders: Sequence[str]) -> dlt.Pipeline:
+def imap_get_attachments(senders: Sequence[str] = None) -> dlt.Pipeline:
     pipeline = dlt.pipeline(
         pipeline_name="standard_inbox",
         destination="duckdb",
