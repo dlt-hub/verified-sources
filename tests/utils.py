@@ -26,7 +26,7 @@ from dlt.common.storages import FileStorage
 from dlt.common.schema.typing import TTableSchema
 from dlt.common.utils import set_working_dir
 
-from dlt.pipeline.exceptions import SqlClientNotAvailable
+from dlt.common.destination.exceptions import SqlClientNotAvailable
 
 TEST_STORAGE_ROOT = "_storage"
 
