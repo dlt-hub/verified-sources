@@ -63,16 +63,6 @@ the
    pip install -r requirements.txt
    ```
 
-   Prerequisites for fetching messages differ by provider.
-
-    - For Gmail:
-
-      `pip install google-api-python-client>=2.86.0`
-
-      `pip install google-auth-oauthlib>=1.0.0`
-
-      `pip install google-auth-httplib2>=0.1.0`
-
     - For pdf parsing:
 
       `pip install PyPDF2`
