@@ -3,6 +3,7 @@ import imaplib
 import hashlib
 from email.message import Message
 from email.header import decode_header, make_header
+from email.utils import parsedate_to_datetime
 from time import mktime
 from typing import Any, Dict, Iterator, Optional, Sequence, Tuple
 
@@ -87,7 +88,9 @@ def extract_email_info(msg: Message, include_body: bool = False) -> Dict[str, An
         Dict[str, Any]: The email information.
     """
     email_data = dict(msg)
-    email_data["Date"] = pendulum.parse(msg["Date"], strict=False)
+    dt = parsedate_to_datetime(msg["Date"])
+    dt_pendulum = pendulum.instance(dt)
+    email_data["Date"] = dt_pendulum
     email_data["content_type"] = msg.get_content_type()
     if include_body:
         email_data["body"] = get_email_body(msg)
