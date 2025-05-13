@@ -22,6 +22,8 @@ RECENTS_ENTITIES = {
     "organization": "organizations",
     "pipeline": "pipelines",
     "product": "products",
+    "project": "projects",
     "stage": "stages",
+    "task": "tasks",
     "user": "users",
 }
