@@ -19,10 +19,10 @@ This verified source loads data from the following default endpoints:
 
 ## Initialize the pipeline
 ```bash
-dlt init stripe duckdb
+dlt init stripe_analytics duckdb
 ```
 
-Here, we chose BigQuery as the destination. Alternatively, you can also choose redshift, duckdb, or any of the other [destinations.](https://dlthub.com/docs/dlt-ecosystem/destinations/)
+Here, we chose DuckDB as the destination. Alternatively, you can also choose Redshift, BigQuery, or any of the other [destinations.](https://dlthub.com/docs/dlt-ecosystem/destinations/)
 
 ## Setup verified source
 To get the full list of supported endpoints, grab API credentials and initialise the verified source and pipeline example, read the [full documentation here.](https://dlthub.com/docs/dlt-ecosystem/verified-sources/stripe)
