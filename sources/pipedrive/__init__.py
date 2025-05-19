@@ -9,7 +9,7 @@ Api changelog: https://developers.pipedrive.com/changelog
 To get an api key: https://pipedrive.readme.io/docs/how-to-find-the-api-token
 """
 
-from typing import Any, Dict, Iterator, List, Optional, Union, Iterable, Iterator, Tuple
+from typing import Any, Dict, Iterator, List, Optional, Union, Iterator
 
 import dlt
 
@@ -53,6 +53,8 @@ def pipedrive_source(
         stages
         users
         leads
+        projects
+        tasks
 
     For custom fields rename the `custom_fields_mapping` resource must be selected or loaded before other resources.
 
