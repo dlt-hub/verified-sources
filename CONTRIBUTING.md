@@ -352,7 +352,7 @@ In essence **DLT_SECRETS_TOML** is just your `secrets.toml` file and will be use
 
 
 ### Sharing and obtaining source credentials, test accounts, destination access
-Typically we created a common test account for your source [before you started coding](#Walkthrough-create-and-contribute-a-new-source). This is an ideal situation - we can reuse your tests directly and can merge your work quickly.
+Typically we create a common test account for your source [before you started coding](#Walkthrough-create-and-contribute-a-new-source). This is an ideal situation - we can reuse your tests directly and can merge your work quickly.
 
 If you contributed a source and created own credentials, test accounts or test datasets please
    include them in the tests or share them with `dlt` team so we can configure the CI job. If
