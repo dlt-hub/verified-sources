@@ -946,11 +946,10 @@ wheels = [
 
 [[package]]
 name = "dlt"
-version = "1.8.0"
+version = "1.11.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "click" },
-    { name = "dlt-pendulum", marker = "python_full_version >= '3.13'" },
     { name = "fsspec" },
     { name = "gitpython" },
     { name = "giturlparse" },
@@ -961,7 +960,7 @@ dependencies = [
     { name = "orjson", marker = "platform_python_implementation != 'PyPy'" },
     { name = "packaging" },
     { name = "pathvalidate" },
-    { name = "pendulum", marker = "python_full_version < '3.13'" },
+    { name = "pendulum" },
     { name = "pluggy" },
     { name = "pytz" },
     { name = "pywin32", marker = "sys_platform == 'win32'" },
@@ -972,15 +971,16 @@ dependencies = [
     { name = "semver" },
     { name = "setuptools" },
     { name = "simplejson" },
+    { name = "sqlglot" },
     { name = "tenacity" },
     { name = "tomlkit" },
     { name = "typing-extensions" },
     { name = "tzdata" },
     { name = "win-precise-time", marker = "os_name == 'nt'" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/35/70/826c592ba42f6f242ab88172917d24f1f74233ccd331af27683479f7fdea/dlt-1.8.0.tar.gz", hash = "sha256:4b924c5793c003568a596d60211dc7d1b6c1589e61ccefe55b271f7ffc47519f", size = 712165 }
+sdist = { url = "https://files.pythonhosted.org/packages/f2/33/a9254d9ffa33c7d28239a0f17895463227c2485ada02a6de9a8151176708/dlt-1.11.0.tar.gz", hash = "sha256:54ac0fb746b447e2f0a5d2cbe98a2054dc9c7cdc11410925b486660fd51e540c", size = 737849 }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/12/cd/98b15309aa872ef3698d31ccae7529b4bd57bef4f206cbeb37c6731d09a1/dlt-1.8.0-py3-none-any.whl", hash = "sha256:72a275b08936fede9ba570b7a577379d10e3f28cc7792932dc278b58e435500f", size = 897470 },
+    { url = "https://files.pythonhosted.org/packages/ae/05/21b22c20779f0e7a78c2b20b8dbb2e74783d06c392b86ae324979f5a72d4/dlt-1.11.0-py3-none-any.whl", hash = "sha256:1120dd92e365aa9a2b9cd0dff9707149605fc25038f50ee1e6d551f49292b72c", size = 926019 },
 ]
 
 [package.optional-dependencies]
@@ -994,81 +994,6 @@ bigquery = [
 ]
 duckdb = [
     { name = "duckdb" },
-]
-
-[[package]]
-name = "dlt-pendulum"
-version = "3.0.2"
-source = { registry = "https://pypi.org/simple" }
-dependencies = [
-    { name = "cffi", marker = "python_full_version >= '3.13'" },
-    { name = "python-dateutil", marker = "python_full_version >= '3.13'" },
-    { name = "tzdata", marker = "python_full_version >= '3.13'" },
-]
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/24/13/4584c5379493dc98790a21a2ee87e710e2d7c0a9f7d242c6f2cf815aab5c/dlt_pendulum-3.0.2-cp310-cp310-macosx_10_12_x86_64.whl", hash = "sha256:9ae1222828474f9e4743f8929f8026abe2d0b3a99427a483da2868690b017332", size = 333994 },
-    { url = "https://files.pythonhosted.org/packages/ea/0c/8df94143c07808184030e4c74e3032f6a43e3ca734754d2c26f2ae4e0393/dlt_pendulum-3.0.2-cp310-cp310-macosx_11_0_arm64.whl", hash = "sha256:75e1b758f88f887706902438fa5b293f11cec5d656c6540c9957da8c9b953198", size = 322819 },
-    { url = "https://files.pythonhosted.org/packages/2e/fa/a69e95997ae7de7a0b9856c5ac75d001f6bce40dcfd17ad20f75aae7c332/dlt_pendulum-3.0.2-cp310-cp310-manylinux_2_17_aarch64.manylinux2014_aarch64.whl", hash = "sha256:f28fc8663fdb5988b001f9ede02abd760437f899ee698093f142e70e2b7ca8a3", size = 336946 },
-    { url = "https://files.pythonhosted.org/packages/e5/ad/9673fef7b1f9cf0afc5b02840e942015cc73430916609073252ce1960021/dlt_pendulum-3.0.2-cp310-cp310-manylinux_2_17_ppc64le.manylinux2014_ppc64le.whl", hash = "sha256:605ef9fc369a8db62f707b758d95d9b8d5aba0cdb1ecb3b2ac123f39849b9122", size = 372470 },
-    { url = "https://files.pythonhosted.org/packages/90/4b/088737cbedd4442fd1144f89c841265ade7e2f86118dbbd06e0030466c50/dlt_pendulum-3.0.2-cp310-cp310-manylinux_2_17_s390x.manylinux2014_s390x.whl", hash = "sha256:989c05e3999217453456d559e18f6d71a3e706b78692c0b867fdd9ef0a1a72f1", size = 428097 },
-    { url = "https://files.pythonhosted.org/packages/c1/59/bd18fe530af14f0b7c9f93e61c44ebdd8ccacc8e6f88546853df982e0e75/dlt_pendulum-3.0.2-cp310-cp310-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:a07652a46a076e19c23927b25e4f1b204ff90ac9104bb7d6dac7fa3cb6feba3a", size = 348582 },
-    { url = "https://files.pythonhosted.org/packages/6e/ec/6fdf9d82a49f82cff694b2f1e91fb25c50fbc2a001f16d863dbb56d6f018/dlt_pendulum-3.0.2-cp310-cp310-musllinux_1_1_aarch64.whl", hash = "sha256:f6930a1e604a3885e67d8397782c076353cf61eab8ca6e31c2a0418a83d68389", size = 514956 },
-    { url = "https://files.pythonhosted.org/packages/ff/73/42afd8054e73f114183f65ece12458fa8dbc27a3e708ea7faac6e2f3c91b/dlt_pendulum-3.0.2-cp310-cp310-musllinux_1_1_x86_64.whl", hash = "sha256:6708b2e48c4780f2c6d84c97900c98d033264cfb74ebccef813b9f204e072cdf", size = 517881 },
-    { url = "https://files.pythonhosted.org/packages/77/6b/68e39bc24d5af80fc768c587205a11a8f5d12f84ce05d5b32fbb2bb29c02/dlt_pendulum-3.0.2-cp310-cp310-win_amd64.whl", hash = "sha256:452d33875d9bb89c7987caec3b92ea3480b91b8bba32bd777d1702e252d4f39c", size = 256300 },
-    { url = "https://files.pythonhosted.org/packages/38/83/db955a22a095cc92c44e137080a3418c42c9491c448b48341b599f0fb1d0/dlt_pendulum-3.0.2-cp311-cp311-macosx_10_12_x86_64.whl", hash = "sha256:448cf4deddd5ed5a74eca286e82f39ff645d9ea239a84e3366c0dc8a5525b3f6", size = 333979 },
-    { url = "https://files.pythonhosted.org/packages/8b/93/e0fc6f54f741933103f41c9dccf37693bdcd1f59bbd24dea143ed6a8c1f1/dlt_pendulum-3.0.2-cp311-cp311-macosx_11_0_arm64.whl", hash = "sha256:8b0f842b83e78dcaf2829d09513bbb90422c706897e62f6da1caa8eacef8c334", size = 322609 },
-    { url = "https://files.pythonhosted.org/packages/1c/6b/78843db6f588389e64747f82ef61d0a33c5a3294c11f3fd6c3788c5cf508/dlt_pendulum-3.0.2-cp311-cp311-manylinux_2_17_aarch64.manylinux2014_aarch64.whl", hash = "sha256:43d7af1ee840b8a8591c415e1b39053c607397cc8e79aad80baaabb63ea73b6f", size = 336876 },
-    { url = "https://files.pythonhosted.org/packages/48/06/11fcfd2feb7f6d7f8eddafdb4bf213eac9a1ded2c79e3e1cd27dc2b7249d/dlt_pendulum-3.0.2-cp311-cp311-manylinux_2_17_ppc64le.manylinux2014_ppc64le.whl", hash = "sha256:79fe7bc48584fd95d24e2389fd44a1d2ed5b74a0d628b8500e93dccab553c4c1", size = 372499 },
-    { url = "https://files.pythonhosted.org/packages/72/91/5198a3c2a3ea953c90cbd89977ee5e89db920758ac41d749206844c47716/dlt_pendulum-3.0.2-cp311-cp311-manylinux_2_17_s390x.manylinux2014_s390x.whl", hash = "sha256:6b0a3c2a7fea9d81c92138b56b137864926808f9a6e6d7f0a78bc103467cc3e2", size = 427679 },
-    { url = "https://files.pythonhosted.org/packages/2b/6f/2138a17e7a00fcb19f5997044ab437ff0d3c5e255865bc7ace3fb3ec25c1/dlt_pendulum-3.0.2-cp311-cp311-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:b9bf75d9228f708518ece8f655e29b852ec961596ea39938dd3f10c0b7cb2d6b", size = 348494 },
-    { url = "https://files.pythonhosted.org/packages/47/0a/61956d3b3b78b15113a49503352f76a458830f089c81b090bb5d839242f4/dlt_pendulum-3.0.2-cp311-cp311-musllinux_1_1_aarch64.whl", hash = "sha256:ae3765ac5aaabe09900d47232392c0c295f79fb871b43e9064e2ed6b37613ed6", size = 514884 },
-    { url = "https://files.pythonhosted.org/packages/83/b8/ae23cd173f73057198e83030f3b82d5b2a5ece3eb2b4108a3769faec9e8e/dlt_pendulum-3.0.2-cp311-cp311-musllinux_1_1_x86_64.whl", hash = "sha256:3bf400f1361ca22dc2e550e7f1ef111bb1664f6154b30e03fbe2a6adbe9975c8", size = 517769 },
-    { url = "https://files.pythonhosted.org/packages/b4/af/e519e837679816045fcd4958e29ccbe4c06c2ccf9e357f3c41b6ca943123/dlt_pendulum-3.0.2-cp311-cp311-win_amd64.whl", hash = "sha256:ea29f41100231557ea04f39fd0fcbb417cc0c80f8ceb9c699ee63280a1ea218b", size = 256188 },
-    { url = "https://files.pythonhosted.org/packages/77/9b/8c0e8c0b282cbda1f6d6069853aa5f5e94846ef498b294bf16a3b18ba8cb/dlt_pendulum-3.0.2-cp311-cp311-win_arm64.whl", hash = "sha256:f1091b3ce84ff920d48e55038f9a2b733c7e4e3ca122a1cdd557609e5d963e0d", size = 250602 },
-    { url = "https://files.pythonhosted.org/packages/cc/5f/f42ceb577b3e2dad7ac06abe42a0d577b0316fa31ba50520993c04b27ab4/dlt_pendulum-3.0.2-cp312-cp312-macosx_10_12_x86_64.whl", hash = "sha256:2daf27e40621b94fa58254cf62b1affc393cfdd86178613997fd4305143641b2", size = 331350 },
-    { url = "https://files.pythonhosted.org/packages/18/96/cfd0e05a37c7e9d8b3f5aa6801887371c67ba153d856167a0a40be21698c/dlt_pendulum-3.0.2-cp312-cp312-macosx_11_0_arm64.whl", hash = "sha256:e6d0fe5167216b96d68bd0459772d8d2e02314f4deb1d6543a605ae450cc99d2", size = 319653 },
-    { url = "https://files.pythonhosted.org/packages/83/65/ca1b821349e54308833f74dfd611fb6dbb27e93f9de22c7515e5336dd4b8/dlt_pendulum-3.0.2-cp312-cp312-manylinux_2_17_aarch64.manylinux2014_aarch64.whl", hash = "sha256:c70cecdfd90d63a58fc7d3f6170bb38b963c5601308df424b36adfdfcd800c46", size = 334073 },
-    { url = "https://files.pythonhosted.org/packages/a4/fc/ce499e9cad6676e08f4ae2417870b4ea370346a91399ed3c72db1a4a2f31/dlt_pendulum-3.0.2-cp312-cp312-manylinux_2_17_ppc64le.manylinux2014_ppc64le.whl", hash = "sha256:a29a076b7ca9ce7c7ddc519252d62c66dbb50345a10dbe570b5e8b57a19da87b", size = 370343 },
-    { url = "https://files.pythonhosted.org/packages/ba/78/6fb27dc4f97630a9c0afa4e8f4e9e7daaa56cf6286641d8c6ecea1ad1a93/dlt_pendulum-3.0.2-cp312-cp312-manylinux_2_17_s390x.manylinux2014_s390x.whl", hash = "sha256:f30c6b0876c1a4f4c8fece12d77733abccb735a7e2752a74b7aab6b264529880", size = 425689 },
-    { url = "https://files.pythonhosted.org/packages/9d/96/2ddd5d773183688a703ecbdc39ec3b51bd83fcd5d3a6eda599e9ae13b5df/dlt_pendulum-3.0.2-cp312-cp312-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:08b2fd5b93ffa64f198db036b0a1b42cda1a9f1aaf5b151bb3971151458fb95b", size = 346132 },
-    { url = "https://files.pythonhosted.org/packages/c9/5d/acd0f19a2b47d637c7bf4ea4b5dec93d374f9310f125dc894ec16b8a0847/dlt_pendulum-3.0.2-cp312-cp312-musllinux_1_1_aarch64.whl", hash = "sha256:dfc22370e8a44ea92e1f0ff84d96e5979f90e9c39a23ba6b00e6d08743d59371", size = 511867 },
-    { url = "https://files.pythonhosted.org/packages/89/98/d085feeb821fa786c4581ddacae90a6d4baed491b4102824c682c22b9617/dlt_pendulum-3.0.2-cp312-cp312-musllinux_1_1_x86_64.whl", hash = "sha256:302ea13476b0225a36bde6a66f0720b5930dcfaf3bed86115aba137f25dc0e51", size = 515426 },
-    { url = "https://files.pythonhosted.org/packages/02/68/21041f4db0d85aee5ed0692486937d3f96b509fb9ad42837c5313e96b72b/dlt_pendulum-3.0.2-cp312-cp312-win_amd64.whl", hash = "sha256:695edd6e7cb245cee19f401b9f8461f5bc10b7043153a250af4bf925373d4262", size = 255656 },
-    { url = "https://files.pythonhosted.org/packages/c1/13/23fcac53321c0710cd294e3d4807fe625425e3045e45b8d035d7765141e0/dlt_pendulum-3.0.2-cp312-cp312-win_arm64.whl", hash = "sha256:3906f107fdaceaa651bbebfe86719c2624cb8ab4316958f0a5cc619d5cf5c691", size = 248923 },
-    { url = "https://files.pythonhosted.org/packages/ce/d7/0a35f63676fc0a8f24474b7d91b2e5a7c22a62eb1fa77af53d0a94952aa1/dlt_pendulum-3.0.2-cp313-cp313-macosx_10_12_x86_64.whl", hash = "sha256:e21a8bbb35a295ea1fbfe2909d3a7c3e8aaef9994da690d0def95f26b7b52925", size = 331350 },
-    { url = "https://files.pythonhosted.org/packages/b7/ac/91d9990dd5fc1f9fa73e07542bfc843a92b3587574b64981678207205e3d/dlt_pendulum-3.0.2-cp313-cp313-macosx_11_0_arm64.whl", hash = "sha256:21a254a9afe8d748b9e6d72becad23b8e28ae9beb820758da7887f96b5d03f72", size = 319652 },
-    { url = "https://files.pythonhosted.org/packages/78/13/2fe2d4eefa0c451e04e0f950c5f8f4caaae52248a47f2b237f032c4558ff/dlt_pendulum-3.0.2-cp313-cp313-manylinux_2_17_aarch64.manylinux2014_aarch64.whl", hash = "sha256:cf864c60a73b692d4f2dfc8f5ee38535e2f4e26ba37b90d8e008c631dd2c6623", size = 334072 },
-    { url = "https://files.pythonhosted.org/packages/9c/9e/753fdaf3ea8f695e3648f050833825afe7bca23e1cbb10923087ffd0c693/dlt_pendulum-3.0.2-cp313-cp313-manylinux_2_17_ppc64le.manylinux2014_ppc64le.whl", hash = "sha256:c210fbdab7456270731b0dc0e108085739449e6e9962e46bb2afb863cbe48e84", size = 370345 },
-    { url = "https://files.pythonhosted.org/packages/47/e6/67f74c2ca5cdb1b2af98fe400fa070e01067f83568b741d5824ac092ec8f/dlt_pendulum-3.0.2-cp313-cp313-manylinux_2_17_s390x.manylinux2014_s390x.whl", hash = "sha256:e62f789864318e037db1efc12fa62e21de911584e790d7914689bd8444af919c", size = 425690 },
-    { url = "https://files.pythonhosted.org/packages/1d/64/b5b781663a4ffd4242984581d36e452dac016e8f717f7fc06a9156f10531/dlt_pendulum-3.0.2-cp313-cp313-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:4d1472f911a88b9eed7606dc76010142a7ed7a2a243eabc22bd2c228c3812ad0", size = 346132 },
-    { url = "https://files.pythonhosted.org/packages/b6/ef/af74bdc9532f7f947bbd4441b1caa2e0e72555ef8f2b856b2321976da5b6/dlt_pendulum-3.0.2-cp313-cp313-musllinux_1_1_aarch64.whl", hash = "sha256:a6fb800dc275487f064ffd30ca1fc142e1a1918c50d0a18cd136c91085802830", size = 511868 },
-    { url = "https://files.pythonhosted.org/packages/e0/00/fff1d92922165b85aafc948d724ed0d492bfa5d388e679ee1dc44ec411e4/dlt_pendulum-3.0.2-cp313-cp313-musllinux_1_1_x86_64.whl", hash = "sha256:1ea898cf16d8e3d5064041ef775889103ebddb9c094d8198ee732eee5169301c", size = 515426 },
-    { url = "https://files.pythonhosted.org/packages/51/f6/1df8146baeb4f5d3c9e59050e445502a764408b004cb4ef520eadd778b34/dlt_pendulum-3.0.2-cp313-cp313-win_amd64.whl", hash = "sha256:6daf6ff583c2e0f03de0f6f8b07eb8db7f4913180cd2c5357014671bf8c6b460", size = 255649 },
-    { url = "https://files.pythonhosted.org/packages/7a/3e/a9d83ab73177b24daa6d81e25f9811250edf1a9570a5614cfc08857a9da5/dlt_pendulum-3.0.2-cp313-cp313-win_arm64.whl", hash = "sha256:016e2055964eb33ca3636dc580e4f8f5923285cfc3597e46ce053bbad84b0611", size = 248918 },
-    { url = "https://files.pythonhosted.org/packages/b1/09/6edf1a82b9715a7e66e525f40e91b8a0b32d110729c7053ac692a0b47547/dlt_pendulum-3.0.2-cp39-cp39-macosx_10_12_x86_64.whl", hash = "sha256:7c7a0f0e5322f3d0855a3a3887f6b1d1a6d6ed13954140c08c48d603c9b3c37b", size = 335123 },
-    { url = "https://files.pythonhosted.org/packages/80/e0/03c137f76323b9dc1b8070b05ec78223e2f23c305bbb36edf1a60f707daa/dlt_pendulum-3.0.2-cp39-cp39-macosx_11_0_arm64.whl", hash = "sha256:8151275957ba13a035f775fcb4c4ea8fd0d030150647f5020424ab30db16597b", size = 323598 },
-    { url = "https://files.pythonhosted.org/packages/36/20/b5410c6ae5c5277f210067ca882e5854ee19722b1433c17257f243a919c8/dlt_pendulum-3.0.2-cp39-cp39-manylinux_2_17_aarch64.manylinux2014_aarch64.whl", hash = "sha256:ca7b33497fe89a8fe01fb2f9983d5418ea2842fbd3c40d9d590a548572844c02", size = 337424 },
-    { url = "https://files.pythonhosted.org/packages/47/a0/ee389c196cd404c8966cea85a478db001cc086c983a0b9952da29d959922/dlt_pendulum-3.0.2-cp39-cp39-manylinux_2_17_ppc64le.manylinux2014_ppc64le.whl", hash = "sha256:2c6cdc9e075feea712acddb498e26d0660d99356b9587c540aa6941782de415a", size = 373110 },
-    { url = "https://files.pythonhosted.org/packages/b5/fe/abca9d1c4fc4d5be53ea8041b5fc34f0c30b1fb4ecafa8996e47bc103d1f/dlt_pendulum-3.0.2-cp39-cp39-manylinux_2_17_s390x.manylinux2014_s390x.whl", hash = "sha256:a703edd72df4d446edcea982270ee9c3caba55d7824c1516f194574d005002f0", size = 429074 },
-    { url = "https://files.pythonhosted.org/packages/94/2c/c8c626578124ff14d7a0442ab70402c0b4059fef83dbaa6874380f500fa1/dlt_pendulum-3.0.2-cp39-cp39-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:f6e51eddce1b74f68dbcca5b25c077fb9c05ade96075e1d0879fb4c1069041de", size = 349455 },
-    { url = "https://files.pythonhosted.org/packages/7d/f4/b041838796772728fe4ea93e43bb45702a72a88c3768fb4c3ecd2b414cb9/dlt_pendulum-3.0.2-cp39-cp39-musllinux_1_1_aarch64.whl", hash = "sha256:a7ba694566cab9356025eea0e7b376f615464dbfc8fe9c84a4c831839720921f", size = 515537 },
-    { url = "https://files.pythonhosted.org/packages/d2/b2/32cc6f3ca252927182e09da2f7bf8de7ea190ea104aec088965094b0f75d/dlt_pendulum-3.0.2-cp39-cp39-musllinux_1_1_x86_64.whl", hash = "sha256:fae8176d8da338c50d044110a0eadf8cc9a723e87163d87cf5967ecb08461ac2", size = 518456 },
-    { url = "https://files.pythonhosted.org/packages/08/24/1a38249415322127cb2e7da7869383d8ecb21f63b95b9d4ecfbad2cc62e6/dlt_pendulum-3.0.2-cp39-cp39-win_amd64.whl", hash = "sha256:bf73ac54fbe2807097da987c2f01b7d333dd90dd8978ee2e642cae213c6b7b48", size = 256777 },
-    { url = "https://files.pythonhosted.org/packages/18/01/62aefc7696fac788fceca13a10dbe065cdc9c351aecba62f6a9b7d5307f8/dlt_pendulum-3.0.2-pp310-pypy310_pp73-macosx_10_12_x86_64.whl", hash = "sha256:84de2669352881ae6f5aebf17f109ee5ef4302a7a5807f72e643ea7675dbc54b", size = 334745 },
-    { url = "https://files.pythonhosted.org/packages/48/06/2ad92f9aa0198ba0cb5b410bb4c6ac365cf091bc4627571b27850615adb8/dlt_pendulum-3.0.2-pp310-pypy310_pp73-macosx_11_0_arm64.whl", hash = "sha256:898b944850fda027dbbbf635757e89220e90ac599a9c240dee01e2b191398ff5", size = 323342 },
-    { url = "https://files.pythonhosted.org/packages/ee/76/98a7eb19b08d853839f727cc4a89169528bedf1f7fb7c77ff37f4d53d1ce/dlt_pendulum-3.0.2-pp310-pypy310_pp73-manylinux_2_17_aarch64.manylinux2014_aarch64.whl", hash = "sha256:ea1335fa358b33dedd0765ab15292d3e6c29c9a02d672a12b2ec766e7a92830c", size = 337418 },
-    { url = "https://files.pythonhosted.org/packages/d0/df/a5c4225d50032a5549db2ac4caaea791b3be7802e677224d9c7229e91350/dlt_pendulum-3.0.2-pp310-pypy310_pp73-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:389182056f889c5fe551200bcc7f821d3e54e124125af95f7538df0fd7b3052d", size = 349288 },
-    { url = "https://files.pythonhosted.org/packages/06/54/0ed389e6314920e85bd9c195187399d4737379526ded2e5d9ff72bd5c35d/dlt_pendulum-3.0.2-pp310-pypy310_pp73-musllinux_1_1_aarch64.whl", hash = "sha256:1c65b3e3ec9df89f97c5c6f31e192ec2705e92421b86228d341ce98df119e96d", size = 515463 },
-    { url = "https://files.pythonhosted.org/packages/67/f5/3161fa22f4df23937b183013d4acc4a4321ed33bb1d570e09786551aa1f7/dlt_pendulum-3.0.2-pp310-pypy310_pp73-musllinux_1_1_x86_64.whl", hash = "sha256:3bda319216948917a5ef93c4ea9c86b4a6bdc97c1fdf02daf17a18daec9df218", size = 518367 },
-    { url = "https://files.pythonhosted.org/packages/ea/b8/07f05dce706e65a5e3b56c02923e408c380523c4efdad090566e3f64db9d/dlt_pendulum-3.0.2-pp310-pypy310_pp73-win_amd64.whl", hash = "sha256:f693bd8c2f0cab6b2a19166c77054857b571511107585a4e3ea9d0c166f820e2", size = 256633 },
-    { url = "https://files.pythonhosted.org/packages/bf/23/84b886db03cbe50aed632ca3b95e7f545ddacc80b9ed3b764e04cc2ba568/dlt_pendulum-3.0.2-pp39-pypy39_pp73-macosx_10_12_x86_64.whl", hash = "sha256:ca5426a96ba5ef02156251350eebab9b4d265b0373b3dc00035d401103c36e6e", size = 335339 },
-    { url = "https://files.pythonhosted.org/packages/d9/2f/23fb7b737f12ccad8bb86ca5ced2adfdf1c04a1db33fc75dd84718d003ce/dlt_pendulum-3.0.2-pp39-pypy39_pp73-macosx_11_0_arm64.whl", hash = "sha256:cb960ca1a8320b114f93c3da16c2d6c45372830b56b2624ee51c1bf605d50234", size = 323834 },
-    { url = "https://files.pythonhosted.org/packages/d4/31/051780d7389e278daa8587a63f0dfc31d3819807dce639f4882493a33750/dlt_pendulum-3.0.2-pp39-pypy39_pp73-manylinux_2_17_aarch64.manylinux2014_aarch64.whl", hash = "sha256:c6c3e0abb02f7d7d82d12afac102c83c032d92ade32bcb054d1dfc8bb46153c3", size = 337786 },
-    { url = "https://files.pythonhosted.org/packages/95/9a/c8ed2dc7895e9d74b73649aeabe68cf549ec1c5a3b4364b76bca19585ae6/dlt_pendulum-3.0.2-pp39-pypy39_pp73-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:ef2009fd3cbe55742cb8e6ae2e13193ead9d29eece4e96f4871d325e5f80df57", size = 349699 },
-    { url = "https://files.pythonhosted.org/packages/34/57/14f934d1ced1a9cdb711ea9e5e6b202b92ab995dbb87b2caf58ee79c10d9/dlt_pendulum-3.0.2-pp39-pypy39_pp73-musllinux_1_1_aarch64.whl", hash = "sha256:b13e7ccaf2e90a1bd9b022c3087a5be422a5a35ca6deb662ea9100e5d8f18a17", size = 515707 },
-    { url = "https://files.pythonhosted.org/packages/0d/8c/a43dabe8d17c4d74976617880a4bf6d994a8ec04bc56213a7ff4f8862f5a/dlt_pendulum-3.0.2-pp39-pypy39_pp73-musllinux_1_1_x86_64.whl", hash = "sha256:6e47ea014c41bc2cd64786f2607a64ae9a09ac7226d8ab03438f0677b517499e", size = 518846 },
-    { url = "https://files.pythonhosted.org/packages/36/11/4922fb2c9c1963417ef5d5d74d72b073b519ae0481104b018431292a0e91/dlt_pendulum-3.0.2-pp39-pypy39_pp73-win_amd64.whl", hash = "sha256:b3236ccce1d00eb7a956cdefdef77cda8c51c281c2642fb9c60f8e9aacc9b69b", size = 256824 },
-    { url = "https://files.pythonhosted.org/packages/91/1b/f54ae6b98800044f4c9834fcd65cf4c4caa1f87fc6e83ac6a423353169b0/dlt_pendulum-3.0.2-py3-none-any.whl", hash = "sha256:5d95953c9e7ffaef7a7c97d25e95b854e5aa4b072201dd61c942090cf6347f6f", size = 109848 },
 ]
 
 [[package]]
@@ -1210,7 +1135,7 @@ dev = [
     { name = "types-psycopg2", specifier = ">=2.9.0,<3" },
     { name = "types-requests", specifier = ">=2.28.11.7,<3" },
 ]
-dltpure = [{ name = "dlt", specifier = ">=1.7.0" }]
+dltpure = [{ name = "dlt", specifier = ">=1.10.0" }]
 facebook-ads = [{ name = "facebook-business", specifier = ">=17.0.2,<18" }]
 filesystem = [
     { name = "adlfs", specifier = ">=2023.10.0" },
@@ -4729,6 +4654,15 @@ wheels = [
     { url = "https://files.pythonhosted.org/packages/42/d5/20a6c93c50f6c6b388e8d85fbba1c960ae00ed820ec1a31ae58f35f62f74/SQLAlchemy-2.0.38-cp39-cp39-win32.whl", hash = "sha256:c09a6ea87658695e527104cf857c70f79f14e9484605e205217aae0ec27b45fc", size = 2079838 },
     { url = "https://files.pythonhosted.org/packages/24/2d/efbefd0b8206a3a811328bfa24ed3c96f7b0b6c3bfc5a2a29613e23a9d30/SQLAlchemy-2.0.38-cp39-cp39-win_amd64.whl", hash = "sha256:12f5c9ed53334c3ce719155424dc5407aaa4f6cadeb09c5b627e06abb93933a1", size = 2104028 },
     { url = "https://files.pythonhosted.org/packages/aa/e4/592120713a314621c692211eba034d09becaf6bc8848fabc1dc2a54d8c16/SQLAlchemy-2.0.38-py3-none-any.whl", hash = "sha256:63178c675d4c80def39f1febd625a6333f44c0ba269edd8a468b156394b27753", size = 1896347 },
+]
+
+[[package]]
+name = "sqlglot"
+version = "26.17.1"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/8e/86/461568bd63a43fd3c9d2dec42f9070905cd7b1a0a7e27cacfe91c2e386ff/sqlglot-26.17.1.tar.gz", hash = "sha256:518c649ff4ae9601e2f156758c21d3552db8a109872f1228e0f6e89d3712bf73", size = 5356122 }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/81/30/2b50dd8bc227cce28aa7cb4dfa8fc174d34d1b7fb65128055d308ab6af7a/sqlglot-26.17.1-py3-none-any.whl", hash = "sha256:8772f5c1d095a9600cfbe5bdd08bc345d84f875773735a6cbe6cd5abcfa43900", size = 460536 },
 ]
 
 [[package]]
