@@ -12,8 +12,8 @@ from .helpers import get_reactions_data, get_rest_pages, get_stargazers
 
 @dlt.source
 def github_reactions(
-    owner: str,
-    name: str,
+    owner: str = dlt.config.value,
+    name: str = dlt.config.value,
     access_token: str = dlt.secrets.value,
     items_per_page: int = 100,
     max_items: Optional[int] = None,
