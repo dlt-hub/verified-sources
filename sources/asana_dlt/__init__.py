@@ -7,10 +7,11 @@ functions are meant to be used as part of a data loading pipeline.
 """
 
 import typing as t
-from typing import Any, Iterable
+from typing import Any, Iterable, Sequence
 
 import dlt
 from dlt.common.typing import TDataItem
+from dlt.extract.resource import DltResource
 
 from .helpers import get_client
 from .settings import (
@@ -28,7 +29,7 @@ from .settings import (
 
 
 @dlt.source
-def asana_source() -> Any:  # should be Sequence[DltResource]:
+def asana_source(access_token: str = dlt.secrets.value) -> Sequence[DltResource]:
     """
     The main function that runs all the other functions to fetch data from Asana.
     Returns:
