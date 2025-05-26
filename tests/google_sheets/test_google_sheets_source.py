@@ -98,7 +98,11 @@ def test_full_load(destination_name: str) -> None:
     """
 
     info, pipeline = _run_pipeline(
-        destination_name=destination_name, dataset_name="test_full_load"
+        destination_name=destination_name,
+        dataset_name="test_full_load",
+        get_sheets=True,
+        get_named_ranges=False,
+        range_names=[],
     )
     assert_load_info(info)
 
@@ -635,6 +639,7 @@ def test_no_ranges():
     info, pipeline = _run_pipeline(
         destination_name="duckdb",
         dataset_name="test_table_in_middle",
+        range_names=[],
         get_sheets=False,
         get_named_ranges=False,
     )
