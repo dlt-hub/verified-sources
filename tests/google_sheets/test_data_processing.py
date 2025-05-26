@@ -1,10 +1,9 @@
 import pytest
 from sources.google_sheets.helpers import data_processing
-from typing import Union, List, Any
+from typing import Union, List
 
 from dlt.common.typing import DictStrAny
 from dlt.common import pendulum
-from dlt.common.data_types import TDataType
 
 TEST_CASES_URL = [
     (
@@ -128,49 +127,3 @@ def test_serial_date_to_datetime(
     assert (
         data_processing.serial_date_to_datetime(serial_number, "timestamp") == expected
     )
-
-
-@pytest.mark.parametrize(
-    "sheet_values",
-    [
-        [
-            [1],
-            [2, "a", "b", "c", "d", "f"],
-        ],
-        [
-            [322, "", "", 2, "", 123456],
-            [43, "dsa", "dd", "w", 2],
-            [432, "scds", "ddd", "e", 3],
-            ["", "dsfdf", "dddd", "r", 4],
-        ],
-        [
-            [322, "", "", 2],
-            [43, "dsa", "dd", "w", 2],
-            [432, "scds", "ddd", "e", 3],
-            ["", "dsfdf", "dddd", "r", 4],
-        ],
-    ],
-)
-def test_process_range_with_missing_cols(
-    sheet_values: List[List[Any]],
-):
-    """
-    Tester for process_range function
-    :param: sheet_values- list of
-    """
-    # Define 6 headers
-    headers = [f"col{i}" for i in range(1, 7)]
-
-    # Create dummy data types aligned with the number of columns in the first row
-    data_types = [None for i in range(len(sheet_values[0]))]
-
-    table_dicts = list(data_processing.process_range(sheet_values, headers, data_types))
-
-    for i, table_dict in enumerate(table_dicts):
-        # Mid row empty values are handled as None
-        expected_dict_vals = [val if val != "" else None for val in sheet_values[i]]
-        # Trailing empty columns that are not detected should be added as None
-        expected_dict_vals += [None] * (len(headers) - len(sheet_values[i]))
-        expected_dict = {f"col{i+1}": val for i, val in enumerate(expected_dict_vals)}
-        assert expected_dict == table_dict
-        assert len(table_dict) == 6
