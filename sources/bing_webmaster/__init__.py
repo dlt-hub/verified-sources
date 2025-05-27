@@ -25,10 +25,12 @@ def source(
     A dlt source for the Bing Webmaster api.
     It groups resources for the APIs which return organic search traffic statistics
     Args:
-        site_urls: List[str]: A list of site_urls, e.g, ["dlthub.com", "dlthub.de"]. Use this if you need the weekly traffic per site_url and page
-        site_url_pages: Iterable[Dict[str, str]]: A list of pairs of site_url and page. Use this if you need the weekly traffic per site_url, page, and query
+        site_urls: List[str]: A list of site_urls to get weekly traffic statistics for
+        site_url_pages: Iterable[Dict[str, str]]: A list of pairs of site_url and page for which to return weekly traffic per site_url, page, and query
     Returns:
         Sequence[DltResource]: A sequence of resources that can be selected from including page_stats and page_query_stats.
+    Examples:
+        >>> source(site_urls=["dlthub.de", "dlthub.com"], site_url_pages=[{"site_url": "dlthub.com", "page": "https://www.dlthub.com/docs"}])
     """
     return (
         page_stats(site_urls),
