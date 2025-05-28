@@ -1,5 +1,6 @@
 import dlt
 from quickbooks_online import quickbooks_online
+from quickbooks_online.settings import sandbox_env, production_env
 
 
 def load_customer() -> None:
@@ -8,7 +9,7 @@ def load_customer() -> None:
         destination="duckdb",
         dataset_name="quickbooks_online",
     )
-    load_info = pipeline.run(quickbooks_online())
+    load_info = pipeline.run(quickbooks_online(environment=sandbox_env))
     print(load_info)
 
 

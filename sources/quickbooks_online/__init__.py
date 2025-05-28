@@ -23,7 +23,7 @@ from quickbooks.objects.invoice import Invoice
 
 @dlt.source(name="quickbooks_online")
 def quickbooks_online(
-    environment: str = sandbox_env,
+    environment: str,
     client_id: str = dlt.secrets.value,
     client_secret: str = dlt.secrets.value,
     refresh_token: str = dlt.secrets.value,

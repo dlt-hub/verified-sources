@@ -27,13 +27,11 @@ To grab credentials and initialize the verified source, please refer to the [ful
     ```toml
     # put your secret values and credentials here. do not share this file and do not push it to github
     [sources.quickbooks_online]
-    environment=""
     company_id=""
     client_id=""
     client_secret=""
-    access_token=""
     refresh_token=""
-    redirect_uri=""
+    redirect_url=""
     ```
 
 3. Enter credentials for your chosen destination as per the [docs.](https://dlthub.com/docs/dlt-ecosystem/destinations/)
