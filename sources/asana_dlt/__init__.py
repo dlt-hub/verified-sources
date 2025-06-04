@@ -47,8 +47,9 @@ def asana_source(access_token: str = dlt.secrets.value) -> Sequence[DltResource]
         Yields:
             dict: The workspace data.
         """
-        yield from get_client(access_token).workspaces.find_all(opt_fields=",".join(fields))
-
+        yield from get_client(access_token).workspaces.find_all(
+            opt_fields=",".join(fields)
+        )
 
     @dlt.transformer(
         data_from=workspaces,
@@ -74,7 +75,6 @@ def asana_source(access_token: str = dlt.secrets.value) -> Sequence[DltResource]
                 opt_fields=",".join(fields),
             )
         )
-
 
     @dlt.transformer(
         data_from=projects,
@@ -103,7 +103,6 @@ def asana_source(access_token: str = dlt.secrets.value) -> Sequence[DltResource]
             )
         ]
 
-
     @dlt.transformer(data_from=workspaces, write_disposition="replace")
     @dlt.defer
     def tags(
@@ -126,7 +125,6 @@ def asana_source(access_token: str = dlt.secrets.value) -> Sequence[DltResource]
                 opt_fields=",".join(fields),
             )
         ]
-
 
     @dlt.transformer(data_from=projects, write_disposition="merge", primary_key="gid")
     def tasks(
@@ -157,7 +155,6 @@ def asana_source(access_token: str = dlt.secrets.value) -> Sequence[DltResource]
             )
         )
 
-
     @dlt.transformer(
         data_from=tasks,
         write_disposition="append",
@@ -184,7 +181,6 @@ def asana_source(access_token: str = dlt.secrets.value) -> Sequence[DltResource]
             )
         ]
 
-
     @dlt.transformer(
         data_from=workspaces,
         write_disposition="replace",
@@ -210,7 +206,6 @@ def asana_source(access_token: str = dlt.secrets.value) -> Sequence[DltResource]
                 opt_fields=",".join(fields),
             )
         ]
-
 
     @dlt.transformer(
         data_from=workspaces,
@@ -249,4 +244,3 @@ def asana_source(access_token: str = dlt.secrets.value) -> Sequence[DltResource]
         teams,
         users,
     ]
-
