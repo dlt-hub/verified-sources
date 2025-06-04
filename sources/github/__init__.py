@@ -67,7 +67,9 @@ def github_reactions(
 
 @dlt.source(max_table_nesting=2)
 def github_repo_events(
-    owner: str, name: str, access_token: Optional[str] = None
+    owner: str = dlt.config.value,
+    name: str = dlt.config.value,
+    access_token: Optional[str] = None,
 ) -> DltResource:
     """Gets events for repository `name` with owner `owner` incrementally.
 
@@ -112,8 +114,8 @@ def github_repo_events(
 
 @dlt.source
 def github_stargazers(
-    owner: str,
-    name: str,
+    owner: str = dlt.config.value,
+    name: str = dlt.config.value,
     access_token: str = dlt.secrets.value,
     items_per_page: int = 100,
     max_items: Optional[int] = None,
