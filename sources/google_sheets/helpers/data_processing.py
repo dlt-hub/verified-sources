@@ -251,6 +251,9 @@ def process_range(
         # empty row; skip
         if not row:
             continue
+        # align trailing empty columns
+        data_types += [None] * (len(headers) - len(row))
+        row += [""] * (len(headers) - len(row))
         table_dict = {}
         # process both rows and check for differences to spot dates
         for val, header, data_type in zip(row, headers, data_types):

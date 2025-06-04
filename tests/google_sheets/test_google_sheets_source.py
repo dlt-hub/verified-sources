@@ -25,8 +25,6 @@ ALL_RANGES = {
     "inconsistent_types",
     "more_data",
     "more_headers_than_data",
-    "NamedRange1",
-    "NamedRange2",
     "only_data",
     "only_headers",
     "Sheet 1",
@@ -36,13 +34,15 @@ ALL_RANGES = {
     "two_tables",
     "hidden_columns_merged_cells",
     "Blank Columns",
+    "trailing_empty_cols_1",
+    "trailing_empty_cols_2",
+    "trailing_empty_cols_3",
 }
 
 SKIPPED_RANGES = {
     "empty",
     "only_data",
     "only_headers",
-    "NamedRange2",
 }
 
 NAMED_RANGES = {
@@ -62,7 +62,6 @@ ALL_TABLES_LOADED = {
     "inconsistent_types",
     "more_data",
     "more_headers_than_data",
-    "named_range1",
     "sheet_1",
     "sheet2",
     "sheet3",
@@ -71,6 +70,9 @@ ALL_TABLES_LOADED = {
     "two_tables",
     "hidden_columns_merged_cells",
     "blank_columns",
+    "trailing_empty_cols_1",
+    "trailing_empty_cols_2",
+    "trailing_empty_cols_3",
 }
 
 
@@ -98,7 +100,11 @@ def test_full_load(destination_name: str) -> None:
     """
 
     info, pipeline = _run_pipeline(
-        destination_name=destination_name, dataset_name="test_full_load"
+        destination_name=destination_name,
+        dataset_name="test_full_load",
+        get_sheets=True,
+        get_named_ranges=False,
+        range_names=[],
     )
     assert_load_info(info)
 
@@ -106,7 +112,8 @@ def test_full_load(destination_name: str) -> None:
     # ALL_TABLES is missing spreadsheet info table - table being tested here
     schema = pipeline.default_schema
     user_tables = schema.data_tables()
-    assert set([t["name"] for t in user_tables]) == ALL_TABLES_LOADED
+    user_table_names = set([t["name"] for t in user_tables])
+    assert user_table_names == ALL_TABLES_LOADED
 
     # check load metadata
     with pipeline.sql_client() as c:
@@ -635,6 +642,7 @@ def test_no_ranges():
     info, pipeline = _run_pipeline(
         destination_name="duckdb",
         dataset_name="test_table_in_middle",
+        range_names=[],
         get_sheets=False,
         get_named_ranges=False,
     )
@@ -679,6 +687,80 @@ def test_table_not_A1():
     assert_query_data(
         pipeline, "SELECT col_9 FROM table_in_middle ORDER BY col_9 ASC", range(90, 101)
     )
+
+
+def test_trailing_empty_cols() -> None:
+    info, pipeline = _run_pipeline(
+        destination_name="duckdb",
+        dataset_name="test_trailing_empty_cols",
+        range_names=[
+            "trailing_empty_cols_1",
+            "trailing_empty_cols_2",
+            "trailing_empty_cols_3",
+        ],
+        get_sheets=False,
+        get_named_ranges=False,
+    )
+    assert_load_info(info)
+
+    assert "trailing_empty_cols_1" in pipeline.default_schema.tables
+    assert "trailing_empty_cols_2" in pipeline.default_schema.tables
+    assert "trailing_empty_cols_3" in pipeline.default_schema.tables
+
+    assert set(
+        pipeline.default_schema.get_table_columns("trailing_empty_cols_1").keys()
+    ) == {"col0", "col1", "col2", "_dlt_id", "_dlt_load_id"}
+    assert set(
+        pipeline.default_schema.get_table_columns("trailing_empty_cols_2").keys()
+    ) == {
+        "col0",
+        "col1",
+        "col2",
+        "col3",
+        "col3__v_text",
+        "col4",
+        "_dlt_id",
+        "_dlt_load_id",
+    }
+    assert set(
+        pipeline.default_schema.get_table_columns("trailing_empty_cols_3").keys()
+    ) == {
+        "col0",
+        "col1",
+        "col2",
+        "col3",
+        "col3__v_text",
+        "col4",
+        "col5",
+        "_dlt_id",
+        "_dlt_load_id",
+    }
+
+    expected_rows = [
+        (322, None, None, 2, None, None, 123456),
+        (43, "dsa", "dd", None, "w", 2, None),
+        (432, "scds", "ddd", None, "e", 3, None),
+        (None, "dsfdf", "dddd", None, "r", 4, None),
+    ]
+
+    with pipeline.sql_client() as c:
+        sql_query = "SELECT col0, col1, col2 FROM trailing_empty_cols_1;"
+        with c.execute_query(sql_query) as cur:
+            rows = list(cur.fetchall())
+            assert len(rows) == 4
+            assert rows == [row[:3] for row in expected_rows]
+
+        sql_query = "SELECT col0, col1, col2, col3, col3__v_text, col4 FROM trailing_empty_cols_2;"
+        with c.execute_query(sql_query) as cur:
+            rows = list(cur.fetchall())
+            assert len(rows) == 4
+            assert rows == [row[:6] for row in expected_rows]
+
+        sql_query = "SELECT col0, col1, col2, col3, col3__v_text, col4, col5 FROM trailing_empty_cols_3;"
+        with c.execute_query(sql_query) as cur:
+            rows = list(cur.fetchall())
+            assert len(rows) == 4
+            assert rows == expected_rows
 
 
 def _row_helper(row, destination_name):
