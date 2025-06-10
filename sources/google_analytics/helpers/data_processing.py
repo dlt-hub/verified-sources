@@ -48,7 +48,6 @@ def to_dict(item: Any) -> Iterator[TDataItem]:
             including_default_value_fields=False,
         )
     )
-    print(item)
     yield item
 
 
@@ -177,5 +176,14 @@ def _resolve_dimension_value(dimension_name: str, dimension_value: str) -> Any:
         return pendulum.from_format(dimension_value, "YYYYMMDDHH", tz="UTC")
     elif dimension_name == "dateHourMinute":
         return pendulum.from_format(dimension_value, "YYYYMMDDHHmm", tz="UTC")
+    elif dimension_name == "yearMonth":
+        return pendulum.from_format(dimension_value, "YYYYMM", tz="UTC")
+    elif dimension_name == "isoYearIsoWeek":
+        # GA4 returns isoYearIsoWeek in format "202401"
+        year = int(dimension_value[:4])
+        week = int(dimension_value[4:])
+        return pendulum.parse(f"{year}-W{week:02d}", strict=False, tz="UTC")
+    elif dimension_name == "year":
+        return pendulum.from_format(dimension_value, "YYYY", tz="UTC")
     else:
         return dimension_value
