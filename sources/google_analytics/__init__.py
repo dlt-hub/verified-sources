@@ -4,7 +4,6 @@ Defines all the sources and resources needed for Google Analytics V4
 from typing import Iterator, List, Optional, Union
 
 import dlt
-from apiclient.discovery import Resource
 from dlt.common.typing import DictStrAny, TDataItem
 from dlt.sources import DltResource
 from dlt.sources.credentials import GcpOAuthCredentials, GcpServiceAccountCredentials
@@ -14,6 +13,15 @@ from google.analytics.data_v1beta.types import GetMetadataRequest, Metadata
 from .helpers import basic_report
 from .helpers.data_processing import to_dict
 from .settings import START_DATE
+
+TIME_DIMENSIONS = {
+    "date",
+    "isoYearIsoWeek",
+    "year",
+    "yearMonth",
+    "dateHour",
+    "dateHourMinute",
+}
 
 
 @dlt.source(max_table_nesting=2)
@@ -34,6 +42,9 @@ def google_analytics(
         property_id: A numeric Google Analytics property id.
             More info: https://developers.google.com/analytics/devguides/reporting/data/v1/property-id.
         queries: List containing info on all the reports being requested with all the dimensions and metrics per report.
+            Each query can specify its own time granularity by including the appropriate time dimension
+            (e.g. "date", "isoYearIsoWeek", "yearMonth", etc.). If no time dimension is specified,
+            "date" will be used for incremental loading.
         start_date: The string version of the date in the format yyyy-mm-dd and some other values.
             More info: https://developers.google.com/analytics/devguides/reporting/data/v1/rest/v1beta/DateRange.
             Can be left empty for default incremental load behavior.
@@ -68,9 +79,12 @@ def google_analytics(
     for query in queries:
         # always add "date" to dimensions so we are able to track the last day of a report
         dimensions = query["dimensions"]
-        if "date" not in dimensions:
-            # make a copy of dimensions
-            dimensions = dimensions + ["date"]
+        time_dimension = next(
+            (dim for dim in dimensions if dim in TIME_DIMENSIONS),
+            "date",  # Default to "date" if no time dimension found
+        )
+        if time_dimension not in dimensions:
+            dimensions += [time_dimension]
         resource_name = query["resource_name"]
         resource_list.append(
             dlt.resource(basic_report, name=resource_name, write_disposition="append")(
@@ -82,7 +96,7 @@ def google_analytics(
                 resource_name=resource_name,
                 start_date=start_date,
                 last_date=dlt.sources.incremental(
-                    "date", primary_key=()
+                    time_dimension, primary_key=()
                 ),  # pass empty primary key to avoid unique checks, a primary key defined by the resource will be used
             )
         )
@@ -90,7 +104,9 @@ def google_analytics(
 
 
 @dlt.resource(selected=False)
-def get_metadata(client: Resource, property_id: int) -> Iterator[Metadata]:
+def get_metadata(
+    client: BetaAnalyticsDataClient, property_id: int
+) -> Iterator[Metadata]:
     """
     Get all the metrics and dimensions for a report.
 
