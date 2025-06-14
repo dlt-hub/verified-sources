@@ -27,7 +27,7 @@ from .helpers import (
     standalone=True,
 )
 def kafka_consumer(
-    topics: Union[str, List[str]],
+    topics: List[str] = dlt.config.value,
     credentials: Union[KafkaCredentials, Consumer] = dlt.secrets.value,
     msg_processor: Optional[
         Callable[[Message], Dict[str, Any]]
@@ -60,9 +60,6 @@ def kafka_consumer(
     Yields:
         Iterable[TDataItem]: Kafka messages.
     """
-    if not isinstance(topics, list):
-        topics = [topics]
-
     if isinstance(credentials, Consumer):
         consumer = credentials
     elif isinstance(credentials, KafkaCredentials):
