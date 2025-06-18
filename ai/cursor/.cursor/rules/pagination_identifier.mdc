@@ -1,0 +1,21 @@
+---
+description: Decision tree for selecting the correct paginator type
+globs: 
+alwaysApply: true
+---
+
+# Pagination Type Decision Tree
+
+1. Does the **response itself** expose a direct “next-page” link?  
+   - **YES – in the JSON body** (e.g. `{"next":"…"}`, `{"links":{"next":"…"}}`) → `json_link`  
+   - **YES – in the HTTP headers** (`Link: <…>; rel="next"`, `X-Next-Page: …`) → `header_link`  
+   - **NO** → go to 2
+
+2. Does the **request/URL** use numeric paging parameters?  
+   - **Offset/Skip + Limit** (`offset`, `skip`, `start`, paired with `limit`, `size` …) → `offset`  
+   - **Page + Page-size** (`page`, `page_number`, often with `page_size`, `per_page` …) → `page_number`  
+   - **NO numeric scheme detected** → go to 3
+
+3. Does the API expose a **cursor or token** value?  
+   - **YES** (cursor in response JSON or query param such as `cursor`, `nextCursor`, `token`, `nextToken`) → `cursor`  
+   - **NO** → `single_page`

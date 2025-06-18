@@ -1,0 +1,42 @@
+---
+description: Important reference for choosing the correct data selector and incremental configuration
+globs: 
+alwaysApply: true
+---
+
+# 1. Select the right data from the response
+
+In each endpoint the data (typically an array of objects) is be wrapped
+differently. You can unwrap this data by using `data_selector`
+
+Data Selection Patterns:
+```python
+"endpoint": {
+    "data_selector": "data.items.*",  # Basic array selection
+    "data_selector": "data.*.items",  # Nested array selection
+    "data_selector": "data.{id,name,created_at}",  # Field selection
+}
+```
+
+# 2. Select the right incremental loading configuration
+
+## Incremental Loading Configuration
+Configure incremental loading for efficient data extraction. Your task is to get only new data from
+the endpoint.
+
+You will identify the query parameter that allows to get items that are newer than certain date. As an example,
+the end result will be:
+
+```py
+{
+    "path": "posts",
+    "data_selector": "results",
+    "params": {
+        "created_since": "{incremental.start_value}",  # Uses cursor value in query parameter
+    },
+    "incremental": {
+        "cursor_path": "created_at",
+        "initial_value": "2024-01-25T00:00:00Z",
+    },
+}
+```

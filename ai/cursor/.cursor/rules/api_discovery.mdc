@@ -1,0 +1,29 @@
+---
+description: Checklist rule to discover API
+globs: 
+alwaysApply: true
+---
+
+# API Discovery Checklist
+
+Use API documentation (OpenAPI spec, docs, or existing code) for the following:
+
+## 1. Base Configuration
+- [ ] Base URL: ________________
+- [ ] Auth type: ________________  
+→ See @auth_patterns.mdc for configuration syntax and 
+
+## 2. Resource Inventory
+
+Use API documentation (OpenAPI spec, docs, or existing code) for the following:
+
+For each GET endpoint:
+- [ ] Path: ________________
+- [ ] Pagination type: ________________
+→ See @pagination_identifier.mdc for quick identification
+
+## 3. Response Analysis
+For each endpoint:
+- [ ] Data selector path: ________________
+- [ ] Incremental field: ________________
+→ See @response_patterns.mdc for common structures

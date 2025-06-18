@@ -1,0 +1,9 @@
+---
+description: Checklist to validate
+globs: 
+alwaysApply: true
+---
+
+## 1. Make sure the Rest API source config uses keys correctly.
+## 2. Test the configuration with mock responses.
+## 3. Test pagination for each endpoint type.

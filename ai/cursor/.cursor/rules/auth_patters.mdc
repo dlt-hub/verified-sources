@@ -1,0 +1,54 @@
+---
+description: Important reference for choosing the correct authentication method
+globs: 
+alwaysApply: true
+---
+
+# Authentication Methods
+
+## API Key in Query or Header
+```python
+"auth": {
+    "type": "api_key", 
+    "name": "api_key", 
+    "api_key": dlt.secrets["api_key"], 
+    "location": "query" # or "header"
+}
+```
+
+## Bearer Token
+```python
+"auth": {
+    "type": "bearer", 
+    "token": dlt.secrets["bearer_token"]
+}
+```
+
+## Basic Authentication
+```python
+"auth": {
+    "type": "basic",
+    "username": dlt.secrets["username"],
+    "password": dlt.secrets["password"]
+}
+```
+
+## OAuth2 Athentication
+```python
+"auth": {
+    "type": "oauth2",
+    "token_url": "https://auth.example.com/oauth/token",
+    "client_id": dlt.secrets["client_id"],
+    "client_secret": dlt.secrets["client_secret"],
+    "scopes": ["read", "write"]
+}
+```
+
+## Make it easier for the user to enter credentials
+
+Either adjust the field and key values in toml files in `./.dlt`
+or ask the user to use equivalent environment variables.
+Use https://dlthub.com/docs/general-usage/credentials for reference on
+how to setup credentials with dlt.
+
+After the user enters their credentials, test with a simple API call from the documentation.

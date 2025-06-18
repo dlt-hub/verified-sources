@@ -1,0 +1,69 @@
+---
+description: An End to End Rest API Source example
+globs: 
+alwaysApply: true
+---
+
+```python
+from dlt.sources.rest_api import RESTAPIConfig, rest_api_resources
+
+@dlt.source
+def github_source(github_token=dlt.secrets.value):
+    config: RESTAPIConfig = {
+        "client": {
+            "base_url": "https://api.github.com/repos/dlt-hub/dlt/",
+            "auth": {
+                "token": github_token,
+            },
+        },
+        "resource_defaults": {
+            "primary_key": "id",
+            "write_disposition": "merge",
+            "endpoint": {
+                "params": {
+                    "per_page": 100,
+                },
+            },
+        },
+        "resources": [
+            {
+                "name": "issues",
+                "endpoint": {
+                    "path": "issues",
+                    "params": {
+                        "sort": "updated",
+                        "direction": "desc",
+                        "state": "open",
+                        "since": {
+                            "type": "incremental",
+                            "cursor_path": "updated_at",
+                            "initial_value": "2024-01-25T11:21:28Z",
+                        },
+                    },
+                    "data_selector": "results",
+                },
+            },
+            {
+                "name": "issue_comments",
+                "endpoint": {
+                    "path": "issues/{resources.issues.number}/comments",
+                },
+                "include_from_parent": ["id"],
+            },
+        ],
+    }
+
+    yield from rest_api_resources(config)
+
+def load_github() -> None:
+    pipeline = dlt.pipeline(
+        pipeline_name="rest_api_github",
+        destination="duckdb",
+        dataset_name="rest_api_data",
+        progress="log",
+        dev_mode=True,
+    )
+
+    load_info = pipeline.run(github_source())
+    print(load_info)
+```

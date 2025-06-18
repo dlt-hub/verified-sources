@@ -1,0 +1,50 @@
+---
+description: Master rule
+globs: 
+alwaysApply: true
+---
+
+# REST API Source Building Workflow
+
+## Phase 0: Prerequisites
+0. You will be using dlt which stands for `data load tool`, an open-source python library. 
+Before proceeding, you must have the dlt REST API documentation in hand.
+If that documentation is missing, pause and explicitly ask the user to provide it. 
+As a last resort, consult https://dlthub.com/docs/dlt-ecosystem/verified-sources/rest_api/ for guidance.
+2. Ensure you have a boilerplate `<source>_pipeline.py` example file
+3. Since you will be working with a specific REST‑API source, confirm you have the documentation for it.
+It can be an OpenAPI spec, other documentation, existing code, or even a web link.
+If it is missing, explicitly ask the user to provide it!
+
+## Phase 1: Setup
+The user should already have a Python virtual environment activated.
+If a virtual environment is missing, create one:
+```
+python -m venv myenv
+# Linux / macOS
+source myenv/bin/activate
+# Windows (PowerShell)
+.\myenv\Scripts\Activate
+```
+Install core dependencies (inside the activated venv):
+```
+pip install dlt==1.12.0a1
+pip install -r requirements.txt
+```
+
+## Phase 2: Extract Core Configuration
+→ Use rule: @api_discovery.mdc
+
+## Phase 3: Use Extracted Core Configuration to write pipeline script in `<source>_pipeline.py`
+→ Use rule: @end_to_end_example.mdc
+
+## Phase 4: Test & Validate
+→ Use rule: @validation_checklist.mdc
+
+## Phase 5: Repeat this workflow until you have a working rest api source
+
+## Phase 6: If the pipeline's destination is DuckDB, take advantage of dlt’s built‑in Marimo notebook instead of writing ad‑hoc SQL queries:
+```
+dlt pipeline <pipeline_name> show --marimo
+```
+This command launches an interactive notebook pre‑loaded with your tables, making it easy to browse schemas, preview records, and debug load issues in a familiar, notebook‑style interface.
