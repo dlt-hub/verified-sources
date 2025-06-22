@@ -222,6 +222,7 @@ def zendesk_support(
     pivot_ticket_fields: bool = True,
     start_date: Optional[TAnyDateTime] = DEFAULT_START_DATE,
     end_date: Optional[TAnyDateTime] = None,
+    include_ticket_comments: bool = False,
 ) -> Iterable[DltResource]:
     """
     Retrieves data from Zendesk Support for tickets, users, brands, organizations, and groups.
@@ -238,6 +239,9 @@ def zendesk_support(
         start_date: The start time of the range for which to load. Defaults to January 1st 2000.
         end_date: The end time of the range for which to load data.
             If end time is not provided, the incremental loading will be enabled and after initial run, only new data will be retrieved
+        include_ticket_comments: You can include comments in the ticket_events by setting this to True.
+            If set to False, any comment present in the ticket update is described only by boolean flags
+            'comment_present' and 'comment_public'. Defaults to False
 
     Returns:
         Sequence[DltResource]: Multiple dlt resources.
@@ -263,14 +267,21 @@ def zendesk_support(
             end_value=end_date_ts,
             allow_external_schedulers=True,
         ),
+        include_ticket_comments: bool = False,
     ) -> Iterator[TDataItem]:
         # URL For ticket events
         # 'https://d3v-dlthub.zendesk.com/api/v2/incremental/ticket_events.json?start_time=946684800'
+
+        params = {"start_time": timestamp.last_value}
+        if include_ticket_comments:
+            # sideload the actual values of the comments
+            params["include"] = "comment_events"
+
         event_pages = zendesk_client.get_pages(
             "/api/v2/incremental/ticket_events.json",
             "ticket_events",
             PaginationType.STREAM,
-            params={"start_time": timestamp.last_value},
+            params=params,
         )
         for page in event_pages:
             yield page
@@ -414,7 +425,10 @@ def zendesk_support(
     # loading base tables
     resource_list = [
         ticket_fields_resource(zendesk_client=zendesk_client),
-        ticket_events(zendesk_client=zendesk_client),
+        ticket_events(
+            zendesk_client=zendesk_client,
+            include_ticket_comments=include_ticket_comments,
+        ),
         ticket_table(zendesk_client=zendesk_client, pivot_fields=pivot_ticket_fields),
         ticket_metric_table(zendesk_client=zendesk_client),
     ]
