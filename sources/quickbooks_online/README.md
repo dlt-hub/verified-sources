@@ -18,12 +18,10 @@ Here, we chose DuckDB as the destination. Alternatively, you can also choose red
 
 ## Setup verified source and pipeline example
 
-To grab credentials and initialize the verified source, please refer to the [full documentation here.](https://dlthub.com/docs/dlt-ecosystem/verified-sources/salesforce)
-
-## Add credentials
+### Add credentials
 
 1. Open `.dlt/secrets.toml`.
-2. Put these credentials in, these can be sourced from quickbooks developer portal and quickbooks oauth playground:
+2. Put the credentials in, these can be sourced from [quickbooks developer portal and quickbooks oauth playground](https://developer.intuit.com/app/developer/qbo/docs/develop/authentication-and-authorization/oauth-2.0#authorization-request):
     ```toml
     # put your secret values and credentials here. do not share this file and do not push it to github
     [sources.quickbooks_online]
@@ -34,9 +32,7 @@ To grab credentials and initialize the verified source, please refer to the [ful
     redirect_url=""
     ```
 
-3. Enter credentials for your chosen destination as per the [docs.](https://dlthub.com/docs/dlt-ecosystem/destinations/)
-
-## Run the pipeline example
+### Run the pipeline example
 
 1. Install the necessary dependencies by running the following command:
     ```bash

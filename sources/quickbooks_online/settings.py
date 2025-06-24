@@ -1,5 +1,3 @@
-from intuitlib.enums import Scopes
-
 discovery_document_url_sandbox = (
     "https://developer.api.intuit.com/.well-known/openid_sandbox_configuration"
 )

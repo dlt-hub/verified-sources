@@ -34,7 +34,7 @@ def quickbooks_online(
     Retrieves data from Quickbooks using the Quickbooks API.
 
     Args:
-        environment (str): The environment used for authentication, choose variable sandbox_env | production_env
+        environment (str): The environment used for authentication, only "sandbox" or "production" values are allowed
         client_id (str): The client id provided by quickbooks for authentication. Defaults to the value in the `dlt.secrets` object.
         client_secret (str): The client secret provided by quickbooks for authentication. Defaults to the value in the `dlt.secrets` object.
         refresh_token (str): The refresh token given a quickbooks scope. Defaults to the value in the `dlt.secrets` object.

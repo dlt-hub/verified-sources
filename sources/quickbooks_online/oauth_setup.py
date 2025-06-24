@@ -2,12 +2,12 @@ from dlt.sources.helpers import requests
 import base64
 import json
 import random
+from intuitlib.enums import Scopes
 from typing import Union
 from urllib.parse import urlencode
 from .settings import (
     discovery_document_url_sandbox,
-    discovery_document_url_prod,
-    Scopes,
+    discovery_document_url_prod
 )
 
 
