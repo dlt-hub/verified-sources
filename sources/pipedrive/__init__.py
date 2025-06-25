@@ -94,7 +94,8 @@ def pipedrive_source(
         name="deals_flow", write_disposition="merge", primary_key="id"
     )(_get_deals_flow)(pipedrive_api_key)
 
-    yield leads(pipedrive_api_key, update_time=since_timestamp)
+    # if simple value is passed in place of incremental, it will be used as initial value
+    yield leads(pipedrive_api_key, update_time=since_timestamp)  # type: ignore[arg-type]
 
 
 def _get_deals_flow(
