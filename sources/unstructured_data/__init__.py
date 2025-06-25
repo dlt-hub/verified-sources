@@ -2,7 +2,7 @@
 
 import asyncio
 import os
-from typing import Dict
+from typing import Dict, Optional
 
 import dlt
 from dlt.common import logger
@@ -18,7 +18,7 @@ from .settings import INVOICE_QUERIES
 
 @dlt.resource
 def unstructured_to_structured_resource(
-    queries: Dict[str, str] = INVOICE_QUERIES,
+    queries: Optional[Dict[str, str]] = dlt.config.value,
     openai_api_key: str = dlt.secrets.value,
     vectorstore: str = "chroma",
     table_name: str = "unstructured_to_structured_resource",
@@ -43,6 +43,8 @@ def unstructured_to_structured_resource(
     """
     if openai_api_key:
         os.environ["OPENAI_API_KEY"] = openai_api_key
+    if queries is None:
+        queries = dict(INVOICE_QUERIES)
 
     return dlt.transformer(
         convert_data,

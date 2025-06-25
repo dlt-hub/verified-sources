@@ -1,31 +1,32 @@
 ---
-description: 
+description: Crucial guidelines to build a dlt rest api source
 globs: 
 alwaysApply: true
 ---
 ## Prerequisities to writing a source
 
-1. VERY IMPORTANT. When writing new source, you should have example available in rest_api_pipeline.py file. Use github rest api source for the general structure of the code. If you do not see this file, ask user to add it
-2. Recall OpenAPI spec. You will need to figure out the same information that OpenAPI spec contains on each API.
+1. VERY IMPORTANT. When writing a new source, you should have an example available in the rest_api_pipeline.py file. 
+Use this example or the github rest api source example from dlt's documentation on rest api for the general structure of the code. If you do not see this file rest_api_pipeline.py, ask the user to add it
+2. Recall OpenAPI spec. You will figure out the same information that the OpenAPI spec contains for each API.
 3. In particular:
 - API base url
 - type of authentication
 - list of endpoints with method GET (you can read data for those)
-4. You will need to figure additional information that is required for successful data extraction
+4. You will figure out additional information that is required for successful data extraction
 - type of pagination
 - if data from an endpoint can be loaded incrementally
 - unwrapping end user data from a response
 - write disposition of the endpoint: append, replace, merge
 - in case of merge, you need to find primary key that can be compound
-5. Some endpoints take data from other endpoints. For example `comments` endpoint needs `post id` to get list of comments per particular post. You'll need to figure out such connections
-6. **ASK USER IF YOU MISS CRUCIAL INFORMATION** You should make sure user provided you with enough information to figure out the above. Below are the most common possibilities
+5. Some endpoints take data from other endpoints. For example, in the github rest api source example from dlt's documentation, the `comments` endpoint needs `post id` to get the list of comments per particular post. You'll need to figure out such connections
+6. **ASK USER IF YOU MISS CRUCIAL INFORMATION** You will make sure the user has provided you with enough information to figure out the above. Below are the most common possibilities
 - open api spec (file or link)
 - any other api definition, for example Airbyte low code yaml
 - a source code in Python, java or c# of such connector or API client
 - a documentation of the api or endpoint
 7. In case you find more than 10 endpoints and you do not get instructions which you should add to the source, ask user.
-8. please make sure you use right pagination and you use exactly the arguments that are available in pagination guide. do not try to guess anything. remember that we have many paginator types that are configured differently
-9. When creating pipeline instance add progress="log" as parameter
+8. Make sure you use the right pagination and use exactly the arguments that are available in the pagination guide. do not try to guess anything. remember that we have many paginator types that are configured differently
+9. When creating pipeline instance add progress="log" as parameter `pipeline = dlt.pipeline(..., progress="log")`
 10. When fixing a bug report focus only on a single cause. ie. incremental, pagination or authentication or wrong dict fields
 11. You should have references for paginator types, authenticator types and general reference for rest api in you context. **DO NOT GUESS. DO NOT INVENT CODE. YOU SHOULD HAVE DOCUMENTATION FOR EVERYTHING YOU NEED. IF NOT - ASK USER**
 

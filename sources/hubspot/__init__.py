@@ -134,7 +134,7 @@ def crm_objects(
 
 
 def crm_object_history(
-    object_type: THubspotObjectType,
+    object_type: str,
     api_key: str,
     props: Optional[Sequence[str]] = None,
     include_custom_props: bool = True,
@@ -143,7 +143,7 @@ def crm_object_history(
     Fetch the history of property changes for a given CRM object type.
 
     Args:
-        object_type (THubspotObjectType): Type of HubSpot object (e.g., 'company', 'contact').
+        object_type (str): Type of HubSpot object (e.g., 'company', 'contact').
         api_key (str, optional): API key for HubSpot authentication.
         props (Optional[Sequence[str]], optional): List of properties to retrieve. Defaults to None.
         include_custom_props (bool, optional): Include custom properties in the result. Defaults to True.
@@ -356,7 +356,7 @@ def hubspot(
             Iterator[DltResource]: dlt resources for pipelines and stages.
         """
 
-        def get_pipelines(object_type: THubspotObjectType) -> Iterator[TDataItems]:
+        def get_pipelines(object_type: str) -> Iterator[TDataItems]:
             yield from fetch_data(
                 CRM_PIPELINES_ENDPOINT.format(objectType=object_type),
                 api_key=api_key_inner,
