@@ -10,9 +10,8 @@ from sources.pg_legacy_replication import (
     init_replication,
     cleanup_snapshot_resources,
     replication_source,
-    ReplicationOptions,
 )
-from sources.pg_legacy_replication.helpers import SqlTableOptions, TableBackend
+from sources.pg_legacy_replication.helpers import TableBackend
 from tests.utils import (
     ALL_DESTINATIONS,
     assert_load_info,
