@@ -181,7 +181,7 @@ def get_data_types(data_row_metadata: List[DictStrAny]) -> List[TDataType]:
     Determines if each column in the first line of a range contains datetime objects.
 
     Args:
-        data_row_metadata (List[DictStrAny]): Metadata of the first row of data
+        data_row_metadata (List[DictStrAny]): Metadata of a row of data
 
     Returns:
         List[TDataType]: "timestamp" or "data" indicating the date/time type for a column, otherwise None
@@ -202,6 +202,38 @@ def get_data_types(data_row_metadata: List[DictStrAny]) -> List[TDataType]:
         return data_types
     except IndexError:
         return []
+
+
+def get_data_types_from_multiple_rows(
+    multiple_rows_metadata: List[List[DictStrAny]], 
+    expected_columns: int
+) -> List[TDataType]:
+    """
+    Determines data types by examining multiple rows of metadata. This allows to handle cases where
+    the data is sparse and the first few rows contain empty values for some columns.
+
+    Args:
+        multiple_rows_metadata (List[List[DictStrAny]]): List of metadata rows, each containing metadata for that row's columns
+        expected_columns (int): Expected number of columns (from headers)
+
+    Returns:
+        List[TDataType]: List of data types for each column, padded to expected_columns length
+    """
+    if not multiple_rows_metadata:
+        return [None] * expected_columns
+    
+    result_types: List[TDataType] = [None] * expected_columns
+    
+    for row_metadata in multiple_rows_metadata:
+        if row_metadata:
+
+          row_types = get_data_types(row_metadata)
+          
+          for idx, data_type in enumerate(row_types):
+              if idx < expected_columns and data_type is not None and result_types[idx] is None:
+                  result_types[idx] = data_type
+    
+    return result_types
 
 
 def serial_date_to_datetime(

@@ -127,3 +127,68 @@ def test_serial_date_to_datetime(
     assert (
         data_processing.serial_date_to_datetime(serial_number, "timestamp") == expected
     )
+
+
+def test_get_data_types_from_multiple_rows():
+    """Test combining metadata from multiple rows to determine data types."""
+    row1_metadata = [
+        {"effectiveValue": {"stringValue": "a"}, "formattedValue": "a"}
+    ]
+    
+    row2_metadata = [
+        {"effectiveValue": {"stringValue": "b"}, "formattedValue": "b"},
+        {"effectiveValue": {"stringValue": "c"}, "formattedValue": "c"}
+    ]
+    
+    data_types = data_processing.get_data_types_from_multiple_rows([row1_metadata, row2_metadata], 2)
+    
+    assert len(data_types) == 2
+    assert data_types == [None, None]
+
+
+def test_get_data_types_from_multiple_rows_with_datetime():
+    """Test datetime detection across multiple rows."""
+    row1_metadata = [
+        {"effectiveValue": {"stringValue": "a"}, "formattedValue": "a"}
+    ]
+    
+    row2_metadata = [
+        {"effectiveValue": {"stringValue": "b"}, "formattedValue": "b"},
+        {
+            "effectiveValue": {"numberValue": 44927.0},
+            "formattedValue": "1/1/2023",
+            "effectiveFormat": {"numberFormat": {"type": "DATE_TIME"}}
+        }
+    ]
+    
+    data_types = data_processing.get_data_types_from_multiple_rows([row1_metadata, row2_metadata], 2)
+    
+    assert len(data_types) == 2
+    assert data_types == [None, "timestamp"]
+
+
+def test_get_data_types_from_multiple_rows_edge_cases():
+    """Test edge cases: empty input, empty rows, and padding."""
+    assert data_processing.get_data_types_from_multiple_rows([], 3) == [None, None, None]
+    assert data_processing.get_data_types_from_multiple_rows([[], []], 2) == [None, None]
+    
+    single_col_data = [{"effectiveValue": {"stringValue": "a"}, "formattedValue": "a"}]
+    result = data_processing.get_data_types_from_multiple_rows([single_col_data], 5)
+    assert len(result) == 5
+    assert result == [None, None, None, None, None]
+
+
+def test_get_data_types_from_multiple_rows_preserves_columns():
+    """Test that all expected columns are preserved even when missing from early rows."""
+    headers_count = 2
+    
+    incomplete_row = [{"effectiveValue": {"stringValue": "a"}, "formattedValue": "a"}]
+    complete_row = [
+        {"effectiveValue": {"stringValue": "b"}, "formattedValue": "b"},
+        {"effectiveValue": {"stringValue": "c"}, "formattedValue": "c"}
+    ]
+    
+    result = data_processing.get_data_types_from_multiple_rows([incomplete_row, complete_row], headers_count)
+    
+    assert len(result) == 2
+    assert result == [None, None]
