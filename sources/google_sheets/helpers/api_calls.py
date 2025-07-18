@@ -105,7 +105,7 @@ def get_known_range_names(
 
 @retry_deco
 def get_data_for_ranges(
-    service: Resource, spreadsheet_id: str, range_names: List[str]
+    service: Resource, spreadsheet_id: str, range_names: List[str], metadata_scan_rows: int = 1
 ) -> List[Tuple[str, ParsedRange, ParsedRange, List[List[Any]]]]:
     """
     Calls Google Sheets API to get data in a batch. This is the most efficient way to get data for multiple ranges inside a spreadsheet.
@@ -114,6 +114,7 @@ def get_data_for_ranges(
         service (Resource): Object to make API calls to Google Sheets.
         spreadsheet_id (str): The ID of the spreadsheet.
         range_names (List[str]): List of range names.
+        metadata_scan_rows (int, optional): Number of data rows to use for metadata detection. Defaults to 1.
 
     Returns:
         List[DictStrAny]: A list of ranges with data in the same order as `range_names`
@@ -140,8 +141,7 @@ def get_data_for_ranges(
         values: List[List[Any]] = range_.get("values", None)
         if values:
             parsed_range, values = trim_range_top_left(parsed_range, values)
-        # create a new range to get first two rows
-        meta_range = parsed_range._replace(end_row=parsed_range.start_row + 1)
-        # print(f"{name}:{parsed_range}:{meta_range}")
+        # create a new range to get header + metadata_scan_rows for metadata detection
+        meta_range = parsed_range._replace(end_row=parsed_range.start_row + metadata_scan_rows)
         rv.append((name, parsed_range, meta_range, values))
     return rv
