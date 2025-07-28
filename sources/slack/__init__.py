@@ -60,7 +60,9 @@ def slack_source(
     )
 
     def get_channels(
-        slack_api: SlackAPI, selected_channels: Optional[List[str]], include_private_channels: bool = False
+        slack_api: SlackAPI,
+        selected_channels: Optional[List[str]],
+        include_private_channels: bool = False,
     ) -> Tuple[List[TDataItem], List[TDataItem]]:
         """
         Returns channel fetched from slack and list of selected channels.
@@ -74,13 +76,13 @@ def slack_source(
             Tuple[List[TDataItem], List[TDataItem]]: fetched channels and selected fetched channels.
         """
         channels: List[TDataItem] = []
-        
+
         # Define conversation types based on the include_private_channels parameter
         if include_private_channels:
             conversation_types = "public_channel,private_channel,mpim"
         else:
-            conversation_types = "public_channel"     
-               
+            conversation_types = "public_channel"
+
         for page_data in slack_api.get_pages(
             resource="conversations.list",
             response_path="$.channels[*]",
@@ -99,7 +101,9 @@ def slack_source(
             fetch_channels = channels
         return channels, fetch_channels
 
-    channels, fetched_selected_channels = get_channels(api, selected_channels, include_private_channels)
+    channels, fetched_selected_channels = get_channels(
+        api, selected_channels, include_private_channels
+    )
 
     @dlt.resource(name="channels", primary_key="id", write_disposition="replace")
     def channels_resource() -> Iterable[TDataItem]:
