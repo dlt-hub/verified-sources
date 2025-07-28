@@ -1,0 +1,8 @@
+{
+  "name": "Master-rules",
+  "description": "Master rules for dlt verified-sources",
+  "author": "Marcin Rudolf",
+  "license": "Apache-2.0",
+  "version": "1.0.0",
+  "rules": {}
+}

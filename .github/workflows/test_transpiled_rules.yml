@@ -1,0 +1,52 @@
+name: test transpiled rules
+
+on:
+  pull_request:
+    branches:
+      - master
+  workflow_dispatch:
+
+jobs:
+
+  test_transpiled_rules:
+    name: Check that transpiled rules are up to date
+    runs-on: ubuntu-latest
+
+    steps:
+
+      - name: Check out
+        uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v4
+        with:
+          python-version: "3.9"
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+
+      - name: Install rules-cli
+        run: npm install -g rules-cli
+
+      - name: Run transpile-rules
+        run: make transpile-rules
+
+      - name: Check for changes
+        run: |
+          # Add any new files that might have been generated
+          git add -A
+          
+          # Check if there are any differences
+          if ! git diff --staged --quiet; then
+            echo "❌ Transpiled rules are out of date!"
+            echo ""
+            echo "The following files have changes:"
+            git diff --staged --name-only
+            echo ""
+            echo "Please run 'make transpile-rules' locally and commit the changes."
+            exit 1
+          else
+            echo "✅ Transpiled rules are up to date!"
+          fi 

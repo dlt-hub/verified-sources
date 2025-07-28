@@ -1,7 +1,7 @@
 ---
-description: Information about dlt
-globs: 
 alwaysApply: true
+description: Information about dlt
+globs:
 ---
 
 # Guidelines

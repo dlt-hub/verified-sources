@@ -1,8 +1,9 @@
 ---
 description: Crucial guidelines to build a dlt rest api source
-globs: 
-alwaysApply: true
+globs:
+trigger: always_on
 ---
+
 ## Prerequisities to writing a source
 
 1. VERY IMPORTANT. When writing a new source, you should have an example available in the rest_api_pipeline.py file. 
@@ -253,4 +254,3 @@ Customization:
 • Adjust batch sizes and pagination parameters as needed.
 • Implement custom error handling and retry logic where necessary.
 • Handle different pagination strategies appropriately.
-

@@ -32,6 +32,18 @@ format:
 
 format-lint: format lint
 
+transpile-rules:
+	cd ai && \
+	uv run rules render cursor && \
+	uv run rules render continue && \
+	uv run rules render windsurf && \
+	uv run rules render claude && \
+	uv run rules render copilot && \
+	uv run rules render codex && \
+	uv run rules render cline && \
+	uv run rules render cody && \
+	uv run rules render amp
+
 test:
 	uv run pytest tests
 
