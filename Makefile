@@ -34,15 +34,15 @@ format-lint: format lint
 
 transpile-rules:
 	cd ai && \
-	uv run rules render cursor && \
-	uv run rules render continue && \
-	uv run rules render windsurf && \
-	uv run rules render claude && \
-	uv run rules render copilot && \
-	uv run rules render codex && \
-	uv run rules render cline && \
-	uv run rules render cody && \
-	uv run rules render amp
+	uv run rules render claude && mkdir -p claude && mv CLAUDE.md claude/ && \
+	uv run rules render amp && mkdir -p amp && mv AGENT.md amp/ && \
+	uv run rules render codex && mkdir -p codex && mv AGENT.md codex/ && \
+	uv run rules render cody && mkdir -p cody && cp -r .sourcegraph cody/ && rm -rf .sourcegraph && \
+	uv run rules render cline && mkdir -p cline && cp -r .clinerules cline/ && rm -rf .clinerules && \
+	uv run rules render cursor && mkdir -p cursor && cp -r .cursor cursor/ && rm -rf .cursor && \
+	uv run rules render continue && mkdir -p continue && cp -r .continue continue/ && rm -rf .continue && \
+	uv run rules render windsurf && mkdir -p windsurf && cp -r .windsurf windsurf/ && rm -rf .windsurf && \
+	uv run rules render copilot && mkdir -p copilot && cp -r .github copilot/ && rm -rf .github
 
 test:
 	uv run pytest tests

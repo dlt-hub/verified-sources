@@ -22,6 +22,9 @@ jobs:
         with:
           python-version: "3.9"
 
+      - name: Install dlt
+        run: uv run pip install dlt
+
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
@@ -50,3 +53,6 @@ jobs:
           else
             echo "✅ Transpiled rules are up to date!"
           fi 
+
+      - name: Run dlt ai command test
+        run: uv run pytest tests/test_dlt_ai.py

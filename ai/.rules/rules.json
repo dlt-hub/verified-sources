@@ -1,7 +1,7 @@
 {
-  "name": "Master-rules",
-  "description": "Master rules for dlt verified-sources",
-  "author": "Marcin Rudolf",
+  "name": "dlt-rules",
+  "description": "Rules to build REST API sources with dlt",
+  "author": "dltHub Inc.",
   "license": "Apache-2.0",
   "version": "1.0.0",
   "rules": {}
