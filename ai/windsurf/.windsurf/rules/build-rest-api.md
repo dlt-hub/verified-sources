@@ -1,7 +1,7 @@
 ---
-alwaysApply: true
 description: Crucial guidelines to build a dlt rest api source
 globs:
+trigger: always_on
 ---
 
 ## Prerequisities to writing a source

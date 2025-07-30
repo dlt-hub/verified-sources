@@ -1,7 +1,5 @@
 ---
-alwaysApply: true
 description: Crucial guidelines to build a dlt rest api source
-globs:
 ---
 
 ## Prerequisities to writing a source

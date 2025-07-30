@@ -1,7 +1,7 @@
 ---
-alwaysApply: true
 description: Information about dlt
 globs:
+trigger: always_on
 ---
 
 # Guidelines

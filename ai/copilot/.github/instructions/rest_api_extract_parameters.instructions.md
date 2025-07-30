@@ -1,7 +1,6 @@
 ---
-alwaysApply: true
+applyTo:
 description: This rule helps identify and extract ALL necessary parameters from API documentation to build a dlt REST API source
-globs:
 ---
 
 # REST API Parameter Extraction Guide
