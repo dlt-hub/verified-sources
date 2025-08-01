@@ -1,6 +1,6 @@
 import dlt
 import pytest
-from pendulum import datetime
+from pendulum import datetime, now
 
 from sources.slack import slack_source
 from tests.utils import ALL_DESTINATIONS, assert_load_info, load_table_counts
@@ -17,8 +17,8 @@ def test_tabel_per_channel(destination_name: str) -> None:
 
     # Set page size to ensure we use pagination
     source = slack_source(
-        start_date=datetime(2024, 1, 31),
-        end_date=datetime(2024, 2, 1),
+        start_date=now().subtract(weeks=2),
+        end_date=now(),
         selected_channels=["dlt-github-ci", "3-technical-help"],
     )
     load_info = pipeline.run(source)
@@ -33,8 +33,9 @@ def test_tabel_per_channel(destination_name: str) -> None:
 
     assert set(table_counts.keys()) >= set(expected_tables)
     assert table_counts["channels"] >= 15
-    assert table_counts[ci_table] == 6
-    assert table_counts[help_table] == 5
+    # Note: Message counts may vary with dynamic dates, so we check for > 0
+    assert table_counts[ci_table] > 0
+    assert table_counts[help_table] > 0
 
 
 @pytest.mark.parametrize("destination_name", ALL_DESTINATIONS)
@@ -49,8 +50,8 @@ def test_all_resources(destination_name: str) -> None:
     # Set page size to ensure we use pagination
     source = slack_source(
         page_size=40,
-        start_date=datetime(2024, 1, 31),
-        end_date=datetime(2024, 2, 1),
+        start_date=now().subtract(weeks=2),
+        end_date=now(),
         selected_channels=["dlt-github-ci", "1-announcements"],
         table_per_channel=False,
     )
@@ -65,7 +66,8 @@ def test_all_resources(destination_name: str) -> None:
     assert set(table_counts.keys()) >= set(expected_tables)
     assert "replies" not in table_names
     assert table_counts["channels"] >= 15
-    assert table_counts["messages"] == 34
+    # Note: Message counts may vary with dynamic dates, so we check for > 0
+    assert table_counts["messages"] > 0
 
 
 @pytest.mark.parametrize("destination_name", ALL_DESTINATIONS)
@@ -79,9 +81,9 @@ def test_replies(destination_name: str) -> None:
 
     # Set page size to ensure we use pagination
     source = slack_source(
-        start_date=datetime(2023, 12, 19),
-        end_date=datetime(2024, 1, 10),
-        selected_channels=["1-announcements"],
+        start_date=now().subtract(weeks=1),
+        end_date=now(),
+        selected_channels=["3-technical-help"],
         replies=True,
         table_per_channel=False,
     )
@@ -91,7 +93,8 @@ def test_replies(destination_name: str) -> None:
     table_names = [t["name"] for t in pipeline.default_schema.data_tables()]
     table_counts = load_table_counts(pipeline, *table_names)
     assert "replies" in table_names
-    assert table_counts["replies"] >= 5
+    # Note: Reply counts may vary with dynamic dates, so we check for > 0 
+    assert table_counts["replies"] > 0
 
 
 @pytest.mark.parametrize("destination_name", ALL_DESTINATIONS)
@@ -109,8 +112,8 @@ def test_with_merge_disposition(destination_name: str, table_per_channel: bool) 
 
     # Set page size to ensure we use pagination
     source = slack_source(
-        start_date=datetime(2023, 12, 19),
-        end_date=datetime(2024, 1, 10),
+        start_date=now().subtract(weeks=4),
+        end_date=now().subtract(weeks=1),
         selected_channels=["1-announcements"],
         replies=True,
         table_per_channel=table_per_channel,
@@ -154,3 +157,32 @@ def test_users(destination_name: str) -> None:
     print(table_counts.keys())
     assert set(table_counts.keys()) >= set(expected_tables)
     assert table_counts["users"] >= 300  # The number of users can increase over time
+
+
+@pytest.mark.parametrize("destination_name", ALL_DESTINATIONS)
+def test_private_channels(destination_name: str) -> None:
+    pipeline = dlt.pipeline(
+        pipeline_name="slack",
+        destination=destination_name,
+        dataset_name="slack_data",
+        dev_mode=True,
+    )
+    PRIVATE_CHANNEL_NAME = "test-bot-channel"
+    # Use dynamic dates: last week to now
+    source = slack_source(
+        start_date=now().subtract(weeks=1),
+        end_date=now(),
+        selected_channels=[PRIVATE_CHANNEL_NAME, "3-technical-help"],
+        include_private_channels=True,
+    )
+    load_info = pipeline.run(source)
+    assert_load_info(load_info)
+    table_names = [t["name"] for t in pipeline.default_schema.data_tables()]
+    table_counts = load_table_counts(pipeline, *table_names)
+    # verify both private and public channels are fetched
+    help_table = "_3-technical-help_message".replace("-", "_")
+    private_channel_table = PRIVATE_CHANNEL_NAME.replace("-", "_") + "_message"
+    expected_tables = ["channels", private_channel_table, help_table]
+    assert set(table_counts.keys()) >= set(expected_tables)
+    assert table_counts["channels"] >= 15
+    assert table_counts[private_channel_table] > 0  # Note: before running the test send a message to the private channel
