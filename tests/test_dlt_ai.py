@@ -36,13 +36,11 @@ def test_ai_setup_command(
             ai_command.ai_setup_command(
                 ide=ide,
                 repo=DEFAULT_VERIFIED_SOURCES_REPO,
-                branch="feat/continue-rules",
             )
         else:
             ai_command.ai_setup_command(
                 ide=ide,
                 location=DEFAULT_VERIFIED_SOURCES_REPO,
-                branch="feat/continue-rules",
             )
 
     base_path = Path(TEST_STORAGE_ROOT).resolve()
