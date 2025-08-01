@@ -1,7 +1,6 @@
 ---
-alwaysApply: true
+applyTo:
 description: Use this rule when writing REST API Source to configure right pagination type for an Endpoint
-globs:
 ---
 
 # dlt REST API Pagination Configuration Guide

@@ -1,9 +1,8 @@
 ---
-alwaysApply: true
+globs: 
 description: This rule helps identify and extract ALL necessary parameters from API documentation to build a dlt REST API source
-globs:
+alwaysApply: true
 ---
-
 # REST API Parameter Extraction Guide
 
 This rule helps identify and extract ALL necessary parameters from API documentation to build a dlt REST API source. **Crucially, configuration parameters like pagination and incremental loading can vary significantly between different API endpoints. Do not assume a single global strategy applies to all resources.**
@@ -239,4 +238,4 @@ Before finalizing the configuration:
 6.  **For EACH resource:** Determine if incremental loading is possible and identify its strategy (timestamp, ID, etc.).
 7.  **For EACH resource:** Extract the correct incremental parameters (`cursor_path`, `initial_value`, `start_param`, etc.) based on its strategy.
 8.  Validate the `data_selector` path for each resource by checking example responses.
-9.  Check for any required Global Headers AND Resource-Specific Headers.
+9.  Check for any required Global Headers AND Resource-Specific Headers. 

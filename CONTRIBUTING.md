@@ -100,9 +100,19 @@ your source will be distributed to other users once it is accepted into our repo
 
 ## Walkthrough: Modify or add rules files for LLM-enabled IDEs
 In this section, you will learn how to contribute rules files.
-1. Follow the [coding prerequisites](#coding-prerequisites) to setup the repository
-2. On your branch, add or modify rules files under the `/ai` directory
-3. Verify that the rules are properly formatted and work with the target IDE.
+
+### 1. How the `ai/` directory works
+
+1. The `.rules` folder is the master folder from which the files are rendered and copied into the respective IDE folders with the appropriate structure and format.
+2. Rendering and copying of the files are handled by the `make transpile-rules` command.
+3. The make transpile-rules command relies on Continue's [rules CLI](https://github.com/continuedev/rules).
+
+### 1. How to modify or add rules
+
+1. Follow the [coding prerequisites](#coding-prerequisites) to setup the repository.
+2. On your branch, add or modify rules files under the `/ai/.rules/` directory.
+3. Verify that the rules are properly formatted.
+4. Run `make transpile-rules` to update the respective IDE folders.
 4. Proceed to the pull request section to [create a pull request to the main repo](#making-a-pull-request-to-the-main-repo-from-fork). Please explain for what use cases these rules are useful and share what IDE version you're using.
 
 ## Coding Prerequisites
