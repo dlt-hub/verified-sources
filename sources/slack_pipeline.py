@@ -3,9 +3,8 @@
 from typing import List
 
 import dlt
-from pendulum import datetime
+from pendulum import datetime, now
 from slack import slack_source
-from dlt.common.time import now
 
 
 def load_all_resources(replies: bool = False) -> None:
