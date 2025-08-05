@@ -206,7 +206,7 @@ def test_private_channels(destination_name: str) -> None:
         end_date=pendulum.now(),
         selected_channels=[PRIVATE_CHANNEL_NAME],
         include_private_channels=True,
-    ).with_resources(PRIVATE_CHANNEL_NAME, f"{PRIVATE_CHANNEL_NAME}_replies")
+    ).with_resources(PRIVATE_CHANNEL_NAME)
     load_info = pipeline.run(source)
     assert_load_info(load_info)
     table_names = [t["name"] for t in pipeline.default_schema.data_tables()]
