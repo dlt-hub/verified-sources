@@ -136,7 +136,6 @@ def test_with_merge_disposition(destination_name: str, table_per_channel: bool) 
         dev_mode=True,
     )
 
-    # Set page size to ensure we use pagination
     def get_resource_names(table_per_channel: bool, channel_name: str) -> str:
         return channel_name if table_per_channel else "messages"
 
