@@ -11,6 +11,7 @@ from .helpers import api_calls
 from .helpers.api_calls import api_auth
 from .helpers.data_processing import (
     get_data_types,
+    get_data_types_from_multiple_rows,
     get_range_headers,
     get_spreadsheet_id,
     process_range,
@@ -27,6 +28,7 @@ def google_spreadsheet(
     get_sheets: bool = False,
     get_named_ranges: bool = True,
     max_api_retries: int = 5,
+    metadata_scan_rows: int = 1,
 ) -> Iterable[DltResource]:
     """
     The source for the dlt pipeline. It returns the following resources:
@@ -44,6 +46,8 @@ def google_spreadsheet(
         get_named_ranges (bool, optional): If True, load all the named ranges inside the spreadsheet into the database.
             Defaults to True.
         max_api_retries (int, optional): Max number of retires to google sheets API. Actual behavior is internal to google client.
+        metadata_scan_rows (int, optional): Number of data rows to scan for metadata detection. By default, it uses the first row of data.
+            Increase this value (e.g., to 5-10) if you have sparse data where columns might be empty in the first few rows.
 
     Yields:
         Iterable[DltResource]: List of dlt resources.
@@ -69,6 +73,7 @@ def google_spreadsheet(
         service=service,
         spreadsheet_id=spreadsheet_id,
         range_names=list(all_range_names),
+        metadata_scan_rows=metadata_scan_rows,
     )
     assert len(all_range_names) == len(
         all_range_data
@@ -124,20 +129,28 @@ def google_spreadsheet(
 
         headers_metadata = metadata["rowData"][0]["values"]
         headers = get_range_headers(headers_metadata, name)
+        
         if headers is None:
             # generate automatic headers and treat the first row as data
             headers = [f"col_{idx+1}" for idx in range(len(headers_metadata))]
-            data_row_metadata = headers_metadata
-            rows_data = values[0:]
+            start_row = 0
+            rows_data = values
             logger.warning(
                 f"Using automatic headers. WARNING: first row of the range {name} will be used as data!"
             )
         else:
             # first row contains headers and is skipped
-            data_row_metadata = metadata["rowData"][1]["values"]
+            start_row = 1
             rows_data = values[1:]
 
-        data_types = get_data_types(data_row_metadata)
+        # collect metadata from the specified number of data rows
+        multiple_rows_metadata = []
+        end_row = min(len(metadata["rowData"]), start_row + metadata_scan_rows)
+        for row_idx in range(start_row, end_row):
+            if "values" in metadata["rowData"][row_idx]:
+                multiple_rows_metadata.append(metadata["rowData"][row_idx]["values"])
+
+        data_types = get_data_types_from_multiple_rows(multiple_rows_metadata, len(headers))
 
         yield dlt.resource(
             process_range(rows_data, headers=headers, data_types=data_types),
