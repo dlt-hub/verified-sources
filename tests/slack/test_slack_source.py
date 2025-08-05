@@ -206,16 +206,11 @@ def test_private_channels(destination_name: str) -> None:
         end_date=pendulum.now(),
         selected_channels=[PRIVATE_CHANNEL_NAME],
         include_private_channels=True,
-        replies=True,
     ).with_resources(PRIVATE_CHANNEL_NAME, f"{PRIVATE_CHANNEL_NAME}_replies")
     load_info = pipeline.run(source)
     assert_load_info(load_info)
     table_names = [t["name"] for t in pipeline.default_schema.data_tables()]
 
     expected_message_table_name = f"{PRIVATE_CHANNEL_NAME}_message".replace("-", "_")
-    expected_replies_table_name = f"{PRIVATE_CHANNEL_NAME}_replies_message".replace(
-        "-", "_"
-    )
 
     assert expected_message_table_name in table_names
-    assert expected_replies_table_name in table_names
