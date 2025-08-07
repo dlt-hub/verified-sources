@@ -10,100 +10,22 @@ To get the security token: https://onlinehelp.coveo.com/en/ces/7.0/administrator
 from dlt.sources import DltResource
 from dlt.sources import incremental
 
-from typing import Iterable, overload, Dict, Union
+from typing import Iterable, Optional
 
 import dlt
-from simple_salesforce import Salesforce
+from dlt.sources.helpers.requests import Session
 from dlt.common.typing import TDataItem
 
+from .helpers.records import get_records
+from .helpers.client import SalesforceAuth, make_salesforce_client
 
-from .helpers import get_records
 
-
-@overload
+@dlt.source(name="salesforce")
 def salesforce_source(
-    user_name: str = dlt.secrets.value,
-    password: str = dlt.secrets.value,
-    security_token: str = dlt.secrets.value,
-    domain: str = dlt.secrets.value,
+    credentials: SalesforceAuth = dlt.secrets.value,
+    session: Optional[Session] = None,
 ) -> Iterable[DltResource]:
-    """Athentication with username, password and security token"""
-    ...
-
-
-@overload
-def salesforce_source(
-    user_name: str = dlt.secrets.value,
-    password: str = dlt.secrets.value,
-    organization_id: str = dlt.secrets.value,
-    domain: str = dlt.secrets.value,
-) -> Iterable[DltResource]:
-    """Athentication with username, password and organizationId"""
-    ...
-
-
-@overload
-def salesforce_source(
-    user_name: str = dlt.secrets.value,
-    consumer_key: str = dlt.secrets.value,
-    privatekey_file: str = dlt.secrets.value,
-    domain: str = dlt.secrets.value,
-) -> Iterable[DltResource]:
-    """JWT authentication with username, consumer key and private key file"""
-    ...
-
-
-@overload
-def salesforce_source(
-    user_name: str = dlt.secrets.value,
-    password: str = dlt.secrets.value,
-    consumer_key: str = dlt.secrets.value,
-    consumer_secret: str = dlt.secrets.value,
-    domain: str = dlt.secrets.value,
-) -> Iterable[DltResource]:
-    """JWT authentication with username, consumer key and private key file"""
-    ...
-
-
-@dlt.source(name="salesforce")  # type: ignore[misc]
-def salesforce_source(
-    *,
-    user_name: str = dlt.secrets.value,
-    password: Union[str, None] = dlt.secrets.value,
-    security_token: Union[str, None] = dlt.secrets.value,
-    organization_id: Union[str, None] = dlt.secrets.value,
-    consumer_key: Union[str, None] = dlt.secrets.value,
-    consumer_secret: Union[str, None] = dlt.secrets.value,
-    privatekey_file: Union[str, None] = dlt.secrets.value,
-    domain: Union[str, None] = dlt.secrets.value,
-) -> Iterable[DltResource]:
-    """
-    Retrieves data from Salesforce using the Salesforce API.
-
-    Args:
-        user_name (str): The username for authentication. Defaults to the value in the `dlt.secrets` object.
-        password (str): The password for authentication. Defaults to the value in the `dlt.secrets` object.
-        security_token (str): The security token for authentication. Defaults to the value in the `dlt.secrets` object.
-        organization_id (str): ID of an IP‑whitelisted organization.
-        consumer_key (str): Connected‑App consumer key.
-        consumer_secret (str): Connected‑App consumer secret.
-        privatekey_file (str): Path to the PEM‑encoded private key.
-        domain (str): Login domain (Needs to be set to "test" to enter a sandbox.)
-
-    Yields:
-        DltResource: Data resources from Salesforce.
-    """
-
-    client = Salesforce(
-        username=user_name,
-        password=password,
-        security_token=security_token,
-        organizationId=organization_id,
-        consumer_key=consumer_key,
-        consumer_secret=consumer_secret,
-        privatekey_file=privatekey_file,
-        domain=domain,
-    )
+    client = make_salesforce_client(credentials, session)
 
     # define resources
     @dlt.resource(write_disposition="replace")

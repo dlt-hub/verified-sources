@@ -9,11 +9,11 @@ from simple_salesforce import Salesforce
 from dlt.common.typing import TDataItem
 
 
-from .settings import IS_PRODUCTION
+from ..settings import IS_PRODUCTION
 
 
 def _process_record(
-    record: Dict[str, Any], date_fields: Set[str], is_bulk_api: bool = False
+    record: Dict[str, Any], date_fields: Set[str], api_type: str
 ) -> Dict[str, Any]:
     """
     Process a single Salesforce record by removing attributes and converting date fields.
@@ -21,7 +21,7 @@ def _process_record(
     Args:
         record: The record to process
         date_fields: Set of field names that contain date/datetime values
-        is_bulk_api: Whether this record came from Bulk API (timestamps) or standard API (ISO strings)
+        api_type: Whether this record came from Bulk API (timestamps), or standard API (ISO strings)
 
     Returns:
         The processed record
@@ -31,13 +31,13 @@ def _process_record(
 
     for field in date_fields:
         if record.get(field):
-            if is_bulk_api:
+            if api_type == "bulk":
                 # Bulk API returns timestamps, convert to ISO 8601
                 record[field] = pendulum.from_timestamp(
                     record[field] / 1000,
                 ).strftime("%Y-%m-%dT%H:%M:%S.%fZ")
             else:
-                # Standard API returns ISO strings, ensure consistent format
+                # Standard API return ISO strings, ensure consistent format
                 if record[field]:
                     # pendulum.parse can also return Date, Time or Duration
                     # Salesforce date/datetime fields are always DateTime
@@ -65,7 +65,6 @@ def get_records(
     Yields:
         Dict[TDataItem]: A dictionary representing a record from the Salesforce sObject.
     """
-
     # Get all fields for the sobject
     desc = getattr(sf, sobject).describe()
     # Salesforce returns compound fields as separate fields, so we need to filter them out
@@ -80,6 +79,7 @@ def get_records(
     date_fields = {
         f["name"] for f in desc["fields"] if f["type"] in ("datetime",) and f["name"]
     }
+
     # If no fields are specified, use all fields except compound fields
     fields = [f["name"] for f in desc["fields"] if f["name"] not in compound_fields]
 
@@ -95,11 +95,9 @@ def get_records(
 
     # Try Bulk API first, fallback to standard SOQL if not available
     try:
-        # Query all records in batches using Bulk API
         for page in getattr(sf.bulk, sobject).query_all(query, lazy_operation=True):
             processed_page = [
-                _process_record(record, date_fields, is_bulk_api=True)
-                for record in page
+                _process_record(record, date_fields, api_type="bulk") for record in page
             ]
             yield from processed_page
             n_records += len(processed_page)
@@ -110,7 +108,7 @@ def get_records(
             while True:
                 for record in result["records"]:
                     processed_record = _process_record(
-                        record, date_fields, is_bulk_api=False
+                        record, date_fields, api_type="standard"
                     )
                     yield processed_record
                     n_records += 1
