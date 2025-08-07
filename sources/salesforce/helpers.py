@@ -65,7 +65,6 @@ def get_records(
     Yields:
         Dict[TDataItem]: A dictionary representing a record from the Salesforce sObject.
     """
-
     # Get all fields for the sobject
     desc = getattr(sf, sobject).describe()
     # Salesforce returns compound fields as separate fields, so we need to filter them out
@@ -80,6 +79,7 @@ def get_records(
     date_fields = {
         f["name"] for f in desc["fields"] if f["type"] in ("datetime",) and f["name"]
     }
+
     # If no fields are specified, use all fields except compound fields
     fields = [f["name"] for f in desc["fields"] if f["name"] not in compound_fields]
 

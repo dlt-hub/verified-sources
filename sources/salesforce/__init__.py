@@ -61,7 +61,7 @@ def salesforce_source(
     consumer_secret: str = dlt.secrets.value,
     domain: str = dlt.secrets.value,
 ) -> Iterable[DltResource]:
-    """JWT authentication with username, consumer key and private key file"""
+    """Connected app authentication with username, consumer key and private key file"""
     ...
 
 
