@@ -42,7 +42,7 @@ To grab credentials and initialize the verified source, please refer to the [ful
 ## Add credentials
 
 1. Open `.dlt/secrets.toml`.
-2. Enter the user name, password and security token:
+2. Enter the username, password and security token:
     ```toml
     # put your secret values and credentials here. do not share this file and do not push it to github
     [sources.salesforce]
@@ -50,7 +50,36 @@ To grab credentials and initialize the verified source, please refer to the [ful
     password = "please set me up!" # Salesforce password
     security_token = "please set me up!" # Salesforce security token generated
     ```
+
+    Alternatively, you can authenticate using one of the following methods:
+
+    - IP-whitelist + organization ID:
+        ```toml
+        [sources.salesforce]
+        user_name = "please set me up!" 
+        password = "please set me up!" 
+        organization_id = "please set me up!"
+        ```    
+
+    - JWT method:
+        ```toml
+        [sources.salesforce]
+        user_name = "please set me up!" 
+        consumer_key = "please set me up!" 
+        privatekey_file = "please set me up!"
+        ```    
+
+    - Connected app method:
+        ```toml
+        [sources.salesforce]
+        user_name = "please set me up!" 
+        password = "please set me up!" 
+        consumer_key = "please set me up!"
+        consumer_secret = "please set me up!"
+        ```    
     
+    > To connect to a sandbox environment, add `domain = "test"`.
+
 3. Enter credentials for your chosen destination as per the [docs.](https://dlthub.com/docs/dlt-ecosystem/destinations/)
 
 ## Run the pipeline example
