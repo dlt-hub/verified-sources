@@ -1,11 +1,14 @@
 """Hubspot source helpers"""
 
-import urllib.parse
-from typing import Any, Dict, Generator, Iterator, List, Optional
+import dlt
 
+import urllib.parse
+from typing import Any, Dict, Generator, Iterator, List, Optional, Tuple, Set
+
+from dlt.common.schema.typing import TColumnSchema
 from dlt.sources.helpers import requests
 
-from .settings import OBJECT_TYPE_PLURAL
+from .settings import OBJECT_TYPE_PLURAL, HS_TO_DLT_TYPE
 
 BASE_URL = "https://api.hubapi.com/"
 
@@ -151,7 +154,7 @@ def fetch_data(
         404 Not Found), a `requests.exceptions.HTTPError` exception will be raised.
 
         The `endpoint` argument should be a relative URL, which will be appended to the base URL for the
-        API. The `params` argument is used to pass additional query parameters to the request
+        API. The `params` argument is used to pass additional query parameters to the request.
 
         This function also includes a retry decorator that will automatically retry the API call up to
         3 times with a 5-second delay between retries, using an exponential backoff strategy.
@@ -197,26 +200,27 @@ def fetch_data(
         _data = pagination(_data, headers)
 
 
-def _get_property_names(api_key: str, object_type: str) -> List[str]:
+def _get_property_names_types(api_key: str, object_type: str) -> Dict[str, str]:
     """
-    Retrieve property names for a given entity from the HubSpot API.
+    Retrieve property names and their types for a given entity from the HubSpot API.
 
     Args:
         entity: The entity name for which to retrieve property names.
 
     Returns:
-        A list of property names.
+        A dict of propery names and their types.
 
     Raises:
         Exception: If an error occurs during the API request.
     """
-    properties = []
+    props_to_type: Dict[str, str] = {}
     endpoint = f"/crm/v3/properties/{OBJECT_TYPE_PLURAL[object_type]}"
 
     for page in fetch_data(endpoint, api_key):
-        properties.extend([prop["name"] for prop in page])
+        for prop in page:
+            props_to_type[prop["name"]] = prop["type"]
 
-    return properties
+    return props_to_type
 
 
 def get_properties_labels(
@@ -230,3 +234,12 @@ def get_properties_labels(
     while _data is not None:
         yield _data
         _data = pagination(_data, headers)
+
+
+def _to_dlt_columns_schema(col: Dict[str, str]) -> TColumnSchema:
+    """Converts hubspot column to dlt column schema."""
+    col_name, col_type = next(iter(col.items()))
+    return {
+        "name": col_name,
+        "data_type": HS_TO_DLT_TYPE[col_type],
+    }
