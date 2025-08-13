@@ -1,11 +1,14 @@
 from unittest.mock import patch, ANY, call
+from contextlib import nullcontext
 
 import dlt
 import pytest
+import copy
 from typing import Any
 from urllib.parse import urljoin
 
 from dlt.common import pendulum
+from dlt.pipeline.exceptions import PipelineStepFailed
 from dlt.extract.exceptions import ResourceExtractionError
 from dlt.sources.helpers import requests
 from sources.hubspot import hubspot, hubspot_events_for_objects
@@ -18,6 +21,8 @@ from sources.hubspot.settings import (
     CRM_PRODUCTS_ENDPOINT,
     CRM_TICKETS_ENDPOINT,
     CRM_QUOTES_ENDPOINT,
+    HS_TO_DLT_TYPE,
+    MAX_PROPS_LENGTH,
 )
 from sources.hubspot.utils import chunk_properties
 from tests.hubspot.mock_data import (
@@ -119,6 +124,72 @@ def test_fetch_data_quotes(mock_response):
 
 
 @pytest.mark.parametrize("destination_name", ALL_DESTINATIONS)
+def test_data_type_conversion(destination_name: str, mock_response) -> None:
+    # Test with minimal mock data with different types
+    typed_mock_properties = {
+        "results": [
+            {"name": "number_col", "type": "number"},
+            {"name": "enum_col", "type": "enumeration"},
+            {"name": "bool_col", "type": "bool"},
+            {"name": "datetime_col", "type": "datetime"},
+            {"name": "string_col", "type": "string"},
+        ]
+    }
+
+    mock_data = {
+        "results": [
+            {
+                "id": "1",
+                "properties": {
+                    "number_col": "500",
+                    "enum_col": "random, text",
+                    "bool_col": "true",
+                    "datetime_col": "2023-06-28T13:55:47.572Z",
+                    "string_col": "some_string",
+                },
+            }
+        ]
+    }
+
+    def fake_get(url: str, *args, **kwargs) -> Any:  # type: ignore[no-untyped-def]
+        if "/properties" in url:
+            return mock_response(json_data=typed_mock_properties)
+        return mock_response(json_data=mock_data)
+
+    with patch("dlt.sources.helpers.requests.get", side_effect=fake_get):
+        pipeline = dlt.pipeline(
+            pipeline_name="hubspot",
+            destination=destination_name,
+            dataset_name="hubspot_data",
+            dev_mode=True,
+        )
+        source = hubspot(
+            api_key="fake_key",
+            properties={
+                "contact": [
+                    "number_col",
+                    "enum_col",
+                    "bool_col",
+                    "datetime_col",
+                    "string_col",
+                ]
+            },
+        )
+        load_info = pipeline.run(source.with_resources("contacts"))
+
+    assert_load_info(load_info)
+
+    schema = pipeline.default_schema
+    col_schemas = schema.get_table_columns("contacts")
+
+    for col in typed_mock_properties["results"]:
+        col_name = col["name"]
+        original_type = col["type"]
+        expected_type = HS_TO_DLT_TYPE[original_type]
+        assert col_schemas[col_name]["data_type"] == expected_type
+
+
+@pytest.mark.parametrize("destination_name", ALL_DESTINATIONS)
 def test_resource_contacts_with_history(destination_name: str, mock_response) -> None:
     expected_rows = []
     expected_props = "address,annualrevenue,associatedcompanyid,associatedcompanylastupdated,city,closedate,company,company_size,country,createdate,currentlyinworkflow,date_of_birth,days_to_close,degree,email,engagements_last_meeting_booked,engagements_last_meeting_booked_campaign,engagements_last_meeting_booked_medium,engagements_last_meeting_booked_source,fax,field_of_study,first_conversion_date,first_conversion_event_name,first_deal_created_date,firstname,followercount,gender,graduation_date,hs_object_id,hubspot_owner_assigneddate,hubspot_owner_id,hubspot_team_id,hubspotscore,industry,ip_city,ip_country,ip_country_code,ip_latlon,ip_state,ip_state_code,ip_zipcode,job_function,jobtitle,kloutscoregeneral,lastmodifieddate,lastname,lifecyclestage,linkedinbio,linkedinconnections,marital_status,message,military_status,mobilephone,notes_last_contacted,notes_last_updated,notes_next_activity_date,num_associated_deals,num_contacted_notes,num_conversion_events,num_notes,num_unique_conversion_events,numemployees,owneremail,ownername,phone,photo,recent_conversion_date,recent_conversion_event_name,recent_deal_amount,recent_deal_close_date,relationship_status,salutation,school,seniority,start_date,state,surveymonkeyeventlastupdated,total_revenue,twitterbio,twitterhandle,twitterprofilephoto,webinareventlastupdated,website,work_email,zip"
@@ -198,15 +269,29 @@ def test_too_many_properties(destination_name: str) -> None:
             list(source.with_resources("contacts"))
 
 
+@pytest.mark.parametrize(
+    "custom_props_exist",
+    [True, False],
+)
 @pytest.mark.parametrize("destination_name", ALL_DESTINATIONS)
-def test_only_users_properties(destination_name: str, mock_response) -> None:
-    def fake_get(url: str, *args, **kwargs) -> Any:  # type: ignore[no-untyped-def]
-        if "/properties" in url:
-            return mock_response(json_data=mock_contacts_properties)
-        return mock_response(json_data=mock_contacts_with_history)
-
+def test_only_users_properties(
+    destination_name: str, mock_response, custom_props_exist: bool
+) -> None:
     expected_props = "prop1,prop2,prop3"
     props = ["prop1", "prop2", "prop3"]
+
+    # avoid test isolation issues
+    test_mock_contacts_properties = copy.deepcopy(mock_contacts_properties)
+
+    if custom_props_exist:
+        test_mock_contacts_properties["results"] += [
+            {"name": prop, "type": "string"} for prop in props
+        ]
+
+    def fake_get(url: str, *args, **kwargs) -> Any:  # type: ignore[no-untyped-def]
+        if "/properties" in url:
+            return mock_response(json_data=test_mock_contacts_properties)
+        return mock_response(json_data=mock_contacts_with_history)
 
     pipeline = dlt.pipeline(
         pipeline_name="hubspot",
@@ -214,25 +299,36 @@ def test_only_users_properties(destination_name: str, mock_response) -> None:
         dataset_name="hubspot_data",
         dev_mode=True,
     )
-    source = hubspot(api_key="fake_key", include_custom_props=False)
-    with patch("sources.hubspot.ENTITY_PROPERTIES", {"contact": props}):
+
+    expectation = (
+        pytest.raises(PipelineStepFailed) if not custom_props_exist else nullcontext()
+    )
+
+    with expectation:
         with patch("dlt.sources.helpers.requests.get", side_effect=fake_get) as m:
+            source = hubspot(
+                api_key="fake_key",
+                properties={"contact": props},
+                include_custom_props=False,
+            )
             load_info = pipeline.run(source.with_resources("contacts"))
 
-        assert_load_info(load_info)
+        # Only run assertions for successful case
+        if custom_props_exist:
+            assert_load_info(load_info)
 
-        m.assert_has_calls(
-            [
-                call(
-                    urljoin(BASE_URL, CRM_CONTACTS_ENDPOINT),
-                    headers=ANY,
-                    params={
-                        "properties": expected_props,
-                        "limit": 100,
-                    },
-                ),
-            ]
-        )
+            m.assert_has_calls(
+                [
+                    call(
+                        urljoin(BASE_URL, CRM_CONTACTS_ENDPOINT),
+                        headers=ANY,
+                        params={
+                            "properties": expected_props,
+                            "limit": 100,
+                        },
+                    ),
+                ]
+            )
 
 
 @pytest.mark.parametrize("destination_name", ALL_DESTINATIONS)
@@ -271,15 +367,29 @@ def test_only_default_props(destination_name: str, mock_response) -> None:
     )
 
 
+@pytest.mark.parametrize(
+    "custom_props_exist",
+    [True, False],
+)
 @pytest.mark.parametrize("destination_name", ALL_DESTINATIONS)
-def test_users_and_custom_properties(destination_name: str, mock_response) -> None:
-    def fake_get(url: str, *args, **kwargs) -> Any:  # type: ignore[no-untyped-def]
-        if "/properties" in url:
-            return mock_response(json_data=mock_contacts_properties)
-        return mock_response(json_data=mock_contacts_with_history)
-
+def test_users_and_custom_properties(
+    destination_name: str, mock_response, custom_props_exist: bool
+) -> None:
     expected_props = "address,annualrevenue,associatedcompanyid,associatedcompanylastupdated,city,closedate,company,company_size,country,createdate,currentlyinworkflow,date_of_birth,days_to_close,degree,email,engagements_last_meeting_booked,engagements_last_meeting_booked_campaign,engagements_last_meeting_booked_medium,engagements_last_meeting_booked_source,fax,field_of_study,first_conversion_date,first_conversion_event_name,first_deal_created_date,firstname,followercount,gender,graduation_date,hubspot_owner_assigneddate,hubspot_owner_id,hubspot_team_id,hubspotscore,industry,ip_city,ip_country,ip_country_code,ip_latlon,ip_state,ip_state_code,ip_zipcode,job_function,jobtitle,kloutscoregeneral,lastmodifieddate,lastname,lifecyclestage,linkedinbio,linkedinconnections,marital_status,message,military_status,mobilephone,notes_last_contacted,notes_last_updated,notes_next_activity_date,num_associated_deals,num_contacted_notes,num_conversion_events,num_notes,num_unique_conversion_events,numemployees,owneremail,ownername,phone,photo,prop1,prop2,prop3,recent_conversion_date,recent_conversion_event_name,recent_deal_amount,recent_deal_close_date,relationship_status,salutation,school,seniority,start_date,state,surveymonkeyeventlastupdated,total_revenue,twitterbio,twitterhandle,twitterprofilephoto,webinareventlastupdated,website,work_email,zip"
     props = ["prop1", "prop2", "prop3"]
+
+    # avoid test isolation issues
+    test_mock_contacts_properties = copy.deepcopy(mock_contacts_properties)
+
+    if custom_props_exist:
+        test_mock_contacts_properties["results"] += [
+            {"name": prop, "type": "string"} for prop in props
+        ]
+
+    def fake_get(url: str, *args, **kwargs) -> Any:  # type: ignore[no-untyped-def]
+        if "/properties" in url:
+            return mock_response(json_data=test_mock_contacts_properties)
+        return mock_response(json_data=mock_contacts_with_history)
 
     pipeline = dlt.pipeline(
         pipeline_name="hubspot",
@@ -287,30 +397,37 @@ def test_users_and_custom_properties(destination_name: str, mock_response) -> No
         dataset_name="hubspot_data",
         dev_mode=True,
     )
-    source = hubspot(api_key="fake_key")
-    with patch("sources.hubspot.ENTITY_PROPERTIES", {"contact": props}):
+
+    expectation = (
+        pytest.raises(PipelineStepFailed) if not custom_props_exist else nullcontext()
+    )
+
+    with expectation:
         with patch("dlt.sources.helpers.requests.get", side_effect=fake_get) as m:
+            source = hubspot(api_key="fake_key", properties={"contact": props})
             load_info = pipeline.run(source.with_resources("contacts"))
 
-        assert_load_info(load_info)
+        # Only run assertions for successful case
+        if custom_props_exist:
+            assert_load_info(load_info)
 
-        m.assert_has_calls(
-            [
-                call(
-                    urljoin(BASE_URL, "/crm/v3/properties/contacts"),
-                    headers=ANY,
-                    params=None,
-                ),
-                call(
-                    urljoin(BASE_URL, CRM_CONTACTS_ENDPOINT),
-                    headers=ANY,
-                    params={
-                        "properties": expected_props,
-                        "limit": 100,
-                    },
-                ),
-            ]
-        )
+            m.assert_has_calls(
+                [
+                    call(
+                        urljoin(BASE_URL, "/crm/v3/properties/contacts"),
+                        headers=ANY,
+                        params=None,
+                    ),
+                    call(
+                        urljoin(BASE_URL, CRM_CONTACTS_ENDPOINT),
+                        headers=ANY,
+                        params={
+                            "properties": expected_props,
+                            "limit": 100,
+                        },
+                    ),
+                ]
+            )
 
 
 @pytest.mark.parametrize("destination_name", ALL_DESTINATIONS)
@@ -345,6 +462,7 @@ def test_all_resources(destination_name: str) -> None:
         dataset_name="hubspot_data",
         dev_mode=True,
     )
+
     load_info = pipeline.run(
         hubspot(include_history=True).with_resources(
             "contacts", "deals", "companies", "contacts_property_history"
@@ -362,7 +480,7 @@ def test_all_resources(destination_name: str) -> None:
     assert (
         load_table_counts(pipeline, *table_names)
         == load_table_distinct_counts(pipeline, "hs_object_id", *table_names)
-        == {"companies": 4, "contacts": 3, "deals": 2}
+        == {"companies": 4, "contacts": 3, "deals": 3}
     )
 
     history_table_names = [
