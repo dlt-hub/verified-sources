@@ -39,7 +39,6 @@ from .settings import (
 )
 from .settings import (
     FACEBOOK_INSIGHTS_RETENTION_PERIOD,
-    ALL_ACTION_BREAKDOWNS,
     ALL_ACTION_ATTRIBUTION_WINDOWS,
     DEFAULT_INSIGHT_FIELDS,
     INSIGHT_FIELDS_TYPES,
@@ -126,8 +125,8 @@ def facebook_insights_source(
     fields: Sequence[str] = DEFAULT_INSIGHT_FIELDS,
     attribution_window_days_lag: int = 7,
     time_increment_days: int = 1,
-    breakdowns: TInsightsBreakdownOptions = "ads_insights",
-    action_breakdowns: Sequence[str] = ALL_ACTION_BREAKDOWNS,
+    breakdowns: TInsightsBreakdownOptions = None,
+    action_breakdowns: Sequence[str] = None,
     level: TInsightsLevels = "ad",
     action_attribution_windows: Sequence[str] = ALL_ACTION_ATTRIBUTION_WINDOWS,
     batch_size: int = 50,
@@ -149,8 +148,8 @@ def facebook_insights_source(
         fields (Sequence[str], optional): A list of fields to include in each reports. Note that `breakdowns` option adds fields automatically. Defaults to DEFAULT_INSIGHT_FIELDS.
         attribution_window_days_lag (int, optional): Attribution window in days. The reports in attribution window are refreshed on each run.. Defaults to 7.
         time_increment_days (int, optional): The report aggregation window in days. use 7 for weekly aggregation. Defaults to 1.
-        breakdowns (TInsightsBreakdownOptions, optional): A presents with common aggregations. See settings.py for details. Defaults to "ads_insights_age_and_gender".
-        action_breakdowns (Sequence[str], optional): Action aggregation types. See settings.py for details. Defaults to ALL_ACTION_BREAKDOWNS.
+        breakdowns (TInsightsBreakdownOptions, optional): A presents with common aggregations. See settings.py for details. Defaults to None (no breakdowns).
+        action_breakdowns (Sequence[str], optional): Action aggregation types. See settings.py for details. Defaults to None (no action breakdowns).
         level (TInsightsLevels, optional): The granularity level. Defaults to "ad".
         action_attribution_windows (Sequence[str], optional): Attribution windows for actions. Defaults to ALL_ACTION_ATTRIBUTION_WINDOWS.
         batch_size (int, optional): Page size when reading data from particular report. Defaults to 50.
@@ -186,16 +185,8 @@ def facebook_insights_source(
         while start_date <= end_date:
             query = {
                 "level": level,
-                "action_breakdowns": list(action_breakdowns),
-                "breakdowns": list(
-                    INSIGHTS_BREAKDOWNS_OPTIONS[breakdowns]["breakdowns"]
-                ),
                 "limit": batch_size,
-                "fields": list(
-                    set(fields)
-                    .union(INSIGHTS_BREAKDOWNS_OPTIONS[breakdowns]["fields"])
-                    .difference(INVALID_INSIGHTS_FIELDS)
-                ),
+                "fields": list(set(fields).difference(INVALID_INSIGHTS_FIELDS)),
                 "time_increment": time_increment_days,
                 "action_attribution_windows": list(action_attribution_windows),
                 "time_ranges": [
@@ -207,6 +198,22 @@ def facebook_insights_source(
                     }
                 ],
             }
+            
+            # Only add action_breakdowns if explicitly provided
+            if action_breakdowns is not None:
+                query["action_breakdowns"] = list(action_breakdowns)
+            
+            # Only add breakdowns if explicitly provided
+            if breakdowns is not None:
+                query["breakdowns"] = list(
+                    INSIGHTS_BREAKDOWNS_OPTIONS[breakdowns]["breakdowns"]
+                )
+                # Add breakdown fields to the fields list
+                query["fields"] = list(
+                    set(query["fields"])
+                    .union(INSIGHTS_BREAKDOWNS_OPTIONS[breakdowns]["fields"])
+                    .difference(INVALID_INSIGHTS_FIELDS)
+                )
             job = execute_job(account.get_insights(params=query, is_async=True))
             yield list(map(process_report_item, job.get_result()))
             start_date = start_date.add(days=time_increment_days)
