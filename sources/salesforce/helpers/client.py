@@ -23,7 +23,9 @@ class SalesforceClientConfiguration(BaseConfiguration):
     proxies: Optional[str] = None
     client_id: Optional[str] = None
 
-    def get_proxies(self) -> Proxies:
+    def get_proxies(self) -> Optional[Proxies]:
+        if self.proxies is None:
+            return None
         return cast(Proxies, json.loads(self.proxies))
 
 
@@ -137,13 +139,12 @@ def make_salesforce_client(
     Note that version, domain, session and proxies are universal kwargs used for all authentication types in
     the Salesforce object.
     """
-    proxies = config.get_proxies() if config.proxies else None
     if isinstance(credentials, SecurityTokenAuth):
         return Salesforce(
             version=config.version,
             domain=config.domain,
             session=session,
-            proxies=proxies,
+            proxies=config.get_proxies(),
             username=credentials.user_name,
             password=credentials.password,
             security_token=credentials.security_token,
@@ -155,7 +156,7 @@ def make_salesforce_client(
             version=config.version,
             domain=config.domain,
             session=session,
-            proxies=proxies,
+            proxies=config.get_proxies(),
             session_id=credentials.session_id,
             instance=credentials.instance,
             instance_url=credentials.instance_url,
@@ -166,7 +167,7 @@ def make_salesforce_client(
             version=config.version,
             domain=config.domain,
             session=session,
-            proxies=proxies,
+            proxies=config.get_proxies(),
             username=credentials.user_name,
             password=credentials.password,
             organizationId=credentials.organization_id,
@@ -178,7 +179,7 @@ def make_salesforce_client(
             version=config.version,
             domain=config.domain,
             session=session,
-            proxies=proxies,
+            proxies=config.get_proxies(),
             username=credentials.user_name,
             password=credentials.password,
             consumer_key=credentials.consumer_key,
@@ -190,7 +191,7 @@ def make_salesforce_client(
             version=config.version,
             domain=config.domain,
             session=session,
-            proxies=proxies,
+            proxies=config.get_proxies(),
             username=credentials.user_name,
             instance_url=credentials.instance_url,
             consumer_key=credentials.consumer_key,
@@ -203,7 +204,7 @@ def make_salesforce_client(
         return Salesforce(
             version=config.version,
             session=session,
-            proxies=proxies,
+            proxies=config.get_proxies(),
             consumer_key=credentials.consumer_key,
             consumer_secret=credentials.consumer_secret,
             domain=credentials.domain,

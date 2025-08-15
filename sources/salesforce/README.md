@@ -37,7 +37,7 @@ Here, we chose BigQuery as the destination. Alternatively, you can also choose r
 
 ## Setup verified source and pipeline example
 
-To grab credentials and initialize the verified source, please refer to the [full documentation here.](https://dlthub.com/docs/dlt-ecosystem/verified-sources/salesforce)
+To initialize the verified source, please refer to the [full documentation here.](https://dlthub.com/docs/dlt-ecosystem/verified-sources/salesforce)
 
 ## Add credentials and configs
 
@@ -51,7 +51,7 @@ To grab credentials and initialize the verified source, please refer to the [ful
     security_token = "please set me up!" # Salesforce security token generated
     ```
 
-    Alternatively, you can authenticate using one of the following methods:
+   Alternatively, you may authenticate using any method supported by the underlying `simple_salesforce` library. For instructions on obtaining these credentials, please consult Salesforce’s documentation.
 
     - IP-whitelist + organization ID:
         ```toml

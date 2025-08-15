@@ -1,13 +1,10 @@
-from typing import OrderedDict
-import inspect
+from collections import OrderedDict
 from tests.utils import ALL_DESTINATIONS, assert_load_info, load_table_counts
 import pytest
 from dlt.common import pendulum
 import dlt
 from sources.salesforce import salesforce_source
 from sources.salesforce.helpers.records import _process_record
-from simple_salesforce import Salesforce
-from dlt.sources.helpers.requests import Session
 
 
 @pytest.mark.parametrize("destination_name", ALL_DESTINATIONS)
@@ -87,19 +84,19 @@ def test_process_record(api_type: str) -> None:
             ("Id", "003Wz00000E9PTuIAN"),
             (
                 "CreatedDate",
-                "2025-08-06T14:16:08.000+0000"
+                "2020-08-06T14:16:08.000+0000"
                 if api_type == "standard"
                 else 1754489768000,
             ),
             (
                 "LastModifiedDate",
-                "2025-08-06T14:16:08.000+0000"
+                "2020-08-06T14:16:08.000+0000"
                 if api_type == "standard"
                 else 1754489768000,
             ),
             (
                 "SystemModstamp",
-                "2025-08-06T14:16:08.000+0000"
+                "2020-08-06T14:16:08.000+0000"
                 if api_type == "standard"
                 else 1754489768000,
             ),

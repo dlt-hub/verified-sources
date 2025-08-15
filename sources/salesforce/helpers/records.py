@@ -37,7 +37,7 @@ def _process_record(
                     record[field] / 1000,
                 ).strftime("%Y-%m-%dT%H:%M:%S.%fZ")
             else:
-                # Standard API return ISO strings, ensure consistent format
+                # Standard API returns ISO strings, ensure consistent format
                 if record[field]:
                     # pendulum.parse can also return Date, Time or Duration
                     # Salesforce date/datetime fields are always DateTime
