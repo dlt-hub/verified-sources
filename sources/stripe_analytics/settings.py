@@ -7,8 +7,9 @@ ENDPOINTS = (
     "Account",
     "Coupon",
     "Customer",
+    "Invoice",
     "Product",
     "Price",
 )
 # possible incremental endpoints
-INCREMENTAL_ENDPOINTS = ("Event", "Invoice", "BalanceTransaction")
+INCREMENTAL_ENDPOINTS = ("Event", "BalanceTransaction")
