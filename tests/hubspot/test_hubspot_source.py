@@ -22,7 +22,6 @@ from sources.hubspot.settings import (
     CRM_TICKETS_ENDPOINT,
     CRM_QUOTES_ENDPOINT,
     HS_TO_DLT_TYPE,
-    MAX_PROPS_LENGTH,
 )
 from sources.hubspot.utils import chunk_properties
 from tests.hubspot.mock_data import (

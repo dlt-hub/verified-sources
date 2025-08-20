@@ -154,8 +154,8 @@ def load_web_analytics_events(
 
 if __name__ == "__main__":
     load_crm_data()
-# load_crm_data_with_history()
-# load_crm_objects_with_custom_properties()
-# load_pipelines()
-# load_crm_data_with_soft_delete()
-# load_web_analytics_events("company", ["7086461639", "7086464459"])
+    # load_crm_data_with_history()
+    # load_crm_objects_with_custom_properties()
+    # load_pipelines()
+    # load_crm_data_with_soft_delete()
+    # load_web_analytics_events("company", ["7086461639", "7086464459"])

@@ -31,16 +31,12 @@ from typing import (
     Literal,
     Optional,
     Sequence,
-    Union,
-    Tuple,
-    Set,
 )
 from urllib.parse import quote
 
 import dlt
 from dlt.common import pendulum
 from dlt.common.typing import TDataItems
-from dlt.common.schema.typing import TColumnSchema, TTableSchemaColumns
 from dlt.sources import DltResource
 
 from .helpers import (
@@ -137,7 +133,6 @@ def crm_objects(
     col_type_hints = {
         prop: _to_dlt_columns_schema({prop: hb_type})
         for prop, hb_type in props_to_type.items()
-        if hb_type in HS_TO_DLT_TYPE
     }
     for batch in fetch_data_for_properties(
         ",".join(sorted(props_to_type.keys())), api_key, object_type, archived
@@ -454,12 +449,12 @@ def fetch_props_with_types(
     include_custom_props: bool = True,
 ) -> Dict[str, str]:
     """
-    Fetch the list of properties for a HubSpot object type as a joined string, as well as the mapping of properties to their types.
+    Fetch the mapping of properties to their types.
 
     Args:
         object_type (str): Type of HubSpot object (e.g., 'company', 'contact').
         api_key (str): HubSpot API key for authentication.
-        props (Set[str]): Set of properties to fetch.
+        props (List[str]): List of properties to fetch.
         include_custom_props (bool, optional): Include custom properties in the result. Defaults to True.
 
     Returns:

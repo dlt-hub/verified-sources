@@ -1,9 +1,9 @@
 """Hubspot source helpers"""
 
-import dlt
+from typing import Union
 
 import urllib.parse
-from typing import Any, Dict, Generator, Iterator, List, Optional, Tuple, Set
+from typing import Any, Dict, Iterator, List, Optional
 
 from dlt.common.schema.typing import TColumnSchema
 from dlt.sources.helpers import requests
@@ -200,15 +200,17 @@ def fetch_data(
         _data = pagination(_data, headers)
 
 
-def _get_property_names_types(api_key: str, object_type: str) -> Dict[str, str]:
+def _get_property_names_types(
+    api_key: str, object_type: str
+) -> Dict[str, Union[str, None]]:
     """
-    Retrieve property names and their types for a given entity from the HubSpot API.
+    Retrieve property names and their types if present for a given entity from the HubSpot API.
 
     Args:
         entity: The entity name for which to retrieve property names.
 
     Returns:
-        A dict of propery names and their types.
+        A dict of propery names and their types if present.
 
     Raises:
         Exception: If an error occurs during the API request.
@@ -218,7 +220,7 @@ def _get_property_names_types(api_key: str, object_type: str) -> Dict[str, str]:
 
     for page in fetch_data(endpoint, api_key):
         for prop in page:
-            props_to_type[prop["name"]] = prop["type"]
+            props_to_type[prop["name"]] = prop.get("type", None)
 
     return props_to_type
 
@@ -237,9 +239,13 @@ def get_properties_labels(
 
 
 def _to_dlt_columns_schema(col: Dict[str, str]) -> TColumnSchema:
-    """Converts hubspot column to dlt column schema."""
+    """Converts hubspot column to dlt column schema that will be
+    used as a column hint."""
     col_name, col_type = next(iter(col.items()))
-    return {
-        "name": col_name,
-        "data_type": HS_TO_DLT_TYPE[col_type],
-    }
+    # NOTE: if col_type is not in HS_TO_DLT_TYPE, we return an empty dict.
+    # Downstream, this means no column hints are provided for this property.
+    return (
+        {"name": col_name, "data_type": HS_TO_DLT_TYPE[col_type]}
+        if col_type in HS_TO_DLT_TYPE
+        else {}
+    )
