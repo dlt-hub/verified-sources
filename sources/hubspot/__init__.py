@@ -37,7 +37,6 @@ from urllib.parse import quote
 import dlt
 from dlt.common import pendulum
 from dlt.common.typing import TDataItems
-from dlt.common.schema.typing import TColumnSchema, TTableSchemaColumns
 from dlt.sources import DltResource
 
 from .helpers import (
