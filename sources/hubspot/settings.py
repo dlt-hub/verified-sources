@@ -117,7 +117,7 @@ PIPELINES_OBJECTS = ["deals", "tickets"]
 SOFT_DELETE_KEY = "is_deleted"
 ARCHIVED_PARAM = {"archived": True}
 PREPROCESSING = {"split": ["hs_merged_object_ids"]}
-STAGE_PROPERTY_PREFIX = "hs_date_entered_"
+STAGE_PROPERTY_PREFIX = "hs_v2_date_entered_"
 MAX_PROPS_LENGTH = 2000
 PROPERTIES_WITH_CUSTOM_LABELS = ()
 

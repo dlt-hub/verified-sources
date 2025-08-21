@@ -69,7 +69,7 @@ THubspotObjectType = Literal["company", "contact", "deal", "ticket", "product", 
 
 
 def fetch_data_for_properties(
-    props: Sequence[str],
+    props: List[str],
     api_key: str,
     object_type: str,
     soft_delete: bool,
@@ -78,7 +78,7 @@ def fetch_data_for_properties(
     Fetch data for a given set of properties from the HubSpot API.
 
     Args:
-        props (Sequence[str]): List of property names to fetch.
+        props (List[str]): List of property names to fetch.
         api_key (str): HubSpot API key for authentication.
         object_type (str): The type of HubSpot object (e.g., 'company', 'contact').
         soft_delete (bool): Flag to fetch soft-deleted (archived) records.
@@ -86,8 +86,9 @@ def fetch_data_for_properties(
     Yields:
         Iterator[TDataItems]: Data retrieved from the HubSpot API.
     """
-
-    params: Dict[str, Any] = {"properties": props, "limit": 100}
+    # The Hubspot API expects a comma separated string as properties
+    joined_props = ",".join(sorted(props))
+    params: Dict[str, Any] = {"properties": joined_props, "limit": 100}
     context: Optional[Dict[str, Any]] = (
         {SOFT_DELETE_KEY: False} if soft_delete else None
     )
@@ -135,7 +136,7 @@ def crm_objects(
         for prop, hb_type in props_to_type.items()
     }
     for batch in fetch_data_for_properties(
-        ",".join(sorted(props_to_type.keys())), api_key, object_type, archived
+        list(props_to_type.keys()), api_key, object_type, archived
     ):
         yield dlt.mark.with_hints(batch, dlt.mark.make_hints(columns=col_type_hints))
 
@@ -151,9 +152,9 @@ def crm_object_history(
 
     Args:
         object_type (str): Type of HubSpot object (e.g., 'company', 'contact').
-        api_key (str, optional): API key for HubSpot authentication.
-        props (List[str], optional): List of properties to retrieve. Defaults to None.
-        include_custom_props (bool, optional): Include custom properties in the result. Defaults to True.
+        api_key (str): API key for HubSpot authentication.
+        props (List[str]): List of properties to retrieve. Defaults to None.
+        include_custom_props (bool): Include custom properties in the result. Defaults to True.
 
     Yields:
         Iterator[TDataItems]: Historical property data.
@@ -207,7 +208,11 @@ def pivot_stages_properties(
             continue
         id_val = record_not_null.pop(id_prop)
         new_data += [
-            {id_prop: id_val, property_prefix: v, "stage": k.split(property_prefix)[1]}
+            {
+                id_prop: id_val,
+                property_prefix: v,
+                "stage": k.split(property_prefix)[1],
+            }
             for k, v in record_not_null.items()
             if k.startswith(property_prefix)
         ]
@@ -221,12 +226,8 @@ def stages_timing(
 ) -> Iterator[TDataItems]:
     """
     Fetch stage timing data for a specific object type from the HubSpot API. Some entities, like,
-    deals and tickets actually have pipelines with multiple stages, which they can enter and exit. This function fetches
-    history of entering and exiting different stages for the given object.
-
-    We have to request them separately, because these properties has the pipeline stage_id in the name.
-    For example, "hs_date_entered_12345678", where 12345678 is the stage_id.
-
+    deals and tickets have pipelines with multiple stages, which they can enter and exit. This function fetches
+    history of entering different stages for the given object.
 
     Args:
         object_type (str): Type of HubSpot object (e.g., 'deal', 'ticket').
@@ -236,7 +237,6 @@ def stages_timing(
     Yields:
         Iterator[TDataItems]: Stage timing data.
     """
-
     all_properties: List[str] = list(
         _get_property_names_types(api_key, object_type).keys()
     )
@@ -248,10 +248,7 @@ def stages_timing(
     # data for the whole properties list. Therefore, in the following lines we request
     # data iteratively for chunks of the properties list.
     for chunk in chunk_properties(date_entered_properties, MAX_PROPS_LENGTH):
-        props_part = ",".join(chunk)
-        for data in fetch_data_for_properties(
-            props_part, api_key, object_type, soft_delete
-        ):
+        for data in fetch_data_for_properties(chunk, api_key, object_type, soft_delete):
             yield pivot_stages_properties(data)
 
 
