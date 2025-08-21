@@ -9,8 +9,44 @@ from pg_replication.helpers import init_replication
 
 PG_CREDS = dlt.secrets.get("sources.pg_replication.credentials", PostgresCredentials)
 
+def replicate_with_initial_load(pipeline_name, slot_name, pub_name) -> None:
+    """Production example: Sets up replication with initial load.
 
-def replicate_single_table() -> None:
+    Demonstrates usage of `persist_snapshots` argument and snapshot resource
+    returned by `init_replication` helper.
+    """
+    # create source and destination pipelines
+    dest_pl = dlt.pipeline(
+        pipeline_name=pipeline_name,
+        destination='duckdb',
+        dataset_name="replication_postgres",
+    )
+    schema_name = "public"
+
+    creds = dlt.secrets.get(
+        f"{pipeline_name}.sources.pg_replication.credentials", PostgresCredentials
+    )
+    print(creds)
+    snapshot = init_replication(  # requires the Postgres user to have the REPLICATION attribute assigned
+        slot_name=slot_name,
+        credentials=creds,
+        pub_name=pub_name,
+        schema_name=schema_name,
+        persist_snapshots=True,  # persist snapshot table(s) and let function return resource(s) for initial load
+        reset=True
+    )
+    print("replication initialized")
+    # perform initial load to capture all records present in source table prior to replication initialization
+    dest_pl.run(snapshot)
+    print("replication run")
+    # insert record in source table and propagate change to destination
+    changes = replication_resource(slot_name, pub_name, cridentials=creds)
+    print("changes initialized")
+    dest_pl.run(changes)
+    print("changes run")
+    
+
+def replicate_single_table_demo() -> None:
     """Sets up replication for a single Postgres table and loads changes into a destination.
 
     Demonstrates basic usage of `init_replication` helper and `replication_resource` resource.
@@ -64,11 +100,16 @@ def replicate_single_table() -> None:
     show_destination_table(dest_pl)
 
 
-def replicate_with_initial_load() -> None:
+def demo_initial_load_replication() -> None:
     """Sets up replication with initial load.
 
     Demonstrates usage of `persist_snapshots` argument and snapshot resource
     returned by `init_replication` helper.
+
+    Notes:
+      - This function also creates the source table itself. That’s only useful for demos or
+        when starting with a brand-new database. In production you normally won’t create tables here,
+        since your application/database already has them.
     """
     # create source and destination pipelines
     src_pl = get_postgres_pipeline()
@@ -112,7 +153,7 @@ def replicate_with_initial_load() -> None:
     show_destination_table(dest_pl)
 
 
-def replicate_entire_schema() -> None:
+def replicate_entire_schema_demo() -> None:
     """Demonstrates setup and usage of schema replication.
 
     Schema replication requires a Postgres server version of 15 or higher. An
@@ -172,7 +213,7 @@ def replicate_entire_schema() -> None:
     show_destination_table(dest_pl, "tbl_z")
 
 
-def replicate_with_column_selection() -> None:
+def replicate_with_column_selection_demo() -> None:
     """Sets up replication with column selection.
 
     Demonstrates usage of `include_columns` argument.
@@ -286,7 +327,7 @@ def show_destination_table(
 
 
 if __name__ == "__main__":
-    replicate_single_table()
+    replicate_single_table_demo()
     # replicate_with_initial_load()
-    # replicate_entire_schema()
-    # replicate_with_column_selection()
+    # replicate_entire_schema_demo()
+    # replicate_with_column_selection_demo()
