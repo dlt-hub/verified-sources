@@ -1,5 +1,7 @@
 """Hubspot source settings and constants"""
+from typing import Dict
 from dlt.common import pendulum
+from dlt.common.data_types import TDataType
 
 STARTDATE = pendulum.datetime(year=2024, month=2, day=10)
 
@@ -111,9 +113,6 @@ ENTITY_PROPERTIES = {
 }
 
 
-# 'ALL' represents a list of all available properties for all types
-ALL = "All"
-
 PIPELINES_OBJECTS = ["deals", "tickets"]
 SOFT_DELETE_KEY = "is_deleted"
 ARCHIVED_PARAM = {"archived": True}
@@ -121,3 +120,11 @@ PREPROCESSING = {"split": ["hs_merged_object_ids"]}
 STAGE_PROPERTY_PREFIX = "hs_date_entered_"
 MAX_PROPS_LENGTH = 2000
 PROPERTIES_WITH_CUSTOM_LABELS = ()
+
+HS_TO_DLT_TYPE: Dict[str, TDataType] = {
+    "bool": "bool",
+    "enumeration": "text",
+    "number": "double",
+    "datetime": "timestamp",
+    "string": "text",
+}
