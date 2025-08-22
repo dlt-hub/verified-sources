@@ -35,6 +35,8 @@ When source detects any problems with headers or table layout **it will issue a 
 `dlt` normalizer will use first row of data to infer types and will try to coerce following rows - creating variant columns if that is not possible. This is a standard behavior.
 **date time** and **date** types are also recognized and this happens via additional metadata that is retrieved for the first row.
 
+> For **date time** or **date** columns, provide a type hint if the first row is empty to ensure values are serialized correctly.
+
 ## Passing the spreadsheet id/url and explicit range names
 You can use both url of your spreadsheet that you can copy from the browser ie.
 ```

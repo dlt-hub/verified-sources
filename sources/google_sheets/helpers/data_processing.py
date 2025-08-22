@@ -1,12 +1,13 @@
 """This is a helper module that contains function which validate and process data"""
 
 import re
-from typing import Any, Iterator, List, Tuple, Union, NamedTuple
+from typing import Any, Iterator, List, Tuple, Union, NamedTuple, Optional
 
 import dlt
 from dlt.common import logger, pendulum
-from dlt.common.typing import DictStrAny
+from dlt.common.typing import DictStrAny, TTableHintTemplate
 from dlt.common.data_types import TDataType
+from dlt.common.schema.typing import TTableSchemaColumns
 
 # this string comes before the id
 URL_ID_IDENTIFIER = "d"
@@ -229,8 +230,52 @@ def serial_date_to_datetime(
     return conv_datetime
 
 
+def _handle_possibly_date_vals(
+    val: Union[int, float],
+    col_name: str,
+    type_from_metadata: Optional[TDataType],
+    col_hints: Optional[TTableHintTemplate[TTableSchemaColumns]],
+) -> Any:
+    """
+    Convert numeric spreadsheet values to dates/timestamps when appropriate.
+    1. if val is a boolean, return it unchanged
+    2. if type_from_metadata is "timestamp" or "date", convert using serial_date_to_datetime
+    3. if type_from_metadata is not provided, look up type hint in col_hints
+       and if "timestamp" or "date", convert using serial_date_to_datetime
+    4. otherwise return unchanged
+
+    Args:
+        val (Union[int, float]): numeric cell value
+        col_name (str): name of the header the cell value corresponds to
+        type_from_metadata (Optional[TDataType]): "timestamp", "date" or None based on first row under the header
+        col_hints (Optional[TTableHintTemplate[TTableSchemaColumns]]): Column hints, possibly with date/timestamp data type hints
+
+    Yields:
+        Any: The converted datetime object, or the original value.
+    """
+    # bool is a subclass of int, no additional processing needed
+    if isinstance(val, bool):
+        return val
+    # data type is provided from the metadata
+    if type_from_metadata in ["timestamp", "date"]:
+        return serial_date_to_datetime(val, type_from_metadata)
+    # if no type is provided from the metadata, check col hints
+    if type_from_metadata is None:
+        # we only use non dynamic hints that are dicts
+        if not col_hints or not isinstance(col_hints, dict):
+            return val
+        col_schema = col_hints.get(col_name, None)
+        if col_schema:
+            data_type = col_schema.get("data_type")
+            if data_type in ["timestamp", "date"]:
+                return serial_date_to_datetime(val, data_type)
+    return val
+
+
 def process_range(
-    sheet_values: List[List[Any]], headers: List[str], data_types: List[TDataType]
+    sheet_values: List[List[Any]],
+    headers: List[str],
+    data_types: List[TDataType],
 ) -> Iterator[DictStrAny]:
     """
     Yields lists of values as dictionaries, converts data times and handles empty rows and cells. Please note:
@@ -241,11 +286,14 @@ def process_range(
     Args:
         sheet_val (List[List[Any]]): range values without the header row
         headers (List[str]): names of the headers
-        data_types: List[TDataType]: "timestamp" and "date" or None for each column
+        data_types (List[TDataType]): "timestamp" and "date" or None for each column
 
     Yields:
         DictStrAny: A dictionary version of the table. It generates a dictionary of the type {header: value} for every row.
     """
+    # col_hints are used in case the data type was not produced due to empty traling columns
+    current_resource = dlt.current.source().resources[dlt.current.resource_name()]
+    col_hints = current_resource.columns
 
     for row in sheet_values:
         # empty row; skip
@@ -261,12 +309,8 @@ def process_range(
             # handle null values properly. Null cell values are returned as empty strings, this will cause dlt to create new columns and fill them with empty strings
             if val == "":
                 fill_val = None
-            elif data_type in ["timestamp", "date"]:
-                # the datetimes are inferred from first row of data. if next rows have inconsistent data types - pass the values to dlt to deal with them
-                if not isinstance(val, (int, float)) or isinstance(val, bool):
-                    fill_val = val
-                else:
-                    fill_val = serial_date_to_datetime(val, data_type)
+            elif isinstance(val, (int, float)):
+                fill_val = _handle_possibly_date_vals(val, header, data_type, col_hints)
             else:
                 fill_val = val
             table_dict[header] = fill_val
