@@ -464,23 +464,30 @@ def test_all_resources(destination_name: str) -> None:
 
     load_info = pipeline.run(
         hubspot(include_history=True).with_resources(
-            "contacts", "deals", "companies", "contacts_property_history"
+            "contacts",
+            "deals",
+            "companies",
+            "contacts_property_history",
+            "stages_timing_deals",
         )
     )
 
     assert_load_info(load_info)
-    table_names = [
-        t["name"]
-        for t in pipeline.default_schema.data_tables()
-        if not t["name"].endswith("_property_history") and not t.get("parent")
-    ]
 
     # make sure no duplicates (ie. pages wrongly overlap)
-    assert (
-        load_table_counts(pipeline, *table_names)
-        == load_table_distinct_counts(pipeline, "hs_object_id", *table_names)
-        == {"companies": 4, "contacts": 3, "deals": 3}
-    )
+    expected_counts = {
+        "companies": 4,
+        "contacts": 3,
+        "deals": 3,
+        "stages_timing_deals": 8,
+    }
+    for table, expected in expected_counts.items():
+        distinct_col = "_dlt_id" if table == "stages_timing_deals" else "hs_object_id"
+        assert (
+            load_table_counts(pipeline, table)
+            == load_table_distinct_counts(pipeline, distinct_col, table)
+            == {table: expected}
+        )
 
     history_table_names = [
         t["name"]
