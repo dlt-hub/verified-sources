@@ -1,8 +1,8 @@
-import logging
 from typing import Tuple
 
 import pytest
 import dlt
+from datetime import date # noqa: I251
 from dlt.common.pipeline import LoadInfo
 from sources.google_sheets import google_spreadsheet
 from tests.utils import (
@@ -37,6 +37,7 @@ ALL_RANGES = {
     "trailing_empty_cols_1",
     "trailing_empty_cols_2",
     "trailing_empty_cols_3",
+    "trailing_empty_col_date",
 }
 
 SKIPPED_RANGES = {
@@ -73,6 +74,7 @@ ALL_TABLES_LOADED = {
     "trailing_empty_cols_1",
     "trailing_empty_cols_2",
     "trailing_empty_cols_3",
+    "trailing_empty_col_date",
 }
 
 
@@ -761,6 +763,46 @@ def test_trailing_empty_cols() -> None:
             rows = list(cur.fetchall())
             assert len(rows) == 4
             assert rows == expected_rows
+
+
+@pytest.mark.parametrize("with_hints", [True, False])
+def test_trailing_empty_col_date(with_hints: bool) -> None:
+    pipeline = dlt.pipeline(
+        destination="duckdb",
+        dev_mode=True,
+        dataset_name="test_trailing_empty_col_date",
+    )
+    data = google_spreadsheet(
+        "1HhWHjqouQnnCIZAFa2rL6vT91YRN8aIhts22SUUR580",
+        range_names=["trailing_empty_cols_1", "trailing_empty_col_date"],
+        get_named_ranges=False,
+    )
+    if with_hints:
+        data.trailing_empty_col_date.apply_hints(
+            columns={"Start Date": {"data_type": "date"}}
+        )
+    info = pipeline.run(data)
+    assert_load_info(info)
+
+    assert "trailing_empty_col_date" in pipeline.default_schema.tables
+    assert set(
+        pipeline.default_schema.get_table_columns("trailing_empty_col_date").keys()
+    ) == {"start_date", "end_date", "text", "_dlt_id", "_dlt_load_id"}
+
+    expected = [
+        (None, date(2027, 4, 12), "blablabla"),
+        (
+            date(2028, 4, 12) if with_hints else 46855,
+            date(2027, 4, 12),
+            "43432",
+        ),
+    ]
+    with pipeline.sql_client() as c:
+        sql_query = f"SELECT start_date, end_date, text FROM {pipeline.dataset_name}.trailing_empty_col_date;"
+        with c.execute_query(sql_query) as cur:
+            rows = list(cur.fetchall())
+            assert len(rows) == 2
+            assert rows == expected
 
 
 def _row_helper(row, destination_name):
