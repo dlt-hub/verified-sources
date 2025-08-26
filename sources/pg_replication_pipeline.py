@@ -9,7 +9,7 @@ from pg_replication.helpers import init_replication
 
 PG_CREDS = dlt.secrets.get("sources.pg_replication.credentials", PostgresCredentials)
 
-def replicate_with_initial_load(pipeline_name, slot_name, pub_name) -> None:
+def replicate_with_initial_load(pipeline_name: str, slot_name: str, pub_name: str) -> None:
     """Production example: Sets up replication with initial load.
 
     Demonstrates usage of `persist_snapshots` argument and snapshot resource
@@ -40,7 +40,7 @@ def replicate_with_initial_load(pipeline_name, slot_name, pub_name) -> None:
     dest_pl.run(snapshot)
     print("replication run")
     # insert record in source table and propagate change to destination
-    changes = replication_resource(slot_name, pub_name, cridentials=creds)
+    changes = replication_resource(slot_name, pub_name, credentials=creds)
     print("changes initialized")
     dest_pl.run(changes)
     print("changes run")
