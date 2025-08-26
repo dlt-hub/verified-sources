@@ -203,30 +203,106 @@ Response:
 
 Map diverse API documentation terms to consistent `dlt` parameters. Identify the API's term first, then find the corresponding `dlt` key.
 
-| Concept             | Common API Terms                                    | dlt Parameter Key(s) | Notes                                      |
-|---------------------|-----------------------------------------------------|----------------------|--------------------------------------------|
-| **Client**          |                                                     |                      |                                            |
-| Base URL            | Base URL, API Endpoint, Root URL, Service URL       | `client.base_url`    | Include version path (e.g., `/v1/`)        |
-| API Key (value)     | API Key, Access Token, Secret, Token, Key           | `client.auth.api_key`| (Handled via Secret Handling patterns)     |
-| API Key (param name)| `api_key`, `token`, `key`, `access_token`           | `client.auth.name`   | Query param name or Header name            |
-| API Key (location)  | Query parameter, Header                             | `client.auth.location`| `query` or `header`                        |
-| Bearer Token        | Bearer Token, JWT                                   | `client.auth.token`  | (Handled via Secret Handling patterns)     |
-| **Pagination**      |                                                     |                      | **Define per-resource if strategies differ!** |
-| Next Cursor (source)| `next_cursor`, `next_page`, `nextToken`, `marker`   | `paginator.cursor_path`| JSON path in response                      |
-| Next Cursor (param) | `cursor`, `page_token`, `after`, `next`, `marker`   | `paginator.cursor_param`| Query param name to send cursor            |
-| Offset (param)      | `offset`, `skip`, `start`, `startIndex`             | `paginator.offset_param`| Query param name                           |
-| Page Number (param) | `page`, `page_number`, `pageNum`                    | `paginator.page_param`| Query param name                           |
-| Page Size (param)   | `limit`, `per_page`, `page_size`, `count`, `maxItems` | `paginator.limit_param`| Query param name                           |
-| Total Items (source)| `total`, `total_count`, `total_results`, `count`  | `paginator.total_path`| Optional JSON path in response             |
-| Link Header Relation| `next`, `last`                                      | `paginator.next_url_path`| `rel` value in `Link` header           |
-| **Incremental**     |                                                     |                      | **Define per-resource if strategies differ!** |
-| Timestamp (param)   | `since`, `updated_since`, `modified_since`, `from`| `incremental.start_param`| Query param name                           |
-| Timestamp (source)  | `updated_at`, `modified`, `last_updated`, `ts`    | `incremental.cursor_path`| JSON path in response item                 |
-| ID/Sequence (param) | `since_id`, `min_id`, `after_id`, `sequence`      | `incremental.start_param`| Query param name                           |
-| ID/Sequence (source)| `id`, `event_id`, `sequence_id`, `_id`            | `incremental.cursor_path`| JSON path in response item                 |
-| Initial Value       | N/A                                                 | `incremental.initial_value`| Start value for first run                |
-| **Data**            |                                                     |                      |                                            |
-| Data Array Path     | `data`, `results`, `items`, `records`, `entries`    | `endpoint.data_selector`| JSON path to the list of items           |
+```yaml
+client:
+  base_url:
+    common_api_terms: ["Base URL", "API Endpoint", "Root URL", "Service URL"]
+    dlt_parameter: "client.base_url"
+    notes: "Include version path (e.g., /v1/)"
+  
+  auth:
+    api_key_value:
+      common_api_terms: ["API Key", "Access Token", "Secret", "Token", "Key"]
+      dlt_parameter: "client.auth.api_key"
+      notes: "Handled via Secret Handling patterns"
+    
+    api_key_param_name:
+      common_api_terms: ["api_key", "token", "key", "access_token"]
+      dlt_parameter: "client.auth.name"
+      notes: "Query param name or Header name"
+    
+    api_key_location:
+      common_api_terms: ["Query parameter", "Header"]
+      dlt_parameter: "client.auth.location"
+      notes: "query or header"
+    
+    bearer_token:
+      common_api_terms: ["Bearer Token", "JWT"]
+      dlt_parameter: "client.auth.token"
+      notes: "Handled via Secret Handling patterns"
+
+pagination:
+  note: "Define per-resource if strategies differ!"
+  
+  next_cursor_source:
+    common_api_terms: ["next_cursor", "next_page", "nextToken", "marker"]
+    dlt_parameter: "paginator.cursor_path"
+    notes: "JSON path in response"
+  
+  next_cursor_param:
+    common_api_terms: ["cursor", "page_token", "after", "next", "marker"]
+    dlt_parameter: "paginator.cursor_param"
+    notes: "Query param name to send cursor"
+  
+  offset_param:
+    common_api_terms: ["offset", "skip", "start", "startIndex"]
+    dlt_parameter: "paginator.offset_param"
+    notes: "Query param name"
+  
+  page_number_param:
+    common_api_terms: ["page", "page_number", "pageNum"]
+    dlt_parameter: "paginator.page_param"
+    notes: "Query param name"
+  
+  page_size_param:
+    common_api_terms: ["limit", "per_page", "page_size", "count", "maxItems"]
+    dlt_parameter: "paginator.limit_param"
+    notes: "Query param name"
+  
+  total_items_source:
+    common_api_terms: ["total", "total_count", "total_results", "count"]
+    dlt_parameter: "paginator.total_path"
+    notes: "Optional JSON path in response"
+  
+  link_header_relation:
+    common_api_terms: ["next", "last"]
+    dlt_parameter: "paginator.next_url_path"
+    notes: "rel value in Link header"
+
+incremental:
+  note: "Define per-resource if strategies differ!"
+  
+  timestamp_param:
+    common_api_terms: ["since", "updated_since", "modified_since", "from"]
+    dlt_parameter: "incremental.start_param"
+    notes: "Query param name"
+  
+  timestamp_source:
+    common_api_terms: ["updated_at", "modified", "last_updated", "ts"]
+    dlt_parameter: "incremental.cursor_path"
+    notes: "JSON path in response item"
+  
+  id_sequence_param:
+    common_api_terms: ["since_id", "min_id", "after_id", "sequence"]
+    dlt_parameter: "incremental.start_param"
+    notes: "Query param name"
+  
+  id_sequence_source:
+    common_api_terms: ["id", "event_id", "sequence_id", "_id"]
+    dlt_parameter: "incremental.cursor_path"
+    notes: "JSON path in response item"
+  
+  initial_value:
+    common_api_terms: ["N/A"]
+    dlt_parameter: "incremental.initial_value"
+    notes: "Start value for first run"
+
+data:
+  data_array_path:
+    common_api_terms: ["data", "results", "items", "records", "entries"]
+    dlt_parameter: "endpoint.data_selector"
+    notes: "JSON path to the list of items"
+```
 
 ## 7. Verification Checklist
 
