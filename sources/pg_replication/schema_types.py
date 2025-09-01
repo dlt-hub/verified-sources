@@ -38,8 +38,10 @@ _PG_TYPES: Dict[int, str] = {
     1043: "character varying",
     1082: "date",
     1083: "time without time zone",
+    1114: "timestamp without time zone",
     1184: "timestamp with time zone",
     1700: "numeric",
+    114: "json",
     3802: "jsonb",
 }
 """Maps postgres type OID to type string. Only includes types present in PostgresTypeMapper."""
