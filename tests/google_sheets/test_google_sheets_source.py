@@ -2,7 +2,7 @@ from typing import Tuple
 
 import pytest
 import dlt
-from datetime import date # noqa: I251
+from datetime import date  # noqa: I251
 from dlt.common.pipeline import LoadInfo
 from sources.google_sheets import google_spreadsheet
 from tests.utils import (

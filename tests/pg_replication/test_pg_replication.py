@@ -6,6 +6,7 @@ from psycopg2.errors import InsufficientPrivilege
 
 import dlt
 from dlt.destinations.job_client_impl import SqlJobClientBase
+from pendulum import DateTime, timezone
 
 from tests.utils import (
     ALL_DESTINATIONS,
@@ -459,6 +460,25 @@ def test_mapped_data_types(
     assert_loaded_data(
         dest_pl, "items", ["col1", "col2", "col3"], exp, "col1", "col1 = 2"
     )
+
+    TS_UTC = DateTime(2022, 5, 23, 13, 26, 45, 176451, tzinfo=timezone("UTC"))
+
+    def make_expected(col: str, dt: DateTime, n: int = 3, drop_first: bool = False):
+        recs = [{col: dt} for _ in range(n)]
+        return recs[1:] if drop_first else recs
+
+    # col4: timestamp with timezone (OID 1184)
+    # always UTC; drop the first record if not initial load
+    expected_col4 = make_expected("col4", TS_UTC, drop_first=not init_load)
+    assert_loaded_data(dest_pl, "items", ["col4"], expected_col4, "col4")
+
+    # col0: timestamp without timezone (OID 1114)
+    # pure replication stream applies default UTC timezone to timestamp-without-tz
+    dt_col0 = (
+        TS_UTC if (not give_hints and not init_load) else TS_UTC.replace(tzinfo=None)
+    )
+    expected_col0 = make_expected("col0", dt_col0, drop_first=not init_load)
+    assert_loaded_data(dest_pl, "items", ["col0"], expected_col0, "col0")
 
 
 @pytest.mark.parametrize("destination_name", ALL_DESTINATIONS)

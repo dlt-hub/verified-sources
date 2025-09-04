@@ -5,6 +5,7 @@ from dlt.common.schema import TColumnSchema, TTableSchemaColumns
 
 
 TABLE_ROW_ALL_DATA_TYPES = {
+    "col0": "2022-05-23 13:26:45.176451",
     "col1": 989127831,
     "col2": 898912.821982,
     "col3": True,
@@ -41,10 +42,11 @@ TABLE_ROW_ALL_DATA_TYPES = {
     "col11_precision": "13:26:45.176451",
 }
 TABLE_UPDATE: List[TColumnSchema] = [
+    {"name": "col0", "data_type": "timestamp", "nullable": False, "timezone": False},
     {"name": "col1", "data_type": "bigint", "nullable": False},
     {"name": "col2", "data_type": "double", "nullable": False},
     {"name": "col3", "data_type": "bool", "nullable": False},
-    {"name": "col4", "data_type": "timestamp", "nullable": False},
+    {"name": "col4", "data_type": "timestamp", "nullable": False, "timezone": True},
     {"name": "col5", "data_type": "text", "nullable": False},
     {"name": "col6", "data_type": "decimal", "nullable": False},
     {"name": "col7", "data_type": "binary", "nullable": False},
