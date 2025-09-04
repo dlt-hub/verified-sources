@@ -19,7 +19,7 @@ DLT_TIMEZONE = "UTC"
 TIMESTAMP_CONST = -2209161600.0
 # compiled regex to extract ranges
 RE_PARSE_RANGE = re.compile(
-    r"^(?:(?P<sheet>[\'\w\s]+)!)?(?P<start_col>[A-Z]+)(?P<start_row>\d+):(?P<end_col>[A-Z]+)(?P<end_row>\d+)$"
+    r"^(?:(?P<sheet>[\'\w\s\-]+)!)?(?P<start_col>[A-Z]+)(?P<start_row>\d+):(?P<end_col>[A-Z]+)(?P<end_row>\d+)$"
 )
 
 
