@@ -2,7 +2,7 @@ from typing import Tuple
 
 import pytest
 import dlt
-from datetime import date # noqa: I251
+from datetime import date  # noqa: I251
 from dlt.common.pipeline import LoadInfo
 from sources.google_sheets import google_spreadsheet
 from tests.utils import (
@@ -37,7 +37,7 @@ ALL_RANGES = {
     "trailing_empty_cols_1",
     "trailing_empty_cols_2",
     "trailing_empty_cols_3",
-    "trailing_empty_col_date",
+    "trailing_empty_col-date",
 }
 
 SKIPPED_RANGES = {
@@ -774,11 +774,11 @@ def test_trailing_empty_col_date(with_hints: bool) -> None:
     )
     data = google_spreadsheet(
         "1HhWHjqouQnnCIZAFa2rL6vT91YRN8aIhts22SUUR580",
-        range_names=["trailing_empty_cols_1", "trailing_empty_col_date"],
+        range_names=["trailing_empty_cols_1", "trailing_empty_col-date"],
         get_named_ranges=False,
     )
     if with_hints:
-        data.trailing_empty_col_date.apply_hints(
+        data.resources["trailing_empty_col-date"].apply_hints(
             columns={"Start Date": {"data_type": "date"}}
         )
     info = pipeline.run(data)
