@@ -6,7 +6,6 @@ from psycopg2.errors import InsufficientPrivilege
 
 import dlt
 from dlt.destinations.job_client_impl import SqlJobClientBase
-from pendulum import DateTime, timezone
 
 from tests.utils import (
     ALL_DESTINATIONS,
@@ -51,7 +50,10 @@ def test_schema_replication(
     snapshots = init_replication(
         slot_name=slot_name,
         pub_name=pub_name,
-        table_names=None,  # will initialize schema replication and get list of snapshots from sql_database
+        table_names=[
+            "tbl_x",
+            "tbl_y",
+        ],  # will initialize schema replication and get list of snapshots from sql_database, set to None if creds have superuser privileges
         schema_name=src_pl.dataset_name,
         persist_snapshots=True,
     )
@@ -92,14 +94,25 @@ def test_schema_replication(
     assert_loaded_data(dest_pl, "tbl_y", ["id_y", "val_y"], exp_tbl_y, "id_y")
 
     # add new table and load data, we should receive it in publication slot
-    # because we track the whole schema
+    # after adding it to the publication
     @dlt.resource(write_disposition="append", primary_key="id_z")
     def tbl_z(data):
         yield data
 
-    src_pl.run(tbl_z([{"id_z": 2, "val_x": "bar"}, {"id_z": 3}]))
+    # create the table and add pk first
+    src_pl.run(tbl_z([{"id_z": 1, "val_x": "initial"}]))
     add_pk(src_pl.sql_client, "tbl_z", "id_z")
-    # for some reason I need to add data to see that PK was added
+
+    # add the new table to the existing publication before inserting data we want to capture
+    init_replication(
+        slot_name=slot_name,
+        pub_name=pub_name,
+        table_names=["tbl_x", "tbl_y", "tbl_z"],
+        schema_name=src_pl.dataset_name,
+    )
+
+    # now insert the data that should be captured in replication
+    src_pl.run(tbl_z([{"id_z": 2, "val_x": "bar"}, {"id_z": 3}]))
     src_pl.run(tbl_z([{"id_z": 4, "val_x": "bar"}, {"id_z": 5}]))
 
     info = dest_pl.run(replication_resource(slot_name, pub_name))
@@ -461,24 +474,95 @@ def test_mapped_data_types(
         dest_pl, "items", ["col1", "col2", "col3"], exp, "col1", "col1 = 2"
     )
 
-    TS_UTC = DateTime(2022, 5, 23, 13, 26, 45, 176451, tzinfo=timezone("UTC"))
 
-    def make_expected(col: str, dt: DateTime, n: int = 3, drop_first: bool = False):
-        recs = [{col: dt} for _ in range(n)]
-        return recs[1:] if drop_first else recs
+@pytest.mark.parametrize("init_load", [True, False])
+@pytest.mark.parametrize("destination_name", ALL_DESTINATIONS)
+def test_timestamp_without_tz_and_json(
+    src_config: Tuple[dlt.Pipeline, str, str],
+    init_load: bool,
+    destination_name: str,
+) -> None:
+    """Test that PostgreSQL OID 114 (json) and OID 1114 (timestamp without timezone) are correctly mapped.
 
-    # col4: timestamp with timezone (OID 1184)
-    # always UTC; drop the first record if not initial load
-    expected_col4 = make_expected("col4", TS_UTC, drop_first=not init_load)
-    assert_loaded_data(dest_pl, "items", ["col4"], expected_col4, "col4")
+    This test verifies the fix for the issue where pg_replication source didn't handle these
+    data types correctly, causing them to default to 'text' type instead of proper type mapping.
+    """
+    data = deepcopy({k: TABLE_ROW_ALL_DATA_TYPES[k] for k in ("col4", "col9")})
+    data["col0"] = deepcopy(data["col4"])  # same value as col4
 
-    # col0: timestamp without timezone (OID 1114)
-    # pure replication stream applies default UTC timezone to timestamp-without-tz
-    dt_col0 = (
-        TS_UTC if (not give_hints and not init_load) else TS_UTC.replace(tzinfo=None)
+    # resource to load data into postgres source table
+    @dlt.resource(columns={"col9": {"data_type": "json"}})
+    def items(data):
+        yield data
+
+    src_pl, slot_name, pub_name = src_config
+
+    # create postgres table with the three records
+    src_pl.run(items(data))
+
+    # ensure source has expected col types for testing:
+    # col0: timestamp without time zone (OID 1114)
+    # col4: timestamp with time zone (OID 1184)
+    # col9: jsonb (OID 3802)
+    with src_pl.sql_client() as c:
+        query = f"""
+            SELECT data_type
+            FROM information_schema.columns
+            WHERE table_schema = '{src_pl.dataset_name}'
+            AND table_name = 'items'
+            AND column_name = %s;
+        """
+        col0_type = c.execute_sql(query, ("col0"))[0][0]
+        assert "timestamp with time zone" == col0_type
+        # we need to alter type to timestamp without time zone for col0
+        qual_name = src_pl.sql_client().make_qualified_table_name("items")
+        c.execute_sql(
+            f"ALTER TABLE {qual_name} ALTER COLUMN col0 TYPE timestamp WITHOUT TIME ZONE USING (col0 AT TIME ZONE 'UTC');"
+        )
+        col0_type = c.execute_sql(query, ("col0"))[0][0]
+        assert "timestamp without time zone" == col0_type
+
+        col4_type = c.execute_sql(query, ("col4"))[0][0]
+        assert "timestamp with time zone" == col4_type
+
+        # since dlt's PostgresTypeMapper always loads json as jsonb,
+        # we need to alter type to test json
+        c.execute_sql(
+            f"ALTER TABLE {qual_name} ALTER COLUMN col9 TYPE json USING col9::json;"
+        )
+        col9_type = c.execute_sql(query, ("col9"))[0][0]
+        assert "json" == col9_type
+
+    # load to destination
+    dest_pl = dlt.pipeline(
+        pipeline_name="dest_pl",
+        destination=destination_name,
     )
-    expected_col0 = make_expected("col0", dt_col0, drop_first=not init_load)
-    assert_loaded_data(dest_pl, "items", ["col0"], expected_col0, "col0")
+
+    # create snapshot resource based on init_load parameter
+    snapshot = init_replication(
+        slot_name=slot_name,
+        pub_name=pub_name,
+        schema_name=src_pl.dataset_name,
+        table_names="items",
+        persist_snapshots=init_load,
+    )
+    changes = replication_resource(slot_name, pub_name)
+
+    if init_load:
+        info = dest_pl.run(snapshot)
+        assert_load_info(info)
+
+    src_pl.run(items(data))
+    info = dest_pl.run(changes)
+    assert_load_info(info)
+
+    col_schemas = dest_pl.default_schema.get_table_columns("items")
+    assert "timestamp" == col_schemas["col0"]["data_type"]
+    assert not col_schemas["col0"].get("timezone")
+    assert "timestamp" == col_schemas["col4"]["data_type"]
+    assert col_schemas["col4"].get("timezone") is True
+    assert "json" == col_schemas["col9"]["data_type"]
 
 
 @pytest.mark.parametrize("destination_name", ALL_DESTINATIONS)
