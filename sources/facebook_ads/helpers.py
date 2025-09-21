@@ -3,7 +3,7 @@
 import functools
 import itertools
 import time
-from typing import Any, Iterator, Sequence
+from typing import Any, Iterator, Sequence, Union
 
 import dlt
 import humanize
@@ -71,7 +71,10 @@ def process_report_item(item: AbstractObject) -> DictStrAny:
 
 
 def get_data_chunked(
-    method: TFbMethod, fields: Sequence[str], states: Sequence[str], chunk_size: int
+    method: TFbMethod,
+    fields: Sequence[str],
+    states: Union[Sequence[str], None],
+    chunk_size: int,
 ) -> Iterator[TDataItems]:
     # add pagination and chunk into lists
     params: DictStrAny = {"limit": chunk_size}
@@ -137,7 +140,7 @@ def execute_job(
     insights_max_wait_to_finish_seconds: int = 30 * 60,
     insights_max_async_sleep_seconds: int = 5 * 60,
 ) -> AbstractCrudObject:
-    status: str = None
+    status: Union[str, None] = None
     time_start = time.time()
     sleep_time = 10
     while status != "Job Completed":
@@ -181,7 +184,10 @@ def execute_job(
 
 
 def get_ads_account(
-    account_id: str, access_token: str, request_timeout: float, app_api_version: str
+    account_id: str,
+    access_token: str,
+    request_timeout: float,
+    app_api_version: Union[str, None],
 ) -> AdAccount:
     notify_on_token_expiration()
 
@@ -242,7 +248,9 @@ def get_ads_account(
 
 
 @with_config(sections=("sources", "facebook_ads"))
-def notify_on_token_expiration(access_token_expires_at: int = None) -> None:
+def notify_on_token_expiration(
+    access_token_expires_at: Union[int, None] = None,
+) -> None:
     """Notifies (currently via logger) if access token expires in less than 7 days. Needs `access_token_expires_at` to be configured."""
     if not access_token_expires_at:
         logger.warning(

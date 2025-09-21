@@ -1,6 +1,6 @@
 """Loads campaigns, ads sets, ads, leads and insight data from Facebook Marketing API"""
 
-from typing import Iterator, Sequence
+from typing import Iterator, Sequence, Union
 
 from facebook_business import FacebookAdsApi
 from facebook_business.api import FacebookResponse
@@ -56,7 +56,7 @@ def facebook_ads_source(
     access_token: str = dlt.secrets.value,
     chunk_size: int = 50,
     request_timeout: float = 300.0,
-    app_api_version: str = None,
+    app_api_version: Union[str, None] = None,
 ) -> Sequence[DltResource]:
     """Returns a list of resources to load campaigns, ad sets, ads, creatives and ad leads data from Facebook Marketing API.
 
@@ -83,19 +83,22 @@ def facebook_ads_source(
 
     @dlt.resource(primary_key="id", write_disposition="replace")
     def campaigns(
-        fields: Sequence[str] = DEFAULT_CAMPAIGN_FIELDS, states: Sequence[str] = None
+        fields: Sequence[str] = DEFAULT_CAMPAIGN_FIELDS,
+        states: Union[Sequence[str], None] = None,
     ) -> Iterator[TDataItems]:
         yield get_data_chunked(account.get_campaigns, fields, states, chunk_size)
 
     @dlt.resource(primary_key="id", write_disposition="replace")
     def ads(
-        fields: Sequence[str] = DEFAULT_AD_FIELDS, states: Sequence[str] = None
+        fields: Sequence[str] = DEFAULT_AD_FIELDS,
+        states: Union[Sequence[str], None] = None,
     ) -> Iterator[TDataItems]:
         yield get_data_chunked(account.get_ads, fields, states, chunk_size)
 
     @dlt.resource(primary_key="id", write_disposition="replace")
     def ad_sets(
-        fields: Sequence[str] = DEFAULT_ADSET_FIELDS, states: Sequence[str] = None
+        fields: Sequence[str] = DEFAULT_ADSET_FIELDS,
+        states: Union[Sequence[str], None] = None,
     ) -> Iterator[TDataItems]:
         yield get_data_chunked(account.get_ad_sets, fields, states, chunk_size)
 
@@ -103,7 +106,7 @@ def facebook_ads_source(
     def leads(
         items: TDataItems,
         fields: Sequence[str] = DEFAULT_LEAD_FIELDS,
-        states: Sequence[str] = None,
+        states: Union[Sequence[str], None] = None,
     ) -> Iterator[TDataItems]:
         for item in items:
             ad = Ad(item["id"])
@@ -111,7 +114,8 @@ def facebook_ads_source(
 
     @dlt.resource(primary_key="id", write_disposition="replace")
     def ad_creatives(
-        fields: Sequence[str] = DEFAULT_ADCREATIVE_FIELDS, states: Sequence[str] = None
+        fields: Sequence[str] = DEFAULT_ADCREATIVE_FIELDS,
+        states: Union[Sequence[str], None] = None,
     ) -> Iterator[TDataItems]:
         yield get_data_chunked(account.get_ad_creatives, fields, states, chunk_size)
 
@@ -132,7 +136,7 @@ def facebook_insights_source(
     action_attribution_windows: Sequence[str] = ALL_ACTION_ATTRIBUTION_WINDOWS,
     batch_size: int = 50,
     request_timeout: int = 300,
-    app_api_version: str = None,
+    app_api_version: Union[str, None] = None,
 ) -> DltResource:
     """Incrementally loads insight reports with defined granularity level, fields, breakdowns etc.
 
