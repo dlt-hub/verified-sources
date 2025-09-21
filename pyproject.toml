@@ -61,7 +61,7 @@ stripe_analytics = [
     "types-stripe>=3.5.2.14,<4",
 ]
 asana_dlt = ["asana>=3.2.1,<4"]
-facebook_ads = ["facebook-business>=17.0.2,<18"]
+facebook_ads = ["facebook-business>=23.0.0,<24"]
 google_ads = [
     "google-ads>=21.1.0,<22",
     "google-api-python-client>=2.129.0,<3",
