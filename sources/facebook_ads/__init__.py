@@ -1,6 +1,6 @@
 """Loads campaigns, ads sets, ads, leads and insight data from Facebook Marketing API"""
 
-from typing import Iterator, Sequence, Union
+from typing import Iterator, Sequence, Union, cast
 
 from facebook_business import FacebookAdsApi
 from facebook_business.api import FacebookResponse
@@ -211,7 +211,12 @@ def facebook_insights_source(
                     }
                 ],
             }
-            job = execute_job(account.get_insights(params=query, is_async=True))
+            job = execute_job(
+                cast(
+                    AbstractCrudObject,
+                    account.get_insights(params=query, is_async=True),
+                )
+            )
             yield list(map(process_report_item, job.get_result()))
             start_date = start_date.add(days=time_increment_days)
 

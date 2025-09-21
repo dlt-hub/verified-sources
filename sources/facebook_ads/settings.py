@@ -1,10 +1,11 @@
 """Facebook ads source settings and constants"""
 
-from typing import Any, Callable, Dict, Iterator, Literal
+from typing import Any, Callable, Dict, Iterator, Literal, Union
 from dlt.common.schema.typing import TTableSchemaColumns
 from facebook_business.adobjects.abstractobject import AbstractObject
+from facebook_business.api import FacebookRequest
 
-TFbMethod = Callable[..., Iterator[AbstractObject]]
+TFbMethod = Callable[..., Union[FacebookRequest, Iterator[AbstractObject], Any]]
 
 
 DEFAULT_FIELDS = (

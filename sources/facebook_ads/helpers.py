@@ -3,7 +3,7 @@
 import functools
 import itertools
 import time
-from typing import Any, Iterator, Sequence, Union
+from typing import Any, Iterator, Sequence, Type, Union, cast
 
 import dlt
 import humanize
@@ -19,7 +19,7 @@ from dlt.sources.helpers.requests import Client
 from facebook_business import FacebookAdsApi
 from facebook_business.adobjects.adaccount import AdAccount
 from facebook_business.adobjects.user import User
-from facebook_business.api import FacebookResponse
+from facebook_business.api import Cursor, FacebookResponse
 
 from .exceptions import InsightsJobTimeout
 from .settings import (
@@ -62,7 +62,7 @@ def get_start_date(
 
 
 def process_report_item(item: AbstractObject) -> DictStrAny:
-    d: DictStrAny = item.export_all_data()
+    d: DictStrAny = cast(DictStrAny, item.export_all_data())
     for pki in INSIGHTS_PRIMARY_KEY:
         if pki not in d:
             d[pki] = "no_" + pki
@@ -80,9 +80,8 @@ def get_data_chunked(
     params: DictStrAny = {"limit": chunk_size}
     if states:
         params.update({"effective_status": states})
-    it: map[DictStrAny] = map(
-        lambda c: c.export_all_data(), method(fields=fields, params=params)
-    )
+    result = cast(Iterator[AbstractObject], method(fields=fields, params=params))
+    it: map[DictStrAny] = map(lambda c: cast(DictStrAny, c.export_all_data()), result)
     while True:
         chunk = list(itertools.islice(it, chunk_size))
         if not chunk:
@@ -90,7 +89,9 @@ def get_data_chunked(
         yield chunk
 
 
-def enrich_ad_objects(fb_obj_type: AbstractObject, fields: Sequence[str]) -> Any:
+def enrich_ad_objects(
+    fb_obj_type: Type[AbstractCrudObject], fields: Sequence[str]
+) -> Any:
     """Returns a transformation that will enrich any of the resources returned by `` with additional fields
 
     In example below we add "thumbnail_url" to all objects loaded by `ad_creatives` resource:
@@ -108,13 +109,20 @@ def enrich_ad_objects(fb_obj_type: AbstractObject, fields: Sequence[str]) -> Any
     """
 
     def _wrap(items: TDataItems, meta: Any = None) -> TDataItems:
-        api_batch = FacebookAdsApi.get_default_api().new_batch()
+        default_api = FacebookAdsApi.get_default_api()
+        if not default_api:
+            raise RuntimeError("FacebookAdsApi not initialized")
+
+        api_batch = default_api.new_batch()
 
         def update_item(resp: FacebookResponse, item: TDataItem) -> None:
             item.update(resp.json())
 
         def fail(resp: FacebookResponse) -> None:
-            raise resp.error()
+            error = resp.error()
+            if error:
+                raise error
+            raise RuntimeError("Unknown error")
 
         for item in items:
             o: AbstractCrudObject = fb_obj_type(item["id"])
@@ -191,7 +199,11 @@ def get_ads_account(
 ) -> AdAccount:
     notify_on_token_expiration()
 
-    def retry_on_limit(response: requests.Response, exception: BaseException) -> bool:
+    def retry_on_limit(
+        response: Union[requests.Response, None], exception: Union[BaseException, None]
+    ) -> bool:
+        if not response:
+            return False
         try:
             error = response.json()["error"]
             code = error["code"]
@@ -235,16 +247,12 @@ def get_ads_account(
     API._session.requests = retry_session
     user = User(fbid="me")
 
-    accounts = user.get_ad_accounts()
-    account: AdAccount = None
+    accounts = cast(Cursor, user.get_ad_accounts())
     for acc in accounts:
         if acc["account_id"] == account_id:
-            account = acc
+            return acc
 
-    if not account:
-        raise ValueError("Couldn't find account with id {}".format(account_id))
-
-    return account
+    raise ValueError("Couldn't find account with id {}".format(account_id))
 
 
 @with_config(sections=("sources", "facebook_ads"))
