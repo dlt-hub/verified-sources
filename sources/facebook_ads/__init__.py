@@ -177,7 +177,7 @@ def facebook_insights_source(
     def facebook_insights(
         date_start: dlt.sources.incremental[str] = dlt.sources.incremental(
             "date_start", initial_value=initial_load_start_date_str
-        )
+        ),
     ) -> Iterator[TDataItems]:
         start_date = get_start_date(date_start, attribution_window_days_lag)
         end_date = pendulum.now()
