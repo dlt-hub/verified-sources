@@ -14,7 +14,7 @@ from dlt.common.configuration.inject import with_config
 from dlt.common.time import ensure_pendulum_datetime
 from dlt.common.typing import DictStrAny, TDataItem, TDataItems
 from dlt.sources.helpers import requests
-from dlt.sources.helpers.requests.retry import Client
+from dlt.sources.helpers.requests import Client
 
 from facebook_business import FacebookAdsApi
 from facebook_business.adobjects.adaccount import AdAccount
