@@ -18,6 +18,7 @@ from dlt.sources.helpers.requests import Client
 
 from facebook_business import FacebookAdsApi
 from facebook_business.adobjects.adaccount import AdAccount
+from facebook_business.adobjects.adreportrun import AdReportRun
 from facebook_business.adobjects.user import User
 from facebook_business.api import Cursor, FacebookResponse
 
@@ -143,17 +144,17 @@ You should remove the fields in `fields` argument that are not necessary, as tha
 
 
 def execute_job(
-    job: AbstractCrudObject,
+    job: AdReportRun,
     insights_max_wait_to_start_seconds: int = 5 * 60,
     insights_max_wait_to_finish_seconds: int = 30 * 60,
     insights_max_async_sleep_seconds: int = 5 * 60,
-) -> AbstractCrudObject:
+) -> AdReportRun:
     status: Union[str, None] = None
     time_start = time.time()
     sleep_time = 10
     while status != "Job Completed":
         duration = time.time() - time_start
-        job = job.api_get()
+        job = cast(AdReportRun, job.api_get())
         status = job["async_status"]
         percent_complete = job["async_percent_completion"]
 

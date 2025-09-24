@@ -3,6 +3,7 @@
 from typing import Iterator, Sequence, Union, cast
 
 from facebook_business import FacebookAdsApi
+from facebook_business.adobjects.adreportrun import AdReportRun
 from facebook_business.api import FacebookResponse
 
 import dlt
@@ -213,7 +214,7 @@ def facebook_insights_source(
             }
             job = execute_job(
                 cast(
-                    AbstractCrudObject,
+                    AdReportRun,
                     account.get_insights(params=query, is_async=True),
                 )
             )
