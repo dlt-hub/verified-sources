@@ -3,7 +3,7 @@
 import functools
 import itertools
 import time
-from typing import Any, Iterator, Sequence, Type, Union, cast
+from typing import Any, Iterator, Protocol, Sequence, Type, Union, cast
 
 import dlt
 import humanize
@@ -13,6 +13,7 @@ from dlt.common import logger
 from dlt.common.configuration.inject import with_config
 from dlt.common.time import ensure_pendulum_datetime
 from dlt.common.typing import DictStrAny, TDataItem, TDataItems
+from dlt.extract.items_transform import ItemTransformFunctionWithMeta
 from dlt.sources.helpers import requests
 from dlt.sources.helpers.requests import Client
 
@@ -20,7 +21,7 @@ from facebook_business import FacebookAdsApi
 from facebook_business.adobjects.adaccount import AdAccount
 from facebook_business.adobjects.adreportrun import AdReportRun
 from facebook_business.adobjects.user import User
-from facebook_business.api import Cursor, FacebookResponse
+from facebook_business.api import Cursor, FacebookRequest, FacebookResponse
 
 from .exceptions import InsightsJobTimeout
 from .settings import (
@@ -28,7 +29,7 @@ from .settings import (
     INSIGHTS_PRIMARY_KEY,
     TFbMethod,
 )
-from .utils import AbstractCrudObject, AbstractObject
+from .utils import AbstractObject
 
 
 def get_start_date(
@@ -90,9 +91,23 @@ def get_data_chunked(
         yield chunk
 
 
+class AbstractCrudObjectWithApiGet(Protocol):
+    def __init__(self, fbid=None, parent_id=None, api=None): ...
+
+    def api_get(
+        self,
+        fields=None,
+        params=None,
+        batch=None,
+        success=None,
+        failure=None,
+        pending=False,
+    ) -> Any: ...
+
+
 def enrich_ad_objects(
-    fb_obj_type: Type[AbstractCrudObject], fields: Sequence[str]
-) -> Any:
+    fb_obj_type: Type[AbstractCrudObjectWithApiGet], fields: Sequence[str]
+) -> ItemTransformFunctionWithMeta[TDataItems]:
     """Returns a transformation that will enrich any of the resources returned by `` with additional fields
 
     In example below we add "thumbnail_url" to all objects loaded by `ad_creatives` resource:
@@ -126,7 +141,7 @@ def enrich_ad_objects(
             raise RuntimeError("Unknown error")
 
         for item in items:
-            o: AbstractCrudObject = fb_obj_type(item["id"])
+            o = fb_obj_type(item["id"])
             o.api_get(
                 fields=fields,
                 batch=api_batch,
