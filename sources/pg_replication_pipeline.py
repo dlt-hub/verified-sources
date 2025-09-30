@@ -1,3 +1,4 @@
+from typing import Optional, Union, Sequence
 import dlt
 
 from dlt.common.destination import Destination
@@ -9,50 +10,64 @@ from pg_replication.helpers import init_replication
 
 PG_CREDS = dlt.secrets.get("sources.pg_replication.credentials", PostgresCredentials)
 
-def replicate_with_initial_load(pipeline_name: str, slot_name: str, pub_name: str) -> None:
-    """Production example: Sets up replication with initial load.
 
-    Demonstrates usage of `persist_snapshots` argument and snapshot resource
-    returned by `init_replication` helper.
+def replicate_single_table_with_initial_load(
+    schema_name: str, table_names: Optional[Union[str, Sequence[str]]]
+) -> None:
+    """Sets up replication with initial load for your existing PostgreSQL database.
+
+    Unlike the other functions, this function does NOT simulate changes in the source table.
+    It connects to your actual database and performs initial load from the specified tables
+    and performs replication if any.
+
+    Args:
+        schema_name (str): Name of the schema containing the tables to replicate.
+        table_names (Optional[Union[str, Sequence[str]]]): Name(s) of the table(s)
+            to replicate. Can be a single table name as string or a sequence of table names.
+            If None, replicates all tables in the schema (requires superuser privileges).
+            When specifying table names, the Postgres user must own the tables or be a superuser.
+
+    Returns:
+        None
     """
-    # create source and destination pipelines
+    # create destination pipeline
     dest_pl = dlt.pipeline(
-        pipeline_name=pipeline_name,
-        destination='duckdb',
-        dataset_name="replication_postgres",
+        pipeline_name="pg_replication_pipeline",
+        destination="duckdb",
+        dataset_name="replicate_with_initial_load",
     )
-    schema_name = "public"
 
-    creds = dlt.secrets.get(
-        f"{pipeline_name}.sources.pg_replication.credentials", PostgresCredentials
-    )
-    print(creds)
+    # initialize replication for the source table
+    slot_name = "example_slot"
+    pub_name = "example_pub"
     snapshot = init_replication(  # requires the Postgres user to have the REPLICATION attribute assigned
         slot_name=slot_name,
-        credentials=creds,
         pub_name=pub_name,
+        table_names=table_names,  # requires the Postgres user to own the table(s) or be superuser
         schema_name=schema_name,
         persist_snapshots=True,  # persist snapshot table(s) and let function return resource(s) for initial load
-        reset=True
+        reset=True,
     )
-    print("replication initialized")
+
     # perform initial load to capture all records present in source table prior to replication initialization
-    dest_pl.run(snapshot)
-    print("replication run")
-    # insert record in source table and propagate change to destination
-    changes = replication_resource(slot_name, pub_name, credentials=creds)
-    print("changes initialized")
-    dest_pl.run(changes)
-    print("changes run")
-    
+    load_info = dest_pl.run(snapshot)
+    print(load_info)
+    print(dest_pl.last_trace.last_normalize_info)
+
+    # assuming there were changes in the source table, propagate change to destination
+    changes = replication_resource(slot_name, pub_name)
+    load_info = dest_pl.run(changes)
+    print(load_info)
+    print(dest_pl.last_trace.last_normalize_info)
+
 
 def replicate_single_table_demo() -> None:
-    """Sets up replication for a single Postgres table and loads changes into a destination.
+    """Demonstrates PostgreSQL replication by simulating a source table and changes.
 
-    Demonstrates basic usage of `init_replication` helper and `replication_resource` resource.
-    Uses `src_pl` to create and change the replicated Postgres table—this
-    is only for demonstration purposes, you won't need this when you run in production
-    as you'll probably have another process feeding your Postgres instance.
+    Shows basic usage of `init_replication` helper and `replication_resource` resource.
+    This demo creates a source table and simulates INSERT, UPDATE, and DELETE operations
+    to show how replication works end-to-end. In production, you would have an existing
+    PostgreSQL database with real changes instead of simulating them.
     """
     # create source and destination pipelines
     src_pl = get_postgres_pipeline()
@@ -100,16 +115,12 @@ def replicate_single_table_demo() -> None:
     show_destination_table(dest_pl)
 
 
-def demo_initial_load_replication() -> None:
-    """Sets up replication with initial load.
+def replicate_with_initial_load_demo() -> None:
+    """Demonstrates PostgreSQL replication with initial load by simulating a source table and changes.
 
-    Demonstrates usage of `persist_snapshots` argument and snapshot resource
-    returned by `init_replication` helper.
-
-    Notes:
-      - This function also creates the source table itself. That’s only useful for demos or
-        when starting with a brand-new database. In production you normally won’t create tables here,
-        since your application/database already has them.
+    Shows usage of `persist_snapshots` argument and snapshot resource returned by `init_replication` helper.
+    This demo creates a source table with existing data, then simulates additional changes to show how
+    initial load captures pre-existing records and replication handles subsequent changes.
     """
     # create source and destination pipelines
     src_pl = get_postgres_pipeline()
@@ -154,10 +165,14 @@ def demo_initial_load_replication() -> None:
 
 
 def replicate_entire_schema_demo() -> None:
-    """Demonstrates setup and usage of schema replication.
+    """Demonstrates schema-level replication by simulating multiple tables and changes.
 
-    Schema replication requires a Postgres server version of 15 or higher. An
-    exception is raised if that's not the case.
+    Shows setup and usage of schema replication, which captures changes across all tables
+    in a schema. This demo creates multiple source tables and simulates changes to show
+    how schema replication works, including tables added after replication starts.
+
+    Schema replication requires PostgreSQL server version 15 or higher. An exception
+    is raised if that's not the case.
     """
     # create source and destination pipelines
     src_pl = get_postgres_pipeline()
@@ -214,9 +229,11 @@ def replicate_entire_schema_demo() -> None:
 
 
 def replicate_with_column_selection_demo() -> None:
-    """Sets up replication with column selection.
+    """Demonstrates column selection in replication by simulating tables with selective column capture.
 
-    Demonstrates usage of `include_columns` argument.
+    Shows usage of `include_columns` argument to replicate only specific columns from tables.
+    This demo creates source tables and simulates changes to show how column selection works,
+    where some tables have filtered columns while others include all columns by default.
     """
     # create source and destination pipelines
     src_pl = get_postgres_pipeline()
@@ -327,7 +344,10 @@ def show_destination_table(
 
 
 if __name__ == "__main__":
-    replicate_single_table_demo()
-    # replicate_with_initial_load()
+    replicate_single_table_with_initial_load(
+        schema_name="public", table_names="test_table"
+    )
+    # replicate_single_table_demo()
+    # replicate_with_initial_load_demo()
     # replicate_entire_schema_demo()
     # replicate_with_column_selection_demo()

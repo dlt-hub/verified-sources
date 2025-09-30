@@ -29,6 +29,13 @@ It also needs `CREATE` privilege on the database:
 GRANT CREATE ON DATABASE dlt_data TO replication_user;
 ```
 
+If not a superuser, the user must have ownership of the tables that need to be replicated:
+
+```sql
+ALTER TABLE your_table OWNER TO replication_user;  
+```
+
+
 ### Set up RDS
 1. You must enable replication for RDS Postgres instance via **Parameter Group**: https://docs.aws.amazon.com/AmazonRDS/latest/UserGuide/USER_PostgreSQL.Replication.ReadReplicas.html
 2. `WITH LOGIN REPLICATION;` does not work on RDS, instead do:

@@ -114,7 +114,8 @@ def init_replication(
         table_names (Optional[Union[str, Sequence[str]]]):  Name(s) of the table(s)
           to include in the publication. If not provided, the whole schema with `schema_name` will be replicated
           (also tables added to the schema after the publication was created). You need superuser privileges
-          for the schema replication.
+          for the whole schema replication. When specifying individual table names, the database role must
+          own the tables if it's not a superuser.
         credentials (ConnectionStringCredentials): Postgres database credentials.
         publish (str): Comma-separated string of DML operations. Can be used to
           control which changes are included in the publication. Allowed operations
