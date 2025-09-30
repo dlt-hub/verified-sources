@@ -30,8 +30,8 @@ def replicate_single_table_with_initial_load(
     Returns:
         None
     """
-    # create destination pipeline
-    dest_pl = dlt.pipeline(
+    # create replication pipeline
+    repl_pl = dlt.pipeline(
         pipeline_name="pg_replication_pipeline",
         destination="duckdb",
         dataset_name="replicate_with_initial_load",
@@ -50,15 +50,15 @@ def replicate_single_table_with_initial_load(
     )
 
     # perform initial load to capture all records present in source table prior to replication initialization
-    load_info = dest_pl.run(snapshot)
+    load_info = repl_pl.run(snapshot)
     print(load_info)
-    print(dest_pl.last_trace.last_normalize_info)
+    print(repl_pl.last_trace.last_normalize_info)
 
     # assuming there were changes in the source table, propagate change to destination
     changes = replication_resource(slot_name, pub_name)
-    load_info = dest_pl.run(changes)
+    load_info = repl_pl.run(changes)
     print(load_info)
-    print(dest_pl.last_trace.last_normalize_info)
+    print(repl_pl.last_trace.last_normalize_info)
 
 
 def replicate_single_table_demo() -> None:
@@ -69,9 +69,9 @@ def replicate_single_table_demo() -> None:
     to show how replication works end-to-end. In production, you would have an existing
     PostgreSQL database with real changes instead of simulating them.
     """
-    # create source and destination pipelines
-    src_pl = get_postgres_pipeline()
-    dest_pl = dlt.pipeline(
+    # create simulation and replication pipelines
+    sim_pl = get_postgres_pipeline()
+    repl_pl = dlt.pipeline(
         pipeline_name="pg_replication_pipeline",
         destination="duckdb",
         dataset_name="replicate_single_table",
@@ -80,7 +80,7 @@ def replicate_single_table_demo() -> None:
 
     # create table "my_source_table" in source to demonstrate replication
     create_source_table(
-        src_pl, "CREATE TABLE {table_name} (id integer PRIMARY KEY, val bool);"
+        sim_pl, "CREATE TABLE {table_name} (id integer PRIMARY KEY, val bool);"
     )
 
     # initialize replication for the source table—this creates a replication slot and publication
@@ -89,7 +89,7 @@ def replicate_single_table_demo() -> None:
     init_replication(  # requires the Postgres user to have the REPLICATION attribute assigned
         slot_name=slot_name,
         pub_name=pub_name,
-        schema_name=src_pl.dataset_name,
+        schema_name=sim_pl.dataset_name,
         table_names="my_source_table",
         reset=True,
     )
@@ -99,20 +99,20 @@ def replicate_single_table_demo() -> None:
 
     # insert two records in source table and propagate changes to destination
     change_source_table(
-        src_pl, "INSERT INTO {table_name} VALUES (1, true), (2, false);"
+        sim_pl, "INSERT INTO {table_name} VALUES (1, true), (2, false);"
     )
-    dest_pl.run(changes)
-    show_destination_table(dest_pl)
+    repl_pl.run(changes)
+    show_destination_table(repl_pl)
 
     # update record in source table and propagate change to destination
-    change_source_table(src_pl, "UPDATE {table_name} SET val = true WHERE id = 2;")
-    dest_pl.run(changes)
-    show_destination_table(dest_pl)
+    change_source_table(sim_pl, "UPDATE {table_name} SET val = true WHERE id = 2;")
+    repl_pl.run(changes)
+    show_destination_table(repl_pl)
 
     # delete record from source table and propagate change to destination
-    change_source_table(src_pl, "DELETE FROM {table_name} WHERE id = 2;")
-    dest_pl.run(changes)
-    show_destination_table(dest_pl)
+    change_source_table(sim_pl, "DELETE FROM {table_name} WHERE id = 2;")
+    repl_pl.run(changes)
+    show_destination_table(repl_pl)
 
 
 def replicate_with_initial_load_demo() -> None:
@@ -122,9 +122,9 @@ def replicate_with_initial_load_demo() -> None:
     This demo creates a source table with existing data, then simulates additional changes to show how
     initial load captures pre-existing records and replication handles subsequent changes.
     """
-    # create source and destination pipelines
-    src_pl = get_postgres_pipeline()
-    dest_pl = dlt.pipeline(
+    # create simulation and replication pipelines
+    sim_pl = get_postgres_pipeline()
+    repl_pl = dlt.pipeline(
         pipeline_name="pg_replication_pipeline",
         destination="duckdb",
         dataset_name="replicate_with_initial_load",
@@ -133,12 +133,12 @@ def replicate_with_initial_load_demo() -> None:
 
     # create table "my_source_table" in source to demonstrate replication
     create_source_table(
-        src_pl, "CREATE TABLE {table_name} (id integer PRIMARY KEY, val bool);"
+        sim_pl, "CREATE TABLE {table_name} (id integer PRIMARY KEY, val bool);"
     )
 
     # insert records before initializing replication
     change_source_table(
-        src_pl, "INSERT INTO {table_name} VALUES (1, true), (2, false);"
+        sim_pl, "INSERT INTO {table_name} VALUES (1, true), (2, false);"
     )
 
     # initialize replication for the source table
@@ -147,21 +147,21 @@ def replicate_with_initial_load_demo() -> None:
     snapshot = init_replication(  # requires the Postgres user to have the REPLICATION attribute assigned
         slot_name=slot_name,
         pub_name=pub_name,
-        schema_name=src_pl.dataset_name,
+        schema_name=sim_pl.dataset_name,
         table_names="my_source_table",
         persist_snapshots=True,  # persist snapshot table(s) and let function return resource(s) for initial load
         reset=True,
     )
 
     # perform initial load to capture all records present in source table prior to replication initialization
-    dest_pl.run(snapshot)
-    show_destination_table(dest_pl)
+    repl_pl.run(snapshot)
+    show_destination_table(repl_pl)
 
     # insert record in source table and propagate change to destination
-    change_source_table(src_pl, "INSERT INTO {table_name} VALUES (3, true);")
+    change_source_table(sim_pl, "INSERT INTO {table_name} VALUES (3, true);")
     changes = replication_resource(slot_name, pub_name)
-    dest_pl.run(changes)
-    show_destination_table(dest_pl)
+    repl_pl.run(changes)
+    show_destination_table(repl_pl)
 
 
 def replicate_entire_schema_demo() -> None:
@@ -174,9 +174,9 @@ def replicate_entire_schema_demo() -> None:
     Schema replication requires PostgreSQL server version 15 or higher. An exception
     is raised if that's not the case.
     """
-    # create source and destination pipelines
-    src_pl = get_postgres_pipeline()
-    dest_pl = dlt.pipeline(
+    # create simulation and replication pipelines
+    sim_pl = get_postgres_pipeline()
+    repl_pl = dlt.pipeline(
         pipeline_name="pg_replication_pipeline",
         destination="duckdb",
         dataset_name="replicate_entire_schema",
@@ -185,12 +185,12 @@ def replicate_entire_schema_demo() -> None:
 
     # create two source tables to demonstrate schema replication
     create_source_table(
-        src_pl,
+        sim_pl,
         "CREATE TABLE {table_name} (id integer PRIMARY KEY, val bool);",
         "tbl_x",
     )
     create_source_table(
-        src_pl,
+        sim_pl,
         "CREATE TABLE {table_name} (id integer PRIMARY KEY, val varchar);",
         "tbl_y",
     )
@@ -201,7 +201,7 @@ def replicate_entire_schema_demo() -> None:
     init_replication(  # initializing schema replication requires the Postgres user to be a superuser
         slot_name=slot_name,
         pub_name=pub_name,
-        schema_name=src_pl.dataset_name,
+        schema_name=sim_pl.dataset_name,
         reset=True,
     )
 
@@ -210,22 +210,22 @@ def replicate_entire_schema_demo() -> None:
 
     # insert records in source tables and propagate changes to destination
     change_source_table(
-        src_pl, "INSERT INTO {table_name} VALUES (1, true), (2, false);", "tbl_x"
+        sim_pl, "INSERT INTO {table_name} VALUES (1, true), (2, false);", "tbl_x"
     )
-    change_source_table(src_pl, "INSERT INTO {table_name} VALUES (1, 'foo');", "tbl_y")
-    dest_pl.run(changes)
-    show_destination_table(dest_pl, "tbl_x")
-    show_destination_table(dest_pl, "tbl_y")
+    change_source_table(sim_pl, "INSERT INTO {table_name} VALUES (1, 'foo');", "tbl_y")
+    repl_pl.run(changes)
+    show_destination_table(repl_pl, "tbl_x")
+    show_destination_table(repl_pl, "tbl_y")
 
     # tables added to the schema later are also included in the replication
     create_source_table(
-        src_pl, "CREATE TABLE {table_name} (id integer PRIMARY KEY, val date);", "tbl_z"
+        sim_pl, "CREATE TABLE {table_name} (id integer PRIMARY KEY, val date);", "tbl_z"
     )
     change_source_table(
-        src_pl, "INSERT INTO {table_name} VALUES (1, '2023-03-18');", "tbl_z"
+        sim_pl, "INSERT INTO {table_name} VALUES (1, '2023-03-18');", "tbl_z"
     )
-    dest_pl.run(changes)
-    show_destination_table(dest_pl, "tbl_z")
+    repl_pl.run(changes)
+    show_destination_table(repl_pl, "tbl_z")
 
 
 def replicate_with_column_selection_demo() -> None:
@@ -235,9 +235,9 @@ def replicate_with_column_selection_demo() -> None:
     This demo creates source tables and simulates changes to show how column selection works,
     where some tables have filtered columns while others include all columns by default.
     """
-    # create source and destination pipelines
-    src_pl = get_postgres_pipeline()
-    dest_pl = dlt.pipeline(
+    # create simulation and replication pipelines
+    sim_pl = get_postgres_pipeline()
+    repl_pl = dlt.pipeline(
         pipeline_name="pg_replication_pipeline",
         destination="duckdb",
         dataset_name="replicate_with_column_selection",
@@ -246,12 +246,12 @@ def replicate_with_column_selection_demo() -> None:
 
     # create two source tables to demonstrate schema replication
     create_source_table(
-        src_pl,
+        sim_pl,
         "CREATE TABLE {table_name} (c1 integer PRIMARY KEY, c2 bool, c3 varchar);",
         "tbl_x",
     )
     create_source_table(
-        src_pl,
+        sim_pl,
         "CREATE TABLE {table_name} (c1 integer PRIMARY KEY, c2 bool, c3 varchar);",
         "tbl_y",
     )
@@ -262,7 +262,7 @@ def replicate_with_column_selection_demo() -> None:
     init_replication(  # requires the Postgres user to have the REPLICATION attribute assigned
         slot_name=slot_name,
         pub_name=pub_name,
-        schema_name=src_pl.dataset_name,
+        schema_name=sim_pl.dataset_name,
         table_names=("tbl_x", "tbl_y"),
         reset=True,
     )
@@ -278,18 +278,18 @@ def replicate_with_column_selection_demo() -> None:
 
     # insert records in source tables and propagate changes to destination
     change_source_table(
-        src_pl, "INSERT INTO {table_name} VALUES (1, true, 'foo');", "tbl_x"
+        sim_pl, "INSERT INTO {table_name} VALUES (1, true, 'foo');", "tbl_x"
     )
     change_source_table(
-        src_pl, "INSERT INTO {table_name} VALUES (1, false, 'bar');", "tbl_y"
+        sim_pl, "INSERT INTO {table_name} VALUES (1, false, 'bar');", "tbl_y"
     )
-    dest_pl.run(changes)
+    repl_pl.run(changes)
 
     # show columns in schema for both tables
     # column c3 is not in the schema for tbl_x because we did not include it
     # tbl_y does have column c3 because we didn't specify include columns for this table and by default all columns are included
-    print("tbl_x", ":", list(dest_pl.default_schema.get_table_columns("tbl_x").keys()))
-    print("tbl_y", ":", list(dest_pl.default_schema.get_table_columns("tbl_y").keys()))
+    print("tbl_x", ":", list(repl_pl.default_schema.get_table_columns("tbl_x").keys()))
+    print("tbl_y", ":", list(repl_pl.default_schema.get_table_columns("tbl_y").keys()))
 
 
 # define some helper methods to make examples more readable
@@ -304,7 +304,7 @@ def get_postgres_pipeline() -> dlt.Pipeline:
     # this trick prevents dlt init command from replacing "destination" argument to "pipeline"
     p_call = dlt.pipeline
     pipe = p_call(
-        pipeline_name="source_pipeline",
+        pipeline_name="simulation_pipeline",
         destination=Destination.from_reference("postgres", credentials=PG_CREDS),
         dataset_name="source_dataset",
         dev_mode=True,

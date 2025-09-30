@@ -6,6 +6,7 @@ Resources that can be loaded using this verified source are:
 | Name                 | Description                                     |
 |----------------------|-------------------------------------------------|
 | replication_resource | Load published messages from a replication slot |
+| init_replication     | Initialize replication and optionally return snapshot resources for initial data load  |
 
 ## Initialize the pipeline
 
