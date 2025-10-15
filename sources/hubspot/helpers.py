@@ -13,6 +13,10 @@ from .settings import OBJECT_TYPE_PLURAL, HS_TO_DLT_TYPE
 BASE_URL = "https://api.hubapi.com/"
 
 
+class SearchOutOfBoundsException(Exception):
+    pass
+
+
 def get_url(endpoint: str) -> str:
     """Get absolute hubspot endpoint URL"""
     return urllib.parse.urljoin(BASE_URL, endpoint)
@@ -43,6 +47,22 @@ def pagination(
         next_url = _next["link"]
         # Get the next page response
         r = requests.get(next_url, headers=headers)
+        return r.json()  # type: ignore
+    else:
+        return None
+
+
+def search_pagination(
+    url: str,
+    _data: Dict[str, Any],
+    headers: Dict[str, Any],
+    params: Optional[Dict[str, Any]] = None,
+) -> Optional[Dict[str, Any]]:
+    _next = _data.get("paging", {}).get("next", False)
+    if _next:
+        after = _next["after"]
+        # Get the next page response
+        r = requests.post(url, headers=headers, json={**params, after: after})
         return r.json()  # type: ignore
     else:
         return None
@@ -126,6 +146,34 @@ def fetch_property_history(
             _data = None
 
 
+def search_data(
+    endpoint: str,
+    api_key: str,
+    params: Optional[Dict[str, Any]] = None,
+    context: Optional[Dict[str, Any]] = None,
+) -> Iterator[List[Dict[str, Any]]]:
+    # Construct the URL and headers for the API request
+    url = get_url(endpoint)
+    headers = _get_headers(api_key)
+
+    # Make the API request
+    r = requests.post(url, headers=headers, json=params)
+    # Parse the API response and yield the properties of each result
+    # Parse the response JSON data
+    _data = r.json()
+
+    if _data.get("total", 0) > 9999:
+        raise SearchOutOfBoundsException
+    else:
+        # Yield the properties of each result in the API response
+        while _data is not None:
+            if "results" in _data:
+                yield _data_to_objects(_data, headers, context)
+
+            # Follow pagination links if they exist
+            _data = search_pagination(url, _data, headers, params)
+
+
 def fetch_data(
     endpoint: str,
     api_key: str,
@@ -168,36 +216,41 @@ def fetch_data(
     # Parse the API response and yield the properties of each result
     # Parse the response JSON data
     _data = r.json()
+
     # Yield the properties of each result in the API response
     while _data is not None:
         if "results" in _data:
-            _objects: List[Dict[str, Any]] = []
-            for _result in _data["results"]:
-                _obj = _result.get("properties", _result)
-                if "id" not in _obj and "id" in _result:
-                    # Move id from properties to top level
-                    _obj["id"] = _result["id"]
-                if "associations" in _result:
-                    for association in _result["associations"]:
-                        __data = _result["associations"][association]
-
-                        __values = extract_association_data(
-                            _obj, __data, association, headers
-                        )
-
-                        # remove duplicates from list of dicts
-                        __values = [
-                            dict(t) for t in {tuple(d.items()) for d in __values}
-                        ]
-
-                        _obj[association] = __values
-                if context:
-                    _obj.update(context)
-                _objects.append(_obj)
-            yield _objects
+            yield _data_to_objects(_data, headers, context)
 
         # Follow pagination links if they exist
         _data = pagination(_data, headers)
+
+
+def _data_to_objects(
+    data: Any,
+    headers: Dict[str, str],
+    context: Optional[Dict[str, Any]] = None,
+) -> List[Dict[str, Any]]:
+    _objects: List[Dict[str, Any]] = []
+    for _result in data["results"]:
+        _obj = _result.get("properties", _result)
+        if "id" not in _obj and "id" in _result:
+            # Move id from properties to top level
+            _obj["id"] = _result["id"]
+        if "associations" in _result:
+            for association in _result["associations"]:
+                __data = _result["associations"][association]
+
+                __values = extract_association_data(_obj, __data, association, headers)
+
+                # remove duplicates from list of dicts
+                __values = [dict(t) for t in {tuple(d.items()) for d in __values}]
+
+                _obj[association] = __values
+        if context:
+            _obj.update(context)
+        _objects.append(_obj)
+    return _objects
 
 
 def _get_property_names_types(

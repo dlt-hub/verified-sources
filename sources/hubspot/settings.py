@@ -3,7 +3,24 @@ from typing import Dict
 from dlt.common import pendulum
 from dlt.common.data_types import TDataType
 
+HUBSPOT_CREATION_DATE = pendulum.datetime(year=2006, month=6, day=1)
 STARTDATE = pendulum.datetime(year=2024, month=2, day=10)
+
+CRM_CONTACTS_SEARCH_ENDPOINT = "/crm/v3/objects/contacts/search"
+CRM_COMPANIES_SEARCH_ENDPOINT = "/crm/v3/objects/companies/search"
+CRM_DEALS_SEARCH_ENDPOINT = "/crm/v3/objects/deals/search"
+CRM_PRODUCTS_SEARCH_ENDPOINT = "/crm/v3/objects/products/search"
+CRM_TICKETS_SEARCH_ENDPOINT = "/crm/v3/objects/tickets/search"
+CRM_QUOTES_SEARCH_ENDPOINT = "/crm/v3/objects/quotes/search"
+
+CRM_SEARCH_OBJECT_ENDPOINTS = {
+    "contact": CRM_CONTACTS_SEARCH_ENDPOINT,
+    "company": CRM_COMPANIES_SEARCH_ENDPOINT,
+    "deal": CRM_DEALS_SEARCH_ENDPOINT,
+    "product": CRM_PRODUCTS_SEARCH_ENDPOINT,
+    "ticket": CRM_TICKETS_SEARCH_ENDPOINT,
+    "quote": CRM_QUOTES_SEARCH_ENDPOINT,
+}
 
 CRM_CONTACTS_ENDPOINT = (
     "/crm/v3/objects/contacts?associations=deals,products,tickets,quotes"
@@ -112,6 +129,14 @@ ENTITY_PROPERTIES = {
     "quote": DEFAULT_QUOTE_PROPS,
 }
 
+LAST_MODIFIED_PROPERTY = {
+    "company": "hs_lastmodifieddate",
+    "contact": "lastmodifieddate",
+    "deal": "hs_lastmodifieddate",
+    "ticket": "hs_lastmodifieddate",
+    "product": "hs_lastmodifieddate",
+    "quote": "hs_lastmodifieddate",
+}
 
 PIPELINES_OBJECTS = ["deals", "tickets"]
 SOFT_DELETE_KEY = "is_deleted"
