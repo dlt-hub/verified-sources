@@ -50,9 +50,9 @@ from .helpers import (
 from .settings import (
     ALL_OBJECTS,
     ARCHIVED_PARAM,
+    CRM_OBJECT_ASSOCIATIONS,
     CRM_OBJECT_ENDPOINTS,
     CRM_PIPELINES_ENDPOINT,
-    CRM_SEARCH_OBJECT_ENDPOINTS,
     ENTITY_PROPERTIES,
     LAST_MODIFIED_PROPERTY,
     HUBSPOT_CREATION_DATE,
@@ -95,7 +95,13 @@ def fetch_data_for_properties(
     logger.info(f"Fetching data for {object_type}.")
     # The Hubspot API expects a comma separated string as properties
     joined_props = ",".join(sorted(props))
-    params: Dict[str, Any] = {"properties": joined_props, "limit": 100}
+    associations = CRM_OBJECT_ASSOCIATIONS[object_type]
+    joined_associations = ",".join(associations)
+    params: Dict[str, Any] = {
+        "associations": joined_associations,
+        "properties": joined_props,
+        "limit": 100,
+    }
     context: Optional[Dict[str, Any]] = (
         {SOFT_DELETE_KEY: False} if soft_delete else None
     )
@@ -120,8 +126,9 @@ def fetch_data_for_properties(
 
         try:
             yield from search_data(
-                CRM_SEARCH_OBJECT_ENDPOINTS[object_type],
+                CRM_OBJECT_ENDPOINTS[object_type],
                 api_key,
+                associations=associations,
                 params=search_params,
                 context=context,
             )
@@ -228,7 +235,7 @@ def crm_object_history(
     # This is especially relevant for columns of type "number" in Hubspot
     # that are returned as strings by the API
     for batch in fetch_property_history(
-        CRM_SEARCH_OBJECT_ENDPOINTS[object_type],
+        CRM_OBJECT_ENDPOINTS[object_type],
         api_key,
         ",".join(sorted(props_to_type.keys())),
     ):

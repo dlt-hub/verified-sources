@@ -6,28 +6,8 @@ from dlt.common.data_types import TDataType
 HUBSPOT_CREATION_DATE = pendulum.datetime(year=2006, month=6, day=1)
 STARTDATE = pendulum.datetime(year=2024, month=2, day=10)
 
-CRM_CONTACTS_SEARCH_ENDPOINT = "/crm/v3/objects/contacts/search"
-CRM_COMPANIES_SEARCH_ENDPOINT = "/crm/v3/objects/companies/search"
-CRM_DEALS_SEARCH_ENDPOINT = "/crm/v3/objects/deals/search"
-CRM_PRODUCTS_SEARCH_ENDPOINT = "/crm/v3/objects/products/search"
-CRM_TICKETS_SEARCH_ENDPOINT = "/crm/v3/objects/tickets/search"
-CRM_QUOTES_SEARCH_ENDPOINT = "/crm/v3/objects/quotes/search"
-
-CRM_SEARCH_OBJECT_ENDPOINTS = {
-    "contact": CRM_CONTACTS_SEARCH_ENDPOINT,
-    "company": CRM_COMPANIES_SEARCH_ENDPOINT,
-    "deal": CRM_DEALS_SEARCH_ENDPOINT,
-    "product": CRM_PRODUCTS_SEARCH_ENDPOINT,
-    "ticket": CRM_TICKETS_SEARCH_ENDPOINT,
-    "quote": CRM_QUOTES_SEARCH_ENDPOINT,
-}
-
-CRM_CONTACTS_ENDPOINT = (
-    "/crm/v3/objects/contacts?associations=deals,products,tickets,quotes"
-)
-CRM_COMPANIES_ENDPOINT = (
-    "/crm/v3/objects/companies?associations=contacts,deals,products,tickets,quotes"
-)
+CRM_CONTACTS_ENDPOINT = "/crm/v3/objects/contacts"
+CRM_COMPANIES_ENDPOINT = "/crm/v3/objects/companies"
 CRM_DEALS_ENDPOINT = "/crm/v3/objects/deals"
 CRM_PRODUCTS_ENDPOINT = "/crm/v3/objects/products"
 CRM_TICKETS_ENDPOINT = "/crm/v3/objects/tickets"
@@ -35,6 +15,9 @@ CRM_QUOTES_ENDPOINT = "/crm/v3/objects/quotes"
 CRM_OWNERS_ENDPOINT = "/crm/v3/owners/"
 CRM_PROPERTIES_ENDPOINT = "/crm/v3/properties/{objectType}/{property_name}"
 CRM_PIPELINES_ENDPOINT = "/crm/v3/pipelines/{objectType}"
+
+CRM_SEARCH_ENDPOINT = "{crm_endpoint}/search"
+CRM_ASSOCIATIONS_ENDPOINT = "{crm_endpoint}/{object_id}/associations/{association}"
 
 CRM_OBJECT_ENDPOINTS = {
     "contact": CRM_CONTACTS_ENDPOINT,
@@ -44,6 +27,16 @@ CRM_OBJECT_ENDPOINTS = {
     "ticket": CRM_TICKETS_ENDPOINT,
     "quote": CRM_QUOTES_ENDPOINT,
     "owner": CRM_OWNERS_ENDPOINT,
+}
+
+CRM_OBJECT_ASSOCIATIONS = {
+    "contact": ["deals", "products", "tickets", "quotes"],
+    "company": ["contacts", "deals", "products", "tickets", "quotes"],
+    "deal": [],
+    "product": [],
+    "ticket": [],
+    "quote": [],
+    "owner": [],
 }
 
 WEB_ANALYTICS_EVENTS_ENDPOINT = "/events/v3/events?objectType={objectType}&objectId={objectId}&occurredAfter={occurredAfter}&occurredBefore={occurredBefore}&sort=-occurredAt"

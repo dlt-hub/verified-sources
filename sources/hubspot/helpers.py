@@ -8,7 +8,12 @@ from typing import Any, Dict, Iterator, List, Optional
 from dlt.common.schema.typing import TColumnSchema
 from dlt.sources.helpers import requests
 
-from .settings import OBJECT_TYPE_PLURAL, HS_TO_DLT_TYPE
+from .settings import (
+    CRM_ASSOCIATIONS_ENDPOINT,
+    CRM_SEARCH_ENDPOINT,
+    OBJECT_TYPE_PLURAL,
+    HS_TO_DLT_TYPE,
+)
 
 BASE_URL = "https://api.hubapi.com/"
 
@@ -62,7 +67,7 @@ def search_pagination(
     if _next:
         after = _next["after"]
         # Get the next page response
-        r = requests.post(url, headers=headers, json={**params, after: after})
+        r = requests.post(url, headers=headers, json={**params, "after": after})
         return r.json()  # type: ignore
     else:
         return None
@@ -149,11 +154,12 @@ def fetch_property_history(
 def search_data(
     endpoint: str,
     api_key: str,
+    associations: Optional[List[str]] = None,
     params: Optional[Dict[str, Any]] = None,
     context: Optional[Dict[str, Any]] = None,
 ) -> Iterator[List[Dict[str, Any]]]:
     # Construct the URL and headers for the API request
-    url = get_url(endpoint)
+    url = get_url(CRM_SEARCH_ENDPOINT.format(crm_endpoint=endpoint))
     headers = _get_headers(api_key)
 
     # Make the API request
@@ -168,7 +174,9 @@ def search_data(
         # Yield the properties of each result in the API response
         while _data is not None:
             if "results" in _data:
-                yield _data_to_objects(_data, headers, context)
+                yield _data_to_objects(
+                    _data, endpoint, headers, associations=associations, context=context
+                )
 
             # Follow pagination links if they exist
             _data = search_pagination(url, _data, headers, params)
@@ -220,7 +228,7 @@ def fetch_data(
     # Yield the properties of each result in the API response
     while _data is not None:
         if "results" in _data:
-            yield _data_to_objects(_data, headers, context)
+            yield _data_to_objects(_data, endpoint, headers, context=context)
 
         # Follow pagination links if they exist
         _data = pagination(_data, headers)
@@ -228,7 +236,9 @@ def fetch_data(
 
 def _data_to_objects(
     data: Any,
+    endpoint: str,
     headers: Dict[str, str],
+    associations: Optional[List[str]] = None,
     context: Optional[Dict[str, Any]] = None,
 ) -> List[Dict[str, Any]]:
     _objects: List[Dict[str, Any]] = []
@@ -240,17 +250,34 @@ def _data_to_objects(
         if "associations" in _result:
             for association in _result["associations"]:
                 __data = _result["associations"][association]
-
-                __values = extract_association_data(_obj, __data, association, headers)
-
-                # remove duplicates from list of dicts
-                __values = [dict(t) for t in {tuple(d.items()) for d in __values}]
-
-                _obj[association] = __values
+                _add_association_data(__data, association, headers, _obj)
+        elif associations is not None:
+            for association in associations:
+                __endpoint = get_url(
+                    CRM_ASSOCIATIONS_ENDPOINT.format(
+                        crm_endpoint=endpoint,
+                        object_id=_result["id"],
+                        association=association,
+                    )
+                )
+                r = requests.get(__endpoint, headers=headers, params={"limit": 500})
+                __data = r.json()
+                _add_association_data(__data, association, headers, _obj)
         if context:
             _obj.update(context)
         _objects.append(_obj)
     return _objects
+
+
+def _add_association_data(
+    data: Any, association: str, headers: Dict[str, str], obj: Any
+) -> None:
+    __values = extract_association_data(obj, data, association, headers)
+
+    # remove duplicates from list of dicts
+    __values = [dict(t) for t in {tuple(d.items()) for d in __values}]
+
+    obj[association] = __values
 
 
 def _get_property_names_types(
