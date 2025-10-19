@@ -41,7 +41,7 @@ from dlt.sources import DltResource
 from .helpers import (
     _get_property_names_types,
     _to_dlt_columns_schema,
-    search_data,
+    search_data_since,
     fetch_data,
     fetch_property_history,
     get_properties_labels,
@@ -107,29 +107,14 @@ def fetch_data_for_properties(
     )
 
     if last_modified is not None:
-        logger.info(f"Attempting search starting at {last_modified}.")
-        search_params: Dict[str, Any] = {
-            "properties": sorted(props),
-            "limit": 200,
-            "filterGroups": [
-                {
-                    "filters": [
-                        {
-                            "propertyName": LAST_MODIFIED_PROPERTY[object_type],
-                            "operator": "GTE",
-                            "value": last_modified,
-                        }
-                    ]
-                }
-            ],
-        }
-
         try:
-            yield from search_data(
+            yield from search_data_since(
                 CRM_OBJECT_ENDPOINTS[object_type],
                 api_key,
+                last_modified,
+                LAST_MODIFIED_PROPERTY[object_type],
+                props=props,
                 associations=associations,
-                params=search_params,
                 context=context,
             )
         except SearchOutOfBoundsException:
@@ -396,7 +381,7 @@ def hubspot(
         """
 
         def get_properties_description(
-            properties_list_inner: List[Dict[str, Any]]
+            properties_list_inner: List[Dict[str, Any]],
         ) -> Iterator[Dict[str, Any]]:
             """Fetch properties."""
             for property_info in properties_list_inner:

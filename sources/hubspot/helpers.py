@@ -5,6 +5,7 @@ from typing import Union
 import urllib.parse
 from typing import Any, Dict, Iterator, List, Optional
 
+from dlt.common import logger
 from dlt.common.schema.typing import TColumnSchema
 from dlt.sources.helpers import requests
 
@@ -63,11 +64,10 @@ def search_pagination(
     headers: Dict[str, Any],
     params: Optional[Dict[str, Any]] = None,
 ) -> Optional[Dict[str, Any]]:
-    _next = _data.get("paging", {}).get("next", False)
-    if _next:
-        after = _next["after"]
+    _after = _data.get("paging", {}).get("next", {}).get("after", False)
+    if _after and _after != "10000":
         # Get the next page response
-        r = requests.post(url, headers=headers, json={**params, "after": after})
+        r = requests.post(url, headers=headers, json={**params, "after": _after})
         return r.json()  # type: ignore
     else:
         return None
@@ -151,35 +151,70 @@ def fetch_property_history(
             _data = None
 
 
-def search_data(
+def search_data_since(
     endpoint: str,
     api_key: str,
+    last_modified: str,
+    last_modified_prop: str,
+    props: List[str],
     associations: Optional[List[str]] = None,
-    params: Optional[Dict[str, Any]] = None,
     context: Optional[Dict[str, Any]] = None,
 ) -> Iterator[List[Dict[str, Any]]]:
     # Construct the URL and headers for the API request
     url = get_url(CRM_SEARCH_ENDPOINT.format(crm_endpoint=endpoint))
     headers = _get_headers(api_key)
+    body: Dict[str, Any] = {
+        "properties": sorted(props),
+        "limit": 200,
+        "filterGroups": [
+            {
+                "filters": [
+                    {
+                        "propertyName": last_modified_prop,
+                        "operator": "GTE",
+                        "value": last_modified,
+                    }
+                ]
+            }
+        ],
+        "sorts": [{"propertyName": last_modified_prop, "direction": "ASCENDING"}],
+    }
 
     # Make the API request
-    r = requests.post(url, headers=headers, json=params)
+    r = requests.post(url, headers=headers, json=body)
     # Parse the API response and yield the properties of each result
     # Parse the response JSON data
     _data = r.json()
 
-    if _data.get("total", 0) > 9999:
-        raise SearchOutOfBoundsException
-    else:
-        # Yield the properties of each result in the API response
-        while _data is not None:
-            if "results" in _data:
-                yield _data_to_objects(
-                    _data, endpoint, headers, associations=associations, context=context
-                )
+    _total = _data.get("total", 0)
+    logger.info(f"Getting {_total} new objects from {url} starting at {last_modified}")
+    _max_last_modified = last_modified
+    # Yield the properties of each result in the API response
+    while _data is not None:
+        if "results" in _data:
+            for _result in _data["results"]:
+                if _result["updatedAt"]:
+                    _max_last_modified = max(_max_last_modified, _result["updatedAt"])
+            yield _data_to_objects(
+                _data, endpoint, headers, associations=associations, context=context
+            )
 
-            # Follow pagination links if they exist
-            _data = search_pagination(url, _data, headers, params)
+        # Follow pagination links if they exist
+        _data = search_pagination(url, _data, headers, body)
+
+    if _total > 9999:
+        if _max_last_modified == last_modified:
+            raise SearchOutOfBoundsException
+        logger.info(f"Starting new search iteration at {_max_last_modified}")
+        yield from search_data_since(
+            endpoint,
+            api_key,
+            _max_last_modified,
+            last_modified_prop,
+            props,
+            associations,
+            context,
+        )
 
 
 def fetch_data(
