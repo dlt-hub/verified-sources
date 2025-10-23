@@ -61,12 +61,6 @@ def sharepoint_files(
             file_name_startswith=sharepoint_files_config.file_name_startswith,
             pattern=sharepoint_files_config.pattern,
         ):
-            if file_item["size"] > sharepoint_files_config.file_size_limit:
-                logger.warning(f"File {file_item['name']} is too large, skipping")
-                raise RuntimeError(
-                    f"File {file_item['name']} is larger than the limit of"
-                    f" {sharepoint_files_config.file_size_limit} bytes."
-                )
             logger.debug(
                 "filtering files based on lastModifiedDateTime, compare to last_value:"
                 f" {current_last_value}"

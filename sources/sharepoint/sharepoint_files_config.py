@@ -50,7 +50,6 @@ class SharepointFilesConfig(BaseModel):
     pattern: Optional[str] = ".*"
     pandas_kwargs: Dict = {}
     limit: Optional[int] = None
-    file_size_limit: Optional[int] = 100_000_000  # 100 MB
     is_compressed_folder: Optional[bool] = False
     if_apply_str_to_all_columns: Optional[bool] = True
     is_file_incremental: bool = False

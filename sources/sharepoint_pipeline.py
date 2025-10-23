@@ -28,7 +28,6 @@ if __name__ == "__main__":
         file_type="csv",
         table_name="sharepoint_reports",
         is_file_incremental=True,
-        file_size_limit=5_000_000,
         pandas_kwargs={}
     )
 
