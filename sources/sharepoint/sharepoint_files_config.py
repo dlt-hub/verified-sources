@@ -30,7 +30,6 @@ class SharepointListConfig(BaseModel):
     table_name: str
     list_title: str
     select: Optional[str] = None
-    limit: Optional[int] = None
     is_incremental: Optional[bool] = False
 
     def __init__(self, **data):
@@ -48,9 +47,6 @@ class SharepointFilesConfig(BaseModel):
     file_name_startswith: str
     pattern: Optional[str] = ".*"
     pandas_kwargs: Dict = {}
-    limit: Optional[int] = None
-    is_compressed_folder: Optional[bool] = False
-    if_apply_str_to_all_columns: Optional[bool] = True
     is_file_incremental: bool = False
 
     def __init__(self, **data):
