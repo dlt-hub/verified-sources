@@ -3,7 +3,7 @@ from io import BytesIO
 import re
 
 from msal import ConfidentialClientApplication
-from loguru import logger
+from dlt.common import logger
 from dlt.sources.helpers.rest_client import RESTClient
 from dlt.sources.helpers.rest_client.auth import BearerTokenAuth
 from dlt.sources.helpers.rest_client.paginators import JSONLinkPaginator

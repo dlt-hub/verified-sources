@@ -4,7 +4,7 @@ import re
 import dlt
 from dlt.common.typing import TDataItems
 from dlt.common.configuration.specs import configspec, BaseConfiguration
-from loguru import logger
+from dlt.common import logger
 import pandas as pd
 
 from .helpers import SharepointClient
