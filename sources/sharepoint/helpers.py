@@ -1,4 +1,4 @@
-from typing import Dict, Union, List, Tuple
+from typing import Dict, List
 from io import BytesIO
 import re
 
@@ -170,76 +170,3 @@ class SharepointClient:
             return bytes_io
         else:
             raise FileNotFoundError(f"File not found: {file_item['name']} or can't be downloaded")
-
-    def archive_file(self, file_item: Dict, archive_folder_path: str, new_file_name: str) -> None:
-        url = f"{self.graph_site_url}/drive/items/{file_item['id']}"
-        archive_folder_path = self.remove_driver_root_in_path(archive_folder_path)
-        archive_folder_id = self.create_folder_if_not_exists(folder_path=archive_folder_path)
-        body = {
-            "parentReference": {"id": archive_folder_id},
-            "name": new_file_name,
-        }
-        res = self.client.patch(url, json=body)
-        if res.status_code == 200:
-            logger.success(
-                f"File {file_item['name']} renamed to {new_file_name} in {archive_folder_path}"
-            )
-        else:
-            raise RuntimeError(f"File {file_item['name']} can't be renamed to {new_file_name}")
-
-    def safe_get_folder_id(self, folder_path: str) -> Union[str, None]:
-        folder_url = f"{self.graph_site_url}/drive/root:/{folder_path}"
-        res = self.client.get(folder_url)
-        if res.status_code == 200:
-            return res.json()["id"]
-
-    def list_folder(self, folder_path: str) -> Tuple[List, List]:
-        """List sub folders and files in folder_path
-
-        Args:
-            folder_path (str): folder_path from sharepoint
-
-        Returns:
-            Tuple[List, List]: (List of folders, List of files)
-        """
-        if r"/" not in folder_path:
-            raise ValueError(f"Invalid folder path: {folder_path}, must contain '/'")
-        folder_url = f"{self.graph_site_url}/drive/root:/{folder_path}:/children"
-        logger.info(f"Listing from folder_path: {folder_path} using {folder_url}")
-        res = self.client.get(folder_url)
-        file_and_folder_items = res.json().get("value", [])
-        file_items = [x for x in file_and_folder_items if "file" in x.keys()]
-        folder_items = [x for x in file_and_folder_items if "folder" in x.keys()]
-        return (folder_items, file_items)
-
-    def create_folder(self, folder_path: str) -> str:
-        if r"/" not in folder_path:
-            raise ValueError(f"Invalid folder path: {folder_path}, must contain '/'")
-        parent_folder, folder_name = folder_path.rsplit("/", 1)
-        parent_folder_id = self.safe_get_folder_id(parent_folder)
-        if not parent_folder_id:
-            raise ValueError(f"Parent folder {parent_folder} not found")
-        logger.debug(f"Creating folder {folder_name} in {parent_folder}")
-        folder_url = f"{self.graph_site_url}/drive/items/{parent_folder_id}/children"
-        body = {
-            "name": folder_name,
-            "folder": {},
-            "@microsoft.graph.conflictBehavior": "fail",
-        }
-        res = self.client.post(folder_url, json=body)
-        if res.status_code == 201:
-            logger.success(f"Folder {folder_name} created")
-            return res.json()["id"]
-        else:
-            raise RuntimeError(f"Folder {folder_name} can't be created")
-
-    def create_folder_if_not_exists(self, folder_path: str) -> str:
-        folder_id = self.safe_get_folder_id(folder_path)
-        if folder_id:
-            logger.info(f"Folder {folder_path} already exists")
-            return folder_id
-        else:
-            return self.create_folder(folder_path)
-
-    def remove_driver_root_in_path(self, path: str) -> str:
-        return re.sub(r"^/drive/root:/", "", path)
