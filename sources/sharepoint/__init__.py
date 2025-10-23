@@ -31,9 +31,16 @@ def sharepoint_list(
 
     def get_pipe(sharepoint_list_config: SharepointListConfig):
         def get_records(sharepoint_list_config: SharepointListConfig):
-            data = client.get_items_from_list(list_title=sharepoint_list_config.list_title, select=sharepoint_list_config.select)
+            data = client.get_items_from_list(
+                list_title=sharepoint_list_config.list_title,
+                select=sharepoint_list_config.select,
+            )
             yield from data
-        return dlt.resource(get_records, name=sharepoint_list_config.table_name)(sharepoint_list_config)
+
+        return dlt.resource(get_records, name=sharepoint_list_config.table_name)(
+            sharepoint_list_config
+        )
+
     yield get_pipe(sharepoint_list_config=sharepoint_list_config)
 
 
@@ -65,12 +72,17 @@ def sharepoint_files(
                 "filtering files based on lastModifiedDateTime, compare to last_value:"
                 f" {current_last_value}"
             )
-            if file_item["lastModifiedDateTime"] > current_last_value or not sharepoint_files_config.is_file_incremental:
+            if (
+                file_item["lastModifiedDateTime"] > current_last_value
+                or not sharepoint_files_config.is_file_incremental
+            ):
                 logger.info(
                     f"Processing file after lastModifiedDateTime filter: {file_item['name']}"
                 )
 
-                file_item["pd_function"] = sharepoint_files_config.file_type.get_pd_function()
+                file_item["pd_function"] = (
+                    sharepoint_files_config.file_type.get_pd_function()
+                )
                 file_item["pd_kwargs"] = sharepoint_files_config.pandas_kwargs
                 yield file_item
             else:
@@ -93,7 +105,9 @@ def sharepoint_files(
         logger.debug(f"get_records done for {file_item['name']}")
 
     def get_pipe(sharepoint_files_config: SharepointFilesConfig):
-        return dlt.resource(get_files, name=f"{sharepoint_files_config.table_name}_files")(sharepoint_files_config) | dlt.transformer(
+        return dlt.resource(
+            get_files, name=f"{sharepoint_files_config.table_name}_files"
+        )(sharepoint_files_config) | dlt.transformer(
             get_records, name=sharepoint_files_config.table_name, parallelized=False
         )
 

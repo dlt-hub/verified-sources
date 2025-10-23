@@ -40,6 +40,7 @@ class SharepointListConfig(BaseModel):
                 "Incremental loading for Sharepoint List is not implemented yet."
             )
 
+
 class SharepointFilesConfig(BaseModel):
     file_type: FileType
     folder_path: str
