@@ -160,6 +160,35 @@ def search_data_since(
     associations: Optional[List[str]] = None,
     context: Optional[Dict[str, Any]] = None,
 ) -> Iterator[List[Dict[str, Any]]]:
+    """
+    Fetch data from the HUBSPOT search endpoint, based on a given root endpoint, using a specified
+    API key and yield the properties of each result. This function yields results from a last modified
+    point in time based on the provided last modified property.
+
+    Args:
+        endpoint (str): The root endpoint to fetch data from, as a string.
+        api_key (str): The API key to use for authentication, as a string.
+        last_modified (str): The date from which to start the search, as a string in ISO format.
+        last_modified_prop (str): The property used to check the last modified date against, as a string.
+        props: The list of properties to include for the object in the request.
+        associations: Optional dict of associations to search for for each object.
+        context (Optional[Dict[str, Any]]): Additional data which need to be added in the resulting page.
+
+    Yields:
+        A List of CRM object dicts
+
+    Raises:
+        requests.exceptions.HTTPError: If the API returns an HTTP error status code.
+
+    Notes:
+        This function uses the `requests` library to make a POST request to the specified endpoint, with
+        the API key included in the headers. If the API returns a non-successful HTTP status code (e.g.
+        404 Not Found), a `requests.exceptions.HTTPError` exception will be raised.
+
+        The `endpoint` argument should be a relative URL, which will be modified to a search endpoint
+        and then appended to the base URL for the API. `last_modified`, `last_modified_prop`, and `props`
+        are used to pass additional parameters to the request
+    """
     # Construct the URL and headers for the API request
     url = get_url(CRM_SEARCH_ENDPOINT.format(crm_endpoint=endpoint))
     headers = _get_headers(api_key)
