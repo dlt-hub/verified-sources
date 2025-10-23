@@ -56,7 +56,7 @@ class SharepointClient:
                 auth=BearerTokenAuth(access_token),
                 paginator=JSONLinkPaginator(next_url_path="@odata.nextLink"),
             )
-            logger.success(f"Connected to SharePoint site id: {self.site_id} successfully")
+            logger.info(f"Connected to SharePoint site id: {self.site_id} successfully")
         else:
             raise ConnectionError("Connection failed : ", token_response)
 
