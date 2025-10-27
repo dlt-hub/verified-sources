@@ -98,10 +98,12 @@ def fetch_data_for_properties(
     associations = CRM_OBJECT_ASSOCIATIONS[object_type]
     joined_associations = ",".join(associations)
     params: Dict[str, Any] = {
-        "associations": joined_associations,
         "properties": joined_props,
         "limit": 100,
     }
+    if associations:
+        params["associations"] = joined_associations
+
     context: Optional[Dict[str, Any]] = (
         {SOFT_DELETE_KEY: False} if soft_delete else None
     )
