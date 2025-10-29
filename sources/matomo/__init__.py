@@ -138,7 +138,7 @@ def matomo_visits(
     if get_live_event_visitors:
         resource_list.append(
             visits_data_generator
-            | get_unique_visitors(client=client, site_id=live_events_site_id)
+            | get_unique_visitors_with_chunk(client=client, site_id=live_events_site_id)
         )
     return resource_list
 
