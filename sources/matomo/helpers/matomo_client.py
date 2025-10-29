@@ -25,7 +25,9 @@ class MatomoAPIClient:
         Args:
             api_token (str): Token used to authenticate for Matomo API.
             url (str): URL of the Matomo website.
-            call_method (str): HTTP method for API calls, related to authentication
+            call_method (str): HTTP method for API calls, related to authentication,
+            either "GET" or "POST". Default is "GET" to continue the support for Matomo 4 and below,
+            for Matomo 5, "POST" is recommended
         """
 
         self.base_url = url
