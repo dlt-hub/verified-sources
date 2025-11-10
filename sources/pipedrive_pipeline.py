@@ -1,12 +1,19 @@
+from typing import Optional, Sequence
+
 import dlt
-from pipedrive import pipedrive_source
+from pipedrive import pipedrive_source, pipedrive_v2_source
+from pipedrive.settings import DEFAULT_V2_RESOURCES
 
 
 def load_pipedrive() -> None:
     """Constructs a pipeline that will load all pipedrive data"""
     # configure the pipeline with your destination details
     pipeline = dlt.pipeline(
-        pipeline_name="pipedrive", destination="duckdb", dataset_name="pipedrive_data"
+        pipeline_name="pipedrive",
+        destination="duckdb",
+        dataset_name="pipedrive_data",
+        progress="log",
+        dev_mode=True,
     )
     load_info = pipeline.run(pipedrive_source())
     print(load_info)
@@ -16,13 +23,18 @@ def load_pipedrive() -> None:
 def load_selected_data() -> None:
     """Shows how to load just selected tables using `with_resources`"""
     pipeline = dlt.pipeline(
-        pipeline_name="pipedrive", destination="duckdb", dataset_name="pipedrive_data"
+        pipeline_name="pipedrive",
+        destination="duckdb",
+        dataset_name="pipedrive_data",
+        progress="log",
+        dev_mode=True,
     )
     # Use with_resources to select which entities to load
     # Note: `custom_fields_mapping` must be included to translate custom field hashes to corresponding names
     load_info = pipeline.run(
         pipedrive_source().with_resources(
-            "products", "deals", "deals_participants", "custom_fields_mapping"
+            # "products", "deals", "deals_participants", "custom_fields_mapping"
+            "deals"
         )
     )
     print(load_info)
@@ -44,7 +56,11 @@ def load_selected_data() -> None:
 def load_from_start_date() -> None:
     """Example to incrementally load activities limited to items updated after a given date"""
     pipeline = dlt.pipeline(
-        pipeline_name="pipedrive", destination="duckdb", dataset_name="pipedrive_data"
+        pipeline_name="pipedrive",
+        destination="duckdb",
+        dataset_name="pipedrive_data",
+        progress="log",
+        dev_mode=True,
     )
 
     # First source configure to load everything except activities from the beginning
@@ -61,10 +77,48 @@ def load_from_start_date() -> None:
     print(load_info)
 
 
+def load_v2_resources(resources: Optional[Sequence[str]] = None) -> None:
+    """Load v2 entities using the separate v2 source.
+
+    Note: company_domain will be read from dlt secrets if not provided.
+    """
+    resources = list(resources or DEFAULT_V2_RESOURCES)
+    pipeline = dlt.pipeline(
+        pipeline_name="pipedrive",
+        destination="duckdb",
+        dataset_name="pipedrive_data",
+        progress="log",
+        dev_mode=True,
+    )
+    source = pipedrive_v2_source(resources=resources)
+    load_info = pipeline.run(source)
+    print(load_info)
+    print(pipeline.last_trace.last_normalize_info)
+
+
+def load_selected_v2_data(resources: Sequence[str]) -> None:
+    """Load only the specified v2 entities (and their nested resources)."""
+    pipeline = dlt.pipeline(
+        pipeline_name="pipedrive",
+        destination="duckdb",
+        dataset_name="pipedrive_data",
+        progress="log",
+        dev_mode=True,
+    )
+    source = pipedrive_v2_source(resources=list(resources))
+    load_info = pipeline.run(source)
+    print(load_info)
+    print(pipeline.last_trace.last_normalize_info)
+
+
 if __name__ == "__main__":
     # run our main example
-    load_pipedrive()
+    # load_pipedrive()
     # load selected tables and display resource info
     # load_selected_data()
     # load activities updated since given date
     # load_from_start_date()
+    # load v2 resources (optional addon)
+    load_v2_resources()
+    # load only selected v2 resources
+    # load_selected_v2_data(["deals", "stages"])
