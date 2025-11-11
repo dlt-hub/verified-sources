@@ -10,7 +10,7 @@ def load_pipedrive() -> None:
     # configure the pipeline with your destination details
     pipeline = dlt.pipeline(
         pipeline_name="pipedrive",
-        destination='duckdb',
+        destination="duckdb",
         dataset_name="pipedrive_data",
         progress="log",
     )
@@ -23,7 +23,7 @@ def load_selected_data() -> None:
     """Shows how to load just selected tables using `with_resources`"""
     pipeline = dlt.pipeline(
         pipeline_name="pipedrive",
-        destination='duckdb',
+        destination="duckdb",
         dataset_name="pipedrive_data",
         progress="log",
     )
@@ -31,7 +31,7 @@ def load_selected_data() -> None:
     # Note: `custom_fields_mapping` must be included to translate custom field hashes to corresponding names
     load_info = pipeline.run(
         pipedrive_source().with_resources(
-             "products", "deals", "deals_participants", "custom_fields_mapping"
+            "products", "deals", "deals_participants", "custom_fields_mapping"
         )
     )
     print(load_info)
@@ -54,7 +54,7 @@ def load_from_start_date() -> None:
     """Example to incrementally load activities limited to items updated after a given date"""
     pipeline = dlt.pipeline(
         pipeline_name="pipedrive",
-        destination='duckdb',
+        destination="duckdb",
         dataset_name="pipedrive_data",
         progress="log",
     )
@@ -79,7 +79,7 @@ def load_v2_resources(resources: Optional[Sequence[str]] = None) -> None:
     resources = list(resources or DEFAULT_V2_RESOURCES)
     pipeline = dlt.pipeline(
         pipeline_name="pipedrive",
-        destination='duckdb',
+        destination="duckdb",
         dataset_name="pipedrive_data",
         progress="log",
     )
@@ -116,6 +116,6 @@ if __name__ == "__main__":
     # load activities updated since given date
     # load_from_start_date()
     # load v2 resources (optional addon)
-    #load_v2_resources()
+    # load_v2_resources()
     # load only selected v2 resources (3 major endpoints: deals, persons, organizations)
     load_selected_v2_data()

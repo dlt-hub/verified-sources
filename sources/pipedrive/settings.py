@@ -93,7 +93,10 @@ NESTED_ENTITIES_V2 = {
     "deal_followers": {
         "parent": "deals",
         "endpoint_path": "deals/{id}/followers",
-        "primary_key": ["user_id", "_deals_id"],  # Followers don't have 'id', use composite key
+        "primary_key": [
+            "user_id",
+            "_deals_id",
+        ],  # Followers don't have 'id', use composite key
         "include_from_parent": ["id"],  # Include deal id from parent
         "params": {
             "limit": 500,
@@ -105,4 +108,11 @@ NESTED_ENTITIES_V2 = {
 # This curated set includes the most commonly used endpoints.
 # Users can customize this list to match their needs.
 # See ENTITIES_V2 above for all available v2 endpoints.
-DEFAULT_V2_RESOURCES = ["deals", "persons", "organizations" ,"products", "pipelines", "stages"]
+DEFAULT_V2_RESOURCES = [
+    "deals",
+    "persons",
+    "organizations",
+    "products",
+    "pipelines",
+    "stages",
+]
