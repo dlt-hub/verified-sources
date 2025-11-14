@@ -90,15 +90,14 @@ def load_v2_resources(resources: Optional[Sequence[str]] = None) -> None:
 
 
 def load_selected_v2_data() -> None:
-    """Load only the specified v2 entities (and their nested resources)."""
+    """Load only the specified v2 entities using `with_resources`."""
     pipeline = dlt.pipeline(
-        pipeline_name="pipedrive21",
+        pipeline_name="pipedrive",
         destination="duckdb",
-        dataset_name="pipedrive_dat21a",
+        dataset_name="pipedrive_data",
         progress="log",
     )
-    # Use with_resources to select which entities to load (3 major v2 endpoints)
-    # Note: v2 resources are prefixed with "v2_" in the source
+    # Nested dependencies (e.g., v2_deal_products, v2_deal_followers) must be explicitly listed.
     load_info = pipeline.run(
         pipedrive_v2_source().with_resources(
             "v2_deals", "v2_persons", "v2_organizations"
@@ -110,12 +109,12 @@ def load_selected_v2_data() -> None:
 
 if __name__ == "__main__":
     # run our main example
-    # load_pipedrive()
+    load_pipedrive()
     # load selected tables and display resource info
     # load_selected_data()
     # load activities updated since given date
     # load_from_start_date()
     # load v2 resources (optional addon)
-    # load_v2_resources()
+    load_v2_resources()
     # load only selected v2 resources (3 major endpoints: deals, persons, organizations)
-    load_selected_v2_data()
+    # load_selected_v2_data()

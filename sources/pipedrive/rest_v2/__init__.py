@@ -1,3 +1,9 @@
+"""Pipedrive API v2 source using REST API v2 endpoints
+
+Pipedrive API v2 docs: https://pipedrive.readme.io/docs/pipedrive-api-v2
+"""
+
+
 from typing import Iterable, Dict, Any, List, Optional, Union, cast
 
 import dlt
@@ -10,8 +16,8 @@ from ..settings import ENTITIES_V2, NESTED_ENTITIES_V2
 
 @dlt.source(name="pipedrive_v2")
 def pipedrive_v2_source(
-    pipedrive_api_key: str = dlt.secrets.value,
-    company_domain: str = dlt.secrets.value,
+    pipedrive_api_key: Optional[str] = None,
+    company_domain: Optional[str] = None,
     resources: Optional[List[str]] = None,
     prefix: str = "v2_",
 ) -> Iterable[DltResource]:
