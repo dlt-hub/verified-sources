@@ -18,8 +18,9 @@ from dlt.common.configuration.providers import (
     SecretsTomlProvider,
 )
 from dlt.common.configuration.specs.pluggable_run_context import (
-    SupportsRunContext,
+    RunContextBase,
 )
+
 from dlt.common.runtime.run_context import DOT_DLT, RunContext
 from dlt.common.pipeline import LoadInfo, PipelineContext, ExtractInfo
 from dlt.common.storages import FileStorage
@@ -94,7 +95,7 @@ class MockableRunContext(RunContext):
     _data_dir: str
 
     @classmethod
-    def from_context(cls, ctx: SupportsRunContext) -> "MockableRunContext":
+    def from_context(cls, ctx: RunContextBase) -> "MockableRunContext":
         cls_ = cls(ctx.run_dir)
         cls_._name = ctx.name
         cls_._global_dir = ctx.global_dir
