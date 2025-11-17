@@ -186,7 +186,6 @@ def facebook_insights_source(
             query = {
                 "level": level,
                 "limit": batch_size,
-                "fields": list(set(fields).difference(INVALID_INSIGHTS_FIELDS)),
                 "time_increment": time_increment_days,
                 "action_attribution_windows": list(action_attribution_windows),
                 "time_ranges": [
@@ -198,22 +197,22 @@ def facebook_insights_source(
                     }
                 ],
             }
-            
-            # Only add action_breakdowns if explicitly provided
-            if action_breakdowns is not None:
-                query["action_breakdowns"] = list(action_breakdowns)
-            
+
+            fields_to_use = set(fields)
             # Only add breakdowns if explicitly provided
             if breakdowns is not None:
                 query["breakdowns"] = list(
                     INSIGHTS_BREAKDOWNS_OPTIONS[breakdowns]["breakdowns"]
                 )
-                # Add breakdown fields to the fields list
-                query["fields"] = list(
-                    set(query["fields"])
-                    .union(INSIGHTS_BREAKDOWNS_OPTIONS[breakdowns]["fields"])
-                    .difference(INVALID_INSIGHTS_FIELDS)
+                fields_to_use = fields_to_use.union(
+                    INSIGHTS_BREAKDOWNS_OPTIONS[breakdowns]["fields"]
                 )
+            query["fields"] = list(fields_to_use.difference(INVALID_INSIGHTS_FIELDS))
+
+            # Only add action_breakdowns if explicitly provided
+            if action_breakdowns is not None:
+                query["action_breakdowns"] = list(action_breakdowns)
+
             job = execute_job(account.get_insights(params=query, is_async=True))
             yield list(map(process_report_item, job.get_result()))
             start_date = start_date.add(days=time_increment_days)
