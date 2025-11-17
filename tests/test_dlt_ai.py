@@ -4,9 +4,9 @@ from packaging.version import Version
 
 import dlt
 from dlt.common.utils import set_working_dir
-from dlt.cli import ai_command
-from dlt.cli.ai_command import TSupportedIde
-from dlt.cli.plugins import DEFAULT_VERIFIED_SOURCES_REPO
+from dlt._workspace.cli import _ai_command as ai_command
+from dlt._workspace.cli._ai_command import TSupportedIde
+from dlt._workspace.cli import DEFAULT_VERIFIED_SOURCES_REPO
 
 from tests.utils import TEST_STORAGE_ROOT
 
