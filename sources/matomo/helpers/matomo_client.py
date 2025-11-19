@@ -1,5 +1,5 @@
 """This module contains an implementation of a Matomo API client for python."""
-from typing import Iterator, List
+from typing import Iterator, List, Literal
 
 from dlt.common.typing import DictStrAny, TDataItem, TDataItems
 from dlt.sources.helpers.requests import client
@@ -18,7 +18,7 @@ class MatomoAPIClient:
     API client used to make requests to Matomo API.
     """
 
-    def __init__(self, api_token: str, url: str, call_method: str = "GET") -> None:
+    def __init__(self, api_token: str, url: str, call_method: Literal["GET", "POST"] = "GET") -> None:
         """
         Initializes the client.
 
@@ -26,14 +26,13 @@ class MatomoAPIClient:
             api_token (str): Token used to authenticate for Matomo API.
             url (str): URL of the Matomo website.
             call_method (str): HTTP method for API calls, related to authentication,
-            either "GET" or "POST". Default is "GET" to continue the support for Matomo 4 and below,
-            for Matomo 5, "POST" is recommended
+                either "GET" or "POST". Default is "GET" to continue the support for Matomo 4 and below,
+                for Matomo 5, if you select "GET", then you have to disable "Only allow secure requests" in the api key,
+                otherwise "POST" should be used, and it's more secure.
         """
 
         self.base_url = url
         self.auth_token = api_token
-        if call_method.upper() not in ["GET", "POST"]:
-            raise ValueError("call_method must be either 'GET' or 'POST'")
         self.call_method = call_method
 
     def _request(
@@ -44,7 +43,9 @@ class MatomoAPIClient:
 
         Args:
             base_params (DictStrAny): Parameters for the API request.
-            detailed_params (DictStrAny): Detailed parameters for the API request.
+            detailed_params (DictStrAny): Detailed parameters for the API request,
+                since POST method requires some parameters to be sent in the body,
+                this will be merged with base_params for GET requests.
 
         Returns:
             TDataItem: JSON response from the API.
@@ -61,9 +62,8 @@ class MatomoAPIClient:
             )
         else:
             headers = {"Content-type": "application/json"}
-            final_params = base_params.copy()
-            final_params.update(detailed_params)
-            response = client.get(url=url, headers=headers, params=final_params)
+            params = {**base_params, **detailed_params}
+            response = client.get(url=url, headers=headers, params=params)
         response.raise_for_status()
         json_response = response.json()
         # matomo returns error with HTTP 200
