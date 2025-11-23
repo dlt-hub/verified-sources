@@ -8,7 +8,7 @@ from typing import Iterable, Dict, Any, List, Optional, Union, cast
 
 import dlt
 from dlt.sources import DltResource
-from dlt.sources.rest_api import rest_api_source, RESTAPIConfig
+from dlt.sources.rest_api import rest_api_resources, RESTAPIConfig
 from dlt.sources.rest_api.typing import EndpointResource
 
 from ..settings import ENTITIES_V2, NESTED_ENTITIES_V2
@@ -16,8 +16,8 @@ from ..settings import ENTITIES_V2, NESTED_ENTITIES_V2
 
 @dlt.source(name="pipedrive_v2")
 def pipedrive_v2_source(
-    pipedrive_api_key: Optional[str] = None,
-    company_domain: Optional[str] = None,
+    pipedrive_api_key: Optional[str] = dlt.secrets["sources.pipedrive.pipedrive_api_key"],
+    company_domain: Optional[str] = dlt.secrets["sources.pipedrive.company_domain"],
     resources: Optional[List[str]] = None,
     prefix: str = "v2_",
 ) -> Iterable[DltResource]:
@@ -101,7 +101,7 @@ def rest_v2_resources(
 
         # Use native rest_api_source nested endpoint syntax: {resources.parent_name.id}
         nested_resource_def: Dict[str, Any] = {
-            "name": nested_name,
+            "name": f"{prefix}{nested_name}",
             "endpoint": {
                 "path": endpoint_path.replace(
                     "{id}", f"{{resources.{parent_name}.id}}"
@@ -145,6 +145,8 @@ def rest_v2_resources(
         "resources": cast(List[Union[str, EndpointResource, DltResource]], resources),
     }
 
-    api_source = rest_api_source(config)
-    for resource in api_source.resources.values():
-        yield resource.with_name(f"{prefix}{resource.name}")
+    for resource in rest_api_resources(config):
+        # Only prefix the table name for main resources (nested ones are already prefixed in name)
+        if prefix and not resource.name.startswith(prefix):
+            resource.table_name = f"{prefix}{resource.name}"
+        yield resource
