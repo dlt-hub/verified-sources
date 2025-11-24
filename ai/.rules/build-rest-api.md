@@ -1,7 +1,7 @@
 ---
-globs: 
+globs: "**/*.py"
 description: Crucial guidelines to build a dlt rest api source
-alwaysApply: true
+alwaysApply: false
 ---
 ## Prerequisities to writing a source
 
