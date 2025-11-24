@@ -1,5 +1,5 @@
 ---
-applyTo:
+applyTo: '**/*.py'
 description: Information about dlt
 ---
 

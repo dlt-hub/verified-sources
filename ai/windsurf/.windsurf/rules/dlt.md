@@ -1,7 +1,7 @@
 ---
 description: Information about dlt
-globs:
-trigger: always_on
+globs: '**/*.py'
+trigger: manual
 ---
 
 # Guidelines

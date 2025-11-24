@@ -1,5 +1,5 @@
 ---
-applyTo:
+applyTo: '**/*.py'
 description: This rule helps identify and extract ALL necessary parameters from API documentation to build a dlt REST API source
 ---
 
