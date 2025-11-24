@@ -14,10 +14,10 @@ from dlt.sources.rest_api.typing import EndpointResource
 from ..settings import ENTITIES_V2, NESTED_ENTITIES_V2
 
 
-@dlt.source(name="pipedrive_v2")
+@dlt.source(name="pipedrive_v2", section="pipedrive")
 def pipedrive_v2_source(
-    pipedrive_api_key: Optional[str] = dlt.secrets["sources.pipedrive.pipedrive_api_key"],
-    company_domain: Optional[str] = dlt.secrets["sources.pipedrive.company_domain"],
+    pipedrive_api_key: Optional[str] = dlt.secrets.value,
+    company_domain: Optional[str] = dlt.secrets.value,
     resources: Optional[List[str]] = None,
     prefix: str = "v2_",
 ) -> Iterable[DltResource]:
@@ -25,8 +25,8 @@ def pipedrive_v2_source(
     Get data from the Pipedrive API v2.
 
     Args:
-        pipedrive_api_key: API token for authentication
-        company_domain: Your Pipedrive company domain
+        pipedrive_api_key: API token for authentication.
+        company_domain: Your Pipedrive company domain.
         resources: List of resource names to load (e.g., ["deals", "persons"]). If None, loads all available v2 resources.
         prefix: Prefix for table names (default: "v2_")
 
