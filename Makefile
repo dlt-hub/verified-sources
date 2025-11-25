@@ -34,15 +34,17 @@ format-lint: format lint
 
 transpile-rules:
 	cd ai && \
-	uv run rules render claude && mkdir -p claude && mv CLAUDE.md claude/ && cp .rules/.message claude/ && \
-	uv run rules render amp && mkdir -p amp && mv AGENT.md amp/ && cp .rules/.message amp/ && \
-	uv run rules render codex && mkdir -p codex && mv AGENT.md codex/ && cp .rules/.message codex/ && \
 	uv run rules render cody && mkdir -p cody && cp -r .sourcegraph cody/ && rm -rf .sourcegraph && cp .rules/.message cody/ && \
 	uv run rules render cline && mkdir -p cline && cp -r .clinerules cline/ && rm -rf .clinerules && cp .rules/.message cline/ && \
 	uv run rules render cursor && mkdir -p cursor && cp -r .cursor cursor/ && rm -rf .cursor && cp .rules/.message cursor/ && \
 	uv run rules render continue && mkdir -p continue && cp -r .continue continue/ && rm -rf .continue && cp .rules/.message continue/ && \
 	uv run rules render windsurf && mkdir -p windsurf && cp -r .windsurf windsurf/ && rm -rf .windsurf && cp .rules/.message windsurf/ && \
-	uv run rules render copilot && mkdir -p copilot && cp -r .github copilot/ && rm -rf .github && cp .rules/.message copilot/ \
+	uv run rules render copilot && mkdir -p copilot && cp -r .github copilot/ && rm -rf .github && cp .rules/.message copilot/ && \
+	sed -i.bak -E 's/^alwaysApply:[[:space:]]*false/alwaysApply: true/' .rules/*.md && rm -f .rules/*.md.bak && \
+	uv run rules render claude && mkdir -p claude && mv CLAUDE.md claude/ && cp .rules/.message claude/ && \
+	uv run rules render amp && mkdir -p amp && mv AGENT.md amp/ && cp .rules/.message amp/ && \
+	uv run rules render codex && mkdir -p codex && mv AGENT.md codex/ && cp .rules/.message codex/ && \
+	sed -i.bak -E 's/^alwaysApply:[[:space:]]*true/alwaysApply: false/' .rules/*.md && rm -f .rules/*.md.bak
 
 test:
 	uv run pytest tests

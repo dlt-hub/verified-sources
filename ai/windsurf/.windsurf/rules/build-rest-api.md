@@ -1,7 +1,7 @@
 ---
 description: Crucial guidelines to build a dlt rest api source
-globs:
-trigger: always_on
+globs: '**/*.py'
+trigger: manual
 ---
 
 ## Prerequisities to writing a source

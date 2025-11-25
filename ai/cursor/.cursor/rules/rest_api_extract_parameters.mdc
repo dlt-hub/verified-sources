@@ -1,7 +1,7 @@
 ---
-alwaysApply: true
+alwaysApply: false
 description: This rule helps identify and extract ALL necessary parameters from API documentation to build a dlt REST API source
-globs:
+globs: '**/*.py'
 ---
 
 # REST API Parameter Extraction Guide

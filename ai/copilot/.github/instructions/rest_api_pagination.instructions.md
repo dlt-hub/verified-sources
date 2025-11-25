@@ -1,5 +1,5 @@
 ---
-applyTo:
+applyTo: '**/*.py'
 description: Use this rule when writing REST API Source to configure right pagination type for an Endpoint
 ---
 

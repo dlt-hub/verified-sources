@@ -1,7 +1,7 @@
 ---
-alwaysApply: true
+alwaysApply: false
 description: Information about dlt
-globs:
+globs: '**/*.py'
 ---
 
 # Guidelines

@@ -1,7 +1,7 @@
 ---
 description: Use this rule when writing REST API Source to configure right pagination type for an Endpoint
-globs:
-trigger: always_on
+globs: '**/*.py'
+trigger: manual
 ---
 
 # dlt REST API Pagination Configuration Guide
