@@ -1,17 +1,21 @@
-"""Pipedrive API v2 source using REST API v2 endpoints
-
-Pipedrive API v2 docs: https://pipedrive.readme.io/docs/pipedrive-api-v2
-"""
-
+"""Pipedrive API v2 source. Loads data from Pipedrive API v2 endpoints with incremental support."""
 
 from typing import Iterable, Dict, Any, List, Optional, Union, cast
-
 import dlt
+from dlt.common import pendulum
+from dlt.common.time import ensure_pendulum_datetime
 from dlt.sources import DltResource
-from dlt.sources.rest_api import rest_api_resources, RESTAPIConfig
-from dlt.sources.rest_api.typing import EndpointResource
+from dlt.sources.rest_api import rest_api_resources, RESTAPIConfig, EndpointResource
 
 from ..settings import ENTITIES_V2, NESTED_ENTITIES_V2
+
+INCREMENTAL_API_RESOURCES = {
+    "activities",
+    "deals",
+    "persons",
+    "organizations",
+    "products",
+}
 
 
 @dlt.source(name="pipedrive_v2", section="pipedrive")
@@ -20,50 +24,46 @@ def pipedrive_v2_source(
     company_domain: Optional[str] = dlt.secrets.value,
     resources: Optional[List[str]] = None,
     prefix: str = "v2_",
+    since_timestamp: Optional[Union[pendulum.DateTime, str]] = "1970-01-01 00:00:00",
 ) -> Iterable[DltResource]:
-    """
-    Get data from the Pipedrive API v2.
+    """Load Pipedrive API v2 data with incremental filtering.
 
     Args:
-        pipedrive_api_key: API token for authentication.
-        company_domain: Your Pipedrive company domain.
-        resources: List of resource names to load (e.g., ["deals", "persons"]). If None, loads all available v2 resources.
-        prefix: Prefix for table names (default: "v2_")
+        pipedrive_api_key: The API key for authentication.
+        company_domain: The company domain for the Pipedrive account.
+        resources: List of resource names to load. If None, all available resources are loaded.
+        prefix: Prefix to add to resource names. Defaults to "v2_".
+        since_timestamp: Start timestamp for incremental loading. Defaults to "1970-01-01 00:00:00".
 
     Returns:
-        Resources for v2 endpoints. Nested endpoints (e.g., deal_products, deal_followers) are automatically included when their parent resource is selected.
-
-    See also: https://pipedrive.readme.io/docs/pipedrive-api-v2#api-v2-availability
+        Iterable[DltResource]: Resources for Pipedrive API v2 endpoints.
     """
     resources = resources or list(ENTITIES_V2.keys())
 
-    # Filter valid v2 endpoints
     v2_resources_config = {
-        resource: ENTITIES_V2[resource]
-        for resource in resources
-        if resource in ENTITIES_V2  # this ensures that resource is supported by v2 api
+        res: ENTITIES_V2[res] for res in resources if res in ENTITIES_V2
     }
 
     if not v2_resources_config:
-        raise ValueError(
-            f"No valid v2 endpoints found in: {resources}. "
-            f"Available endpoints: {list(ENTITIES_V2.keys())}"
-        )
+        raise ValueError(f"No valid v2 endpoints found in: {resources}")
 
-    # Only include nested endpoints if their parent is in the v2 endpoints list
     nested_configs_to_create = {
-        nested_name: nested_config
-        for nested_name, nested_config in NESTED_ENTITIES_V2.items()
-        if nested_config["parent"] in v2_resources_config
+        name: conf
+        for name, conf in NESTED_ENTITIES_V2.items()
+        if conf["parent"] in v2_resources_config
     }
+    # pipdrive API expects RFC3339 format for updated_since parameter
+    since_timestamp_rfc3339 = ensure_pendulum_datetime(
+        since_timestamp
+    ).to_rfc3339_string()
 
-    # Create and yield v2 resources
     v2_resources = rest_v2_resources(
         pipedrive_api_key,
         company_domain,
         v2_resources_config,
         nested_configs_to_create,
         prefix,
+        since_timestamp_rfc3339,
     )
     for resource in v2_resources:
         yield resource
@@ -75,45 +75,65 @@ def rest_v2_resources(
     resource_configs: Dict[str, Any],
     nested_configs: Dict[str, Dict[str, Any]],
     prefix: str,
+    since_timestamp: str,
 ) -> Iterable[DltResource]:
-    """
-    Build and yield REST v2 resources for the given resource configurations.
-    Includes nested endpoints that depend on parent resources.
-    """
-    # Build resources list
-    resources: List[Dict[str, Any]] = []
+    """Build REST v2 resources with nested endpoints.
 
-    # Build the resources list for the config from the provided resource configs
+    Args:
+        pipedrive_api_key: The API key for authentication.
+        company_domain: The company domain for the Pipedrive account.
+        resource_configs: Configuration for main resources.
+        nested_configs: Configuration for nested/dependent resources.
+        prefix: Prefix to add to resource names.
+        since_timestamp: Timestamp for incremental filtering.
+
+    Returns:
+        Iterable[DltResource]: Configured REST API resources.
+    """
+    resources = []
+
     for resource_name, endpoint_config in resource_configs.items():
-        resource_def: Dict[str, Any] = {
-            "name": resource_name,
-            "endpoint": endpoint_config,
+        endpoint_def = {
+            **endpoint_config,
+            "path": resource_name,
+            "params": {**endpoint_config.get("params", {})},
         }
-        resources.append(resource_def)
 
-    # Add nested resources using native rest_api_source support
-    for nested_name, nested_config in nested_configs.items():
-        parent_name = nested_config["parent"]
-        endpoint_path = nested_config["endpoint_path"]
-        params = nested_config.get("params", {})
-        primary_key: Union[str, List[str]] = nested_config.get("primary_key", "id")
-        include_from_parent = nested_config.get("include_from_parent")
+        if resource_name in INCREMENTAL_API_RESOURCES:
+            endpoint_def["params"]["updated_since"] = "{incremental.start_value}"
+            endpoint_def["incremental"] = {
+                "cursor_path": "update_time",
+                "initial_value": since_timestamp,
+            }
 
-        # Use native rest_api_source nested endpoint syntax: {resources.parent_name.id}
-        nested_resource_def: Dict[str, Any] = {
-            "name": f"{prefix}{nested_name}",
+        resources.append(
+            {
+                "name": f"{prefix}{resource_name}",
+                "endpoint": endpoint_def,
+            }
+        )
+
+    for name, conf in nested_configs.items():
+        nested_res = {
+            "name": f"{prefix}{name}",
             "endpoint": {
-                "path": endpoint_path.replace(
-                    "{id}", f"{{resources.{parent_name}.id}}"
+                "path": conf["endpoint_path"].replace(
+                    "{id}", f"{{resources.{prefix}{conf['parent']}.id}}"
                 ),
-                "params": params,
+                "params": {**conf.get("params", {})},
             },
         }
-        if include_from_parent:
-            nested_resource_def["include_from_parent"] = include_from_parent
-        if primary_key != "id":
-            nested_resource_def["primary_key"] = primary_key
-        resources.append(nested_resource_def)
+
+        if "include_from_parent" in conf:
+            nested_res["include_from_parent"] = conf["include_from_parent"]
+
+        pk = conf.get("primary_key", "id")
+        if isinstance(pk, list):
+            nested_res["primary_key"] = [k for k in pk if not k.startswith("_")]
+        elif pk != "id":
+            nested_res["primary_key"] = pk
+
+        resources.append(nested_res)
 
     config: RESTAPIConfig = {
         "client": {
@@ -145,8 +165,4 @@ def rest_v2_resources(
         "resources": cast(List[Union[str, EndpointResource, DltResource]], resources),
     }
 
-    for resource in rest_api_resources(config):
-        # Only prefix the table name for main resources (nested ones are already prefixed in name)
-        if prefix and not resource.name.startswith(prefix):
-            resource.table_name = f"{prefix}{resource.name}"
-        yield resource
+    yield from rest_api_resources(config)
