@@ -63,7 +63,7 @@ stripe_analytics = [
 asana_dlt = ["asana>=3.2.1,<4"]
 facebook_ads = ["facebook-business>=17.0.2,<18"]
 google_ads = [
-    "google-ads>=21.1.0,<22",
+    "google-ads>=21.1.0,<29",
     "google-api-python-client>=2.129.0,<3",
 ]
 salesforce = ["simple-salesforce>=1.12.4,<2"]
