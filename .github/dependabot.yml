@@ -1,0 +1,18 @@
+version: 2
+updates:
+  # 1) uv: updates pyproject.toml + uv.lock
+  - package-ecosystem: uv
+    directory: "/"
+    schedule:
+      interval: daily
+
+  # 2) pip: updates requirements.lock
+  - package-ecosystem: pip
+    directory: "/"
+    schedule:
+      interval: daily
+    # Optional: limit noise
+    groups:
+      python-packages:
+        patterns:
+          - "*"
