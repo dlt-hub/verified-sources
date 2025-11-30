@@ -41,12 +41,12 @@ jobs:
           # Add any new files that might have been generated
           git add -A
           
-          # Check if there are any differences
-          if ! git diff --staged --quiet; then
+          # Check if there are any differences in the ai folder
+          if ! git diff --staged --quiet -- ai/; then
             echo "❌ Transpiled rules are out of date!"
             echo ""
             echo "The following files have changes:"
-            git diff --staged --name-only
+            git diff --staged --name-only -- ai/
             echo ""
             echo "Please run 'make transpile-rules' locally and commit the changes."
             exit 1

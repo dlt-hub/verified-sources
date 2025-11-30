@@ -11,6 +11,8 @@ help:
 
 dev:
 	uv sync --reinstall-package dlt --upgrade-package dlt
+	# export lockfile in widely recognized format
+	uv export --format requirements-txt --all-extras --all-groups --no-editable --locked -q --output-file tools/dependabot_lock/requirements.txt
 
 lint-dlt-init:
 	uv run ./check-requirements.py
