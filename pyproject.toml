@@ -13,14 +13,14 @@ dependencies = [
 [dependency-groups]
 dltpure = ["dlt>=1.10.0"]
 pytest = [
-    "pytest>=7.2.0,<8",
+    "pytest>=7.2.0,<9",
     "pytest-mock>=3.12.0,<4",
     "pytest-forked>=1.6.0,<2",
 ]
 dev = [
     "mypy>=1.10.0,<2",
     "flake8>=6.0.0,<7",
-    "pytest>=7.2.0,<8",
+    "pytest>=7.2.0,<9",
     "bandit>=1.7.4,<2",
     "flake8-bugbear>=22.12.6,<23",
     "flake8-tidy-imports>=4.8.0,<5",
