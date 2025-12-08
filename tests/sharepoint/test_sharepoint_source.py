@@ -427,8 +427,8 @@ class TestSharepointListSource:
         credentials = SharepointCredentials(**MOCK_CREDENTIALS)
         source = sharepoint_list(config, credentials=credentials)
 
-        # Extract data
-        resources = list(source)
+        # Extract resources from source
+        resources = list(source.resources.values())
         assert len(resources) == 1
 
         # Get data from resource
@@ -436,8 +436,6 @@ class TestSharepointListSource:
         assert len(resource_data) == 2
         assert resource_data[0]["Title"] == "Item 1"
         assert resource_data[1]["Title"] == "Item 2"
-
-
 class TestSharepointFilesSource:
     """Test sharepoint_files source"""
 
@@ -472,11 +470,11 @@ class TestSharepointFilesSource:
         credentials = SharepointCredentials(**MOCK_CREDENTIALS)
         source = sharepoint_files(config, credentials=credentials)
 
-        # Extract data
-        resources = list(source)
+        # Extract resources from source
+        resources = list(source.resources.values())
         assert len(resources) == 1
 
-        # Get data from resource - this should yield file items first, then dataframes
+        # Get data from resource - this should yield dataframes
         all_data = list(resources[0])
 
         # The transformer should yield dataframes
@@ -518,8 +516,8 @@ class TestSharepointFilesSource:
         credentials = SharepointCredentials(**MOCK_CREDENTIALS)
         source = sharepoint_files(config, credentials=credentials)
 
-        # Extract data
-        resources = list(source)
+        # Extract resources from source
+        resources = list(source.resources.values())
         assert len(resources) == 1
 
     @patch("sources.sharepoint.SharepointClient")
@@ -554,9 +552,14 @@ class TestSharepointFilesSource:
         credentials = SharepointCredentials(**MOCK_CREDENTIALS)
         source = sharepoint_files(config, credentials=credentials)
 
-        # Extract data
-        resources = list(source)
+        # Extract resources from source
+        resources = list(source.resources.values())
         assert len(resources) == 1
+
+        # Get data from resource - with chunksize, this yields multiple dataframes (chunks)
+        all_chunks = list(resources[0])
+        # Should have 10 chunks (100 rows / 10 rows per chunk)
+        assert len(all_chunks) == 10
 
 
 @pytest.mark.parametrize("destination_name", ALL_DESTINATIONS)
