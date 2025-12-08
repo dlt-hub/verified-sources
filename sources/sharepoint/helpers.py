@@ -1,3 +1,4 @@
+"""Helper module for SharePoint data extraction using Microsoft Graph API."""
 from typing import Dict, List
 from io import BytesIO
 import re
@@ -10,8 +11,21 @@ from dlt.sources.helpers.rest_client.paginators import JSONLinkPaginator
 
 
 class SharepointClient:
-    # * playground:  https://developer.microsoft.com/en-us/graph/graph-explorer
-    # * If the result contains more results, Microsoft Graph returns an @odata.nextLink property
+    """Client for interacting with SharePoint via Microsoft Graph API.
+
+    This client handles authentication and provides methods to retrieve lists,
+    list items, and files from SharePoint sites.
+
+    Attributes:
+        client_id: Azure AD application client ID
+        tenant_id: Azure AD tenant ID
+        site_id: SharePoint site ID
+        client_secret: Azure AD application client secret
+        sub_site_id: Optional sub-site ID for nested sites
+        graph_api_url: Base URL for Microsoft Graph API
+        graph_site_url: Full URL for the specific SharePoint site
+        client: REST client instance (set after connect())
+    """
 
     def __init__(
         self,
@@ -21,6 +35,18 @@ class SharepointClient:
         client_secret: str,
         sub_site_id: str = "",
     ) -> None:
+        """Initialize SharePoint client with credentials.
+
+        Args:
+            client_id: Azure AD application client ID
+            tenant_id: Azure AD tenant ID
+            site_id: SharePoint site ID
+            client_secret: Azure AD application client secret
+            sub_site_id: Optional sub-site ID for nested sites
+
+        Raises:
+            ValueError: If any required credentials are missing
+        """
         self.client_id = client_id
         self.tenant_id = tenant_id
         self.client_secret = client_secret
@@ -37,6 +63,14 @@ class SharepointClient:
             self.graph_site_url += f"/sites/{self.sub_site_id}"
 
     def connect(self) -> None:
+        """Establish connection to SharePoint using MSAL authentication.
+
+        Acquires an access token using client credentials flow and initializes
+        the REST client with bearer token authentication.
+
+        Raises:
+            ConnectionError: If authentication fails or access token cannot be obtained
+        """
         authority = f"https://login.microsoftonline.com/{self.tenant_id}"
         scope = ["https://graph.microsoft.com/.default"]
 
@@ -62,6 +96,11 @@ class SharepointClient:
 
     @property
     def sub_sites(self) -> List:
+        """Get list of sub-sites within the current SharePoint site.
+
+        Returns:
+            List of sub-site information dictionaries
+        """
         url = f"{self.graph_site_url}/sites"
         response = self.client.get(url)
         site_info = response.json()
@@ -72,6 +111,11 @@ class SharepointClient:
 
     @property
     def site_info(self) -> Dict:
+        """Get information about the current SharePoint site.
+
+        Returns:
+            Dictionary containing site metadata and properties
+        """
         url = f"{self.graph_site_url}"
         response = self.client.get(url)
         site_info = response.json()
@@ -81,6 +125,14 @@ class SharepointClient:
             logger.warning(f"No site_info found in {url}")
 
     def get_all_lists_in_site(self) -> List[Dict]:
+        """Retrieve all generic lists from the SharePoint site.
+
+        Filters for lists with template type 'genericList' and 'Lists' in their URL,
+        excluding document libraries and other non-list items.
+
+        Returns:
+            List of dictionaries containing list metadata
+        """
         url = f"{self.graph_site_url}/lists"
         res = self.client.get(url)
         res.raise_for_status()
@@ -101,6 +153,20 @@ class SharepointClient:
         return filtered_lists
 
     def get_items_from_list(self, list_title: str, select: str = None) -> List[Dict]:
+        """Retrieve items from a specific SharePoint list.
+
+        Note: Pagination is not yet implemented; only the first page is returned.
+
+        Args:
+            list_title: Display name of the SharePoint list
+            select: Optional comma-separated string of field names to retrieve
+
+        Returns:
+            List of dictionaries containing list item field values
+
+        Raises:
+            ValueError: If the specified list is not found in the site
+        """
         # TODO, pagination not yet implemented
         logger.warning(
             "Pagination is not implemented for get_items_from_list, "
@@ -148,6 +214,16 @@ class SharepointClient:
     def get_files_from_path(
         self, folder_path: str, file_name_startswith: str, pattern: str = None
     ) -> Dict:
+        """Get files from a SharePoint folder matching specified criteria.
+
+        Args:
+            folder_path: Path to the folder within SharePoint (e.g., 'Documents/Reports')
+            file_name_startswith: Prefix that file names must start with
+            pattern: Optional regex pattern for additional filtering
+
+        Returns:
+            List of file item dictionaries containing metadata and download URLs
+        """
         folder_url = (
             f"{self.graph_site_url}/drive/root:/{folder_path}:/children?$filter=startswith(name,"
             f" '{file_name_startswith}')"
@@ -164,6 +240,17 @@ class SharepointClient:
         return file_items
 
     def get_file_bytes_io(self, file_item: Dict):
+        """Download a SharePoint file to a BytesIO object.
+
+        Args:
+            file_item: File metadata dictionary containing '@microsoft.graph.downloadUrl'
+
+        Returns:
+            BytesIO object containing the file contents
+
+        Raises:
+            FileNotFoundError: If the file cannot be downloaded
+        """
         file_url = file_item["@microsoft.graph.downloadUrl"]
         response = self.client.get(file_url)
         if response.status_code == 200:

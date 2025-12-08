@@ -93,6 +93,10 @@ scrapy = [
     "scrapy>=2.11.0,<3",
     "twisted==22.10.0",
 ]
+sharepoint = [
+    "msal>=1.20.0",
+    "pandas>=2.0.0",
+]
 
 [tool.uv]
 default-groups = [
@@ -113,6 +117,7 @@ default-groups = [
     "airtable",
     "filesystem",
     "scrapy",
+    "sharepoint",
 ]
 
 # [tool.uv.sources]

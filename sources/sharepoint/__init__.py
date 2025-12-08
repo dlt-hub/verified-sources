@@ -1,3 +1,8 @@
+"""SharePoint data source for dlt.
+
+Provides sources for extracting data from SharePoint lists and files
+using the Microsoft Graph API.
+"""
 from typing import Iterator, Dict
 import re
 
@@ -13,6 +18,15 @@ from .sharepoint_files_config import SharepointFilesConfig, SharepointListConfig
 
 @configspec
 class SharepointCredentials(BaseConfiguration):
+    """Credentials for SharePoint authentication via Azure AD.
+
+    Attributes:
+        client_id: Azure AD application client ID
+        tenant_id: Azure AD tenant ID
+        site_id: SharePoint site ID
+        client_secret: Azure AD application client secret
+        sub_site_id: Optional sub-site ID for nested sites
+    """
     client_id: str = None
     tenant_id: str = None
     site_id: str = None
@@ -25,6 +39,26 @@ def sharepoint_list(
     sharepoint_list_config: SharepointListConfig,
     credentials: SharepointCredentials = dlt.secrets.value,
 ) -> Iterator[Dict[str, str]]:
+    """Extract data from a SharePoint list.
+
+    This source connects to SharePoint using Microsoft Graph API and retrieves
+    items from a specified list.
+
+    Args:
+        sharepoint_list_config: Configuration for the SharePoint list extraction
+        credentials: SharePoint authentication credentials
+
+    Yields:
+        DLT resource containing SharePoint list items
+
+    Example:
+        >>> config = SharepointListConfig(
+        ...     table_name="tasks",
+        ...     list_title="Project Tasks"
+        ... )
+        >>> source = sharepoint_list(config)
+        >>> pipeline.run(source)
+    """
     client: SharepointClient = SharepointClient(**credentials)
     client.connect()
     logger.info(f"Connected to SharePoint site: {client.site_info}")
@@ -49,6 +83,30 @@ def sharepoint_files(
     sharepoint_files_config: SharepointFilesConfig,
     credentials: SharepointCredentials = dlt.secrets.value,
 ):
+    """Extract and process files from SharePoint document libraries.
+
+    This source downloads files from SharePoint based on the configuration,
+    processes them using pandas, and yields the data for loading.
+
+    Supports incremental loading based on file modification time.
+
+    Args:
+        sharepoint_files_config: Configuration for file extraction and processing
+        credentials: SharePoint authentication credentials
+
+    Yields:
+        DLT resource containing processed file data
+
+    Example:
+        >>> config = SharepointFilesConfig(
+        ...     file_type=FileType.CSV,
+        ...     folder_path="Documents/Reports",
+        ...     table_name="reports",
+        ...     file_name_startswith="report_"
+        ... )
+        >>> source = sharepoint_files(config)
+        >>> pipeline.run(source)
+    """
     client: SharepointClient = SharepointClient(**credentials)
     client.connect()
     logger.info(f"Connected to SharePoint site: {client.site_info}")
