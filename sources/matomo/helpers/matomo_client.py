@@ -1,6 +1,8 @@
 """This module contains an implementation of a Matomo API client for python."""
-from typing import Iterator, List, Union
-from dlt.common.typing import DictStrAny, DictStrStr, TDataItem, TDataItems
+from typing import Iterator, List, Literal
+from urllib.parse import urljoin
+
+from dlt.common.typing import DictStrAny, TDataItem, TDataItems
 from dlt.sources.helpers.requests import client
 
 
@@ -29,22 +31,22 @@ class MatomoAPIClient:
         self.base_url = url
         self.auth_token = api_token
 
-    def _request(self, params: DictStrAny) -> TDataItem:
+    def _request(self, query_params: DictStrAny, body_params: DictStrAny) -> TDataItem:
         """
         Helper method that retrieves data and returns the JSON response from the API.
 
         Args:
-            params (DictStrAny): Parameters for the API request.
+            query_params (DictStrAny): Parameters sent in URL query string (e.g., module, method, format).
+            body_params (DictStrAny): Parameters sent in POST request body (e.g., token_auth, urls, filters).
 
         Returns:
             TDataItem: JSON response from the API.
         """
-
-        # loop through all the pages
-        # the total number of rows is received after the first request, for the first request to be sent through, initializing the row_count to 1 would suffice
-        headers = {"Content-type": "application/json"}
-        url = f"{self.base_url}/index.php"
-        response = client.get(url=url, headers=headers, params=params)
+        url = urljoin(self.base_url, "index.php")
+        headers = {"Content-type": "application/x-www-form-urlencoded"}
+        response = client.post(
+            url=url, headers=headers, data=body_params, params=query_params
+        )
         response.raise_for_status()
         json_response = response.json()
         # matomo returns error with HTTP 200
@@ -75,23 +77,22 @@ class MatomoAPIClient:
         Returns:
             TDataItem: JSON data from the response.
         """
-        # Set up the API URL and parameters
-        if not extra_params:
-            extra_params = {}
-        params = {
+        query_params = {
             "module": "API",
             "method": "API.getBulkRequest",
             "format": "json",
+        }
+        body_params = {
             "token_auth": self.auth_token,
         }
         for i, method in enumerate(methods):
-            params[
+            body_params[
                 f"urls[{i}]"
             ] = f"method={method}&idSite={site_id}&period={period}&date={date}"
         # Merge the additional parameters into the request parameters
-        params.update(extra_params)
+        body_params.update(extra_params if extra_params else {})
         # Send the API request
-        return self._request(params=params)
+        return self._request(query_params=query_params, body_params=body_params)
 
     def get_method(
         self,
@@ -112,32 +113,36 @@ class MatomoAPIClient:
         Yields:
             Iterator[TDataItems]: JSON data from the response.
         """
-
-        # Set up the API URL and parameters
-        if not extra_params:
-            extra_params = {}
         filter_offset = 0
-        params = {
+
+        query_params = {
             "module": "API",
             "method": "API.getBulkRequest",
             "format": "json",
-            "token_auth": self.auth_token,
-            "urls[0]": f"method={method}&idSite={site_id}&filter_limit={rows_per_page}&filter_offset={filter_offset}",
         }
-        # Merge the additional parameters into the request parameters
-        params.update(extra_params)
-        # Send the API request
-        method_data = self._request(params=params)[0]
-        while len(method_data):
-            yield method_data
-            filter_offset += len(method_data)
-            params[
-                "urls[0]"
-            ] = f"method={method}&idSite={site_id}&filter_limit={rows_per_page}&filter_offset={filter_offset}"
-            method_data = self._request(params=params)[0]
+
+        while True:
+            body_params = {
+                "urls[0]": f"method={method}&idSite={site_id}&filter_limit={rows_per_page}&filter_offset={filter_offset}",
+                "token_auth": self.auth_token,
+            }
+            body_params.update(extra_params if extra_params else {})
+            response_data = self._request(
+                query_params=query_params, body_params=body_params
+            )
+            if not response_data or not isinstance(response_data, list):
+                break
+            batch = response_data[0] if len(response_data) > 0 else []
+            if not batch:
+                break
+            yield batch
+            filter_offset += len(batch)
 
     def get_visitors_batch(
-        self, visitor_list: List[str], site_id: int, extra_params: DictStrAny = None
+        self,
+        visitor_list: List[str],
+        site_id: int,
+        extra_params: DictStrAny = None,
     ) -> TDataItems:
         """
         Gets visitors for Matomo.
@@ -150,21 +155,17 @@ class MatomoAPIClient:
         Returns:
             TDataItems: JSON data from the response.
         """
-        if not extra_params:
-            extra_params = {}
-        params = {
+        query_params = {
             "module": "API",
             "method": "API.getBulkRequest",
             "format": "json",
             "site_id": site_id,
-            "token_auth": self.auth_token,
         }
-        params.update(
-            {
-                f"urls[{i}]": f"method=Live.getVisitorProfile&idSite={site_id}&visitorId={visitor_list[i]}"
-                for i in range(len(visitor_list))
-            }
-        )
-        params.update(extra_params)
-        method_data = self._request(params=params)
+        body_params = {
+            f"urls[{i}]": f"method=Live.getVisitorProfile&idSite={site_id}&visitorId={visitor_list[i]}"
+            for i in range(len(visitor_list))
+        }
+        body_params["token_auth"] = self.auth_token
+        body_params.update(extra_params if extra_params else {})
+        method_data = self._request(query_params=query_params, body_params=body_params)
         return method_data
