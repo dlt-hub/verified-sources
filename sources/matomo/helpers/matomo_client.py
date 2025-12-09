@@ -18,7 +18,9 @@ class MatomoAPIClient:
     API client used to make requests to Matomo API.
     """
 
-    def __init__(self, api_token: str, url: str, call_method: Literal["GET", "POST"] = "GET") -> None:
+    def __init__(
+        self, api_token: str, url: str, call_method: Literal["GET", "POST"] = "GET"
+    ) -> None:
         """
         Initializes the client.
 
