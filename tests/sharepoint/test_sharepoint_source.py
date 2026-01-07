@@ -84,6 +84,8 @@ class TestSharepointFilesConfig:
         assert FileType.EXCEL.get_pd_function() == pd.read_excel
         assert FileType.JSON.get_pd_function() == pd.read_json
         assert FileType.PARQUET.get_pd_function() == pd.read_parquet
+        assert FileType.SAS.get_pd_function() == pd.read_sas
+        assert FileType.SPSS.get_pd_function() == pd.read_spss
 
 
 class TestSharepointListConfig:
