@@ -158,14 +158,8 @@ class SharepointClient:
         self, list_title: str, select: str = None
     ) -> Iterator[Dict[str, Any]]:
         all_lists = self.get_all_lists_in_site()
-        filtered_lists = [
-            x
-            for x in all_lists
-            if x.get("list", {}).get("template") == "genericList"
-            and "Lists" in x.get("webUrl", "")
-        ]
 
-        possible_list_titles = [x["displayName"] for x in filtered_lists]
+        possible_list_titles = [x["displayName"] for x in all_lists]
         if list_title not in possible_list_titles:
             raise ValueError(
                 f"List with title '{list_title}' not found in site {self.site_id}. "
@@ -174,7 +168,7 @@ class SharepointClient:
 
         # Get the list ID
         list_id = next(
-            x["id"] for x in filtered_lists if x["displayName"] == list_title
+            x["id"] for x in all_lists if x["displayName"] == list_title
         )
 
         url = f"{self.graph_site_url}/lists/{list_id}/items?expand=fields"
