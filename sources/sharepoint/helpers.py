@@ -105,7 +105,7 @@ class SharepointClient:
         response = self.client.get(url)
         site_info = response.json()
         if "value" in site_info:
-            return site_info["value"]
+            return site_info["value"]  # type: ignore[no-any-return]
         else:
             logger.warning(f"No subsite found in {url}")
             return []
@@ -120,8 +120,8 @@ class SharepointClient:
         url = f"{self.graph_site_url}"
         response = self.client.get(url)
         site_info = response.json()
-        if not "error" in site_info:
-            return site_info
+        if "error" not in site_info:
+            return site_info  # type: ignore[no-any-return]
         else:
             logger.warning(f"No site_info found in {url}")
             return None

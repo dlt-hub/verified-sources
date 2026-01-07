@@ -3,9 +3,10 @@
 Provides sources for extracting data from SharePoint lists and files
 using the Microsoft Graph API.
 """
-from typing import Iterator, Dict, Any
+from typing import Iterator, Dict, Any, Iterable
 
 import dlt
+from dlt.sources import DltResource
 from dlt.common.typing import TDataItems
 from dlt.common.configuration.specs import configspec, BaseConfiguration
 from dlt.common import logger
@@ -37,7 +38,7 @@ class SharepointCredentials(BaseConfiguration):
 def sharepoint_list(
     sharepoint_list_config: SharepointListConfig,
     credentials: SharepointCredentials = dlt.secrets.value,
-) -> Iterator[Dict[str, str]]:
+) -> Iterable[DltResource]:
     """Extract data from a SharePoint list.
 
     This source connects to SharePoint using Microsoft Graph API and retrieves
@@ -81,7 +82,7 @@ def sharepoint_list(
 def sharepoint_files(
     sharepoint_files_config: SharepointFilesConfig,
     credentials: SharepointCredentials = dlt.secrets.value,
-):
+) -> Iterable[DltResource]:
     """Extract and process files from SharePoint document libraries.
 
     This source downloads files from SharePoint based on the configuration,

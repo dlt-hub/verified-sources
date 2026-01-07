@@ -3,7 +3,7 @@
 Provides configuration models for SharePoint lists and files,
 including file type definitions and validation utilities.
 """
-from typing import Optional, Dict, Callable, Any
+from typing import Optional, Dict, Callable, Any, cast
 import re
 from enum import Enum
 
@@ -39,15 +39,15 @@ class FileType(Enum):
         Returns:
             Callable pandas read function (e.g., pd.read_csv, pd.read_excel)
         """
-        file_type_map: Dict[FileType, Callable[..., Any]] = {
-            self.EXCEL: pd.read_excel,
-            self.CSV: pd.read_csv,
-            self.JSON: pd.read_json,
-            self.PARQUET: pd.read_parquet,
-            self.SAS: pd.read_sas,
-            self.SPSS: pd.read_spss,
+        file_type_map: Dict[str, Callable[..., Any]] = {
+            FileType.EXCEL.value: pd.read_excel,
+            FileType.CSV.value: pd.read_csv,
+            FileType.JSON.value: pd.read_json,
+            FileType.PARQUET.value: pd.read_parquet,
+            FileType.SAS.value: pd.read_sas,
+            FileType.SPSS.value: pd.read_spss,
         }
-        return file_type_map[self]
+        return file_type_map[self.value]
 
 
 class SharepointListConfig(BaseModel):
