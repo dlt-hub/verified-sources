@@ -1,5 +1,5 @@
 """Helper module for SharePoint data extraction using Microsoft Graph API."""
-from typing import Dict, List
+from typing import Dict, List, Optional, Union, Iterator
 from io import BytesIO
 import re
 
@@ -92,7 +92,7 @@ class SharepointClient:
             )
             logger.info(f"Connected to SharePoint site id: {self.site_id} successfully")
         else:
-            raise ConnectionError("Connection failed : ", token_response)
+            raise ConnectionError(f"Connection failed : {token_response}")
 
     @property
     def sub_sites(self) -> List:
@@ -108,9 +108,11 @@ class SharepointClient:
             return site_info["value"]
         else:
             logger.warning(f"No subsite found in {url}")
+            return []
+
 
     @property
-    def site_info(self) -> Dict:
+    def site_info(self) -> Union[Dict, None]:
         """Get information about the current SharePoint site.
 
         Returns:
@@ -152,30 +154,10 @@ class SharepointClient:
             logger.warning(f"No lists found in {url}")
         return filtered_lists
 
-    def get_items_from_list(self, list_title: str, select: str = None) -> List[Dict]:
-        """Retrieve items from a specific SharePoint list.
-
-        Note: Pagination is not yet implemented; only the first page is returned.
-
-        Args:
-            list_title: Display name of the SharePoint list
-            select: Optional comma-separated string of field names to retrieve
-
-        Returns:
-            List of dictionaries containing list item field values
-
-        Raises:
-            ValueError: If the specified list is not found in the site
-        """
-        # TODO, pagination not yet implemented
-        logger.warning(
-            "Pagination is not implemented for get_items_from_list, "
-            "it will return only first page of items."
-        )
+    def get_items_from_list(self, list_title: str, select:str = None) -> Iterator[Dict]:
         all_lists = self.get_all_lists_in_site()
         filtered_lists = [
-            x
-            for x in all_lists
+            x for x in all_lists
             if x.get("list", {}).get("template") == "genericList"
             and "Lists" in x.get("webUrl", "")
         ]
@@ -195,25 +177,36 @@ class SharepointClient:
         url = f"{self.graph_site_url}/lists/{list_id}/items?expand=fields"
         if select:
             url += f"(select={select})"
-        res = self.client.get(url)
-        res.raise_for_status()
-        items_info = res.json()
+
+        total_items = 0
+        response = self.client.get(url)
+        response.raise_for_status()
+        items_info = response.json()
 
         if "value" in items_info:
-            output = [x.get("fields", {}) for x in items_info["value"]]
+            for item in items_info["value"]:
+                total_items += 1
+                yield item.get("fields", {})
+
+        # Handle pagination
+        while "@odata.nextLink" in items_info:
+            url = items_info["@odata.nextLink"]
+            response = self.client.get(url)
+            response.raise_for_status()
+            items_info = response.json()
+            if "value" in items_info:
+                for item in items_info["value"]:
+                    total_items += 1
+                    yield item.get("fields", {})
+
+        if total_items > 0:
+            logger.info(f"Yielded {total_items} items from list: {list_title}")
         else:
-            output = []
-        if output:
-            logger.info(f"Got {len(output)} items from list: {list_title}")
-            return output
-        else:
-            logger.warning(
-                f"No items found in list: {list_title}, with select: {select}"
-            )
+            logger.warning(f"No items found in list: {list_title}, with select: {select}")
 
     def get_files_from_path(
         self, folder_path: str, file_name_startswith: str, pattern: str = None
-    ) -> Dict:
+    ) -> List[Dict]:
         """Get files from a SharePoint folder matching specified criteria.
 
         Args:
