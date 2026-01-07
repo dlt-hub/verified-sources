@@ -120,7 +120,11 @@ files_config = SharepointFilesConfig(
     file_name_startswith="report_",
     pattern=r"202[4-5].*\.csv$",
     is_file_incremental=True,
-    pandas_kwargs={"sep": ",", "encoding": "utf-8"}
+    pandas_kwargs={
+      "sep": ",",
+      "encoding": "utf-8",
+      "chunksize": 1000,  # Process in chunks of 1000 rows
+    }
 )
 
 # Create and run pipeline
@@ -149,7 +153,6 @@ files_config = SharepointFilesConfig(
     file_name_startswith="annual_",
     pandas_kwargs={
         "sheet_name": "Data",
-        "chunksize": 1000  # Process in chunks of 1000 rows
     }
 )
 ```
