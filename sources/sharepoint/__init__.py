@@ -62,8 +62,8 @@ def sharepoint_list(
     client.connect()
     logger.info(f"Connected to SharePoint site: {client.site_info}")
 
-    def get_pipe(sharepoint_list_config: SharepointListConfig):
-        def get_records(sharepoint_list_config: SharepointListConfig):
+    def get_pipe(sharepoint_list_config: SharepointListConfig):  # type: ignore[no-untyped-def]
+        def get_records(sharepoint_list_config: SharepointListConfig):  # type: ignore[no-untyped-def]
             data = client.get_items_from_list(
                 list_title=sharepoint_list_config.list_title,
                 select=sharepoint_list_config.select,
@@ -110,9 +110,9 @@ def sharepoint_files(
     client.connect()
     logger.info(f"Connected to SharePoint site: {client.site_info}")
 
-    def get_files(
+    def get_files(  # type: ignore[no-untyped-def]
         sharepoint_files_config: SharepointFilesConfig,
-        last_update_timestamp: dlt.sources.incremental = dlt.sources.incremental(
+        last_update_timestamp: dlt.sources.incremental[Any] = dlt.sources.incremental(
             cursor_path="lastModifiedDateTime",
             initial_value="2020-01-01T00:00:00Z",
             primary_key=(),
@@ -147,7 +147,7 @@ def sharepoint_files(
                     f"Skipping file {file_item['name']} based on lastModifiedDateTime filter"
                 )
 
-    def get_records(file_item: Dict) -> TDataItems:
+    def get_records(file_item: Dict[str, Any]) -> TDataItems:
         chunksize = file_item["pd_kwargs"].get("chunksize", None)
         file_io = client.get_file_bytes_io(file_item=file_item)
 
@@ -161,7 +161,7 @@ def sharepoint_files(
             yield df
         logger.debug(f"get_records done for {file_item['name']}")
 
-    def get_pipe(sharepoint_files_config: SharepointFilesConfig):
+    def get_pipe(sharepoint_files_config: SharepointFilesConfig):  # type: ignore[no-untyped-def]
         return dlt.resource(
             get_files, name=f"{sharepoint_files_config.table_name}_files"
         )(sharepoint_files_config) | dlt.transformer(

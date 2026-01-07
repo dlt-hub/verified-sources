@@ -3,7 +3,7 @@
 Provides configuration models for SharePoint lists and files,
 including file type definitions and validation utilities.
 """
-from typing import Optional, Dict
+from typing import Optional, Dict, Callable, Any
 import re
 from enum import Enum
 
@@ -33,20 +33,21 @@ class FileType(Enum):
     SAS = "sas"
     SPSS = "spss"
 
-    def get_pd_function(self):
+    def get_pd_function(self) -> Callable[..., Any]:
         """Get the pandas read function for this file type.
 
         Returns:
             Callable pandas read function (e.g., pd.read_csv, pd.read_excel)
         """
-        return {
+        file_type_map: Dict[FileType, Callable[..., Any]] = {
             self.EXCEL: pd.read_excel,
             self.CSV: pd.read_csv,
             self.JSON: pd.read_json,
             self.PARQUET: pd.read_parquet,
             self.SAS: pd.read_sas,
             self.SPSS: pd.read_spss,
-        }[self]
+        }
+        return file_type_map[self]
 
 
 class SharepointListConfig(BaseModel):
@@ -67,7 +68,7 @@ class SharepointListConfig(BaseModel):
     select: Optional[str] = None
     is_incremental: Optional[bool] = False
 
-    def __init__(self, **data):
+    def __init__(self, **data: Any) -> None:
         super().__init__(**data)
         if self.is_incremental is True:
             raise NotImplementedError(
@@ -97,10 +98,10 @@ class SharepointFilesConfig(BaseModel):
     table_name: str
     file_name_startswith: str
     pattern: Optional[str] = ".*"
-    pandas_kwargs: Dict = {}
+    pandas_kwargs: Dict[str, Any] = {}
     is_file_incremental: bool = False
 
-    def __init__(self, **data):
+    def __init__(self, **data: Any) -> None:
         super().__init__(**data)
         self.folder_path = validate_folder_path(self.folder_path)
         self.pattern = f"^{self.file_name_startswith}{self.pattern}"

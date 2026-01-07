@@ -1,9 +1,9 @@
 """Helper module for SharePoint data extraction using Microsoft Graph API."""
-from typing import Dict, List, Optional, Union, Iterator
+from typing import Dict, List, Optional, Union, Iterator, Any
 from io import BytesIO
 import re
 
-from msal import ConfidentialClientApplication
+from msal import ConfidentialClientApplication  # type: ignore[import-untyped]
 from dlt.common import logger
 from dlt.sources.helpers.rest_client import RESTClient
 from dlt.sources.helpers.rest_client.auth import BearerTokenAuth
@@ -95,7 +95,7 @@ class SharepointClient:
             raise ConnectionError(f"Connection failed : {token_response}")
 
     @property
-    def sub_sites(self) -> List:
+    def sub_sites(self) -> List[Dict[str, Any]]:
         """Get list of sub-sites within the current SharePoint site.
 
         Returns:
@@ -111,7 +111,7 @@ class SharepointClient:
             return []
 
     @property
-    def site_info(self) -> Union[Dict, None]:
+    def site_info(self) -> Optional[Dict[str, Any]]:
         """Get information about the current SharePoint site.
 
         Returns:
@@ -124,8 +124,9 @@ class SharepointClient:
             return site_info
         else:
             logger.warning(f"No site_info found in {url}")
+            return None
 
-    def get_all_lists_in_site(self) -> List[Dict]:
+    def get_all_lists_in_site(self) -> List[Dict[str, Any]]:
         """Retrieve all generic lists from the SharePoint site.
 
         Filters for lists with template type 'genericList' and 'Lists' in their URL,
@@ -155,7 +156,7 @@ class SharepointClient:
 
     def get_items_from_list(
         self, list_title: str, select: str = None
-    ) -> Iterator[Dict]:
+    ) -> Iterator[Dict[str, Any]]:
         all_lists = self.get_all_lists_in_site()
         filtered_lists = [
             x
@@ -210,7 +211,7 @@ class SharepointClient:
 
     def get_files_from_path(
         self, folder_path: str, file_name_startswith: str, pattern: str = None
-    ) -> List[Dict]:
+    ) -> List[Dict[str, Any]]:
         """Get files from a SharePoint folder matching specified criteria.
 
         Args:
@@ -236,7 +237,7 @@ class SharepointClient:
         logger.debug(f"Got number files from ms graph api: {len(file_items)}")
         return file_items
 
-    def get_file_bytes_io(self, file_item: Dict):
+    def get_file_bytes_io(self, file_item: Dict[str, Any]) -> BytesIO:
         """Download a SharePoint file to a BytesIO object.
 
         Args:
