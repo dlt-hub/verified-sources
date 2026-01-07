@@ -31,7 +31,6 @@ class FileType(Enum):
     PARQUET = "parquet"
     SAS = "sas"
     SPSS = "spss"
-    SAV = "sav"
 
     def get_pd_function(self):
         """Get the pandas read function for this file type.

@@ -4,13 +4,11 @@ Provides sources for extracting data from SharePoint lists and files
 using the Microsoft Graph API.
 """
 from typing import Iterator, Dict
-import re
 
 import dlt
 from dlt.common.typing import TDataItems
 from dlt.common.configuration.specs import configspec, BaseConfiguration
 from dlt.common import logger
-import pandas as pd
 
 from .helpers import SharepointClient
 from .sharepoint_files_config import SharepointFilesConfig, SharepointListConfig
