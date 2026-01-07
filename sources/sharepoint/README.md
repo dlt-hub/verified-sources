@@ -193,6 +193,7 @@ Incremental loading for SharePoint lists is not yet implemented.
 ### Folder Path Validation
 
 Folder paths are automatically normalized:
+
 - Leading/trailing slashes are removed
 - Double slashes are not allowed
 - Only alphanumeric characters, dashes, underscores, spaces, and dots are allowed
@@ -233,6 +234,7 @@ files_config = SharepointFilesConfig(
 ### Authentication Issues
 
 If you encounter authentication errors:
+
 1. Verify your Client ID, Tenant ID, and Client Secret are correct
 2. Ensure your Azure AD app has the required permissions
 3. Check that admin consent has been granted for the permissions
@@ -240,6 +242,7 @@ If you encounter authentication errors:
 ### File Not Found
 
 If files are not being found:
+
 1. Verify the folder path is correct (case-sensitive)
 2. Check that the file name pattern matches your files
 3. Ensure your app has access to the SharePoint site and folder
@@ -247,6 +250,7 @@ If files are not being found:
 ### Permission Errors
 
 Ensure your Azure AD application has been granted:
+
 - `Sites.Read.All` or `Sites.ReadWrite.All`
 - `Files.Read.All`
 
