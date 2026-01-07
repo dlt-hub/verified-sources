@@ -1,7 +1,9 @@
-
 import dlt
 from sharepoint import sharepoint_list, sharepoint_files, SharepointCredentials
-from sharepoint.sharepoint_files_config import SharepointFilesConfig, SharepointListConfig
+from sharepoint.sharepoint_files_config import (
+    SharepointFilesConfig,
+    SharepointListConfig,
+)
 
 if __name__ == "__main__":
     # --- 1. Define SharePoint credentials ---
@@ -10,14 +12,12 @@ if __name__ == "__main__":
         tenant_id="your-tenant-id",
         site_id="your-site-id",
         client_secret="your-client-secret",
-        sub_site_id=""
+        sub_site_id="",
     )
 
     # --- 2. Configure SharePoint list extraction ---
     list_config = SharepointListConfig(
-        list_title="test_list",
-        select="Title,ins",
-        table_name="sharepoint_list_table"
+        list_title="test_list", select="Title,ins", table_name="sharepoint_list_table"
     )
 
     # --- 3. Configure SharePoint file extraction ---
@@ -28,7 +28,7 @@ if __name__ == "__main__":
         file_type="csv",
         table_name="sharepoint_reports",
         is_file_incremental=True,
-        pandas_kwargs={}
+        pandas_kwargs={},
     )
 
     # --- 4. Create the DLT pipeline (destination = DuckDB) ---
@@ -36,7 +36,7 @@ if __name__ == "__main__":
         pipeline_name="sharepoint_to_duckdb",
         destination="duckdb",
         dataset_name="sharepoint_data",
-        full_refresh=False
+        full_refresh=False,
     )
 
     # --- 5. Run both sources and load to DuckDB ---
@@ -48,7 +48,6 @@ if __name__ == "__main__":
     with pipeline.sql_client() as client:
         df = client.execute("SELECT * FROM sharepoint_list_table LIMIT 10").df()
         print(df)
-
 
     print("Loading SharePoint Files data...")
     files_load_info = pipeline.run(

@@ -25,6 +25,7 @@ class SharepointCredentials(BaseConfiguration):
         client_secret: Azure AD application client secret
         sub_site_id: Optional sub-site ID for nested sites
     """
+
     client_id: str = None
     tenant_id: str = None
     site_id: str = None
@@ -136,9 +137,9 @@ def sharepoint_files(
                     f"Processing file after lastModifiedDateTime filter: {file_item['name']}"
                 )
 
-                file_item["pd_function"] = (
-                    sharepoint_files_config.file_type.get_pd_function()
-                )
+                file_item[
+                    "pd_function"
+                ] = sharepoint_files_config.file_type.get_pd_function()
                 file_item["pd_kwargs"] = sharepoint_files_config.pandas_kwargs
                 yield file_item
             else:

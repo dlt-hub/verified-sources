@@ -25,6 +25,7 @@ class FileType(Enum):
         SPSS: SPSS data files
         SAV: SPSS SAV format files
     """
+
     EXCEL = "excel"
     CSV = "csv"
     JSON = "json"
@@ -60,6 +61,7 @@ class SharepointListConfig(BaseModel):
     Raises:
         NotImplementedError: If is_incremental is set to True
     """
+
     table_name: str
     list_title: str
     select: Optional[str] = None
@@ -89,6 +91,7 @@ class SharepointFilesConfig(BaseModel):
         The pattern attribute is automatically prefixed with file_name_startswith.
         Folder paths are validated and normalized during initialization.
     """
+
     file_type: FileType
     folder_path: str
     table_name: str

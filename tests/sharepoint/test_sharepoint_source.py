@@ -129,11 +129,15 @@ class TestValidateFolderPath:
 
     def test_valid_path_with_subdirs(self):
         """Test valid path with subdirectories"""
-        assert validate_folder_path("Documents/Reports/2024") == "Documents/Reports/2024"
+        assert (
+            validate_folder_path("Documents/Reports/2024") == "Documents/Reports/2024"
+        )
 
     def test_valid_path_with_spaces(self):
         """Test valid path with spaces"""
-        assert validate_folder_path("My Documents/My Reports") == "My Documents/My Reports"
+        assert (
+            validate_folder_path("My Documents/My Reports") == "My Documents/My Reports"
+        )
 
     def test_invalid_characters(self):
         """Test that invalid characters raise ValueError"""
@@ -157,7 +161,10 @@ class TestSharepointClient:
         assert client.site_id == MOCK_CREDENTIALS["site_id"]
         assert client.client_secret == MOCK_CREDENTIALS["client_secret"]
         assert client.sub_site_id == ""
-        assert client.graph_site_url == f"https://graph.microsoft.com/v1.0/sites/{MOCK_CREDENTIALS['site_id']}"
+        assert (
+            client.graph_site_url
+            == f"https://graph.microsoft.com/v1.0/sites/{MOCK_CREDENTIALS['site_id']}"
+        )
 
     def test_client_with_subsite(self):
         """Test SharepointClient initialization with sub_site_id"""
@@ -169,7 +176,10 @@ class TestSharepointClient:
 
     def test_client_missing_credentials(self):
         """Test that missing credentials raise ValueError"""
-        with pytest.raises(ValueError, match="client_id, tenant_id, client_secret and site_id are required"):
+        with pytest.raises(
+            ValueError,
+            match="client_id, tenant_id, client_secret and site_id are required",
+        ):
             SharepointClient(
                 client_id="",
                 tenant_id="test",
@@ -204,7 +214,9 @@ class TestSharepointClient:
         """Test failed connection to SharePoint"""
         # Mock MSAL token response without access_token
         mock_app_instance = Mock()
-        mock_app_instance.acquire_token_for_client.return_value = {"error": "authentication_failed"}
+        mock_app_instance.acquire_token_for_client.return_value = {
+            "error": "authentication_failed"
+        }
         mock_msal_app.return_value = mock_app_instance
 
         client = SharepointClient(**MOCK_CREDENTIALS)
@@ -217,7 +229,9 @@ class TestSharepointClient:
         """Test getting all lists from a site"""
         # Setup mocks
         mock_app_instance = Mock()
-        mock_app_instance.acquire_token_for_client.return_value = {"access_token": "test_token"}
+        mock_app_instance.acquire_token_for_client.return_value = {
+            "access_token": "test_token"
+        }
         mock_msal_app.return_value = mock_app_instance
 
         mock_client_instance = Mock()
@@ -262,7 +276,9 @@ class TestSharepointClient:
         """Test getting items from a specific list"""
         # Setup mocks
         mock_app_instance = Mock()
-        mock_app_instance.acquire_token_for_client.return_value = {"access_token": "test_token"}
+        mock_app_instance.acquire_token_for_client.return_value = {
+            "access_token": "test_token"
+        }
         mock_msal_app.return_value = mock_app_instance
 
         mock_client_instance = Mock()
@@ -291,7 +307,10 @@ class TestSharepointClient:
         }
         mock_items_response.raise_for_status = Mock()
 
-        mock_client_instance.get.side_effect = [mock_lists_response, mock_items_response]
+        mock_client_instance.get.side_effect = [
+            mock_lists_response,
+            mock_items_response,
+        ]
         mock_rest_client.return_value = mock_client_instance
 
         client = SharepointClient(**MOCK_CREDENTIALS)
@@ -308,7 +327,9 @@ class TestSharepointClient:
         """Test getting items from a list that doesn't exist"""
         # Setup mocks
         mock_app_instance = Mock()
-        mock_app_instance.acquire_token_for_client.return_value = {"access_token": "test_token"}
+        mock_app_instance.acquire_token_for_client.return_value = {
+            "access_token": "test_token"
+        }
         mock_msal_app.return_value = mock_app_instance
 
         mock_client_instance = Mock()
@@ -330,7 +351,9 @@ class TestSharepointClient:
         client = SharepointClient(**MOCK_CREDENTIALS)
         client.connect()
 
-        with pytest.raises(ValueError, match="List with title 'Nonexistent List' not found"):
+        with pytest.raises(
+            ValueError, match="List with title 'Nonexistent List' not found"
+        ):
             client.get_items_from_list("Nonexistent List")
 
     @patch("sources.sharepoint.helpers.ConfidentialClientApplication")
@@ -339,7 +362,9 @@ class TestSharepointClient:
         """Test getting files from a folder path"""
         # Setup mocks
         mock_app_instance = Mock()
-        mock_app_instance.acquire_token_for_client.return_value = {"access_token": "test_token"}
+        mock_app_instance.acquire_token_for_client.return_value = {
+            "access_token": "test_token"
+        }
         mock_msal_app.return_value = mock_app_instance
 
         mock_client_instance = Mock()
@@ -378,7 +403,9 @@ class TestSharepointClient:
         """Test downloading a file to BytesIO"""
         # Setup mocks
         mock_app_instance = Mock()
-        mock_app_instance.acquire_token_for_client.return_value = {"access_token": "test_token"}
+        mock_app_instance.acquire_token_for_client.return_value = {
+            "access_token": "test_token"
+        }
         mock_msal_app.return_value = mock_app_instance
 
         mock_client_instance = Mock()
@@ -436,6 +463,8 @@ class TestSharepointListSource:
         assert len(resource_data) == 2
         assert resource_data[0]["Title"] == "Item 1"
         assert resource_data[1]["Title"] == "Item 2"
+
+
 class TestSharepointFilesSource:
     """Test sharepoint_files source"""
 

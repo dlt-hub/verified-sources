@@ -110,7 +110,6 @@ class SharepointClient:
             logger.warning(f"No subsite found in {url}")
             return []
 
-
     @property
     def site_info(self) -> Union[Dict, None]:
         """Get information about the current SharePoint site.
@@ -154,10 +153,13 @@ class SharepointClient:
             logger.warning(f"No lists found in {url}")
         return filtered_lists
 
-    def get_items_from_list(self, list_title: str, select:str = None) -> Iterator[Dict]:
+    def get_items_from_list(
+        self, list_title: str, select: str = None
+    ) -> Iterator[Dict]:
         all_lists = self.get_all_lists_in_site()
         filtered_lists = [
-            x for x in all_lists
+            x
+            for x in all_lists
             if x.get("list", {}).get("template") == "genericList"
             and "Lists" in x.get("webUrl", "")
         ]
@@ -202,7 +204,9 @@ class SharepointClient:
         if total_items > 0:
             logger.info(f"Yielded {total_items} items from list: {list_title}")
         else:
-            logger.warning(f"No items found in list: {list_title}, with select: {select}")
+            logger.warning(
+                f"No items found in list: {list_title}, with select: {select}"
+            )
 
     def get_files_from_path(
         self, folder_path: str, file_name_startswith: str, pattern: str = None
