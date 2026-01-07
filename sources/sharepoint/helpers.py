@@ -1,5 +1,5 @@
 """Helper module for SharePoint data extraction using Microsoft Graph API."""
-from typing import Dict, List, Optional, Union, Iterator, Any
+from typing import Dict, List, Optional, Iterator, Any
 from io import BytesIO
 import re
 

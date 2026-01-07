@@ -3,7 +3,7 @@
 Provides sources for extracting data from SharePoint lists and files
 using the Microsoft Graph API.
 """
-from typing import Iterator, Dict, Any, Iterable
+from typing import Dict, Any, Iterable
 
 import dlt
 from dlt.sources import DltResource
