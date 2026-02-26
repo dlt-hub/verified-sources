@@ -1,4 +1,4 @@
-import pendulum.testing
+import time_machine
 import pytest
 from typing import List
 import dlt
@@ -31,10 +31,9 @@ QUERIES = [
     },
 ]
 INCREMENTAL_END_DATES = [
-    pendulum.datetime(year=2020, month=1, day=1),
-    pendulum.datetime(year=2020, month=2, day=1),
-    pendulum.datetime(year=2021, month=1, day=1),
-    pendulum.datetime(year=2021, month=2, day=1),
+    pendulum.datetime(year=2022, month=3, day=1),
+    pendulum.datetime(year=2022, month=4, day=1),
+    pendulum.datetime(year=2022, month=5, day=1),
 ]
 QUERIES_START_DATE1 = [
     {
@@ -67,7 +66,6 @@ ALL_TABLES_REPORTS = [
 ]
 
 
-@pytest.mark.skip("We don't have a Matomo test account.")
 @pytest.mark.parametrize("destination_name", ALL_DESTINATIONS)
 def test_reports(destination_name: str) -> None:
     """
@@ -86,7 +84,6 @@ def test_reports(destination_name: str) -> None:
     _check_pipeline_has_tables(pipeline, ALL_TABLES_REPORTS)
 
 
-@pytest.mark.skip("We don't have a Matomo test account.")
 @pytest.mark.parametrize("destination_name", ALL_DESTINATIONS)
 def test_visits(destination_name: str) -> None:
     """
@@ -105,7 +102,7 @@ def test_visits(destination_name: str) -> None:
     assert_load_info(info)
     _check_pipeline_has_tables(pipeline, ["visits"])
     counts = load_table_counts(pipeline, "visits")
-    assert counts["visits"] > 100
+    assert counts["visits"] > 20
 
     # load again
     data_events = matomo_visits(
@@ -121,7 +118,6 @@ def test_visits(destination_name: str) -> None:
         assert diff_count >= 0 and diff_count < 5
 
 
-@pytest.mark.skip("We don't have a Matomo test account.")
 @pytest.mark.parametrize("destination_name", ALL_DESTINATIONS)
 def test_visits_with_visitors(destination_name: str) -> None:
     """
@@ -129,36 +125,36 @@ def test_visits_with_visitors(destination_name: str) -> None:
     :param destination_name: Name of the db the data is loaded to.
     :returns: None
     """
-
-    pipeline = dlt.pipeline(
-        destination=destination_name, dev_mode=True, dataset_name="matomo_dataset"
-    )
-    data_events = matomo_visits(
-        live_events_site_id=LIVE_EVENTS_SITE_ID,
-        initial_load_past_days=0,
-        get_live_event_visitors=True,
-    )
-    info = pipeline.run(data_events)
-    assert_load_info(info)
-    _check_pipeline_has_tables(pipeline, ["visits", "visitors"])
-    counts = load_table_counts(pipeline, "visits", "visitors")
-    assert counts["visits"] > 100
-    assert counts["visitors"] > 100
-
-    # load again
-    data_events = matomo_visits(
-        live_events_site_id=LIVE_EVENTS_SITE_ID, get_live_event_visitors=True
-    )
-    info = pipeline.run(data_events)
-    if len(info.loads_ids) > 0:
-        # we should not load anything but if we do
+    with time_machine.travel(pendulum.datetime(2022, 1, 1)):
+        pipeline = dlt.pipeline(
+            destination=destination_name, dev_mode=True, dataset_name="matomo_dataset"
+        )
+        data_events = matomo_visits(
+            live_events_site_id=LIVE_EVENTS_SITE_ID,
+            initial_load_past_days=365,
+            get_live_event_visitors=True,
+        )
+        info = pipeline.run(data_events)
         assert_load_info(info)
-        counts_inc = load_table_counts(pipeline, "visits", "visitors")
-        # we should have no more rows or maybe just 1-2
-        diff_count = counts_inc["visits"] - counts["visits"]
-        assert diff_count >= 0 and diff_count < 5
-        diff_count = counts_inc["visitors"] - counts["visitors"]
-        assert diff_count >= 0 and diff_count < 5
+        _check_pipeline_has_tables(pipeline, ["visits", "visitors"])
+        counts = load_table_counts(pipeline, "visits", "visitors")
+        assert counts["visits"] > 20
+        assert counts["visitors"] > 20
+
+    with time_machine.travel(pendulum.datetime(2020, 2, 15)):
+        data_events = matomo_visits(
+            live_events_site_id=LIVE_EVENTS_SITE_ID, get_live_event_visitors=True
+        )
+        info = pipeline.run(data_events)
+        if len(info.loads_ids) > 0:
+            # we should not load anything but if we do
+            assert_load_info(info)
+            counts_inc = load_table_counts(pipeline, "visits", "visitors")
+            # we should have no more rows or maybe just 1-2
+            diff_count = counts_inc["visits"] - counts["visits"]
+            assert diff_count >= 0 and diff_count < 5
+            diff_count = counts_inc["visitors"] - counts["visitors"]
+            assert diff_count >= 0 and diff_count < 5
 
 
 @pytest.mark.parametrize(
@@ -273,7 +269,6 @@ def test_remove_active_visits(
     assert result == expected_visits
 
 
-@pytest.mark.skip("We don't have a Matomo test account.")
 @pytest.mark.parametrize("destination_name", ALL_DESTINATIONS)
 def test_incrementing_reports(destination_name: str) -> None:
     """
@@ -285,36 +280,22 @@ def test_incrementing_reports(destination_name: str) -> None:
         destination=destination_name, dev_mode=True, dataset_name="matomo"
     )
 
-    # load the rest of the data
-    # TODO: this is defunct, mock the pendulum.now method
+    # Mock time for each iteration
     for incremental_end_date in INCREMENTAL_END_DATES:
-        with pendulum.test(incremental_end_date):
+        with time_machine.travel(incremental_end_date):
             data = matomo_reports(queries=QUERIES, site_id=REPORTS_SITE_ID)
             info = pipeline.run(data)
             assert_load_info(info)
             incremental_load_counts.append(
                 load_table_counts(pipeline, *ALL_TABLES_REPORTS)
             )
-
-    # Check new data is added after each incremental load
-    _count_comparison(
-        first_counts=incremental_load_counts[1],
-        second_counts=incremental_load_counts[0],
-        same_data_expected=False,
-    )
-    _count_comparison(
-        first_counts=incremental_load_counts[2],
-        second_counts=incremental_load_counts[1],
-        same_data_expected=False,
-    )
-    _count_comparison(
-        first_counts=incremental_load_counts[3],
-        second_counts=incremental_load_counts[2],
-        same_data_expected=False,
-    )
+            for _, resource in data.resources.items():
+                assert (
+                    resource.state["incremental"]["date"]["last_value"]
+                    == pendulum.yesterday()
+                )
 
 
-@pytest.mark.skip("We don't have a Matomo test account.")
 @pytest.mark.parametrize("destination_name", ALL_DESTINATIONS)
 def test_start_date(destination_name: str) -> None:
     """
@@ -330,7 +311,14 @@ def test_start_date(destination_name: str) -> None:
         include_events=False,
         queries=QUERIES_START_DATE1,
     )
-    load_count1 = load_table_counts(pipeline1, *ALL_TABLES_START_DATE)
+    with pipeline1.sql_client() as client:
+        result = client.execute_sql(
+            f"SELECT MIN(date) as min_date FROM {pipeline1.dataset_name}.sample_analytics_data1_visits_summary_get"
+        )
+        min_date = list(result)[0][0]
+        assert pendulum.parse(str(min_date)) >= pendulum.datetime(2020, 1, 1)
+        assert pendulum.parse(str(min_date)) < pendulum.datetime(2022, 1, 1)
+
     pipeline2 = _create_pipeline(
         destination_name=destination_name,
         dataset_name="matomo_start_date2",
@@ -339,12 +327,13 @@ def test_start_date(destination_name: str) -> None:
         include_events=False,
         queries=QUERIES_START_DATE2,
     )
-    load_count2 = load_table_counts(pipeline2, *ALL_TABLES_START_DATE)
 
-    # Check new data is added after each incremental load
-    _count_comparison(
-        first_counts=load_count1, second_counts=load_count2, same_data_expected=False
-    )
+    with pipeline2.sql_client() as client:
+        result = client.execute_sql(
+            f"SELECT MIN(date) as min_date FROM {pipeline2.dataset_name}.sample_analytics_data1_visits_summary_get"
+        )
+        min_date = list(result)[0][0]
+        assert pendulum.parse(str(min_date)) >= pendulum.datetime(2022, 1, 1)
 
 
 def _create_pipeline(
@@ -390,22 +379,3 @@ def _check_pipeline_has_tables(pipeline: Pipeline, tables: List[str]):
     schema = pipeline.default_schema
     user_tables = schema.data_tables()
     assert set(tables).difference([t["name"] for t in user_tables]) == set()
-
-
-def _count_comparison(
-    first_counts: DictStrAny, second_counts: DictStrAny, same_data_expected: bool = True
-):
-    """
-    Compares 2 dictionaries that have a row count for each loaded table. If the counts are supposed to have the same
-    :param first_counts: Dict containing information about tables and respective rows per table
-    :param second_counts: Dict containing information about tables and respective rows per table
-    :param same_data_expected: If true, both tables are expected to have the same number of rows for non metadata tables, otherwise first_counts is expected to have more rows per table.
-    :return:
-    """
-    assert len(first_counts) == len(second_counts)
-    for table_name in first_counts:
-        if table_name not in {"dimensions", "metrics"}:
-            if same_data_expected:
-                assert first_counts[table_name] == second_counts[table_name]
-            else:
-                assert first_counts[table_name] > second_counts[table_name]

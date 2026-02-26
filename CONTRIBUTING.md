@@ -15,24 +15,34 @@
 </div>
 <br>
 
+
 The following guide will walk you through contributing new sources or changes to existing sources
 and their demo pipelines and contains a troubleshooting section. Please also read
 [DISTRIBUTION.md](docs/DISTRIBUTION.md) to understand how our sources are distributed to the users.
-Refer to [BUILDING-BLOCKS.md](docs/BUILDING-BLOCKS.md) to learn about the basic building blocks of a
-dlt source.
 
-What do you can do here:
+## Before you start
+* 🚀 We are happy to accept **bugfixes and improvements** to existing sources!
+* 📣 **We accept new sources but only those that cannot be easily implemented** via `REST API`, `sql_database` or `filesystem` or with **vibe coding**. 
+  - see issues for source requests!
+  - queues and brokers like google pub sub or rabbitMQ
+  - SAP/ERP/HEALTH
+  - HR platforms
+  - Graph QL
+
+
+
+## What you can do here
 
 - Contribute a change to an existing verified source or its demo pipeline: Go to the
-  ["Walktrough: Fix, improve, customize, document an existing source"](#walktrough-fix-improve-customize-document-an-existing-pipeline)
+  ["Walkthrough: Fix, improve, customize, document an existing source"](#Walkthrough-fix-improve-customize-document-an-existing-pipeline)
   section.
 - Contribute a new verified source: Go to the
-  ["Walktrough: Create and contribute a new source"](#walktrough-create-and-contribute-a-new-source)
+  ["Walkthrough: Create and contribute a new source"](#Walkthrough-create-and-contribute-a-new-source)
   section.
 - Join our slack to get support from us by following the
   [invitation link](https://dlthub.com/community).
 
-## Walktrough: Fix, improve, customize, document an existing pipeline
+## Walkthrough: Fix, improve, customize, document an existing pipeline
 
 In this section you will learn how to contribute changes to an existing pipeline.
 
@@ -50,7 +60,7 @@ In this section you will learn how to contribute changes to an existing pipeline
    4. Run the linter and formatter to check for any problems: `make lint-code`.
 3. Proceed to the pull request section to [create a pull request to the main repo](#making-a-pull-request-to-the-main-repo-from-fork).
 
-## Walktrough: Create and contribute a new source
+## Walkthrough: Create and contribute a new source
 
 In this section you will learn how to contribute a new source including tests and a demo pipeline
 for that source. It is helpful to also read through the above section to see all the steps that are
@@ -90,9 +100,19 @@ your source will be distributed to other users once it is accepted into our repo
 
 ## Walkthrough: Modify or add rules files for LLM-enabled IDEs
 In this section, you will learn how to contribute rules files.
-1. Follow the [coding prerequisites](#coding-prerequisites) to setup the repository
-2. On your branch, add or modify rules files under the `/ai` directory
-3. Verify that the rules are properly formatted and work with the target IDE.
+
+### 1. How the `ai/` directory works
+
+1. The `.rules` folder is the master folder from which the files are rendered and copied into the respective IDE folders with the appropriate structure and format.
+2. Rendering and copying of the files are handled by the `make transpile-rules` command.
+3. The make transpile-rules command relies on Continue's [rules CLI](https://github.com/continuedev/rules).
+
+### 1. How to modify or add rules
+
+1. Follow the [coding prerequisites](#coding-prerequisites) to setup the repository.
+2. On your branch, add or modify rules files under the `/ai/.rules/` directory.
+3. Verify that the rules are properly formatted.
+4. Run `make transpile-rules` to update the respective IDE folders.
 4. Proceed to the pull request section to [create a pull request to the main repo](#making-a-pull-request-to-the-main-repo-from-fork). Please explain for what use cases these rules are useful and share what IDE version you're using.
 
 ## Coding Prerequisites
@@ -342,7 +362,7 @@ In essence **DLT_SECRETS_TOML** is just your `secrets.toml` file and will be use
 
 
 ### Sharing and obtaining source credentials, test accounts, destination access
-Typically we created a common test account for your source [before you started coding](#walktrough-create-and-contribute-a-new-source). This is an ideal situation - we can reuse your tests directly and can merge your work quickly.
+Typically we create a common test account for your source [before you started coding](#Walkthrough-create-and-contribute-a-new-source). This is an ideal situation - we can reuse your tests directly and can merge your work quickly.
 
 If you contributed a source and created own credentials, test accounts or test datasets please
    include them in the tests or share them with `dlt` team so we can configure the CI job. If

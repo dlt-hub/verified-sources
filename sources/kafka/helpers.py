@@ -1,14 +1,14 @@
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
 from confluent_kafka import Consumer, Message, TopicPartition  # type: ignore
-from confluent_kafka.admin import AdminClient, TopicMetadata  # type: ignore
+from confluent_kafka.admin import TopicMetadata  # type: ignore
 
 from dlt import config, secrets
 from dlt.common import pendulum
 from dlt.common.configuration import configspec
 from dlt.common.configuration.specs import CredentialsConfiguration
 from dlt.common.time import ensure_pendulum_datetime
-from dlt.common.typing import DictStrAny, TSecretValue, TAnyDateTime
+from dlt.common.typing import DictStrAny, TSecretValue
 from dlt.common.utils import digest128
 
 
@@ -54,8 +54,8 @@ def default_msg_processor(msg: Message) -> Dict[str, Any]:
 class OffsetTracker(dict):  # type: ignore
     """Object to control offsets of the given topics.
 
-    Tracks all the partitions of the given topics with two params:
-    current offset and maximum offset (partition length).
+    Tracks all the partitions of the given topics with three params:
+    current offset, maximum offset (partition length), and an end time.
 
     Args:
         consumer (confluent_kafka.Consumer): Kafka consumer.
@@ -63,6 +63,8 @@ class OffsetTracker(dict):  # type: ignore
         pl_state (DictStrAny): Pipeline current state.
         start_from (Optional[pendulum.DateTime]): A timestamp, after which messages
             are read. Older messages are ignored.
+        end_time (Optional[pendulum.DateTime]): A timestamp, before which messages
+            are read. Newer messages are ignored.
     """
 
     def __init__(
@@ -70,7 +72,8 @@ class OffsetTracker(dict):  # type: ignore
         consumer: Consumer,
         topic_names: List[str],
         pl_state: DictStrAny,
-        start_from: pendulum.DateTime = None,
+        start_from: Optional[pendulum.DateTime] = None,
+        end_time: Optional[pendulum.DateTime] = None,
     ):
         super().__init__()
 
@@ -82,7 +85,7 @@ class OffsetTracker(dict):  # type: ignore
             "offsets", {t_name: {} for t_name in topic_names}
         )
 
-        self._init_partition_offsets(start_from)
+        self._init_partition_offsets(start_from, end_time)
 
     def _read_topics(self, topic_names: List[str]) -> Dict[str, TopicMetadata]:
         """Read the given topics metadata from Kafka.
@@ -104,7 +107,11 @@ class OffsetTracker(dict):  # type: ignore
 
         return tracked_topics
 
-    def _init_partition_offsets(self, start_from: pendulum.DateTime) -> None:
+    def _init_partition_offsets(
+        self,
+        start_from: Optional[pendulum.DateTime] = None,
+        end_time: Optional[pendulum.DateTime] = None,
+    ) -> None:
         """Designate current and maximum offsets for every partition.
 
         Current offsets are read from the state, if present. Set equal
@@ -113,6 +120,8 @@ class OffsetTracker(dict):  # type: ignore
         Args:
             start_from (pendulum.DateTime): A timestamp, at which to start
                 reading. Older messages are ignored.
+            end_time (pendulum.DateTime): A timestamp, before which messages
+                are read. Newer messages are ignored.
         """
         all_parts = []
         for t_name, topic in self._topics.items():
@@ -128,27 +137,49 @@ class OffsetTracker(dict):  # type: ignore
                 for part in topic.partitions
             ]
 
-            # get offsets for the timestamp, if given
-            if start_from is not None:
+            # get offsets for the timestamp ranges, if given
+            if start_from is not None and end_time is not None:
+                start_ts_offsets = self._consumer.offsets_for_times(parts)
+                end_ts_offsets = self._consumer.offsets_for_times(
+                    [
+                        TopicPartition(t_name, part, end_time.int_timestamp * 1000)
+                        for part in topic.partitions
+                    ]
+                )
+            elif start_from is not None:
                 ts_offsets = self._consumer.offsets_for_times(parts)
 
             # designate current and maximum offsets for every partition
             for i, part in enumerate(parts):
                 max_offset = self._consumer.get_watermark_offsets(part)[1]
 
-                if start_from is not None:
+                if start_from is not None and end_time is not None:
+                    if start_ts_offsets[i].offset != -1:
+                        cur_offset = start_ts_offsets[i].offset
+                    else:
+                        cur_offset = max_offset - 1
+                    if end_ts_offsets[i].offset != -1:
+                        end_offset = end_ts_offsets[i].offset
+                    else:
+                        end_offset = max_offset
+
+                elif start_from is not None:
                     if ts_offsets[i].offset != -1:
                         cur_offset = ts_offsets[i].offset
                     else:
                         cur_offset = max_offset - 1
+
+                    end_offset = max_offset
+
                 else:
                     cur_offset = (
                         self._cur_offsets[t_name].get(str(part.partition), -1) + 1
                     )
+                    end_offset = max_offset
 
                 self[t_name][str(part.partition)] = {
                     "cur": cur_offset,
-                    "max": max_offset,
+                    "max": end_offset,
                 }
 
                 parts[i].offset = cur_offset
@@ -200,9 +231,11 @@ class KafkaCredentials(CredentialsConfiguration):
     bootstrap_servers: str = config.value
     group_id: str = config.value
     security_protocol: str = config.value
-    sasl_mechanisms: str = config.value
-    sasl_username: str = config.value
-    sasl_password: TSecretValue = secrets.value
+
+    # Optional SASL credentials
+    sasl_mechanisms: Optional[str] = config.value
+    sasl_username: Optional[str] = config.value
+    sasl_password: Optional[TSecretValue] = secrets.value
 
     def init_consumer(self) -> Consumer:
         """Init a Kafka consumer from this credentials.
@@ -214,9 +247,16 @@ class KafkaCredentials(CredentialsConfiguration):
             "bootstrap.servers": self.bootstrap_servers,
             "group.id": self.group_id,
             "security.protocol": self.security_protocol,
-            "sasl.mechanisms": self.sasl_mechanisms,
-            "sasl.username": self.sasl_username,
-            "sasl.password": self.sasl_password,
             "auto.offset.reset": "earliest",
         }
+
+        if self.sasl_mechanisms and self.sasl_username and self.sasl_password:
+            config.update(
+                {
+                    "sasl.mechanisms": self.sasl_mechanisms,
+                    "sasl.username": self.sasl_username,
+                    "sasl.password": self.sasl_password,
+                }
+            )
+
         return Consumer(config)

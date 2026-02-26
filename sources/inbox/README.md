@@ -54,6 +54,22 @@ the
    add credentials for your chosen destination, ensuring proper routing of your data to the final
    destination.
 
+## GMail
+
+GMail has a concurrency limit on access via IMAP, which at the time of writing is 15.
+In order to not run into `[ALERT] Too many simultaneous connections`, you can reduce
+the concurrency via:
+
+```toml
+[load]
+# Prevent the IMAP error: "[ALERT] Too many simultaneous connections" 
+# by limiting the number of concurrent load jobs
+workers=15
+```
+
+Bear in mind that IMAP connections are shared, so if you access a mailbox that is used elsewhere,
+you may need to reduce the workers accordingly.
+
 ## Run the pipeline
 
 1. Before running the pipeline, ensure that you have installed all the necessary dependencies by
@@ -62,16 +78,6 @@ the
    ```bash
    pip install -r requirements.txt
    ```
-
-   Prerequisites for fetching messages differ by provider.
-
-    - For Gmail:
-
-      `pip install google-api-python-client>=2.86.0`
-
-      `pip install google-auth-oauthlib>=1.0.0`
-
-      `pip install google-auth-httplib2>=0.1.0`
 
     - For pdf parsing:
 

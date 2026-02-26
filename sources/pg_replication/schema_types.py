@@ -38,9 +38,11 @@ _PG_TYPES: Dict[int, str] = {
     1043: "character varying",
     1082: "date",
     1083: "time without time zone",
+    1114: "timestamp without time zone",
     1184: "timestamp with time zone",
     1700: "numeric",
     3802: "jsonb",
+    114: "json",
 }
 """Maps postgres type OID to type string. Only includes types present in PostgresTypeMapper."""
 
@@ -98,7 +100,14 @@ def _to_dlt_column_type(type_id: int, atttypmod: int) -> TColumnType:
         pg_type = "character varying"
     precision = _get_precision(type_id, atttypmod)
     scale = _get_scale(type_id, atttypmod)
-    return _type_mapper().from_destination_type(pg_type, precision, scale)
+    dlt_type = _type_mapper().from_destination_type(pg_type, precision, scale)
+
+    # Set timezone flag for timestamp types
+    if type_id == 1114:  # timestamp without time zone
+        dlt_type["timezone"] = False
+    elif type_id == 1184:  # timestamp with time zone
+        dlt_type["timezone"] = True
+    return dlt_type
 
 
 def _to_dlt_column_schema(col: ColumnType) -> TColumnSchema:

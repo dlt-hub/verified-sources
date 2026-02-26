@@ -19,23 +19,29 @@ This repository contains verified dlt sources and demo pipelines for each source
 
 ## How to add a verified source to your dlt project
 `dlt` offers an `init` command that will clone and inject any source with an example pipeline from this repository into your project, setup the credentials and python dependencies. Please follow the step by step instructions in our [docs](https://dlthub.com/docs/walkthroughs/add-a-verified-source).
+
+### We encourage you to hack the code
+Verified sources code is added to your project with the expectation that you will hack or customize code yourself - as you need it.
+
+
 ## How to contact us and get help
 Join our slack by following the [invitation link](https://dlthub.com/community)
-
- - If you have added a source and something does not work, post in the `technical-help` channel
- - If you want to contribute sources, customization or a fix, post in the `dlt-contributors` channel
 
 ## Reporting a source bug
 Follow this link: [bug report template](https://github.com/dlt-hub/verified-sources/issues/new?template=bug-report.md)
 
-## Requesting a source implementation
-Follow this link: [source request template](https://github.com/dlt-hub/verified-sources/issues/new?template=request-new-source.md)
-
 ## How to contribute
+* 🚀 We are happy to accept **bugfixes and improvements** to existing sources!
+* 📣 **We accept new sources but only those that cannot be easily implemented** via `REST API`, `sql_database` or `filesystem` or with **vibe coding**. 
+  - see issues for source requests!
+  - queues and brokers like google pub sub or rabbitMQ
+  - SAP/ERP/HEALTH
+  - HR platforms
+  - Graph QL
+* 📣 **Before starting, announce your PR** with [source request template](https://github.com/dlt-hub/verified-sources/issues/new?template=bug-report.md)
+
 Find step by step instruction as well as troubleshooting help in [CONTRIBUTING.md](CONTRIBUTING.md).
 
-## Building blocks
-Find a list of the building blocks of dlt with links to our official documentation in [BUILDING-BLOCKS.md](docs/BUILDING-BLOCKS.md).
 
 ## Building with LLMs
 See README [`ai`](ai/README.md) folder for details.

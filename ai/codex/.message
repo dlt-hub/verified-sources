@@ -1,0 +1,3 @@
+
+This command and rule-set is a work in progress. Currently we provide rules specific to one workflow:
+creating REST API sources and pipeline from legacy code, OpenAPI specs, REST API documentation but also from scratch.

@@ -1,7 +1,6 @@
 """Pipedrive source helpers"""
 
-from dlt.common import pendulum
-from typing import Any, Iterable, Tuple, Dict, List, cast
+from typing import Any, Iterable, Tuple, Dict, List
 from itertools import groupby
 
 

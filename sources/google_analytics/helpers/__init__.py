@@ -4,7 +4,6 @@ from typing import Iterator, List
 from pendulum.datetime import DateTime
 
 import dlt
-from apiclient.discovery import Resource
 from dlt.common import logger, pendulum
 from dlt.common.typing import TDataItem
 
@@ -14,10 +13,11 @@ from google.analytics.data_v1beta.types import (
     Dimension,
     Metric,
 )
+from google.analytics.data_v1beta import BetaAnalyticsDataClient
 
 
 def basic_report(
-    client: Resource,
+    client: BetaAnalyticsDataClient,
     rows_per_page: int,
     dimensions: List[str],
     metrics: List[str],

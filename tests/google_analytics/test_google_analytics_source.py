@@ -5,7 +5,9 @@ import dlt
 from dlt.common.pendulum import pendulum
 from dlt.common.typing import DictStrAny
 from dlt.pipeline.pipeline import Pipeline
-from sources.google_analytics import google_analytics
+from sources.google_analytics import google_analytics, TIME_DIMENSIONS
+from sources.google_analytics.settings import START_DATE
+from sources.google_analytics import helpers
 from tests.utils import (
     ALL_DESTINATIONS,
     assert_load_info,
@@ -25,9 +27,10 @@ QUERIES = [
         "metrics": ["totalUsers"],
     },
 ]
+
 # dict containing the name of the tables expected in the db as keys and the number of rows expected as values
 ALL_TABLES = {
-    "dimensions": 208,
+    "dimensions": 388,
     "metrics": 101,
     "sample_analytics_data1": 12,
     "sample_analytics_data2": 12,
@@ -141,29 +144,30 @@ def test_incrementing(destination_name: str) -> None:
     ]
 
     incremental_load_counts = []
-    # dataset_name = "analytics_dataset_" + uniq_id()  # use random dataset name so we can run many tests in parallel
-    pipeline = dlt.pipeline(
-        destination=destination_name,
-        dev_mode=True,
-        dataset_name="analytics_dataset",
-    )
 
-    # do first load with first ending date
-    # with pendulum.test(incremental_end_date):
-    #     # do not use full refresh it does not work with pendulum mock
+    data = google_analytics(queries=QUERIES)
 
-    #     pipeline = _create_pipeline(queries=QUERIES, destination_name=destination_name, dataset_name=dataset_name, dev_mode=False)
-    # incremental_load_counts = [load_table_counts(pipeline, *ALL_TABLES.keys())]
-
-    # load the rest of the data
+    start_date = pendulum.parse(START_DATE)
     for incremental_end_date in incremental_end_dates:
-        with pendulum.test(incremental_end_date):
-            data = google_analytics(queries=QUERIES)
-            info = pipeline.run(data)
-            assert_load_info(info)
-            incremental_load_counts.append(
-                load_table_counts(pipeline, *ALL_TABLES.keys())
+        pipeline = dlt.pipeline(
+            destination=destination_name,
+            dev_mode=True,
+            dataset_name="analytics_dataset",
+        )
+        for _, resource in data.resources.items():
+            resource.apply_hints(
+                incremental=dlt.sources.incremental(
+                    "date",
+                    primary_key=(),
+                    initial_value=start_date,
+                    end_value=incremental_end_date,
+                    on_cursor_value_missing="include",
+                )
             )
+
+        info = pipeline.run(data)
+        assert_load_info(info)
+        incremental_load_counts.append(load_table_counts(pipeline, *ALL_TABLES.keys()))
 
     # Check new data is added after the 1st incremental load
     assert (
@@ -265,6 +269,65 @@ def test_starting_date(destination_name: str) -> None:
         second_counts=second_load_counts,
         same_data_expected=False,
     )
+
+
+@pytest.mark.parametrize("time_dimension", TIME_DIMENSIONS)
+@pytest.mark.parametrize("destination_name", ALL_DESTINATIONS)
+def test_time_dimensions(destination_name: str, time_dimension: str, mocker) -> None:
+    """
+    Checks to see that time dimensions are correcly passed.
+    :param destination_name: Name of the db the data is loaded to.
+    :param time_dimension: Name of the time dimension.
+    :param mocker: Mocker to spy the get_report function.
+    :returns: None
+    """
+    if time_dimension == "dateHourMinute":
+        pytest.skip("Property lacks data at dateHour granularity.")
+
+    pipeline = dlt.pipeline(
+        destination=destination_name,
+        dev_mode=True,
+        dataset_name="analytics_dataset",
+    )
+
+    QUERY = [
+        {
+            "resource_name": "sample_analytics_data1",
+            "dimensions": ["browser", "city", time_dimension],
+            "metrics": ["totalUsers", "transactions"],
+        },
+    ]
+
+    EXPECTED_NUMBER_PER_TIME_DIMENSION = {
+        "date": 12,
+        "isoYearIsoWeek": 6,
+        "year": 5,
+        "yearMonth": 5,
+        "dateHour": 88,
+    }
+
+    spy = mocker.spy(helpers, "get_report")
+
+    data = google_analytics(queries=QUERY).with_resources("sample_analytics_data1")
+
+    info = pipeline.run(data)
+    assert_load_info(info)
+
+    assert spy.call_count == 1
+    assert len(spy.call_args_list[0].kwargs["dimension_list"]) == 3
+    assert any(
+        dimension.name == time_dimension
+        for dimension in spy.call_args_list[0].kwargs["dimension_list"]
+    )
+
+    with pipeline.sql_client() as client:
+        sql_query = f"""
+            SELECT *
+            FROM {pipeline.dataset_name}.sample_analytics_data1;
+        """
+        with client.execute_query(sql_query) as cur:
+            rows = list(cur.fetchall())
+            assert len(rows) == EXPECTED_NUMBER_PER_TIME_DIMENSION[time_dimension]
 
 
 def _create_pipeline(

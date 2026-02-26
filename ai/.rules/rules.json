@@ -1,0 +1,8 @@
+{
+  "name": "dlt-rules",
+  "description": "Rules to build REST API sources with dlt",
+  "author": "dltHub Inc.",
+  "license": "Apache-2.0",
+  "version": "1.0.0",
+  "rules": {}
+}

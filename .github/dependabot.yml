@@ -1,0 +1,16 @@
+version: 2
+updates:
+  # # we do not want automatic PRs with dependency updates and dependency resolution for uv
+  # # does not fully work
+  # - package-ecosystem: uv
+  #   directory: "/"
+  #   schedule:
+  #     interval: daily
+
+  # use requirements.txt in tools/dependabot_lock synced with lockfile
+  - package-ecosystem: pip
+    directory: "tools/dependabot_lock"
+    schedule:
+      interval: daily
+    # don't do PRs
+    open-pull-requests-limit: 0

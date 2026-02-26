@@ -111,7 +111,7 @@ def test_parse_pdf() -> None:
     def pdf_to_text(file_items: Sequence[FileItemDict]) -> Iterator[Dict[str, Any]]:
         # extract data from PDF page by page
         for file_item in file_items:
-            with file_item.open() as file:
+            with file_item.open(compression="disable") as file:
                 reader = PdfReader(file)
                 for page_no in range(len(reader.pages)):
                     # add page content to file item

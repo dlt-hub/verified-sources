@@ -9,32 +9,35 @@ Api changelog: https://developers.pipedrive.com/changelog
 To get an api key: https://pipedrive.readme.io/docs/how-to-find-the-api-token
 """
 
-from typing import Any, Dict, Iterator, List, Optional, Union, Iterable, Iterator, Tuple
+from typing import Any, Dict, Iterator, List, Optional, Union, Iterable
 
 import dlt
+from dlt.common import pendulum
+from dlt.common.time import ensure_pendulum_datetime
+from dlt.common.typing import TDataItems
+from dlt.sources import DltResource
 
 from .helpers.custom_fields_munger import update_fields_mapping, rename_fields
 from .helpers.pages import get_recent_items_incremental, get_pages
 from .helpers import group_deal_flows
 from .typing import TDataPage
 from .settings import ENTITY_MAPPINGS, RECENTS_ENTITIES
-from dlt.common import pendulum
-from dlt.common.time import ensure_pendulum_datetime
-from dlt.sources import DltResource, TDataItems
+
+# Export v2 source for easy access
+from .rest_v2 import pipedrive_v2_source
 
 
 @dlt.source(name="pipedrive")
 def pipedrive_source(
     pipedrive_api_key: str = dlt.secrets.value,
     since_timestamp: Optional[Union[pendulum.DateTime, str]] = "1970-01-01 00:00:00",
-) -> Iterator[DltResource]:
+) -> Iterable[DltResource]:
     """
     Get data from the Pipedrive API. Supports incremental loading and custom fields mapping.
 
     Args:
         pipedrive_api_key: https://pipedrive.readme.io/docs/how-to-find-the-api-token
         since_timestamp: Starting timestamp for incremental loading. By default complete history is loaded on first run.
-        incremental: Enable or disable incremental loading.
 
     Returns resources:
         custom_fields_mapping
@@ -53,12 +56,16 @@ def pipedrive_source(
         stages
         users
         leads
+        projects
+        tasks
 
     For custom fields rename the `custom_fields_mapping` resource must be selected or loaded before other resources.
 
     Resources that depend on another resource are implemented as transformers
     so they can re-use the original resource data without re-downloading.
     Examples:  deals_participants, deals_flow
+
+    Note: For v2 API endpoints, use pipedrive_v2_source from pipedrive.rest_v2
     """
 
     # yield nice rename mapping
@@ -93,7 +100,8 @@ def pipedrive_source(
         name="deals_flow", write_disposition="merge", primary_key="id"
     )(_get_deals_flow)(pipedrive_api_key)
 
-    yield leads(pipedrive_api_key, update_time=since_timestamp)
+    # if simple value is passed in place of incremental, it will be used as initial value
+    yield leads(pipedrive_api_key, update_time=since_timestamp)  # type: ignore[arg-type]
 
 
 def _get_deals_flow(

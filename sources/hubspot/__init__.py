@@ -23,7 +23,15 @@ Example:
 To retrieve data from all endpoints, use the following code:
 """
 
-from typing import Any, Dict, Iterator, List, Literal, Optional, Sequence, Union
+from typing import (
+    Any,
+    Dict,
+    Iterator,
+    List,
+    Literal,
+    Optional,
+    Sequence,
+)
 from urllib.parse import quote
 
 import dlt
@@ -32,13 +40,13 @@ from dlt.common.typing import TDataItems
 from dlt.sources import DltResource
 
 from .helpers import (
-    _get_property_names,
+    _get_property_names_types,
+    _to_dlt_columns_schema,
     fetch_data,
     fetch_property_history,
     get_properties_labels,
 )
 from .settings import (
-    ALL,
     ALL_OBJECTS,
     ARCHIVED_PARAM,
     CRM_OBJECT_ENDPOINTS,
@@ -53,27 +61,15 @@ from .settings import (
     STAGE_PROPERTY_PREFIX,
     STARTDATE,
     WEB_ANALYTICS_EVENTS_ENDPOINT,
+    HS_TO_DLT_TYPE,
 )
 from .utils import chunk_properties
 
 THubspotObjectType = Literal["company", "contact", "deal", "ticket", "product", "quote"]
 
 
-def extract_properties_list(props: Sequence[Any]) -> List[str]:
-    """
-    Flatten a list of property dictionaries to extract property names.
-
-    Args:
-        props (Sequence[Any]): List of property names or property dictionaries.
-
-    Returns:
-        List[str]: List of property names.
-    """
-    return [prop if isinstance(prop, str) else prop.get("name") for prop in props]
-
-
 def fetch_data_for_properties(
-    props: Sequence[str],
+    props: List[str],
     api_key: str,
     object_type: str,
     soft_delete: bool,
@@ -82,7 +78,7 @@ def fetch_data_for_properties(
     Fetch data for a given set of properties from the HubSpot API.
 
     Args:
-        props (Sequence[str]): List of property names to fetch.
+        props (List[str]): List of property names to fetch.
         api_key (str): HubSpot API key for authentication.
         object_type (str): The type of HubSpot object (e.g., 'company', 'contact').
         soft_delete (bool): Flag to fetch soft-deleted (archived) records.
@@ -90,8 +86,9 @@ def fetch_data_for_properties(
     Yields:
         Iterator[TDataItems]: Data retrieved from the HubSpot API.
     """
-
-    params: Dict[str, Any] = {"properties": props, "limit": 100}
+    # The Hubspot API expects a comma separated string as properties
+    joined_props = ",".join(sorted(props))
+    params: Dict[str, Any] = {"properties": joined_props, "limit": 100}
     context: Optional[Dict[str, Any]] = (
         {SOFT_DELETE_KEY: False} if soft_delete else None
     )
@@ -111,7 +108,7 @@ def fetch_data_for_properties(
 def crm_objects(
     object_type: str,
     api_key: str,
-    props: Optional[Sequence[str]] = None,
+    props: List[str],
     include_custom_props: bool = True,
     archived: bool = False,
 ) -> Iterator[TDataItems]:
@@ -120,54 +117,70 @@ def crm_objects(
 
     Args:
         object_type (str): Type of HubSpot object (e.g., 'company', 'contact').
-        api_key (str, optional): API key for HubSpot authentication.
-        props (Optional[Sequence[str]], optional): List of properties to retrieve. Defaults to None.
+        api_key (str): API key for HubSpot authentication.
+        props (List[str]): List of properties to retrieve.
         include_custom_props (bool, optional): Include custom properties in the result. Defaults to True.
         archived (bool, optional): Fetch archived (soft-deleted) objects. Defaults to False.
 
     Yields:
         Iterator[TDataItems]: Data items retrieved from the API.
     """
-    props_entry: Sequence[str] = props or ENTITY_PROPERTIES.get(object_type, [])
-    props_fetched = fetch_props(object_type, api_key, props_entry, include_custom_props)
-    yield from fetch_data_for_properties(props_fetched, api_key, object_type, archived)
+    props_to_type = fetch_props_with_types(
+        object_type, api_key, props, include_custom_props
+    )
+    # We need column hints so that dlt can correctly set data types
+    # This is especially relevant for columns of type "number" in Hubspot
+    # that are returned as strings by the API
+    col_type_hints = {
+        prop: _to_dlt_columns_schema({prop: hb_type})
+        for prop, hb_type in props_to_type.items()
+    }
+    for batch in fetch_data_for_properties(
+        list(props_to_type.keys()), api_key, object_type, archived
+    ):
+        yield dlt.mark.with_hints(batch, dlt.mark.make_hints(columns=col_type_hints))
 
 
 def crm_object_history(
-    object_type: THubspotObjectType,
+    object_type: str,
     api_key: str,
-    props: Optional[Sequence[str]] = None,
+    props: List[str] = None,
     include_custom_props: bool = True,
 ) -> Iterator[TDataItems]:
     """
     Fetch the history of property changes for a given CRM object type.
 
     Args:
-        object_type (THubspotObjectType): Type of HubSpot object (e.g., 'company', 'contact').
-        api_key (str, optional): API key for HubSpot authentication.
-        props (Optional[Sequence[str]], optional): List of properties to retrieve. Defaults to None.
-        include_custom_props (bool, optional): Include custom properties in the result. Defaults to True.
+        object_type (str): Type of HubSpot object (e.g., 'company', 'contact').
+        api_key (str): API key for HubSpot authentication.
+        props (List[str]): List of properties to retrieve. Defaults to None.
+        include_custom_props (bool): Include custom properties in the result. Defaults to True.
 
     Yields:
         Iterator[TDataItems]: Historical property data.
     """
 
     # Fetch the properties from ENTITY_PROPERTIES or default to "All"
-    props_entry: Union[Sequence[str], str] = props or ENTITY_PROPERTIES.get(
-        object_type, ALL
-    )
+    props_entry: List[str] = props or ENTITY_PROPERTIES.get(object_type, [])
 
     # Fetch the properties with the option to include custom properties
-    props_fetched: str = fetch_props(
+    props_to_type = fetch_props_with_types(
         object_type, api_key, props_entry, include_custom_props
     )
-
-    # Yield the property history
-    yield from fetch_property_history(
+    col_type_hints = {
+        prop: _to_dlt_columns_schema({prop: hb_type})
+        for prop, hb_type in props_to_type.items()
+        if hb_type in HS_TO_DLT_TYPE
+    }
+    # We need column hints so that dlt can correctly set data types
+    # This is especially relevant for columns of type "number" in Hubspot
+    # that are returned as strings by the API
+    for batch in fetch_property_history(
         CRM_OBJECT_ENDPOINTS[object_type],
         api_key,
-        props_fetched,
-    )
+        ",".join(sorted(props_to_type.keys())),
+    ):
+        yield dlt.mark.with_hints(batch, dlt.mark.make_hints(columns=col_type_hints))
 
 
 def pivot_stages_properties(
@@ -195,7 +208,11 @@ def pivot_stages_properties(
             continue
         id_val = record_not_null.pop(id_prop)
         new_data += [
-            {id_prop: id_val, property_prefix: v, "stage": k.split(property_prefix)[1]}
+            {
+                id_prop: id_val,
+                property_prefix: v,
+                "stage": k.split(property_prefix)[1],
+            }
             for k, v in record_not_null.items()
             if k.startswith(property_prefix)
         ]
@@ -209,12 +226,8 @@ def stages_timing(
 ) -> Iterator[TDataItems]:
     """
     Fetch stage timing data for a specific object type from the HubSpot API. Some entities, like,
-    deals and tickets actually have pipelines with multiple stages, which they can enter and exit. This function fetches
-    history of entering and exiting different stages for the given object.
-
-    We have to request them separately, because these properties has the pipeline stage_id in the name.
-    For example, "hs_date_entered_12345678", where 12345678 is the stage_id.
-
+    deals and tickets have pipelines with multiple stages, which they can enter and exit. This function fetches
+    history of entering different stages for the given object.
 
     Args:
         object_type (str): Type of HubSpot object (e.g., 'deal', 'ticket').
@@ -224,8 +237,9 @@ def stages_timing(
     Yields:
         Iterator[TDataItems]: Stage timing data.
     """
-
-    all_properties: List[str] = list(_get_property_names(api_key, object_type))
+    all_properties: List[str] = list(
+        _get_property_names_types(api_key, object_type).keys()
+    )
     date_entered_properties: List[str] = [
         prop for prop in all_properties if prop.startswith(STAGE_PROPERTY_PREFIX)
     ]
@@ -234,10 +248,7 @@ def stages_timing(
     # data for the whole properties list. Therefore, in the following lines we request
     # data iteratively for chunks of the properties list.
     for chunk in chunk_properties(date_entered_properties, MAX_PROPS_LENGTH):
-        props_part = ",".join(chunk)
-        for data in fetch_data_for_properties(
-            props_part, api_key, object_type, soft_delete
-        ):
+        for data in fetch_data_for_properties(chunk, api_key, object_type, soft_delete):
             yield pivot_stages_properties(data)
 
 
@@ -247,7 +258,7 @@ def hubspot(
     include_history: bool = False,
     soft_delete: bool = False,
     include_custom_props: bool = True,
-    properties: Optional[Dict[str, Any]] = None,
+    properties: Optional[Dict[str, List[str]]] = None,
 ) -> Iterator[DltResource]:
     """
     A dlt source that retrieves data from the HubSpot API using the
@@ -282,6 +293,7 @@ def hubspot(
         HubSpot CRM API. The API key is passed to `fetch_data` as the
         `api_key` argument.
     """
+    properties = properties or ENTITY_PROPERTIES
 
     @dlt.resource(name="owners", write_disposition="merge", primary_key="id")
     def owners(
@@ -356,7 +368,7 @@ def hubspot(
             Iterator[DltResource]: dlt resources for pipelines and stages.
         """
 
-        def get_pipelines(object_type: THubspotObjectType) -> Iterator[TDataItems]:
+        def get_pipelines(object_type: str) -> Iterator[TDataItems]:
             yield from fetch_data(
                 CRM_PIPELINES_ENDPOINT.format(objectType=object_type),
                 api_key=api_key_inner,
@@ -398,7 +410,7 @@ def hubspot(
         )(
             object_type=obj,
             api_key=api_key,
-            props=properties.get(obj) if properties else None,
+            props=properties.get(obj),
             include_custom_props=include_custom_props,
             archived=soft_delete,
         )
@@ -413,7 +425,7 @@ def hubspot(
             )(
                 object_type=obj,
                 api_key=api_key,
-                props=properties.get(obj) if properties else None,
+                props=properties.get(obj),
                 include_custom_props=include_custom_props,
             )
 
@@ -427,52 +439,46 @@ def hubspot(
     yield properties_custom_labels
 
 
-def fetch_props(
+def fetch_props_with_types(
     object_type: str,
     api_key: str,
-    props: Optional[Sequence[str]] = None,
+    props: List[str],
     include_custom_props: bool = True,
-) -> str:
+) -> Dict[str, str]:
     """
-    Fetch the list of properties for a HubSpot object type.
+    Fetch the mapping of properties to their types.
 
     Args:
         object_type (str): Type of HubSpot object (e.g., 'company', 'contact').
         api_key (str): HubSpot API key for authentication.
-        props (Optional[Sequence[str]], optional): List of properties to fetch. Defaults to None.
+        props (List[str]): List of properties to fetch.
         include_custom_props (bool, optional): Include custom properties in the result. Defaults to True.
 
     Returns:
-        str: Comma-separated list of properties.
+        Dict[str, str]: Mapping of property to type.
     """
-    if props == ALL:
-        # Fetch all property names
-        props_list = list(_get_property_names(api_key, object_type))
-    elif isinstance(props, str):
-        # If props are passed as a single string, convert it to a list
-        props_list = [props]
+    unique_props = set(props)
+    props_to_type = _get_property_names_types(api_key, object_type)
+    all_props = set(props_to_type.keys())
+
+    all_custom = {prop for prop in all_props if not prop.startswith("hs_")}
+
+    # Choose selected props
+    if unique_props == all_props:
+        selected = all_props if include_custom_props else all_props - all_custom
     else:
-        # Ensure it's a list of strings, if not already
-        props_list = extract_properties_list(props or [])
-
-    if include_custom_props:
-        all_props: List[str] = _get_property_names(api_key, object_type)
-        custom_props: List[str] = [
-            prop for prop in all_props if not prop.startswith("hs_")
-        ]
-        props_list += custom_props
-
-    props_str = ",".join(sorted(set(props_list)))
-
-    if len(props_str) > MAX_PROPS_LENGTH:
-        raise ValueError(
-            "Your request to Hubspot is too long to process. "
-            f"Maximum allowed query length is {MAX_PROPS_LENGTH} symbols, while "
-            f"your list of properties `{props_str[:200]}`... is {len(props_str)} "
-            "symbols long. Use the `props` argument of the resource to "
-            "set the list of properties to extract from the endpoint."
+        non_existent = unique_props - all_props
+        if non_existent:
+            raise ValueError(
+                f"The requested props {non_existent} don't exist in the source!"
+            )
+        selected = (
+            unique_props.union(all_custom) if include_custom_props else unique_props
         )
-    return props_str
+
+    props_to_type = {prop: props_to_type[prop] for prop in selected}
+
+    return props_to_type
 
 
 @dlt.resource

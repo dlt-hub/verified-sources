@@ -65,7 +65,7 @@ jobs:
 
     steps:
       - name: Check out
-        uses: actions/checkout@master@v4
+        uses: actions/checkout@master
         with:
           ref: ${{ github.event.pull_request.head.sha || github.ref }}
 
