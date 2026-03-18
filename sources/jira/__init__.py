@@ -65,7 +65,7 @@ def jira_search(
 
     @dlt.resource(write_disposition="replace")
     def issues(jql_queries: List[str]) -> Iterable[TDataItem]:
-        api_path = "rest/api/3/search"
+        api_path = "rest/api/3/search/jql"
 
         for jql in jql_queries:
             params = {
@@ -83,6 +83,7 @@ def jira_search(
                 api_token=api_token,
                 page_size=page_size,
                 data_path="issues",
+                use_cursor_pagination=True,
             )
 
     return issues
@@ -93,9 +94,10 @@ def get_paginated_data(
     email: str,
     api_token: str,
     page_size: int,
-    api_path: str = "rest/api/2/search",
+    api_path: str = "rest/api/3/search/jql",
     data_path: Optional[str] = None,
     params: Optional[DictStrAny] = None,
+    use_cursor_pagination: bool = False,
 ) -> Iterable[TDataItem]:
     """
     Function to fetch paginated data from a Jira API endpoint.
@@ -108,15 +110,19 @@ def get_paginated_data(
         api_path: The API path for the Jira endpoint.
         data_path: Optional data path to extract from the response.
         params: Optional parameters for the API request.
+        use_cursor_pagination: If True, uses cursor-based pagination (nextPageToken)
+            for the /search/jql endpoint. If False, uses offset-based pagination (startAt).
     Yields:
         Iterable[TDataItem]: Yields pages of data from the API.
     """
     url = f"https://{subdomain}.atlassian.net/{api_path}"
     headers = {"Accept": "application/json"}
     auth = (email, api_token)
-    params = {} if params is None else params
-    params["startAt"] = start_at = 0
+    params = {} if params is None else dict(params)
     params["maxResults"] = page_size
+
+    if not use_cursor_pagination:
+        params["startAt"] = start_at = 0
 
     while True:
         response = requests.get(url, auth=auth, headers=headers, params=params)
@@ -133,6 +139,11 @@ def get_paginated_data(
 
         yield results_page
 
-        # continue from next page
-        start_at += len(results_page)
-        params["startAt"] = start_at
+        if use_cursor_pagination:
+            next_page_token = result.get("nextPageToken")
+            if not next_page_token:
+                break
+            params["nextPageToken"] = next_page_token
+        else:
+            start_at += len(results_page)
+            params["startAt"] = start_at

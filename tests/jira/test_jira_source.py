@@ -61,7 +61,7 @@ def test_load_users(destination_name: str) -> None:
     assert (
         load_table_counts(pipeline, "users")
         == load_table_distinct_counts(pipeline, "account_id", "users")
-        == {"users": 19}
+        == {"users": 57}
     )
 
     # we can also test the data
@@ -75,7 +75,7 @@ def test_load_users(destination_name: str) -> None:
         ) as cur:
             rows = list(cur.fetchall())
 
-            assert len(rows) == 2
+            assert len(rows) == 1
             assert rows[0][0] == "Trello"
             assert rows[0][1] == "app"  # Trello has 'app' account type
 
@@ -84,9 +84,9 @@ def test_load_users(destination_name: str) -> None:
 def test_load_query_issues(destination_name: str) -> None:
     # test queries
     queries = [
-        "created >= -30d order by created DESC",  # nothing returned
-        'key = "KAN-2"',  # one returned
-        "",  # all returned
+        "created >= -1d order by created DESC",  # nothing returned
+        'key = "MDP-10"',  # one returned
+        "created >= '2000-01-01' order by created DESC",  # all returned
     ]
 
     # mind the `dev_mode` flag - it makes sure that data is loaded to unique dataset. this allows you to run the tests on the same database in parallel
