@@ -6,6 +6,8 @@ import dlt
 from dlt.common import logger
 from twisted.internet import reactor as _reactor_module
 
+import logging as _logging
+
 from scrapy import signals, Item, Spider
 from scrapy.crawler import Crawler, CrawlerRunner
 
@@ -40,8 +42,11 @@ def _ensure_reactor() -> None:
 class Signals(t.Generic[T]):
     """Manages signal connections between a Scrapy Crawler and the scraping queue.
 
-    Connects to a Crawler's SignalManager to receive item_scraped and
-    engine_stopped events, forwarding scraped items to the queue.
+    Connects to spider_closed (not engine_stopped) to close the queue. This is
+    important because spider_closed fires AFTER all item_scraped callbacks —
+    guaranteed by the engine's deferred chain:
+      scraper.close_spider() waits for slot.is_idle() → spider_closed signal
+    Using engine_stopped would race with pending item_scraped callbacks.
     """
 
     def __init__(self, pipeline_name: str, queue: ScrapingQueue[T]) -> None:
@@ -58,29 +63,23 @@ class Signals(t.Generic[T]):
         self._crawler = crawler
         self._runner = runner
         crawler.signals.connect(self.on_item_scraped, signals.item_scraped)
-        crawler.signals.connect(self.on_engine_stopped, signals.engine_stopped)
+        crawler.signals.connect(self.on_spider_closed, signals.spider_closed)
 
     def disconnect(self) -> None:
         """Disconnect signal handlers. Must be called from the reactor thread."""
         if self._crawler is not None:
             self._crawler.signals.disconnect(self.on_item_scraped, signals.item_scraped)
             self._crawler.signals.disconnect(
-                self.on_engine_stopped, signals.engine_stopped
+                self.on_spider_closed, signals.spider_closed
             )
             self._crawler = None
             self._runner = None
 
     def on_item_scraped(self, item: T) -> None:
-        if not self.queue.is_closed:
-            self.queue.put(item)
-        else:
-            logger.info(
-                "Queue is closed, stopping",
-                extra={"pipeline_name": self.pipeline_name},
-            )
-            self._initiate_stop()
+        self.queue.put(item)
 
-    def on_engine_stopped(self) -> None:
+    def on_spider_closed(self, spider: t.Any, reason: str) -> None:
+        logger.info(f"Spider closed for pipeline={self.pipeline_name} reason={reason}")
         self._initiate_stop()
 
     def _initiate_stop(self) -> None:
@@ -92,7 +91,6 @@ class Signals(t.Generic[T]):
         if self._stopped:
             return
         self._stopped = True
-        logger.info(f"Crawling engine stopped for pipeline={self.pipeline_name}")
         self.queue.close()
         if self._runner is not None:
             _REACTOR.callFromThread(self._runner.stop)
@@ -116,6 +114,10 @@ class ScrapyRunner(Runnable):
         self.start_urls = start_urls
         self.signals = signals
         self.runner = CrawlerRunner(settings=settings)
+        # apply scrapy log level without touching root handlers (dlt owns those)
+        log_level = self.runner.settings.get("LOG_LEVEL", "WARNING")
+        _logging.getLogger("scrapy").setLevel(log_level)
+        _logging.getLogger("twisted").setLevel(_logging.ERROR)
 
     def run(self, *args: t.Any, **kwargs: t.Any) -> None:
         """Runs scrapy crawler via the persistent reactor.

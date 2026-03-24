@@ -86,19 +86,21 @@ def test_signals_initiate_stop_is_idempotent():
 
 
 def test_signals_on_item_scraped_when_queue_closed():
-    """When queue is already closed, on_item_scraped should trigger _initiate_stop."""
+    """Items are always enqueued, even after queue is closed.
+
+    The closed flag only tells the consumer to stop after draining.
+    This prevents dropping items when engine_stopped and item_scraped
+    callbacks are interleaved in the reactor.
+    """
     queue = ScrapingQueue()
     sig = Signals(pipeline_name="test", queue=queue)
-
-    mock_runner = mock.MagicMock()
-    sig._runner = mock_runner
 
     queue.close()
     sig.on_item_scraped({"data": "value"})
 
-    assert sig._stopped is True
-    # Item should NOT be put in a closed queue
-    assert queue.empty()
+    # item is still enqueued so the consumer can drain it
+    assert not queue.empty()
+    assert queue.get_nowait() == {"data": "value"}
 
 
 def test_settings_merge_preserves_defaults():

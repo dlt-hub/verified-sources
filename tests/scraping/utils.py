@@ -50,9 +50,12 @@ class MockQueue(ScrapingQueue):
 
             try:
                 if self.is_closed:
-                    raise QueueClosedError("Queue is closed")
-
-                item = self.get(timeout=self.read_timeout)
+                    try:
+                        item = self.get_nowait()
+                    except Empty:
+                        raise QueueClosedError("Queue is closed")
+                else:
+                    item = self.get(timeout=self.read_timeout)
                 batch.append(item)
 
                 # Mark task as completed
@@ -69,7 +72,6 @@ class MockQueue(ScrapingQueue):
                 print("Get attempt #", get_attempts)
                 get_attempts += 1
             except QueueClosedError:
-                # Return the last batch before exiting
                 if batch:
                     yield batch
 
@@ -98,7 +100,6 @@ def queue_closer(
 
 def table_expect_at_least_n_records(table_name: str, n: int, pipeline: dlt.Pipeline):
     with pipeline.sql_client() as client:
-        with client.execute_query(f"SELECT * FROM {table_name}") as cursor:
-            loaded_values = [item for item in cursor.fetchall()]
-            n_loaded_values = len(loaded_values)
-            assert n_loaded_values == n, f"Expected {n} records, got {n_loaded_values}"
+        with client.execute_query(f"SELECT count(*) FROM {table_name}") as cursor:
+            count = cursor.fetchone()[0]
+            assert count >= n, f"Expected at least {n} records, got {count}"
