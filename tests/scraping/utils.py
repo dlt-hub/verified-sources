@@ -1,15 +1,12 @@
 from queue import Empty
-from typing import Any, Iterator, List, Type, Union
+from typing import Any, Iterator, List
 import time
 import threading
 
 import dlt
 
 from scrapy import Spider  # type: ignore
-from scrapy.crawler import Crawler, CrawlerRunner  # type: ignore
 from scrapy.http import Response  # type: ignore
-from twisted.internet import reactor
-from twisted.internet.defer import Deferred
 
 from sources.scraping.queue import QueueClosedError, ScrapingQueue
 
@@ -32,7 +29,7 @@ class MySpider(Spider):
             yield result
 
 
-class TestQueue(ScrapingQueue):
+class MockQueue(ScrapingQueue):
     """Test queue alters the default get_batches behavior by
     adding max attempts count on queue read timeout
     """
@@ -77,26 +74,6 @@ class TestQueue(ScrapingQueue):
                     yield batch
 
                 break
-
-
-class TestCrawlerProcess(CrawlerRunner):
-    def crawl(
-        self,
-        crawler_or_spidercls: Union[Type[Spider], str, Crawler],
-        *args: Any,
-        **kwargs: Any,
-    ) -> Deferred:
-        deferred = super().crawl(crawler_or_spidercls, *args, **kwargs)
-        deferred.addBoth(lambda _: reactor.stop())
-        return deferred
-
-    def start(
-        self, stop_after_crawl: bool = True, install_signal_handlers: bool = True
-    ) -> None:
-        try:
-            reactor.run()
-        except Exception:
-            pass
 
 
 def queue_closer(

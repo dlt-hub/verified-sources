@@ -587,9 +587,9 @@ dlt==1.12.1 ; python_full_version < '3.9.2' \
     --hash=sha256:4a90aeb58f3e5d89005fe9f36bcc7fa723f87632365883478751cc7f7b1397f6 \
     --hash=sha256:bc16d157012aa96b77d6c151f624cf2d3b122691e95bc98606021f0bc1d70fb2
     # via dlt-verified-sources
-dlt==1.18.2 ; python_full_version >= '3.9.2' \
-    --hash=sha256:9a6fd5060c7bcd18c3fa76a3f3a22dbb0c8f349a5c044c207c478e4022c51743 \
-    --hash=sha256:e1b199202cb254cf8a862317c79eecaab9ff8c946ea174c16f06192210481707
+dlt==1.24.0 ; python_full_version >= '3.9.2' \
+    --hash=sha256:9227d634b89925778691513246e24cc4bfcafcf22686b401f994de48cc602e39 \
+    --hash=sha256:ae270eefe54a42d662507ec52a9b3c0608eedd6e297f2c9f02f0f95689da2e03
     # via dlt-verified-sources
 dnspython==2.7.0 \
     --hash=sha256:b4c34b7d10b51bcc3a5071e7b8dee77939f1e878477eeecc965e9835f63c6c86 \
@@ -1629,7 +1629,7 @@ openpyxl==3.1.5 \
     --hash=sha256:5282c12b107bffeef825f4617dc029afaf41d0ea60823bbb665ef3079dc79de2 \
     --hash=sha256:cf0e3cf56142039133628b5acffe8ef0c12bc902d2aadd3e0fe5878dc08d1050
     # via unstructured
-orjson==3.10.15 ; (python_full_version >= '3.9.2' and python_full_version < '3.14' and sys_platform != 'emscripten') or (python_full_version < '3.14' and platform_python_implementation != 'PyPy' and sys_platform != 'emscripten') or (python_full_version < '3.9.2' and platform_python_implementation != 'PyPy' and sys_platform == 'emscripten') \
+orjson==3.10.15 ; (python_full_version < '3.14' and platform_python_implementation != 'PyPy' and sys_platform != 'emscripten') or (python_full_version < '3.9.2' and platform_python_implementation != 'PyPy' and sys_platform == 'emscripten') \
     --hash=sha256:035fb83585e0f15e076759b6fedaf0abb460d1765b6a36f48018a52858443514 \
     --hash=sha256:05ca7fe452a2e9d8d9d706a2984c95b9c2ebc5db417ce0b7a49b91d50642a23e \
     --hash=sha256:0a4f27ea5617828e6b58922fdbec67b0aa4bb844e2d363b9244c47fa2180e665 \
