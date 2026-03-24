@@ -41,7 +41,3 @@ Follow this link: [bug report template](https://github.com/dlt-hub/verified-sour
 * 📣 **Before starting, announce your PR** with [source request template](https://github.com/dlt-hub/verified-sources/issues/new?template=bug-report.md)
 
 Find step by step instruction as well as troubleshooting help in [CONTRIBUTING.md](CONTRIBUTING.md).
-
-
-## Building with LLMs
-See README [`ai`](ai/README.md) folder for details.
