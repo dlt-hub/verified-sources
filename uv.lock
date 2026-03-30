@@ -1028,7 +1028,7 @@ duckdb = [
 
 [[package]]
 name = "dlt"
-version = "1.18.2"
+version = "1.24.0"
 source = { registry = "https://pypi.org/simple" }
 resolution-markers = [
     "python_full_version >= '3.14' and platform_python_implementation != 'PyPy' and sys_platform != 'emscripten'",
@@ -1057,7 +1057,7 @@ dependencies = [
     { name = "giturlparse", marker = "python_full_version >= '3.9.2'" },
     { name = "humanize", marker = "python_full_version >= '3.9.2'" },
     { name = "jsonpath-ng", marker = "python_full_version >= '3.9.2'" },
-    { name = "orjson", version = "3.10.15", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.9.2' and python_full_version < '3.14' and sys_platform != 'emscripten'" },
+    { name = "orjson", version = "3.10.15", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.9.2' and python_full_version < '3.14' and platform_python_implementation != 'PyPy' and sys_platform != 'emscripten'" },
     { name = "orjson", version = "3.11.4", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.14'" },
     { name = "packaging", marker = "python_full_version >= '3.9.2'" },
     { name = "pathvalidate", marker = "python_full_version >= '3.9.2'" },
@@ -1079,9 +1079,9 @@ dependencies = [
     { name = "tzdata", marker = "python_full_version >= '3.9.2'" },
     { name = "win-precise-time", marker = "python_full_version >= '3.9.2' and python_full_version < '3.13' and os_name == 'nt'" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/92/56/d46cc2a2b951a6e762f393ec07e775a7961c81cfc75d6428756541013fc3/dlt-1.18.2.tar.gz", hash = "sha256:e1b199202cb254cf8a862317c79eecaab9ff8c946ea174c16f06192210481707", size = 856709, upload-time = "2025-11-03T15:59:47.171Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/29/92/b1ad6b1287fb2a6bf6356b90f3b9813bc5a382fe3167653dc1b939b8e437/dlt-1.24.0.tar.gz", hash = "sha256:9227d634b89925778691513246e24cc4bfcafcf22686b401f994de48cc602e39", size = 960430, upload-time = "2026-03-19T11:41:48.898Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/bd/31/e6a48f91584baf9e34be7f0c4ba1bdc8e0f672599bf779b704192746efff/dlt-1.18.2-py3-none-any.whl", hash = "sha256:9a6fd5060c7bcd18c3fa76a3f3a22dbb0c8f349a5c044c207c478e4022c51743", size = 1092124, upload-time = "2025-11-03T15:59:43.238Z" },
+    { url = "https://files.pythonhosted.org/packages/a3/fc/d6c21282af64470e359724720552e872eb5b36473b4ef56b880e1c132b27/dlt-1.24.0-py3-none-any.whl", hash = "sha256:ae270eefe54a42d662507ec52a9b3c0608eedd6e297f2c9f02f0f95689da2e03", size = 1211749, upload-time = "2026-03-19T11:41:53.358Z" },
 ]
 
 [package.optional-dependencies]
@@ -1103,7 +1103,7 @@ version = "0.1.0"
 source = { editable = "." }
 dependencies = [
     { name = "dlt", version = "1.12.1", source = { registry = "https://pypi.org/simple" }, extra = ["bigquery", "duckdb"], marker = "python_full_version < '3.9.2'" },
-    { name = "dlt", version = "1.18.2", source = { registry = "https://pypi.org/simple" }, extra = ["bigquery", "duckdb"], marker = "python_full_version >= '3.9.2'" },
+    { name = "dlt", version = "1.24.0", source = { registry = "https://pypi.org/simple" }, extra = ["bigquery", "duckdb"], marker = "python_full_version >= '3.9.2'" },
 ]
 
 [package.dev-dependencies]
@@ -1141,7 +1141,7 @@ dev = [
 ]
 dltpure = [
     { name = "dlt", version = "1.12.1", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.9.2'" },
-    { name = "dlt", version = "1.18.2", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.9.2'" },
+    { name = "dlt", version = "1.24.0", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.9.2'" },
 ]
 facebook-ads = [
     { name = "facebook-business" },
@@ -1237,7 +1237,7 @@ dev = [
     { name = "pytest-forked", specifier = ">=1.6.0,<2" },
     { name = "pytest-mock", specifier = ">=3.12.0,<4" },
     { name = "requests-mock", specifier = ">=1.10.0,<2" },
-    { name = "twisted", specifier = "==22.10.0" },
+    { name = "twisted", specifier = ">=22.10.0,<=25.5.0" },
     { name = "types-psycopg2", specifier = ">=2.9.0,<3" },
     { name = "types-requests", specifier = ">=2.28.11.7,<3" },
 ]
@@ -1273,7 +1273,7 @@ pytest = [
 salesforce = [{ name = "simple-salesforce", specifier = ">=1.12.4,<2" }]
 scrapy = [
     { name = "scrapy", specifier = ">=2.11.0,<3" },
-    { name = "twisted", specifier = "==22.10.0" },
+    { name = "twisted", specifier = ">=22.10.0,<=25.5.0" },
 ]
 sql-database = [
     { name = "connectorx", marker = "python_full_version >= '3.9'", specifier = ">=0.3.3" },
@@ -3020,15 +3020,10 @@ version = "3.10.15"
 source = { registry = "https://pypi.org/simple" }
 resolution-markers = [
     "python_full_version == '3.13.*' and platform_python_implementation != 'PyPy' and sys_platform != 'emscripten'",
-    "python_full_version == '3.13.*' and platform_python_implementation == 'PyPy' and sys_platform != 'emscripten'",
     "python_full_version == '3.12.*' and platform_python_implementation != 'PyPy' and sys_platform != 'emscripten'",
-    "python_full_version == '3.12.*' and platform_python_implementation == 'PyPy' and sys_platform != 'emscripten'",
     "python_full_version == '3.11.*' and platform_python_implementation != 'PyPy' and sys_platform != 'emscripten'",
-    "python_full_version == '3.11.*' and platform_python_implementation == 'PyPy' and sys_platform != 'emscripten'",
     "python_full_version == '3.10.*' and platform_python_implementation != 'PyPy' and sys_platform != 'emscripten'",
-    "python_full_version == '3.10.*' and platform_python_implementation == 'PyPy' and sys_platform != 'emscripten'",
     "python_full_version >= '3.9.2' and python_full_version < '3.10' and platform_python_implementation != 'PyPy' and sys_platform != 'emscripten'",
-    "python_full_version >= '3.9.2' and python_full_version < '3.10' and platform_python_implementation == 'PyPy' and sys_platform != 'emscripten'",
     "python_full_version < '3.9.2'",
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/ae/f9/5dea21763eeff8c1590076918a446ea3d6140743e0e36f58f369928ed0f4/orjson-3.10.15.tar.gz", hash = "sha256:05ca7fe452a2e9d8d9d706a2984c95b9c2ebc5db417ce0b7a49b91d50642a23e", size = 5282482, upload-time = "2025-01-18T15:55:28.817Z" }

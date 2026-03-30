@@ -48,9 +48,12 @@ class ScrapingQueue(_Queue[T]):
 
             try:
                 if self.is_closed:
-                    raise QueueClosedError("Queue is closed")
-
-                item = self.get(timeout=self.read_timeout)
+                    try:
+                        item = self.get_nowait()
+                    except Empty:
+                        raise QueueClosedError("Queue is closed")
+                else:
+                    item = self.get(timeout=self.read_timeout)
                 batch.append(item)
 
                 # Mark task as completed
@@ -60,9 +63,8 @@ class ScrapingQueue(_Queue[T]):
                     yield batch
                     batch = []
             except QueueClosedError:
-                logger.info("Queue is closed, stopping...")
+                logger.info("Queue is closed and drained")
 
-                # Return the last batch before exiting
                 if batch:
                     yield batch
 
