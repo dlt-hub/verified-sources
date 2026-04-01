@@ -11,6 +11,7 @@ from dlt.sources.helpers.requests.retry import DEFAULT_RETRY_STATUS
 
 from .data_processing import ParsedRange, trim_range_top_left
 
+
 try:
     from apiclient.discovery import build, Resource
 except ImportError:
@@ -105,7 +106,10 @@ def get_known_range_names(
 
 @retry_deco
 def get_data_for_ranges(
-    service: Resource, spreadsheet_id: str, range_names: List[str]
+    service: Resource,
+    spreadsheet_id: str,
+    range_names: List[str],
+    value_render_option: str = "UNFORMATTED_VALUE",
 ) -> List[Tuple[str, ParsedRange, ParsedRange, List[List[Any]]]]:
     """
     Calls Google Sheets API to get data in a batch. This is the most efficient way to get data for multiple ranges inside a spreadsheet.
@@ -114,20 +118,29 @@ def get_data_for_ranges(
         service (Resource): Object to make API calls to Google Sheets.
         spreadsheet_id (str): The ID of the spreadsheet.
         range_names (List[str]): List of range names.
+        value_render_option (str): How values should be rendered by the API:
+            - "UNFORMATTED_VALUE": Returns typed values (numbers as numbers, dates as serial numbers)
+            - "FORMATTED_VALUE": Returns all values as their displayed formatted strings
 
     Returns:
         List[DictStrAny]: A list of ranges with data in the same order as `range_names`
     """
+    # When using FORMATTED_VALUE, dates/times come as formatted strings
+    # When using UNFORMATTED_VALUE, we want serial numbers for date conversion
+    date_time_option = (
+        "FORMATTED_STRING"
+        if value_render_option == "FORMATTED_VALUE"
+        else "SERIAL_NUMBER"
+    )
+
     range_batch_resp = (
         service.spreadsheets()
         .values()
         .batchGet(
             spreadsheetId=spreadsheet_id,
             ranges=range_names,
-            # un formatted returns typed values
-            valueRenderOption="UNFORMATTED_VALUE",
-            # will return formatted dates as a serial number
-            dateTimeRenderOption="SERIAL_NUMBER",
+            valueRenderOption=value_render_option,
+            dateTimeRenderOption=date_time_option,
         )
         .execute()
     )
