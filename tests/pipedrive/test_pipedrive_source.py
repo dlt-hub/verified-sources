@@ -9,9 +9,10 @@ import dlt
 from dlt.common import pendulum
 from dlt.common.pipeline import TSourceState
 from dlt.common.schema import Schema
+from dlt.extract.items_transform import MapItem
 from dlt.sources.helpers import requests
 
-from sources.pipedrive import pipedrive_source, leads
+from sources.pipedrive import pipedrive_source, leads, pipedrive_v2_source
 from tests.utils import (
     ALL_DESTINATIONS,
     assert_load_info,
@@ -21,6 +22,9 @@ from tests.utils import (
 from sources.pipedrive.helpers.custom_fields_munger import (
     update_fields_mapping,
     rename_fields,
+    build_v2_fields_mapping,
+    rename_v2_custom_fields,
+    update_v2_fields_mapping,
 )
 
 
@@ -437,6 +441,199 @@ def test_rename_fields_with_set() -> None:
     result = rename_fields([data_item], mapping)
 
     assert result == [{"custom_field_1": ["b", "a", "c"], "id": 44, "name": "asdf"}]
+
+
+def test_build_v2_fields_mapping() -> None:
+    fields = [
+        {
+            "is_custom_field": True,
+            "field_code": "enum_hash",
+            "field_name": "Single option",
+            "field_type": "enum",
+            "options": [{"id": 12, "label": "Selected option"}],
+        },
+        {
+            "is_custom_field": False,
+            "field_code": "regular_field",
+            "field_name": "Regular field",
+            "field_type": "varchar",
+            "options": [],
+        },
+    ]
+
+    with mock.patch.object(dlt.current, "source_schema", return_value=Schema("test")):
+        result = build_v2_fields_mapping(fields)
+
+    assert result == {
+        "enum_hash": {
+            "name": "Single option",
+            "normalized_name": "single_option",
+            "field_type": "enum",
+            "options": {"12": "Selected option"},
+        }
+    }
+
+
+def test_update_v2_fields_mapping_keeps_existing_field_name() -> None:
+    mapping: Dict[str, Any] = {
+        "revenue_hash": {
+            "name": "Revenue",
+            "normalized_name": "revenue",
+            "field_type": "monetary",
+            "options": {},
+        }
+    }
+    fields = [
+        {
+            "is_custom_field": True,
+            "field_code": "revenue_hash",
+            "field_name": "Revenue GBP",
+            "field_type": "monetary",
+            "options": [],
+        },
+    ]
+
+    with mock.patch.object(dlt.current, "source_schema", return_value=Schema("test")):
+        result = update_v2_fields_mapping(fields, mapping)
+
+    assert result["revenue_hash"]["name"] == "Revenue"
+    assert result["revenue_hash"]["normalized_name"] == "revenue"
+
+
+def test_update_v2_fields_mapping_adds_new_options() -> None:
+    mapping: Dict[str, Any] = {
+        "services_hash": {
+            "name": "Services",
+            "normalized_name": "services",
+            "field_type": "set",
+            "options": {"62": "Distribution"},
+        }
+    }
+    fields = [
+        {
+            "is_custom_field": True,
+            "field_code": "services_hash",
+            "field_name": "Services",
+            "field_type": "set",
+            "options": [
+                {"id": 62, "label": "Distribution renamed"},
+                {"id": 63, "label": "Publishing"},
+            ],
+        },
+    ]
+
+    with mock.patch.object(dlt.current, "source_schema", return_value=Schema("test")):
+        result = update_v2_fields_mapping(fields, mapping)
+
+    assert result["services_hash"]["options"] == {
+        "62": "Distribution",
+        "63": "Publishing",
+    }
+
+
+def test_rename_v2_custom_fields() -> None:
+    data_item = {
+        "id": 395,
+        "title": "Example deal",
+        "update_time": "2026-05-27T17:33:46Z",
+        "custom_fields": {
+            "enum_hash": 12,
+            "set_hash": [62, 63, 65],
+            "monetary_hash": {"value": 100, "currency": "GBP"},
+            "empty_hash": None,
+        },
+    }
+    mapping = {
+        "enum_hash": {
+            "name": "Single option",
+            "normalized_name": "single_option",
+            "field_type": "enum",
+            "options": {"12": "Selected option"},
+        },
+        "set_hash": {
+            "name": "Services",
+            "normalized_name": "services",
+            "field_type": "set",
+            "options": {
+                "62": "Service A",
+                "63": "Service B",
+                "65": "Service C",
+            },
+        },
+        "monetary_hash": {
+            "name": "Budget",
+            "normalized_name": "budget",
+            "field_type": "monetary",
+            "options": {},
+        },
+        "empty_hash": {
+            "name": "Empty field",
+            "normalized_name": "empty_field",
+            "field_type": "varchar",
+            "options": {},
+        },
+    }
+
+    result = rename_v2_custom_fields(data_item, mapping)
+
+    assert result == {
+        "id": 395,
+        "title": "Example deal",
+        "update_time": "2026-05-27T17:33:46Z",
+        "Single option": "Selected option",
+        "Services": ["Service A", "Service B", "Service C"],
+        "Budget": {"value": 100, "currency": "GBP"},
+        "Empty field": None,
+    }
+
+
+def test_rename_v2_custom_fields_keeps_custom_fields_without_mapping() -> None:
+    data_item = {"id": 395, "custom_fields": {"enum_hash": 12}}
+
+    result = rename_v2_custom_fields(data_item, {})
+
+    assert result == {"id": 395, "custom_fields": {"enum_hash": 12}}
+
+
+def test_pipedrive_v2_deals_maps_custom_fields() -> None:
+    with mock.patch("sources.pipedrive.rest_v2.get_v2_fields") as get_v2_fields:
+        source = pipedrive_v2_source(
+            pipedrive_api_key="token",
+            company_domain="company",
+            resources=["deals"],
+        )
+
+    deals = source.resources["v2_deals"]
+    pipes = list(deals._pipe)
+
+    get_v2_fields.assert_not_called()
+    assert any(isinstance(item, MapItem) for item in pipes)
+
+
+def test_pipedrive_v2_persons_maps_custom_fields() -> None:
+    source = pipedrive_v2_source(
+        pipedrive_api_key="token",
+        company_domain="company",
+        resources=["persons"],
+    )
+
+    persons = source.resources["v2_persons"]
+    pipes = list(persons._pipe)
+
+    assert any(isinstance(item, MapItem) for item in pipes)
+
+
+def test_pipedrive_v2_pipelines_do_not_map_custom_fields() -> None:
+    source = pipedrive_v2_source(
+        pipedrive_api_key="token",
+        company_domain="company",
+        resources=["pipelines"],
+    )
+
+    pipelines = source.resources["v2_pipelines"]
+    pipes = list(pipelines._pipe)
+
+    assert all(not isinstance(item, MapItem) for item in pipes)
 
 
 def test_recents_none_data_items_from_recents() -> None:
