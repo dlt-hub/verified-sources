@@ -439,6 +439,28 @@ def test_rename_fields_with_set() -> None:
     assert result == [{"custom_field_1": ["b", "a", "c"], "id": 44, "name": "asdf"}]
 
 
+def test_rename_fields_with_set_csv_string() -> None:
+    data_item = {"random_hash_1": "62,63,65", "id": 44, "name": "asdf"}
+    mapping = {
+        "random_hash_1": {
+            "name": "services",
+            "normalized_name": "services",
+            "field_type": "set",
+            "options": {"62": "Service A", "63": "Service B", "65": "Service C"},
+        }
+    }
+
+    result = rename_fields([data_item], mapping)
+
+    assert result == [
+        {
+            "services": ["Service A", "Service B", "Service C"],
+            "id": 44,
+            "name": "asdf",
+        }
+    ]
+
+
 def test_recents_none_data_items_from_recents() -> None:
     pytest.skip("Unskip after setting up credentials.")
     """Pages from /recents sometimes contain `None` data items which cause errors.
