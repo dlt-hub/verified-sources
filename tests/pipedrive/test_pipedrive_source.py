@@ -601,6 +601,7 @@ def test_pipedrive_v2_deals_maps_custom_fields() -> None:
             pipedrive_api_key="token",
             company_domain="company",
             resources=["deals"],
+            map_custom_fields=True,
         )
 
     deals = source.resources["v2_deals"]
@@ -615,6 +616,7 @@ def test_pipedrive_v2_persons_maps_custom_fields() -> None:
         pipedrive_api_key="token",
         company_domain="company",
         resources=["persons"],
+        map_custom_fields=True,
     )
 
     persons = source.resources["v2_persons"]
@@ -623,11 +625,25 @@ def test_pipedrive_v2_persons_maps_custom_fields() -> None:
     assert any(isinstance(item, MapItem) for item in pipes)
 
 
+def test_pipedrive_v2_does_not_map_custom_fields_by_default() -> None:
+    source = pipedrive_v2_source(
+        pipedrive_api_key="token",
+        company_domain="company",
+        resources=["deals"],
+    )
+
+    deals = source.resources["v2_deals"]
+    pipes = list(deals._pipe)
+
+    assert all(not isinstance(item, MapItem) for item in pipes)
+
+
 def test_pipedrive_v2_pipelines_do_not_map_custom_fields() -> None:
     source = pipedrive_v2_source(
         pipedrive_api_key="token",
         company_domain="company",
         resources=["pipelines"],
+        map_custom_fields=True,
     )
 
     pipelines = source.resources["v2_pipelines"]

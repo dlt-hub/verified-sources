@@ -38,6 +38,7 @@ def pipedrive_v2_source(
     resources: Optional[List[str]] = None,
     prefix: str = "v2_",
     since_timestamp: Optional[Union[pendulum.DateTime, str]] = "1970-01-01 00:00:00",
+    map_custom_fields: bool = False,
 ) -> Iterable[DltResource]:
     """Load Pipedrive API v2 data with incremental filtering.
 
@@ -47,6 +48,7 @@ def pipedrive_v2_source(
         resources: List of resource names to load. If None, all available resources are loaded.
         prefix: Prefix to add to resource names. Defaults to "v2_".
         since_timestamp: Start timestamp for incremental loading. Defaults to "1970-01-01 00:00:00".
+        map_custom_fields: Map Pipedrive custom field hashes to readable names. Defaults to False.
 
     Returns:
         Iterable[DltResource]: Resources for Pipedrive API v2 endpoints.
@@ -77,6 +79,7 @@ def pipedrive_v2_source(
         nested_configs_to_create,
         prefix,
         since_timestamp_rfc3339,
+        map_custom_fields,
     )
     for resource in v2_resources:
         yield resource
@@ -89,6 +92,7 @@ def rest_v2_resources(
     nested_configs: Dict[str, Dict[str, Any]],
     prefix: str,
     since_timestamp: str,
+    map_custom_fields: bool,
 ) -> Iterable[DltResource]:
     """Build REST v2 resources with nested endpoints.
 
@@ -99,6 +103,7 @@ def rest_v2_resources(
         nested_configs: Configuration for nested/dependent resources.
         prefix: Prefix to add to resource names.
         since_timestamp: Timestamp for incremental filtering.
+        map_custom_fields: Whether to map custom field hashes to readable names.
 
     Returns:
         Iterable[DltResource]: Configured REST API resources.
@@ -124,7 +129,7 @@ def rest_v2_resources(
             ]
         return custom_fields_mappings[resource_name]
 
-    def map_custom_fields(
+    def map_resource_custom_fields(
         data_item: Dict[str, Any], resource_name: str
     ) -> Dict[str, Any]:
         return rename_v2_custom_fields(
@@ -135,7 +140,7 @@ def rest_v2_resources(
         resource_name: str,
     ) -> Callable[[Dict[str, Any]], Dict[str, Any]]:
         def _map_custom_fields(data_item: Dict[str, Any]) -> Dict[str, Any]:
-            return map_custom_fields(data_item, resource_name)
+            return map_resource_custom_fields(data_item, resource_name)
 
         return _map_custom_fields
 
@@ -157,7 +162,7 @@ def rest_v2_resources(
             "name": f"{prefix}{resource_name}",
             "endpoint": cast(Any, endpoint_def),
         }
-        if resource_name in CUSTOM_FIELD_API_RESOURCES:
+        if map_custom_fields and resource_name in CUSTOM_FIELD_API_RESOURCES:
             resource["processing_steps"] = [
                 {"map": make_custom_fields_mapper(resource_name)}
             ]
