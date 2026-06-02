@@ -3,7 +3,7 @@
 from typing import Any, Dict, Iterable, Optional, Union
 
 import stripe
-from dlt.common import pendulum
+from dlt.common.time import ensure_pendulum_datetime
 from dlt.common.typing import TDataItem
 from pendulum import DateTime
 
@@ -40,12 +40,8 @@ def pagination(
 
 
 def transform_date(date: Union[str, DateTime, int]) -> int:
-    if isinstance(date, str):
-        date = pendulum.from_format(date, "%Y-%m-%dT%H:%M:%SZ")
-    if isinstance(date, DateTime):
-        # convert to unix timestamp
-        date = int(date.timestamp())
-    return date
+    # convert ISO 8601 strings, datetimes and unix timestamps to a unix timestamp
+    return int(ensure_pendulum_datetime(date).timestamp())
 
 
 def stripe_get_data(
@@ -65,4 +61,6 @@ def stripe_get_data(
     resource_dict = getattr(stripe, resource).list(
         created={"gte": start_date, "lt": end_date}, limit=100, **kwargs
     )
-    return dict(resource_dict)
+    # to_dict works across stripe-python versions, dict() conversion broke in v15
+    # when StripeObject stopped inheriting from dict
+    return resource_dict.to_dict()  # type: ignore[no-any-return]
