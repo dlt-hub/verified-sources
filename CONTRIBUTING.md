@@ -120,7 +120,7 @@ ensure you have a working setup.
 
 ### 2. Prepare the development environment
 
-Development on the verified sources repository depends on Python 3.9 or higher and `uv` being
+Development on the verified sources repository depends on Python 3.10 or higher and `uv` being
 available as well as the needed dependencies being installed. Make is used to automate tasks.
 
 1. Install uv: https://docs.astral.sh/uv/getting-started/installation/
@@ -359,13 +359,13 @@ We are happy to add you as contributor to avoid the hurdles of setting up creden
 
 ### Ensuring the correct Python version
 
-Use Python 3.9 for development which is the lowest supported version for `dlt`. You'll need
-`distutils` and `venv`:
+Use Python 3.10 for development which is the lowest supported version for this repository.
+You'll need `distutils` and `venv`:
 
 ```shell
-sudo apt-get install python3.9
-sudo apt-get install python3.9-distutils
-sudo apt install python3.9-venv
+sudo apt-get install python3.10
+sudo apt-get install python3.10-distutils
+sudo apt install python3.10-venv
 ```
 
 `uv` will manage virtual environments for you.

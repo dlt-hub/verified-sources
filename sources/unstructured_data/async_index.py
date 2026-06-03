@@ -27,7 +27,7 @@ class AVectorStoreIndexWrapper(VectorStoreIndexWrapper):
         chain = RetrievalQA.from_chain_type(
             llm, retriever=self.vectorstore.as_retriever(), **kwargs
         )
-        return await chain.arun(question)
+        return str(await chain.arun(question))
 
 
 class AVectorstoreIndexCreator(VectorstoreIndexCreator):
