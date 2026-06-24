@@ -1,5 +1,6 @@
 import pytest
 
+from types import SimpleNamespace
 from typing import Set, Tuple
 from copy import deepcopy
 from psycopg2.errors import InsufficientPrivilege
@@ -15,6 +16,7 @@ from tests.utils import (
 )
 from sources.pg_replication import replication_resource
 from sources.pg_replication.helpers import (
+    MessageConsumer,
     init_replication,
     get_pg_version,
 )
@@ -22,6 +24,15 @@ from sources.pg_replication.exceptions import IncompatiblePostgresVersionExcepti
 
 from .cases import TABLE_ROW_ALL_DATA_TYPES, TABLE_UPDATE_COLUMNS_SCHEMA
 from .utils import add_pk, assert_loaded_data, is_super_user
+
+
+def test_message_consumer_ignores_type_message() -> None:
+    consumer = MessageConsumer(upto_lsn=0, pub_ops={})
+
+    consumer.process_msg(SimpleNamespace(payload=b"Y"))  # type: ignore[arg-type]
+
+    assert consumer.data_items == {}
+    assert consumer.consumed_all is False
 
 
 @pytest.mark.parametrize("destination_name", ALL_DESTINATIONS)
