@@ -1,12 +1,17 @@
 """Pipedrive API v2 source. Loads data from Pipedrive API v2 endpoints with incremental support."""
 
-from typing import Iterable, Dict, Any, List, Optional, Union, cast
+from typing import Callable, Iterable, Dict, Any, List, Optional, Union, cast
 import dlt
 from dlt.common import pendulum
 from dlt.common.time import ensure_pendulum_datetime
 from dlt.sources import DltResource
+from dlt.sources.helpers import requests
 from dlt.sources.rest_api import rest_api_resources, RESTAPIConfig, EndpointResource
 
+from ..helpers.custom_fields_munger import (
+    rename_v2_custom_fields,
+    update_v2_fields_mapping,
+)
 from ..settings import ENTITIES_V2, NESTED_ENTITIES_V2
 
 INCREMENTAL_API_RESOURCES = {
@@ -17,6 +22,14 @@ INCREMENTAL_API_RESOURCES = {
     "products",
 }
 
+CUSTOM_FIELD_API_RESOURCES = {
+    "activities": "activityFields",
+    "deals": "dealFields",
+    "persons": "personFields",
+    "organizations": "organizationFields",
+    "products": "productFields",
+}
+
 
 @dlt.source(name="pipedrive_v2", section="pipedrive")
 def pipedrive_v2_source(
@@ -25,6 +38,7 @@ def pipedrive_v2_source(
     resources: Optional[List[str]] = None,
     prefix: str = "v2_",
     since_timestamp: Optional[Union[pendulum.DateTime, str]] = "1970-01-01 00:00:00",
+    map_custom_fields: bool = False,
 ) -> Iterable[DltResource]:
     """Load Pipedrive API v2 data with incremental filtering.
 
@@ -34,6 +48,7 @@ def pipedrive_v2_source(
         resources: List of resource names to load. If None, all available resources are loaded.
         prefix: Prefix to add to resource names. Defaults to "v2_".
         since_timestamp: Start timestamp for incremental loading. Defaults to "1970-01-01 00:00:00".
+        map_custom_fields: Map Pipedrive custom field hashes to readable names. Defaults to False.
 
     Returns:
         Iterable[DltResource]: Resources for Pipedrive API v2 endpoints.
@@ -64,6 +79,7 @@ def pipedrive_v2_source(
         nested_configs_to_create,
         prefix,
         since_timestamp_rfc3339,
+        map_custom_fields,
     )
     for resource in v2_resources:
         yield resource
@@ -76,6 +92,7 @@ def rest_v2_resources(
     nested_configs: Dict[str, Dict[str, Any]],
     prefix: str,
     since_timestamp: str,
+    map_custom_fields: bool,
 ) -> Iterable[DltResource]:
     """Build REST v2 resources with nested endpoints.
 
@@ -86,11 +103,46 @@ def rest_v2_resources(
         nested_configs: Configuration for nested/dependent resources.
         prefix: Prefix to add to resource names.
         since_timestamp: Timestamp for incremental filtering.
+        map_custom_fields: Whether to map custom field hashes to readable names.
 
     Returns:
         Iterable[DltResource]: Configured REST API resources.
     """
-    resources = []
+    resources: List[Union[str, EndpointResource, DltResource]] = []
+    custom_fields_mappings: Dict[str, Dict[str, Any]] = {}
+
+    def get_custom_fields_mapping(resource_name: str) -> Dict[str, Any]:
+        if resource_name not in custom_fields_mappings:
+            custom_fields_mapping_state = dlt.current.source_state().setdefault(
+                "custom_fields_mapping", {}
+            )
+            fields = get_v2_fields(
+                pipedrive_api_key,
+                company_domain,
+                CUSTOM_FIELD_API_RESOURCES[resource_name],
+            )
+            custom_fields_mappings[resource_name] = update_v2_fields_mapping(
+                fields, custom_fields_mapping_state.setdefault(resource_name, {})
+            )
+            custom_fields_mapping_state[resource_name] = custom_fields_mappings[
+                resource_name
+            ]
+        return custom_fields_mappings[resource_name]
+
+    def map_resource_custom_fields(
+        data_item: Dict[str, Any], resource_name: str
+    ) -> Dict[str, Any]:
+        return rename_v2_custom_fields(
+            data_item, get_custom_fields_mapping(resource_name)
+        )
+
+    def make_custom_fields_mapper(
+        resource_name: str,
+    ) -> Callable[[Dict[str, Any]], Dict[str, Any]]:
+        def _map_custom_fields(data_item: Dict[str, Any]) -> Dict[str, Any]:
+            return map_resource_custom_fields(data_item, resource_name)
+
+        return _map_custom_fields
 
     for resource_name, endpoint_config in resource_configs.items():
         endpoint_def = {
@@ -106,15 +158,18 @@ def rest_v2_resources(
                 "initial_value": since_timestamp,
             }
 
-        resources.append(
-            {
-                "name": f"{prefix}{resource_name}",
-                "endpoint": endpoint_def,
-            }
-        )
+        resource: EndpointResource = {
+            "name": f"{prefix}{resource_name}",
+            "endpoint": cast(Any, endpoint_def),
+        }
+        if map_custom_fields and resource_name in CUSTOM_FIELD_API_RESOURCES:
+            resource["processing_steps"] = [
+                {"map": make_custom_fields_mapper(resource_name)}
+            ]
+        resources.append(resource)
 
     for name, conf in nested_configs.items():
-        nested_res = {
+        nested_res: EndpointResource = {
             "name": f"{prefix}{name}",
             "endpoint": {
                 "path": conf["endpoint_path"].replace(
@@ -162,7 +217,28 @@ def rest_v2_resources(
                 },
             },
         },
-        "resources": cast(List[Union[str, EndpointResource, DltResource]], resources),
+        "resources": resources,
     }
 
     yield from rest_api_resources(config)
+
+
+def get_v2_fields(
+    pipedrive_api_key: str, company_domain: str, fields_endpoint: str
+) -> List[Dict[str, Any]]:
+    """Fetch Pipedrive API v2 field metadata."""
+    fields: List[Dict[str, Any]] = []
+    params = {"api_token": pipedrive_api_key, "limit": "500"}
+    while True:
+        response = requests.get(
+            f"https://{company_domain}.pipedrive.com/api/v2/{fields_endpoint}",
+            params=params,
+        )
+        response.raise_for_status()
+        page = response.json()
+        fields.extend(page["data"] or [])
+        next_cursor = page.get("additional_data", {}).get("next_cursor")
+        if not next_cursor:
+            break
+        params["cursor"] = next_cursor
+    return fields
