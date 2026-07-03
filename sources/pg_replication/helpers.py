@@ -705,6 +705,8 @@ class MessageConsumer:
                 "The truncate operation is currently not supported. "
                 "Truncate replication messages are ignored."
             )
+        elif op == 89:  # ASCII for 'Y'
+            pass  # Type messages describe custom types and do not carry row changes.
         else:
             raise ValueError(f"Unknown replication op {op}")
 
