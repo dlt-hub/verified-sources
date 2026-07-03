@@ -27,6 +27,7 @@ def google_spreadsheet(
     get_sheets: bool = False,
     get_named_ranges: bool = True,
     max_api_retries: int = 5,
+    extract_all_as_text: bool = False,
 ) -> Iterable[DltResource]:
     """
     The source for the dlt pipeline. It returns the following resources:
@@ -44,6 +45,10 @@ def google_spreadsheet(
         get_named_ranges (bool, optional): If True, load all the named ranges inside the spreadsheet into the database.
             Defaults to True.
         max_api_retries (int, optional): Max number of retires to google sheets API. Actual behavior is internal to google client.
+        extract_all_as_text (bool, optional): If True, extract all cell values as their displayed formatted strings
+            (preserving date formatting, currency symbols, etc.) and load all columns as VARCHAR/TEXT
+            in the destination. Use this when you want to preserve the exact visual representation
+            from Google Sheets. Defaults to False.
 
     Yields:
         Iterable[DltResource]: List of dlt resources.
@@ -65,14 +70,19 @@ def google_spreadsheet(
             all_range_names.update(named_ranges)
 
     # first we get all data for all the ranges (explicit or named)
+    # use FORMATTED_VALUE when extract_all_as_text=True to get displayed strings instead of typed values
+    value_render_option = (
+        "FORMATTED_VALUE" if extract_all_as_text else "UNFORMATTED_VALUE"
+    )
     all_range_data = api_calls.get_data_for_ranges(
         service=service,
         spreadsheet_id=spreadsheet_id,
         range_names=list(all_range_names),
+        value_render_option=value_render_option,
     )
-    assert len(all_range_names) == len(
-        all_range_data
-    ), "Google Sheets API must return values for all requested ranges"
+    assert len(all_range_names) == len(all_range_data), (
+        "Google Sheets API must return values for all requested ranges"
+    )
 
     # get metadata for two first rows of each range
     # first should contain headers
@@ -126,7 +136,7 @@ def google_spreadsheet(
         headers = get_range_headers(headers_metadata, name)
         if headers is None:
             # generate automatic headers and treat the first row as data
-            headers = [f"col_{idx+1}" for idx in range(len(headers_metadata))]
+            headers = [f"col_{idx + 1}" for idx in range(len(headers_metadata))]
             data_row_metadata = headers_metadata
             rows_data = values[0:]
             logger.warning(
@@ -139,11 +149,23 @@ def google_spreadsheet(
 
         data_types = get_data_types(data_row_metadata)
 
-        yield dlt.resource(
-            process_range(rows_data, headers=headers, data_types=data_types),
+        # When extract_all_as_text=True, skip date type inference (values are already strings)
+        # and force all columns to text type in destination
+        effective_data_types = (
+            [None] * len(headers) if extract_all_as_text else data_types
+        )
+
+        resource = dlt.resource(
+            process_range(rows_data, headers=headers, data_types=effective_data_types),
             name=name,
             write_disposition="replace",
         )
+
+        if extract_all_as_text:
+            # Apply text type hints to force VARCHAR/TEXT in destination (e.g., Snowflake)
+            resource.apply_hints(columns={h: {"data_type": "text"} for h in headers})
+
+        yield resource
     yield dlt.resource(
         metadata_table,
         write_disposition="merge",
