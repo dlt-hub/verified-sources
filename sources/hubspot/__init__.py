@@ -30,28 +30,32 @@ from typing import (
     List,
     Literal,
     Optional,
-    Sequence,
 )
 from urllib.parse import quote
 
 import dlt
-from dlt.common import pendulum
+from dlt.common import logger, pendulum
 from dlt.common.typing import TDataItems
 from dlt.sources import DltResource
 
 from .helpers import (
     _get_property_names_types,
     _to_dlt_columns_schema,
+    search_data_since,
     fetch_data,
     fetch_property_history,
     get_properties_labels,
+    SearchOutOfBoundsException,
 )
 from .settings import (
     ALL_OBJECTS,
     ARCHIVED_PARAM,
+    CRM_OBJECT_ASSOCIATIONS,
     CRM_OBJECT_ENDPOINTS,
     CRM_PIPELINES_ENDPOINT,
     ENTITY_PROPERTIES,
+    LAST_MODIFIED_PROPERTY,
+    HUBSPOT_CREATION_DATE,
     MAX_PROPS_LENGTH,
     OBJECT_TYPE_PLURAL,
     OBJECT_TYPE_SINGULAR,
@@ -73,6 +77,7 @@ def fetch_data_for_properties(
     api_key: str,
     object_type: str,
     soft_delete: bool,
+    last_modified: str = None,
 ) -> Iterator[TDataItems]:
     """
     Fetch data for a given set of properties from the HubSpot API.
@@ -82,20 +87,50 @@ def fetch_data_for_properties(
         api_key (str): HubSpot API key for authentication.
         object_type (str): The type of HubSpot object (e.g., 'company', 'contact').
         soft_delete (bool): Flag to fetch soft-deleted (archived) records.
+        last_modified (str): The date from which to fetch records. If None, get all records.
 
     Yields:
         Iterator[TDataItems]: Data retrieved from the HubSpot API.
     """
+    logger.info(f"Fetching data for {object_type}.")
     # The Hubspot API expects a comma separated string as properties
     joined_props = ",".join(sorted(props))
-    params: Dict[str, Any] = {"properties": joined_props, "limit": 100}
+    associations = CRM_OBJECT_ASSOCIATIONS[object_type]
+    joined_associations = ",".join(associations)
+    params: Dict[str, Any] = {
+        "properties": joined_props,
+        "limit": 100,
+    }
+    if associations:
+        params["associations"] = joined_associations
+
     context: Optional[Dict[str, Any]] = (
         {SOFT_DELETE_KEY: False} if soft_delete else None
     )
 
-    yield from fetch_data(
-        CRM_OBJECT_ENDPOINTS[object_type], api_key, params=params, context=context
-    )
+    if last_modified is not None:
+        try:
+            yield from search_data_since(
+                CRM_OBJECT_ENDPOINTS[object_type],
+                api_key,
+                last_modified,
+                LAST_MODIFIED_PROPERTY[object_type],
+                props=props,
+                associations=associations,
+                context=context,
+            )
+        except SearchOutOfBoundsException:
+            logger.info("Search out of bounds, fetching all data")
+            yield from fetch_data(
+                CRM_OBJECT_ENDPOINTS[object_type],
+                api_key,
+                params=params,
+                context=context,
+            )
+    else:
+        yield from fetch_data(
+            CRM_OBJECT_ENDPOINTS[object_type], api_key, params=params, context=context
+        )
     if soft_delete:
         yield from fetch_data(
             CRM_OBJECT_ENDPOINTS[object_type],
@@ -109,6 +144,7 @@ def crm_objects(
     object_type: str,
     api_key: str,
     props: List[str],
+    last_modified: dlt.sources.incremental[str],
     include_custom_props: bool = True,
     archived: bool = False,
 ) -> Iterator[TDataItems]:
@@ -119,6 +155,7 @@ def crm_objects(
         object_type (str): Type of HubSpot object (e.g., 'company', 'contact').
         api_key (str): API key for HubSpot authentication.
         props (List[str]): List of properties to retrieve.
+        last_modified (str): The date from which to fetch records
         include_custom_props (bool, optional): Include custom properties in the result. Defaults to True.
         archived (bool, optional): Fetch archived (soft-deleted) objects. Defaults to False.
 
@@ -135,8 +172,17 @@ def crm_objects(
         prop: _to_dlt_columns_schema({prop: hb_type})
         for prop, hb_type in props_to_type.items()
     }
+    last_modified_on = (
+        None
+        if last_modified.start_value == last_modified.initial_value
+        else last_modified.start_value
+    )
     for batch in fetch_data_for_properties(
-        list(props_to_type.keys()), api_key, object_type, archived
+        list(props_to_type.keys()),
+        api_key,
+        object_type,
+        archived,
+        last_modified_on,
     ):
         yield dlt.mark.with_hints(batch, dlt.mark.make_hints(columns=col_type_hints))
 
@@ -337,7 +383,7 @@ def hubspot(
         """
 
         def get_properties_description(
-            properties_list_inner: List[Dict[str, Any]]
+            properties_list_inner: List[Dict[str, Any]],
         ) -> Iterator[Dict[str, Any]]:
             """Fetch properties."""
             for property_info in properties_list_inner:
@@ -411,6 +457,10 @@ def hubspot(
             object_type=obj,
             api_key=api_key,
             props=properties.get(obj),
+            last_modified=dlt.sources.incremental(
+                LAST_MODIFIED_PROPERTY[obj],
+                initial_value=HUBSPOT_CREATION_DATE.isoformat(),
+            ),
             include_custom_props=include_custom_props,
             archived=soft_delete,
         )

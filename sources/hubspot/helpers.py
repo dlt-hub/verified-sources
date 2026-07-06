@@ -5,12 +5,22 @@ from typing import Union
 import urllib.parse
 from typing import Any, Dict, Iterator, List, Optional
 
+from dlt.common import logger
 from dlt.common.schema.typing import TColumnSchema
 from dlt.sources.helpers import requests
 
-from .settings import OBJECT_TYPE_PLURAL, HS_TO_DLT_TYPE
+from .settings import (
+    CRM_ASSOCIATIONS_ENDPOINT,
+    CRM_SEARCH_ENDPOINT,
+    OBJECT_TYPE_PLURAL,
+    HS_TO_DLT_TYPE,
+)
 
 BASE_URL = "https://api.hubapi.com/"
+
+
+class SearchOutOfBoundsException(Exception):
+    pass
 
 
 def get_url(endpoint: str) -> str:
@@ -43,6 +53,21 @@ def pagination(
         next_url = _next["link"]
         # Get the next page response
         r = requests.get(next_url, headers=headers)
+        return r.json()  # type: ignore
+    else:
+        return None
+
+
+def search_pagination(
+    url: str,
+    _data: Dict[str, Any],
+    headers: Dict[str, Any],
+    params: Optional[Dict[str, Any]] = None,
+) -> Optional[Dict[str, Any]]:
+    _after = _data.get("paging", {}).get("next", {}).get("after", False)
+    if _after and _after != "10000":
+        # Get the next page response
+        r = requests.post(url, headers=headers, json={**params, "after": _after})
         return r.json()  # type: ignore
     else:
         return None
@@ -126,6 +151,101 @@ def fetch_property_history(
             _data = None
 
 
+def search_data_since(
+    endpoint: str,
+    api_key: str,
+    last_modified: str,
+    last_modified_prop: str,
+    props: List[str],
+    associations: Optional[List[str]] = None,
+    context: Optional[Dict[str, Any]] = None,
+) -> Iterator[List[Dict[str, Any]]]:
+    """
+    Fetch data from the HUBSPOT search endpoint, based on a given root endpoint, using a specified
+    API key and yield the properties of each result. This function yields results from a last modified
+    point in time based on the provided last modified property.
+
+    Args:
+        endpoint (str): The root endpoint to fetch data from, as a string.
+        api_key (str): The API key to use for authentication, as a string.
+        last_modified (str): The date from which to start the search, as a string in ISO format.
+        last_modified_prop (str): The property used to check the last modified date against, as a string.
+        props: The list of properties to include for the object in the request.
+        associations: Optional dict of associations to search for for each object.
+        context (Optional[Dict[str, Any]]): Additional data which need to be added in the resulting page.
+
+    Yields:
+        A List of CRM object dicts
+
+    Raises:
+        requests.exceptions.HTTPError: If the API returns an HTTP error status code.
+
+    Notes:
+        This function uses the `requests` library to make a POST request to the specified endpoint, with
+        the API key included in the headers. If the API returns a non-successful HTTP status code (e.g.
+        404 Not Found), a `requests.exceptions.HTTPError` exception will be raised.
+
+        The `endpoint` argument should be a relative URL, which will be modified to a search endpoint
+        and then appended to the base URL for the API. `last_modified`, `last_modified_prop`, and `props`
+        are used to pass additional parameters to the request
+    """
+    # Construct the URL and headers for the API request
+    url = get_url(CRM_SEARCH_ENDPOINT.format(crm_endpoint=endpoint))
+    headers = _get_headers(api_key)
+    body: Dict[str, Any] = {
+        "properties": sorted(props),
+        "limit": 200,
+        "filterGroups": [
+            {
+                "filters": [
+                    {
+                        "propertyName": last_modified_prop,
+                        "operator": "GTE",
+                        "value": last_modified,
+                    }
+                ]
+            }
+        ],
+        "sorts": [{"propertyName": last_modified_prop, "direction": "ASCENDING"}],
+    }
+
+    # Make the API request
+    r = requests.post(url, headers=headers, json=body)
+    # Parse the API response and yield the properties of each result
+    # Parse the response JSON data
+    _data = r.json()
+
+    _total = _data.get("total", 0)
+    logger.info(f"Getting {_total} new objects from {url} starting at {last_modified}")
+    _max_last_modified = last_modified
+    # Yield the properties of each result in the API response
+    while _data is not None:
+        if "results" in _data:
+            for _result in _data["results"]:
+                if _result["updatedAt"]:
+                    _max_last_modified = max(_max_last_modified, _result["updatedAt"])
+            yield _data_to_objects(
+                _data, endpoint, headers, associations=associations, context=context
+            )
+
+        # Follow pagination links if they exist
+        _data = search_pagination(url, _data, headers, body)
+
+    if _total > 9999:
+        if _max_last_modified == last_modified:
+            raise SearchOutOfBoundsException
+        logger.info(f"Starting new search iteration at {_max_last_modified}")
+        yield from search_data_since(
+            endpoint,
+            api_key,
+            _max_last_modified,
+            last_modified_prop,
+            props,
+            associations,
+            context,
+        )
+
+
 def fetch_data(
     endpoint: str,
     api_key: str,
@@ -168,36 +288,60 @@ def fetch_data(
     # Parse the API response and yield the properties of each result
     # Parse the response JSON data
     _data = r.json()
+
     # Yield the properties of each result in the API response
     while _data is not None:
         if "results" in _data:
-            _objects: List[Dict[str, Any]] = []
-            for _result in _data["results"]:
-                _obj = _result.get("properties", _result)
-                if "id" not in _obj and "id" in _result:
-                    # Move id from properties to top level
-                    _obj["id"] = _result["id"]
-                if "associations" in _result:
-                    for association in _result["associations"]:
-                        __data = _result["associations"][association]
-
-                        __values = extract_association_data(
-                            _obj, __data, association, headers
-                        )
-
-                        # remove duplicates from list of dicts
-                        __values = [
-                            dict(t) for t in {tuple(d.items()) for d in __values}
-                        ]
-
-                        _obj[association] = __values
-                if context:
-                    _obj.update(context)
-                _objects.append(_obj)
-            yield _objects
+            yield _data_to_objects(_data, endpoint, headers, context=context)
 
         # Follow pagination links if they exist
         _data = pagination(_data, headers)
+
+
+def _data_to_objects(
+    data: Any,
+    endpoint: str,
+    headers: Dict[str, str],
+    associations: Optional[List[str]] = None,
+    context: Optional[Dict[str, Any]] = None,
+) -> List[Dict[str, Any]]:
+    _objects: List[Dict[str, Any]] = []
+    for _result in data["results"]:
+        _obj = _result.get("properties", _result)
+        if "id" not in _obj and "id" in _result:
+            # Move id from properties to top level
+            _obj["id"] = _result["id"]
+        if "associations" in _result:
+            for association in _result["associations"]:
+                __data = _result["associations"][association]
+                _add_association_data(__data, association, headers, _obj)
+        elif associations is not None:
+            for association in associations:
+                __endpoint = get_url(
+                    CRM_ASSOCIATIONS_ENDPOINT.format(
+                        crm_endpoint=endpoint,
+                        object_id=_result["id"],
+                        association=association,
+                    )
+                )
+                r = requests.get(__endpoint, headers=headers, params={"limit": 500})
+                __data = r.json()
+                _add_association_data(__data, association, headers, _obj)
+        if context:
+            _obj.update(context)
+        _objects.append(_obj)
+    return _objects
+
+
+def _add_association_data(
+    data: Any, association: str, headers: Dict[str, str], obj: Any
+) -> None:
+    __values = extract_association_data(obj, data, association, headers)
+
+    # remove duplicates from list of dicts
+    __values = [dict(t) for t in {tuple(d.items()) for d in __values}]
+
+    obj[association] = __values
 
 
 def _get_property_names_types(
