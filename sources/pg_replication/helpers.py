@@ -413,9 +413,10 @@ def persist_snapshot_table(
     )
     snapshot_qual_name = _make_qualified_table_name(snapshot_table_name, schema_name)
     qual_name = _make_qualified_table_name(table_name, schema_name)
+    # create unlogged table to avoid writing to WAL
     cur.execute(
         f"""
-        CREATE TABLE {snapshot_qual_name} AS SELECT {col_str} FROM {qual_name};
+        CREATE UNLOGGED TABLE {snapshot_qual_name} AS SELECT {col_str} FROM {qual_name};
         """
     )
     logger.info(f"Successfully persisted snapshot table state in {snapshot_qual_name}.")
