@@ -17,7 +17,7 @@ def _make_pipeline(destination_name: str) -> dlt.Pipeline:
 @pytest.mark.parametrize("destination_name", ["duckdb"])
 def test_load_unauthorized_domain(destination_name: str) -> None:
     pipeline = _make_pipeline(destination_name)
-    data = source(site_urls=["wikipedia.org"])
+    data = source(site_urls=["wikipedia.org"], site_url_pages=[])
     with pytest.raises(Exception):
         pipeline.run(data.with_resources("page_stats"))
 
@@ -28,7 +28,7 @@ def test_load_page_stats(destination_name: str) -> None:
     table_name = "bing_page_stats"
 
     # Note: If this test fails: replace this with a site_url you can access
-    data = source(site_urls=["dlthub.com"])
+    data = source(site_urls=["dlthub.com"], site_url_pages=[])
 
     info = pipeline.run(data.with_resources("page_stats"))
     assert_load_info(info)
@@ -63,11 +63,12 @@ def test_load_page_query_stats(destination_name: str) -> None:
     table_name = "bing_page_query_stats"
 
     data = source(
+        site_urls=["dlthub.com"],
         # Note: If this test fails: replace this with site_url and pages you can access
         site_url_pages=[
             {"site_url": "dlthub.com", "page": "https://dlthub.com/docs/intro"},
             {"site_url": "dlthub.com", "page": "https://dlthub.com/why/"},
-        ]
+        ],
     )
     info = pipeline.run(data.with_resources("page_query_stats"))
     assert_load_info(info)

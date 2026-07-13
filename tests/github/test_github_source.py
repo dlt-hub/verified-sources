@@ -54,10 +54,10 @@ def test_github_events(destination_name: str) -> None:
     pipeline = dlt.pipeline(
         "github_events",
         destination=destination_name,
-        dataset_name="airflow_events",
+        dataset_name="duckdb_events",
         dev_mode=True,
     )
-    data = github_repo_events("apache", "airflow")
+    data = github_repo_events("duckdb", "duckdb")
     load_info = pipeline.run(data)
     assert_load_info(load_info)
     # all tables must end with event (auto created from event types) or contain "_event__" (child tables)
@@ -67,7 +67,7 @@ def test_github_events(destination_name: str) -> None:
     )
     load_table_counts(pipeline, *table_names)
     # load again. it could happen that a single event got loaded but surely numbers should not double and events must be unique
-    data = github_repo_events("apache", "airflow")
+    data = github_repo_events("duckdb", "duckdb")
     pipeline.run(data)
     table_names = [
         t["name"]

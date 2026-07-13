@@ -47,7 +47,7 @@ def load_with_custom_processor() -> None:
             "data": msg.value().decode("utf-8"),
         }
 
-    data = kafka_consumer("books", msg_processor=custom_msg_processor)
+    data = kafka_consumer(["books"], msg_processor=custom_msg_processor)
 
     info = pipeline.run(data)
     print(info)
@@ -63,7 +63,7 @@ def load_starting_from_date() -> None:
     )
 
     from_date = datetime(2023, 12, 15)
-    data = kafka_consumer("books", start_from=from_date)
+    data = kafka_consumer(["books"], start_from=from_date)
 
     info = pipeline.run(data)
     print(info)
