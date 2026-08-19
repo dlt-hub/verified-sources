@@ -594,8 +594,8 @@ class ItemGenerator:
     upto_lsn: int
     start_lsn: int = 0
     target_batch_size: int = 1000
-    include_columns: Optional[Dict[str, Sequence[str]]] = (None,)  # type: ignore[assignment]
-    columns: Optional[Dict[str, TTableSchemaColumns]] = (None,)  # type: ignore[assignment]
+    include_columns: Optional[Dict[str, Sequence[str]]] = None
+    columns: Optional[Dict[str, TTableSchemaColumns]] = None
     last_commit_lsn: Optional[int] = field(default=None, init=False)
     generated_all: bool = False
 

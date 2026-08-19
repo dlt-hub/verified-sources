@@ -6,6 +6,7 @@ from psycopg2.errors import InsufficientPrivilege
 
 import dlt
 from dlt.destinations.job_client_impl import SqlJobClientBase
+from dlt.sources.credentials import ConnectionStringCredentials
 
 from tests.utils import (
     ALL_DESTINATIONS,
@@ -15,6 +16,7 @@ from tests.utils import (
 )
 from sources.pg_replication import replication_resource
 from sources.pg_replication.helpers import (
+    ItemGenerator,
     init_replication,
     get_pg_version,
 )
@@ -22,6 +24,18 @@ from sources.pg_replication.exceptions import IncompatiblePostgresVersionExcepti
 
 from .cases import TABLE_ROW_ALL_DATA_TYPES, TABLE_UPDATE_COLUMNS_SCHEMA
 from .utils import add_pk, assert_loaded_data, is_super_user
+
+
+def test_item_generator_optional_defaults() -> None:
+    generator = ItemGenerator(
+        credentials=ConnectionStringCredentials(),
+        slot_name="test_slot",
+        options={"publication_names": "test_publication"},
+        upto_lsn=0,
+    )
+
+    assert generator.include_columns is None
+    assert generator.columns is None
 
 
 @pytest.mark.parametrize("destination_name", ALL_DESTINATIONS)
