@@ -106,7 +106,7 @@ def mongodb_collection(
     filter_: Optional[Dict[str, Any]] = None,
     projection: Optional[Union[Mapping[str, Any], Iterable[str]]] = dlt.config.value,
     pymongoarrow_schema: Optional[Any] = None,
-) -> Any:
+) -> DltResource:
     """
     A DLT source which loads a collection from a mongo database using PyMongo.
 
@@ -134,7 +134,7 @@ def mongodb_collection(
         pymongoarrow_schema (pymongoarrow.schema.Schema): Mapping of expected field types to convert BSON to Arrow
 
     Returns:
-        Iterable[DltResource]: A list of DLT resources for each collection to be loaded.
+        DltResource: The resource loading the selected collection.
     """
     # set up mongo client
     client = client_from_credentials(connection_url)
