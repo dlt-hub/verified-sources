@@ -100,7 +100,8 @@ def replication_resource(
             columns=columns,
         )
         yield from gen
-        if gen.generated_all:
+        if gen.last_commit_lsn is not None:
             dlt.current.resource_state()["last_commit_lsn"] = gen.last_commit_lsn
+        if gen.generated_all:
             break
         start_lsn = gen.last_commit_lsn
