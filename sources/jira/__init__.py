@@ -224,8 +224,7 @@ def _check_data_path(api_path: str, data_path: str, response: Response) -> None:
         return
     got = sorted(body) if isinstance(body, dict) else type(body).__name__
     raise JiraResponseError(
-        f"Jira endpoint {api_path} returned no '{data_path}' key. "
-        f"Got: {got}. The endpoint may have been removed."
+        f"Jira endpoint {api_path} returned no '{data_path}' key. Got: {got}."
     )
 
 
