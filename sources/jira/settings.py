@@ -3,6 +3,8 @@ from typing import Any, Dict, TypedDict
 
 class _EndpointRequired(TypedDict):
     api_path: str
+    # the response field holding the key, which dlt normalizes into `primary_key`
+    key_field: str
     primary_key: str
 
 
@@ -10,7 +12,7 @@ class TEndpoint(_EndpointRequired, total=False):
     data_path: str
     offset_path: str
     use_cursor_pagination: bool
-    deduplicate_on: str
+    deduplicate: bool
     params: Dict[str, Any]
 
 
@@ -19,9 +21,10 @@ DEFAULT_ENDPOINTS: Dict[str, TEndpoint] = {
         "data_path": "issues",
         "api_path": "rest/api/3/search/jql",
         "use_cursor_pagination": True,
+        "key_field": "id",
         "primary_key": "id",
         # jira_search runs several queries and they match the same issue
-        "deduplicate_on": "id",
+        "deduplicate": True,
         "params": {
             "fields": "*all",
             "expand": "changelog,operations,transitions,names",
@@ -32,6 +35,7 @@ DEFAULT_ENDPOINTS: Dict[str, TEndpoint] = {
         # returns a bare array of active, inactive and deleted users; maxResults is capped at 1000
         # no envelope, so the loop needs one empty page to stop
         "api_path": "rest/api/3/users",
+        "key_field": "accountId",
         "primary_key": "account_id",
         "params": {},
     },
@@ -39,6 +43,7 @@ DEFAULT_ENDPOINTS: Dict[str, TEndpoint] = {
         # rest/api/3/workflow/search is deprecated and scheduled for removal
         "data_path": "values",
         "api_path": "rest/api/3/workflows/search",
+        "key_field": "id",
         "primary_key": "id",
         "params": {},
     },
@@ -50,16 +55,18 @@ DEFAULT_ENDPOINTS: Dict[str, TEndpoint] = {
         "data_path": "statuses",
         "offset_path": "values",
         "api_path": "rest/api/3/workflows/search",
+        "key_field": "statusReference",
         "primary_key": "status_reference",
         # pages repeat the statuses their workflows share. A merge disposition would
         # deduplicate them, but it would also collapse the rows whose key is null, which the
         # primary key hint allows, so the resource deduplicates and keeps `replace`.
-        "deduplicate_on": "statusReference",
+        "deduplicate": True,
         "params": {},
     },
     "projects": {
         "data_path": "values",
         "api_path": "rest/api/3/project/search",
+        "key_field": "id",
         "primary_key": "id",
         "params": {
             "expand": "description,lead,issueTypes,url,projectKeys,permissions,insight"

@@ -57,7 +57,8 @@ def jira(
             offset_path=endpoint.get("offset_path"),
             params=endpoint.get("params"),
             use_cursor_pagination=endpoint.get("use_cursor_pagination", False),
-            deduplicate_on=endpoint.get("deduplicate_on"),
+            key_field=endpoint["key_field"],
+            deduplicate=endpoint.get("deduplicate", False),
             subdomain=subdomain,
             email=email,
             api_token=api_token,
@@ -88,6 +89,7 @@ def jira_search(
         Iterable[DltResource]: Resource function for searching issues.
     """
     issues_endpoint: TEndpoint = DEFAULT_ENDPOINTS["issues"]
+    key_field = issues_endpoint["key_field"]
 
     @dlt.resource(
         write_disposition="replace",
@@ -97,7 +99,6 @@ def jira_search(
     def issues(jql_queries: List[str]) -> Iterable[TDataItem]:
         # the queries overlap, so the ids seen are shared across them
         seen: Set[Any] = set()
-        deduplicate_on = issues_endpoint.get("deduplicate_on")
         for jql in jql_queries:
             params = {**issues_endpoint.get("params", {}), "jql": jql}
 
@@ -112,10 +113,9 @@ def jira_search(
                 use_cursor_pagination=issues_endpoint.get(
                     "use_cursor_pagination", False
                 ),
+                key_field=key_field,
             ):
-                rows = (
-                    unseen_rows(page, deduplicate_on, seen) if deduplicate_on else page
-                )
+                rows = unseen_rows(page, key_field, seen)
                 if rows:
                     yield rows
 

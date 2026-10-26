@@ -3,6 +3,7 @@
 from typing import Any, Dict, Iterable, List, Optional, Set
 from urllib.parse import urlparse
 
+from dlt.common import logger
 from dlt.common.schema.typing import TColumnSchema
 from dlt.common.typing import DictStrAny, TDataItem
 from dlt.sources.helpers.requests import Request, Response
@@ -52,6 +53,10 @@ def unseen_rows(
         seen.add(key)
         unseen.append(row)
     return unseen
+
+
+def _any_row_without_key(rows: List[TDataItem], key_field: str) -> bool:
+    return any(not isinstance(row, dict) or row.get(key_field) is None for row in rows)
 
 
 def _body(response: Response) -> Any:
@@ -192,7 +197,8 @@ def get_paginated_data(
     offset_path: Optional[str] = None,
     params: Optional[DictStrAny] = None,
     use_cursor_pagination: bool = False,
-    deduplicate_on: Optional[str] = None,
+    key_field: Optional[str] = None,
+    deduplicate: bool = False,
 ) -> Iterable[TDataItem]:
     """
     Function to fetch paginated data from a Jira API endpoint.
@@ -209,10 +215,13 @@ def get_paginated_data(
         params: Optional parameters for the API request.
         use_cursor_pagination: If True, uses cursor-based pagination (nextPageToken)
             for the /search/jql endpoint. If False, uses offset-based pagination (startAt).
-        deduplicate_on: Optional response field whose repeated values are dropped.
+        key_field: Optional response field holding the key. Rows missing it are logged once.
+        deduplicate: If True, drops rows whose `key_field` was yielded before.
     Yields:
         Iterable[TDataItem]: Yields pages of data from the API.
     """
+    if deduplicate and not key_field:
+        raise ValueError("deduplicate needs a key_field to deduplicate on")
     client = RESTClient(
         base_url=f"https://{subdomain}.atlassian.net/",
         headers={"Accept": "application/json"},
@@ -223,7 +232,8 @@ def get_paginated_data(
         if use_cursor_pagination
         else JiraOffsetPaginator(page_size, offset_path)
     )
-    seen: Set[Any] = set()
+    seen: Optional[Set[Any]] = set() if deduplicate else None
+    warned_on_missing_key = False
     # "$" selects the whole body for the endpoints that return a bare array
     for page in client.paginate(
         api_path,
@@ -235,7 +245,17 @@ def get_paginated_data(
         if data_path:
             _check_data_path(api_path, data_path, page.response)
         rows = list(page)
-        if deduplicate_on:
-            rows = unseen_rows(rows, deduplicate_on, seen)
+        if (
+            key_field
+            and not warned_on_missing_key
+            and _any_row_without_key(rows, key_field)
+        ):
+            logger.warning(
+                f"Jira endpoint {api_path} returned rows without '{key_field}'. They load with"
+                " a null primary key and are reported once per run."
+            )
+            warned_on_missing_key = True
+        if seen is not None and key_field:
+            rows = unseen_rows(rows, key_field, seen)
         if rows:
             yield rows

@@ -8,7 +8,7 @@ import requests_mock
 from dlt.common.normalizers.naming.snake_case import NamingConvention
 from dlt.sources.helpers.requests import Response
 
-from sources.jira import jira, jira_search
+from sources.jira import helpers, jira, jira_search
 from sources.jira.helpers import JiraResponseError, get_paginated_data
 from sources.jira.settings import DEFAULT_ENDPOINTS
 
@@ -23,7 +23,8 @@ INTERNAL_KEYS = {
     "data_path",
     "offset_path",
     "use_cursor_pagination",
-    "deduplicate_on",
+    "deduplicate",
+    "key_field",
     "primary_key",
 }
 
@@ -283,13 +284,12 @@ def test_workflow_statuses_read_the_same_response_as_workflows() -> None:
     assert statuses["primary_key"] == "status_reference"
 
 
-@pytest.mark.parametrize(
-    "endpoint_name", [n for n, e in DEFAULT_ENDPOINTS.items() if "deduplicate_on" in e]
-)
-def test_deduplicated_field_normalizes_to_the_primary_key(endpoint_name: str) -> None:
-    """Deduplication runs on the response field, the primary key names the loaded column."""
+@pytest.mark.parametrize("endpoint_name", list(DEFAULT_ENDPOINTS))
+def test_key_field_normalizes_to_the_primary_key(endpoint_name: str) -> None:
+    """Deduplication and the missing key warning run on the response field, the primary key
+    names the loaded column."""
     endpoint = DEFAULT_ENDPOINTS[endpoint_name]
-    normalized = NamingConvention().normalize_identifier(endpoint["deduplicate_on"])
+    normalized = NamingConvention().normalize_identifier(endpoint["key_field"])
     assert normalized == endpoint["primary_key"]
 
 
@@ -409,6 +409,24 @@ def test_source_nesting_setting_is_not_overridden_on_search_issues() -> None:
     assert source.max_table_nesting == 0
     # a resource level hint would win over the source setting, so there must not be one
     assert source.resources["issues"].max_table_nesting is None
+
+
+def test_rows_without_the_key_field_are_reported_once(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    warnings: List[str] = []
+    monkeypatch.setattr(helpers.logger, "warning", warnings.append)
+    with requests_mock.Mocker() as m:
+        serve(
+            m,
+            "rest/api/3/users",
+            [{"accountId": "a"}, {"displayName": "Former"}],
+            [{"displayName": "Also former"}],
+            [],
+        )
+        list(jira(**AUTH).resources["users"])
+    assert len(warnings) == 1
+    assert "without 'accountId'" in warnings[0]
 
 
 def test_null_primary_key_loads_instead_of_failing_the_package() -> None:
