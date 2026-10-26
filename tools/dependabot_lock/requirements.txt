@@ -426,6 +426,10 @@ constantly==23.10.4 \
     --hash=sha256:3fd9b4d1c3dc1ec9757f3c52aef7e53ad9323dbe39f51dfd4c43853b68dfa3f9 \
     --hash=sha256:aa92b70a33e2ac0bb33cd745eb61776594dc48764b06c35e0efd050b7f1c7cbd
     # via twisted
+croniter==6.2.4 \
+    --hash=sha256:8ef3d544107a5c05a150a2d78f8bf5a8eb9c5c4d93405a736b824109574e3f4d \
+    --hash=sha256:fc124f751b1b04805c2a04b061898b436b45ab2320b045e1e052ea895de65189
+    # via dlt
 cryptography==44.0.1 \
     --hash=sha256:00918d859aa4e57db8299607086f793fa7813ae2ff5a4637e318a25ef82730f7 \
     --hash=sha256:1e8d181e90a777b63f3f0caa836844a1182f1f265687fac2115fcf245f5fbec3 \
@@ -500,9 +504,9 @@ distro==1.9.0 ; python_full_version < '3.13' \
     --hash=sha256:2fa77c6fd8940f116ee1d6b94a2f90b13b5ea8d019b98bc8bafdcabcdd9bdbed \
     --hash=sha256:7bffd925d65168f85027d8da9af6bddab658135b840670a223589bc0c8ef02b2
     # via posthog
-dlt==1.27.2 \
-    --hash=sha256:1c54d394864ca2cf1b042a28dafe393f24afbd60653edffc20dc6b77066cab2a \
-    --hash=sha256:e9cf70883df0d04a1d40e1dea95d34dee29de978a9500d1d434eae881b5d0279
+dlt==1.31.0 \
+    --hash=sha256:3919c1223170175cc9365514223c68048cb8c42a38ea32bb291fb99bdd7d62bd \
+    --hash=sha256:4264984207bc0ebd8e5bd3b55104db863b590e4e86ff32b8c8e00ae11c32aee3
     # via dlt-verified-sources
 dnspython==2.7.0 \
     --hash=sha256:b4c34b7d10b51bcc3a5071e7b8dee77939f1e878477eeecc965e9835f63c6c86 \
@@ -1004,9 +1008,13 @@ joblib==1.4.2 ; python_full_version < '3.13' \
     --hash=sha256:06d478d5674cbc267e7496a410ee875abd68e4340feff4490bcb7afb88060ae6 \
     --hash=sha256:2382c5816b2636fbd20a09e0f4e9dad4736765fdfb7dca582943b9c1366b3f0e
     # via nltk
-jsonpath-ng==1.7.0 \
-    --hash=sha256:f3d7f9e848cba1b6da28c55b1c26ff915dc9e0b1ba7e752a53d6da8d5cbd00b6 \
-    --hash=sha256:f6f5f7fd4e5ff79c785f1573b394043b39849fb2bb47bcead935d12b00beab3c
+jsonpath-ng==1.8.0 ; python_full_version < '3.11' \
+    --hash=sha256:54252968134b5e549ea5b872f1df1168bd7defe1a52fed5a358c194e1943ddc3 \
+    --hash=sha256:b8dde192f8af58d646fc031fac9c99fe4d00326afc4148f1f043c601a8cfe138
+    # via dlt
+jsonpath-ng==1.14.0 ; python_full_version >= '3.11' \
+    --hash=sha256:748ffe4fce1a5f7f67f5414206ab4919bab99f800598de1f60df280a211d71df \
+    --hash=sha256:8c8b0b32c24421ba150621863c6a943e84861edbe6a4414261d1ad7cba7828bc
     # via dlt
 langchain==0.0.219 ; python_full_version < '3.13' \
     --hash=sha256:1f08a00e622f1c75087d6013f34e82be3f8dd1859266eb583a0fd7bc045090cf \
@@ -1528,7 +1536,7 @@ orjson==3.10.15 ; python_full_version < '3.13' and platform_python_implementatio
     --hash=sha256:fd56a26a04f6ba5fb2045b0acc487a63162a958ed837648c5781e1fe3316cfbf \
     --hash=sha256:ff4f6edb1578960ed628a3b998fa54d78d9bb3e2eb2cfc5c2a09732431c678d0
     # via dlt
-orjson==3.11.4 ; (python_full_version >= '3.14' and platform_python_implementation == 'PyPy') or (python_full_version >= '3.13' and platform_python_implementation != 'PyPy' and sys_platform != 'emscripten') or (python_full_version >= '3.14' and sys_platform == 'emscripten') \
+orjson==3.11.4 ; python_full_version >= '3.13' and platform_python_implementation != 'PyPy' and sys_platform != 'emscripten' \
     --hash=sha256:01ee5487fefee21e6910da4c2ee9eef005bee568a0879834df86f888d2ffbdd9 \
     --hash=sha256:03bfa548cf35e3f8b3a96c4e8e41f753c686ff3d8e182ce275b1751deddab58c \
     --hash=sha256:04b69c14615fb4434ab867bf6f38b2d649f6f300af30a6705397e895f7aec67a \
@@ -1833,10 +1841,6 @@ pluggy==1.5.0 \
     # via
     #   dlt
     #   pytest
-ply==3.11 \
-    --hash=sha256:00c7c1aaa88358b9c765b6d3000c6eec0ba42abca5351b095321aef446081da3 \
-    --hash=sha256:096f9b8350b65ebd2fd1346b12452efe5b9607f7482813ffca50c22722a807ce
-    # via jsonpath-ng
 portalocker==2.10.1 \
     --hash=sha256:53a5984ebc86a025552264b459b46a2086e269b21823cb572f8f28ee759e45bf \
     --hash=sha256:ef1bf844e878ab08aee7e40184156e1151f228f103aa5c6bd0724cc330960f8f
@@ -2319,6 +2323,7 @@ python-dateutil==2.9.0.post0 \
     # via
     #   aiobotocore
     #   botocore
+    #   croniter
     #   google-cloud-bigquery
     #   pandas
     #   pendulum
@@ -2684,9 +2689,9 @@ sqlalchemy==2.0.38 \
     --hash=sha256:f53c0d6a859b2db58332e0e6a921582a02c1677cc93d4cbb36fdf49709b327b2 \
     --hash=sha256:f9d57f1b3061b3e21476b0ad5f0397b112b94ace21d1f439f2db472e568178ae
     # via langchain
-sqlglot==26.17.1 \
-    --hash=sha256:518c649ff4ae9601e2f156758c21d3552db8a109872f1228e0f6e89d3712bf73 \
-    --hash=sha256:8772f5c1d095a9600cfbe5bdd08bc345d84f875773735a6cbe6cd5abcfa43900
+sqlglot==30.25.0 \
+    --hash=sha256:7d5a292d5f61b7fc860e65a8fa41083c726db0e27fb6efb224cca63c3a5980f7 \
+    --hash=sha256:d2d6e4d4865a210b1e33a801b105a6782ef12280cc2b6d0969bdc2634aef427a
     # via dlt
 starlette==0.20.4 ; python_full_version < '3.13' \
     --hash=sha256:42fcf3122f998fefce3e2c5ad7e5edbf0f02cf685d646a83a08d404726af5084 \
