@@ -99,8 +99,8 @@ def test_load_query_issues(destination_name: str) -> None:
     # load issues from specified Jira queries.
     search = jira_search(page_size=5)
     search.max_table_nesting = 0
-    search.issues.bind(jql_queries=queries)
-    search.add_limit(PAGE_LIMIT)
+    # each query is bounded on its own, so the second one runs and the overlap is real
+    search.issues.bind(jql_queries=queries, page_limit=PAGE_LIMIT)
     info = pipeline.run(search)
     # lets print it (pytest -s will show it)
     print(info)

@@ -1,6 +1,7 @@
 """ This source uses Jira API and dlt to load data such as Issues, Users, Workflows and Projects to the database. """
 
-from typing import Any, Iterable, List, Optional, Set
+from itertools import islice
+from typing import Any, Iterable, Iterator, List, Optional, Set
 
 import dlt
 from dlt.common.typing import TDataItem
@@ -96,26 +97,40 @@ def jira_search(
         primary_key=issues_endpoint["primary_key"],
         columns=nullable_key_columns(issues_endpoint["primary_key"]),
     )
-    def issues(jql_queries: List[str]) -> Iterable[TDataItem]:
+    def issues(
+        jql_queries: List[str], page_limit: Optional[int] = None
+    ) -> Iterable[TDataItem]:
+        """
+        Args:
+            jql_queries: JQL queries to run. A query needs a filtering clause; Jira rejects
+                one that only sorts.
+            page_limit: Maximum number of pages to read per query. `add_limit` on the resource
+                bounds the queries together, so the first one absorbs the whole budget.
+        """
         # the queries overlap, so the ids seen are shared across them
         seen: Set[Any] = set()
         for jql in jql_queries:
             params = {**issues_endpoint.get("params", {}), "jql": jql}
 
-            for page in get_paginated_data(
-                api_path=issues_endpoint["api_path"],
-                params=params,
-                subdomain=subdomain,
-                email=email,
-                api_token=api_token,
-                page_size=page_size
-                or issues_endpoint.get("page_size", DEFAULT_PAGE_SIZE),
-                data_path=issues_endpoint.get("data_path"),
-                use_cursor_pagination=issues_endpoint.get(
-                    "use_cursor_pagination", False
-                ),
-                key_field=key_field,
-            ):
+            pages: Iterator[TDataItem] = iter(
+                get_paginated_data(
+                    api_path=issues_endpoint["api_path"],
+                    params=params,
+                    subdomain=subdomain,
+                    email=email,
+                    api_token=api_token,
+                    page_size=page_size
+                    or issues_endpoint.get("page_size", DEFAULT_PAGE_SIZE),
+                    data_path=issues_endpoint.get("data_path"),
+                    use_cursor_pagination=issues_endpoint.get(
+                        "use_cursor_pagination", False
+                    ),
+                    key_field=key_field,
+                )
+            )
+            if page_limit is not None:
+                pages = islice(pages, page_limit)
+            for page in pages:
                 rows = unseen_rows(page, key_field, seen)
                 if rows:
                     yield rows

@@ -78,7 +78,7 @@ To grab Jira credentials and configure the verified source, please refer to the
    ```
 
 1. Now the pipeline can be run by using the command. The example loads two pages per resource and
-   two pages of search results; remove the `limit` arguments in `jira_pipeline.py` to load
+   two pages per JQL query; remove the `limit` arguments in `jira_pipeline.py` to load
    everything.
 
    ```bash
@@ -105,6 +105,9 @@ by two queries is loaded once.
 `rest/api/3/search/jql` rejects a query that only sorts: `order by created DESC` answers
 `400 Unbounded JQL queries are not allowed here. Please add a search restriction to your query.`
 Add a filtering clause, as the shipped example does with `created >= -30d`.
+
+`page_limit` bounds each query on its own. `add_limit` on the resource bounds them together, and
+the first query absorbs the whole budget.
 
 💡 To explore additional customizations for this pipeline, we recommend referring to the official
 `dlt` [Jira](https://dlthub.com/docs/dlt-ecosystem/verified-sources/jira) documentation. It provides

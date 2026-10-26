@@ -321,6 +321,31 @@ def test_an_issue_matched_by_two_queries_is_yielded_once() -> None:
     assert [i["id"] for i in data] == ["1", "2", "3"]
 
 
+def test_page_limit_bounds_each_query_on_its_own() -> None:
+    """A shared limit lets the first query absorb the budget and the second never runs."""
+    with requests_mock.Mocker() as m:
+        m.get(
+            url_for("rest/api/3/search/jql"),
+            [
+                {"json": {"issues": [{"id": "1"}], "nextPageToken": "t"}},
+                {"json": {"issues": [{"id": "2"}], "nextPageToken": "t"}},
+                {"json": {"issues": [{"id": "3"}], "nextPageToken": "t"}},
+                {"json": {"issues": [{"id": "4"}], "nextPageToken": "t"}},
+            ],
+        )
+        resource = jira_search(**AUTH).issues(
+            jql_queries=["project = X", "project = Y"], page_limit=2
+        )
+        data = list(resource)
+    assert [i["id"] for i in data] == ["1", "2", "3", "4"]
+    assert [p["jql"] for p in sent_params(m)] == [
+        "project = X",
+        "project = X",
+        "project = Y",
+        "project = Y",
+    ]
+
+
 def test_offset_path_advances_on_the_sibling_key() -> None:
     # workflow_statuses takes `statuses` but startAt counts `values`
     with requests_mock.Mocker() as m:
