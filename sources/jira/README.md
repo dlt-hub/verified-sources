@@ -12,6 +12,9 @@ Resources that can be loaded using this verified source are:
 | workflows | the key aspect of managing and tracking the progress of issues or tasks within a project |
 | projects  | a collection of tasks that need to be completed to achieve a certain outcome             |
 
+The `workflows` resource reads `rest/api/3/workflows/search`. It returns team-managed workflows as
+well, and its table has different columns than the deprecated endpoint produced.
+
 ## Initialize the pipeline
 
 ```bash

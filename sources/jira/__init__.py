@@ -130,7 +130,17 @@ def get_paginated_data(
         result = response.json()
 
         if data_path:
-            results_page = result.pop(data_path)
+            if not isinstance(result, dict) or data_path not in result:
+                got = (
+                    sorted(result)
+                    if isinstance(result, dict)
+                    else type(result).__name__
+                )
+                raise ValueError(
+                    f"Jira endpoint {api_path} returned no '{data_path}' key. "
+                    f"Got: {got}. The endpoint may have been removed."
+                )
+            results_page = result[data_path]
         else:
             results_page = result
 

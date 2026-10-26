@@ -16,8 +16,9 @@ DEFAULT_ENDPOINTS = {
         "params": {"includeInactiveUsers": True},
     },
     "workflows": {
+        # rest/api/3/workflow/search is deprecated and scheduled for removal
         "data_path": "values",
-        "api_path": "/rest/api/3/workflow/search",
+        "api_path": "rest/api/3/workflows/search",
         "params": {},
     },
     "projects": {
