@@ -1,6 +1,6 @@
 ---
 name: refresh-source
-description: Audit a verified source against the current state of its upstream API/SDK, find breakages and outdated patterns, and propose (or implement) a fix plan with credential-free unit tests. Use when users report a source is outdated or broken, or for periodic source maintenance.
+description: Audit a verified source against the current state of its upstream API/SDK, find breakages, outdated patterns and data access gaps (large volumes, bulk export, Arrow, upfront schema, incremental/merge setup), and propose (or implement) a fix plan with credential-free unit tests. Use when users report a source is outdated or broken, or for periodic source maintenance.
 argument-hint: <source-name> -- [optional hints what to pay attention to]
 ---
 
@@ -29,6 +29,47 @@ Use WebSearch/WebFetch against official docs, SDK changelogs, and SDK migration 
 - Current API version / versioning model; what the code pins vs. what is current; breaking changes in between (renamed/removed/restructured fields the source or its helpers depend on).
 - Official request/response shapes the code touches: list envelopes, pagination cursors, filter parameter formats, retention limits (e.g. event retention windows). Capture documented example payloads — they become test fixtures in phase 4.
 
+## Phase 1b — Data access audit
+
+Breakages are not the only reason to refresh: many sources load correctly but cannot handle real data volumes. Answer each question below for **every resource**, with the doc URL behind each claim. Where docs are silent, say it is a guess and why (e.g. "activity objects are typically the largest tables in a CRM").
+
+1. **Large volumes.** Which endpoints can hold millions of records (activities, events, history/audit logs, line items, messages)? From docs and the web: page size limits, request/export quotas (daily API calls), export file size and count limits, query timeouts. Estimate the cost of a full load (requests = records / page size against the quota) and check how the code behaves at that size:
+   - Is the whole response or file materialized in memory, e.g. `response.json()` on a large export file?
+   - Is there any checkpointing within a run?
+   - Do large mutable tables use `replace`, so they are reloaded in full on every run?
+2. **Bulk loading.** Is there a bulk, export or async API (e.g. Salesforce Bulk API 2.0, export jobs, report or data dump endpoints)? Record:
+   - its limits and server-side chunking;
+   - the objects and fields it does not support, and whether a fallback to the standard API is needed. Detect "not supported" errors at runtime instead of hard-coding object lists;
+   - job polling and how much of a run is spent waiting on the job;
+   - whether a job can outlive the auth session. The session must be renewed with a lock, so clients shared across parallel resources log in only once, and the job resumed from the same page;
+   - whether the SDK retries 429 and 5xx. Most don't: pass dlt's `Client(raise_for_status=False).session` so the SDK still maps errors.
+
+   **Check other popular open source connectors** for the same API: which API they use for which objects and fields, when they fall back, and why. Take the facts, not the code, because their licenses may not allow copying.
+
+3. **Arrow backend.** Can the response be parsed straight into Arrow (CSV via `pyarrow.csv`, NDJSON, Parquet or Arrow exports), with types applied by dlt's own mapper (`dlt.common.libs.pyarrow.cast_arrow_as_columns_schema` / `columns_to_arrow`, using `caps` from the `Container`)? Requirements:
+   - `pyarrow` stays **optional**: a `backend` option ("auto" picks pyarrow when installed via `importlib.util.find_spec`, without importing it), and a "python" backend that parses with the standard library and never imports pyarrow. Prove it with a test that sets `sys.modules["pyarrow"] = None`.
+   - Both backends must load identical values and types; compare them on captured data.
+   - Known traps:
+     - pyarrow's default `null_values` turns the strings `NA`, `N/A` and `NULL` into nulls;
+     - a page with only a header gives a 0-row table that dlt's cast rejects;
+     - null bytes;
+     - whole numbers written as `42.0`.
+   - Measure throughput offline with captured data, using the local `filesystem` destination with `jsonl` so the destination's load step doesn't skew the numbers (duckdb `insert_values` dominates otherwise).
+4. **Schema upfront.** Is there a metadata endpoint (describe, OpenAPI, JSON schema) to compute columns before loading, like `sql_table` reflection?
+   - Map vendor types to dlt types: precision and scale for decimals, `timezone` for timestamps, `date`, `time`, `json`. Skip fields the API cannot return. Unknown types become `text`.
+   - Pass the result as resource `columns` hints and let user `apply_hints` override it.
+   - Verify the mapping against **real** responses: vendors store values differently than written (numbers as doubles, trimmed whitespace, second-precision datetimes, sanitized HTML).
+   - Flag options users may want, e.g. floats as decimals.
+5. **Incremental and merge.** For each resource:
+   - **Cursor:** is there a server-side filterable, preferably indexed, "updated at" field? Prefer the one that changes on every update, e.g. `SystemModstamp` over `LastModifiedDate`.
+   - **Primary key:** is it set? Merge without a key silently appends.
+   - **Disposition:** does it match mutability: merge for mutable records, append for insert-only (history, logs), replace only without a cursor?
+   - **Query:** are queries built from the incremental, with `incremental.get_current_range()` and a closed range so boundary rows are deduplicated by the primary key, which dlt passes to the incremental?
+   - **Lag:** is there a lag for records committed late?
+   - **Deletes:** do they propagate (soft-delete flag as `hard_delete`, deleted-records endpoints)?
+   - **Ordering:** does ORDER BY or LIMIT defeat server-side chunking?
+   - **Defaults:** consider an `incremental="auto"` default that derives cursor, disposition and lag from the schema, and leaves the `"replace"` shorthand as a full reload.
+
 ## Phase 2 — Reproduce empirically. Never claim a breakage you haven't run.
 
 Use ephemeral environments to prove each suspected breakage and each proposed fix, at **both ends** of the allowed dependency range:
@@ -46,9 +87,9 @@ Tier the findings; keep tiers separable:
 
 - **P0 — unbreak**: minimal fixes that work across the whole supported dependency range; align CI group with what fresh users install; fix requirements bounds (add upper bound to majors not yet verified). Must NOT change loaded table schemas.
 - **P1 — modernize client**: new SDK client patterns, drop global state, configurable API version. Anything that changes response shapes **changes loaded schemas for existing users** — call this out explicitly as breaking and keep it out of P0.
-- **P2 — features**: new endpoints, incremental improvements.
+- **P2 — features**: new endpoints, incremental improvements, and the data access findings of phase 1b: bulk API, `backend` option, upfront schema, incremental "auto". These usually change loaded schemas, so they are **breaking**: document the migration (e.g. `refresh="drop_sources"`).
 
-Prefer dlt built-ins over hand-rolled code (`dlt.common.time.ensure_pendulum_datetime`, `dlt.common` logger, rest_api helpers) — but verify the utility exists in the oldest dlt allowed by the source's requirements.txt before using it.
+Prefer dlt built-ins over hand-rolled code (`dlt.common.time.ensure_datetime_in_tz` / `ensure_date`, `dlt.common` logger, rest_api helpers, `sql_table` patterns) — but verify the utility exists in the oldest dlt allowed by the source's requirements.txt before using it, and bump that minimum when needed. Do not add new `pendulum` code: use stdlib `datetime` with dlt's helpers.
 
 ## Phase 4 — Tests (the biggest pain point)
 
@@ -59,6 +100,22 @@ Existing source tests are usually credential-gated integration tests that never 
 - Mock at the transport/SDK boundary with **real SDK objects** (`construct_from` etc.), monkeypatching the API call — so the installed SDK's serialization actually runs instead of a MagicMock lying about it.
 - Cover: pagination control flow (cursor passed from last item, stop on terminal page flag), parameter construction (filters, special-cased endpoints), and any date/type conversion helpers with one case per accepted input type.
 - Run the unit tests against both ends of the SDK range (phase 2 envs) before declaring the range supported.
+- **Pass resolved credentials** (`credentials.resolve()`) to resources in unit tests, otherwise dlt replaces them with real ones from the secrets.
+- Patch sleeps in polling code. Test session renewal and retries (401, 429, 5xx) at the transport level with `requests_mock`.
+
+### Test accounts and captured data
+
+Hand-made fixtures encode our assumptions; they hid the header-only page bug in the Salesforce refresh. When the source has a test account:
+- **Seed it as code** under `tests/<name>/seed/`: one re-runnable, idempotent script that creates metadata (custom objects or fields covering every field type) and records with edge-case values. Upsert on external ids, never delete and re-create. The records are:
+  - null-like and number-like text;
+  - quotes, line breaks and unicode;
+  - boundary numbers and dates;
+  - blank values;
+  - deleted records.
+- **Capture real responses** from the seeded account into `tests/<name>/cases/`. Use only synthetic seed data, never customer data. Run credential-free unit tests on them, compared field by field with expected values derived from the seed data.
+- **Keep live (end-to-end) tests read-only, few and parallel.** Count only seeded records, because accounts come with their own sample data. Pause between live runs, since vendors throttle.
+- **Never read or print secrets files.** Credentials reach the seed script and tests only through dlt config injection.
+- **Check other popular open source connectors** for the same API and their test suites for edge cases not covered yet: value formats, nulls, quoting, pagination, errors, unsupported objects. Add them as test cases. Take the cases, not the code: write fixtures and values ourselves, because their licenses may not allow copying.
 
 ## Phase 5 — Verify and finish
 
@@ -77,5 +134,5 @@ https://dlthub.com/docs/llms.txt — one fix covers both. Fetch the file
 
 - **Code drift**: constant names, default endpoint tuples, function signatures and links quoted in the docs must match `settings.py`/`__init__.py` exactly — docs commonly lag source-repo PRs (e.g. an endpoint moved between ENDPOINTS tuples).
 - **Copy-pasteable examples are the highest-stakes content**: an example demonstrating a removed or unsafe pattern (e.g. incremental loading of an editable endpoint) silently produces wrong data for everyone who pastes it.
-- **Document what the refresh established**: supported SDK version range, pinned upstream API version and its schema implications, accepted input formats, retention limits and other upstream constraints discovered in phase 1.
+- **Document what the refresh established**: supported SDK version range, pinned upstream API version and its schema implications, accepted input formats, retention limits and other upstream constraints discovered in phase 1, plus the phase 1b results: which API is used for which resources, backend options and their throughput, type mapping, default incremental and write dispositions, known limitations, and a migration note for breaking changes.
 - Propose the changes as a diff against the fetched file; the actual PR goes to `dlt-hub/dlt`, not this repo.
