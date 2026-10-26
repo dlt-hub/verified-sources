@@ -1,13 +1,19 @@
 """ This source uses Jira API and dlt to load data such as Issues, Users, Workflows and Projects to the database. """
 
-from typing import Iterable, List, Optional
+from typing import Dict, Iterable, List, Optional
 
 import dlt
+from dlt.common.schema.typing import TColumnSchema
 from dlt.common.typing import DictStrAny, TDataItem
 from dlt.sources import DltResource
 from dlt.sources.helpers import requests
 
-from .settings import DEFAULT_ENDPOINTS, DEFAULT_PAGE_SIZE
+from .settings import DEFAULT_ENDPOINTS, DEFAULT_PAGE_SIZE, TEndpoint
+
+
+def nullable_key_columns(primary_key: str) -> Dict[str, TColumnSchema]:
+    """The spec marks no response field as required, so a null key must not fail the load."""
+    return {primary_key: {"nullable": True}}
 
 
 @dlt.source(max_table_nesting=2)
@@ -29,11 +35,18 @@ def jira(
         Iterable[DltResource]: List of resource functions.
     """
     resources = []
-    for endpoint_name, endpoint_parameters in DEFAULT_ENDPOINTS.items():
+    for endpoint_name, endpoint in DEFAULT_ENDPOINTS.items():
         res_function = dlt.resource(
-            get_paginated_data, name=endpoint_name, write_disposition="replace"
+            get_paginated_data,
+            name=endpoint_name,
+            write_disposition="replace",
+            primary_key=endpoint["primary_key"],
+            columns=nullable_key_columns(endpoint["primary_key"]),
         )(
-            **endpoint_parameters,  # type: ignore[arg-type]
+            api_path=endpoint["api_path"],
+            data_path=endpoint.get("data_path"),
+            params=endpoint.get("params"),
+            use_cursor_pagination=endpoint.get("use_cursor_pagination", False),
             subdomain=subdomain,
             email=email,
             api_token=api_token,
@@ -62,28 +75,28 @@ def jira_search(
     Returns:
         Iterable[DltResource]: Resource function for searching issues.
     """
+    issues_endpoint: TEndpoint = DEFAULT_ENDPOINTS["issues"]
 
-    @dlt.resource(write_disposition="replace")
+    @dlt.resource(
+        write_disposition="replace",
+        primary_key=issues_endpoint["primary_key"],
+        columns=nullable_key_columns(issues_endpoint["primary_key"]),
+    )
     def issues(jql_queries: List[str]) -> Iterable[TDataItem]:
-        api_path = "rest/api/3/search/jql"
-
         for jql in jql_queries:
-            params = {
-                "fields": "*all",
-                "expand": "fields,changelog,operations,transitions,names",
-                "validateQuery": "strict",
-                "jql": jql,
-            }
+            params = {**issues_endpoint.get("params", {}), "jql": jql}
 
             yield from get_paginated_data(
-                api_path=api_path,
+                api_path=issues_endpoint["api_path"],
                 params=params,
                 subdomain=subdomain,
                 email=email,
                 api_token=api_token,
                 page_size=page_size,
-                data_path="issues",
-                use_cursor_pagination=True,
+                data_path=issues_endpoint.get("data_path"),
+                use_cursor_pagination=issues_endpoint.get(
+                    "use_cursor_pagination", False
+                ),
             )
 
     return issues
@@ -130,20 +143,33 @@ def get_paginated_data(
         result = response.json()
 
         if data_path:
-            results_page = result.pop(data_path)
+            if data_path not in result:
+                raise ValueError(
+                    f"Jira endpoint {api_path} returned no '{data_path}' key. "
+                    f"Keys returned: {sorted(result)}. The endpoint may have been removed."
+                )
+            results_page = result[data_path]
         else:
             results_page = result
 
-        if len(results_page) == 0:
-            break
-
-        yield results_page
+        if results_page:
+            yield results_page
 
         if use_cursor_pagination:
+            # the token is omitted on the last page; an empty page with a token is not the end
             next_page_token = result.get("nextPageToken")
-            if not next_page_token:
+            if not next_page_token or result.get("isLast"):
                 break
             params["nextPageToken"] = next_page_token
         else:
+            # an empty page always ends the loop, otherwise isLast=false with no rows never advances
+            if len(results_page) == 0:
+                break
             start_at += len(results_page)
+            if isinstance(result, dict):
+                if result.get("isLast"):
+                    break
+                total = result.get("total")
+                if total is not None and start_at >= total:
+                    break
             params["startAt"] = start_at

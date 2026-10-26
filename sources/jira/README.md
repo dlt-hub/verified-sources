@@ -8,7 +8,7 @@ Resources that can be loaded using this verified source are:
 | Name      | Description                                                                              |
 | --------- | ---------------------------------------------------------------------------------------- |
 | issues    | individual pieces of work to be completed                                                |
-| users     | administrator of a given project                                                         |
+| users     | all users on the site, including inactive and deleted accounts                           |
 | workflows | the key aspect of managing and tracking the progress of issues or tasks within a project |
 | projects  | a collection of tasks that need to be completed to achieve a certain outcome             |
 
@@ -45,9 +45,9 @@ To grab Jira credentials and configure the verified source, please refer to the
 
 1. Use the email address associated with your Jira account.
 
-1. Set up the "access_token" to ensure secure access to your Jira account.
+1. Set up the "api_token" to ensure secure access to your Jira account.
 
-1. Next, follow the instructions in [Destinations](../destinations/duckdb) to add credentials for
+1. Next, follow the instructions in [Destinations](https://dlthub.com/docs/dlt-ecosystem/destinations/) to add credentials for
    your chosen destination. This will ensure that your data is properly routed to its final
    destination.
 
@@ -57,6 +57,13 @@ To grab Jira credentials and configure the verified source, please refer to the
 
    ```bash
    pip install -r requirements.txt
+   ```
+
+   If the init command did not write a `requirements.txt`, install `dlt` with your destination
+   extra instead:
+
+   ```bash
+   pip install "dlt[duckdb]"
    ```
 
 1. Now the pipeline can be run by using the command:

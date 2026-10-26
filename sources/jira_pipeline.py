@@ -4,21 +4,25 @@ import dlt
 from jira import jira, jira_search
 
 
-def load(endpoints: Optional[List[str]] = None) -> None:
+def load(endpoints: Optional[List[str]] = None, limit: Optional[int] = None) -> None:
     """
     Load data from specified Jira endpoints into a dataset.
 
     Args:
         endpoints: A list of Jira endpoints. If not provided, defaults to all resources.
+        limit: Maximum number of pages per resource. Bounds a first run.
     """
-    if not endpoints:
-        endpoints = list(jira().resources.keys())
-
     pipeline = dlt.pipeline(
         pipeline_name="jira_pipeline", destination="duckdb", dataset_name="jira"
     )
 
-    load_info = pipeline.run(jira().with_resources(*endpoints))
+    source = jira()
+    if endpoints:
+        source = source.with_resources(*endpoints)
+    if limit is not None:
+        source.add_limit(limit)
+
+    load_info = pipeline.run(source)
 
     print(f"Load Information: {load_info}")
 
@@ -42,12 +46,12 @@ def load_query_data(queries: List[str]) -> None:
 
 
 if __name__ == "__main__":
-    # Add your desired endpoints to the list 'endpoints'
-    load(endpoints=None)
+    # issues load in the query run below
+    load(endpoints=["users", "projects", "workflows"], limit=2)
 
     queries = [
         "created >= -30d order by created DESC",
-        'project = KAN AND status = "In Progress" order by created DESC',
+        'status = "In Progress" order by created DESC',
     ]
 
     load_query_data(queries=queries)
