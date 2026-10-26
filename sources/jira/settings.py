@@ -1,7 +1,5 @@
 from typing import Any, Dict, TypedDict
 
-from dlt.common.schema.typing import TWriteDisposition
-
 
 class _EndpointRequired(TypedDict):
     api_path: str
@@ -12,7 +10,6 @@ class TEndpoint(_EndpointRequired, total=False):
     data_path: str
     offset_path: str
     use_cursor_pagination: bool
-    write_disposition: TWriteDisposition
     deduplicate_on: str
     params: Dict[str, Any]
 
@@ -54,8 +51,10 @@ DEFAULT_ENDPOINTS: Dict[str, TEndpoint] = {
         "offset_path": "values",
         "api_path": "rest/api/3/workflows/search",
         "primary_key": "status_reference",
-        # pages repeat the statuses their workflows share
-        "write_disposition": "merge",
+        # pages repeat the statuses their workflows share. A merge disposition would
+        # deduplicate them, but it would also collapse the rows whose key is null, which the
+        # primary key hint allows, so the resource deduplicates and keeps `replace`.
+        "deduplicate_on": "statusReference",
         "params": {},
     },
     "projects": {

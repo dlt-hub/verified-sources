@@ -177,7 +177,7 @@ def jira(
         res_function = dlt.resource(
             get_paginated_data,
             name=endpoint_name,
-            write_disposition=endpoint.get("write_disposition", "replace"),
+            write_disposition="replace",
             primary_key=endpoint["primary_key"],
             columns=_nullable_key_columns(endpoint["primary_key"]),
         )(

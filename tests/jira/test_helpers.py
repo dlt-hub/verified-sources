@@ -5,7 +5,6 @@ from urllib.parse import parse_qs, urlparse
 import dlt
 import pytest
 import requests_mock
-
 from dlt.common.normalizers.naming.snake_case import NamingConvention
 from dlt.sources.helpers.requests import Response
 
@@ -24,7 +23,6 @@ INTERNAL_KEYS = {
     "offset_path",
     "use_cursor_pagination",
     "deduplicate_on",
-    "write_disposition",
     "primary_key",
 }
 
@@ -262,8 +260,6 @@ def test_workflow_statuses_read_the_same_response_as_workflows() -> None:
     assert statuses["api_path"] == workflows["api_path"]
     # workflows__statuses.status_reference joins to this key
     assert statuses["primary_key"] == "status_reference"
-    # pages repeat the statuses their workflows share
-    assert statuses["write_disposition"] == "merge"
 
 
 @pytest.mark.parametrize(
@@ -450,3 +446,74 @@ def test_each_response_is_parsed_once_by_the_source(
         list(get_paginated_data(api_path=api_path, **read_args, **AUTH))
     # dlt parses the page to apply the data selector, this source parses it once more
     assert len(parses) == 2
+
+
+def test_repeated_statuses_are_yielded_once() -> None:
+    # workflows that share a status repeat it, and `replace` deduplicates nothing
+    with requests_mock.Mocker() as m:
+        serve(
+            m,
+            "rest/api/3/workflows/search",
+            {
+                "values": [{"id": "w1"}],
+                "statuses": [{"statusReference": "s1"}, {"statusReference": "s2"}],
+                "total": 2,
+            },
+            {
+                "values": [{"id": "w2"}],
+                "statuses": [{"statusReference": "s2"}, {"statusReference": "s3"}],
+                "total": 2,
+            },
+        )
+        data = list(jira(**AUTH).resources["workflow_statuses"])
+    assert [i["statusReference"] for i in data] == ["s1", "s2", "s3"]
+
+
+def test_statuses_without_a_key_all_load() -> None:
+    """A merge disposition collapses the keyless rows into one, `replace` lands them all."""
+    pipeline = dlt.pipeline(
+        pipeline_name="test_jira_keyless_statuses",
+        destination="duckdb",
+        dataset_name="test_jira_keyless_statuses",
+        dev_mode=True,
+    )
+    # the keyless rows only disappear when the same load carries keyed ones
+    statuses = [
+        {"statusReference": "s1", "name": "Open"},
+        {"name": "Unreferenced"},
+        {"statusReference": "s2", "name": "Done"},
+        {"name": "Also unreferenced"},
+    ]
+    with requests_mock.Mocker() as m:
+        serve(
+            m,
+            DEFAULT_ENDPOINTS["workflow_statuses"]["api_path"],
+            {"values": [{"id": "w1"}], "statuses": statuses, "isLast": True},
+        )
+        info = pipeline.run(jira(**AUTH).with_resources("workflow_statuses"))
+    assert_load_info(info)
+    assert load_table_counts(pipeline, "workflow_statuses") == {"workflow_statuses": 4}
+
+
+def test_statuses_dropped_upstream_do_not_survive_the_next_load() -> None:
+    pipeline = dlt.pipeline(
+        pipeline_name="test_jira_statuses_replace",
+        destination="duckdb",
+        dataset_name="test_jira_statuses_replace",
+        dev_mode=True,
+    )
+    api_path = DEFAULT_ENDPOINTS["workflow_statuses"]["api_path"]
+    loads = (
+        [{"statusReference": "s1"}, {"statusReference": "s2"}],
+        [{"statusReference": "s1"}],
+    )
+    for statuses in loads:
+        with requests_mock.Mocker() as m:
+            serve(
+                m,
+                api_path,
+                {"values": [{"id": "w1"}], "statuses": statuses, "isLast": True},
+            )
+            info = pipeline.run(jira(**AUTH).with_resources("workflow_statuses"))
+        assert_load_info(info)
+    assert load_table_counts(pipeline, "workflow_statuses") == {"workflow_statuses": 1}
