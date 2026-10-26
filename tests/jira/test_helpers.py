@@ -2,8 +2,12 @@ from typing import Any, Dict, Iterator, List
 
 import pytest
 
-from sources.jira import get_paginated_data
+from sources.jira import get_paginated_data, jira, jira_search
 from sources.jira.settings import DEFAULT_ENDPOINTS
+
+# params the Jira Cloud v3 spec rejects on the endpoints this source calls
+REJECTED_PARAMS = {"validateQuery", "includeInactiveUsers"}
+REJECTED_EXPANDS = {"fields"}
 
 AUTH = dict(subdomain="example", email="e@example.com", api_token="token", page_size=2)
 
@@ -214,3 +218,29 @@ def test_cursor_pagination_requires_object_response(
                 api_path="rest/api/3/search/jql", use_cursor_pagination=True, **AUTH
             )
         )
+
+
+def assert_params_accepted(params: Dict[str, Any]) -> None:
+    assert not REJECTED_PARAMS & set(params)
+    assert not REJECTED_EXPANDS & set(params.get("expand", "").split(","))
+    assert params["maxResults"] == AUTH["page_size"]
+
+
+@pytest.mark.parametrize("endpoint_name", list(DEFAULT_ENDPOINTS))
+def test_jira_resource_request(
+    endpoint_name: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    empty_page = [] if endpoint_name == "users" else {"issues": [], "values": []}
+    stub = install(monkeypatch, StubGet([], exhausted=empty_page))
+    resource = jira(**AUTH).resources[endpoint_name]
+    assert list(resource) == []
+    assert_params_accepted(stub.sent[0])
+
+
+def test_jira_search_request(monkeypatch: pytest.MonkeyPatch) -> None:
+    stub = install(monkeypatch, StubGet([], exhausted={"issues": []}))
+    resource = jira_search(**AUTH).issues(jql_queries=["project = X", "project = Y"])
+    assert list(resource) == []
+    assert [p["jql"] for p in stub.sent] == ["project = X", "project = Y"]
+    for params in stub.sent:
+        assert_params_accepted(params)

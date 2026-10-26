@@ -70,8 +70,7 @@ def jira_search(
         for jql in jql_queries:
             params = {
                 "fields": "*all",
-                "expand": "fields,changelog,operations,transitions,names",
-                "validateQuery": "strict",
+                "expand": "changelog,operations,transitions,names",
                 "jql": jql,
             }
 

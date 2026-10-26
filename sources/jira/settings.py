@@ -6,14 +6,15 @@ DEFAULT_ENDPOINTS = {
         "use_cursor_pagination": True,
         "params": {
             "fields": "*all",
-            "expand": "fields,changelog,operations,transitions,names",
-            "validateQuery": "strict",
+            "expand": "changelog,operations,transitions,names",
             "jql": "created >= '2000-01-01' order by created DESC",
         },
     },
     "users": {
+        # returns a bare array of active, inactive and deleted users; maxResults is capped at 1000
+        # no envelope, so the loop needs one empty page to stop
         "api_path": "rest/api/3/users",
-        "params": {"includeInactiveUsers": True},
+        "params": {},
     },
     "workflows": {
         # rest/api/3/workflow/search is deprecated and scheduled for removal
