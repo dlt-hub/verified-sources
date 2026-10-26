@@ -8,6 +8,8 @@ from sources.jira.settings import DEFAULT_ENDPOINTS
 # params the Jira Cloud v3 spec rejects on the endpoints this source calls
 REJECTED_PARAMS = {"validateQuery", "includeInactiveUsers"}
 REJECTED_EXPANDS = {"fields"}
+# endpoint config keys that must not reach the query string
+INTERNAL_KEYS = {"api_path", "data_path", "use_cursor_pagination", "primary_key"}
 
 AUTH = dict(subdomain="example", email="e@example.com", api_token="token", page_size=2)
 
@@ -221,9 +223,15 @@ def test_cursor_pagination_requires_object_response(
 
 
 def assert_params_accepted(params: Dict[str, Any]) -> None:
-    assert not REJECTED_PARAMS & set(params)
+    assert not (REJECTED_PARAMS | INTERNAL_KEYS) & set(params)
     assert not REJECTED_EXPANDS & set(params.get("expand", "").split(","))
     assert params["maxResults"] == AUTH["page_size"]
+
+
+def assert_nullable_key(resource: Any, primary_key: str) -> None:
+    key_column = resource.compute_table_schema()["columns"][primary_key]
+    assert key_column["primary_key"] is True
+    assert key_column["nullable"] is True
 
 
 @pytest.mark.parametrize("endpoint_name", list(DEFAULT_ENDPOINTS))
@@ -236,6 +244,8 @@ def test_jira_resource_request(
     assert list(resource) == []
     assert_params_accepted(stub.sent[0])
 
+    assert_nullable_key(resource, DEFAULT_ENDPOINTS[endpoint_name]["primary_key"])
+
 
 def test_jira_search_request(monkeypatch: pytest.MonkeyPatch) -> None:
     stub = install(monkeypatch, StubGet([], exhausted={"issues": []}))
@@ -244,3 +254,4 @@ def test_jira_search_request(monkeypatch: pytest.MonkeyPatch) -> None:
     assert [p["jql"] for p in stub.sent] == ["project = X", "project = Y"]
     for params in stub.sent:
         assert_params_accepted(params)
+    assert_nullable_key(resource, "id")

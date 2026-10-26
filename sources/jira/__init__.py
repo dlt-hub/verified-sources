@@ -1,13 +1,19 @@
 """ This source uses Jira API and dlt to load data such as Issues, Users, Workflows and Projects to the database. """
 
-from typing import Iterable, List, Optional
+from typing import Dict, Iterable, List, Optional
 
 import dlt
+from dlt.common.schema.typing import TColumnSchema
 from dlt.common.typing import DictStrAny, TDataItem
 from dlt.sources import DltResource
 from dlt.sources.helpers import requests
 
-from .settings import DEFAULT_ENDPOINTS, DEFAULT_PAGE_SIZE
+from .settings import DEFAULT_ENDPOINTS, DEFAULT_PAGE_SIZE, TEndpoint
+
+
+def nullable_key_columns(primary_key: str) -> Dict[str, TColumnSchema]:
+    """Hints marking `primary_key` nullable, since Jira marks no response field as required."""
+    return {primary_key: {"nullable": True}}
 
 
 @dlt.source(max_table_nesting=2)
@@ -29,11 +35,18 @@ def jira(
         Iterable[DltResource]: List of resource functions.
     """
     resources = []
-    for endpoint_name, endpoint_parameters in DEFAULT_ENDPOINTS.items():
+    for endpoint_name, endpoint in DEFAULT_ENDPOINTS.items():
         res_function = dlt.resource(
-            get_paginated_data, name=endpoint_name, write_disposition="replace"
+            get_paginated_data,
+            name=endpoint_name,
+            write_disposition="replace",
+            primary_key=endpoint["primary_key"],
+            columns=nullable_key_columns(endpoint["primary_key"]),
         )(
-            **endpoint_parameters,  # type: ignore[arg-type]
+            api_path=endpoint["api_path"],
+            data_path=endpoint.get("data_path"),
+            params=endpoint.get("params"),
+            use_cursor_pagination=endpoint.get("use_cursor_pagination", False),
             subdomain=subdomain,
             email=email,
             api_token=api_token,
@@ -62,27 +75,28 @@ def jira_search(
     Returns:
         Iterable[DltResource]: Resource function for searching issues.
     """
+    issues_endpoint: TEndpoint = DEFAULT_ENDPOINTS["issues"]
 
-    @dlt.resource(write_disposition="replace")
+    @dlt.resource(
+        write_disposition="replace",
+        primary_key=issues_endpoint["primary_key"],
+        columns=nullable_key_columns(issues_endpoint["primary_key"]),
+    )
     def issues(jql_queries: List[str]) -> Iterable[TDataItem]:
-        api_path = "rest/api/3/search/jql"
-
         for jql in jql_queries:
-            params = {
-                "fields": "*all",
-                "expand": "changelog,operations,transitions,names",
-                "jql": jql,
-            }
+            params = {**issues_endpoint.get("params", {}), "jql": jql}
 
             yield from get_paginated_data(
-                api_path=api_path,
+                api_path=issues_endpoint["api_path"],
                 params=params,
                 subdomain=subdomain,
                 email=email,
                 api_token=api_token,
                 page_size=page_size,
-                data_path="issues",
-                use_cursor_pagination=True,
+                data_path=issues_endpoint.get("data_path"),
+                use_cursor_pagination=issues_endpoint.get(
+                    "use_cursor_pagination", False
+                ),
             )
 
     return issues
