@@ -11,6 +11,7 @@ from tests.utils import (
     assert_load_info,
     load_table_counts,
     load_table_distinct_counts,
+    load_tables_to_dicts,
 )
 
 # pages per resource, so the run stays bounded on a site of any size
@@ -123,3 +124,29 @@ def test_load_query_issues(destination_name: str) -> None:
     counts = load_table_counts(pipeline, "issues")
     assert counts["issues"] > 0
     assert load_table_distinct_counts(pipeline, "id", "issues") == counts
+
+
+@pytest.mark.parametrize("destination_name", ALL_DESTINATIONS)
+def test_workflow_statuses_resolve_the_child_table_references(
+    destination_name: str,
+) -> None:
+    """`workflows__statuses` carries a reference and no name. This is the join that resolves it."""
+    pipeline = dlt.pipeline(
+        pipeline_name="test_jira_workflow_statuses",
+        destination=destination_name,
+        dataset_name="test_dataset_name",
+        dev_mode=True,
+    )
+    source = jira(page_size=5).with_resources("workflows", "workflow_statuses")
+    source.add_limit(PAGE_LIMIT)
+    info = pipeline.run(source)
+    assert_load_info(info)
+
+    tables = load_tables_to_dicts(pipeline, "workflows__statuses", "workflow_statuses")
+    referenced = {row["status_reference"] for row in tables["workflows__statuses"]}
+    resolved = {row["status_reference"] for row in tables["workflow_statuses"]}
+    assert referenced
+    assert referenced <= resolved
+    # the resource deduplicates, so the join stays one to one
+    assert len(resolved) == len(tables["workflow_statuses"])
+    assert all(row["name"] for row in tables["workflow_statuses"])
