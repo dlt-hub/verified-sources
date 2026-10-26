@@ -1,6 +1,6 @@
 """ This source uses Jira API and dlt to load data such as Issues, Users, Workflows and Projects to the database. """
 
-from typing import Any, Iterable, List, Set
+from typing import Any, Iterable, List, Optional, Set
 
 import dlt
 from dlt.common.typing import TDataItem
@@ -29,7 +29,7 @@ def jira(
     subdomain: str = dlt.secrets.value,
     email: str = dlt.secrets.value,
     api_token: str = dlt.secrets.value,
-    page_size: int = DEFAULT_PAGE_SIZE,
+    page_size: Optional[int] = None,
 ) -> Iterable[DltResource]:
     """
     Jira source function that generates a list of resource functions based on endpoints.
@@ -38,7 +38,7 @@ def jira(
         subdomain: The subdomain for the Jira instance.
         email: The email to authenticate with.
         api_token: The API token to authenticate with.
-        page_size: Maximum number of results per page
+        page_size: Rows per request. Defaults to the largest page each endpoint serves.
 
     Returns:
         Iterable[DltResource]: List of resource functions.
@@ -62,7 +62,7 @@ def jira(
             subdomain=subdomain,
             email=email,
             api_token=api_token,
-            page_size=page_size,
+            page_size=page_size or endpoint.get("page_size", DEFAULT_PAGE_SIZE),
         )
         resources.append(res_function)
 
@@ -74,7 +74,7 @@ def jira_search(
     subdomain: str = dlt.secrets.value,
     email: str = dlt.secrets.value,
     api_token: str = dlt.secrets.value,
-    page_size: int = DEFAULT_PAGE_SIZE,
+    page_size: Optional[int] = None,
 ) -> Iterable[DltResource]:
     """
     Jira search source function that generates a resource function for searching issues.
@@ -83,7 +83,7 @@ def jira_search(
         subdomain: The subdomain for the Jira instance.
         email: The email to authenticate with.
         api_token: The API token to authenticate with.
-        page_size: Maximum number of results per page
+        page_size: Rows per request. Defaults to the largest page the endpoint serves.
 
     Returns:
         Iterable[DltResource]: Resource function for searching issues.
@@ -108,7 +108,8 @@ def jira_search(
                 subdomain=subdomain,
                 email=email,
                 api_token=api_token,
-                page_size=page_size,
+                page_size=page_size
+                or issues_endpoint.get("page_size", DEFAULT_PAGE_SIZE),
                 data_path=issues_endpoint.get("data_path"),
                 use_cursor_pagination=issues_endpoint.get(
                     "use_cursor_pagination", False

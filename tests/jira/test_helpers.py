@@ -10,7 +10,7 @@ from dlt.sources.helpers.requests import Response
 
 from sources.jira import helpers, jira, jira_search
 from sources.jira.helpers import JiraResponseError, get_paginated_data
-from sources.jira.settings import DEFAULT_ENDPOINTS
+from sources.jira.settings import DEFAULT_ENDPOINTS, DEFAULT_PAGE_SIZE
 
 from tests.utils import assert_load_info, load_table_counts
 
@@ -22,6 +22,7 @@ INTERNAL_KEYS = {
     "api_path",
     "data_path",
     "offset_path",
+    "page_size",
     "use_cursor_pagination",
     "deduplicate",
     "key_field",
@@ -421,6 +422,27 @@ def test_source_nesting_setting_is_not_overridden_on_search_issues() -> None:
     assert source.max_table_nesting == 0
     # a resource level hint would win over the source setting, so there must not be one
     assert source.resources["issues"].max_table_nesting is None
+
+
+@pytest.mark.parametrize("endpoint_name", list(DEFAULT_ENDPOINTS))
+def test_each_endpoint_requests_its_own_page_size(endpoint_name: str) -> None:
+    """Jira caps `maxResults` per endpoint, so the default is per endpoint too."""
+    endpoint = DEFAULT_ENDPOINTS[endpoint_name]
+    credentials = {k: v for k, v in AUTH.items() if k != "page_size"}
+    empty_page: Any = (
+        [] if endpoint_name == "users" else {"issues": [], "values": [], "statuses": []}
+    )
+    with requests_mock.Mocker() as m:
+        serve(m, endpoint["api_path"], empty_page)
+        assert list(jira(**credentials).resources[endpoint_name]) == []
+        expected = endpoint.get("page_size", DEFAULT_PAGE_SIZE)
+        assert sent_params(m)[0]["maxResults"] == str(expected)
+
+    # the source argument still overrides it
+    with requests_mock.Mocker() as m:
+        serve(m, endpoint["api_path"], empty_page)
+        assert list(jira(**credentials, page_size=7).resources[endpoint_name]) == []
+        assert sent_params(m)[0]["maxResults"] == "7"
 
 
 def test_rows_without_the_key_field_are_reported_once(

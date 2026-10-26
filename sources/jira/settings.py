@@ -11,6 +11,8 @@ class _EndpointRequired(TypedDict):
 class TEndpoint(_EndpointRequired, total=False):
     data_path: str
     offset_path: str
+    # the largest page the endpoint serves; the source argument overrides it
+    page_size: int
     use_cursor_pagination: bool
     deduplicate: bool
     params: Dict[str, Any]
@@ -23,6 +25,8 @@ DEFAULT_ENDPOINTS: Dict[str, TEndpoint] = {
         "use_cursor_pagination": True,
         "key_field": "id",
         "primary_key": "id",
+        # jira caps the page at 100 issues while `fields` asks for `*all`
+        "page_size": 100,
         "params": {
             "fields": "*all",
             "expand": "changelog,operations,transitions,names",
@@ -30,11 +34,12 @@ DEFAULT_ENDPOINTS: Dict[str, TEndpoint] = {
         },
     },
     "users": {
-        # returns a bare array of active, inactive and deleted users; maxResults is capped at 1000
-        # no envelope, so the loop needs one empty page to stop
+        # bare array of active, inactive and previously deleted users, no envelope,
+        # so the loop needs one empty page to stop
         "api_path": "rest/api/3/users",
         "key_field": "accountId",
         "primary_key": "account_id",
+        "page_size": 1000,
         "params": {},
     },
     "workflows": {
@@ -43,6 +48,8 @@ DEFAULT_ENDPOINTS: Dict[str, TEndpoint] = {
         "api_path": "rest/api/3/workflows/search",
         "key_field": "id",
         "primary_key": "id",
+        # jira caps the page at 50 workflows and reports no maximum
+        "page_size": 50,
         "params": {},
     },
     "workflow_statuses": {
@@ -55,6 +62,7 @@ DEFAULT_ENDPOINTS: Dict[str, TEndpoint] = {
         "api_path": "rest/api/3/workflows/search",
         "key_field": "statusReference",
         "primary_key": "status_reference",
+        "page_size": 50,
         # pages repeat the statuses their workflows share. A merge disposition would
         # deduplicate them, but it would also collapse the rows whose key is null, which the
         # primary key hint allows, so the resource deduplicates and keeps `replace`.
@@ -66,6 +74,8 @@ DEFAULT_ENDPOINTS: Dict[str, TEndpoint] = {
         "api_path": "rest/api/3/project/search",
         "key_field": "id",
         "primary_key": "id",
+        # the documented maximum
+        "page_size": 100,
         "params": {
             "expand": "description,lead,issueTypes,url,projectKeys,permissions,insight"
         },

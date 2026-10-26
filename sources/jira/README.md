@@ -85,6 +85,9 @@ To grab Jira credentials and configure the verified source, please refer to the
    python jira_pipeline.py
    ```
 
+   Each resource requests the largest page its endpoint serves. Pass `page_size` to `jira` or
+   `jira_search` to request a smaller one.
+
 1. To make sure that everything is loaded as expected, use the command:
 
    ```bash
