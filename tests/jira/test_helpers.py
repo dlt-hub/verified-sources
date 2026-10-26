@@ -293,6 +293,18 @@ def test_key_field_normalizes_to_the_primary_key(endpoint_name: str) -> None:
     assert normalized == endpoint["primary_key"]
 
 
+def test_issues_in_the_jira_source_are_not_deduplicated() -> None:
+    """`jira` runs one query, so every row it gets is loaded. Only `jira_search` overlaps."""
+    with requests_mock.Mocker() as m:
+        serve(
+            m,
+            "rest/api/3/search/jql",
+            {"issues": [{"id": "1"}, {"id": "1"}], "isLast": True},
+        )
+        data = list(jira(**AUTH).resources["issues"])
+    assert [i["id"] for i in data] == ["1", "1"]
+
+
 def test_an_issue_matched_by_two_queries_is_yielded_once() -> None:
     with requests_mock.Mocker() as m:
         serve(

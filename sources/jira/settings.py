@@ -23,8 +23,6 @@ DEFAULT_ENDPOINTS: Dict[str, TEndpoint] = {
         "use_cursor_pagination": True,
         "key_field": "id",
         "primary_key": "id",
-        # jira_search runs several queries and they match the same issue
-        "deduplicate": True,
         "params": {
             "fields": "*all",
             "expand": "changelog,operations,transitions,names",
