@@ -62,7 +62,9 @@ To grab Jira credentials and configure the verified source, please refer to the
    pip install -r requirements.txt
    ```
 
-1. Now the pipeline can be run by using the command:
+1. Now the pipeline can be run by using the command. The example loads two pages per resource;
+   remove the `limit` argument in `jira_pipeline.py` to load everything.
+
 
    ```bash
    python jira_pipeline.py
