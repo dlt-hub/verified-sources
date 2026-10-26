@@ -8,7 +8,8 @@ import requests_mock
 from dlt.common.normalizers.naming.snake_case import NamingConvention
 from dlt.sources.helpers.requests import Response
 
-from sources.jira import JiraResponseError, get_paginated_data, jira, jira_search
+from sources.jira import jira, jira_search
+from sources.jira.helpers import JiraResponseError, get_paginated_data
 from sources.jira.settings import DEFAULT_ENDPOINTS
 
 from tests.utils import assert_load_info, load_table_counts
