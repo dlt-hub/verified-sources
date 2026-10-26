@@ -236,6 +236,26 @@ def test_http_error_raises() -> None:
             )
 
 
+def test_jira_error_messages_reach_the_caller() -> None:
+    """Jira answers an unfiltered JQL query with 400 and the reason in the body."""
+    message = "Unbounded JQL queries are not allowed here."
+    with requests_mock.Mocker() as m:
+        m.get(
+            url_for("rest/api/3/search/jql"),
+            status_code=400,
+            json={"errorMessages": [message], "errors": {}},
+        )
+        with pytest.raises(JiraResponseError, match=message):
+            list(
+                get_paginated_data(
+                    api_path="rest/api/3/search/jql",
+                    data_path="issues",
+                    use_cursor_pagination=True,
+                    **AUTH,
+                )
+            )
+
+
 def test_requests_carry_basic_auth() -> None:
     with requests_mock.Mocker() as m:
         serve(m, "rest/api/3/users", [])

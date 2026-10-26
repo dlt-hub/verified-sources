@@ -1,6 +1,7 @@
 """Request and response handling for the Jira endpoints the source reads."""
 
 from typing import Any, Dict, Iterable, List, Optional, Set
+from urllib.parse import urlparse
 
 from dlt.common.schema.typing import TColumnSchema
 from dlt.common.typing import DictStrAny, TDataItem
@@ -148,6 +149,29 @@ class JiraOffsetPaginator(BasePaginator):
         _set_param(request, "maxResults", self.page_size)
 
 
+def _raise_jira_error(response: Response, *args: Any, **kwargs: Any) -> None:
+    """Response hook replacing `raise_for_status`, so the messages Jira sends reach the user.
+
+    An error body carries `errorMessages`, and `raise_for_status` reports only the status code.
+    `rest/api/3/search/jql` rejects a JQL query with no filtering clause that way.
+    """
+    if response.status_code < 400:
+        return
+    body = None
+    try:
+        body = _body(response)
+    except ValueError:
+        pass
+    messages = body.get("errorMessages") if isinstance(body, dict) else None
+    if not messages:
+        response.raise_for_status()
+        return
+    raise JiraResponseError(
+        f"Jira endpoint {urlparse(response.url).path.lstrip('/')} answered"
+        f" {response.status_code}: {' '.join(messages)}"
+    )
+
+
 def _check_data_path(api_path: str, data_path: str, response: Response) -> None:
     body = _body(response)
     if isinstance(body, dict) and data_path in body:
@@ -206,6 +230,7 @@ def get_paginated_data(
         params=dict(params or {}),
         paginator=paginator,
         data_selector=data_path or "$",
+        hooks={"response": [_raise_jira_error]},
     ):
         if data_path:
             _check_data_path(api_path, data_path, page.response)

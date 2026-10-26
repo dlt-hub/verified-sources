@@ -94,6 +94,15 @@ To grab Jira credentials and configure the verified source, please refer to the
    For example, the `pipeline_name` for the above pipeline example is `jira_pipeline`, you may also
    use any custom name instead.
 
+### Writing JQL queries
+
+`jira_search` takes a list of JQL queries and loads the issues each one matches. An issue matched
+by two queries is loaded once.
+
+`rest/api/3/search/jql` rejects a query that only sorts: `order by created DESC` answers
+`400 Unbounded JQL queries are not allowed here. Please add a search restriction to your query.`
+Add a filtering clause, as the shipped example does with `created >= -30d`.
+
 💡 To explore additional customizations for this pipeline, we recommend referring to the official
 `dlt` [Jira](https://dlthub.com/docs/dlt-ecosystem/verified-sources/jira) documentation. It provides
 comprehensive information and guidance on how to further customize and tailor the pipeline to suit
