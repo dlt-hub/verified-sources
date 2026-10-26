@@ -8,7 +8,7 @@ import pendulum
 from dlt.common.time import ensure_pendulum_datetime
 from dlt.common.typing import Dict, TAnyDateTime, TDataItem
 from dlt.sources.helpers import requests
-from jsonpath_ng.ext import parse  # type: ignore
+from jsonpath_ng.ext import parse
 
 from .settings import MAX_PAGE_SIZE, SLACK_API_URL
 
