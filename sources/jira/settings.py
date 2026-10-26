@@ -1,5 +1,7 @@
 from typing import Any, Dict, TypedDict
 
+from dlt.common.schema.typing import TWriteDisposition
+
 
 class _EndpointRequired(TypedDict):
     api_path: str
@@ -8,7 +10,9 @@ class _EndpointRequired(TypedDict):
 
 class TEndpoint(_EndpointRequired, total=False):
     data_path: str
+    offset_path: str
     use_cursor_pagination: bool
+    write_disposition: TWriteDisposition
     params: Dict[str, Any]
 
 
@@ -36,6 +40,19 @@ DEFAULT_ENDPOINTS: Dict[str, TEndpoint] = {
         "data_path": "values",
         "api_path": "rest/api/3/workflows/search",
         "primary_key": "id",
+        "params": {},
+    },
+    "workflow_statuses": {
+        # the names behind workflows__statuses.status_reference. Same response as workflows,
+        # under a sibling key, so startAt advances on `values` and not on the rows taken.
+        # rest/api/3/status omits unused statuses and rest/api/3/statuses/search omits
+        # project scoped ones, so neither resolves every reference.
+        "data_path": "statuses",
+        "offset_path": "values",
+        "api_path": "rest/api/3/workflows/search",
+        "primary_key": "status_reference",
+        # pages repeat the statuses their workflows share
+        "write_disposition": "merge",
         "params": {},
     },
     "projects": {

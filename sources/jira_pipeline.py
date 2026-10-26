@@ -53,7 +53,7 @@ def load_query_data(queries: List[str], limit: Optional[int] = None) -> None:
 
 if __name__ == "__main__":
     # issues load in the query run below
-    load(endpoints=["users", "projects", "workflows"], limit=2)
+    load(endpoints=["users", "projects", "workflows", "workflow_statuses"], limit=2)
 
     queries = [
         "created >= -30d order by created DESC",

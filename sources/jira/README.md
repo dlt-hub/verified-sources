@@ -10,10 +10,25 @@ Resources that can be loaded using this verified source are:
 | issues    | individual pieces of work to be completed                                                |
 | users     | all users on the site, including inactive and deleted accounts                           |
 | workflows | the key aspect of managing and tracking the progress of issues or tasks within a project |
+| workflow_statuses | names and categories of the statuses the workflows reference                     |
 | projects  | a collection of tasks that need to be completed to achieve a certain outcome             |
 
 The `workflows` resource reads `rest/api/3/workflows/search`. It returns team-managed workflows as
 well, and its table has different columns than the deprecated endpoint produced.
+
+The `workflows__statuses` child table holds a `status_reference` per status and no name. Join it to
+`workflow_statuses.status_reference` for the name, description and category. That resource reads the
+same response as `workflows` under a sibling key, so it needs no extra permission. `rest/api/3/status`
+omits unused statuses and `rest/api/3/statuses/search` omits project scoped ones, so neither resolves
+every reference.
+
+### Upgrading an existing dataset
+
+The `workflows` table changed shape. Its `id` was an object and arrived as `id__name` and
+`id__entity_id`; it is now a text `id` and the declared primary key. `has_draft_workflow`,
+`is_default`, `projects` and `schemes` are gone, and `name`, `is_editable`, `scope` and `version`
+are new. Drop the `workflows` table before the first run on this version, or load into a fresh
+dataset. The other resources keep their columns.
 
 ## Initialize the pipeline
 
@@ -60,13 +75,6 @@ To grab Jira credentials and configure the verified source, please refer to the
 
    ```bash
    pip install -r requirements.txt
-   ```
-
-   If the init command did not write a `requirements.txt`, install `dlt` with your destination
-   extra instead:
-
-   ```bash
-   pip install "dlt[duckdb]"
    ```
 
 1. Now the pipeline can be run by using the command. The example loads two pages per resource and
