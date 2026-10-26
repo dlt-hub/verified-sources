@@ -3,7 +3,6 @@ from typing import Any, Dict, TypedDict
 
 class _EndpointRequired(TypedDict):
     api_path: str
-    # the response field holding the key, which dlt normalizes into `primary_key`
     key_field: str
     primary_key: str
 
@@ -11,17 +10,18 @@ class _EndpointRequired(TypedDict):
 class TEndpoint(_EndpointRequired, total=False):
     data_path: str
     offset_path: str
-    # the largest page the endpoint serves; the source argument overrides it
     page_size: int
     use_cursor_pagination: bool
     deduplicate: bool
     params: Dict[str, Any]
 
 
+# `key_field` is the response field, `primary_key` the name dlt normalizes it to.
+# `page_size` is the largest page the endpoint serves; the source argument overrides it.
 DEFAULT_ENDPOINTS: Dict[str, TEndpoint] = {
     "issues": {
-        "data_path": "issues",
         "api_path": "rest/api/3/search/jql",
+        "data_path": "issues",
         "use_cursor_pagination": True,
         "key_field": "id",
         "primary_key": "id",
@@ -43,9 +43,8 @@ DEFAULT_ENDPOINTS: Dict[str, TEndpoint] = {
         "params": {},
     },
     "workflows": {
-        # rest/api/3/workflow/search is deprecated and scheduled for removal
-        "data_path": "values",
         "api_path": "rest/api/3/workflows/search",
+        "data_path": "values",
         "key_field": "id",
         "primary_key": "id",
         # jira caps the page at 50 workflows and reports no maximum
@@ -53,25 +52,21 @@ DEFAULT_ENDPOINTS: Dict[str, TEndpoint] = {
         "params": {},
     },
     "workflow_statuses": {
-        # the names behind workflows__statuses.status_reference. Same response as workflows,
-        # under a sibling key, so startAt advances on `values` and not on the rows taken.
-        # rest/api/3/status omits unused statuses and rest/api/3/statuses/search omits
-        # project scoped ones, so neither resolves every reference.
+        # the names behind workflows__statuses.status_reference, under a sibling key of the
+        # workflows response, so startAt advances on `values` and not on the rows taken
+        "api_path": "rest/api/3/workflows/search",
         "data_path": "statuses",
         "offset_path": "values",
-        "api_path": "rest/api/3/workflows/search",
         "key_field": "statusReference",
         "primary_key": "status_reference",
         "page_size": 50,
-        # pages repeat the statuses their workflows share. A merge disposition would
-        # deduplicate them, but it would also collapse the rows whose key is null, which the
-        # primary key hint allows, so the resource deduplicates and keeps `replace`.
+        # a page repeats the statuses its workflows share
         "deduplicate": True,
         "params": {},
     },
     "projects": {
-        "data_path": "values",
         "api_path": "rest/api/3/project/search",
+        "data_path": "values",
         "key_field": "id",
         "primary_key": "id",
         # the documented maximum

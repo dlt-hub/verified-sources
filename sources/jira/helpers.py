@@ -22,12 +22,8 @@ class JiraResponseError(Exception):
 
 
 def nullable_key_columns(primary_key: str) -> Dict[str, TColumnSchema]:
-    """Hints keeping `primary_key` nullable.
-
-    A `primary_key` hint sets `nullable: False`, and dlt then fails the whole load package
-    when a single row carries a null or absent key. Jira does not guarantee the key field,
-    so the hint stays nullable and a bad row lands instead of stopping the load.
-    """
+    """Hints keeping `primary_key` nullable, so a row without one lands instead of
+    failing the load package."""
     return {primary_key: {"nullable": True}}
 
 
@@ -36,11 +32,7 @@ def unseen_rows(
 ) -> List[TDataItem]:
     """Rows whose key has not been yielded yet, adding the keys it returns to `seen`.
 
-    Jira repeats rows across requests: the workflow search repeats the statuses its workflows
-    share, and two JQL queries both match the same issue. The resources declare a primary key
-    and load with `replace`, which deduplicates nothing. `key_field` is the response field, so
-    it is the camel case name that dlt normalizes into the primary key. A row without the field
-    cannot be matched and is kept.
+    A row without the field cannot be matched and is kept.
     """
     unseen = []
     for row in rows:
@@ -62,8 +54,9 @@ def _any_row_without_key(rows: List[TDataItem], key_field: str) -> bool:
 def _body(response: Response) -> Any:
     """Parsed response body, cached on the response.
 
-    `Response.json()` parses the payload again on every call, and a page is read by the
-    paginator, by the data path check and by dlt itself. Issue pages run to megabytes.
+    `Response.json()` parses the payload again on every call, and issue pages run to megabytes.
+    dlt parses each page once to apply the data selector, and this cache holds the source to one
+    parse on top of that.
     """
     body = getattr(response, _BODY_ATTR, None)
     if body is None:
@@ -82,7 +75,9 @@ class JiraCursorPaginator(JSONResponseCursorPaginator):
     """Cursor pagination for `rest/api/3/search/jql`.
 
     An empty page carrying a `nextPageToken` is not the end of the result set, so the base
-    class default of running on past an empty page is what this endpoint needs.
+    class default of running on past an empty page is what this endpoint needs. The base class
+    stops when the token is absent. This adds a second stop on `isLast` and the `maxResults`
+    parameter.
     """
 
     CURSOR_KEY = "nextPageToken"
@@ -114,10 +109,10 @@ class JiraCursorPaginator(JSONResponseCursorPaginator):
 class JiraOffsetPaginator(BasePaginator):
     """`startAt` pagination for the page bean envelopes and for the bare user array.
 
-    Advances by the rows a page held rather than by `maxResults`: Jira clamps the requested
-    page size without reporting the clamp (100 on project search, 1000 on users), and
-    stepping by the requested size would skip the rows beyond the clamp.
+    Advances by the rows a page held, because Jira clamps `maxResults` without reporting it.
     """
+
+    # the `nextPage` link is no alternative: workflows/search returns an internal Atlassian host
 
     def __init__(self, page_size: int, offset_path: Optional[str] = None) -> None:
         super().__init__()

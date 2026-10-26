@@ -104,8 +104,8 @@ def jira_search(
         Args:
             jql_queries: JQL queries to run. A query needs a filtering clause; Jira rejects
                 one that only sorts.
-            page_limit: Maximum number of pages to read per query. `add_limit` on the resource
-                bounds the queries together, so the first one absorbs the whole budget.
+            page_limit: Maximum number of pages to read per query, since all queries share one
+                generator and `add_limit` would bound them together.
         """
         # the queries overlap, so the ids seen are shared across them
         seen: Set[Any] = set()
