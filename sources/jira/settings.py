@@ -13,6 +13,7 @@ class TEndpoint(_EndpointRequired, total=False):
     offset_path: str
     use_cursor_pagination: bool
     write_disposition: TWriteDisposition
+    deduplicate_on: str
     params: Dict[str, Any]
 
 
@@ -22,6 +23,8 @@ DEFAULT_ENDPOINTS: Dict[str, TEndpoint] = {
         "api_path": "rest/api/3/search/jql",
         "use_cursor_pagination": True,
         "primary_key": "id",
+        # jira_search runs several queries and they match the same issue
+        "deduplicate_on": "id",
         "params": {
             "fields": "*all",
             "expand": "changelog,operations,transitions,names",

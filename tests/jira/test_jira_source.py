@@ -112,7 +112,7 @@ def test_load_query_issues(destination_name: str) -> None:
     # tables are typed dicts
     users_table = data_tables[0]
     assert users_table["name"] == "issues"
-    # overlapping queries write every match under replace, so only the distinct count is stable
-    distinct = load_table_distinct_counts(pipeline, "id", "issues")
-    assert distinct["issues"] > 0
-    assert load_table_counts(pipeline, "issues")["issues"] >= distinct["issues"]
+    # the queries overlap and the resource deduplicates, so the declared key holds
+    counts = load_table_counts(pipeline, "issues")
+    assert counts["issues"] > 0
+    assert load_table_distinct_counts(pipeline, "id", "issues") == counts

@@ -6,6 +6,7 @@ import dlt
 import pytest
 import requests_mock
 
+from dlt.common.normalizers.naming.snake_case import NamingConvention
 from dlt.sources.helpers.requests import Response
 
 from sources.jira import JiraResponseError, get_paginated_data, jira, jira_search
@@ -22,6 +23,7 @@ INTERNAL_KEYS = {
     "data_path",
     "offset_path",
     "use_cursor_pagination",
+    "deduplicate_on",
     "write_disposition",
     "primary_key",
 }
@@ -262,6 +264,31 @@ def test_workflow_statuses_read_the_same_response_as_workflows() -> None:
     assert statuses["primary_key"] == "status_reference"
     # pages repeat the statuses their workflows share
     assert statuses["write_disposition"] == "merge"
+
+
+@pytest.mark.parametrize(
+    "endpoint_name", [n for n, e in DEFAULT_ENDPOINTS.items() if "deduplicate_on" in e]
+)
+def test_deduplicated_field_normalizes_to_the_primary_key(endpoint_name: str) -> None:
+    """Deduplication runs on the response field, the primary key names the loaded column."""
+    endpoint = DEFAULT_ENDPOINTS[endpoint_name]
+    normalized = NamingConvention().normalize_identifier(endpoint["deduplicate_on"])
+    assert normalized == endpoint["primary_key"]
+
+
+def test_an_issue_matched_by_two_queries_is_yielded_once() -> None:
+    with requests_mock.Mocker() as m:
+        serve(
+            m,
+            "rest/api/3/search/jql",
+            {"issues": [{"id": "1"}, {"id": "2"}]},
+            {"issues": [{"id": "2"}, {"id": "3"}]},
+        )
+        resource = jira_search(**AUTH).issues(
+            jql_queries=["project = X", "project = Y"]
+        )
+        data = list(resource)
+    assert [i["id"] for i in data] == ["1", "2", "3"]
 
 
 def test_offset_path_advances_on_the_sibling_key() -> None:

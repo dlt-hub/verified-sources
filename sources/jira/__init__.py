@@ -1,6 +1,6 @@
 """ This source uses Jira API and dlt to load data such as Issues, Users, Workflows and Projects to the database. """
 
-from typing import Any, Dict, Iterable, List, Optional
+from typing import Any, Dict, Iterable, List, Optional, Set
 
 import dlt
 from dlt.common.schema.typing import TColumnSchema
@@ -29,6 +29,30 @@ def _nullable_key_columns(primary_key: str) -> Dict[str, TColumnSchema]:
     so the hint stays nullable and a bad row lands instead of stopping the load.
     """
     return {primary_key: {"nullable": True}}
+
+
+def _unseen_rows(
+    rows: List[TDataItem], key_field: str, seen: Set[Any]
+) -> List[TDataItem]:
+    """Rows whose key has not been yielded yet, adding the keys it returns to `seen`.
+
+    Jira repeats rows across requests: the workflow search repeats the statuses its workflows
+    share, and two JQL queries both match the same issue. The resources declare a primary key
+    and load with `replace`, which deduplicates nothing. `key_field` is the response field, so
+    it is the camel case name that dlt normalizes into the primary key. A row without the field
+    cannot be matched and is kept.
+    """
+    unseen = []
+    for row in rows:
+        key = row.get(key_field) if isinstance(row, dict) else None
+        if key is None:
+            unseen.append(row)
+            continue
+        if key in seen:
+            continue
+        seen.add(key)
+        unseen.append(row)
+    return unseen
 
 
 _BODY_ATTR = "_jira_parsed_body"
@@ -162,6 +186,7 @@ def jira(
             offset_path=endpoint.get("offset_path"),
             params=endpoint.get("params"),
             use_cursor_pagination=endpoint.get("use_cursor_pagination", False),
+            deduplicate_on=endpoint.get("deduplicate_on"),
             subdomain=subdomain,
             email=email,
             api_token=api_token,
@@ -199,10 +224,13 @@ def jira_search(
         columns=_nullable_key_columns(issues_endpoint["primary_key"]),
     )
     def issues(jql_queries: List[str]) -> Iterable[TDataItem]:
+        # the queries overlap, so the ids seen are shared across them
+        seen: Set[Any] = set()
+        deduplicate_on = issues_endpoint.get("deduplicate_on")
         for jql in jql_queries:
             params = {**issues_endpoint.get("params", {}), "jql": jql}
 
-            yield from get_paginated_data(
+            for page in get_paginated_data(
                 api_path=issues_endpoint["api_path"],
                 params=params,
                 subdomain=subdomain,
@@ -213,7 +241,12 @@ def jira_search(
                 use_cursor_pagination=issues_endpoint.get(
                     "use_cursor_pagination", False
                 ),
-            )
+            ):
+                rows = (
+                    _unseen_rows(page, deduplicate_on, seen) if deduplicate_on else page
+                )
+                if rows:
+                    yield rows
 
     return issues
 
@@ -238,6 +271,7 @@ def get_paginated_data(
     offset_path: Optional[str] = None,
     params: Optional[DictStrAny] = None,
     use_cursor_pagination: bool = False,
+    deduplicate_on: Optional[str] = None,
 ) -> Iterable[TDataItem]:
     """
     Function to fetch paginated data from a Jira API endpoint.
@@ -254,6 +288,7 @@ def get_paginated_data(
         params: Optional parameters for the API request.
         use_cursor_pagination: If True, uses cursor-based pagination (nextPageToken)
             for the /search/jql endpoint. If False, uses offset-based pagination (startAt).
+        deduplicate_on: Optional response field whose repeated values are dropped.
     Yields:
         Iterable[TDataItem]: Yields pages of data from the API.
     """
@@ -267,6 +302,7 @@ def get_paginated_data(
         if use_cursor_pagination
         else JiraOffsetPaginator(page_size, offset_path)
     )
+    seen: Set[Any] = set()
     # "$" selects the whole body for the endpoints that return a bare array
     for page in client.paginate(
         api_path,
@@ -276,5 +312,8 @@ def get_paginated_data(
     ):
         if data_path:
             _check_data_path(api_path, data_path, page.response)
-        if page:
-            yield list(page)
+        rows = list(page)
+        if deduplicate_on:
+            rows = _unseen_rows(rows, deduplicate_on, seen)
+        if rows:
+            yield rows
