@@ -1,33 +1,16 @@
 # Salesforce
 
-Salesforce is a cloud-based platform that helps businesses manage customer relationships and optimize various operational aspects. This Salesforce `dlt` verified source and pipeline example offers the capability to load Salesforce endpoints such as "User" and "Opportunity" to a destination of your choosing. It enables you to conveniently load the following endpoints:
+Loads Salesforce sObjects with the Bulk API 2.0, and with the REST API for sObjects the Bulk API does not support.
 
-### Single loading endpoints (replace mode)
+- `salesforce_source` loads User, UserRole, Opportunity, OpportunityLineItem, OpportunityContactRole, Account, Contact, Lead, Campaign, CampaignMember, Product2, Pricebook2, PricebookEntry, Task and Event.
+- `salesforce_table` loads any sObject, including custom objects.
 
-| Endpoint | Mode | Description |
-| --- | --- | --- |
-| User | replace | refers to an individual who has access to a Salesforce org or instance |
-| UserRole | replace | a standard object that represents a role within the organization's hierarchy |
-| Lead | replace | prospective customer/individual/org. that has shown interest in a company's products/services |
-| Contact | replace | an individual person associated with an account or organization |
-| Campaign | replace | marketing initiative or project designed to achieve specific goals, such as generating leads etc. |
-| Product2 | replace | for managing and organizing your product-related data within the Salesforce ecosystem |
-| Pricebook2 | replace | used to manage product pricing and create price books |
-| PricebookEntry | replace | an object that represents a specific price for a product in a price book |
+By default records changed since the last run are merged on `Id` and records deleted in Salesforce are deleted from the destination. `write_disposition="replace"` reloads all records. Field types come from the sObject description. `pyarrow` is optional: it is used when installed and is much faster on large sObjects.
 
-### Incremental endpoints (merge mode)
+Creating the source or a resource logs in and describes the sObjects. On Airflow, where DAG files are parsed often, pass `defer_table_reflect=True` so this happens only when the data is extracted.
 
-| Endpoint | Mode | Description |
-| --- | --- | --- |
-| Opportunity | merge | represents a sales opportunity for a specific account or contact |
-| OpportunityLineItem | merge | represents individual line items or products associated with an Opportunity |
-| OpportunityContactRole | merge | represents the association between an Opportunity and a Contact |
-| Account | merge | individual or organization that interacts with your business |
-| CampaignMember | merge | association between a Contact or Lead and a Campaign |
-| Task | merge | used to track and manage various activities and tasks within the Salesforce platform |
-| Event | merge | used to track and manage calendar-based events, such as meetings, appointments calls, or any other time-specific activities |
+> Upgrading from an earlier version of this source changes column types, primary keys and write dispositions. Reload the data with `pipeline.run(salesforce_source(), refresh="drop_sources")`.
 
-To learn more about the write depositions i.e. merge, append and replace please refer to our official [documentation.](https://dlthub.com/docs/general-usage/incremental-loading)
 ## Initialize the pipeline with Salesforce verified source
 ```bash
 dlt init salesforce bigquery
