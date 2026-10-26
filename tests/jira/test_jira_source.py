@@ -1,3 +1,5 @@
+import os
+
 import dlt
 import pytest
 
@@ -19,8 +21,13 @@ PAGE_LIMIT = 2
 def jira_credentials() -> None:
     """These tests load from a live Jira site. The unit tests cover the source without one."""
     subdomain = dlt.secrets.get("sources.jira.subdomain")
-    if not subdomain or subdomain == "set me up":
-        pytest.skip("set [sources.jira] in sources/.dlt/secrets.toml to run these")
+    if subdomain and subdomain != "set me up":
+        return
+    if os.environ.get("CI"):
+        pytest.fail(
+            "[sources.jira] is missing from DLT_SECRETS_TOML, so CI tested nothing"
+        )
+    pytest.skip("set [sources.jira] in sources/.dlt/secrets.toml to run these")
 
 
 @pytest.mark.parametrize("destination_name", ALL_DESTINATIONS)
