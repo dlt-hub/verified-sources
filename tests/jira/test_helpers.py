@@ -6,6 +6,8 @@ import dlt
 import pytest
 import requests_mock
 
+from dlt.sources.helpers.requests import Response
+
 from sources.jira import JiraResponseError, get_paginated_data, jira, jira_search
 from sources.jira.settings import DEFAULT_ENDPOINTS
 
@@ -383,3 +385,41 @@ def test_null_primary_key_loads_instead_of_failing_the_package() -> None:
         info = pipeline.run(jira(**AUTH).with_resources("users"))
     assert_load_info(info)
     assert load_table_counts(pipeline, "users") == {"users": 2}
+
+
+@pytest.mark.parametrize(
+    "api_path, page, read_args",
+    [
+        (
+            "rest/api/3/workflows/search",
+            {"values": [{"id": "w1"}], "statuses": [], "isLast": True},
+            {"data_path": "statuses", "offset_path": "values"},
+        ),
+        (
+            "rest/api/3/search/jql",
+            {"issues": [{"id": "1"}]},
+            {"data_path": "issues", "use_cursor_pagination": True},
+        ),
+    ],
+    ids=["offset", "cursor"],
+)
+def test_each_response_is_parsed_once_by_the_source(
+    api_path: str,
+    page: Any,
+    read_args: Dict[str, Any],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Issue pages run to megabytes and `Response.json()` parses the payload again."""
+    parses = []
+    original = Response.json
+
+    def counting_json(self: Response, **kwargs: Any) -> Any:
+        parses.append(self)
+        return original(self, **kwargs)
+
+    monkeypatch.setattr(Response, "json", counting_json)
+    with requests_mock.Mocker() as m:
+        serve(m, api_path, page)
+        list(get_paginated_data(api_path=api_path, **read_args, **AUTH))
+    # dlt parses the page to apply the data selector, this source parses it once more
+    assert len(parses) == 2

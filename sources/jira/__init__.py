@@ -31,6 +31,22 @@ def _nullable_key_columns(primary_key: str) -> Dict[str, TColumnSchema]:
     return {primary_key: {"nullable": True}}
 
 
+_BODY_ATTR = "_jira_parsed_body"
+
+
+def _body(response: Response) -> Any:
+    """Parsed response body, cached on the response.
+
+    `Response.json()` parses the payload again on every call, and a page is read by the
+    paginator, by the data path check and by dlt itself. Issue pages run to megabytes.
+    """
+    body = getattr(response, _BODY_ATTR, None)
+    if body is None:
+        body = response.json()
+        setattr(response, _BODY_ATTR, body)
+    return body
+
+
 def _set_param(request: Request, name: str, value: Any) -> None:
     if request.params is None:
         request.params = {}
@@ -44,8 +60,10 @@ class JiraCursorPaginator(JSONResponseCursorPaginator):
     class default of running on past an empty page is what this endpoint needs.
     """
 
+    CURSOR_KEY = "nextPageToken"
+
     def __init__(self, api_path: str, page_size: int) -> None:
-        super().__init__(cursor_path="nextPageToken", cursor_param="nextPageToken")
+        super().__init__(cursor_path=self.CURSOR_KEY, cursor_param=self.CURSOR_KEY)
         self.api_path = api_path
         self.page_size = page_size
 
@@ -56,13 +74,14 @@ class JiraCursorPaginator(JSONResponseCursorPaginator):
     def update_state(
         self, response: Response, data: Optional[List[Any]] = None
     ) -> None:
-        body = response.json()
+        body = _body(response)
         if not isinstance(body, dict):
             raise JiraResponseError(
                 f"Jira endpoint {self.api_path} returned {type(body).__name__}. "
                 "Cursor pagination needs an object response."
             )
-        super().update_state(response, data)
+        # the base class reads the same token, by parsing the body a second time
+        self._next_reference = body.get(self.CURSOR_KEY) or None
         if body.get("isLast"):
             self._has_next_page = False
 
@@ -88,7 +107,7 @@ class JiraOffsetPaginator(BasePaginator):
     def update_state(
         self, response: Response, data: Optional[List[Any]] = None
     ) -> None:
-        body = response.json()
+        body = _body(response)
         rows = len(data or [])
         if self.offset_path and isinstance(body, dict):
             rows = len(body.get(self.offset_path) or [])
@@ -200,7 +219,7 @@ def jira_search(
 
 
 def _check_data_path(api_path: str, data_path: str, response: Response) -> None:
-    body = response.json()
+    body = _body(response)
     if isinstance(body, dict) and data_path in body:
         return
     got = sorted(body) if isinstance(body, dict) else type(body).__name__
