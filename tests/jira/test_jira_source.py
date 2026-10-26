@@ -80,7 +80,8 @@ def test_load_query_issues(destination_name: str) -> None:
 
     # load issues from specified Jira queries.
     search = jira_search()
-    search.max_table_nesting = 0
+    # the resource hint wins over the source setting
+    search.issues.max_table_nesting = 0
     search.issues.bind(jql_queries=queries)
     info = pipeline.run(search)
     # lets print it (pytest -s will show it)

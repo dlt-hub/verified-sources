@@ -69,8 +69,9 @@ To grab Jira credentials and configure the verified source, please refer to the
    pip install "dlt[duckdb]"
    ```
 
-1. Now the pipeline can be run by using the command. The example loads two pages per resource;
-   remove the `limit` argument in `jira_pipeline.py` to load everything.
+1. Now the pipeline can be run by using the command. The example loads two pages per resource and
+   two pages of search results; remove the `limit` arguments in `jira_pipeline.py` to load
+   everything.
 
    ```bash
    python jira_pipeline.py

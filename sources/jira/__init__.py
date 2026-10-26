@@ -77,10 +77,12 @@ def jira_search(
     """
     issues_endpoint: TEndpoint = DEFAULT_ENDPOINTS["issues"]
 
+    # the resource hint beats the source setting and survives outside the source, ADF nests deeply
     @dlt.resource(
         write_disposition="replace",
         primary_key=issues_endpoint["primary_key"],
         columns=nullable_key_columns(issues_endpoint["primary_key"]),
+        max_table_nesting=2,
     )
     def issues(jql_queries: List[str]) -> Iterable[TDataItem]:
         for jql in jql_queries:

@@ -255,3 +255,5 @@ def test_jira_search_request(monkeypatch: pytest.MonkeyPatch) -> None:
     for params in stub.sent:
         assert_params_accepted(params)
     assert_nullable_key(resource, "id")
+    # the call returns a clone that runs outside the source
+    assert resource.max_table_nesting == 2
