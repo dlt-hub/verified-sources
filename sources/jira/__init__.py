@@ -128,14 +128,11 @@ def get_paginated_data(
         response = requests.get(url, auth=auth, headers=headers, params=params)
         response.raise_for_status()
         result = response.json()
+        is_object = isinstance(result, dict)
 
         if data_path:
-            if not isinstance(result, dict) or data_path not in result:
-                got = (
-                    sorted(result)
-                    if isinstance(result, dict)
-                    else type(result).__name__
-                )
+            if not is_object or data_path not in result:
+                got = sorted(result) if is_object else type(result).__name__
                 raise ValueError(
                     f"Jira endpoint {api_path} returned no '{data_path}' key. "
                     f"Got: {got}. The endpoint may have been removed."
@@ -144,16 +141,29 @@ def get_paginated_data(
         else:
             results_page = result
 
-        if len(results_page) == 0:
-            break
-
-        yield results_page
+        if results_page:
+            yield results_page
 
         if use_cursor_pagination:
+            if not is_object:
+                raise ValueError(
+                    f"Jira endpoint {api_path} returned {type(result).__name__}. "
+                    "Cursor pagination needs an object response."
+                )
+            # the last page has no token, an empty page with a token is not the end
             next_page_token = result.get("nextPageToken")
-            if not next_page_token:
+            if not next_page_token or result.get("isLast"):
                 break
             params["nextPageToken"] = next_page_token
         else:
+            # an empty page ends the loop or isLast=false with no rows never advances
+            if len(results_page) == 0:
+                break
             start_at += len(results_page)
+            if is_object:
+                if result.get("isLast"):
+                    break
+                total = result.get("total")
+                if total is not None and start_at >= total:
+                    break
             params["startAt"] = start_at

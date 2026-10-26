@@ -45,6 +45,136 @@ def items(pages: Iterator[Any]) -> List[Any]:
     return [item for page in pages for item in page]
 
 
+def test_cursor_pagination_continues_past_empty_page_with_token(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # SearchAndReconcileResults: nextPageToken is omitted on the last page only
+    stub = install(
+        monkeypatch,
+        StubGet(
+            [
+                {"issues": [{"id": "1"}], "nextPageToken": "t1"},
+                {"issues": [], "nextPageToken": "t2"},
+                {"issues": [{"id": "2"}]},
+            ]
+        ),
+    )
+    data = items(
+        get_paginated_data(
+            api_path="rest/api/3/search/jql",
+            data_path="issues",
+            use_cursor_pagination=True,
+            **AUTH,
+        )
+    )
+    assert [i["id"] for i in data] == ["1", "2"]
+    assert [p.get("nextPageToken") for p in stub.sent] == [None, "t1", "t2"]
+
+
+def test_cursor_pagination_stops_on_is_last_with_token(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    stub = install(
+        monkeypatch,
+        StubGet([{"issues": [{"id": "1"}], "nextPageToken": "t1", "isLast": True}]),
+    )
+    data = items(
+        get_paginated_data(
+            api_path="rest/api/3/search/jql",
+            data_path="issues",
+            use_cursor_pagination=True,
+            **AUTH,
+        )
+    )
+    assert [i["id"] for i in data] == ["1"]
+    assert len(stub.sent) == 1
+
+
+def test_offset_pagination_stops_on_is_last(monkeypatch: pytest.MonkeyPatch) -> None:
+    # PageBeanProject: one complete page must cost one request
+    stub = install(
+        monkeypatch,
+        StubGet(
+            [{"values": [{"id": "p1"}], "total": 1, "isLast": True}], {"values": []}
+        ),
+    )
+    data = items(
+        get_paginated_data(
+            api_path="rest/api/3/project/search", data_path="values", **AUTH
+        )
+    )
+    assert [i["id"] for i in data] == ["p1"]
+    assert len(stub.sent) == 1
+
+
+def test_offset_pagination_follows_is_last_false(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    stub = install(
+        monkeypatch,
+        StubGet(
+            [
+                {"values": [{"id": "w1"}, {"id": "w2"}], "total": 3, "isLast": False},
+                {"values": [{"id": "w3"}], "total": 3, "isLast": True},
+            ],
+            {"values": []},
+        ),
+    )
+    data = items(
+        get_paginated_data(
+            api_path="rest/api/3/workflows/search", data_path="values", **AUTH
+        )
+    )
+    assert [i["id"] for i in data] == ["w1", "w2", "w3"]
+    assert [p["startAt"] for p in stub.sent] == [0, 2]
+
+
+def test_offset_pagination_stops_on_total_without_is_last(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    stub = install(
+        monkeypatch,
+        StubGet(
+            [
+                {"values": [{"id": "w1"}, {"id": "w2"}], "total": 3},
+                {"values": [{"id": "w3"}], "total": 3},
+            ],
+            {"values": []},
+        ),
+    )
+    data = items(
+        get_paginated_data(
+            api_path="rest/api/3/workflows/search", data_path="values", **AUTH
+        )
+    )
+    assert [i["id"] for i in data] == ["w1", "w2", "w3"]
+    assert len(stub.sent) == 2
+
+
+def test_offset_pagination_stops_on_empty_page_with_is_last_false(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    page = {"values": [], "total": 5, "isLast": False}
+    stub = install(monkeypatch, StubGet([page], page))
+    data = items(
+        get_paginated_data(
+            api_path="rest/api/3/workflows/search", data_path="values", **AUTH
+        )
+    )
+    assert data == []
+    assert len(stub.sent) == 1
+
+
+def test_bare_array_endpoint_stops_on_empty_page(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # /rest/api/3/users returns a list of User with no envelope
+    stub = install(monkeypatch, StubGet([[{"accountId": "a"}, {"accountId": "b"}], []]))
+    data = items(get_paginated_data(api_path="rest/api/3/users", **AUTH))
+    assert [i["accountId"] for i in data] == ["a", "b"]
+    assert [p["startAt"] for p in stub.sent] == [0, 2]
+
+
 @pytest.mark.parametrize(
     "payload, match",
     [
@@ -72,3 +202,15 @@ def test_workflows_requests_supported_path(monkeypatch: pytest.MonkeyPatch) -> N
     stub = install(monkeypatch, StubGet([], {"values": []}))
     list(get_paginated_data(api_path=api_path, data_path="values", **AUTH))
     assert stub.urls[0] == f"https://{AUTH['subdomain']}.atlassian.net/{api_path}"
+
+
+def test_cursor_pagination_requires_object_response(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    install(monkeypatch, StubGet([[{"id": "1"}]]))
+    with pytest.raises(ValueError, match="rest/api/3/search/jql.*list"):
+        list(
+            get_paginated_data(
+                api_path="rest/api/3/search/jql", use_cursor_pagination=True, **AUTH
+            )
+        )
