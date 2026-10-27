@@ -313,11 +313,11 @@ def table_rows(
     except GeneratorExit:
         # `add_limit` closes the generator after the last page
         _warn_if_cursor_not_moved(
-            sobject, columns_hints, incremental, max_cursor, rows_count, limit
+            sobject, columns_hints, incremental, max_cursor, rows_count, limit, True
         )
         raise
     _warn_if_cursor_not_moved(
-        sobject, columns_hints, incremental, max_cursor, rows_count, limit
+        sobject, columns_hints, incremental, max_cursor, rows_count, limit, False
     )
 
 
@@ -336,9 +336,12 @@ def _warn_if_cursor_not_moved(
     max_cursor: Any,
     rows_count: int,
     limit: Optional[int],
+    truncated: bool,
 ) -> None:
-    """Warns when all records returned by LIMIT have the cursor value the run started from"""
-    if limit is None or incremental is None or rows_count < limit:
+    """Warns when all records read under LIMIT have the cursor value the run started from"""
+    # fewer records than LIMIT are all the records, unless `add_limit` closed the run early.
+    # REST API pages hold fewer records than `chunk_size`
+    if limit is None or incremental is None or (rows_count < limit and not truncated):
         return
     cursor_name = incremental.get_cursor_column_name()
     last_value, _ = incremental.get_current_range(apply_lag=False)
@@ -347,9 +350,9 @@ def _warn_if_cursor_not_moved(
     cursor = columns[cursor_name]
     if to_soql_literal(max_cursor, cursor) == to_soql_literal(last_value, cursor):
         logger.warning(
-            f"Could not move the cursor `{cursor_name}` of `{sobject}` past {last_value}: more"
-            f" than {limit} records have this value or are within the incremental lag. Increase"
-            " `add_limit` or `chunk_size`."
+            f"Could not move the cursor `{cursor_name}` of `{sobject}` past {last_value}: all"
+            f" {rows_count} records read have this value or are within the incremental lag."
+            " Increase `add_limit` or `chunk_size`."
         )
 
 

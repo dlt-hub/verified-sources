@@ -1346,6 +1346,30 @@ def test_salesforce_table_chunked_loading_warnings(
     assert "without ORDER BY" in warning.call_args_list[0].args[0]
 
 
+def test_salesforce_table_chunked_loading_warnings_rest(
+    sf_mock: requests_mock.Mocker, credentials: InstanceAuth, mocker: MockerFixture
+) -> None:
+    # REST API pages hold fewer records than `chunk_size`, `add_limit` closes the run after the
+    # first page and all its records have the start timestamp
+    warning = mocker.spy(table_module.logger, "warning")
+    mock_bulk2(sf_mock, [], fields=SOURCE_FIELDS)
+    mock_rest(sf_mock, account_records(["2024-01-01T00:00:01.000+0000"] * 4), 2)
+    account = salesforce_table(
+        credentials=credentials,
+        sobject="Account",
+        api="rest",
+        chunk_size=3,
+        incremental=dlt.sources.incremental(
+            "SystemModstamp",
+            initial_value=datetime(2024, 1, 1, 0, 0, 1, tzinfo=timezone.utc),
+            row_order="asc",
+        ),
+    )
+    # a single page of 2 records
+    assert [table.num_rows for table in account.add_limit(1)] == [2]
+    assert "Could not move the cursor `SystemModstamp`" in warning.call_args.args[0]
+
+
 @pytest.mark.parametrize(
     "cursor,write_disposition,deduplicated",
     [("SystemModstamp", "merge", False), ("SystemModstamp", "append", True)],
