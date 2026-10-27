@@ -80,7 +80,7 @@ def csv_page_to_arrow(page: bytes, columns: TTableSchemaColumns) -> Optional[Any
     Returns None for a page without records: a job without results returns just the header.
     """
     from dlt.common.libs.pyarrow import cast_arrow_as_columns_schema, pyarrow as pa
-    from pyarrow import csv as pa_csv
+    from pyarrow import compute as pc, csv as pa_csv
 
     if not page.strip():
         return None
@@ -97,6 +97,15 @@ def csv_page_to_arrow(page: bytes, columns: TTableSchemaColumns) -> Optional[Any
     )
     if table.num_rows == 0:
         return None
+    for name in table.column_names:
+        if columns.get(name, {}).get("data_type") == "time":
+            # times are cast with `time.fromisoformat`, which rejects the `Z` suffix before
+            # python 3.11
+            table = table.set_column(
+                table.schema.get_field_index(name),
+                name,
+                pc.utf8_rtrim(table.column(name), characters="Z"),
+            )
     # generate arrow types compatible with the destination when running in a pipeline
     caps = (
         Container().get(DestinationCapabilitiesContext)
