@@ -16,7 +16,7 @@ from simple_salesforce.exceptions import (
 )
 from simple_salesforce.util import call_salesforce
 
-from .pages import rest_records_to_csv
+from .csv_utils import rest_records_to_csv
 
 TQueryApi = Literal["auto", "bulk", "rest"]
 

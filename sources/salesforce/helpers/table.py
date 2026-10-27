@@ -32,7 +32,7 @@ from dlt.extract.incremental import Incremental
 from dlt.extract.resource import DltResource
 
 from .client import SalesforceAuth
-from .pages import arrow_column_max, csv_page_to_arrow, csv_page_to_rows
+from .csv_utils import arrow_column_max, csv_page_to_arrow, csv_page_to_rows
 from .query import QueryClient, TQueryApi
 from .schema_types import (
     DEFAULT_LAG,
