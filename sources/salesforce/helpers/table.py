@@ -301,7 +301,7 @@ def table_rows(
                 rows_count += item.num_rows
                 page_max = arrow_column_max(item, cursor_name) if cursor_name else None
             else:
-                item = csv_page_to_rows(page, columns_hints)
+                item = csv_page_to_rows(page, columns_hints, cursor_name)
                 if not item:
                     continue
                 rows_count += len(item)

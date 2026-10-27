@@ -102,14 +102,15 @@ def test_salesforce_table_filter_deleted_records(include_deleted: bool) -> None:
         backend="python",
     )
     rows = list(resource)
-    active = sorted(row["Seed_Id__c"] for row in rows if not row["IsDeleted"])
+    # python rows hold the CSV strings, the normalizer coerces them
+    active = sorted(row["Seed_Id__c"] for row in rows if row["IsDeleted"] == "false")
     assert active == sorted(
         record["Seed_Id__c"]
         for record in data.DLT_TYPES_RECORDS
         if record["Category__c"] != "plain"
     )
     # deleted records are purged from the recycle bin after 15 days, so their count is not fixed
-    deleted = [row for row in rows if row["IsDeleted"]]
+    deleted = [row for row in rows if row["IsDeleted"] == "true"]
     if not include_deleted:
         assert deleted == []
 

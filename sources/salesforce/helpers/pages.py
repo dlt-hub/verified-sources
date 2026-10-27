@@ -1,4 +1,4 @@
-"""Converts REST API records to CSV pages, and CSV pages to rows or Arrow tables with dlt types"""
+"""Converts REST API records to CSV pages and CSV pages to rows or typed Arrow tables"""
 
 import csv
 import io
@@ -7,24 +7,15 @@ from typing import Any, Dict, List, Optional
 from dlt.common import Decimal
 from dlt.common.configuration.container import Container
 from dlt.common.data_types.type_helpers import coerce_value
-from dlt.common.data_types.typing import TDataType
 from dlt.common.destination import DestinationCapabilitiesContext
 from dlt.common.schema.typing import TColumnSchema, TTableSchemaColumns
 from dlt.common.typing import TDataItem
 
 
-def _coerce(data_type: Optional[TDataType], value: str) -> Any:
-    if data_type in (None, "text"):
-        return value
-    try:
-        return coerce_value(data_type, "text", value)
-    except ValueError:
-        # e.g. `42.0` for bigint, the normalizer creates a variant column for it
-        return value
-
-
-def csv_page_to_rows(page: bytes, columns: TTableSchemaColumns) -> List[TDataItem]:
-    """Parses a page of CSV results into dicts with values coerced to `columns` types.
+def csv_page_to_rows(
+    page: bytes, columns: TTableSchemaColumns, cursor: Optional[str] = None
+) -> List[TDataItem]:
+    """Parses a page of CSV results into dicts of strings, the normalizer coerces them to `columns`.
 
     Blank fields are nulls, `NA` or `NULL` are regular strings in Salesforce.
     """
@@ -32,14 +23,17 @@ def csv_page_to_rows(page: bytes, columns: TTableSchemaColumns) -> List[TDataIte
     header = next(reader, None)
     if not header:
         return []
-    data_types = [columns.get(name, {}).get("data_type") for name in header]
-    return [
-        {
-            name: None if value == "" else _coerce(data_type, value)
-            for name, data_type, value in zip(header, data_types, record)
-        }
+    rows: List[TDataItem] = [
+        {name: None if value == "" else value for name, value in zip(header, record)}
         for record in reader
     ]
+    cursor_type = columns.get(cursor, {}).get("data_type") if cursor else None
+    if cursor and cursor_type not in (None, "text"):
+        # the incremental compares cursor values before the normalizer coerces them
+        for row in rows:
+            if row.get(cursor) is not None:
+                row[cursor] = coerce_value(cursor_type, "text", row[cursor])
+    return rows
 
 
 def rest_records_to_csv(

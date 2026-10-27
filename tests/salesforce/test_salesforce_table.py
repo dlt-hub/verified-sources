@@ -1,6 +1,7 @@
 import csv
 import io
 import json
+import os
 import re
 import sys
 from datetime import date, datetime, time, timezone  # noqa: I251
@@ -1066,7 +1067,10 @@ def test_salesforce_table_rest_decimals(
         ' "Id": "001A", "IsDeleted": false, "Amount__c": 99999999999999.99,'
         ' "SystemModstamp": "2024-01-15T10:30:00.000+0000"}]}',
     )
-    items = list(
+    pipeline = dlt.pipeline(
+        pipeline_name="salesforce_rest_decimals", destination="duckdb", dev_mode=True
+    )
+    pipeline.run(
         salesforce_table(
             credentials=credentials,
             sobject="Account",
@@ -1075,11 +1079,8 @@ def test_salesforce_table_rest_decimals(
             included_columns=["Id", "IsDeleted", "Amount__c", "SystemModstamp"],
         )
     )
-    if backend == "pyarrow":
-        amounts = items[0].column("Amount__c").to_pylist()
-    else:
-        amounts = [item["Amount__c"] for item in items]
-    assert amounts == [Decimal("99999999999999.99")]
+    rows = load_tables_to_dicts(pipeline, "account")["account"]
+    assert [row["amount__c"] for row in rows] == [Decimal("99999999999999.99")]
 
 
 def test_salesforce_table_without_pyarrow(
@@ -1422,6 +1423,61 @@ def test_salesforce_table_deduplication(
         states.append(incremental_state(pipeline, cursor))
     assert bool(states[0]["unique_hashes"]) is deduplicated
     assert states[1]["unique_hashes"] == states[0]["unique_hashes"]
+
+
+def test_salesforce_table_python_backend_cursor(
+    sf_mock: requests_mock.Mocker, credentials: InstanceAuth
+) -> None:
+    # rows hold strings typed by the normalizer, except the cursor compared by the incremental
+    mock_bulk2(sf_mock, [HEADER + ROW_1 + ROW_3])
+    pipeline = dlt.pipeline(
+        pipeline_name="salesforce_python_cursor", destination="duckdb", dev_mode=True
+    )
+    account = salesforce_table(
+        credentials=credentials,
+        sobject="Account",
+        backend="python",
+        incremental=dlt.sources.incremental("NumberOfEmployees"),
+    )
+    rows = list(account)
+    assert sorted(row["NumberOfEmployees"] for row in rows) == [5, 120]
+    assert {row["Amount__c"] for row in rows} == {"1234.56", "0.01"}
+
+    pipeline.run(account)
+    # as strings the max would be "5"
+    assert incremental_state(pipeline, "NumberOfEmployees")["last_value"] == 120
+    loaded = load_tables_to_dicts(pipeline, "account")["account"]
+    assert {row["amount__c"] for row in loaded} == {Decimal("1234.56"), Decimal("0.01")}
+
+
+def test_salesforce_table_backend_switch(
+    sf_mock: requests_mock.Mocker, credentials: InstanceAuth
+) -> None:
+    # the incremental state written with the python backend is read by the pyarrow backend
+    org = FakeBulk2Org(
+        sf_mock,
+        SOURCE_FIELDS,
+        account_records(["2024-01-01T00:00:01.000Z", "2024-01-01T01:00:00.000Z"]),
+    )
+    # tables created from python rows have not nullable `_dlt_load_id` and `_dlt_id`
+    os.environ["NORMALIZE__PARQUET_NORMALIZER__ADD_DLT_LOAD_ID"] = "true"
+    os.environ["NORMALIZE__PARQUET_NORMALIZER__ADD_DLT_ID"] = "true"
+    pipeline = dlt.pipeline(
+        pipeline_name="salesforce_backend_switch", destination="duckdb", dev_mode=True
+    )
+    for backend in ("python", "pyarrow"):
+        assert_load_info(
+            pipeline.run(
+                salesforce_table(
+                    credentials=credentials, sobject="Account", backend=backend
+                )
+            )
+        )
+    assert org.queries[1].endswith(" WHERE SystemModstamp >= 2024-01-01T00:50:00.000Z")
+    assert incremental_state(pipeline, "SystemModstamp")["last_value"] == datetime(
+        2024, 1, 1, 1, tzinfo=timezone.utc
+    )
+    assert load_table_counts(pipeline, "account") == {"account": 2}
 
 
 def mock_login(m: requests_mock.Mocker) -> Any:
