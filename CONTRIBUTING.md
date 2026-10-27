@@ -352,7 +352,7 @@ If you contributed a source and created own credentials, test accounts or test d
    sharing is not possible please help us to reproduce your test cases so CI job will pass.
 
 ### Contributor access to upstream repository
-We are happy to add you as contributor to avoid the hurdles of setting up credentials. This also let's you run your tests on BigQuery/Redshift etc. Just *ping the dlt team on slack**.
+We are happy to add you as contributor to avoid the hurdles of setting up credentials. This also let's you run your tests on BigQuery/Snowflake etc. Just *ping the dlt team on slack**.
 
 
 ## Advanced topics

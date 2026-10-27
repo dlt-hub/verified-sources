@@ -72,7 +72,7 @@ Use `gh pr checks PR_ID` to retrieve the CI check results. The relevant checks:
 - `Runs mypy, flake and bandit` — `make lint`: package structure, mypy, flake8, black, `check-requirements.py` and the `dlt init` tests (`.github/workflows/lint.yml`).
 - `tests dlt init compatibility` — `dlt init` against the affected sources (`.github/workflows/init.yml`).
 - `test destinations postgres and duckdb` (PRs from this repo) or `FORKS - test on local postgres and duckdb` (PRs from forks) — tests of the affected sources only.
-- `test destinations bigquery and redshift` — slow destination tests.
+- `test destinations bigquery and snowflake` — slow destination tests.
 
 Report the status of each check (pass/fail/pending/skipped).
 
