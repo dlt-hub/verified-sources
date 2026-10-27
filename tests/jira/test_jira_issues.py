@@ -1532,6 +1532,10 @@ def test_jira_source(http_mock: requests_mock.Mocker) -> None:
         "workflow_statuses",
         "projects",
     ]
+    # the source setting reaches all resources, nesting of issues is bounded by field shapes
+    assert all(
+        resource.max_table_nesting is None for resource in source.resources.values()
+    )
     write_dispositions = {
         name: resource.write_disposition for name, resource in source.resources.items()
     }

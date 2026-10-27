@@ -223,7 +223,6 @@ def jira_issues(
         primary_key=primary_key or "id",
         merge_key=merge_key,
         columns=columns,
-        max_table_nesting=2,
         parallelized=True,
     )(reader)
 
