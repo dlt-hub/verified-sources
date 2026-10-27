@@ -1,11 +1,17 @@
 import pytest
 
-from typing import Set, Tuple
+import threading
+import time
+from typing import Any, List, Set, Tuple
 from copy import deepcopy
+import psycopg2
 from psycopg2.errors import InsufficientPrivilege
 
 import dlt
 from dlt.destinations.job_client_impl import SqlJobClientBase
+from dlt.pipeline.exceptions import PipelineStepFailed
+from dlt.sources.credentials import ConnectionStringCredentials
+from dlt.sources.sql_database import sql_table
 
 from tests.utils import (
     ALL_DESTINATIONS,
@@ -13,15 +19,27 @@ from tests.utils import (
     load_table_counts,
     get_table_metrics,
 )
-from sources.pg_replication import replication_resource
+from sources.pg_replication import helpers, replication_resource
 from sources.pg_replication.helpers import (
     init_replication,
     get_pg_version,
 )
 from sources.pg_replication.exceptions import IncompatiblePostgresVersionException
 
-from .cases import TABLE_ROW_ALL_DATA_TYPES, TABLE_UPDATE_COLUMNS_SCHEMA
-from .utils import add_pk, assert_loaded_data, is_super_user
+from .cases import (
+    PG_TYPES_DDL,
+    PG_TYPES_ROW,
+    TABLE_ROW_ALL_DATA_TYPES,
+    TABLE_UPDATE_COLUMNS_SCHEMA,
+)
+from .utils import (
+    add_pk,
+    assert_loaded_data,
+    create_tables,
+    is_super_user,
+    run_sql,
+    table_rows,
+)
 
 
 @pytest.mark.parametrize("destination_name", ALL_DESTINATIONS)
@@ -131,9 +149,10 @@ def test_schema_replication(
     )
 
 
+@pytest.mark.parametrize("backend", ["python", "pyarrow"])
 @pytest.mark.parametrize("destination_name", ALL_DESTINATIONS)
 def test_core_functionality(
-    src_config: Tuple[dlt.Pipeline, str, str], destination_name: str
+    src_config: Tuple[dlt.Pipeline, str, str], destination_name: str, backend: str
 ) -> None:
     @dlt.resource(write_disposition="merge", primary_key="id_x")
     def tbl_x(data):
@@ -160,9 +179,10 @@ def test_core_functionality(
         schema_name=src_pl.dataset_name,
         table_names=("tbl_x", "tbl_y"),
         persist_snapshots=True,
+        backend=backend,
     )
 
-    changes = replication_resource(slot_name, pub_name)
+    changes = replication_resource(slot_name, pub_name, backend=backend)
 
     src_pl.run(
         [
@@ -592,7 +612,8 @@ def test_unmapped_data_types(
     # insert record in source table to create replication item
     with src_pl.sql_client() as c:
         c.execute_sql(
-            "INSERT INTO data_types VALUES (B'1', box '((1,1), (0,0))', gen_random_uuid());"
+            "INSERT INTO data_types VALUES"
+            " (B'1', box '((1,1), (0,0))', 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11');"
         )
 
     # run destination pipeline and assert resulting data types
@@ -1064,3 +1085,452 @@ def test_batching(src_config: Tuple[dlt.Pipeline, str, str]) -> None:
     src_pl.run(batch, table_name="items")
     extract_info = dest_pl.extract(changes)
     assert extract_info.asdict()["job_metrics"][0]["items_count"] == 100
+
+
+def _extract_with_timeout(
+    pipeline: dlt.Pipeline, data: Any, timeout: float = 60.0
+) -> Any:
+    result: List[Any] = []
+
+    def _extract() -> None:
+        try:
+            result.append(pipeline.extract(data))
+        except Exception as ex:
+            result.append(ex)
+
+    thread = threading.Thread(target=_extract, daemon=True)
+    thread.start()
+    thread.join(timeout)
+    assert not thread.is_alive(), f"extract did not finish in {timeout} seconds"
+    if isinstance(result[0], Exception):
+        raise result[0]
+    return result[0]
+
+
+def test_multi_batch_with_backlog(
+    src_config: Tuple[dlt.Pipeline, str, str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    src_pl, slot_name, pub_name = src_config
+    rep_conns: List[Any] = []
+
+    def _count_rep_conn(credentials: ConnectionStringCredentials) -> Any:
+        rep_conns.append(get_rep_conn(credentials))
+        return rep_conns[-1]
+
+    get_rep_conn = helpers._get_rep_conn
+    monkeypatch.setattr(helpers, "_get_rep_conn", _count_rep_conn)
+    create_tables(
+        src_pl,
+        "CREATE TABLE {schema}.items (id int PRIMARY KEY);",
+        "CREATE TABLE {schema}.noise (id int);",
+    )
+    init_replication(slot_name, pub_name, src_pl.dataset_name, "items")
+    # unpublished changes keep the server decoding while batches are yielded
+    run_sql(
+        src_pl,
+        *(
+            f"INSERT INTO {{schema}}.items SELECT generate_series({i * 100 + 1}, {i * 100 + 100});"
+            " INSERT INTO {schema}.noise SELECT generate_series(1, 2000);"
+            for i in range(300)
+        ),
+    )
+    dest_pl = dlt.pipeline(pipeline_name="dest_pl", dev_mode=True)
+    rep_conns.clear()
+    extract_info = _extract_with_timeout(
+        dest_pl, replication_resource(slot_name, pub_name, target_batch_size=100)
+    )
+    assert get_table_metrics(extract_info, "items")["items_count"] == 30000
+    # reconnecting per batch races with the previous walsender and decodes the WAL again
+    assert len(rep_conns) == 1
+
+
+def test_no_new_changes_without_flush(
+    src_config: Tuple[dlt.Pipeline, str, str]
+) -> None:
+    src_pl, slot_name, pub_name = src_config
+    create_tables(src_pl, "CREATE TABLE {schema}.items (id int PRIMARY KEY);")
+    init_replication(slot_name, pub_name, src_pl.dataset_name, "items")
+    run_sql(src_pl, "INSERT INTO {schema}.items VALUES (1);")
+    dest_pl = dlt.pipeline(pipeline_name="dest_pl", dev_mode=True)
+    extract_info = _extract_with_timeout(
+        dest_pl, replication_resource(slot_name, pub_name, flush_slot=False)
+    )
+    assert get_table_metrics(extract_info, "items")["items_count"] == 1
+    # the second run has nothing to read and must stop at the WAL position from its start
+    extract_info = _extract_with_timeout(
+        dest_pl, replication_resource(slot_name, pub_name, flush_slot=False)
+    )
+    assert get_table_metrics(extract_info, "items") is None
+
+
+def test_add_limit_makes_progress(src_config: Tuple[dlt.Pipeline, str, str]) -> None:
+    src_pl, slot_name, pub_name = src_config
+    create_tables(src_pl, "CREATE TABLE {schema}.items (id int PRIMARY KEY);")
+    init_replication(slot_name, pub_name, src_pl.dataset_name, "items")
+    run_sql(
+        src_pl,
+        *(
+            f"INSERT INTO {{schema}}.items SELECT generate_series({i * 100 + 1}, {i * 100 + 100});"
+            for i in range(10)
+        ),
+    )
+    dest_pl = dlt.pipeline(pipeline_name="dest_pl", destination="duckdb", dev_mode=True)
+    for expected_count in (200, 400, 600):
+        # a batch is a hints item and a data item, so 4 items are 2 batches
+        changes = replication_resource(
+            slot_name, pub_name, target_batch_size=100
+        ).add_limit(4)
+        assert_load_info(dest_pl.run(changes))
+        assert load_table_counts(dest_pl, "items") == {"items": expected_count}
+    assert_load_info(dest_pl.run(replication_resource(slot_name, pub_name)))
+    assert load_table_counts(dest_pl, "items") == {"items": 1000}
+
+
+@pytest.mark.parametrize(
+    "publish", ["insert", "insert, update, delete"], ids=["append", "merge"]
+)
+@pytest.mark.parametrize(
+    "in_first_transaction", [True, False], ids=["first-txn", "later-txn"]
+)
+def test_schema_change_mid_transaction(
+    src_config: Tuple[dlt.Pipeline, str, str], publish: str, in_first_transaction: bool
+) -> None:
+    src_pl, slot_name, pub_name = src_config
+    create_tables(
+        src_pl,
+        "CREATE TABLE {schema}.x (id int PRIMARY KEY);",
+        "CREATE TABLE {schema}.y (id int PRIMARY KEY);",
+    )
+    init_replication(
+        slot_name, pub_name, src_pl.dataset_name, ("x", "y"), publish=publish
+    )
+    if not in_first_transaction:
+        run_sql(
+            src_pl,
+            "INSERT INTO {schema}.x VALUES (0); INSERT INTO {schema}.y VALUES (1);",
+        )
+    # x gets a second Relation message in the middle of the transaction
+    run_sql(
+        src_pl,
+        "BEGIN; INSERT INTO {schema}.x VALUES (1); INSERT INTO {schema}.y VALUES (2);"
+        " ALTER TABLE {schema}.x ADD COLUMN c int; INSERT INTO {schema}.x VALUES (2, 2); COMMIT;",
+    )
+    dest_pl = dlt.pipeline(pipeline_name="dest_pl", destination="duckdb", dev_mode=True)
+    assert_load_info(dest_pl.run(replication_resource(slot_name, pub_name)))
+    exp_x = (
+        [(1, None), (2, 2)] if in_first_transaction else [(0, None), (1, None), (2, 2)]
+    )
+    exp_y = [(2,)] if in_first_transaction else [(1,), (2,)]
+    assert table_rows(dest_pl, "x", ["id", "c"]) == exp_x
+    assert table_rows(dest_pl, "y", ["id"]) == exp_y
+
+
+def test_primary_key_update(src_config: Tuple[dlt.Pipeline, str, str]) -> None:
+    src_pl, slot_name, pub_name = src_config
+    create_tables(src_pl, "CREATE TABLE {schema}.items (id int PRIMARY KEY, val text);")
+    init_replication(slot_name, pub_name, src_pl.dataset_name, "items")
+    run_sql(src_pl, "INSERT INTO {schema}.items VALUES (1, 'a'), (2, 'b');")
+    dest_pl = dlt.pipeline(pipeline_name="dest_pl", destination="duckdb", dev_mode=True)
+    assert_load_info(dest_pl.run(replication_resource(slot_name, pub_name)))
+    run_sql(src_pl, "UPDATE {schema}.items SET id = 10 WHERE id = 1;")
+    assert_load_info(dest_pl.run(replication_resource(slot_name, pub_name)))
+    assert table_rows(dest_pl, "items", ["id", "val"]) == [(2, "b"), (10, "a")]
+
+
+def test_unchanged_toast_with_replica_identity_full(
+    src_config: Tuple[dlt.Pipeline, str, str]
+) -> None:
+    src_pl, slot_name, pub_name = src_config
+    create_tables(
+        src_pl,
+        "CREATE TABLE {schema}.items (id int PRIMARY KEY, small text, big text);",
+        # store large values out of line without compression
+        "ALTER TABLE {schema}.items ALTER COLUMN big SET STORAGE EXTERNAL;",
+        "ALTER TABLE {schema}.items REPLICA IDENTITY FULL;",
+    )
+    init_replication(slot_name, pub_name, src_pl.dataset_name, "items")
+    run_sql(
+        src_pl,
+        "INSERT INTO {schema}.items VALUES (1, 'a', repeat('x', 10000)), (2, 'a', repeat('y', 5000));",
+    )
+    dest_pl = dlt.pipeline(pipeline_name="dest_pl", destination="duckdb", dev_mode=True)
+    assert_load_info(dest_pl.run(replication_resource(slot_name, pub_name)))
+    run_sql(
+        src_pl,
+        "UPDATE {schema}.items SET small = 'b';",
+        "UPDATE {schema}.items SET id = 20 WHERE id = 2;",
+    )
+    assert_load_info(dest_pl.run(replication_resource(slot_name, pub_name)))
+    assert table_rows(dest_pl, "items", ["id", "small", "length(big)"]) == [
+        (1, "b", 10000),
+        (20, "b", 5000),
+    ]
+    columns = dest_pl.default_schema.get_table_columns("items")
+    assert [name for name, c in columns.items() if c.get("primary_key")] == ["id"]
+
+
+def test_unchanged_toast_without_replica_identity_full(
+    src_config: Tuple[dlt.Pipeline, str, str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    src_pl, slot_name, pub_name = src_config
+    create_tables(
+        src_pl,
+        "CREATE TABLE {schema}.items (id int PRIMARY KEY, small text, big text);",
+        "ALTER TABLE {schema}.items ALTER COLUMN big SET STORAGE EXTERNAL;",
+    )
+    warnings: List[str] = []
+    monkeypatch.setattr(helpers.logger, "warning", warnings.append)
+    init_replication(slot_name, pub_name, src_pl.dataset_name, "items")
+    assert any("REPLICA IDENTITY FULL" in w and "small, big" in w for w in warnings)
+
+    run_sql(src_pl, "INSERT INTO {schema}.items VALUES (1, 'a', repeat('x', 10000));")
+    dest_pl = dlt.pipeline(pipeline_name="dest_pl", destination="duckdb", dev_mode=True)
+    assert_load_info(dest_pl.run(replication_resource(slot_name, pub_name)))
+    run_sql(src_pl, "UPDATE {schema}.items SET small = 'b';")
+    with pytest.raises(PipelineStepFailed) as exc:
+        dest_pl.run(replication_resource(slot_name, pub_name))
+    assert "REPLICA IDENTITY FULL" in str(exc.value)
+
+
+@pytest.mark.parametrize(
+    "initial_snapshot,backend",
+    [
+        ("table", "python"),
+        ("unlogged_table", "pyarrow"),
+        ("direct", "python"),
+        ("direct", "pyarrow"),
+    ],
+)
+def test_snapshot_types_match_replication(
+    src_config: Tuple[dlt.Pipeline, str, str], initial_snapshot: str, backend: str
+) -> None:
+    src_pl, slot_name, pub_name = src_config
+    create_tables(src_pl, PG_TYPES_DDL)
+    run_sql(src_pl, f"INSERT INTO {{schema}}.items VALUES {PG_TYPES_ROW.format(id=1)};")
+    snapshot = init_replication(
+        slot_name,
+        pub_name,
+        src_pl.dataset_name,
+        "items",
+        initial_snapshot=initial_snapshot,
+        backend=backend,
+    )
+    run_sql(src_pl, f"INSERT INTO {{schema}}.items VALUES {PG_TYPES_ROW.format(id=2)};")
+
+    snapshot_pl = dlt.pipeline(
+        pipeline_name="snapshot_pl", destination="duckdb", dev_mode=True
+    )
+    changes_pl = dlt.pipeline(
+        pipeline_name="changes_pl", destination="duckdb", dev_mode=True
+    )
+    assert_load_info(snapshot_pl.run(snapshot))
+    if initial_snapshot == "direct":
+        assert snapshot.closed
+    assert_load_info(
+        changes_pl.run(replication_resource(slot_name, pub_name, backend=backend))
+    )
+
+    snapshot_columns = snapshot_pl.default_schema.get_table_columns("items")
+    changes_columns = changes_pl.default_schema.get_table_columns("items")
+    column_names = [name for name in snapshot_columns if not name.startswith("_dlt")]
+    for name in column_names:
+        hints = ("data_type", "precision", "scale", "timezone")
+        assert {h: snapshot_columns[name].get(h) for h in hints} == {
+            h: changes_columns[name].get(h) for h in hints
+        }, name
+    column_names.remove("id")
+    assert table_rows(snapshot_pl, "items", column_names) == table_rows(
+        changes_pl, "items", column_names
+    )
+
+    # changes load on top of the snapshot
+    assert_load_info(
+        snapshot_pl.run(replication_resource(slot_name, pub_name, backend=backend))
+    )
+    assert load_table_counts(snapshot_pl, "items") == {"items": 2}
+    assert not [
+        c for c in snapshot_pl.default_schema.get_table_columns("items") if "__v_" in c
+    ]
+
+
+@pytest.mark.parametrize("initial_snapshot", ["table", "unlogged_table", "direct"])
+def test_schema_publication_snapshot_not_replicated(
+    src_config: Tuple[dlt.Pipeline, str, str], initial_snapshot: str
+) -> None:
+    if get_pg_version() < 150000:
+        pytest.skip("incompatible Postgres server version")
+    if not is_super_user(src_config[0].sql_client):
+        pytest.skip("Postgres user needs to be superuser")
+    src_pl, slot_name, pub_name = src_config
+    create_tables(
+        src_pl,
+        "CREATE TABLE {schema}.items (id int PRIMARY KEY, val text);",
+        "INSERT INTO {schema}.items SELECT g, 'v' FROM generate_series(1, 1000) g;",
+    )
+    snapshot = init_replication(
+        slot_name,
+        pub_name,
+        src_pl.dataset_name,
+        initial_snapshot=initial_snapshot,
+        publish="insert",
+    )
+    with src_pl.sql_client() as c:
+        published = c.execute_sql(
+            "SELECT tablename FROM pg_publication_tables WHERE pubname = %s;", pub_name
+        )
+    # a logged copy is published with the schema, its rows are skipped when decoding
+    expected = 2 if initial_snapshot == "table" else 1
+    assert len(published) == expected and "items" in [row[0] for row in published]
+    run_sql(src_pl, "INSERT INTO {schema}.items VALUES (1001, 'new');")
+
+    dest_pl = dlt.pipeline(pipeline_name="dest_pl", destination="duckdb", dev_mode=True)
+    assert_load_info(dest_pl.run(snapshot))
+    assert_load_info(dest_pl.run(replication_resource(slot_name, pub_name)))
+    assert load_table_counts(dest_pl, "items") == {"items": 1001}
+    assert dest_pl.default_schema.data_table_names() == ["items"]
+
+
+@pytest.mark.parametrize("initial_snapshot", ["table", "unlogged_table", "direct"])
+def test_snapshot_under_concurrent_writes(
+    src_config: Tuple[dlt.Pipeline, str, str], initial_snapshot: str
+) -> None:
+    src_pl, slot_name, pub_name = src_config
+    create_tables(
+        src_pl,
+        "CREATE TABLE {schema}.items (id int PRIMARY KEY, v int);",
+        "INSERT INTO {schema}.items SELECT g, 0 FROM generate_series(1, 5000) g;",
+    )
+    dsn = dlt.secrets.get(
+        "sources.pg_replication.credentials", ConnectionStringCredentials
+    ).to_native_representation()
+    schema = src_pl.dataset_name
+    stop = threading.Event()
+
+    def _write() -> None:
+        conn = psycopg2.connect(dsn)
+        conn.autocommit = True
+        i = 0
+        with conn.cursor() as cur:
+            while not stop.is_set():
+                i += 1
+                cur.execute(
+                    f"INSERT INTO {schema}.items VALUES ({10000 + i}, {i});"
+                    f" UPDATE {schema}.items SET v = {i} WHERE id = {i % 5000 + 1};"
+                    f" DELETE FROM {schema}.items WHERE id = {(i * 7) % 5000 + 1};"
+                )
+        conn.close()
+
+    writer = threading.Thread(target=_write, daemon=True)
+    writer.start()
+    try:
+        time.sleep(0.5)
+        snapshot = init_replication(
+            slot_name, pub_name, schema, "items", initial_snapshot=initial_snapshot
+        )
+        time.sleep(0.5)
+        dest_pl = dlt.pipeline(
+            pipeline_name="dest_pl", destination="duckdb", dev_mode=True
+        )
+        # writes go on while the snapshot is loaded
+        assert_load_info(dest_pl.run(snapshot))
+    finally:
+        stop.set()
+        writer.join()
+
+    assert_load_info(dest_pl.run(replication_resource(slot_name, pub_name)))
+    with src_pl.sql_client() as c:
+        source_rows = c.execute_sql(f"SELECT id, v FROM {schema}.items ORDER BY id;")
+    assert table_rows(dest_pl, "items", ["id", "v"]) == [
+        tuple(row) for row in source_rows
+    ]
+
+
+def test_reset_slot_with_existing_state(
+    src_config: Tuple[dlt.Pipeline, str, str]
+) -> None:
+    src_pl, slot_name, pub_name = src_config
+    create_tables(src_pl, "CREATE TABLE {schema}.items (id int PRIMARY KEY);")
+    init_replication(slot_name, pub_name, src_pl.dataset_name, "items")
+    run_sql(src_pl, "INSERT INTO {schema}.items VALUES (1);")
+    dest_pl = dlt.pipeline(pipeline_name="dest_pl", destination="duckdb", dev_mode=True)
+    assert_load_info(dest_pl.run(replication_resource(slot_name, pub_name)))
+
+    run_sql(src_pl, "INSERT INTO {schema}.items VALUES (2);")
+    # the new slot starts after the LSN stored in the pipeline state
+    snapshot = init_replication(
+        slot_name,
+        pub_name,
+        src_pl.dataset_name,
+        "items",
+        persist_snapshots=True,
+        reset=True,
+    )
+    assert_load_info(dest_pl.run(snapshot))
+    run_sql(src_pl, "INSERT INTO {schema}.items VALUES (3);")
+    assert_load_info(dest_pl.run(replication_resource(slot_name, pub_name)))
+    assert table_rows(dest_pl, "items", ["id"]) == [(1,), (2,), (3,)]
+
+
+def _from_id_2(query: Any, table: Any) -> Any:
+    return query.where(table.c.id >= 2)
+
+
+def test_direct_snapshot_with_own_sql_tables(
+    src_config: Tuple[dlt.Pipeline, str, str]
+) -> None:
+    src_pl, slot_name, pub_name = src_config
+    create_tables(
+        src_pl,
+        "CREATE TABLE {schema}.a (id int PRIMARY KEY, v text);",
+        "CREATE TABLE {schema}.b (id int PRIMARY KEY, v text);",
+        "INSERT INTO {schema}.a VALUES (1, 'a1'), (2, 'a2'), (3, 'a3');"
+        " INSERT INTO {schema}.b VALUES (1, 'b1'), (2, 'b2');",
+    )
+    credentials = dlt.secrets.get(
+        "sources.pg_replication.credentials", ConnectionStringCredentials
+    )
+    dest_pl = dlt.pipeline(pipeline_name="dest_pl", destination="duckdb", dev_mode=True)
+    with init_replication(
+        slot_name, pub_name, src_pl.dataset_name, ("a", "b"), initial_snapshot="direct"
+    ) as snapshot:
+        # committed after the slot was created: replicated, not in the snapshot
+        run_sql(
+            src_pl,
+            "INSERT INTO {schema}.a VALUES (4, 'a4');",
+            "UPDATE {schema}.a SET v = 'a1 updated' WHERE id = 1;",
+        )
+        # every table is configured separately and reads the same snapshot
+        table_a = sql_table(
+            credentials,
+            table="a",
+            schema=src_pl.dataset_name,
+            backend="pyarrow",
+            query_adapter_callback=_from_id_2,
+            engine_adapter_callback=snapshot.engine_adapter_callback,
+            type_adapter_callback=snapshot.type_adapter_callback,
+        )
+        table_a.apply_hints(write_disposition="merge", primary_key="id")
+        table_b = sql_table(
+            credentials,
+            table="b",
+            schema=src_pl.dataset_name,
+            backend="pyarrow",
+            chunk_size=1,
+            engine_adapter_callback=snapshot.engine_adapter_callback,
+            type_adapter_callback=snapshot.type_adapter_callback,
+        )
+        assert_load_info(dest_pl.run([table_a, table_b]))
+        assert table_rows(dest_pl, "a", ["id", "v"]) == [(2, "a2"), (3, "a3")]
+        assert load_table_counts(dest_pl, "b") == {"b": 2}
+    assert snapshot.closed
+
+    assert_load_info(
+        dest_pl.run(replication_resource(slot_name, pub_name, backend="pyarrow"))
+    )
+    # a row filtered out of the snapshot is loaded when it changes after the slot was created
+    assert table_rows(dest_pl, "a", ["id", "v"]) == [
+        (1, "a1 updated"),
+        (2, "a2"),
+        (3, "a3"),
+        (4, "a4"),
+    ]

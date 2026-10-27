@@ -92,3 +92,29 @@ TABLE_UPDATE: List[TColumnSchema] = [
     {"name": "col11_precision", "data_type": "time", "precision": 3, "nullable": False},
 ]
 TABLE_UPDATE_COLUMNS_SCHEMA: TTableSchemaColumns = {t["name"]: t for t in TABLE_UPDATE}
+
+PG_TYPES_DDL = """
+CREATE TYPE {schema}.mood AS ENUM ('sad', 'ok');
+CREATE DOMAIN {schema}.positive_int AS int CHECK (VALUE > 0);
+CREATE TABLE {schema}.items (
+    id int PRIMARY KEY,
+    c_smallint smallint, c_int int, c_bigint bigint, c_real real, c_double double precision,
+    c_numeric numeric(10,2), c_numeric_unbounded numeric, c_text text, c_varchar varchar(20),
+    c_char char(5), c_bool bool, c_date date, c_time time, c_time3 time(3), c_timetz timetz,
+    c_timestamp timestamp, c_timestamp3 timestamp(3), c_timestamptz timestamptz,
+    c_timestamptz3 timestamptz(3), c_interval interval, c_uuid uuid, c_json json,
+    c_jsonb jsonb, c_bytea bytea, c_int_array int[], c_text_array text[], c_jsonb_array jsonb[],
+    c_inet inet, c_enum {schema}.mood, c_enum_array {schema}.mood[],
+    c_domain {schema}.positive_int
+);
+"""
+"""Postgres types that snapshot and replication must load with the same columns and values."""
+
+PG_TYPES_ROW = (
+    "({id}, 1, 2, 3, 1.5, 2.25, 12345.67, 1.123456789, 'txt', 'vc', 'ch', true, '2024-01-02',"
+    " '10:11:12.123456', '10:11:12.123', '10:11:12+02', '2024-01-02 10:11:12.123456',"
+    " '2024-01-02 10:11:12.123', '2024-01-02 10:11:12.123456+02', '2024-01-02 10:11:12.123+02',"
+    " '1 day 2 hours', 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11', '{{\"a\": 1}}', '{{\"b\": [1, 2]}}',"
+    " '\\xdeadbeef', '{{1,2,NULL}}', '{{\"a\",\"b c\"}}', ARRAY['{{\"a\": 1}}'::jsonb],"
+    " '192.168.0.1', 'ok', '{{sad,ok}}', 7)"
+)
