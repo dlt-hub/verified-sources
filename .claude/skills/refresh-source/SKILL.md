@@ -73,7 +73,7 @@ Breakages are not the only reason to refresh: many sources load correctly but ca
    - **Lag:** is there a lag for records committed late?
    - **Deletes:** do they propagate (soft-delete flag as `hard_delete`, deleted-records endpoints)?
    - **Ordering:** does ORDER BY or LIMIT defeat server-side chunking?
-   - **Defaults:** consider an `incremental="auto"` default that derives cursor, disposition and lag from the schema, and leaves the `"replace"` shorthand as a full reload.
+   - **Defaults:** give mutable resources a default incremental on the "updated at" cursor, with lag and `dedup_sort="desc"` on the cursor, and a `start_date: Optional[TAnyDateTime]` argument as its initial value (all records on the first run if not set). Accept your own `incremental` instead, used as is, and raise if both are passed. Do not overload one argument with sentinels like `"auto"`. dlt resolves every argument typed as an incremental from config and merges config into a passed one, `NotResolved` does not stop it.
 
 ## Source structure and dlt building blocks
 
@@ -109,7 +109,7 @@ Tier the findings; keep tiers separable:
 
 - **P0 — unbreak**: minimal fixes that work across the whole supported dependency range; align CI group with what fresh users install; fix requirements bounds (add upper bound to majors not yet verified). Must NOT change loaded table schemas.
 - **P1 — modernize client**: new SDK client patterns, drop global state, configurable API version. Anything that changes response shapes **changes loaded schemas for existing users** — call this out explicitly as breaking and keep it out of P0.
-- **P2 — features**: new endpoints, incremental improvements, and the data access findings of phase 1b: bulk API, `backend` option, upfront schema, incremental "auto". These usually change loaded schemas, so they are **breaking**: document the migration (e.g. `refresh="drop_sources"`).
+- **P2 — features**: new endpoints, incremental improvements, and the data access findings of phase 1b: bulk API, `backend` option, upfront schema, default incremental with `start_date`. These usually change loaded schemas, so they are **breaking**: document the migration (e.g. `refresh="drop_sources"`).
 
 For a new source, the plan lists the resources from the data inventory, the structure (see [Source structure and dlt building blocks](#source-structure-and-dlt-building-blocks)), write dispositions and tests instead of tiers.
 
