@@ -1,15 +1,38 @@
 import os
-from typing import Any, Dict, List
+from collections import Counter
+from datetime import timedelta
+from typing import Dict, List
 
 import dlt
 import pytest
+from dlt.common.time import ensure_datetime_in_tz
 from dlt.sources.helpers.requests import HTTPError
 
-from sources.jira import issue_comments, jira, jira_issues, jira_search
-from sources.jira.settings import DEFAULT_ENDPOINTS
+from sources.jira import (
+    issue_changelogs,
+    issue_comments,
+    jira,
+    jira_issues,
+    jira_search,
+    worklogs,
+)
+from sources.jira.helpers.client import JiraClient
+from sources.jira.settings import DEFAULT_ENDPOINTS, DEFAULT_LAG
 
-from tests.jira.seed_test_data import SEED_LABEL, Jira
-from tests.jira.utils import CREDENTIALS
+from tests.jira.seed_test_data import (
+    ATTACHMENT_FILENAME,
+    CHANGELOGS_PER_CASE,
+    COMMENTS_PER_CASE,
+    SUMMARIES_PER_CASE,
+    WORKLOGS_PER_CASE,
+    case_label,
+    expected_issues,
+    issues_of_case,
+    request,
+    search_ids,
+    seeded_issues,
+)
+from tests.jira.utils import SEED_LABEL
 from tests.utils import (
     ALL_DESTINATIONS,
     assert_load_info,
@@ -129,8 +152,6 @@ def test_load_query_issues(destination_name: str) -> None:
     search = jira_search(page_size=5, jql_queries=queries, page_limit=PAGE_LIMIT)
     search.max_table_nesting = 0
     info = pipeline.run(search)
-    # lets print it (pytest -s will show it)
-    print(info)
     # make sure all jobs were loaded
     assert_load_info(info)
     # now let's inspect the generated schema. it should contain just one table with data
@@ -177,20 +198,19 @@ def test_issue_comments_changed(destination_name: str) -> None:
     """Adds, edits and deletes comments of a seeded issue between loads. Comments of other runs
     on the same issue are ignored.
     """
-    site = Jira(
+    client = JiraClient(
         dlt.secrets["sources.jira.subdomain"],
         dlt.secrets["sources.jira.email"],
         dlt.secrets["sources.jira.api_token"],
-        "TST",
     )
-    issue_ids = site.search_ids(f'labels = "{SEED_LABEL}-comment-changes"')
+    issue_ids = search_ids(client, f'labels = "{SEED_LABEL}-comment-changes"')
     if not issue_ids:
         pytest.skip(
             "seed the test site: seed_test_data.py --apply --cases comment_changes"
         )
     path = f"issue/{issue_ids[0]}/comment"
     created: List[str] = [
-        site.request("POST", path, json={"body": f"online test {n}"})["id"]
+        request(client, "POST", path, json={"body": f"online test {n}"})["id"]
         for n in (1, 2)
     ]
     pipeline = dlt.pipeline(
@@ -203,98 +223,118 @@ def test_issue_comments_changed(destination_name: str) -> None:
     def load() -> Dict[str, str]:
         issues = jira_issues(jql=f"id = {issue_ids[0]}")
         assert_load_info(pipeline.run([issues, issues | issue_comments]))
-        with pipeline.sql_client() as client:
-            rows = client.execute_sql("SELECT id, body FROM issue_comments")
+        with pipeline.sql_client() as sql_client:
+            rows = sql_client.execute_sql("SELECT id, body FROM issue_comments")
         return {comment_id: body for comment_id, body in rows if comment_id in created}
 
     try:
         assert load() == {created[0]: "online test 1", created[1]: "online test 2"}
-        site.request("PUT", f"{path}/{created[0]}", json={"body": "edited"})
-        site.request("DELETE", f"{path}/{created[1]}")
+        request(client, "PUT", f"{path}/{created[0]}", json={"body": "edited"})
+        request(client, "DELETE", f"{path}/{created[1]}")
         # the issue was updated within lag and is read again
         assert load() == {created[0]: "edited"}
-        site.request("DELETE", f"{path}/{created[0]}")
+        request(client, "DELETE", f"{path}/{created[0]}")
         assert load() == {}
     finally:
         for comment_id in created:
             try:
-                site.request("DELETE", f"{path}/{comment_id}")
+                request(client, "DELETE", f"{path}/{comment_id}")
             except HTTPError:
                 pass
 
 
-# the structured types are checked in Snowflake
-@pytest.mark.parametrize(
-    "destination_name", [name for name in ALL_DESTINATIONS if name == "snowflake"]
-)
-def test_issues_nested_types_snowflake(
-    destination_name: str, captured_mock: Dict[str, Any]
-) -> None:
-    os.environ["DESTINATION__SNOWFLAKE__USE_NESTED_TYPES"] = "true"
+@pytest.mark.parametrize("destination_name", ALL_DESTINATIONS)
+def test_seeded_issues_full_and_incremental(destination_name: str) -> None:
+    """Loads all seeded issues with their comments, changelogs and worklogs, then in backfill
+    windows and incrementally. The counts and values are predicted by the seed cases and the
+    manifest of seeded issues, nothing is derived from the loaded data.
+    """
+    # the comments test writes to the comment changes issue
+    excluded = ("comment_changes",)
+    seeded = seeded_issues(excluded)
+    assert len(seeded) == expected_issues(excluded)
+    jql = f'labels = "{SEED_LABEL}" AND NOT labels = "{case_label(*excluded)}"'
+
+    def case_id(case: str) -> str:
+        (issue,) = issues_of_case(seeded, case)
+        return str(issue["id"])
+
     pipeline = dlt.pipeline(
-        "jira_nested_snowflake", destination=destination_name, dev_mode=True
+        pipeline_name="test_jira_seeded",
+        destination=destination_name,
+        dataset_name="test_jira_seeded",
+        dev_mode=True,
     )
-    for _ in range(2):
-        # the second run merges issues updated within lag into the structured columns
-        issues = jira_issues(**CREDENTIALS, backend="pyarrow", nested_types=True)
-        assert_load_info(pipeline.run(issues, loader_file_format="parquet"))
-
-    text, number = "VARCHAR(16777216)", "NUMBER(19,0)"
-    issue_ref = f"OBJECT(id {text}, key {text})"
-    with pipeline.sql_client() as client:
-        table = client.make_qualified_table_name("issues")
-        types = {
-            row[0]: row[1] for row in client.execute_sql(f"DESCRIBE TABLE {table}")
-        }
-        rows = client.execute_sql(
-            f"""
-            SELECT
-                key,
-                customfield_10020[0]:"name"::string,
-                customfield_10020[0]:"boardId"::int,
-                customfield_10046:"child":"value"::string,
-                attachment[0]:"author":"accountId"::string,
-                issuelinks[0]:"outwardIssue":"key"::string,
-                subtasks[1]:"key"::string,
-                parent:"key"::string,
-                status:"statusCategory":"key"::string,
-                ARRAY_SIZE(labels),
-                customfield_10019
-            FROM {table}
-            """
-        )
-    # nested types are created as structured types with Jira keys
-    assert types["CUSTOMFIELD_10020"] == (
-        f"ARRAY(OBJECT(id {number}, name {text}, state {text}, boardId {number}, goal {text},"
-        f" startDate {text}, endDate {text}, completeDate {text}))"
+    issues = jira_issues(jql=jql)
+    info = pipeline.run(
+        [
+            issues,
+            issues | issue_comments,
+            issues | issue_changelogs,
+            worklogs(),
+        ]
     )
-    assert types["ISSUELINKS"] == (
-        f"ARRAY(OBJECT(id {text}, type OBJECT(id {text}, name {text}, inward {text}, outward"
-        f" {text}), inwardIssue {issue_ref}, outwardIssue {issue_ref}))"
+    assert_load_info(info)
+    assert load_table_counts(pipeline, "issues") == {"issues": len(seeded)}
+    tables = load_tables_to_dicts(
+        pipeline,
+        "issues",
+        "issues__attachment",
+        "issue_comments",
+        "issue_changelogs",
+        "worklogs",
     )
-    assert types["ATTACHMENT"] == (
-        f"ARRAY(OBJECT(id {text}, filename {text}, mimeType {text}, size {number}, created"
-        f" {text}, author OBJECT(accountId {text}, displayName {text})))"
-    )
-    assert types["CUSTOMFIELD_10046"] == (
-        f"OBJECT(id {text}, value {text}, child OBJECT(id {text}, value {text}))"
-    )
-    assert types["STATUS"] == (
-        f"OBJECT(id {text}, name {text}, statusCategory OBJECT(id {number}, key {text}, name"
-        f" {text}))"
-    )
-    assert types["PARENT"] == issue_ref
-    assert types["LABELS"] == f"ARRAY({text})"
-    assert types["CUSTOMFIELD_10019"] == text
-
-    values = {row[0]: row[1:] for row in rows}
-    assert len(values) == 8
-    assert values["TST-13"][:2] == ("TST Sprint 3", 2)
-    assert values["TST-24"][2] == "[dummy] rest_api"
-    assert values["TST-17"][3] == "account-1"
-    assert values["TST-18"][4:6] == ("TST-21", "TST-20")
-    assert values["TST-19"][6] == "TST-18"
-    labels = next(i for i in captured_mock["issues"] if i["key"] == "TST-24")["fields"][
-        "labels"
+    rows = {row["id"]: row for row in tables["issues"]}
+    assert set(rows) == {str(issue["id"]) for issue in seeded}
+    for case, summary in SUMMARIES_PER_CASE.items():
+        assert rows[case_id(case)]["summary"] == summary
+    assert [row["filename"] for row in tables["issues__attachment"]] == [
+        ATTACHMENT_FILENAME
     ]
-    assert values["TST-24"][7:] == ("new", len(labels), "0|i0008n:")
+    # comments, changes and worklogs by the issue they belong to, worklogs are site wide
+    assert Counter(row["issue_id"] for row in tables["issue_comments"]) == {
+        case_id(case): count for case, count in COMMENTS_PER_CASE.items()
+    }
+    changelogs = Counter(row["issue_id"] for row in tables["issue_changelogs"])
+    assert {
+        case_id(case): changelogs[case_id(case)] for case in CHANGELOGS_PER_CASE
+    } == {case_id(case): count for case, count in CHANGELOGS_PER_CASE.items()}
+    assert Counter(
+        row["issue_id"] for row in tables["worklogs"] if row["issue_id"] in rows
+    ) == {case_id(case): count for case, count in WORKLOGS_PER_CASE.items()}
+
+    # backfill windows over `created`, each with the number of issues the manifest predicts
+    created = sorted(ensure_datetime_in_tz(issue["created"]) for issue in seeded)
+    cuts = [
+        created[0],
+        created[len(created) // 3],
+        created[2 * len(created) // 3],
+        created[-1] + timedelta(seconds=1),
+    ]
+    backfill = dlt.pipeline(
+        pipeline_name="test_jira_seeded_backfill",
+        destination=destination_name,
+        dataset_name="test_jira_seeded_backfill",
+        dev_mode=True,
+    )
+    for start, end in zip(cuts, cuts[1:]):
+        predicted = sum(start <= value < end for value in created)
+        assert predicted > 0
+        window = dlt.sources.incremental("created", initial_value=start, end_value=end)
+        assert_load_info(backfill.run(jira_issues(jql=jql, incremental=window)))
+        assert backfill.last_trace.last_normalize_info.row_counts["issues"] == predicted
+    assert load_table_counts(backfill, "issues") == {"issues": len(seeded)}
+
+    # runs without changes: the issues updated within lag of the last one are read again, then
+    # without lag the issues updated last are read once more and recorded, then nothing
+    updated = [ensure_datetime_in_tz(issue["updated"]) for issue in seeded]
+    last = max(updated)
+    within_lag = sum(
+        value >= last - timedelta(seconds=DEFAULT_LAG) for value in updated
+    )
+    at_last = sum(value == last for value in updated)
+    for lag, predicted in ((None, within_lag), (0, at_last), (0, 0)):
+        pipeline.run(jira_issues(jql=jql, lag=lag))
+        row_counts = pipeline.last_trace.last_normalize_info.row_counts
+        assert row_counts.get("issues", 0) == predicted, lag
+        assert load_table_counts(pipeline, "issues") == {"issues": len(seeded)}
