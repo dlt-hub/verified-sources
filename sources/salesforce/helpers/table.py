@@ -2,7 +2,6 @@
 
 import importlib.util
 from copy import copy
-from datetime import timezone  # noqa: I251
 from typing import (
     Any,
     Dict,
@@ -20,21 +19,20 @@ from dlt.common import logger
 from dlt.common.configuration.specs import BaseConfiguration, configspec
 from dlt.common.metrics import TDataLocation
 from dlt.common.schema.typing import (
-    TColumnSchema,
     TTableSchemaColumns,
     TWriteDispositionConfig,
     TWriteDispositionDict,
 )
 from dlt.common.schema.utils import merge_columns
-from dlt.common.time import ensure_date, ensure_datetime_in_tz
 from dlt.common.typing import TColumnNames, TDataItem
 from dlt.extract.incremental import Incremental
 from dlt.extract.resource import DltResource
 
-from .client import SalesforceAuth
+from .connection import SalesforceConnection
+from .credentials import SalesforceAuth
 from .csv_utils import arrow_column_max, csv_page_to_arrow, csv_page_to_rows
-from .query import QueryClient, TQueryApi
-from .schema_types import (
+from .query import QueryApi, TQueryApi, make_query_api
+from .schema import (
     DEFAULT_LAG,
     UPDATED_AT_FIELDS,
     fields_to_columns,
@@ -42,6 +40,7 @@ from .schema_types import (
     get_primary_key,
     get_write_disposition,
 )
+from .soql import make_soql, to_soql_literal
 
 TTableBackend = Literal["auto", "python", "pyarrow"]
 TIncrementalArg = Union[Literal["auto"], Incremental[Any], None]
@@ -80,14 +79,14 @@ class DeferredDescribe(NamedTuple):
 
 
 def describe_columns(
-    query_client: QueryClient,
+    connection: SalesforceConnection,
     sobject: str,
     included_columns: Optional[List[str]],
     excluded_columns: Optional[List[str]],
     double_as_decimal: bool,
 ) -> Tuple[TTableSchemaColumns, Optional[List[str]]]:
     """Describes `sobject` and returns columns of the selected fields and the primary key"""
-    fields = query_client.describe(sobject)["fields"]
+    fields = connection.describe(sobject)["fields"]
     unknown = sorted(set(excluded_columns or []) - {field["name"] for field in fields})
     if unknown:
         logger.warning(
@@ -111,109 +110,6 @@ def _is_time_cursor(columns: TTableSchemaColumns, cursor_field: Optional[str]) -
     return columns.get(cursor_field or "", {}).get("data_type") in ("timestamp", "date")
 
 
-def to_soql_literal(value: Any, column: TColumnSchema) -> str:
-    """Renders `value` as a SOQL literal for a field with `column` schema"""
-    data_type = column.get("data_type")
-    if data_type == "timestamp":
-        dt = ensure_datetime_in_tz(value, timezone.utc)
-        # datetime literals are not quoted, Salesforce stores milliseconds
-        return dt.strftime("%Y-%m-%dT%H:%M:%S.") + f"{dt.microsecond // 1000:03d}Z"
-    if data_type == "date":
-        return ensure_date(value).isoformat()
-    if data_type == "bool":
-        return "true" if value else "false"
-    if data_type in ("bigint", "double", "decimal"):
-        return str(value)
-    escaped = str(value).replace("\\", "\\\\").replace("'", "\\'")
-    return f"'{escaped}'"
-
-
-def make_soql(
-    sobject: str,
-    columns: TTableSchemaColumns,
-    incremental: Optional[Incremental[Any]] = None,
-    soql_filter: Optional[str] = None,
-    limit: Optional[int] = None,
-) -> str:
-    """Builds a SOQL query selecting `columns`, filtered by `soql_filter` and `incremental`.
-
-    ORDER BY is generated only when `row_order` is set and LIMIT only with `limit`: both disable
-    PK chunking of Bulk API 2.0 query jobs, which may time out on large sObjects.
-    """
-    conditions = [soql_filter] if soql_filter else []
-    order_by = ""
-    if incremental:
-        incremental_conditions, order_by = _incremental_soql(
-            sobject, columns, incremental
-        )
-        conditions.extend(incremental_conditions)
-
-    query = f"SELECT {', '.join(columns)} FROM {sobject}"
-    if len(conditions) == 1:
-        query += f" WHERE {conditions[0]}"
-    elif conditions:
-        # SOQL does not allow AND and OR in a single expression without parentheses
-        query += " WHERE " + " AND ".join(f"({condition})" for condition in conditions)
-    query += order_by
-    if limit is not None:
-        query += f" LIMIT {limit}"
-    return query
-
-
-def _incremental_soql(
-    sobject: str, columns: TTableSchemaColumns, incremental: Incremental[Any]
-) -> Tuple[List[str], str]:
-    """Returns WHERE conditions and ORDER BY clause from the `incremental` cursor range"""
-    cursor_name = incremental.get_cursor_column_name()
-    if cursor_name is None:
-        raise ValueError(
-            f"Cursor path `{incremental.cursor_path}` must be a simple field name (e.g."
-            " `SystemModstamp`)"
-        )
-    if cursor_name not in columns:
-        raise KeyError(
-            f"Cursor field `{cursor_name}` does not exist in sObject `{sobject}`"
-        )
-    cursor = columns[cursor_name]
-
-    last_value_func = incremental.last_value_func
-    if last_value_func is max:
-        op = ">=" if incremental.range_start == "closed" else ">"
-        op_end = "<" if incremental.range_end == "open" else "<="
-    elif last_value_func is min:
-        op = "<=" if incremental.range_start == "closed" else "<"
-        op_end = ">" if incremental.range_end == "open" else ">="
-    else:
-        # custom last_value_func, load everything and let incremental filter
-        return [], ""
-
-    start_value, end_value = incremental.get_current_range()
-    conditions: List[str] = []
-    if start_value is not None:
-        condition = f"{cursor_name} {op} {to_soql_literal(start_value, cursor)}"
-        if end_value is not None:
-            condition += (
-                f" AND {cursor_name} {op_end} {to_soql_literal(end_value, cursor)}"
-            )
-        if incremental.on_cursor_value_missing == "include":
-            condition = f"({condition}) OR {cursor_name} = null"
-        conditions.append(condition)
-    if incremental.on_cursor_value_missing == "exclude":
-        conditions.append(f"{cursor_name} != null")
-
-    row_order = incremental.row_order
-    order_by = ""
-    if (row_order == "asc" and last_value_func is max) or (
-        row_order == "desc" and last_value_func is min
-    ):
-        order_by = f" ORDER BY {cursor_name} ASC"
-    elif (row_order == "asc" and last_value_func is min) or (
-        row_order == "desc" and last_value_func is max
-    ):
-        order_by = f" ORDER BY {cursor_name} DESC"
-    return conditions, order_by
-
-
 def resolve_backend(backend: TTableBackend) -> Literal["python", "pyarrow"]:
     """Picks pyarrow for "auto" when it is installed, without importing it"""
     if backend == "auto":
@@ -222,14 +118,14 @@ def resolve_backend(backend: TTableBackend) -> Literal["python", "pyarrow"]:
 
 
 def table_rows(
-    query_client: QueryClient,
+    connection: SalesforceConnection,
+    query_api: QueryApi,
     sobject: str,
     columns: TTableSchemaColumns,
     chunk_size: int,
     include_deleted: bool,
     soql_filter: Optional[str],
     backend: Literal["python", "pyarrow"],
-    api: TQueryApi,
     incremental: Optional[Incremental[Any]] = None,
     deferred: Optional[DeferredDescribe] = None,
 ) -> Iterator[TDataItem]:
@@ -241,7 +137,7 @@ def table_rows(
     primary_key: List[str] = []
     if deferred:
         columns, hints = _describe_when_extracting(
-            query_client, sobject, incremental, deferred
+            connection, sobject, incremental, deferred
         )
         primary_key = hints.get("primary_key") or []
         # merge resource hints with described hints before yielding
@@ -259,7 +155,7 @@ def table_rows(
         TDataLocation(
             kind="salesforce",
             resource_name=resource.name,
-            location=f"https://{query_client.client.sf_instance}",
+            location=connection.instance_url,
         ),
         replace=True,
     )
@@ -290,9 +186,7 @@ def table_rows(
     soql = make_soql(sobject, columns_hints, incremental, soql_filter, limit)
     rows_count, max_cursor = 0, None
     try:
-        for page in query_client.query(
-            soql, columns_hints, chunk_size, include_deleted, api
-        ):
+        for page in query_api.query(soql, columns_hints, include_deleted, chunk_size):
             item: Any
             if backend == "pyarrow":
                 item = csv_page_to_arrow(page, columns_hints)
@@ -369,7 +263,7 @@ def _warn_if_cursor_not_moved(
 
 
 def _describe_when_extracting(
-    query_client: QueryClient,
+    connection: SalesforceConnection,
     sobject: str,
     incremental: Optional[Incremental[Any]],
     deferred: DeferredDescribe,
@@ -379,7 +273,7 @@ def _describe_when_extracting(
     Disables deduplication of `incremental` like `table_resource` does for a described sObject.
     """
     columns, primary_key = describe_columns(
-        query_client,
+        connection,
         sobject,
         deferred.included_columns,
         deferred.excluded_columns,
@@ -407,7 +301,7 @@ def _describe_when_extracting(
 
 
 def table_resource(
-    query_client: QueryClient,
+    connection: SalesforceConnection,
     sobject: str,
     name: Optional[str] = None,
     incremental: TIncrementalArg = "auto",
@@ -434,7 +328,7 @@ def table_resource(
     hints: Dict[str, Any] = {}
     if not defer_table_reflect:
         columns, hints["primary_key"] = describe_columns(
-            query_client, sobject, included_columns, excluded_columns, double_as_decimal
+            connection, sobject, included_columns, excluded_columns, double_as_decimal
         )
         hints["columns"] = columns
     if primary_key:
@@ -509,14 +403,14 @@ def table_resource(
         merge_key=merge_key,
         **hints,
     )(
-        query_client,
+        connection,
+        make_query_api(connection, api),
         sobject,
         columns,
         chunk_size,
         include_deleted,
         soql_filter,
         resolve_backend(backend),
-        api,
         incremental=table_incremental,
         deferred=deferred,
     )

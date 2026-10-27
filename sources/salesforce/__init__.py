@@ -15,8 +15,9 @@ from dlt.common.typing import TColumnNames
 from dlt.sources import DltResource
 from dlt.sources.helpers.requests import Client, Session
 
-from .helpers.client import SalesforceAuth, make_salesforce_client
-from .helpers.query import QueryClient, TQueryApi
+from .helpers.connection import SalesforceConnection
+from .helpers.credentials import SalesforceAuth, make_salesforce_client
+from .helpers.query import TQueryApi
 from .helpers.table import (
     SalesforceTableResourceConfiguration,
     TTableBackend,
@@ -43,13 +44,12 @@ SOURCE_SOBJECTS = {
 }
 
 
-def _query_client(
+def _connection(
     credentials: SalesforceAuth, session: Optional[Session]
-) -> QueryClient:
+) -> SalesforceConnection:
     # retries 429 and 5xx, other errors are raised by simple_salesforce
     session = session or Client(raise_for_status=False).session
-    # logs in on the first API call
-    return QueryClient(None, partial(make_salesforce_client, credentials, session))
+    return SalesforceConnection(partial(make_salesforce_client, credentials, session))
 
 
 @dlt.source(name="salesforce")
@@ -100,10 +100,10 @@ def salesforce_source(
     unknown = set(soql_filters) - set(SOURCE_SOBJECTS)
     if unknown:
         raise ValueError(f"`soql_filters` for unknown resources: {sorted(unknown)}")
-    query_client = _query_client(credentials, session)
+    connection = _connection(credentials, session)
     return [
         table_resource(
-            query_client,
+            connection,
             sobject,
             name=name,
             incremental=incremental,
@@ -190,7 +190,7 @@ def salesforce_table(
         DltResource: The dlt resource loading the sObject.
     """
     return table_resource(
-        _query_client(credentials, None),
+        _connection(credentials, None),
         sobject,
         incremental=incremental,
         lag=lag,

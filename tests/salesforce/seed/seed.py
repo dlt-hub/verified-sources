@@ -30,10 +30,14 @@ from dlt.common.configuration import with_config
 from simple_salesforce import Salesforce
 from simple_salesforce.api import SFType
 
-from sources.salesforce.helpers.client import SalesforceAuth, make_salesforce_client
-from sources.salesforce.helpers.schema_types import fields_to_columns
-from sources.salesforce.helpers.query import QueryClient
-from sources.salesforce.helpers.table import make_soql
+from sources.salesforce.helpers.connection import SalesforceConnection
+from sources.salesforce.helpers.credentials import (
+    SalesforceAuth,
+    make_salesforce_client,
+)
+from sources.salesforce.helpers.query import BulkQueryApi
+from sources.salesforce.helpers.schema import fields_to_columns
+from sources.salesforce.helpers.soql import make_soql
 
 from tests.salesforce.seed import data
 
@@ -317,12 +321,11 @@ def capture(client: Salesforce) -> None:
     ]
     columns = fields_to_columns(fields)
     pages = list(
-        QueryClient(client, lambda: client).query(
+        BulkQueryApi(SalesforceConnection(lambda: client, client)).query(
             make_soql(data.DLT_TYPES, columns),
             columns,
-            max_records=10000,
             query_all=True,
-            api="bulk",
+            page_size=10000,
         )
     )
     assert len(pages) == 1, "all records are expected in a single page"

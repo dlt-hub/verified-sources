@@ -23,13 +23,14 @@ from simple_salesforce.exceptions import (
 )
 
 from sources.salesforce import SOURCE_SOBJECTS, salesforce_source, salesforce_table
-from sources.salesforce.helpers.client import (
+from sources.salesforce.helpers.connection import SalesforceConnection
+from sources.salesforce.helpers.credentials import (
     ConsumerKeySecretDomainAuth,
     InstanceAuth,
     make_salesforce_client,
 )
-from sources.salesforce.helpers.schema_types import sf_field_to_column_schema
-from sources.salesforce.helpers.query import QueryClient, TQueryApi
+from sources.salesforce.helpers.query import BulkQueryApi, TQueryApi
+from sources.salesforce.helpers.schema import sf_field_to_column_schema
 from sources.salesforce.helpers import table as table_module
 from sources.salesforce.helpers.table import TTableBackend
 
@@ -888,7 +889,7 @@ def test_salesforce_table_captured(
 @pytest.mark.parametrize(
     "renewed_by_other_thread", [False, True], ids=["login", "reuse"]
 )
-def test_bulk2_query_session_refresh(
+def test_connection_session_refresh(
     sf_mock: requests_mock.Mocker, renewed_by_other_thread: bool
 ) -> None:
     # the job status request is sent with an expired session and fails with 401
@@ -906,23 +907,23 @@ def test_bulk2_query_session_refresh(
         logins.append("login")
         return make_salesforce_client(renewed)
 
-    bulk2_query = QueryClient(make_salesforce_client(expired), login)
+    connection = SalesforceConnection(login, make_salesforce_client(expired))
 
     def job_status(request: Any, context: Any) -> Any:
         if request.headers["Authorization"] == "Bearer expired":
             if renewed_by_other_thread:
                 # another thread sharing the instance logged in after this request was sent
-                bulk2_query.client = make_salesforce_client(renewed)
+                connection.client = make_salesforce_client(renewed)
             context.status_code = 401
             return [{"errorCode": "INVALID_SESSION_ID", "message": "Session expired"}]
         return {"id": JOB_ID, "state": "JobComplete"}
 
     sf_mock.get(re.compile(rf"/jobs/query/{JOB_ID}$"), json=job_status)
-    bulk2_query._wait_for_job(JOB_ID)
+    BulkQueryApi(connection)._wait_for_job(JOB_ID)
 
     # the session is renewed once, a thread that sees a newer session retries with it
     assert logins == ([] if renewed_by_other_thread else ["login"])
-    assert bulk2_query.client.session_id == "renewed"
+    assert connection.client.session_id == "renewed"
 
 
 def rest_records_from_captured() -> List[Dict[str, Any]]:
