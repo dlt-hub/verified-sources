@@ -1,17 +1,20 @@
 ---
 name: refresh-source
-description: Audit a verified source against the current state of its upstream API/SDK, find breakages, outdated patterns and data access gaps (large volumes, bulk export, Arrow, upfront schema, incremental/merge setup), and propose (or implement) a fix plan with credential-free unit tests. Use when users report a source is outdated or broken, or for periodic source maintenance.
+description: Create a new verified source or refresh an existing one against the current state of its upstream API/SDK - find breakages, outdated patterns and data access gaps (large volumes, bulk export, Arrow, upfront schema, incremental/merge setup), review changes to the loaded data, and propose (or implement) a plan with credential-free unit tests. Use for new source requests, when users report a source is outdated or broken, or for periodic source maintenance.
 argument-hint: <source-name> -- [optional hints what to pay attention to]
 ---
 
-# Refresh a verified source
+# Create or refresh a verified source
 
-Arguments: `$ARGUMENTS` — first token is the source folder name under `sources/`, anything after `--` is user hints (specific user reports, suspected areas).
+Arguments: `$ARGUMENTS` — first token is the source folder name under `sources/`, anything after `--` is user hints (specific user reports, suspected areas, the data needed).
 
 Work through the phases in order. Do not skip phase 0 — wrong conclusions are usually formed by analyzing code that is no longer alive or pins that no longer reflect reality.
 
+**New source**: when `sources/<name>/` does not exist, skip the steps about existing code, pins and dead code, and follow "Walkthrough: Create and contribute a new source" in `CONTRIBUTING.md` and the [new source checklist](../review-pr/new-source-checklist.md).
+
 ## Phase 0 — Ground truth
 
+0. Build the context with [create-source-context](../create-source-context/SKILL.md): the data the upstream offers, authoritative docs, existing connectors, auth, pagination, limits and a data inventory. For a new source, stop after it until the user confirms the scope.
 1. Read everything in `sources/<name>/`, `sources/<name>_pipeline.py`, `tests/<name>/`.
 2. `git log --oneline -- sources/<name>` — look for past removals/refactors. **Hunt dead code**: files, fixtures, conftest helpers, docstrings and README claims orphaned by earlier PRs. Dead code should be deleted, never "fixed". Dead code may also be the only reason for a heavy dependency — deleting it can drop whole packages from `requirements.txt`.
 3. Compare the THREE dependency declarations and flag mismatches:
@@ -22,6 +25,8 @@ Work through the phases in order. Do not skip phase 0 — wrong conclusions are 
 4. Check open/closed GitHub issues for the source (`gh search issues`) and any user hints from the arguments.
 
 ## Phase 1 — Research the upstream (web search, authoritative sources only)
+
+For a new source, `create-source-context` covers this phase.
 
 Use WebSearch/WebFetch against official docs, SDK changelogs, and SDK migration guides (vendor docs site, vendor GitHub wiki/CHANGELOG). For each finding record the source URL.
 
@@ -70,6 +75,23 @@ Breakages are not the only reason to refresh: many sources load correctly but ca
    - **Ordering:** does ORDER BY or LIMIT defeat server-side chunking?
    - **Defaults:** consider an `incremental="auto"` default that derives cursor, disposition and lag from the schema, and leaves the `"replace"` shorthand as a full reload.
 
+## Source structure and dlt building blocks
+
+Build the source like an SDK that is easy to extend. No black boxes:
+- **Layers**: separate the connection (login, session renewal, retries), the API clients, data conversion and the dlt resources. Clients for different APIs share one interface, e.g. Bulk and REST query clients that yield the same pages. Each layer is usable and testable on its own, so users can run their own queries with the source's clients and helpers.
+- **One resource factory** that loads any object, like `sql_table`; the source composes it.
+- **Everything visible and configurable**: no global state, no hidden lists where the API can tell (describe endpoints, errors), options as arguments and config, hints users can change with `apply_hints`.
+
+Use dlt building blocks instead of hand-rolled code. Find dlt docs pages in the [LLM index](https://dlthub.com/docs/llms.txt); every page is served as markdown at its `.md` URL:
+- standard REST APIs: the declarative [`rest_api` source](https://dlthub.com/docs/dlt-ecosystem/verified-sources/rest_api/basic.md);
+- custom REST code: [`RESTClient`](https://dlthub.com/docs/dlt-ecosystem/verified-sources/rest_api/advanced.md#restclient) with its [paginators](https://dlthub.com/docs/dlt-ecosystem/verified-sources/rest_api/advanced.md#paginators) and [authentication](https://dlthub.com/docs/dlt-ecosystem/verified-sources/rest_api/advanced.md#authentication). Write a custom paginator or auth class rather than a loop;
+- other HTTP calls and SDKs: the [requests wrapper](https://dlthub.com/docs/dlt-ecosystem/verified-sources/rest_api/advanced.md#requests-wrapper) with retries, passed to the SDK as its session;
+- [incremental loading](https://dlthub.com/docs/general-usage/incremental-loading.md) translated to API filters ([cursor](https://dlthub.com/docs/general-usage/incremental/cursor.md));
+- [resources and hints](https://dlthub.com/docs/general-usage/resource.md) and [credentials specs](https://dlthub.com/docs/general-usage/credentials/complex_types.md);
+- tables with schema upfront, backends and deferred reflection: follow [`sql_table`](https://dlthub.com/docs/dlt-ecosystem/verified-sources/sql_database/advanced.md).
+
+When a building block does not fit, e.g. CSV responses that `RESTClient.paginate()` cannot parse or login flows only an SDK implements, say why in the plan.
+
 ## Phase 2 — Reproduce empirically. Never claim a breakage you haven't run.
 
 Use ephemeral environments to prove each suspected breakage and each proposed fix, at **both ends** of the allowed dependency range:
@@ -89,7 +111,43 @@ Tier the findings; keep tiers separable:
 - **P1 — modernize client**: new SDK client patterns, drop global state, configurable API version. Anything that changes response shapes **changes loaded schemas for existing users** — call this out explicitly as breaking and keep it out of P0.
 - **P2 — features**: new endpoints, incremental improvements, and the data access findings of phase 1b: bulk API, `backend` option, upfront schema, incremental "auto". These usually change loaded schemas, so they are **breaking**: document the migration (e.g. `refresh="drop_sources"`).
 
-Prefer dlt built-ins over hand-rolled code (`dlt.common.time.ensure_datetime_in_tz` / `ensure_date`, `dlt.common` logger, rest_api helpers, `sql_table` patterns) — but verify the utility exists in the oldest dlt allowed by the source's requirements.txt before using it, and bump that minimum when needed. Do not add new `pendulum` code: use stdlib `datetime` with dlt's helpers.
+For a new source, the plan lists the resources from the data inventory, the structure (see [Source structure and dlt building blocks](#source-structure-and-dlt-building-blocks)), write dispositions and tests instead of tiers.
+
+Classify every planned change with [Data shape and upgrade compatibility](#data-shape-and-upgrade-compatibility) before presenting the plan.
+
+Prefer dlt built-ins over hand-rolled code (see [Source structure and dlt building blocks](#source-structure-and-dlt-building-blocks), and `dlt.common.time.ensure_datetime_in_tz` / `ensure_date`, the `dlt.common` logger) — but verify the utility exists in the oldest dlt allowed by the source's requirements.txt before using it, and bump that minimum when needed. Do not add new `pendulum` code: use stdlib `datetime` with dlt's helpers.
+
+## Data shape and upgrade compatibility
+
+The most important part of any change to a source: users upgrade a pipeline that already loaded data and stored state. Any change that stops that pipeline from loading, or makes it load wrong data, is **breaking**. Understand the shape of the data before and after the change, and warn the user about every difference.
+
+**1. Inventory the shape** of every resource, before and after:
+- tables: names, nested (child) tables created from lists;
+- columns: names, data types with precision, scale and timezone, nullability, variant columns;
+- hints: primary and merge keys, write disposition, `hard_delete` and other column hints;
+- incremental: cursor field, the type of its values, the state key (resource name and cursor path), initial value, lag, deduplication key.
+
+**2. Observe the upgrade on a live account**, which is better than reasoning about it. Run the old version (a worktree from `origin/master`) and then the new one with the same pipeline name, the same dataset and the same destination, as users do. Use a disposable dataset. Compare:
+- the schemas, e.g. `dlt pipeline <name> schema` after each run;
+- the incremental state in `pipeline.state`;
+- the loaded rows: new `__v_` variant columns, duplicates, missing rows, failed load jobs.
+
+Without an account, run both versions on captured responses (phase 4) and compare the same.
+
+**3. Classify each change.** Breaking:
+- column type changes the destination cannot coerce: dlt creates variant columns or the load fails;
+- new NOT NULL columns or keys, or a stricter nullability of existing data;
+- changed primary or merge keys or write disposition: merge stops matching old rows, rows are duplicated or not deleted;
+- renamed resources or tables: a new empty table, the state starts over and a full reload follows;
+- a different cursor field or cursor value type: stored `last_value` cannot be compared with new data (e.g. a string state compared with an Arrow timestamp column), or queries start from a wrong value;
+- a different deduplication key: boundary records are loaded twice;
+- data format switches that change dlt columns, e.g. JSON rows to Arrow tables needs `[normalize.parquet_normalizer] add_dlt_load_id` and `add_dlt_id` for tables created from rows.
+
+Not breaking, but report them: new columns or tables, dropped columns (left in the destination with nulls), type widening the destination coerces.
+
+**4. Warn the user** in the plan, the PR description, the README and the dlt docs (phase 6): list every change, mark the breaking ones with what fails, and give the upgrade path, e.g. `pipeline.run(source, refresh="drop_sources")`, `dlt pipeline <name> drop <resource>`, a config option or an option that keeps the old behavior.
+
+**5. Test it**: run the pipeline twice so the state carries over between runs, and test switches users can make between runs (e.g. a backend picked automatically when a package gets installed).
 
 ## Phase 4 — Tests (the biggest pain point)
 
@@ -122,6 +180,7 @@ Hand-made fixtures encode our assumptions; they hid the header-only page bug in 
 1. `uv lock` if pyproject changed; ensure resolution works on all supported Python versions.
 2. `pytest tests/<name>/test_helpers.py` — must pass without anything in `sources/.dlt`.
 3. Integration tests `pytest tests/<name>` only if credentials exist; otherwise state plainly they were not run.
+   With a test account, run the upgrade from [Data shape and upgrade compatibility](#data-shape-and-upgrade-compatibility) and report what changed.
 4. `make lint-code` and `make format-lint`.
 5. Update stale docstrings/README touched by the changes. Report findings with file:line references and the doc URLs that back each claim.
 

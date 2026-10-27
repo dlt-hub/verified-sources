@@ -107,6 +107,7 @@ Using absolute paths under `WORKTREE`:
 - **New source** — read [new-source-checklist.md](new-source-checklist.md) when the diff adds a new folder under `sources/`. It is intentionally not loaded otherwise.
 - **Loaded schema** — changes to resource or table names, column names or types, primary or merge keys, write dispositions or nesting change the data that existing users already loaded. Flag each one as breaking.
 - **State and incremental cursors** — changes to resource state keys, incremental cursor fields or initial values must stay compatible with the state that existing pipelines already stored. Check what happens on the first run after an upgrade.
+- For both, follow [Data shape and upgrade compatibility](../refresh-source/SKILL.md#data-shape-and-upgrade-compatibility): what to compare, how to observe an upgrade and how to classify each change.
 
 ### 7. Review test coverage
 
@@ -170,7 +171,7 @@ Write a structured analysis covering:
 - **Dependency Changes**: Findings from step 3. `requirements.txt` and shared group changes must appear as WARNING blocks. Omit this section if no dependency changes were found.
 - **CI**: Status of lint, `dlt init` and test checks. If any failed, list the specific errors. State plainly when tests did not run.
 - **Observations & Potential Issues**: Bugs, edge cases, missing error handling, performance concerns, memory issues, security issues.
-- **Breaking Changes**: Changes to source/resource signatures, loaded schema or stored state that affect existing users (step 6a).
+- **Breaking Changes**: Changes to source/resource signatures, loaded schema or stored state that affect existing users (step 6a), each with what fails after an upgrade and the upgrade path.
 - **Test Coverage**: Required scenarios checklist with pass/fail status, misplaced tests, duplication issues, parametrization opportunities.
 - **Documentation**: README length, whether a `dlt-hub/dlt` docs update is needed, demo script.
 - **Reviewer Instructions**: If reviewer instructions were provided, include a dedicated section addressing each point raised. If no instructions were provided, omit this section.

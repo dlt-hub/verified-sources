@@ -41,7 +41,7 @@ Derive the branch category from the issue labels:
 
 If no matching label exists, ask the human for the category.
 
-Issues labeled `source request` or `verified source` ask for a new source. New sources are accepted only when they cannot be easily implemented with `rest_api`, `sql_database` or `filesystem` (see `README.md`) — stop and discuss scope with the human before going further.
+Issues labeled `source request` or `verified source` ask for a new source. New sources are accepted only when they cannot be easily implemented with `rest_api`, `sql_database` or `filesystem` (see `README.md`) — stop and discuss scope with the human before going further. Build an accepted source with [refresh-source](../refresh-source/SKILL.md), which also handles new sources.
 
 #### Hints
 
@@ -73,7 +73,7 @@ Check whether the reporter is using the source correctly:
 
 #### 3c. Check the upstream system and dlt
 
-- If the issue involves the upstream API, SDK or database, consult its official documentation and changelogs via WebFetch/WebSearch. If the source is broadly outdated against its upstream API, suggest `/refresh-source` instead.
+- If the issue involves the upstream API, SDK or database, consult its official documentation and changelogs via WebFetch/WebSearch. If the source is broadly outdated against its upstream API, suggest [refresh-source](../refresh-source/SKILL.md) instead.
 - If the issue involves dlt behavior (state, incremental loading, `add_limit`, schema hints), read the dlt code installed in `.venv` rather than assuming how it works.
 
 #### 3d. Determine: bug or user error?
@@ -82,7 +82,7 @@ Based on research, conclude one of:
 
 - **Bug**: The source has a defect. Proceed to step 4.
 - **User error**: The reporter's configuration is wrong. Draft a response explaining the correct approach. Ask the human to confirm before posting.
-- **Enhancement**: The source works as designed but could be improved. Discuss scope with the human before proceeding.
+- **Enhancement**: The source works as designed but could be improved. Discuss scope with the human before proceeding. Enhancements that change how the source reads or loads data follow [refresh-source](../refresh-source/SKILL.md).
 
 Report findings to the human before moving on.
 
@@ -128,7 +128,7 @@ Enter plan mode and design a plan that **will pass the `/review-pr` skill**. The
 1. **Code quality**: Style conforming to `.claude/rules/` and `CONTRIBUTING.md`, no over-engineering, proper use of existing patterns and dlt utilities.
 2. **Distribution**: The source folder stays self-contained with relative imports, so `dlt init` keeps working.
 3. **Test coverage**: Required scenarios identified, tests in the right location, no duplication, proper parametrization.
-4. **Breaking changes**: Changes to loaded schema, source/resource signatures or stored state are flagged.
+4. **Breaking changes**: Changes to loaded schema, source/resource signatures or stored state are flagged, see [Data shape and upgrade compatibility](../refresh-source/SKILL.md#data-shape-and-upgrade-compatibility).
 5. **Dependencies**: New packages declared in both `sources/<name>/requirements.txt` and the `pyproject.toml` group, `uv.lock` updated.
 6. **Documentation**: The source README stays super short; user-facing changes need a docs update in `dlt-hub/dlt`.
 
