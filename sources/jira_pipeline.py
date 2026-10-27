@@ -1,7 +1,7 @@
 from typing import List, Optional
 
 import dlt
-from jira import issue_comments, jira, jira_issues
+from jira import drop_keys, issue_comments, jira, jira_issues
 
 
 def load(endpoints: Optional[List[str]] = None, limit: Optional[int] = None) -> None:
@@ -21,6 +21,9 @@ def load(endpoints: Optional[List[str]] = None, limit: Optional[int] = None) -> 
         source = source.with_resources(*endpoints)
     if limit is not None:
         source.add_limit(limit)
+    # skip REST links and avatar and icon urls, pass key names to `drop_keys` to skip others
+    for resource in source.resources.values():
+        resource.add_map(drop_keys())
 
     load_info = pipeline.run(source)
 
@@ -41,9 +44,13 @@ def load_issues_with_jql(jql: str, with_comments: bool = True) -> None:
         dataset_name="jira_issues",
     )
 
-    issues = jira_issues(jql=jql)
+    issues = jira_issues(jql=jql).add_map(drop_keys())
     # pass `issues | issue_comments` alone to load comments without issues
-    data = [issues, issues | issue_comments] if with_comments else issues
+    data = (
+        [issues, (issues | issue_comments).add_map(drop_keys())]
+        if with_comments
+        else issues
+    )
     load_info = pipeline.run(data)
 
     print(f"Load Information: {load_info}")

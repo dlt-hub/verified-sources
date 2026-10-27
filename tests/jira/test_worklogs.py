@@ -39,6 +39,11 @@ def test_worklogs(jira_mock: JiraMock) -> None:
     assert columns["updated"]["data_type"] == "timestamp"
     assert columns["updated"]["dedup_sort"] == "desc"
     assert columns["time_spent_seconds"]["data_type"] == "bigint"
+    # typed before the first deleted worklog
+    assert (columns["deleted"]["data_type"], columns["deleted"]["hard_delete"]) == (
+        "bool",
+        True,
+    )
 
     # worklog 2 is deleted, the next run starts at the last update minus 10 minutes of lag
     jira_mock.worklog_feeds.clear()
@@ -51,9 +56,6 @@ def test_worklogs(jira_mock: JiraMock) -> None:
         {"feed": "deleted", "since": since},
     ]
     assert [row["id"] for row in rows_by_id(pipeline, "worklogs")] == ["1", "3"]
-    # the column exists once a worklog was deleted, with the hint that removes the row
-    columns = pipeline.default_schema.get_table_columns("worklogs")
-    assert columns["deleted"]["hard_delete"] is True
 
     # nothing changed and no lag: the feeds list the last change once more, the incremental
     # records it and the next run extracts nothing

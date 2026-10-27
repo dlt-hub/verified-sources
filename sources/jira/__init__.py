@@ -22,6 +22,7 @@ from .helpers.issues import (
     make_issues_resource,
 )
 from .helpers.jql import ORDER_BY
+from .helpers.schema_types import drop_keys
 from .helpers.worklogs import WORKLOG_COLUMNS, worklog_rows
 from .settings import (
     DEFAULT_ENDPOINTS,
@@ -37,6 +38,7 @@ __all__ = [
     "DEFAULT_PAGE_SIZE",
     "JiraClient",
     "JiraResponseError",
+    "drop_keys",
     "issue_changelogs",
     "issue_comments",
     "jira",
@@ -150,7 +152,8 @@ def jira_issues(
         bulk_fetch_size (Optional[int]): Issues fetched in a single request, at most 1000. If not
             set: 1000 if at most 100 fields with a single value are loaded, 100 otherwise.
         search_page_size (int): Issue ids listed in a single search request, at most 5000.
-        included_columns (Optional[List[str]]): Field ids to load, all fields if not set.
+        included_columns (Optional[List[str]]): Field ids to load, all fields if not set. Included
+            fields get typed columns, also before they have values.
         excluded_columns (Optional[List[str]]): Field ids to skip.
         write_disposition (Optional[TWriteDispositionConfig]): "merge" with incremental,
             "replace" without if not set.

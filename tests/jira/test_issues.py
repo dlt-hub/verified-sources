@@ -7,7 +7,13 @@ from dlt.pipeline.exceptions import PipelineStepFailed
 from dlt.pipeline.helpers import pipeline_drop
 from pytest_mock import MockerFixture
 
-from sources.jira import issue_changelogs, issue_comments, jira, jira_issues
+from sources.jira import (
+    drop_keys,
+    issue_changelogs,
+    issue_comments,
+    jira,
+    jira_issues,
+)
 from sources.jira.helpers.client import JiraClient
 from sources.jira.helpers.issues import IssuesReader, changelog_rows, issue_ids
 
@@ -39,9 +45,13 @@ def data_columns(pipeline: dlt.Pipeline, table: str) -> Dict[str, str]:
 
 
 def test_issues_load(jira_mock: JiraMock) -> None:
-    jira_mock.add_issues(make_issue(1, UPDATED_1), make_issue(2, UPDATED_2, labels=[]))
+    # fields without values get no columns
+    jira_mock.add_issues(
+        make_issue(1, UPDATED_1, customfield_10032=None),
+        make_issue(2, UPDATED_2, labels=[], customfield_10032=None),
+    )
     pipeline = duckdb_pipeline("jira_issues_load")
-    load(pipeline, jira_issues(**CREDENTIALS))
+    load(pipeline, jira(**CREDENTIALS).with_resources("issues"))
 
     assert load_table_counts(
         pipeline,
@@ -65,27 +75,31 @@ def test_issues_load(jira_mock: JiraMock) -> None:
         "duedate": "date",
         "timespent": "bigint",
         "customfield_10016": "double",
-        "customfield_10032": "date",
         "customfield_10033": "timestamp",
         # values of unknown structure are text
         "customfield_10050": "text",
-        "thumbnail": "text",
-        # objects are flattened and trimmed to known keys
+        # objects are flattened as Jira returns them, with REST links and image urls
+        "status__self": "text",
         "status__id": "text",
         "status__name": "text",
+        "status__icon_url": "text",
         "status__status_category__id": "bigint",
         "status__status_category__key": "text",
         "status__status_category__name": "text",
         "project__id": "text",
         "project__key": "text",
         "project__name": "text",
+        "assignee__self": "text",
         "assignee__account_id": "text",
         "assignee__display_name": "text",
         "assignee__active": "bool",
         "assignee__account_type": "text",
+        "assignee__avatar_urls___16x16": "text",
         "assignee__time_zone": "text",
+        "customfield_10030__self": "text",
         "customfield_10030__id": "text",
         "customfield_10030__value": "text",
+        "customfield_10034__self": "text",
         "customfield_10034__name": "text",
         "customfield_10034__group_id": "text",
     }
@@ -128,8 +142,8 @@ def test_issues_captured(captured_mock: JiraMock) -> None:
     # restrictions have dynamic keys and are not loaded by default
     assert not any(name.startswith("issuerestriction") for name in rows["TST-24"])
 
-    # a page per issue is fetched in parallel, the column hints reach the extractor before any
-    # page, so the schema and the rows are the same
+    # a page per issue is fetched in parallel and pages reach the extractor in any order, the
+    # schema and the rows are the same
     paged = duckdb_pipeline("jira_issues_captured_paged")
     load(paged, jira_issues(**CREDENTIALS, chunk_size=1))
     assert len(captured_mock.bulk_fetches) == 9
@@ -220,8 +234,8 @@ def test_issues_incremental_runs(jira_mock: JiraMock, mocker: MockerFixture) -> 
     assert table["columns"]["updated"]["dedup_sort"] == "desc"
     assert [row["id"] for row in rows_by_id(pipeline, "issues")] == ["1", "2", "3"]
 
-    # issue 1 is updated and issue 4 is new. issue 5 falls in the minute the JQL rounds the range
-    # down to but before the start value, issue 3 is older than the range
+    # issue 1 is updated, issue 4 is new, issue 5 is in the minute of the JQL range but before the
+    # start value, issue 3 is older than the range
     jira_mock.add_issues(
         make_issue(1, "2024-01-17T12:00:45.000+0000", summary="changed"),
         make_issue(4, "2024-01-17T13:00:00.000+0000"),
@@ -324,7 +338,7 @@ def test_issues_upgrade_from_replace(jira_mock: JiraMock) -> None:
     assert py_ex.value.step == "load"
     assert "_dlt_root_id" in str(py_ex.value)
 
-    # the recovery of the changelog: abort the package, then refresh
+    # the upgrade path in the README changelog: abort the package, then refresh
     pipeline.drop_pending_packages()
     load(pipeline, jira_issues(**CREDENTIALS), refresh="drop_resources")
     assert load_table_counts(pipeline, "issues", "issues__labels") == {
@@ -345,17 +359,27 @@ def test_issues_unexpected_values(jira_mock: JiraMock) -> None:
             customfield_10030="legacy",
             customfield_10016={"value": 1},
             customfield_10031=USER,
+            timespent=1.5,
+        ),
+        make_issue(
+            4, UPDATED_1, customfield_10016=3, timespent=7200.0, customfield_10050=[]
         ),
     )
     rows = list(jira_issues(**CREDENTIALS))
     # empty fields are skipped
-    assert [row.get("project") for row in rows] == [None, None, rows[2]["project"]]
+    assert [row.get("project") for row in rows[:3]] == [None, None, rows[2]["project"]]
     assert rows[2]["project"] is not None
-    # values of unexpected structure are loaded as null
+    # values of unexpected structure or not convertible to the field type are loaded as null
     assert rows[2].get("customfield_10030") is None
     assert rows[2].get("customfield_10016") is None
     assert rows[2].get("customfield_10031") is None
+    assert rows[2].get("timespent") is None
     assert rows[0]["customfield_10030"] is not None
+    # values are converted to the field type, so an integer does not create a variant column
+    assert type(rows[3]["customfield_10016"]) is float
+    assert type(rows[3]["timespent"]) is int
+    # empty values of unknown structure are skipped, not loaded as "[]"
+    assert "customfield_10050" not in rows[3]
 
 
 @pytest.mark.parametrize(
@@ -395,15 +419,72 @@ def test_issues_columns(
     assert list(rows[0]) == ["id", "key", *present]
 
 
-def test_issues_user_column_hints(jira_mock: JiraMock) -> None:
+@pytest.mark.parametrize(
+    "keys,dropped,kept",
+    [
+        (
+            None,
+            [
+                "issues.assignee__self",
+                "issues.assignee__avatar_urls___16x16",
+                "issues.status__icon_url",
+                "issues__fix_versions.self",
+                "issue_comments.self",
+                "issue_comments.author__self",
+            ],
+            ["issues.assignee__time_zone"],
+        ),
+        (
+            ["timeZone"],
+            ["issues.assignee__time_zone", "issue_comments.author__time_zone"],
+            ["issues.assignee__self", "issues__fix_versions.self"],
+        ),
+    ],
+    ids=["urls", "other_keys"],
+)
+def test_drop_keys(
+    jira_mock: JiraMock,
+    keys: Optional[List[str]],
+    dropped: List[str],
+    kept: List[str],
+) -> None:
     jira_mock.add_issues(make_issue(1, UPDATED_1))
-    issues = jira_issues(**CREDENTIALS)
+    jira_mock.comments = {"1": [make_comment(10, UPDATED_1)]}
+    drop = drop_keys() if keys is None else drop_keys(keys)
+    issues = jira_issues(**CREDENTIALS).add_map(drop)
+    pipeline = duckdb_pipeline("jira_drop_keys")
+    # transformers piped from a mapped resource still receive the pages of issues
+    load(pipeline, [issues, (issues | issue_comments).add_map(drop)])
+    assert load_table_counts(pipeline, "issues", "issue_comments") == {
+        "issues": 1,
+        "issue_comments": 1,
+    }
+    columns = {
+        f"{table['name']}.{name}"
+        for table in pipeline.default_schema.data_tables()
+        for name in table["columns"]
+    }
+    assert not set(dropped) & columns
+    assert set(kept) <= columns
+
+
+def test_issues_included_column_hints(jira_mock: JiraMock) -> None:
+    jira_mock.add_issues(make_issue(1, UPDATED_1))
+    issues = jira_issues(
+        **CREDENTIALS, included_columns=["customfield_10016", "thumbnail", "duedate"]
+    )
     issues.apply_hints(columns={"customfield_10016": {"data_type": "text"}})
     pipeline = duckdb_pipeline("jira_issues_hints")
     load(pipeline, issues)
-    columns = pipeline.default_schema.get_table_columns("issues")
-    assert columns["customfield_10016"]["data_type"] == "text"
-    assert columns["updated"]["data_type"] == "timestamp"
+    # included fields get typed columns also without values, the hints of the user win
+    assert data_columns(pipeline, "issues") == {
+        "id": "text",
+        "key": "text",
+        "customfield_10016": "text",
+        "thumbnail": "text",
+        "duedate": "date",
+        "updated": "timestamp",
+    }
 
 
 @pytest.mark.parametrize(

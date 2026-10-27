@@ -1,101 +1,54 @@
-"""Maps Jira field metadata to dlt columns and trims nested field values"""
+"""Maps Jira field metadata to dlt data types and columns, converts field values to them"""
 
-from typing import Any, Dict, Iterable, List, Optional, Union
+from typing import Any, Callable, Dict, Iterable, Optional
 
+from dlt.common.data_types.type_helpers import coerce_value, py_type_to_sc_type
+from dlt.common.json import json
 from dlt.common.schema.typing import TColumnSchema, TTableSchemaColumns
+from dlt.common.time import ensure_date, ensure_datetime_in_tz
+from dlt.common.typing import DictStrAny, TDataItem
 
-# dlt data type of a scalar or the shape of a nested value: keys kept from an object with their
-# shapes, the list wraps the shape of its items
-TShape = Union[str, Dict[str, "TShape"], List["TShape"]]
+from ..settings import URL_KEYS
 
-CUSTOM_FIELD_TYPE_PREFIX = "com.atlassian.jira.plugin.system.customfieldtypes:"
+# types of values with a known structure, which the normalizer unnests
+OBJECT = "object"
+ARRAY = "array"
 
-ID_NAME: TShape = {"id": "text", "name": "text"}
-ISSUE_REF: TShape = {"id": "text", "key": "text"}
-USER: TShape = {
-    "accountId": "text",
-    "displayName": "text",
-    "emailAddress": "text",
-    "active": "bool",
-    "accountType": "text",
-    "timeZone": "text",
+# by `schema.type` of a field and `schema.items` of an array field
+SCHEMA_TYPES: Dict[str, str] = {
+    "string": "text",
+    "number": "double",
+    "datetime": "timestamp",
+    "date": "date",
+    **dict.fromkeys(
+        (
+            "attachment",
+            "component",
+            "group",
+            "issuelinks",
+            "issuetype",
+            "option",
+            "option-with-child",
+            "priority",
+            "progress",
+            "project",
+            "resolution",
+            "securitylevel",
+            "status",
+            "statusCategory",
+            "timetracking",
+            "user",
+            "version",
+            "votes",
+            "watches",
+        ),
+        OBJECT,
+    ),
 }
-STATUS_CATEGORY: TShape = {"id": "bigint", "key": "text", "name": "text"}
-STATUS: TShape = {"id": "text", "name": "text", "statusCategory": STATUS_CATEGORY}
-ISSUE_TYPE: TShape = {
-    "id": "text",
-    "name": "text",
-    "subtask": "bool",
-    "hierarchyLevel": "bigint",
-}
-PROJECT: TShape = {
-    "id": "text",
-    "key": "text",
-    "name": "text",
-    "projectTypeKey": "text",
-}
-VERSION: TShape = {
-    "id": "text",
-    "name": "text",
-    "archived": "bool",
-    "released": "bool",
-    "releaseDate": "text",
-}
-OPTION: TShape = {"id": "text", "value": "text"}
-ISSUE_LINK: TShape = {
-    "id": "text",
-    "type": {"id": "text", "name": "text", "inward": "text", "outward": "text"},
-    "inwardIssue": ISSUE_REF,
-    "outwardIssue": ISSUE_REF,
-}
-ATTACHMENT: TShape = {
-    "id": "text",
-    "filename": "text",
-    "mimeType": "text",
-    "size": "bigint",
-    "created": "text",
-    "author": {"accountId": "text", "displayName": "text"},
-}
-SPRINT: TShape = {
-    "id": "bigint",
-    "name": "text",
-    "state": "text",
-    "boardId": "bigint",
-    "goal": "text",
-    "startDate": "text",
-    "endDate": "text",
-    "completeDate": "text",
-}
-PROGRESS: TShape = {"progress": "bigint", "total": "bigint", "percent": "bigint"}
-
-SYSTEM_FIELD_TYPES: Dict[str, TShape] = {
-    "status": STATUS,
-    "statusCategory": STATUS_CATEGORY,
-    "priority": ID_NAME,
-    "issuetype": ISSUE_TYPE,
-    "project": PROJECT,
-    "resolution": ID_NAME,
-    "security": ID_NAME,
-    "assignee": USER,
-    "reporter": USER,
-    "creator": USER,
-    "parent": ISSUE_REF,
-    "labels": ["text"],
-    "components": [ID_NAME],
-    "fixVersions": [VERSION],
-    "versions": [VERSION],
-    "issuelinks": [ISSUE_LINK],
-    "subtasks": [ISSUE_REF],
-    "attachment": [ATTACHMENT],
-    "timetracking": {
-        "originalEstimateSeconds": "bigint",
-        "remainingEstimateSeconds": "bigint",
-        "timeSpentSeconds": "bigint",
-    },
-    "progress": PROGRESS,
-    "aggregateprogress": PROGRESS,
-    "votes": {"votes": "bigint", "hasVoted": "bool"},
-    "watches": {"watchCount": "bigint", "isWatching": "bool"},
+# system fields of a type their schema does not tell
+SYSTEM_FIELD_TYPES: Dict[str, str] = {
+    # Jira returns `parent` without schema
+    "parent": OBJECT,
     # durations in seconds
     "timespent": "bigint",
     "timeestimate": "bigint",
@@ -105,40 +58,10 @@ SYSTEM_FIELD_TYPES: Dict[str, TShape] = {
     "aggregatetimeoriginalestimate": "bigint",
     "workratio": "bigint",
 }
-CUSTOM_FIELD_TYPES: Dict[str, TShape] = {
-    CUSTOM_FIELD_TYPE_PREFIX + "select": OPTION,
-    CUSTOM_FIELD_TYPE_PREFIX + "radiobuttons": OPTION,
-    CUSTOM_FIELD_TYPE_PREFIX + "multiselect": [OPTION],
-    CUSTOM_FIELD_TYPE_PREFIX + "multicheckboxes": [OPTION],
-    CUSTOM_FIELD_TYPE_PREFIX
-    + "cascadingselect": {"id": "text", "value": "text", "child": OPTION},
-    CUSTOM_FIELD_TYPE_PREFIX + "userpicker": USER,
-    CUSTOM_FIELD_TYPE_PREFIX + "multiuserpicker": [USER],
-    CUSTOM_FIELD_TYPE_PREFIX + "labels": ["text"],
-    CUSTOM_FIELD_TYPE_PREFIX + "float": "double",
-    CUSTOM_FIELD_TYPE_PREFIX + "textfield": "text",
-    CUSTOM_FIELD_TYPE_PREFIX + "textarea": "text",
-    CUSTOM_FIELD_TYPE_PREFIX + "url": "text",
-    CUSTOM_FIELD_TYPE_PREFIX + "datepicker": "date",
-    CUSTOM_FIELD_TYPE_PREFIX + "datetime": "timestamp",
-    "com.pyxis.greenhopper.jira:gh-sprint": [SPRINT],
+# custom fields of a type their schema does not tell, by `schema.custom`
+CUSTOM_FIELD_TYPES: Dict[str, str] = {
+    "com.pyxis.greenhopper.jira:gh-sprint": ARRAY,
     "com.pyxis.greenhopper.jira:gh-lexo-rank": "text",
-}
-SCHEMA_TYPES: Dict[str, TShape] = {
-    "string": "text",
-    "number": "double",
-    "datetime": "timestamp",
-    "date": "date",
-    "group": {"name": "text", "groupId": "text"},
-    "user": USER,
-    "option": OPTION,
-    "version": VERSION,
-    "component": ID_NAME,
-    "priority": ID_NAME,
-    "resolution": ID_NAME,
-    "status": STATUS,
-    "issuetype": ISSUE_TYPE,
-    "project": PROJECT,
 }
 ID_COLUMNS: TTableSchemaColumns = {
     "id": {"name": "id", "data_type": "text", "nullable": False},
@@ -146,11 +69,12 @@ ID_COLUMNS: TTableSchemaColumns = {
 }
 
 
-def get_field_type(field: Dict[str, Any]) -> Optional[TShape]:
-    """Returns the dlt data type or the shape of a field from `/field` metadata.
+def get_field_type(field: Dict[str, Any]) -> Optional[str]:
+    """Returns the dlt data type of a field from `/field` metadata, `object` or `array` for
+    values the normalizer unnests.
 
     Returns None for fields with values of unknown structure, e.g. fields without schema, of type
-    `any` or added by apps. Those are loaded as text, objects and lists serialized as json.
+    `any` or added by apps. Those are loaded as text, objects and arrays serialized as json.
     """
     schema = field.get("schema") or {}
     if not field.get("custom") and field["id"] in SYSTEM_FIELD_TYPES:
@@ -158,23 +82,21 @@ def get_field_type(field: Dict[str, Any]) -> Optional[TShape]:
     if schema.get("custom") in CUSTOM_FIELD_TYPES:
         return CUSTOM_FIELD_TYPES[schema["custom"]]
     if schema.get("type") == "array":
-        item_type = SCHEMA_TYPES.get(schema.get("items"))
-        return None if item_type is None else [item_type]
+        return ARRAY if schema.get("items") in SCHEMA_TYPES else None
     return SCHEMA_TYPES.get(schema.get("type"))
 
 
 def field_to_column_schema(field: Dict[str, Any]) -> Optional[TColumnSchema]:
     """Converts a field from `/field` metadata into a dlt column schema.
 
-    Returns None for nested values of a known shape: the normalizer flattens their objects and
-    loads their lists into nested tables. Values of unknown shape are loaded as text.
+    Returns None for objects and arrays, values of unknown structure are text.
     """
-    shape = get_field_type(field)
-    if shape is None:
+    field_type = get_field_type(field)
+    if field_type is None:
         return {"name": field["id"], "data_type": "text"}
-    if isinstance(shape, str):
-        return {"name": field["id"], "data_type": shape}  # type: ignore[typeddict-item]
-    return None
+    if field_type in (OBJECT, ARRAY):
+        return None
+    return {"name": field["id"], "data_type": field_type}  # type: ignore[typeddict-item]
 
 
 def fields_to_columns(fields: Iterable[Dict[str, Any]]) -> TTableSchemaColumns:
@@ -187,24 +109,67 @@ def fields_to_columns(fields: Iterable[Dict[str, Any]]) -> TTableSchemaColumns:
     return columns
 
 
-def trim_to_shape(value: Any, shape: Optional[TShape]) -> Any:
-    """Keeps the keys of `shape` in nested `value`. Values of unknown shape are returned as is.
-
-    Raises ValueError when `value` is of a different kind than `shape`, e.g. a string where an
-    object is expected.
+def coerce_scalar(value: Any, data_type: str) -> Any:
+    """Converts a scalar `value` to the python type of `data_type`, e.g. `3` to `3.0` for a
+    `double`. Raises ValueError if it cannot be converted, e.g. `3.5` to `bigint`.
     """
-    if value is None or shape is None:
+    if data_type in ("timestamp", "date"):
+        # numbers are not dates, `ensure_datetime_in_tz` would read them as UNIX timestamps
+        if isinstance(value, (int, float)):
+            raise ValueError(value)
+        return (
+            ensure_date(value) if data_type == "date" else ensure_datetime_in_tz(value)
+        )
+    return coerce_value(data_type, py_type_to_sc_type(type(value)), value)  # type: ignore[arg-type]
+
+
+def drop_keys(keys: Iterable[str] = URL_KEYS) -> Callable[[TDataItem], TDataItem]:
+    """Returns a function for `add_map` that removes `keys` from rows and their nested values in
+    place, by default REST links and avatar and icon urls, e.g.
+    `jira_issues().add_map(drop_keys())`
+    """
+    dropped = set(keys)
+
+    def _drop(item: TDataItem) -> TDataItem:
+        if isinstance(item, dict):
+            for key in dropped.intersection(item):
+                del item[key]
+            values: Iterable[Any] = item.values()
+        else:
+            values = item
+        for value in values:
+            if isinstance(value, (dict, list)):
+                _drop(value)
+        return item
+
+    return _drop
+
+
+def convert_value(value: Any, field_type: Optional[str]) -> Any:
+    """Converts the value of a field of `field_type`: scalars to the python type of their dlt data
+    type, objects and arrays are returned as is and values of unknown structure as text.
+
+    Raises ValueError when `value` is of a different kind, e.g. a string where an object is
+    expected, or when a scalar cannot be converted.
+    """
+    if value is None:
+        return None
+    if field_type is None:
+        if isinstance(value, (dict, list)) and not value:
+            return None
+        return value if isinstance(value, str) else json.dumps(value)
+    if field_type in (OBJECT, ARRAY):
+        if not isinstance(value, dict if field_type == OBJECT else list):
+            raise ValueError(value)
         return value
-    if isinstance(shape, dict):
-        if not isinstance(value, dict):
-            raise ValueError(value)
-        return {
-            key: trim_to_shape(value[key], shape[key]) for key in shape if key in value
-        }
-    if isinstance(shape, list):
-        if not isinstance(value, list):
-            raise ValueError(value)
-        return [trim_to_shape(item, shape[0]) for item in value]
     if isinstance(value, (dict, list)):
         raise ValueError(value)
-    return value
+    return coerce_scalar(value, field_type)
+
+
+def convert_record(record: DictStrAny, types: Dict[str, str]) -> DictStrAny:
+    """Converts the values of `types` keys of `record` in place to their dlt data types"""
+    for key, data_type in types.items():
+        if record.get(key) is not None:
+            record[key] = coerce_scalar(record[key], data_type)
+    return record

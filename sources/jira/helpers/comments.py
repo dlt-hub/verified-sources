@@ -1,31 +1,22 @@
 """Reads comments of issues fetched by the `issues` transformer"""
 
-from typing import Dict, Iterator, List, Optional
+from typing import Iterator, List, Optional
 
 from dlt.common import logger
 from dlt.common.schema.typing import TTableSchemaColumns
-from dlt.common.time import ensure_datetime_in_tz
 from dlt.common.typing import DictStrAny, TDataItem
 from dlt.sources.helpers.requests import HTTPError
 
 from .client import JiraClient, batched
 from .issues import IssuesPage, IssuesReader
-from .schema_types import USER, TShape, trim_to_shape
+from .schema_types import convert_record
 
-COMMENT: Dict[str, TShape] = {
-    "id": "text",
-    "author": USER,
-    "updateAuthor": USER,
-    "body": "text",
-    "created": "timestamp",
-    "updated": "timestamp",
-    "jsdPublic": "bool",
-    "visibility": {"type": "text", "value": "text", "identifier": "text"},
-}
+COMMENT_TYPES = {"created": "timestamp", "updated": "timestamp"}
 COMMENT_COLUMNS: TTableSchemaColumns = {
     # the latest version of a comment read more than once in a run wins
     "updated": {"dedup_sort": "desc"},
-    "deleted": {"hard_delete": True},
+    # typed, since the first run writes no rows that delete comments
+    "deleted": {"data_type": "bool", "hard_delete": True},
 }
 
 
@@ -53,11 +44,8 @@ def _comment_rows(
         if issue_comments is None:
             continue
         for comment in issue_comments:
-            row: DictStrAny = trim_to_shape(comment, COMMENT)
+            row = convert_record(comment, COMMENT_TYPES)
             row["issueId"] = issue_id
-            for name in ("created", "updated"):
-                if row.get(name):
-                    row[name] = ensure_datetime_in_tz(row[name])
             yield row
         if not issue_comments and not reader.initial_load:
             yield {"id": f"issue-{issue_id}", "issueId": issue_id, "deleted": True}

@@ -13,7 +13,8 @@ and coding agents. Setup and usage are in the
   `dlt pipeline <name> abort-packages` first
 - **breaking** `issues`: fields are top level columns named by the field id (`fields__summary` is
   `summary`), nested tables are `issues__<field>`, rich text is wiki markup (API v2), no
-  `changelog`, `operations`, `transitions`, `comment` and `worklog` data
+  `changelog`, `operations`, `transitions`, `comment` and `worklog` data. Nested values load as
+  Jira returns them, fields of unknown structure are JSON text
 - **breaking** `jira_search`: issues load like in `jira_issues` with a `query_index` column, the
   primary key is `id` and `query_index`, an issue found by two queries loads twice.
   `jql_queries` and `page_limit` are source arguments. Upgrade: run once with
@@ -26,14 +27,16 @@ and coding agents. Setup and usage are in the
 - changed `users`, `workflows`, `projects`: primary keys, the largest page each endpoint serves
 - changed: `get_paginated_data` is removed, `JiraClient.paginate_endpoint` reads the same endpoints
 
+- new `drop_keys`: a function for `add_map` that removes REST links and avatar and icon urls, or
+  other keys, from rows and their nested values
 Versions before 1.0.0 were not numbered. Copies taken with `dlt init` have no `version.py`,
 `.dlt/.sources` records the repository commit they came from.
 
 ## Extension points
 
 - A replaced endpoint: an entry in `settings.DEFAULT_ENDPOINTS` with its key and page size.
-- A field type: its shape in `SYSTEM_FIELD_TYPES` or `CUSTOM_FIELD_TYPES`. Unknown types load as
-  text.
+- A field type: its dlt data type, `object` or `array` in `SCHEMA_TYPES`, `SYSTEM_FIELD_TYPES` or
+  `CUSTOM_FIELD_TYPES` of `schema_types.py`. Fields of unknown type load as JSON text.
 - A transformer on issues: pipe it from `issues`, it receives pages of issue rows and the
   `IssuesReader` in the `IssuesPage` meta, like `issue_comments` and `issue_changelogs`.
 - A new API: a typed call on `JiraClient`, with a paginator from `paginators.py` or dlt.
@@ -67,8 +70,19 @@ fails and restricted comments are tested offline only.
   issues, comments and changelogs, independent of the size of API requests. Requests take what the
   API serves: search lists up to 5000 ids, bulk fetch takes 1000 issues for at most 100 single
   value fields and 100 otherwise, changelogs are fetched for 1000 issues and worklogs by 1000 ids.
-  Pages of issues are fetched in parallel by the dlt extract `workers` (5 by default), each page in
-  sequential requests, so runs with fewer pages than workers fetch with less parallelism.
+  Pages of issues and their comments and changelogs are fetched in parallel by the dlt extract
+  `workers` (5 by default), each page in sequential requests, so runs with fewer pages than
+  workers fetch with less parallelism.
+- **Types**: scalar fields are converted to their dlt data types in `schema_types.py`, a value
+  that cannot be converted loads as null with a warning. Objects and arrays reach the
+  normalizer as Jira returns them and `max_table_nesting=2` of the sources bounds their nesting.
+  A field gets a column when it has a value, scalar fields in `included_columns` get typed
+  columns upfront. JSON has no dates, so dates in nested values are typed by the `iso_timestamp`
+  detection of dlt. A standalone `jira_issues` has no nesting limit. Columns of `issues` are
+  named by `issue_fields.id`, which holds the field names, e.g. of `customfield_10016`.
+- **Links and images**: objects carry `self` REST links and `avatarUrls` and `iconUrl` image
+  urls, a quarter of the columns of `issues` on the test site. `resource.add_map(drop_keys())`
+  removes them and `drop_keys(["timeZone"])` other keys, see `jira_pipeline.py`.
 - **Comments**: `issue_comments` bulk fetches the `comment` field of each page of issues, 100
   issues per request, which embeds the latest 20 comments of an issue. Issues with more are read
   again from `startAt=0` with the comment endpoint, which returns about 100 per page. An issue left

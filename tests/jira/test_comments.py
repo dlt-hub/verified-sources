@@ -57,7 +57,11 @@ def test_issue_comments(jira_mock: JiraMock, http_mock: requests_mock.Mocker) ->
     assert columns["updated"]["dedup_sort"] == "desc"
     assert columns["body"]["data_type"] == "text"
     assert columns["jsd_public"]["data_type"] == "bool"
-    assert columns["deleted"]["hard_delete"] is True
+    # typed before the first row that deletes comments
+    assert (columns["deleted"]["data_type"], columns["deleted"]["hard_delete"]) == (
+        "bool",
+        True,
+    )
     rows = rows_by_id(pipeline, "issue_comments")
     expected_rows = [
         ("10", "1"),
