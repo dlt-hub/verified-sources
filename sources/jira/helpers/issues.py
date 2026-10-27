@@ -135,6 +135,8 @@ class IssuesReader:
         self._column_hints: Optional[TTableSchemaColumns] = None
         self.incremental: Optional[Incremental[Any]] = None
         self.cursor: Optional[CursorRange] = None
+        # first run of an incremental load, nothing loaded before needs to be deleted
+        self.initial_load = False
 
     def bind(self, incremental: Optional[Incremental[Any]]) -> Optional[str]:
         """Reads field metadata, binds `incremental` and selects the fields to fetch, returns the
@@ -144,11 +146,17 @@ class IssuesReader:
         self.incremental = incremental
         cursor_name: Optional[str] = None
         self.cursor = None
+        self.initial_load = False
         if incremental:
             self.cursor = make_cursor_range(
                 incremental, fields, to_tzinfo(self.client.time_zone())
             )
             cursor_name = incremental.get_cursor_column_name()
+            # the stored last value advances past the initial value once issues are loaded
+            self.initial_load = (
+                incremental.end_value is None
+                and incremental.get_state()["last_value"] == incremental.initial_value
+            )
         self.selected = select_fields(
             fields,
             self.included_columns,
@@ -165,11 +173,6 @@ class IssuesReader:
         self.client.split_batches = False
         self._column_hints = None
         return cursor_name
-
-    @property
-    def initial_load(self) -> bool:
-        """Tells if this is the first run of an incremental load"""
-        return self.cursor is not None and self.cursor.last_value is None
 
     def make_jqls(self) -> List[Tuple[Optional[int], str]]:
         """Returns the JQL queries to run with their query index, None without `queries`"""

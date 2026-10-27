@@ -1,5 +1,6 @@
 import os
-from typing import Any, List, Optional
+from datetime import date, datetime, timezone
+from typing import Any, Dict, List, Optional
 
 import dlt
 import pytest
@@ -24,6 +25,7 @@ from tests.jira.utils import (
     FIELDS,
     INTERNAL_KEYS,
     JiraMock,
+    START,
     UNACCEPTED_EXPANDS,
     UNACCEPTED_PARAMS,
     UPDATED_1,
@@ -68,13 +70,38 @@ def test_jira_source(http_mock: requests_mock.Mocker) -> None:
     assert [row["name"] for row in rows] == ["Flow"]
 
 
+@pytest.mark.parametrize(
+    "kwargs,expected_jql,expected_since",
+    [
+        (
+            {"start_date": date(2024, 1, 15)},
+            'updated >= "2024-01-15 00:00" ORDER BY updated ASC',
+            1705276800000,
+        ),
+        ({}, 'created >= "1970-01-01" ORDER BY updated ASC', 0),
+        (
+            {"incremental": dlt.sources.incremental("created", initial_value=START)},
+            'created >= "2024-01-15 09:30" ORDER BY created ASC',
+            0,
+        ),
+    ],
+    ids=["start_date", "default", "own_incremental"],
+)
+def test_jira_source_incremental(
+    jira_mock: JiraMock, kwargs: Dict[str, Any], expected_jql: str, expected_since: int
+) -> None:
+    # a start date starts issues and worklogs, an incremental applies to issues only
+    source = jira(**CREDENTIALS, **kwargs)
+    assert list(source.with_resources("issues", "worklogs")) == []
+    assert jira_mock.jqls == [expected_jql]
+    assert jira_mock.worklog_feeds[0] == {"feed": "updated", "since": expected_since}
+
+
 def test_issues_config_resolution(jira_mock: JiraMock) -> None:
     os.environ["SOURCES__JIRA__SUBDOMAIN"] = CREDENTIALS["subdomain"]
     os.environ["SOURCES__JIRA__EMAIL"] = CREDENTIALS["email"]
     os.environ["SOURCES__JIRA__API_TOKEN"] = CREDENTIALS["api_token"]
     os.environ["SOURCES__JIRA__ISSUES__LAG"] = "60"
-    # `incremental` is not configurable
-    os.environ["SOURCES__JIRA__ISSUES__INCREMENTAL__CURSOR_PATH"] = "created"
     jira_mock.add_issues(make_issue(1, UPDATED_1))
 
     issues = jira_issues()
@@ -84,17 +111,37 @@ def test_issues_config_resolution(jira_mock: JiraMock) -> None:
     assert [row["id"] for row in issues] == ["1"]
     # the incremental is bound when the ids resource runs
     incremental = issues._parent.incremental.incremental
-    assert (incremental.cursor_path, incremental.lag) == ("updated", 60)
+    assert (incremental.cursor_path, incremental.initial_value, incremental.lag) == (
+        "updated",
+        None,
+        60,
+    )
+    assert issues.columns["updated"]["dedup_sort"] == "desc"
 
-    full = jira_issues(incremental=None)
-    assert full.write_disposition == "replace"
-    assert len(list(full)) == 1
-    assert full._parent.incremental.incremental is None
-    created = jira_issues(incremental=dlt.sources.incremental("created"))
+    # a start date is the initial value of the default incremental
+    os.environ["SOURCES__JIRA__ISSUES__START_DATE"] = "2024-01-15"
+    started = jira_issues()
+    assert len(list(started)) == 1
+    incremental = started._parent.incremental.incremental
+    assert (incremental.cursor_path, incremental.initial_value, incremental.lag) == (
+        "updated",
+        datetime(2024, 1, 15, tzinfo=timezone.utc),
+        60,
+    )
+    assert started.columns["updated"]["dedup_sort"] == "desc"
+    with pytest.raises(ValueError):
+        jira_issues(incremental=dlt.sources.incremental("created"))
+    del os.environ["SOURCES__JIRA__ISSUES__START_DATE"]
+
+    # your own incremental is configurable like any dlt incremental
+    os.environ["SOURCES__JIRA__ISSUES__INCREMENTAL__CURSOR_PATH"] = "created"
+    created = jira_issues()
     assert created.write_disposition == "merge"
     assert len(list(created)) == 1
     assert created._parent.incremental.incremental.cursor_path == "created"
     assert jira_mock.jqls[-1] == 'created >= "1970-01-01" ORDER BY created ASC'
+    assert "updated" not in created.columns
+    del os.environ["SOURCES__JIRA__ISSUES__INCREMENTAL__CURSOR_PATH"]
 
     # resources of issues with their own names keep their own tables and state. resources run
     # together share the `jira` section, so the worklogs find the secrets too

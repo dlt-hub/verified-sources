@@ -1,13 +1,14 @@
 """ This source uses Jira API and dlt to load data such as Issues, Users, Workflows and Projects to the database. """
 
 from datetime import datetime
-from typing import Annotated, Any, Iterable, Iterator, List, Literal, Optional, Union
+from typing import Annotated, Any, Iterable, Iterator, List, Optional
 
 import dlt
 from dlt.common.configuration import NotResolved, with_config
 from dlt.common.configuration.specs import ConfigSectionContext, known_sections
 from dlt.common.schema.typing import TTableSchemaColumns, TWriteDispositionConfig
-from dlt.common.typing import TColumnNames, TDataItem
+from dlt.common.time import ensure_datetime_in_tz
+from dlt.common.typing import TAnyDateTime, TColumnNames, TDataItem
 from dlt.sources import DltResource
 
 from .helpers.client import JiraClient, JiraResponseError
@@ -56,6 +57,8 @@ def jira(
     api_token: str = dlt.secrets.value,
     page_size: Optional[int] = None,
     jql: Optional[str] = None,
+    start_date: Optional[TAnyDateTime] = None,
+    incremental: Optional[dlt.sources.incremental[Any]] = None,
 ) -> Iterable[DltResource]:
     """
     Jira source function that generates a list of resource functions based on endpoints.
@@ -71,17 +74,34 @@ def jira(
             page each endpoint serves.
         jql: JQL restricting loaded issues and their comments and changelogs, e.g.
             `project = KAN`. Worklogs are read for all issues of the site.
+        start_date: Loads issues and worklogs updated since this date on the first run, all of
+            them if not set.
+        incremental: Your own incremental of issues instead of `start_date`, see `jira_issues`.
     Returns:
         Iterable[DltResource]: List of resource functions.
     """
-    issues = jira_issues(subdomain=subdomain, email=email, api_token=api_token, jql=jql)
+    start = None if start_date is None else ensure_datetime_in_tz(start_date)
+    issues = jira_issues(
+        subdomain=subdomain,
+        email=email,
+        api_token=api_token,
+        jql=jql,
+        start_date=start,
+        incremental=incremental,
+    )
     # client of the endpoint resources, comments and changelogs use the client of `issues`
     client = JiraClient(subdomain, email, api_token)
     resources = [
         issues,
         issues | issue_comments,
         issues | issue_changelogs,
-        worklogs(subdomain=subdomain, email=email, api_token=api_token),
+        # merged into the default incremental of worklogs, no start date keeps it as is
+        worklogs(
+            subdomain=subdomain,
+            email=email,
+            api_token=api_token,
+            updated=dlt.sources.incremental(initial_value=start),
+        ),
         issue_fields(subdomain=subdomain, email=email, api_token=api_token),
     ]
     for endpoint_name, endpoint in DEFAULT_ENDPOINTS.items():
@@ -114,10 +134,8 @@ def jira_issues(
     email: str = dlt.secrets.value,
     api_token: str = dlt.secrets.value,
     jql: Optional[str] = None,
-    # not resolved from config: dlt would parse "auto" as the initial value of an incremental
-    incremental: Annotated[
-        Union[Literal["auto"], dlt.sources.incremental[Any], None], NotResolved()
-    ] = "auto",
+    start_date: Optional[TAnyDateTime] = None,
+    incremental: Optional[dlt.sources.incremental[Any]] = None,
     lag: Optional[float] = None,
     chunk_size: Optional[int] = None,
     bulk_fetch_size: Optional[int] = None,
@@ -129,7 +147,7 @@ def jira_issues(
     merge_key: TColumnNames = None,
     name: Annotated[str, NotResolved()] = "issues",
 ) -> DltResource:
-    """Returns the `issues` resource loading issues matching `jql` and the `incremental` range.
+    """Returns the `issues` resource loading issues matching `jql` incrementally.
 
     Ids of matching issues are listed with JQL search and pages of `chunk_size` issues are fetched
     with bulk fetch by a parallelized transformer: the number of parallel pages is set by dlt
@@ -144,10 +162,14 @@ def jira_issues(
         api_token (str): The API token to authenticate with.
         jql (Optional[str]): JQL restricting loaded issues, e.g. `project = KAN`. It must not
             contain ORDER BY.
-        incremental (Union[Literal["auto"], dlt.sources.incremental[Any], None]): Generates
-            the JQL range. "auto" loads issues updated since the last run, None loads all issues.
-            The cursor must be a date or datetime field, e.g. `created` or a custom field id.
-        lag (Optional[float]): Seconds re-read on each run by the "auto" incremental, to catch
+        start_date (Optional[TAnyDateTime]): Loads issues updated since this date on the first
+            run, all issues if not set. It is the initial value of the default incremental
+            `dlt.sources.incremental("updated", initial_value=start_date, lag=lag)`, with
+            `dedup_sort="desc"` on `updated` so the latest version of an issue wins the merge.
+        incremental (Optional[dlt.sources.incremental[Any]]): Your own incremental instead of the
+            default one, used as is, without lag and dedup sort. Its cursor must be a date or
+            datetime field, e.g. `created` or a custom field id.
+        lag (Optional[float]): Seconds re-read on each run by the default incremental, to catch
             issues missing in search results. 600 if not set.
         chunk_size (Optional[int]): Rows in a yielded page of issues and of the comments and
             changelogs piped from them, 1000 if not set. Pages of issues are fetched in parallel,
@@ -158,8 +180,7 @@ def jira_issues(
         included_columns (Optional[List[str]]): Field ids to load, all fields if not set. Included
             fields get typed columns, also before they have values.
         excluded_columns (Optional[List[str]]): Field ids to skip.
-        write_disposition (Optional[TWriteDispositionConfig]): "merge" with incremental,
-            "replace" without if not set.
+        write_disposition (Optional[TWriteDispositionConfig]): "merge" if not set.
         primary_key (TColumnNames): Primary key, the issue `id` if not set.
         merge_key (TColumnNames): Merge key of the resource.
         name (str): Name of the resource and of its table. Its incremental state is kept by the
@@ -173,18 +194,16 @@ def jira_issues(
         raise ValueError(
             f"JQL `{jql}` must not contain ORDER BY, issues are ordered by cursor"
         )
-    table_incremental: Optional[dlt.sources.incremental[Any]]
+    if start_date is not None and incremental is not None:
+        raise ValueError("Pass `start_date` or `incremental`, not both")
     columns: Optional[TTableSchemaColumns] = None
-    if incremental == "auto":
-        table_incremental = dlt.sources.incremental(
-            "updated", lag=DEFAULT_LAG if lag is None else lag
+    if incremental is None:
+        start = None if start_date is None else ensure_datetime_in_tz(start_date)
+        incremental = dlt.sources.incremental(
+            "updated", initial_value=start, lag=DEFAULT_LAG if lag is None else lag
         )
         # the latest version of an issue read more than once in a run wins
         columns = {"updated": {"name": "updated", "dedup_sort": "desc"}}
-    else:
-        table_incremental = incremental
-    if write_disposition is None:
-        write_disposition = "merge" if table_incremental else "replace"
 
     reader = IssuesReader(
         JiraClient(subdomain, email, api_token),
@@ -197,8 +216,8 @@ def jira_issues(
     )
     return make_issues_resource(
         reader,
-        table_incremental,
-        write_disposition,
+        incremental,
+        write_disposition or "merge",
         primary_key or "id",
         merge_key=merge_key,
         columns=columns,

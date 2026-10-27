@@ -12,10 +12,27 @@ from tests.jira.utils import CREDENTIALS, JiraMock, START
 
 
 @pytest.mark.parametrize(
-    "incremental,time_zone,jql,expected_jql",
+    "start_or_incremental,time_zone,jql,expected_jql",
     [
-        ("auto", "UTC", None, 'created >= "1970-01-01" ORDER BY updated ASC'),
-        (None, "UTC", None, 'created >= "1970-01-01"'),
+        (
+            "2024-01-15",
+            "UTC",
+            None,
+            'updated >= "2024-01-15 00:00" ORDER BY updated ASC',
+        ),
+        (
+            "2024-01-15T11:30:15+02:00",
+            "UTC",
+            None,
+            'updated >= "2024-01-15 09:30" ORDER BY updated ASC',
+        ),
+        (
+            date(2024, 1, 15),
+            "America/Los_Angeles",
+            None,
+            'updated >= "2024-01-14 16:00" ORDER BY updated ASC',
+        ),
+        (None, "UTC", None, 'created >= "1970-01-01" ORDER BY updated ASC'),
         (
             dlt.sources.incremental("updated", initial_value=START),
             "UTC",
@@ -119,7 +136,7 @@ from tests.jira.utils import CREDENTIALS, JiraMock, START
             None,
             'created >= "1970-01-01"',
         ),
-        ("auto", "UTC", "project = KAN", "(project = KAN) ORDER BY updated ASC"),
+        (None, "UTC", "project = KAN", "(project = KAN) ORDER BY updated ASC"),
         (
             dlt.sources.incremental("updated", initial_value=START),
             "UTC",
@@ -129,8 +146,10 @@ from tests.jira.utils import CREDENTIALS, JiraMock, START
         ),
     ],
     ids=[
-        "auto_first_run",
-        "no_incremental",
+        "start_date_string",
+        "start_iso_string",
+        "start_date",
+        "default",
         "start",
         "time_zone_negative",
         "time_zone_half_hour",
@@ -151,24 +170,23 @@ from tests.jira.utils import CREDENTIALS, JiraMock, START
 )
 def test_issues_jql(
     http_mock: requests_mock.Mocker,
-    incremental: Any,
+    start_or_incremental: Any,
     time_zone: Optional[str],
     jql: Optional[str],
     expected_jql: str,
 ) -> None:
     jira_mock = JiraMock(http_mock, time_zone=time_zone)
-    assert list(jira_issues(**CREDENTIALS, incremental=incremental, jql=jql)) == []
+    cursor = "updated"
+    if isinstance(start_or_incremental, dlt.sources.incremental):
+        issues = jira_issues(**CREDENTIALS, incremental=start_or_incremental, jql=jql)
+        cursor = start_or_incremental.cursor_path
+    else:
+        issues = jira_issues(**CREDENTIALS, start_date=start_or_incremental, jql=jql)
+    assert list(issues) == []
     assert jira_mock.jqls == [expected_jql]
     # search returns values of the cursor field for the incremental
-    cursor = (
-        "updated"
-        if incremental == "auto"
-        else getattr(incremental, "cursor_path", "id")
-    )
     assert jira_mock.searches[0]["fields"] == cursor
     assert jira_mock.searches[0]["maxResults"] == "5000"
-    # time zone is needed to render datetimes only
-    assert jira_mock.myself_route.called == (incremental is not None)
 
 
 @pytest.mark.parametrize(

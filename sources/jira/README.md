@@ -26,7 +26,10 @@ and coding agents. Setup and usage are in the
   gone. Upgrade: run once with `refresh="drop_resources"` to drop the empty columns
 - new resources `issue_comments`, `issue_changelogs`, `worklogs`, `workflow_statuses` and
   `issue_fields`, the names and schemas of fields, e.g. of custom fields
-- new `jira_issues`: issues matching JQL with any incremental
+- new `jira_issues`: issues matching JQL, updated since `start_date` or in the range of your own
+  `incremental`
+- new `jira` arguments: `jql` restricts issues, `start_date` starts issues and worklogs,
+  `incremental` is passed to `jira_issues`
 - new `drop_keys`: a function for `add_map` that removes REST links and avatar and icon urls, or
   other keys, from rows and their nested values
 - changed `users`, `workflows`, `projects`: primary keys, the largest page each endpoint serves
@@ -103,16 +106,21 @@ fails and restricted comments are tested offline only.
   files and normalize and load run in parallel. `included_columns` with at most 100 single value
   fields fetches 1000 issues per request instead of 100.
 - **Throttling**: 429 and 5xx are retried with the `runtime.request_*` settings of dlt.
-- **Incremental**: JQL compares datetimes with minute precision in the time zone of the user
+- **Incremental**: `start_date` of `jira_issues` and `jira` is the initial value of the default
+  incremental `dlt.sources.incremental("updated", initial_value=start_date, lag=600)` with
+  `dedup_sort="desc"` on `updated`, all issues load on the first run if it is not set. `incremental`
+  replaces it with your own incremental, used as is, without lag and dedup sort. Both are
+  configurable, e.g. `[sources.jira.issues.incremental]`. Replace loads of JQL queries are done by
+  `jira_search`. JQL compares datetimes with minute precision in the time zone of the user
   (`/myself`, UTC if not set). Search is eventually consistent, so the default 10 minute lag reads
   recent issues again and merge absorbs them. `/search/jql` rejects a query without a filtering
   clause, `created >= "1970-01-01"` bounds a full load.
 - **Limits**: `add_limit` on a transformer is ignored. Limit the `issues_ids` resource, the parent
   of `issues`, or use `page_limit` of `jira_search`.
 - **Worklogs**: the feeds list worklogs of all issues of the site the user can see, `jql` does not
-  restrict them, and the first run reads all worklogs. Set `initial_value` of the `updated`
-  incremental to start later. The feeds page by the youngest change of a page. More than 1000
-  worklogs changed in the same millisecond stop the load with an error.
+  restrict them, and the first run reads all worklogs. `start_date` of `jira` or `initial_value` of
+  the `updated` incremental of `worklogs` starts them later. The feeds page by the youngest change
+  of a page. More than 1000 worklogs changed in the same millisecond stop the load with an error.
 - **Workflow statuses**: `workflows__statuses` holds a `status_reference` and no name, join it to
   `workflow_statuses.status_reference`. `rest/api/3/status` omits unused statuses and
   `rest/api/3/statuses/search` omits project scoped ones, so the `statuses` key of
