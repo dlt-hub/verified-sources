@@ -184,7 +184,7 @@ The version follows the [semantic versioning of dlt](https://github.com/dlt-hub/
 
 ## Phase 4 — Tests (the biggest pain point)
 
-Existing source tests are usually credential-gated integration tests that never run for contributors. Always add **credential-free unit tests**:
+Existing source tests usually need upstream credentials and never run for contributors. Always add **credential-free unit tests**:
 
 - In modules that follow the source modules, see [Test modules](../../rules/testing.md#test-modules).
 - **Use proven shapes, not invented ones**: fixtures must mirror request/response shapes, pagination envelopes and cursor semantics found in official docs during phase 1 (cite which doc page a fixture mirrors when it isn't obvious).

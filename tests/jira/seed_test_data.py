@@ -38,7 +38,7 @@ BULK_ISSUES = 250
 CHANGELOG_EDITS = 120
 WORKLOGS = 25
 COMMENTS = 120
-# what the cases below create, the predictions of the end-to-end tests
+# issues each case creates, expected by the end-to-end tests
 ISSUES_PER_CASE = {
     "bulk_issues": BULK_ISSUES,
     "long_changelog": 1,
@@ -449,7 +449,7 @@ def anonymize(captured: Any, site_host: str) -> Any:
 
 
 def seed_manifest(client: JiraClient) -> List[Dict[str, Any]]:
-    """Lists all seeded issues with the timestamps the end-to-end tests predict loads from"""
+    """Lists all seeded issues with their key, labels, created and updated"""
     manifest = []
     for page in client.search(
         f'labels = "{SEED_LABEL}"', "key,labels,created,updated", MAX_SEARCH_PAGE_SIZE

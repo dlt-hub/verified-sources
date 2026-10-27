@@ -524,7 +524,8 @@ def cursor_pages(api_path: str) -> Iterator[Any]:
 
 
 def sent_params(m: requests_mock.Mocker) -> List[Dict[str, str]]:
-    """Query string of each request. `request.qs` lowercases values, so parse the url instead."""
+    """Query string of each request"""
+    # `request.qs` lowercases values
     return [
         {k: v[0] for k, v in parse_qs(urlparse(r.url).query).items()}
         for r in m.request_history

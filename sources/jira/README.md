@@ -48,7 +48,7 @@ Seeded issues are labeled `dlt-seed-<case>`, a case is skipped when its label ex
 3. `uv run python ../tests/jira/seed_test_data.py --capture` rewrites
    `tests/jira/captured_responses.json` with anonymized responses for the unit tests and the
    manifest of seeded issues (`seed`: ids, labels, `created`, `updated`) from which the
-   end-to-end tests predict the counts of full, windowed and incremental loads. Run it again
+   end-to-end tests take the expected counts of full, windowed and incremental loads. Run it again
    after seeding or editing seeded issues.
 
 The test account cannot delete issues and cannot restrict comments to a group or role, so `--delete`

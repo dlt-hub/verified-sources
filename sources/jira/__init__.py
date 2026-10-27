@@ -71,7 +71,7 @@ def jira(
         Iterable[DltResource]: List of resource functions.
     """
     issues = jira_issues(subdomain=subdomain, email=email, api_token=api_token, jql=jql)
-    # comments and changelogs use the client of `issues`
+    # client of the endpoint resources, comments and changelogs use the client of `issues`
     client = JiraClient(subdomain, email, api_token)
     resources = [
         issues,
