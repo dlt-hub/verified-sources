@@ -21,6 +21,28 @@ issues matching a JQL query with a custom incremental, as Python dicts or Arrow 
 (`backend="pyarrow"`). Pipe issues into `issue_comments` to load their comments: when both are
 loaded, comments are fetched with the issues in the same requests.
 
+## Changelog
+
+### 1.0.0
+
+First versioned release, copies of the source taken before it have no version.
+
+- **Breaking**: `issues` are read incrementally on `updated` with a 10 minute lag and merged on
+  `id`, instead of replaced on each run. Fields are top level columns named by the field id
+  (`fields__summary` is now `summary`), nested tables are renamed (`issues__fields__labels` is now
+  `issues__labels`), the `changelog`, `operations` and `transitions` tables are gone, rich text is
+  wiki markup (API v2) instead of Atlassian Document Format, comments and worklogs are not columns.
+  A dataset loaded before fails on merge with `No root_key column (e.g. _dlt_root_id)` and the
+  failed package stays pending. To upgrade, abort it with
+  `dlt pipeline <pipeline_name> abort-packages` and run once with
+  `pipeline.run(source, refresh="drop_resources")`.
+- **Breaking**: `workflows` reads `rest/api/3/workflows/search` and changes shape, see
+  [Upgrading an existing dataset](#upgrading-an-existing-dataset).
+- New resources: `issue_comments` fetched with the issues, `issue_changelogs`, `worklogs` with
+  deleted worklogs removed, and `workflow_statuses`.
+- `jira_issues` loads issues matching JQL with a custom incremental, as dicts or Arrow tables.
+- `jira_search` is deprecated.
+
 The `workflows` resource reads `rest/api/3/workflows/search`. It replaces
 `rest/api/3/workflow/search`, which the v3 spec marks deprecated and scheduled for removal on
 June 1, 2026. The new endpoint returns team-managed workflows as well, and its table has
