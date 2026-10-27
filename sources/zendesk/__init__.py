@@ -82,7 +82,6 @@ def zendesk_talk(
                 "updated_at",
                 initial_value=start_date_obj.isoformat(),
                 end_value=end_date_obj.isoformat() if end_date_obj else None,
-                allow_external_schedulers=True,
             ),
         )
 
@@ -178,7 +177,6 @@ def zendesk_chat(
             "update_timestamp|updated_timestamp",
             initial_value=start_date_obj.isoformat(),
             end_value=end_date_obj.isoformat() if end_date_obj else None,
-            allow_external_schedulers=True,
         ),
     )
 
@@ -261,7 +259,6 @@ def zendesk_support(
             "timestamp",
             initial_value=start_date_ts,
             end_value=end_date_ts,
-            allow_external_schedulers=True,
         ),
     ) -> Iterator[TDataItem]:
         # URL For ticket events
@@ -295,7 +292,6 @@ def zendesk_support(
             "updated_at",
             initial_value=start_date_obj,
             end_value=end_date_obj,
-            allow_external_schedulers=True,
         ),
     ) -> Iterator[TDataItem]:
         """
@@ -341,7 +337,6 @@ def zendesk_support(
             "time",
             initial_value=start_date_iso_str,
             end_value=end_date_iso_str,
-            allow_external_schedulers=True,
         ),
     ) -> Iterator[TDataItem]:
         """

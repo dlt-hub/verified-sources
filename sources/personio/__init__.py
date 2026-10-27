@@ -35,9 +35,7 @@ def personio_source(
     def employees(
         updated_at: dlt.sources.incremental[
             pendulum.DateTime
-        ] = dlt.sources.incremental(
-            "last_modified_at", initial_value=None, allow_external_schedulers=True
-        ),
+        ] = dlt.sources.incremental("last_modified_at", initial_value=None),
         items_per_page: int = items_per_page,
     ) -> Iterable[TDataItem]:
         """
@@ -101,9 +99,7 @@ def personio_source(
     def absences(
         updated_at: dlt.sources.incremental[
             pendulum.DateTime
-        ] = dlt.sources.incremental(
-            "updated_at", initial_value=None, allow_external_schedulers=True
-        ),
+        ] = dlt.sources.incremental("updated_at", initial_value=None),
         items_per_page: int = items_per_page,
     ) -> Iterable[TDataItem]:
         """
@@ -147,9 +143,7 @@ def personio_source(
         end_date: Optional[TAnyDateTime] = None,
         updated_at: dlt.sources.incremental[
             pendulum.DateTime
-        ] = dlt.sources.incremental(
-            "updated_at", initial_value=None, allow_external_schedulers=True
-        ),
+        ] = dlt.sources.incremental("updated_at", initial_value=None),
         items_per_page: int = items_per_page,
     ) -> Iterable[TDataItem]:
         """
