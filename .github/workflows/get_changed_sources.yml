@@ -39,6 +39,10 @@ jobs:
             changed_sources=$(echo "$raw_changed_sources" \
               | sed -nE 's/^sources\/([^/]+)\/.*$/\1/p; s/^sources\/(.*)_pipeline\.py$/\1/p; s/^tests\/([^/]+)\/.*$/\1/p' \
               | sort -u \
+              | while read -r name; do
+                  # pytest fails on paths without tests, ie. tests/postgres
+                  if [ -n "$(find "tests/$name" -name 'test_*.py' -print -quit 2>/dev/null)" ]; then echo "$name"; fi
+                done \
               | tr '\n' ' '
             )
             echo "Changed sources or sources tests: $changed_sources"
