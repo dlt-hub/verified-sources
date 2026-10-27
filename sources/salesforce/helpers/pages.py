@@ -7,6 +7,7 @@ import csv
 import io
 from typing import Any, Dict, List, Optional
 
+from dlt.common import Decimal
 from dlt.common.configuration.container import Container
 from dlt.common.data_types.type_helpers import coerce_value
 from dlt.common.data_types.typing import TDataType
@@ -63,8 +64,9 @@ def _rest_value_to_csv(value: Any, column: TColumnSchema) -> str:
         return ""
     if isinstance(value, bool):
         return "true" if value else "false"
-    if isinstance(value, (int, float)):
-        return repr(value)
+    if isinstance(value, Decimal):
+        # JSON numbers are parsed as decimals, written without exponent
+        return format(value, "f")
     text = str(value)
     if column.get("data_type") == "timestamp" and text.endswith("+0000"):
         # REST API writes UTC as `+0000`, the Bulk API as `Z`

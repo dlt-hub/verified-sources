@@ -5,7 +5,7 @@ from time import sleep
 from typing import Any, Callable, Dict, Iterator, Literal, Optional
 from urllib.parse import quote
 
-from dlt.common import logger
+from dlt.common import Decimal, logger
 from dlt.common.schema.typing import TTableSchemaColumns
 from dlt.sources.helpers.requests import Response
 from simple_salesforce import Salesforce
@@ -152,14 +152,14 @@ class QueryClient:
         headers = {"Sforce-Query-Options": f"batchSize={batch_size}"}
         result = self._request(
             "GET", "rest", path, params={"q": soql}, headers=headers
-        ).json()
+        ).json(parse_float=Decimal)
         while True:
             yield rest_records_to_csv(result["records"], columns)
             if result["done"]:
                 return
             result = self._request(
                 "GET", "instance", result["nextRecordsUrl"], headers=headers
-            ).json()
+            ).json(parse_float=Decimal)
 
     def _request(
         self,

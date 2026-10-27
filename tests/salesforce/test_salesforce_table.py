@@ -935,6 +935,7 @@ def rest_records_from_captured() -> List[Dict[str, Any]]:
             elif types[name] == "boolean":
                 record[name] = value == "true"
             elif types[name] in ("double", "percent", "currency"):
+                # serialized as a JSON number by the REST API mock
                 record[name] = float(value)
             elif types[name] == "datetime":
                 # e.g. `2024-02-29T23:59:59.000+0000`
@@ -1050,6 +1051,34 @@ def test_salesforce_table_rest_query_too_long(
     with pytest.raises(ResourceExtractionError) as py_ex:
         list(resource)
     assert "included_columns" in str(py_ex.value.__cause__)
+
+
+@pytest.mark.parametrize("backend", ["python", "pyarrow"])
+def test_salesforce_table_rest_decimals(
+    sf_mock: requests_mock.Mocker, credentials: InstanceAuth, backend: TTableBackend
+) -> None:
+    # REST API numbers are parsed as decimals, as floats the amount would round to .98
+    mock_bulk2(sf_mock, [])
+    sf_mock.get(
+        re.compile(r"/services/data/v[\d.]+/queryAll\?q="),
+        text='{"totalSize": 1, "done": true, "records": [{"attributes": {"type": "Account"},'
+        ' "Id": "001A", "IsDeleted": false, "Amount__c": 99999999999999.99,'
+        ' "SystemModstamp": "2024-01-15T10:30:00.000+0000"}]}',
+    )
+    items = list(
+        salesforce_table(
+            credentials=credentials,
+            sobject="Account",
+            api="rest",
+            backend=backend,
+            included_columns=["Id", "IsDeleted", "Amount__c", "SystemModstamp"],
+        )
+    )
+    if backend == "pyarrow":
+        amounts = items[0].column("Amount__c").to_pylist()
+    else:
+        amounts = [item["Amount__c"] for item in items]
+    assert amounts == [Decimal("99999999999999.99")]
 
 
 def test_salesforce_table_without_pyarrow(
