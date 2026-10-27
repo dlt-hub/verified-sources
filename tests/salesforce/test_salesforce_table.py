@@ -1370,6 +1370,23 @@ def test_salesforce_table_chunked_loading_warnings_rest(
     assert "Could not move the cursor `SystemModstamp`" in warning.call_args.args[0]
 
 
+def test_salesforce_table_unknown_columns(
+    sf_mock: requests_mock.Mocker, credentials: InstanceAuth, mocker: MockerFixture
+) -> None:
+    # misspelled and not queryable fields are reported instead of silently skipped
+    warning = mocker.spy(table_module.logger, "warning")
+    mock_bulk2(sf_mock, [""])
+    salesforce_table(
+        credentials=credentials,
+        sobject="Account",
+        included_columns=["Id", "Nmae", "BillingAddress"],
+        excluded_columns=["Descripton"],
+    )
+    messages = [call.args[0] for call in warning.call_args_list]
+    assert any("`included_columns` ['Nmae', 'BillingAddress']" in m for m in messages)
+    assert any("`excluded_columns` ['Descripton']" in m for m in messages)
+
+
 @pytest.mark.parametrize(
     "cursor,write_disposition,deduplicated",
     [("SystemModstamp", "merge", False), ("SystemModstamp", "append", True)],

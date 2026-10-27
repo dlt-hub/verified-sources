@@ -88,11 +88,23 @@ def describe_columns(
 ) -> Tuple[TTableSchemaColumns, Optional[List[str]]]:
     """Describes `sobject` and returns columns of the selected fields and the primary key"""
     fields = query_client.describe(sobject)["fields"]
+    unknown = sorted(set(excluded_columns or []) - {field["name"] for field in fields})
+    if unknown:
+        logger.warning(
+            f"`excluded_columns` {unknown} are not fields of sObject `{sobject}`"
+        )
     if included_columns:
         fields = [field for field in fields if field["name"] in included_columns]
     if excluded_columns:
         fields = [field for field in fields if field["name"] not in excluded_columns]
-    return fields_to_columns(fields, double_as_decimal), get_primary_key(fields)
+    columns = fields_to_columns(fields, double_as_decimal)
+    unknown = [name for name in included_columns or [] if name not in columns]
+    if unknown:
+        logger.warning(
+            f"`included_columns` {unknown} are not queryable fields of sObject `{sobject}` and"
+            " will not be loaded"
+        )
+    return columns, get_primary_key(fields)
 
 
 def _is_time_cursor(columns: TTableSchemaColumns, cursor_field: Optional[str]) -> bool:
