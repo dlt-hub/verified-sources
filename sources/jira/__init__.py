@@ -1,10 +1,11 @@
 """ This source uses Jira API and dlt to load data such as Issues, Users, Workflows and Projects to the database. """
 
 from datetime import datetime
-from typing import Any, Iterable, Iterator, List, Literal, Optional, Union
+from typing import Annotated, Any, Iterable, Iterator, List, Literal, Optional, Union
 
 import dlt
-from dlt.common import logger
+from dlt.common.configuration import NotResolved, with_config
+from dlt.common.configuration.specs import ConfigSectionContext, known_sections
 from dlt.common.schema.typing import TTableSchemaColumns, TWriteDispositionConfig
 from dlt.common.typing import TColumnNames, TDataItem
 from dlt.sources import DltResource
@@ -12,24 +13,22 @@ from dlt.sources import DltResource
 from .helpers.client import JiraClient, JiraResponseError
 from .helpers.comments import COMMENT_COLUMNS, comment_rows
 from .helpers.issues import (
-    CHANGELOG_COLUMNS,
     CHANGELOGS_RESOURCE,
     COMMENTS_RESOURCE,
     QUERY_INDEX,
     IssuesPage,
     IssuesReader,
-    JiraIssuesResourceConfiguration,
     changelog_rows,
     make_issues_resource,
 )
 from .helpers.jql import ORDER_BY
-from .helpers.schema_types import TBackend
 from .helpers.worklogs import WORKLOG_COLUMNS, worklog_rows
 from .settings import (
     DEFAULT_ENDPOINTS,
     DEFAULT_LAG,
     DEFAULT_PAGE_SIZE,
     MAX_SEARCH_PAGE_SIZE,
+    SOURCE_SECTION,
     TEndpoint,
 )
 
@@ -54,14 +53,12 @@ def jira(
     api_token: str = dlt.secrets.value,
     page_size: Optional[int] = None,
     jql: Optional[str] = None,
-    backend: TBackend = "python",
 ) -> Iterable[DltResource]:
     """
     Jira source function that generates a list of resource functions based on endpoints.
 
     Issues, their comments, changelogs and worklogs are loaded incrementally and merged. Users,
-    workflows, workflow statuses and projects are replaced on each run. Issues and comments are
-    fetched with the same requests when both are selected.
+    workflows, workflow statuses and projects are replaced on each run.
 
     Args:
         subdomain: The subdomain for the Jira instance.
@@ -70,26 +67,17 @@ def jira(
         page_size: Rows per request of users, workflows and projects. Defaults to the largest
             page each endpoint serves.
         jql: JQL restricting loaded issues, e.g. `project = KAN`.
-        backend: "python" yields issues as dicts, "pyarrow" as Arrow tables.
     Returns:
         Iterable[DltResource]: List of resource functions.
     """
-    issues = jira_issues(
-        subdomain=subdomain, email=email, api_token=api_token, jql=jql, backend=backend
-    )
+    issues = jira_issues(subdomain=subdomain, email=email, api_token=api_token, jql=jql)
     # comments and changelogs use the client of `issues`
     client = JiraClient(subdomain, email, api_token)
     resources = [
         issues,
         issues | issue_comments,
         issues | issue_changelogs,
-        dlt.resource(
-            worklog_rows,
-            name="worklogs",
-            write_disposition="merge",
-            primary_key="id",
-            columns=WORKLOG_COLUMNS,
-        )(client, dlt.sources.incremental("updated", lag=DEFAULT_LAG)),
+        worklogs(subdomain=subdomain, email=email, api_token=api_token),
     ]
     for endpoint_name, endpoint in DEFAULT_ENDPOINTS.items():
         res_function = dlt.resource(
@@ -112,18 +100,20 @@ def endpoint_rows(
     yield from client.paginate_endpoint(endpoint, page_size)
 
 
-@dlt.resource(name="issues", spec=JiraIssuesResourceConfiguration)
+@with_config(
+    sections=(known_sections.SOURCES, SOURCE_SECTION, "issues"),
+    sections_merge_style=ConfigSectionContext.resource_merge_style,
+)
 def jira_issues(
     subdomain: str = dlt.secrets.value,
     email: str = dlt.secrets.value,
     api_token: str = dlt.secrets.value,
     jql: Optional[str] = None,
-    # "auto" goes first so dlt does not bind the incremental to this factory and replace "auto"
-    # with None. the incremental is bound by the resource returned below
-    incremental: Union[Literal["auto"], dlt.sources.incremental[Any], None] = "auto",
+    # not resolved from config: dlt would parse "auto" as the initial value of an incremental
+    incremental: Annotated[
+        Union[Literal["auto"], dlt.sources.incremental[Any], None], NotResolved()
+    ] = "auto",
     lag: Optional[float] = None,
-    backend: TBackend = "python",
-    nested_types: bool = False,
     chunk_size: Optional[int] = None,
     bulk_fetch_size: Optional[int] = None,
     search_page_size: int = MAX_SEARCH_PAGE_SIZE,
@@ -132,8 +122,9 @@ def jira_issues(
     write_disposition: Optional[TWriteDispositionConfig] = None,
     primary_key: TColumnNames = None,
     merge_key: TColumnNames = None,
+    name: Annotated[str, NotResolved()] = "issues",
 ) -> DltResource:
-    """Loads issues matching `jql` and the `incremental` range quickly.
+    """Returns the `issues` resource loading issues matching `jql` and the `incremental` range.
 
     Ids of matching issues are listed with JQL search and pages of `chunk_size` issues are fetched
     with bulk fetch by a parallelized transformer: the number of parallel pages is set by dlt
@@ -141,10 +132,6 @@ def jira_issues(
     the `/field` metadata: each field is a column named by the field id, e.g. `summary` or
     `customfield_10016`. Comments and worklogs are not loaded into this table: pipe the issues
     into `issue_comments` to load comments, use the `worklogs` resource for worklogs.
-
-    Requests fetch only the data of the selected resources: comments are fetched with the issues
-    when both are loaded, only comments when the issues are not loaded, e.g.
-    `pipeline.run(jira_issues() | issue_comments)`.
 
     Args:
         subdomain (str): The subdomain for the Jira instance.
@@ -157,13 +144,9 @@ def jira_issues(
             The cursor must be a date or datetime field, e.g. `created` or a custom field id.
         lag (Optional[float]): Seconds re-read on each run by the "auto" incremental, to catch
             issues missing in search results. 600 if not set.
-        backend (TBackend): "python" yields dicts and loads nested values into flattened columns
-            and nested tables, "pyarrow" yields Arrow tables and loads nested values as json.
-        nested_types (bool): Loads nested values with the pyarrow backend as nested types
-            (structs and lists) on destinations that support them.
-        chunk_size (Optional[int]): Rows in a yielded page (list of dicts or Arrow table) of
-            issues and of the comments and changelogs piped from them, 1000 if not set. Pages of
-            issues are fetched in parallel, each in requests of `bulk_fetch_size` issues.
+        chunk_size (Optional[int]): Rows in a yielded page of issues and of the comments and
+            changelogs piped from them, 1000 if not set. Pages of issues are fetched in parallel,
+            each in requests of `bulk_fetch_size` issues.
         bulk_fetch_size (Optional[int]): Issues fetched in a single request, at most 1000. If not
             set: 1000 if at most 100 fields with a single value are loaded, 100 otherwise.
         search_page_size (int): Issue ids listed in a single search request, at most 5000.
@@ -173,6 +156,9 @@ def jira_issues(
             "replace" without if not set.
         primary_key (TColumnNames): Primary key, the issue `id` if not set.
         merge_key (TColumnNames): Merge key of the resource.
+        name (str): Name of the resource and of its table. Its incremental state is kept by the
+            `<name>_ids` resource, the parent listing the ids. Use it to load several resources
+            of issues in one pipeline.
 
     Returns:
         DltResource: The dlt resource loading issues.
@@ -181,9 +167,6 @@ def jira_issues(
         raise ValueError(
             f"JQL `{jql}` must not contain ORDER BY, issues are ordered by cursor"
         )
-    if backend == "pyarrow":
-        # raises with installation instructions when pyarrow is missing
-        from dlt.common.libs import pyarrow
     table_incremental: Optional[dlt.sources.incremental[Any]]
     columns: Optional[TTableSchemaColumns] = None
     if incremental == "auto":
@@ -199,8 +182,6 @@ def jira_issues(
 
     reader = IssuesReader(
         JiraClient(subdomain, email, api_token),
-        backend,
-        nested_types,
         jql=jql,
         chunk_size=chunk_size,
         bulk_fetch_size=bulk_fetch_size,
@@ -215,6 +196,7 @@ def jira_issues(
         primary_key or "id",
         merge_key=merge_key,
         columns=columns,
+        name=name,
     )
 
 
@@ -230,9 +212,9 @@ def issue_comments(issues: TDataItem, meta: Any = None) -> Iterator[TDataItem]:
     """Loads all comments of issues piped into it from `jira_issues`, e.g.
     `jira_issues() | issue_comments`.
 
-    Comments are fetched with the issues, comments of an issue are paged only if Jira does not
-    return all of them. Comments of each loaded issue replace its comments loaded before, so edited
-    and deleted comments are updated. Merge key is `issueId`.
+    The `comment` field of each page of issues is bulk fetched, comments of an issue are paged only
+    if Jira does not embed all of them. Comments of each loaded issue replace its comments loaded
+    before, so edited and deleted comments are updated. Merge key is `issueId`.
     """
     if isinstance(meta, IssuesPage):
         yield from comment_rows(issues, meta)
@@ -246,7 +228,6 @@ def issue_comments(issues: TDataItem, meta: Any = None) -> Iterator[TDataItem]:
     name=CHANGELOGS_RESOURCE,
     write_disposition="merge",
     primary_key="id",
-    columns=CHANGELOG_COLUMNS,
 )
 def issue_changelogs(issues: TDataItem, meta: Any = None) -> Iterator[TDataItem]:
     """Loads all changelogs of issues piped into it from `jira_issues`, e.g.
@@ -311,8 +292,6 @@ def jira_search(
     """
     reader = IssuesReader(
         JiraClient(subdomain, email, api_token),
-        "python",
-        False,
         queries=jql_queries,
         page_limit=page_limit,
         search_page_size=page_size or MAX_SEARCH_PAGE_SIZE,

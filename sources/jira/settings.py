@@ -62,6 +62,8 @@ DEFAULT_ENDPOINTS: Dict[str, TEndpoint] = {
     },
 }
 DEFAULT_PAGE_SIZE = 50
+# config section of the source, declared by helper modules that build resources
+SOURCE_SECTION = "jira"
 
 # api v2 returns rich text fields and worklog comments as strings, v3 as Atlassian Document Format
 FIELDS_PATH = "rest/api/2/field"

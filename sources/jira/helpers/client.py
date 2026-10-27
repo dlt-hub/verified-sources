@@ -243,11 +243,22 @@ class JiraClient:
             self.split_batches = True
             return self.bulk_fetch(ids, fields, DEFAULT_BULK_ISSUES)
         # issues deleted after the search
-        for error in result.get("issueErrors") or []:
+        errors: List[DictStrAny] = result.get("issueErrors") or []
+        for error in errors:
             logger.warning(
                 f"Skipping Jira issue `{error.get('id')}`: {error.get('errorMessage')}"
             )
         issues: List[DictStrAny] = result.get("issues") or []
+        missing = (
+            set(ids)
+            - {str(issue.get("id")) for issue in issues}
+            - {str(error.get("id")) for error in errors}
+        )
+        if missing:
+            logger.warning(
+                f"Jira bulk fetch returned neither data nor an error for issues"
+                f" {sorted(missing)}, they are skipped"
+            )
         return issues
 
 

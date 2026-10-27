@@ -26,15 +26,11 @@ WORKLOG: TShape = {
 }
 WORKLOG_DATETIMES = ("created", "updated", "started")
 WORKLOG_COLUMNS: TTableSchemaColumns = {
-    "id": {"name": "id", "data_type": "text", "nullable": False},
-    "issueId": {"name": "issueId", "data_type": "text"},
-    **{name: {"name": name, "data_type": "timestamp"} for name in WORKLOG_DATETIMES},
-    "timeSpentSeconds": {"name": "timeSpentSeconds", "data_type": "bigint"},
+    # the latest change of a worklog read more than once in a run wins
+    "updated": {"dedup_sort": "desc"},
     # set on deleted worklogs, which are removed from the destination on merge
-    "deleted": {"name": "deleted", "data_type": "bool", "hard_delete": True},
+    "deleted": {"hard_delete": True},
 }
-# the latest change of a worklog read more than once in a run wins
-WORKLOG_COLUMNS["updated"]["dedup_sort"] = "desc"
 
 
 def to_worklog_row(worklog: DictStrAny) -> DictStrAny:

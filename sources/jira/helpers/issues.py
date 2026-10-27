@@ -7,21 +7,17 @@ from typing import Any, Dict, Iterator, List, NamedTuple, Optional, Sequence, Se
 
 import dlt
 from dlt.common import logger
-from dlt.common.configuration.container import Container
-from dlt.common.configuration.specs import BaseConfiguration, configspec
-from dlt.common.destination import DestinationCapabilitiesContext
 from dlt.common.exceptions import ResourceNameNotAvailable
 from dlt.common.json import json
 from dlt.common.schema.typing import (
     TColumnSchema,
     TTableSchemaColumns,
     TWriteDispositionConfig,
-    TWriteDispositionDict,
 )
 from dlt.common.schema.utils import merge_columns
 from dlt.common.time import ensure_date, ensure_datetime_in_tz, to_tzinfo
-from dlt.common.typing import DictStrAny, TColumnNames, TDataItem, TSecretStrValue
-from dlt.extract.exceptions import CurrentSourceNotAvailable
+from dlt.common.typing import DictStrAny, TColumnNames, TDataItem
+from dlt.extract.exceptions import CurrentSourceNotAvailable, ResourceNotFoundError
 from dlt.extract.incremental import Incremental
 from dlt.extract.items import DataItemWithMeta
 from dlt.sources import DltResource
@@ -30,7 +26,6 @@ from .client import JiraClient, batched
 from .jql import CursorRange, make_cursor_range, make_jql
 from .schema_types import (
     ID_COLUMNS,
-    TBackend,
     TShape,
     fields_to_columns,
     get_field_type,
@@ -45,7 +40,11 @@ from ..settings import (
     MAX_CHANGELOG_ISSUES,
     MAX_SEARCH_PAGE_SIZE,
     MULTI_VALUE_FIELDS,
+    SOURCE_SECTION,
 )
+
+# resources built here resolve config under the section of the source, not of this module
+__source_name__ = SOURCE_SECTION
 
 COMMENTS_RESOURCE = "issue_comments"
 CHANGELOGS_RESOURCE = "issue_changelogs"
@@ -72,50 +71,12 @@ CHANGELOG: TShape = {
         }
     ],
 }
-CHANGELOG_COLUMNS: TTableSchemaColumns = {
-    "id": {"name": "id", "data_type": "text", "nullable": False},
-    "issueId": {"name": "issueId", "data_type": "text"},
-    "created": {"name": "created", "data_type": "timestamp"},
-}
-
-
-@configspec
-class JiraIssuesResourceConfiguration(BaseConfiguration):
-    # `incremental` is not configurable: dlt would parse "auto" as an incremental initial value
-    subdomain: str = None
-    email: str = None
-    api_token: TSecretStrValue = None
-    jql: Optional[str] = None
-    lag: Optional[float] = None
-    backend: TBackend = "python"
-    nested_types: bool = False
-    chunk_size: Optional[int] = None
-    bulk_fetch_size: Optional[int] = None
-    search_page_size: int = MAX_SEARCH_PAGE_SIZE
-    included_columns: Optional[List[str]] = None
-    excluded_columns: Optional[List[str]] = None
-    write_disposition: Optional[TWriteDispositionDict] = None
-    primary_key: Optional[TColumnNames] = None
-    merge_key: Optional[TColumnNames] = None
-
-
-class FetchPlan(NamedTuple):
-    """Data fetched by the `issues` transformer for the resources that consume it"""
-
-    issues_selected: bool
-    fields: bool
-    comments: bool
-
-
-FETCH_ALL = FetchPlan(issues_selected=True, fields=True, comments=True)
 
 
 class IssuesPage(NamedTuple):
     """Meta of a page of issues received by transformers piped from `issues`"""
 
     reader: "IssuesReader"
-    # comments embedded in the issues by issue id, None if comments were not fetched
-    comments: Optional[Dict[str, Optional[DictStrAny]]]
 
 
 def select_fields(
@@ -146,40 +107,6 @@ def select_fields(
     return [fields[name] for name in names]
 
 
-def plan_fetch() -> FetchPlan:
-    """Plans what the `issues` transformer fetches for the resources selected in the current run.
-
-    Must be called by the `issue_ids` resource. Issue fields are fetched when `issues` are loaded
-    or consumed by transformers other than `issue_comments` and `issue_changelogs`, which needs
-    issue ids only. Comments are fetched with issues when `issue_comments` consumes them.
-    """
-    try:
-        ids_pipe = dlt.current.pipe()
-        resources = dlt.current.source().resources
-    except (ResourceNameNotAvailable, CurrentSourceNotAvailable):
-        return FETCH_ALL
-    pipes = resources.extracted_pipes
-    issues_pipes = {
-        pipe.instance_id
-        for pipe in pipes
-        if pipe.parent is not None and pipe.parent.instance_id == ids_pipe.instance_id
-    }
-    consumers = {
-        pipe.name
-        for pipe in pipes
-        if pipe.parent is not None and pipe.parent.instance_id in issues_pipes
-    }
-    issues_selected = any(
-        pipe.instance_id in issues_pipes for pipe in resources.selected_pipes
-    )
-    return FetchPlan(
-        issues_selected=issues_selected,
-        fields=issues_selected
-        or bool(consumers - {COMMENTS_RESOURCE, CHANGELOGS_RESOURCE}),
-        comments=COMMENTS_RESOURCE in consumers,
-    )
-
-
 def get_bulk_size(field_ids: List[str]) -> int:
     """Returns the max number of issues in a bulk fetch request for `field_ids`"""
     if len(field_ids) <= MAX_BULK_ISSUES_FIELDS and not MULTI_VALUE_FIELDS.intersection(
@@ -190,13 +117,12 @@ def get_bulk_size(field_ids: List[str]) -> int:
 
 
 class IssuesReader:
-    """Reads issues like `sql_table` reads a table, shared by the `issue_ids` resource and the
-    `issues` transformer.
+    """Reads issues like `sql_table` reads a table, shared by the ids resource and the issues
+    transformer built by `make_issues_resource`.
 
-    JQL is generated from the incremental of the `issue_ids` resource, which yields pages of
-    `chunk_size` ids and cursor values of matching issues. The parallelized `issues` transformer
-    fetches each page in batches with bulk fetch, together with the comments when
-    `issue_comments` consumes them.
+    JQL is generated from the incremental of the ids resource, which yields pages of `chunk_size`
+    ids and cursor values of matching issues. The parallelized issues transformer fetches each
+    page in batches with bulk fetch.
 
     With `queries`, each query runs as is, without incremental, and rows get the `query_index` of
     the query that found them.
@@ -205,8 +131,6 @@ class IssuesReader:
     def __init__(
         self,
         client: JiraClient,
-        backend: TBackend,
-        nested_types: bool,
         jql: Optional[str] = None,
         queries: Optional[Sequence[str]] = None,
         page_limit: Optional[int] = None,
@@ -217,8 +141,6 @@ class IssuesReader:
         excluded_columns: Optional[List[str]] = None,
     ) -> None:
         self.client = client
-        self.backend = backend
-        self.nested_types = nested_types
         self.jql = jql
         self.queries = queries
         self.page_limit = page_limit
@@ -231,25 +153,20 @@ class IssuesReader:
         self.included_columns = included_columns
         self.excluded_columns = excluded_columns
         # resolved from `/field` metadata when ids are listed
-        self.plan = FETCH_ALL
         self.selected: List[DictStrAny] = []
         self.field_types: Dict[str, Optional[TShape]] = {}
-        self.fetched_fields: List[str] = []
         # column hints are computed once per run by the first of the parallel transformer calls
         self._hints_lock = Lock()
         self._column_hints: Optional[TTableSchemaColumns] = None
         self.incremental: Optional[Incremental[Any]] = None
         self.cursor: Optional[CursorRange] = None
 
-    def bind(
-        self, incremental: Optional[Incremental[Any]], plan: FetchPlan = FETCH_ALL
-    ) -> Optional[str]:
-        """Reads field metadata, binds `incremental` and selects data to fetch according to `plan`,
-        returns the cursor field id
+    def bind(self, incremental: Optional[Incremental[Any]]) -> Optional[str]:
+        """Reads field metadata, binds `incremental` and selects the fields to fetch, returns the
+        cursor field id
         """
         fields = {field["id"]: field for field in self.client.fields()}
         self.incremental = incremental
-        self.plan = plan
         cursor_name: Optional[str] = None
         self.cursor = None
         if incremental:
@@ -257,24 +174,17 @@ class IssuesReader:
                 incremental, fields, to_tzinfo(self.client.time_zone())
             )
             cursor_name = incremental.get_cursor_column_name()
-        self.selected = (
-            select_fields(
-                fields,
-                self.included_columns,
-                self.excluded_columns,
-                [cursor_name] if cursor_name else [],
-            )
-            if plan.fields
-            else []
+        self.selected = select_fields(
+            fields,
+            self.included_columns,
+            self.excluded_columns,
+            [cursor_name] if cursor_name else [],
         )
         self.field_types = {
             field["id"]: get_field_type(field) for field in self.selected
         }
-        self.fetched_fields = list(self.field_types)
-        if plan.comments and "comment" not in self.field_types:
-            self.fetched_fields.append("comment")
         self.bulk_fetch_size = self._bulk_fetch_size or get_bulk_size(
-            self.fetched_fields
+            list(self.field_types)
         )
         self.chunk_size = self._chunk_size or DEFAULT_CHUNK_SIZE
         self.client.split_batches = False
@@ -298,36 +208,18 @@ class IssuesReader:
         """Maps selected fields to column hints merged with hints applied by the user"""
         with self._hints_lock:
             if self._column_hints is None:
-                columns = fields_to_columns(
-                    self.selected, self.backend, self.nested_types
-                )
+                columns = fields_to_columns(self.selected)
                 # hints are emitted at run time and would override hints applied by the user, so they
-                # are merged like `sql_table` merges hints of deferred reflection. transformers
-                # consuming `issues` run them as a parent without resource
-                resource = dlt.current.resource() if self.plan.issues_selected else None
-                if (
-                    resource is not None
-                    and callable(resource.columns)
-                    and self.backend == "pyarrow"
+                # are merged like `sql_table` merges hints of deferred reflection
+                try:
+                    resource: Optional[DltResource] = dlt.current.resource()
+                except (
+                    CurrentSourceNotAvailable,
+                    ResourceNameNotAvailable,
+                    ResourceNotFoundError,
                 ):
-                    logger.warning(
-                        "Dynamic column hints of Jira issues cannot be applied with the pyarrow"
-                        " backend. Use static hints (dict/list) to override the field types."
-                    )
+                    resource = None
                 if resource is not None and not callable(resource.columns):
-                    source_columns = {
-                        **ID_COLUMNS,
-                        **{f["id"]: f for f in self.selected},
-                    }
-                    unmatched = [
-                        name for name in resource.columns if name not in source_columns
-                    ]
-                    if unmatched and self.backend == "pyarrow":
-                        logger.warning(
-                            f"Resource columns {unmatched} do not match any queried Jira field"
-                            " and will be ignored. Use the original Jira field ids in"
-                            " apply_hints."
-                        )
                     columns = merge_columns(columns, resource.columns)
                 if self.queries is not None:
                     columns[QUERY_INDEX] = dict(QUERY_INDEX_COLUMN)  # type: ignore[assignment]
@@ -335,15 +227,11 @@ class IssuesReader:
             return self._column_hints
 
     def fetch(self, ids: List[str]) -> List[DictStrAny]:
-        """Fetches issues with `ids` in batches of `bulk_fetch_size`. Issues are not fetched when
-        no data is needed, e.g. when only changelogs are loaded.
-        """
-        if not self.fetched_fields:
-            return [{"id": issue_id} for issue_id in ids]
-        return self.client.bulk_fetch(ids, self.fetched_fields, self.bulk_fetch_size)
+        """Fetches issues with `ids` in batches of `bulk_fetch_size`"""
+        return self.client.bulk_fetch(ids, list(self.field_types), self.bulk_fetch_size)
 
     def fetch_comments(self, ids: List[str]) -> Dict[str, Optional[DictStrAny]]:
-        """Fetches comments embedded in issues with `ids` when they were not fetched with issues"""
+        """Fetches the comments embedded in issues with `ids`, by issue id"""
         return {
             issue["id"]: (issue.get("fields") or {}).get("comment")
             for issue in self.client.bulk_fetch(ids, ["comment"], DEFAULT_BULK_ISSUES)
@@ -371,12 +259,9 @@ class IssuesReader:
             yield items
 
     def convert(
-        self,
-        issues: List[DictStrAny],
-        hints: TTableSchemaColumns,
-        query_index: Optional[int] = None,
-    ) -> TDataItem:
-        """Converts `issues` to rows or an Arrow table with types from the column `hints`"""
+        self, issues: List[DictStrAny], query_index: Optional[int] = None
+    ) -> List[DictStrAny]:
+        """Converts `issues` to rows with the selected fields as top level values"""
         invalid_fields: Set[str] = set()
         rows = [self._to_row(issue, invalid_fields) for issue in issues]
         if query_index is not None:
@@ -387,13 +272,7 @@ class IssuesReader:
                 f"Jira fields {sorted(invalid_fields)} have values of unexpected structure that"
                 " are loaded as null"
             )
-        # fetched columns in the order of values in Arrow rows, without columns only users hinted
-        columns = {
-            name: hints[name]
-            for name in (*ID_COLUMNS, *self.field_types, QUERY_INDEX)
-            if name in hints
-        }
-        return rows_to_items(rows, columns, self.backend)
+        return rows
 
     def _to_row(self, issue: DictStrAny, invalid_fields: Set[str]) -> DictStrAny:
         row: DictStrAny = {"id": issue["id"], "key": issue.get("key")}
@@ -419,50 +298,6 @@ class IssuesReader:
         return row
 
 
-def rows_to_items(
-    rows: List[DictStrAny], columns: TTableSchemaColumns, backend: TBackend
-) -> TDataItem:
-    """Returns `rows` as a list or as an Arrow table with `columns`, in the order of values"""
-    if backend == "python":
-        return rows
-    from dlt.common.libs.pyarrow import (
-        get_py_arrow_datatype,
-        pyarrow,
-        row_tuples_to_arrow,
-    )
-
-    # generate arrow types compatible with the destination when running in a pipeline
-    caps = (
-        Container().get(DestinationCapabilitiesContext)
-        or DestinationCapabilitiesContext.generic_capabilities()
-    )
-    # serialize nested values that the destination does not load as nested types
-    json_columns = [
-        name
-        for name, col in columns.items()
-        if col.get("data_type") == "json"
-        and pyarrow.types.is_string(get_py_arrow_datatype(col, caps, "UTC"))
-    ]
-    for row in rows:
-        for name in json_columns:
-            if name in row:
-                row[name] = json.dumps(row[name])
-    return row_tuples_to_arrow(
-        [tuple(row.get(name) for name in columns) for row in rows],
-        caps,
-        columns,
-        "UTC",
-    )
-
-
-def page_ids(issues: TDataItem) -> List[str]:
-    """Returns ids of a page of issues, a list of dicts or an Arrow table"""
-    if isinstance(issues, list):
-        return [issue["id"] for issue in issues]
-    ids: List[str] = issues.column("id").to_pylist()
-    return ids
-
-
 def issue_ids(
     reader: IssuesReader, incremental: Optional[Incremental[Any]] = None
 ) -> Iterator[TDataItem]:
@@ -470,13 +305,13 @@ def issue_ids(
     `incremental`. With queries of `jira_search`, ids are tagged with the query index and each
     query reads at most `page_limit` search pages.
     """
-    cursor_name = reader.bind(incremental, plan_fetch())
+    cursor_name = reader.bind(incremental)
     for query_index, jql in reader.make_jqls():
         logger.info(f"Reading Jira issues matching JQL: {jql}")
         search_pages = reader.search(jql, cursor_name)
         if query_index is not None:
             search_pages = islice(search_pages, reader.page_limit)
-        # each data item has a fixed cost, e.g. schema of every Arrow table is merged on extract
+        # each data item has a fixed cost on extract, so search pages are chunked again
         for page in batched(chain.from_iterable(search_pages), reader.chunk_size):
             if query_index is not None:
                 page = [{**item, QUERY_INDEX: query_index} for item in page]
@@ -487,26 +322,15 @@ def issue_details(ids: TDataItem, reader: IssuesReader) -> Iterator[TDataItem]:
     """Fetches issues in a page of ids.
 
     Calls run in parallel and items of different calls reach the extractor in any order, so each
-    call yields the column hints before its page. Comments fetched with the issues are passed in
-    the meta of the page to the transformers piped from `issues`.
+    call yields the column hints before its page. The reader is passed in the meta of the page to
+    the transformers piped from `issues`.
     """
-    hints = reader.column_hints()
-    yield dlt.mark.with_hints([], dlt.mark.make_hints(columns=hints))
+    yield dlt.mark.with_hints([], dlt.mark.make_hints(columns=reader.column_hints()))
     # a page of ids holds issues found by one query
     query_index: Optional[int] = ids[0].get(QUERY_INDEX) if ids else None
     issues = reader.fetch([item["id"] for item in ids])
     if issues:
-        comments = (
-            {
-                issue["id"]: (issue.get("fields") or {}).get("comment")
-                for issue in issues
-            }
-            if reader.plan.comments
-            else None
-        )
-        yield DataItemWithMeta(
-            IssuesPage(reader, comments), reader.convert(issues, hints, query_index)
-        )
+        yield DataItemWithMeta(IssuesPage(reader), reader.convert(issues, query_index))
 
 
 def make_issues_resource(
@@ -516,16 +340,17 @@ def make_issues_resource(
     primary_key: TColumnNames,
     merge_key: TColumnNames = None,
     columns: Optional[TTableSchemaColumns] = None,
+    name: str = "issues",
 ) -> DltResource:
-    """Returns the parallelized `issues` transformer of the `issue_ids` resource, which lists
-    ids of issues in the incremental range and holds the incremental state
+    """Returns the parallelized `name` transformer of the `<name>_ids` resource, which lists ids
+    of issues in the incremental range and holds the incremental state
     """
-    ids = dlt.resource(issue_ids, name="issue_ids", primary_key="id")(
+    ids = dlt.resource(issue_ids, name=f"{name}_ids", primary_key="id")(
         reader, incremental=incremental
     )
     return dlt.transformer(
         issue_details,
-        name="issues",
+        name=name,
         data_from=ids,
         write_disposition=write_disposition,  # type: ignore[arg-type]
         primary_key=primary_key,
@@ -536,12 +361,13 @@ def make_issues_resource(
 
 
 def changelog_rows(
-    client: JiraClient, issues: TDataItem, chunk_size: int = DEFAULT_CHUNK_SIZE
+    client: JiraClient, issues: List[DictStrAny], chunk_size: int = DEFAULT_CHUNK_SIZE
 ) -> Iterator[TDataItem]:
-    """Fetches all changelogs of `issues`, a page of issues as list or Arrow table, and yields
-    them in pages of `chunk_size` changes
+    """Fetches all changelogs of a page of `issues` and yields them in pages of `chunk_size`
+    changes
     """
-    yield from batched(_changelog_rows(client, page_ids(issues)), chunk_size)
+    ids = [issue["id"] for issue in issues]
+    yield from batched(_changelog_rows(client, ids), chunk_size)
 
 
 def _changelog_rows(client: JiraClient, ids: List[str]) -> Iterator[DictStrAny]:

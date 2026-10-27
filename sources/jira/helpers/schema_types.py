@@ -1,10 +1,9 @@
 """Maps Jira field metadata to dlt columns and trims nested field values"""
 
-from typing import Any, Dict, Iterable, List, Literal, Optional, Union
+from typing import Any, Dict, Iterable, List, Optional, Union
 
 from dlt.common.schema.typing import TColumnSchema, TTableSchemaColumns
 
-TBackend = Literal["python", "pyarrow"]
 # dlt data type of a scalar or the shape of a nested value: keys kept from an object with their
 # shapes, the list wraps the shape of its items
 TShape = Union[str, Dict[str, "TShape"], List["TShape"]]
@@ -130,6 +129,7 @@ SCHEMA_TYPES: Dict[str, TShape] = {
     "number": "double",
     "datetime": "timestamp",
     "date": "date",
+    "group": {"name": "text", "groupId": "text"},
     "user": USER,
     "option": OPTION,
     "version": VERSION,
@@ -163,69 +163,28 @@ def get_field_type(field: Dict[str, Any]) -> Optional[TShape]:
     return SCHEMA_TYPES.get(schema.get("type"))
 
 
-def field_to_column_schema(
-    field: Dict[str, Any], backend: TBackend, nested_types: bool
-) -> Optional[TColumnSchema]:
+def field_to_column_schema(field: Dict[str, Any]) -> Optional[TColumnSchema]:
     """Converts a field from `/field` metadata into a dlt column schema.
 
-    Returns None for nested values of a known shape with the python backend: the normalizer
-    flattens their objects and loads their lists into nested tables. The pyarrow backend loads
-    them as json and adds their Arrow type as `x-nested-type` hint when `nested_types` is set.
+    Returns None for nested values of a known shape: the normalizer flattens their objects and
+    loads their lists into nested tables. Values of unknown shape are loaded as text.
     """
-    return shape_to_column_schema(
-        field["id"], get_field_type(field), backend, nested_types
-    )
-
-
-def shape_to_column_schema(
-    name: str, shape: Optional[TShape], backend: TBackend, nested_types: bool
-) -> Optional[TColumnSchema]:
-    """Converts a dlt data type or the shape of a nested value into a column schema, see
-    `field_to_column_schema`. Values of unknown shape are loaded as text.
-    """
-    col: TColumnSchema = {"name": name}
-    if isinstance(shape, str):
-        col["data_type"] = shape  # type: ignore[typeddict-item]
-        return col
+    shape = get_field_type(field)
     if shape is None:
-        col["data_type"] = "text"
-        return col
-    if backend == "python":
-        return None
-    col["data_type"] = "json"
-    if nested_types:
-        from dlt.common.libs.pyarrow import serialize_type
-
-        col["x-nested-type"] = serialize_type(shape_to_arrow(shape))  # type: ignore[typeddict-unknown-key]
-    return col
+        return {"name": field["id"], "data_type": "text"}
+    if isinstance(shape, str):
+        return {"name": field["id"], "data_type": shape}  # type: ignore[typeddict-item]
+    return None
 
 
-def fields_to_columns(
-    fields: Iterable[Dict[str, Any]], backend: TBackend, nested_types: bool
-) -> TTableSchemaColumns:
+def fields_to_columns(fields: Iterable[Dict[str, Any]]) -> TTableSchemaColumns:
     """Converts `fields` into dlt columns that follow the issue `id` and `key` columns"""
     columns: TTableSchemaColumns = {name: dict(col) for name, col in ID_COLUMNS.items()}  # type: ignore[misc]
     for field in fields:
-        col = field_to_column_schema(field, backend, nested_types)
+        col = field_to_column_schema(field)
         if col is not None:
             columns[col["name"]] = col
     return columns
-
-
-def shape_to_arrow(shape: TShape) -> Any:
-    """Converts the shape of a nested value into an Arrow data type. Requires `pyarrow`"""
-    from dlt.common.libs.pyarrow import pyarrow as pa
-
-    if isinstance(shape, list):
-        return pa.list_(shape_to_arrow(shape[0]))
-    if isinstance(shape, dict):
-        return pa.struct([(key, shape_to_arrow(item)) for key, item in shape.items()])
-    return {
-        "text": pa.string(),
-        "bool": pa.bool_(),
-        "bigint": pa.int64(),
-        "double": pa.float64(),
-    }[shape]
 
 
 def trim_to_shape(value: Any, shape: Optional[TShape]) -> Any:

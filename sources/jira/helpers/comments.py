@@ -2,7 +2,6 @@
 
 from typing import Dict, Iterator, List, Optional
 
-import dlt
 from dlt.common import logger
 from dlt.common.schema.typing import TTableSchemaColumns
 from dlt.common.time import ensure_datetime_in_tz
@@ -10,14 +9,8 @@ from dlt.common.typing import DictStrAny, TDataItem
 from dlt.sources.helpers.requests import HTTPError
 
 from .client import JiraClient, batched
-from .issues import IssuesPage, page_ids, rows_to_items
-from .schema_types import (
-    USER,
-    TBackend,
-    TShape,
-    shape_to_column_schema,
-    trim_to_shape,
-)
+from .issues import IssuesPage, IssuesReader
+from .schema_types import USER, TShape, trim_to_shape
 
 COMMENT: Dict[str, TShape] = {
     "id": "text",
@@ -30,48 +23,28 @@ COMMENT: Dict[str, TShape] = {
     "visibility": {"type": "text", "value": "text", "identifier": "text"},
 }
 COMMENT_COLUMNS: TTableSchemaColumns = {
-    "id": {"name": "id", "data_type": "text", "nullable": False},
-    "issueId": {"name": "issueId", "data_type": "text"},
-    "created": {"name": "created", "data_type": "timestamp"},
     # the latest version of a comment read more than once in a run wins
-    "updated": {"name": "updated", "data_type": "timestamp", "dedup_sort": "desc"},
-    "deleted": {"name": "deleted", "data_type": "bool", "hard_delete": True},
+    "updated": {"dedup_sort": "desc"},
+    "deleted": {"hard_delete": True},
 }
 
 
-def comment_columns(backend: TBackend, nested_types: bool) -> TTableSchemaColumns:
-    """Returns columns of comments in the order of values in Arrow rows"""
-    columns: TTableSchemaColumns = {}
-    for name, shape in {**COMMENT, "issueId": "text", "deleted": "bool"}.items():
-        col = shape_to_column_schema(name, shape, backend, nested_types)
-        if col is not None:
-            columns[name] = {**col, **COMMENT_COLUMNS.get(name, {})}
-    return columns
-
-
-def comment_rows(issues: TDataItem, page: IssuesPage) -> Iterator[TDataItem]:
+def comment_rows(issues: List[DictStrAny], page: IssuesPage) -> Iterator[TDataItem]:
     """Yields all comments of a page of `issues` in pages of `chunk_size` comments.
 
-    Each issue without comments gets a row with the `deleted` flag that deletes its comments
-    loaded before, except on the first run of an incremental load.
+    The `comment` field of the issues is bulk fetched, an issue with more comments than Jira
+    embeds is read again with the comment endpoint. Each issue without comments gets a row with
+    the `deleted` flag that deletes its comments loaded before, except on the first run of an
+    incremental load.
     """
-    reader = page.reader
-    columns = comment_columns(reader.backend, reader.nested_types)
-    for index, rows in enumerate(
-        batched(_comment_rows(issues, page), reader.chunk_size)
-    ):
-        if index == 0:
-            yield dlt.mark.with_hints([], dlt.mark.make_hints(columns=columns))
-        yield rows_to_items(rows, columns, reader.backend)
+    yield from batched(_comment_rows(issues, page.reader), page.reader.chunk_size)
 
 
-def _comment_rows(issues: TDataItem, page: IssuesPage) -> Iterator[DictStrAny]:
-    reader = page.reader
-    ids = page_ids(issues)
-    comments = page.comments
-    if comments is None:
-        # `issue_comments` was renamed or there is no pipeline context
-        comments = reader.fetch_comments(ids)
+def _comment_rows(
+    issues: List[DictStrAny], reader: IssuesReader
+) -> Iterator[DictStrAny]:
+    ids = [issue["id"] for issue in issues]
+    comments = reader.fetch_comments(ids)
     for issue_id in ids:
         embedded = comments.get(issue_id)
         if embedded is None:
