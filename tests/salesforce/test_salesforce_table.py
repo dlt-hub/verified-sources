@@ -192,7 +192,8 @@ def credentials() -> InstanceAuth:
 
 
 FIELD_TYPE_CASES: List[Tuple[Dict[str, Any], Optional[Dict[str, Any]]]] = [
-    ({"type": "id", "nillable": False}, {"data_type": "text", "nullable": False}),
+    # `nillable` is not mapped to nullability
+    ({"type": "id", "nillable": False}, {"data_type": "text"}),
     ({"type": "reference"}, {"data_type": "text"}),
     ({"type": "picklist"}, {"data_type": "text"}),
     ({"type": "multipicklist"}, {"data_type": "text"}),
@@ -235,7 +236,7 @@ def test_sf_field_to_column_schema(
     if expected is None:
         assert column is None
     else:
-        assert column == {"name": "Field__c", "nullable": True, **expected}
+        assert column == {"name": "Field__c", **expected}
 
 
 @pytest.mark.parametrize(
@@ -850,7 +851,7 @@ def test_sf_field_to_column_schema_double_as_decimal(
     column = sf_field_to_column_schema(
         {"name": "Field__c", "nillable": True, **field}, double_as_decimal=True
     )
-    assert column == {"name": "Field__c", "nullable": True, **expected}
+    assert column == {"name": "Field__c", **expected}
 
 
 @pytest.mark.parametrize("backend", ["python", "pyarrow"])
@@ -1449,6 +1450,9 @@ def test_salesforce_table_defer_table_reflect(
     # into the user hints so the column order may differ
     assert tables[1]["columns"] == tables[0]["columns"]
     assert tables[1]["columns"]["annual_revenue"]["data_type"] == "double"
+    # only the primary key is not nullable, other fields declared not nillable are
+    assert tables[1]["columns"]["id"]["nullable"] is False
+    assert tables[1]["columns"]["system_modstamp"].get("nullable", True) is True
     assert tables[1]["write_disposition"] == tables[0]["write_disposition"] == "merge"
     # the location is recorded after login
     for extract_inputs in inputs:

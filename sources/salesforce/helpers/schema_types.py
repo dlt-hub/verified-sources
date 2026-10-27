@@ -30,10 +30,9 @@ def sf_field_to_column_schema(
     sf_type = field["type"]
     if sf_type in NON_QUERYABLE_TYPES:
         return None
-    col: TColumnSchema = {
-        "name": field["name"],
-        "nullable": field.get("nillable", True),
-    }
+    # `nillable` is not mapped: a single blank value in a non-nillable field would fail the
+    # load. the primary key hint makes the record id not nullable
+    col: TColumnSchema = {"name": field["name"]}
     if sf_type == "boolean":
         col["data_type"] = "bool"
     elif sf_type in ("int", "long"):

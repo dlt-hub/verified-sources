@@ -226,10 +226,12 @@ def table_rows(
     With `deferred`, `columns` are empty and the sObject is described first.
     """
     resource = dlt.current.resource()
+    primary_key: List[str] = []
     if deferred:
         columns, hints = _describe_when_extracting(
             query_client, sobject, incremental, deferred
         )
+        primary_key = hints.get("primary_key") or []
         # merge resource hints with described hints before yielding
         if resource.columns and not callable(resource.columns):
             hints["columns"] = merge_columns(hints["columns"], resource.columns)
@@ -256,6 +258,12 @@ def table_rows(
             " and will be ignored. Use the original Salesforce field names in apply_hints."
         )
     columns_hints = {name: columns_hints.get(name, columns[name]) for name in columns}
+    # the primary key hint makes the key not nullable, arrow tables must agree with it
+    for name in primary_key or _primary_key(resource):
+        if name in columns_hints:
+            key_column = copy(columns_hints[name])
+            key_column["nullable"] = False
+            columns_hints[name] = key_column
 
     # `add_limit` is pushed down to the query, it counts pages of `chunk_size` records
     limit = resource.limit.limit(chunk_size) if resource.limit else None
@@ -311,6 +319,14 @@ def table_rows(
     _warn_if_cursor_not_moved(
         sobject, columns_hints, incremental, max_cursor, rows_count, limit
     )
+
+
+def _primary_key(resource: DltResource) -> List[str]:
+    """Returns the primary key set in static resource hints"""
+    if resource.has_dynamic_table_name or resource.has_other_dynamic_hints:
+        return []
+    columns = resource.compute_table_schema()["columns"]
+    return [name for name, column in columns.items() if column.get("primary_key")]
 
 
 def _warn_if_cursor_not_moved(
