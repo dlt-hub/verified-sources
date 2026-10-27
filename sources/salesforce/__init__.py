@@ -1,12 +1,9 @@
-"""Source for Salesforce depending on the simple_salesforce python package.
+"""Loads Salesforce sObjects with the Bulk API 2.0.
 
-Imported resources are: sf_user, user_role, opportunity, opportunity_line_item,
-opportunity_contact_role, account, contact, lead, campaign, campaign_member, product_2,
-pricebook_2, pricebook_entry, task and event
+`salesforce_source` loads the sObjects in `SOURCE_SOBJECTS`, `salesforce_table` loads any sObject,
+including custom objects.
 
-The `salesforce_table` resource loads any sObject, including custom objects
-
-Salesforce api docs: https://developer.salesforce.com/docs/apis
+Salesforce API docs: https://developer.salesforce.com/docs/apis
 """
 
 from functools import partial

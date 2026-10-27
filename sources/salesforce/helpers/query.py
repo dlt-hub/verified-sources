@@ -31,12 +31,8 @@ REST_BATCH_SIZE = 2000
 class QueryClient:
     """Queries sObjects with a Bulk API 2.0 job, or with the REST API when Bulk is not supported.
 
-    Both APIs yield CSV pages in the Bulk API format. Bulk API calls of `simple_salesforce` do not
-    refresh an expired session. A large job may outlive the session, so on `INVALID_SESSION_ID`
-    this logs in again with `login` and repeats the call: job ids, result locators and REST
-    cursors stay valid in the new session. Instances may be shared by threads.
-
-    Without a `client` it logs in on the first call, so creating resources makes no API calls.
+    Both APIs yield CSV pages in the Bulk API format. Logs in with `login` on first use and when
+    the session expires. Instances may be shared by threads.
     """
 
     def __init__(
@@ -173,6 +169,8 @@ class QueryClient:
         try:
             return self._call(client, method, api, path, accept, **kwargs)
         except SalesforceExpiredSession:
+            # a long job may outlive the session. job ids, result locators and REST cursors stay
+            # valid in the new session so the call is repeated
             with self._login_lock:
                 # threads sharing this instance log in once, others use the new session
                 if self._client is client:

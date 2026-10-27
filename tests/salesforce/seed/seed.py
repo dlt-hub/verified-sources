@@ -4,9 +4,10 @@ Run from the repository root. Credentials are resolved from `sources/.dlt` like 
 
     uv run python -m tests.salesforce.seed.seed [deploy|load|capture|all]
 
-`deploy` creates the `DltTypes__c` object, the seed id fields on standard objects and a permission
-set granting access to them. `load` upserts the records in `data.py` and is safe to repeat.
-`capture` writes the describe and the gzipped CSV result page of `DltTypes__c` to `tests/salesforce/cases`.
+`deploy` creates the `DltTypes__c` and `DltPages__c` objects, the seed id fields on standard
+objects and a permission set granting access to them. `load` upserts the records in `data.py` and
+is safe to repeat. `capture` writes the describe and the gzipped CSV result page of `DltTypes__c`
+to `tests/salesforce/cases`. See `tests/salesforce/README.md`.
 """
 
 import gzip

@@ -1,7 +1,4 @@
-"""Converts CSV result pages into python rows or Arrow tables typed as dlt columns.
-
-The python backend uses the standard library only. pyarrow is imported just by `csv_page_to_arrow`.
-"""
+"""Converts REST API records to CSV pages, and CSV pages to rows or Arrow tables with dlt types"""
 
 import csv
 import io
@@ -79,6 +76,7 @@ def csv_page_to_arrow(page: bytes, columns: TTableSchemaColumns) -> Optional[Any
 
     Returns None for a page without records: a job without results returns just the header.
     """
+    # imported here so rows can be parsed without pyarrow installed
     from dlt.common.libs.pyarrow import cast_arrow_as_columns_schema, pyarrow as pa
     from pyarrow import compute as pc, csv as pa_csv
 

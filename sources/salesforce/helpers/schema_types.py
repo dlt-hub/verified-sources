@@ -1,4 +1,4 @@
-"""Maps Salesforce `describe()` field types to dlt column schemas"""
+"""Maps sObject `describe()` fields to dlt columns, primary key, cursor and write disposition"""
 
 from typing import Any, Dict, Iterable, List, Optional
 
