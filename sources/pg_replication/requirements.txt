@@ -1,2 +1,3 @@
-dlt>=1.0.0
+dlt>=1.22.0
 psycopg2-binary>=2.9.9
+sqlalchemy>=1.4
