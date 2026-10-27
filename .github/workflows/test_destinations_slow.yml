@@ -1,5 +1,5 @@
 
-name: test destinations bigquery and redshift
+name: test destinations bigquery and snowflake
 
 on:
   pull_request:
@@ -8,7 +8,7 @@ on:
   workflow_dispatch:
 
 env:
-  ALL_DESTINATIONS: '["bigquery", "redshift"]'
+  ALL_DESTINATIONS: '["bigquery", "snowflake"]'
   DLT_SECRETS_TOML: ${{ secrets.DLT_SECRETS_TOML }}
   RUNTIME__LOG_LEVEL: ERROR
 
@@ -19,7 +19,7 @@ jobs:
     if: ${{ !github.event.pull_request.head.repo.fork }}
 
   run_loader:
-    name: test destinations bigquery and redshift
+    name: test destinations bigquery and snowflake
     needs: get_changed_sources
     if: needs.get_changed_sources.outputs.sources_list != ''
 
@@ -60,7 +60,7 @@ jobs:
       - name: Install uv
         uses: astral-sh/setup-uv@v4
         with:
-          python-version: "3.10"
+          python-version: "3.13"
 
       - name: Install dependencies
         run: make dev
