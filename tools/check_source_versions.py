@@ -37,14 +37,18 @@ def resolve_base(root: Path) -> str:
     """Returns the merge base of HEAD and the base branch"""
     github_base = os.environ.get("GITHUB_BASE_REF")
     refs = [
-        os.environ.get("SOURCES_BASE_REF"),
-        f"origin/{github_base}" if github_base else None,
-        "origin/master",
-        "master",
+        ref
+        for ref in dict.fromkeys(
+            [
+                os.environ.get("SOURCES_BASE_REF"),
+                f"origin/{github_base}" if github_base else None,
+                "origin/master",
+                "master",
+            ]
+        )
+        if ref
     ]
     for ref in refs:
-        if not ref:
-            continue
         exists = subprocess.run(
             ["git", "rev-parse", "--verify", "--quiet", f"{ref}^{{commit}}"],
             cwd=root,
