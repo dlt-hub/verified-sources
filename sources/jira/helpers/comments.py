@@ -18,7 +18,6 @@ from .schema_types import (
     shape_to_column_schema,
     trim_to_shape,
 )
-from ..settings import ISSUE_COMMENTS_PATH, MAX_COMMENTS_PAGE_SIZE
 
 COMMENT: Dict[str, TShape] = {
     "id": "text",
@@ -90,30 +89,16 @@ def comment_rows(issues: TDataItem, page: IssuesPage) -> Iterator[TDataItem]:
 def read_comments(
     client: JiraClient, issue_id: str, embedded: DictStrAny
 ) -> Optional[List[DictStrAny]]:
-    """Returns all comments of an issue, pages through them when Jira embedded some of them only.
-    Returns None if the issue was deleted.
+    """Returns all comments of an issue. Jira embeds the latest 20 comments in an issue, all
+    comments are read again when there are more. Returns None if the issue was deleted.
     """
     comments: List[DictStrAny] = embedded.get("comments") or []
     if len(comments) >= (embedded.get("total") or 0):
         return comments
-    comments = []
-    params: DictStrAny = {
-        "startAt": 0,
-        "maxResults": MAX_COMMENTS_PAGE_SIZE,
-        "orderBy": "created",
-    }
-    while True:
-        try:
-            page = client.get_json(
-                ISSUE_COMMENTS_PATH.format(issue_id=issue_id), params=params
-            )
-        except HTTPError as http_ex:
-            if http_ex.response is None or http_ex.response.status_code != 404:
-                raise
-            logger.warning(f"Skipping comments of deleted Jira issue `{issue_id}`")
-            return None
-        batch: List[DictStrAny] = page.get("comments") or []
-        comments.extend(batch)
-        params["startAt"] += len(batch)
-        if not batch or params["startAt"] >= (page.get("total") or 0):
-            return comments
+    try:
+        return client.comments(issue_id)
+    except HTTPError as http_ex:
+        if http_ex.response is None or http_ex.response.status_code != 404:
+            raise
+        logger.warning(f"Skipping comments of deleted Jira issue `{issue_id}`")
+        return None

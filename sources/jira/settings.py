@@ -11,7 +11,6 @@ class TEndpoint(_EndpointRequired, total=False):
     data_path: str
     offset_path: str
     page_size: int
-    use_cursor_pagination: bool
     deduplicate: bool
     params: Dict[str, Any]
 
@@ -60,21 +59,6 @@ DEFAULT_ENDPOINTS: Dict[str, TEndpoint] = {
         "params": {
             "expand": "description,lead,issueTypes,url,projectKeys,permissions,insight"
         },
-    },
-}
-# issues of the deprecated `jira_search` source
-SEARCH_ENDPOINT: TEndpoint = {
-    "api_path": "rest/api/3/search/jql",
-    "data_path": "issues",
-    "use_cursor_pagination": True,
-    "key_field": "id",
-    "primary_key": "id",
-    # jira caps the page at 100 issues while `fields` asks for `*all`
-    "page_size": 100,
-    "params": {
-        "fields": "*all",
-        "expand": "changelog,operations,transitions,names",
-        "jql": "created >= '2000-01-01' order by created DESC",
     },
 }
 DEFAULT_PAGE_SIZE = 50

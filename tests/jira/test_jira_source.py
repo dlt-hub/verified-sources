@@ -123,11 +123,10 @@ def test_load_query_issues(destination_name: str) -> None:
         dev_mode=True,
     )
 
-    # load issues from specified Jira queries.
-    search = jira_search(page_size=5)
+    # load issues from specified Jira queries, each query is bounded on its own, so the second
+    # one runs and the overlap is real
+    search = jira_search(page_size=5, jql_queries=queries, page_limit=PAGE_LIMIT)
     search.max_table_nesting = 0
-    # each query is bounded on its own, so the second one runs and the overlap is real
-    search.issues.bind(jql_queries=queries, page_limit=PAGE_LIMIT)
     info = pipeline.run(search)
     # lets print it (pytest -s will show it)
     print(info)
@@ -139,10 +138,11 @@ def test_load_query_issues(destination_name: str) -> None:
     # tables are typed dicts
     users_table = data_tables[0]
     assert users_table["name"] == "issues"
-    # the queries overlap and the resource deduplicates, so the declared key holds
-    counts = load_table_counts(pipeline, "issues")
-    assert counts["issues"] > 0
-    assert load_table_distinct_counts(pipeline, "id", "issues") == counts
+    # an issue found by both queries is loaded for each, the key is the issue and the query
+    rows = load_tables_to_dicts(pipeline, "issues")["issues"]
+    assert {row["query_index"] for row in rows} == {0, 1}
+    keys = [(row["id"], row["query_index"]) for row in rows]
+    assert len(keys) == len(set(keys))
 
 
 @pytest.mark.parametrize("destination_name", ALL_DESTINATIONS)

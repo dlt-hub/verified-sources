@@ -1,8 +1,7 @@
 """ This source uses Jira API and dlt to load data such as Issues, Users, Workflows and Projects to the database. """
 
 from datetime import datetime
-from itertools import islice
-from typing import Any, Iterable, Iterator, List, Literal, Optional, Set, Union
+from typing import Any, Iterable, Iterator, List, Literal, Optional, Union
 
 import dlt
 from dlt.common import logger
@@ -10,26 +9,21 @@ from dlt.common.schema.typing import TTableSchemaColumns, TWriteDispositionConfi
 from dlt.common.typing import TColumnNames, TDataItem
 from dlt.sources import DltResource
 
-from .helpers.client import JiraClient
+from .helpers.client import JiraClient, JiraResponseError
 from .helpers.comments import COMMENT_COLUMNS, comment_rows
+from .helpers.endpoints import get_paginated_data, nullable_key_columns
 from .helpers.issues import (
     CHANGELOG_COLUMNS,
     CHANGELOGS_RESOURCE,
     COMMENTS_RESOURCE,
-    ORDER_BY,
+    QUERY_INDEX,
     IssuesPage,
     IssuesReader,
     JiraIssuesResourceConfiguration,
     changelog_rows,
-    issue_details,
-    issue_ids,
+    make_issues_resource,
 )
-from .helpers.rest import (
-    JiraResponseError,
-    get_paginated_data,
-    nullable_key_columns,
-    unseen_rows,
-)
+from .helpers.jql import ORDER_BY
 from .helpers.schema_types import TBackend
 from .helpers.worklogs import WORKLOG_COLUMNS, worklog_rows
 from .settings import (
@@ -37,12 +31,12 @@ from .settings import (
     DEFAULT_LAG,
     DEFAULT_PAGE_SIZE,
     MAX_SEARCH_PAGE_SIZE,
-    SEARCH_ENDPOINT,
 )
 
 __all__ = [
     "DEFAULT_ENDPOINTS",
     "DEFAULT_PAGE_SIZE",
+    "JiraClient",
     "JiraResponseError",
     "get_paginated_data",
     "issue_changelogs",
@@ -103,7 +97,6 @@ def jira(
             data_path=endpoint.get("data_path"),
             offset_path=endpoint.get("offset_path"),
             params=endpoint.get("params"),
-            use_cursor_pagination=endpoint.get("use_cursor_pagination", False),
             key_field=endpoint["key_field"],
             deduplicate=endpoint.get("deduplicate", False),
             subdomain=subdomain,
@@ -211,20 +204,14 @@ def jira_issues(
         included_columns=included_columns,
         excluded_columns=excluded_columns,
     )
-    # lists ids of issues in the incremental range, holds the incremental state
-    ids = dlt.resource(issue_ids, name="issue_ids", primary_key="id")(
-        reader, incremental=table_incremental
-    )
-    return dlt.transformer(
-        issue_details,
-        name="issues",
-        data_from=ids,
-        write_disposition=write_disposition,  # type: ignore[arg-type]
-        primary_key=primary_key or "id",
+    return make_issues_resource(
+        reader,
+        table_incremental,
+        write_disposition,
+        primary_key or "id",
         merge_key=merge_key,
         columns=columns,
-        parallelized=True,
-    )(reader)
+    )
 
 
 @dlt.transformer(
@@ -291,66 +278,36 @@ def jira_search(
     email: str = dlt.secrets.value,
     api_token: str = dlt.secrets.value,
     page_size: Optional[int] = None,
+    jql_queries: List[str] = dlt.config.value,
+    page_limit: Optional[int] = None,
 ) -> Iterable[DltResource]:
     """
-    Jira search source function that generates a resource function for searching issues.
+    Jira search source with an `issues` resource that loads issues matching several JQL queries,
+    replaced on each run.
+
+    Issues are loaded like `jira_issues` loads them, each row with the `query_index` of the query
+    that found it: an issue found by several queries is loaded once for each of them, and the
+    primary key is `id` and `query_index`.
 
     Args:
         subdomain: The subdomain for the Jira instance.
         email: The email to authenticate with.
         api_token: The API token to authenticate with.
-        page_size: Rows per request. Defaults to the largest page the endpoint serves.
+        page_size: Issue ids listed in a single search request, at most 5000.
+        jql_queries: JQL queries to run. A query needs a filtering clause; Jira rejects
+            one that only sorts.
+        page_limit: Maximum number of search pages of `page_size` issues to read per query,
+            since all queries share one resource and `add_limit` would bound them together.
 
     Returns:
         Iterable[DltResource]: Resource function for searching issues.
     """
-    logger.warning(
-        "`jira_search` is deprecated and will be removed, use `jira_issues(jql=...)` to load"
-        " issues matching JQL incrementally"
+    reader = IssuesReader(
+        JiraClient(subdomain, email, api_token),
+        "python",
+        False,
+        queries=jql_queries,
+        page_limit=page_limit,
+        search_page_size=page_size or MAX_SEARCH_PAGE_SIZE,
     )
-    key_field = SEARCH_ENDPOINT["key_field"]
-
-    @dlt.resource(
-        write_disposition="replace",
-        primary_key=SEARCH_ENDPOINT["primary_key"],
-        columns=nullable_key_columns(SEARCH_ENDPOINT["primary_key"]),
-    )
-    def issues(
-        jql_queries: List[str], page_limit: Optional[int] = None
-    ) -> Iterable[TDataItem]:
-        """
-        Args:
-            jql_queries: JQL queries to run. A query needs a filtering clause; Jira rejects
-                one that only sorts.
-            page_limit: Maximum number of pages to read per query, since all queries share one
-                generator and `add_limit` would bound them together.
-        """
-        # the queries overlap, so the ids seen are shared across them
-        seen: Set[Any] = set()
-        for jql in jql_queries:
-            params = {**SEARCH_ENDPOINT.get("params", {}), "jql": jql}
-
-            pages: Iterator[TDataItem] = iter(
-                get_paginated_data(
-                    api_path=SEARCH_ENDPOINT["api_path"],
-                    params=params,
-                    subdomain=subdomain,
-                    email=email,
-                    api_token=api_token,
-                    page_size=page_size
-                    or SEARCH_ENDPOINT.get("page_size", DEFAULT_PAGE_SIZE),
-                    data_path=SEARCH_ENDPOINT.get("data_path"),
-                    use_cursor_pagination=SEARCH_ENDPOINT.get(
-                        "use_cursor_pagination", False
-                    ),
-                    key_field=key_field,
-                )
-            )
-            if page_limit is not None:
-                pages = islice(pages, page_limit)
-            for page in pages:
-                rows = unseen_rows(page, key_field, seen)
-                if rows:
-                    yield rows
-
-    return issues
+    return [make_issues_resource(reader, None, "replace", ["id", QUERY_INDEX])]

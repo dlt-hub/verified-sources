@@ -220,6 +220,8 @@ class JiraMock:
         self.issues: Dict[str, Dict[str, Any]] = {}
         # pages of issue ids returned by search, all issues in a single page if not set
         self.search_pages: Optional[List[List[str]]] = None
+        # issue ids returned by search for a JQL query, overrides `search_pages`
+        self.jql_results: Dict[str, List[str]] = {}
         # the last search page has a next page token and is marked with `isLast`
         self.last_page_token = False
         # bulk fetch of more issues is rejected with HTTP 400
@@ -270,9 +272,14 @@ class JiraMock:
     def _search(self, request: Any, context: Any) -> Dict[str, Any]:
         params = {k: v[0] for k, v in parse_qs(urlparse(request.url).query).items()}
         self.searches.append(params)
-        pages = (
-            self.search_pages if self.search_pages is not None else [list(self.issues)]
-        )
+        if params["jql"] in self.jql_results:
+            ids = self.jql_results[params["jql"]]
+            size = int(params["maxResults"])
+            pages = [ids[i : i + size] for i in range(0, len(ids), size)]
+        elif self.search_pages is not None:
+            pages = self.search_pages
+        else:
+            pages = [list(self.issues)]
         page_idx = int(params.get("nextPageToken", 0))
         is_last = page_idx + 1 >= len(pages)
         page: Dict[str, Any] = {

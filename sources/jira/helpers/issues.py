@@ -1,20 +1,9 @@
 """Reads Jira issues incrementally with JQL search and bulk fetch"""
 
-import re
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 from itertools import chain, islice
 from threading import Lock
-from typing import (
-    Any,
-    Dict,
-    Iterable,
-    Iterator,
-    List,
-    NamedTuple,
-    Optional,
-    Set,
-    TypeVar,
-)
+from typing import Any, Dict, Iterator, List, NamedTuple, Optional, Sequence, Set, Tuple
 
 import dlt
 from dlt.common import logger
@@ -23,16 +12,22 @@ from dlt.common.configuration.specs import BaseConfiguration, configspec
 from dlt.common.destination import DestinationCapabilitiesContext
 from dlt.common.exceptions import ResourceNameNotAvailable
 from dlt.common.json import json
-from dlt.common.schema.typing import TTableSchemaColumns, TWriteDispositionDict
+from dlt.common.schema.typing import (
+    TColumnSchema,
+    TTableSchemaColumns,
+    TWriteDispositionConfig,
+    TWriteDispositionDict,
+)
 from dlt.common.schema.utils import merge_columns
 from dlt.common.time import ensure_date, ensure_datetime_in_tz, to_tzinfo
 from dlt.common.typing import DictStrAny, TColumnNames, TDataItem, TSecretStrValue
 from dlt.extract.exceptions import CurrentSourceNotAvailable
 from dlt.extract.incremental import Incremental
 from dlt.extract.items import DataItemWithMeta
-from dlt.sources.helpers.requests import HTTPError
+from dlt.sources import DltResource
 
-from .client import JiraClient
+from .client import JiraClient, batched
+from .jql import CursorRange, make_cursor_range, make_jql
 from .schema_types import (
     ID_COLUMNS,
     TBackend,
@@ -42,28 +37,25 @@ from .schema_types import (
     trim_to_shape,
 )
 from ..settings import (
-    BOUNDING_JQL,
-    CHANGELOG_BULKFETCH_PATH,
     DEFAULT_BULK_ISSUES,
     DEFAULT_CHUNK_SIZE,
     EXCLUDED_FIELDS,
-    FIELDS_PATH,
-    ISSUE_BULKFETCH_PATH,
     MAX_BULK_ISSUES,
     MAX_BULK_ISSUES_FIELDS,
     MAX_CHANGELOG_ISSUES,
     MAX_SEARCH_PAGE_SIZE,
     MULTI_VALUE_FIELDS,
-    SEARCH_PATH,
 )
-
-T = TypeVar("T")
 
 COMMENTS_RESOURCE = "issue_comments"
 CHANGELOGS_RESOURCE = "issue_changelogs"
-ORDER_BY = re.compile(r"\border\s+by\b", re.IGNORECASE)
-# clause names usable in JQL without quoting, e.g. `updated` or `cf[10050]`
-JQL_CLAUSE_NAME = re.compile(r"cf\[\d+\]|\w+")
+# position of the query that found an issue in the queries of `jira_search`
+QUERY_INDEX = "query_index"
+QUERY_INDEX_COLUMN: TColumnSchema = {
+    "name": QUERY_INDEX,
+    "data_type": "bigint",
+    "nullable": False,
+}
 CHANGELOG: TShape = {
     "id": "text",
     "created": "text",
@@ -126,12 +118,6 @@ class IssuesPage(NamedTuple):
     comments: Optional[Dict[str, Optional[DictStrAny]]]
 
 
-def batched(items: Iterable[T], size: int) -> Iterator[List[T]]:
-    iterator = iter(items)
-    while batch := list(islice(iterator, size)):
-        yield batch
-
-
 def select_fields(
     fields: Dict[str, DictStrAny],
     included_columns: Optional[List[str]],
@@ -158,30 +144,6 @@ def select_fields(
         names = [name for name in names if name not in excluded_columns]
     names.extend(name for name in required_columns if name not in names)
     return [fields[name] for name in names]
-
-
-def get_cursor_clause(
-    incremental: Incremental[Any], fields: Dict[str, DictStrAny]
-) -> str:
-    """Returns the JQL clause name of the incremental cursor field"""
-    cursor_name = incremental.get_cursor_column_name()
-    if cursor_name is None:
-        raise ValueError(
-            f"Cursor path `{incremental.cursor_path}` must be a simple field id (e.g. `updated`)"
-        )
-    if cursor_name not in fields:
-        raise KeyError(f"Cursor field `{cursor_name}` does not exist in Jira")
-    field = fields[cursor_name]
-    # clause names are not ordered, custom fields may start with a name that requires quoting
-    clause_names: List[str] = field.get("clauseNames") or []
-    clause = next(
-        (name for name in clause_names if JQL_CLAUSE_NAME.fullmatch(name)), None
-    )
-    if get_field_type(field) not in ("timestamp", "date") or clause is None:
-        raise ValueError(
-            f"Cursor field `{cursor_name}` must be a searchable date or datetime field"
-        )
-    return clause
 
 
 def plan_fetch() -> FetchPlan:
@@ -235,6 +197,9 @@ class IssuesReader:
     `chunk_size` ids and cursor values of matching issues. The parallelized `issues` transformer
     fetches each page in batches with bulk fetch, together with the comments when
     `issue_comments` consumes them.
+
+    With `queries`, each query runs as is, without incremental, and rows get the `query_index` of
+    the query that found them.
     """
 
     def __init__(
@@ -243,6 +208,8 @@ class IssuesReader:
         backend: TBackend,
         nested_types: bool,
         jql: Optional[str] = None,
+        queries: Optional[Sequence[str]] = None,
+        page_limit: Optional[int] = None,
         chunk_size: Optional[int] = None,
         bulk_fetch_size: Optional[int] = None,
         search_page_size: int = MAX_SEARCH_PAGE_SIZE,
@@ -253,6 +220,8 @@ class IssuesReader:
         self.backend = backend
         self.nested_types = nested_types
         self.jql = jql
+        self.queries = queries
+        self.page_limit = page_limit
         # requested sizes, the effective sizes depend on the fetched fields
         self._chunk_size = chunk_size
         self._bulk_fetch_size = bulk_fetch_size
@@ -271,9 +240,7 @@ class IssuesReader:
         self._hints_lock = Lock()
         self._column_hints: Optional[TTableSchemaColumns] = None
         self.incremental: Optional[Incremental[Any]] = None
-        self.last_value: Any = None
-        # set when Jira rejects large bulk fetch requests
-        self.split_batches = False
+        self.cursor: Optional[CursorRange] = None
 
     def bind(
         self, incremental: Optional[Incremental[Any]], plan: FetchPlan = FETCH_ALL
@@ -281,14 +248,16 @@ class IssuesReader:
         """Reads field metadata, binds `incremental` and selects data to fetch according to `plan`,
         returns the cursor field id
         """
-        fields = {field["id"]: field for field in self.client.get_json(FIELDS_PATH)}
+        fields = {field["id"]: field for field in self.client.fields()}
         self.incremental = incremental
         self.plan = plan
         cursor_name: Optional[str] = None
+        self.cursor = None
         if incremental:
+            self.cursor = make_cursor_range(
+                incremental, fields, to_tzinfo(self.client.time_zone())
+            )
             cursor_name = incremental.get_cursor_column_name()
-            self.cursor_clause = get_cursor_clause(incremental, fields)
-            self.cursor_type = get_field_type(fields[cursor_name])
         self.selected = (
             select_fields(
                 fields,
@@ -312,65 +281,22 @@ class IssuesReader:
         self.chunk_size = self._chunk_size or max(
             self.bulk_fetch_size, DEFAULT_CHUNK_SIZE
         )
-        self.split_batches = False
+        self.client.split_batches = False
         self._column_hints = None
-        if incremental:
-            self.time_zone = to_tzinfo(self.client.get_time_zone())
-            self.last_value, self.end_value = incremental.get_current_range()
-            self.on_cursor_value_missing = incremental.on_cursor_value_missing
-            self.row_order = incremental.row_order
         return cursor_name
 
     @property
     def initial_load(self) -> bool:
         """Tells if this is the first run of an incremental load"""
-        return self.incremental is not None and self.last_value is None
+        return self.cursor is not None and self.cursor.last_value is None
 
-    def make_jql(self) -> str:
-        """Generates JQL that selects a superset of the incremental range.
-
-        Datetimes are compared with minute precision in the time zone of the user, so the range
-        is widened to whole minutes and the incremental filters the exact range.
-        """
-        conditions: List[str] = []
-        if self.jql:
-            conditions.append(f"({self.jql})")
-        order_by = ""
-        if self.incremental:
-            last_value_func = self.incremental.last_value_func
-            if last_value_func in (max, min):
-                range_conditions: List[str] = []
-                if self.last_value is not None:
-                    range_conditions.append(
-                        self._cursor_condition(
-                            self.last_value, upper=last_value_func is min
-                        )
-                    )
-                    if self.end_value is not None:
-                        range_conditions.append(
-                            self._cursor_condition(
-                                self.end_value, upper=last_value_func is max
-                            )
-                        )
-                if range_conditions:
-                    condition = " AND ".join(range_conditions)
-                    if self.on_cursor_value_missing == "include":
-                        if len(range_conditions) > 1:
-                            condition = f"({condition})"
-                        condition = f"({condition} OR {self.cursor_clause} is EMPTY)"
-                    conditions.append(condition)
-                if self.row_order is None:
-                    descending = last_value_func is min
-                else:
-                    descending = (self.row_order == "desc") == (last_value_func is max)
-                order_by = (
-                    f" ORDER BY {self.cursor_clause} {'DESC' if descending else 'ASC'}"
-                )
-            if self.on_cursor_value_missing == "exclude":
-                conditions.append(f"{self.cursor_clause} is not EMPTY")
-        if not conditions:
-            conditions.append(BOUNDING_JQL)
-        return " AND ".join(conditions) + order_by
+    def make_jqls(self) -> List[Tuple[Optional[int], str]]:
+        """Returns the JQL queries to run with their query index, None without `queries`"""
+        if self.queries is not None:
+            return [
+                (index, make_jql(jql, None)) for index, jql in enumerate(self.queries)
+            ]
+        return [(None, make_jql(self.jql, self.cursor))]
 
     def column_hints(self) -> TTableSchemaColumns:
         """Maps selected fields to column hints merged with hints applied by the user"""
@@ -396,8 +322,10 @@ class IssuesReader:
                             " apply_hints."
                         )
                     columns = merge_columns(columns, resource.columns)
+                if self.queries is not None:
+                    columns[QUERY_INDEX] = dict(QUERY_INDEX_COLUMN)  # type: ignore[assignment]
                 # queried columns in the order of values in Arrow rows, without user columns
-                queried_columns = [*ID_COLUMNS, *self.field_types]
+                queried_columns = [*ID_COLUMNS, *self.field_types, QUERY_INDEX]
                 self.columns = {
                     name: columns[name] for name in queried_columns if name in columns
                 }
@@ -410,107 +338,44 @@ class IssuesReader:
         """
         if not self.fetched_fields:
             return [{"id": issue_id} for issue_id in ids]
-        return [
-            issue
-            for batch in batched(ids, self.bulk_fetch_size)
-            for issue in self._fetch_issues(batch, self.fetched_fields)
-        ]
+        return self.client.bulk_fetch(ids, self.fetched_fields, self.bulk_fetch_size)
 
     def fetch_comments(self, ids: List[str]) -> Dict[str, Optional[DictStrAny]]:
         """Fetches comments embedded in issues with `ids` when they were not fetched with issues"""
         return {
             issue["id"]: (issue.get("fields") or {}).get("comment")
-            for batch in batched(ids, DEFAULT_BULK_ISSUES)
-            for issue in self._fetch_issues(batch, ["comment"])
+            for issue in self.client.bulk_fetch(ids, ["comment"], DEFAULT_BULK_ISSUES)
         }
-
-    def _cursor_condition(self, value: Any, upper: bool) -> str:
-        if self.cursor_type == "date":
-            op, literal = (
-                "<=" if upper else ">=",
-                ensure_date(value).isoformat(),
-            )
-        else:
-            dt = ensure_datetime_in_tz(value, self.time_zone).replace(
-                second=0, microsecond=0
-            )
-            if upper:
-                op, dt = "<", dt + timedelta(minutes=1)
-            else:
-                op = ">="
-            literal = dt.strftime("%Y-%m-%d %H:%M")
-        return f'{self.cursor_clause} {op} "{literal}"'
 
     def search(
         self, jql: str, cursor_name: Optional[str]
     ) -> Iterator[List[DictStrAny]]:
         """Yields pages of ids of issues matching `jql` with values of the `cursor_name` field"""
-        params: DictStrAny = {
-            "jql": jql,
-            "fields": cursor_name or "id",
-            "maxResults": self.search_page_size,
-        }
-        while True:
-            page = self.client.get_json(SEARCH_PATH, params=params)
+        for page in self.client.search(jql, cursor_name or "id", self.search_page_size):
             items: List[DictStrAny] = []
-            for issue in page.get("issues") or []:
+            for issue in page:
                 item = {"id": issue["id"]}
-                if cursor_name:
+                if cursor_name and self.cursor:
                     value = (issue.get("fields") or {}).get(cursor_name)
                     if value is not None:
                         # the incremental compares datetimes, not strings with offsets
                         value = (
                             ensure_date(value)
-                            if self.cursor_type == "date"
+                            if self.cursor.cursor_type == "date"
                             else ensure_datetime_in_tz(value)
                         )
                     item[cursor_name] = value
                 items.append(item)
-            if items:
-                yield items
-            next_page_token = page.get("nextPageToken")
-            if page.get("isLast") or not next_page_token:
-                return
-            params["nextPageToken"] = next_page_token
+            yield items
 
-    def _fetch_issues(self, ids: List[str], fields: List[str]) -> List[DictStrAny]:
-        if self.split_batches and len(ids) > DEFAULT_BULK_ISSUES:
-            return self._fetch_split(ids, fields)
-        try:
-            result = self.client.post_json(
-                ISSUE_BULKFETCH_PATH, {"issueIdsOrKeys": ids, "fields": fields}
-            )
-        except HTTPError as http_ex:
-            if (
-                http_ex.response is None
-                or http_ex.response.status_code != 400
-                or len(ids) <= DEFAULT_BULK_ISSUES
-            ):
-                raise
-            logger.warning(
-                f"Jira rejected bulk fetch of {len(ids)} issues, fetching {DEFAULT_BULK_ISSUES}"
-                " issues per request"
-            )
-            self.split_batches = True
-            return self._fetch_split(ids, fields)
-        # issues deleted after the search
-        for error in result.get("issueErrors") or []:
-            logger.warning(
-                f"Skipping Jira issue `{error.get('id')}`: {error.get('errorMessage')}"
-            )
-        issues: List[DictStrAny] = result.get("issues") or []
-        return issues
-
-    def _fetch_split(self, ids: List[str], fields: List[str]) -> List[DictStrAny]:
-        return [
-            issue
-            for batch in batched(ids, DEFAULT_BULK_ISSUES)
-            for issue in self._fetch_issues(batch, fields)
-        ]
-
-    def convert(self, issues: List[DictStrAny]) -> TDataItem:
+    def convert(
+        self, issues: List[DictStrAny], query_index: Optional[int] = None
+    ) -> TDataItem:
         invalid_fields: Set[str] = set()
         rows = [self._to_row(issue, invalid_fields) for issue in issues]
+        if query_index is not None:
+            for row in rows:
+                row[QUERY_INDEX] = query_index
         if invalid_fields:
             logger.warning(
                 f"Jira fields {sorted(invalid_fields)} have values of unexpected structure that"
@@ -590,15 +455,20 @@ def issue_ids(
     reader: IssuesReader, incremental: Optional[Incremental[Any]] = None
 ) -> Iterator[TDataItem]:
     """Yields pages of `chunk_size` ids and cursor values of issues matching JQL generated from
-    `incremental`
+    `incremental`. With queries of `jira_search`, ids are tagged with the query index and each
+    query reads at most `page_limit` search pages.
     """
     cursor_name = reader.bind(incremental, plan_fetch())
-    jql = reader.make_jql()
-    logger.info(f"Reading Jira issues matching JQL: {jql}")
-    # each data item has a fixed cost, e.g. schema of every Arrow table is merged on extract
-    yield from batched(
-        chain.from_iterable(reader.search(jql, cursor_name)), reader.chunk_size
-    )
+    for query_index, jql in reader.make_jqls():
+        logger.info(f"Reading Jira issues matching JQL: {jql}")
+        search_pages = reader.search(jql, cursor_name)
+        if query_index is not None:
+            search_pages = islice(search_pages, reader.page_limit)
+        # each data item has a fixed cost, e.g. schema of every Arrow table is merged on extract
+        for page in batched(chain.from_iterable(search_pages), reader.chunk_size):
+            if query_index is not None:
+                page = [{**item, QUERY_INDEX: query_index} for item in page]
+            yield page
 
 
 def issue_details(ids: TDataItem, reader: IssuesReader) -> Iterator[TDataItem]:
@@ -609,6 +479,8 @@ def issue_details(ids: TDataItem, reader: IssuesReader) -> Iterator[TDataItem]:
     the meta of the page to the transformers piped from `issues`.
     """
     yield dlt.mark.with_hints([], dlt.mark.make_hints(columns=reader.column_hints()))
+    # a page of ids holds issues found by one query
+    query_index: Optional[int] = ids[0].get(QUERY_INDEX) if ids else None
     issues = reader.fetch([item["id"] for item in ids])
     if issues:
         comments = (
@@ -619,17 +491,43 @@ def issue_details(ids: TDataItem, reader: IssuesReader) -> Iterator[TDataItem]:
             if reader.plan.comments
             else None
         )
-        yield DataItemWithMeta(IssuesPage(reader, comments), reader.convert(issues))
+        yield DataItemWithMeta(
+            IssuesPage(reader, comments), reader.convert(issues, query_index)
+        )
+
+
+def make_issues_resource(
+    reader: IssuesReader,
+    incremental: Optional[Incremental[Any]],
+    write_disposition: TWriteDispositionConfig,
+    primary_key: TColumnNames,
+    merge_key: TColumnNames = None,
+    columns: Optional[TTableSchemaColumns] = None,
+) -> DltResource:
+    """Returns the parallelized `issues` transformer of the `issue_ids` resource, which lists
+    ids of issues in the incremental range and holds the incremental state
+    """
+    ids = dlt.resource(issue_ids, name="issue_ids", primary_key="id")(
+        reader, incremental=incremental
+    )
+    return dlt.transformer(
+        issue_details,
+        name="issues",
+        data_from=ids,
+        write_disposition=write_disposition,  # type: ignore[arg-type]
+        primary_key=primary_key,
+        merge_key=merge_key,
+        columns=columns,
+        parallelized=True,
+    )(reader)
 
 
 def changelog_rows(client: JiraClient, issues: TDataItem) -> Iterator[TDataItem]:
     """Fetches all changelogs of `issues`, a page of issues as list or Arrow table"""
     for batch in batched(page_ids(issues), MAX_CHANGELOG_ISSUES):
-        body: DictStrAny = {"issueIdsOrKeys": batch}
-        while True:
-            page = client.post_json(CHANGELOG_BULKFETCH_PATH, body)
+        for page in client.changelogs(batch):
             rows: List[DictStrAny] = []
-            for issue_changelog in page.get("issueChangeLogs") or []:
+            for issue_changelog in page:
                 for history in issue_changelog.get("changeHistories") or []:
                     row = trim_to_shape(history, CHANGELOG)
                     row["issueId"] = issue_changelog["issueId"]
@@ -644,6 +542,3 @@ def changelog_rows(client: JiraClient, issues: TDataItem) -> Iterator[TDataItem]
                     rows.append(row)
             if rows:
                 yield rows
-            if not page.get("nextPageToken"):
-                break
-            body["nextPageToken"] = page["nextPageToken"]

@@ -24,7 +24,8 @@ from dlt.sources.helpers.requests import HTTPError
 
 from sources.jira import issue_changelogs, issue_comments, jira, jira_issues, worklogs
 from sources.jira.helpers.client import JiraClient
-from sources.jira.helpers.issues import IssuesReader, changelog_rows
+from sources.jira.helpers.issues import changelog_rows
+from sources.jira.helpers.jql import make_jql
 from sources.jira.helpers.schema_types import (
     field_to_column_schema,
     get_field_type,
@@ -582,23 +583,23 @@ def test_issues_captured_parallel_pages(
     captured_mock: Dict[str, Any], mocker: MockerFixture
 ) -> None:
     # requests_mock serializes requests, the delay is added around them to overlap the fetches
-    fetch_issues = IssuesReader._fetch_issues
+    bulk_fetch = JiraClient.bulk_fetch
     lock, fetches = Lock(), {"in_flight": 0, "max_parallel": 0}
 
-    def slow_fetch_issues(
-        reader: IssuesReader, ids: List[str], fields: List[str]
+    def slow_bulk_fetch(
+        client: JiraClient, ids: List[str], fields: List[str], batch_size: int
     ) -> Any:
         with lock:
             fetches["in_flight"] += 1
             fetches["max_parallel"] = max(fetches["max_parallel"], fetches["in_flight"])
         time.sleep(0.1)
         try:
-            return fetch_issues(reader, ids, fields)
+            return bulk_fetch(client, ids, fields, batch_size)
         finally:
             with lock:
                 fetches["in_flight"] -= 1
 
-    mocker.patch.object(IssuesReader, "_fetch_issues", slow_fetch_issues)
+    mocker.patch.object(JiraClient, "bulk_fetch", slow_bulk_fetch)
     _, single_page = run_to_parquet(
         "jira_single_page",
         jira_issues(**CREDENTIALS, backend="pyarrow", nested_types=True),
@@ -839,6 +840,20 @@ def test_issues_invalid_cursor(
         list(resource)
     assert isinstance(py_ex.value.__cause__, exception)
     assert not jira_mock.search_route.called
+
+
+@pytest.mark.parametrize(
+    "jql,expected",
+    [
+        (None, 'created >= "1970-01-01"'),
+        ("project = KAN", "project = KAN"),
+        ("project = KAN ORDER BY created", "project = KAN ORDER BY created"),
+    ],
+    ids=["bounding", "as_is", "order_by"],
+)
+def test_make_jql_without_cursor(jql: Optional[str], expected: str) -> None:
+    # queries of `jira_search` run as they are
+    assert make_jql(jql, None) == expected
 
 
 def test_issues_jql_with_order_by() -> None:

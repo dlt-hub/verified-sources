@@ -6,14 +6,17 @@ import dlt
 import pytest
 import requests_mock
 from dlt.common.normalizers.naming.snake_case import NamingConvention
-from dlt.sources.helpers.requests import Response
+from dlt.sources.helpers.requests import HTTPError, Response
 
 from sources.jira import jira, jira_search
-from sources.jira.helpers import rest
-from sources.jira.helpers.rest import JiraResponseError, get_paginated_data
+from sources.jira.helpers import endpoints
+from sources.jira.helpers.client import JiraClient
+from sources.jira.helpers.endpoints import get_paginated_data
+from sources.jira.helpers.paginators import JiraCursorPaginator, JiraResponseError
 from sources.jira.settings import DEFAULT_ENDPOINTS, DEFAULT_PAGE_SIZE
 
-from tests.utils import assert_load_info, load_table_counts
+from tests.jira.utils import CREDENTIALS, JiraMock, make_issue
+from tests.utils import assert_load_info, load_table_counts, load_tables_to_dicts
 
 # params the Jira Cloud v3 spec does not accept on the endpoints this source calls
 UNACCEPTED_PARAMS = {"validatequery", "includeinactiveusers"}
@@ -24,7 +27,6 @@ INTERNAL_KEYS = {
     "data_path",
     "offset_path",
     "page_size",
-    "use_cursor_pagination",
     "deduplicate",
     "key_field",
     "primary_key",
@@ -46,6 +48,12 @@ def items(pages: Iterator[Any]) -> List[Any]:
     return [item for page in pages for item in page]
 
 
+def cursor_pages(api_path: str) -> Iterator[Any]:
+    """Pages of issues read from `api_path` by the client with cursor pagination"""
+    client = JiraClient(AUTH["subdomain"], AUTH["email"], AUTH["api_token"])
+    return client.paginate(api_path, JiraCursorPaginator(api_path, 2), "issues")
+
+
 def sent_params(m: requests_mock.Mocker) -> List[Dict[str, str]]:
     """Query string of each request. `request.qs` lowercases values, so parse the url instead."""
     return [
@@ -64,14 +72,7 @@ def test_cursor_pagination_continues_past_empty_page_with_token() -> None:
             {"issues": [], "nextPageToken": "t2"},
             {"issues": [{"id": "2"}]},
         )
-        data = items(
-            get_paginated_data(
-                api_path="rest/api/3/search/jql",
-                data_path="issues",
-                use_cursor_pagination=True,
-                **AUTH,
-            )
-        )
+        data = items(cursor_pages("rest/api/3/search/jql"))
         assert [i["id"] for i in data] == ["1", "2"]
         assert [p.get("nextPageToken") for p in sent_params(m)] == [None, "t1", "t2"]
 
@@ -83,14 +84,7 @@ def test_cursor_pagination_stops_on_is_last_with_token() -> None:
             "rest/api/3/search/jql",
             {"issues": [{"id": "1"}], "nextPageToken": "t1", "isLast": True},
         )
-        data = items(
-            get_paginated_data(
-                api_path="rest/api/3/search/jql",
-                data_path="issues",
-                use_cursor_pagination=True,
-                **AUTH,
-            )
-        )
+        data = items(cursor_pages("rest/api/3/search/jql"))
         assert [i["id"] for i in data] == ["1"]
         assert m.call_count == 1
 
@@ -219,13 +213,7 @@ def test_cursor_pagination_requires_object_response() -> None:
     with requests_mock.Mocker() as m:
         serve(m, "rest/api/3/search/jql", [{"id": "1"}])
         with pytest.raises(JiraResponseError, match="rest/api/3/search/jql.*list"):
-            list(
-                get_paginated_data(
-                    api_path="rest/api/3/search/jql",
-                    use_cursor_pagination=True,
-                    **AUTH,
-                )
-            )
+            list(cursor_pages("rest/api/3/search/jql"))
 
 
 def test_http_error_raises() -> None:
@@ -248,15 +236,11 @@ def test_jira_error_messages_reach_the_caller() -> None:
             status_code=400,
             json={"errorMessages": [message], "errors": {}},
         )
-        with pytest.raises(JiraResponseError, match=message):
-            list(
-                get_paginated_data(
-                    api_path="rest/api/3/search/jql",
-                    data_path="issues",
-                    use_cursor_pagination=True,
-                    **AUTH,
-                )
-            )
+        with pytest.raises(JiraResponseError, match=message) as py_ex:
+            list(cursor_pages("rest/api/3/search/jql"))
+    # callers handle Jira errors as HTTP errors with the response
+    assert isinstance(py_ex.value, HTTPError)
+    assert py_ex.value.response.status_code == 400
 
 
 def test_requests_carry_basic_auth() -> None:
@@ -295,43 +279,70 @@ def test_key_field_normalizes_to_the_primary_key(endpoint_name: str) -> None:
     assert normalized == endpoint["primary_key"]
 
 
-def test_an_issue_matched_by_two_queries_is_yielded_once() -> None:
+@pytest.fixture
+def search_mock() -> Iterator[JiraMock]:
     with requests_mock.Mocker() as m:
-        serve(
-            m,
-            "rest/api/3/search/jql",
-            {"issues": [{"id": "1"}, {"id": "2"}]},
-            {"issues": [{"id": "2"}, {"id": "3"}]},
+        jira_mock = JiraMock(m)
+        jira_mock.add_issues(
+            *(make_issue(n, "2024-01-15T10:30:00.000+0000") for n in range(1, 5))
         )
-        resource = jira_search(**AUTH).issues(
-            jql_queries=["project = X", "project = Y"]
-        )
-        data = list(resource)
-    assert [i["id"] for i in data] == ["1", "2", "3"]
+        jira_mock.jql_results = {
+            "project = X": ["1", "2", "3"],
+            "project = Y order by created": ["2", "4"],
+        }
+        yield jira_mock
 
 
-def test_page_limit_bounds_each_query_on_its_own() -> None:
+def test_an_issue_matched_by_two_queries_is_loaded_for_each(
+    search_mock: JiraMock,
+) -> None:
+    source = jira_search(
+        **CREDENTIALS, jql_queries=["project = X", "project = Y order by created"]
+    )
+    rows = list(source)
+    # the query index tells which query found the issue, pages are fetched in parallel
+    assert sorted((row["id"], row["query_index"]) for row in rows) == [
+        ("1", 0),
+        ("2", 0),
+        ("2", 1),
+        ("3", 0),
+        ("4", 1),
+    ]
+    # queries run as they are, issues are fetched like `jira_issues` does
+    assert [search["jql"] for search in search_mock.searches] == [
+        "project = X",
+        "project = Y order by created",
+    ]
+    assert len(search_mock.bulk_fetches) == 2
+
+
+def test_page_limit_bounds_each_query_on_its_own(search_mock: JiraMock) -> None:
     """A shared limit lets the first query absorb the budget and the second never runs."""
-    with requests_mock.Mocker() as m:
-        m.get(
-            url_for("rest/api/3/search/jql"),
-            [
-                {"json": {"issues": [{"id": "1"}], "nextPageToken": "t"}},
-                {"json": {"issues": [{"id": "2"}], "nextPageToken": "t"}},
-                {"json": {"issues": [{"id": "3"}], "nextPageToken": "t"}},
-                {"json": {"issues": [{"id": "4"}], "nextPageToken": "t"}},
-            ],
-        )
-        resource = jira_search(**AUTH).issues(
-            jql_queries=["project = X", "project = Y"], page_limit=2
-        )
-        data = list(resource)
-    assert [i["id"] for i in data] == ["1", "2", "3", "4"]
-    assert [p["jql"] for p in sent_params(m)] == [
-        "project = X",
-        "project = X",
-        "project = Y",
-        "project = Y",
+    source = jira_search(
+        **CREDENTIALS,
+        jql_queries=["project = X", "project = Y order by created"],
+        page_size=1,
+        page_limit=1,
+    )
+    pipeline = dlt.pipeline(
+        pipeline_name="test_jira_search_page_limit",
+        destination="duckdb",
+        dataset_name="test_jira_search_page_limit",
+        dev_mode=True,
+    )
+    assert_load_info(pipeline.run(source))
+    rows = load_tables_to_dicts(pipeline, "issues")["issues"]
+    assert sorted((row["id"], row["query_index"]) for row in rows) == [
+        ("1", 0),
+        ("2", 1),
+    ]
+    table = pipeline.default_schema.get_table("issues")
+    assert table["write_disposition"] == "replace"
+    assert [
+        name for name, col in table["columns"].items() if col.get("primary_key")
+    ] == [
+        "id",
+        "query_index",
     ]
 
 
@@ -416,22 +427,20 @@ def test_jira_resource_request(endpoint_name: str) -> None:
     assert_nullable_key(resource, endpoint["primary_key"])
 
 
-def test_jira_search_request() -> None:
-    with requests_mock.Mocker() as m:
-        serve(m, "rest/api/3/search/jql", {"issues": []})
-        resource = jira_search(**AUTH).issues(
-            jql_queries=["project = X", "project = Y"]
-        )
-        assert list(resource) == []
-        params = sent_params(m)
-        assert [p["jql"] for p in params] == ["project = X", "project = Y"]
-        for sent in params:
-            assert_params_accepted(sent)
-    assert_nullable_key(resource, "id")
+def test_jira_search_request(search_mock: JiraMock) -> None:
+    source = jira_search(
+        **CREDENTIALS, jql_queries=["project = X", "project = Y order by created"]
+    )
+    assert len(list(source)) == 5
+    for sent in search_mock.searches:
+        assert not (UNACCEPTED_PARAMS | INTERNAL_KEYS) & set(sent)
+        assert not UNACCEPTED_EXPANDS & set(sent.get("expand", "").split(","))
+    # search lists ids only, fields are fetched in bulk
+    assert {search["fields"] for search in search_mock.searches} == {"id"}
 
 
 def test_source_nesting_setting_is_not_overridden_on_search_issues() -> None:
-    source = jira_search(**AUTH)
+    source = jira_search(**AUTH, jql_queries=["project = X"])
     source.max_table_nesting = 0
     assert source.max_table_nesting == 0
     # a resource level hint would win over the source setting, so there must not be one
@@ -463,7 +472,7 @@ def test_rows_without_the_key_field_are_reported_once(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     warnings: List[str] = []
-    monkeypatch.setattr(rest.logger, "warning", warnings.append)
+    monkeypatch.setattr(endpoints.logger, "warning", warnings.append)
     with requests_mock.Mocker() as m:
         serve(
             m,
@@ -497,27 +506,9 @@ def test_null_primary_key_loads_instead_of_failing_the_package() -> None:
     assert load_table_counts(pipeline, "users") == {"users": 2}
 
 
-@pytest.mark.parametrize(
-    "api_path, page, read_args",
-    [
-        (
-            "rest/api/3/workflows/search",
-            {"values": [{"id": "w1"}], "statuses": [], "isLast": True},
-            {"data_path": "statuses", "offset_path": "values"},
-        ),
-        (
-            "rest/api/3/search/jql",
-            {"issues": [{"id": "1"}]},
-            {"data_path": "issues", "use_cursor_pagination": True},
-        ),
-    ],
-    ids=["offset", "cursor"],
-)
+@pytest.mark.parametrize("cursor", [False, True], ids=["offset", "cursor"])
 def test_each_response_is_parsed_once_by_the_source(
-    api_path: str,
-    page: Any,
-    read_args: Dict[str, Any],
-    monkeypatch: pytest.MonkeyPatch,
+    cursor: bool, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """Issue pages run to megabytes and `Response.json()` parses the payload again."""
     parses = []
@@ -529,8 +520,23 @@ def test_each_response_is_parsed_once_by_the_source(
 
     monkeypatch.setattr(Response, "json", counting_json)
     with requests_mock.Mocker() as m:
-        serve(m, api_path, page)
-        list(get_paginated_data(api_path=api_path, **read_args, **AUTH))
+        if cursor:
+            serve(m, "rest/api/3/search/jql", {"issues": [{"id": "1"}]})
+            list(cursor_pages("rest/api/3/search/jql"))
+        else:
+            serve(
+                m,
+                "rest/api/3/workflows/search",
+                {"values": [{"id": "w1"}], "statuses": [], "isLast": True},
+            )
+            list(
+                get_paginated_data(
+                    api_path="rest/api/3/workflows/search",
+                    data_path="statuses",
+                    offset_path="values",
+                    **AUTH,
+                )
+            )
     # dlt parses the page to apply the data selector, this source parses it once more
     assert len(parses) == 2
 

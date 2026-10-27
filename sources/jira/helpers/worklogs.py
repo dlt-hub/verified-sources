@@ -1,22 +1,16 @@
 """Reads Jira worklogs changed and deleted since the last run"""
 
 from datetime import datetime, timezone
-from typing import Any, Iterator, List, Optional
+from typing import Any, Iterator, Optional
 
 from dlt.common.schema.typing import TTableSchemaColumns
 from dlt.common.time import datetime_to_timestamp_ms, ensure_datetime_in_tz
 from dlt.common.typing import DictStrAny, TDataItem
 from dlt.extract.incremental import Incremental
 
-from .client import JiraClient
-from .issues import batched
+from .client import JiraClient, batched
 from .schema_types import TShape, trim_to_shape
-from ..settings import (
-    MAX_WORKLOG_IDS,
-    WORKLOG_DELETED_PATH,
-    WORKLOG_LIST_PATH,
-    WORKLOG_UPDATED_PATH,
-)
+from ..settings import MAX_WORKLOG_IDS, WORKLOG_DELETED_PATH, WORKLOG_UPDATED_PATH
 
 AUTHOR: TShape = {"accountId": "text", "displayName": "text"}
 WORKLOG: TShape = {
@@ -43,27 +37,6 @@ WORKLOG_COLUMNS: TTableSchemaColumns = {
 WORKLOG_COLUMNS["updated"]["dedup_sort"] = "desc"
 
 
-def changed_worklogs(
-    client: JiraClient, path: str, since: int
-) -> Iterator[List[DictStrAny]]:
-    """Pages through ids of worklogs changed after `since` (UNIX timestamp in milliseconds)"""
-    while True:
-        page = client.get_json(path, params={"since": since})
-        values: List[DictStrAny] = page.get("values") or []
-        if values:
-            yield values
-        if page.get("lastPage", True):
-            return
-        until: int = page["until"]
-        if until <= since:
-            # Jira pages by the youngest timestamp of a page
-            raise RuntimeError(
-                f"Cannot page Jira worklogs changed at {since}: more than {MAX_WORKLOG_IDS}"
-                " worklogs share the same timestamp"
-            )
-        since = until
-
-
 def to_worklog_row(worklog: DictStrAny) -> DictStrAny:
     row: DictStrAny = trim_to_shape(worklog, WORKLOG)
     for name in WORKLOG_DATETIMES:
@@ -82,11 +55,10 @@ def worklog_rows(
         if start_value is None
         else datetime_to_timestamp_ms(ensure_datetime_in_tz(start_value))
     )
-    for changed in changed_worklogs(client, WORKLOG_UPDATED_PATH, since):
+    for changed in client.changed_worklogs(WORKLOG_UPDATED_PATH, since):
         for ids in batched([item["worklogId"] for item in changed], MAX_WORKLOG_IDS):
-            worklogs = client.post_json(WORKLOG_LIST_PATH, {"ids": ids})
-            yield [to_worklog_row(worklog) for worklog in worklogs]
-    for deleted in changed_worklogs(client, WORKLOG_DELETED_PATH, since):
+            yield [to_worklog_row(worklog) for worklog in client.worklogs(ids)]
+    for deleted in client.changed_worklogs(WORKLOG_DELETED_PATH, since):
         yield [
             {
                 "id": str(item["worklogId"]),
