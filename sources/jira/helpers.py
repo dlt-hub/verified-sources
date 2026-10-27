@@ -1,0 +1,256 @@
+"""Request and response handling for the Jira endpoints the source reads."""
+
+from typing import Any, Dict, Iterable, List, Optional, Set
+from urllib.parse import urlparse
+
+from dlt.common import logger
+from dlt.common.schema.typing import TColumnSchema
+from dlt.common.typing import DictStrAny, TDataItem
+from dlt.sources.helpers.requests import Request, Response
+from dlt.sources.helpers.rest_client import RESTClient
+from dlt.sources.helpers.rest_client.auth import HttpBasicAuth
+from dlt.sources.helpers.rest_client.paginators import (
+    BasePaginator,
+    JSONResponseCursorPaginator,
+)
+
+_BODY_ATTR = "_jira_parsed_body"
+
+
+class JiraResponseError(Exception):
+    """Raised when a Jira endpoint returns a body this source cannot read."""
+
+
+def nullable_key_columns(primary_key: str) -> Dict[str, TColumnSchema]:
+    """Hints keeping `primary_key` nullable, so a row without one lands instead of
+    failing the load package."""
+    return {primary_key: {"nullable": True}}
+
+
+def unseen_rows(
+    rows: List[TDataItem], key_field: str, seen: Set[Any]
+) -> List[TDataItem]:
+    """Rows whose key has not been yielded yet, adding the keys it returns to `seen`.
+
+    A row without the field cannot be matched and is kept.
+    """
+    unseen = []
+    for row in rows:
+        key = row.get(key_field) if isinstance(row, dict) else None
+        if key is None:
+            unseen.append(row)
+            continue
+        if key in seen:
+            continue
+        seen.add(key)
+        unseen.append(row)
+    return unseen
+
+
+def _any_row_without_key(rows: List[TDataItem], key_field: str) -> bool:
+    return any(not isinstance(row, dict) or row.get(key_field) is None for row in rows)
+
+
+def _body(response: Response) -> Any:
+    """Parsed response body, cached on the response.
+
+    `Response.json()` parses the payload again on every call, and issue pages run to megabytes.
+    dlt parses each page once to apply the data selector, and this cache holds the source to one
+    parse on top of that.
+    """
+    body = getattr(response, _BODY_ATTR, None)
+    if body is None:
+        body = response.json()
+        setattr(response, _BODY_ATTR, body)
+    return body
+
+
+def _set_param(request: Request, name: str, value: Any) -> None:
+    if request.params is None:
+        request.params = {}
+    request.params[name] = value
+
+
+class JiraCursorPaginator(JSONResponseCursorPaginator):
+    """Cursor pagination for `rest/api/3/search/jql`.
+
+    An empty page carrying a `nextPageToken` is not the end of the result set, so the base
+    class default of running on past an empty page is what this endpoint needs. The base class
+    stops when the token is absent. This adds a second stop on `isLast` and the `maxResults`
+    parameter.
+    """
+
+    CURSOR_KEY = "nextPageToken"
+
+    def __init__(self, api_path: str, page_size: int) -> None:
+        super().__init__(cursor_path=self.CURSOR_KEY, cursor_param=self.CURSOR_KEY)
+        self.api_path = api_path
+        self.page_size = page_size
+
+    def init_request(self, request: Request) -> None:
+        super().init_request(request)
+        _set_param(request, "maxResults", self.page_size)
+
+    def update_state(
+        self, response: Response, data: Optional[List[Any]] = None
+    ) -> None:
+        body = _body(response)
+        if not isinstance(body, dict):
+            raise JiraResponseError(
+                f"Jira endpoint {self.api_path} returned {type(body).__name__}. "
+                "Cursor pagination needs an object response."
+            )
+        # the base class reads the same token, by parsing the body a second time
+        self._next_reference = body.get(self.CURSOR_KEY) or None
+        if body.get("isLast"):
+            self._has_next_page = False
+
+
+class JiraOffsetPaginator(BasePaginator):
+    """`startAt` pagination for the page bean envelopes and for the bare user array.
+
+    Advances by the rows a page held, because Jira clamps `maxResults` without reporting it.
+    """
+
+    # the `nextPage` link is no alternative: workflows/search returns an internal Atlassian host
+
+    def __init__(self, page_size: int, offset_path: Optional[str] = None) -> None:
+        super().__init__()
+        self.page_size = page_size
+        # key whose row count advances the offset, when the rows taken sit under a sibling key
+        self.offset_path = offset_path
+        self.offset = 0
+
+    def init_request(self, request: Request) -> None:
+        self.update_request(request)
+
+    def update_state(
+        self, response: Response, data: Optional[List[Any]] = None
+    ) -> None:
+        body = _body(response)
+        rows = len(data or [])
+        if self.offset_path and isinstance(body, dict):
+            rows = len(body.get(self.offset_path) or [])
+        if not rows:
+            self._has_next_page = False
+            return
+        self.offset += rows
+        if not isinstance(body, dict):
+            return
+        if body.get("isLast"):
+            self._has_next_page = False
+            return
+        total = body.get("total")
+        if total is not None and self.offset >= total:
+            self._has_next_page = False
+
+    def update_request(self, request: Request) -> None:
+        _set_param(request, "startAt", self.offset)
+        _set_param(request, "maxResults", self.page_size)
+
+
+def _raise_jira_error(response: Response, *args: Any, **kwargs: Any) -> None:
+    """Response hook replacing `raise_for_status`, so the messages Jira sends reach the user.
+
+    An error body carries `errorMessages`, and `raise_for_status` reports only the status code.
+    `rest/api/3/search/jql` rejects a JQL query with no filtering clause that way.
+    """
+    if response.status_code < 400:
+        return
+    body = None
+    try:
+        body = _body(response)
+    except ValueError:
+        pass
+    messages = body.get("errorMessages") if isinstance(body, dict) else None
+    if not messages:
+        response.raise_for_status()
+        return
+    raise JiraResponseError(
+        f"Jira endpoint {urlparse(response.url).path.lstrip('/')} answered"
+        f" {response.status_code}: {' '.join(messages)}"
+    )
+
+
+def _check_data_path(api_path: str, data_path: str, response: Response) -> None:
+    body = _body(response)
+    if isinstance(body, dict) and data_path in body:
+        return
+    got = sorted(body) if isinstance(body, dict) else type(body).__name__
+    raise JiraResponseError(
+        f"Jira endpoint {api_path} returned no '{data_path}' key. Got: {got}."
+    )
+
+
+def get_paginated_data(
+    subdomain: str,
+    email: str,
+    api_token: str,
+    page_size: int,
+    api_path: str = "rest/api/3/search/jql",
+    data_path: Optional[str] = None,
+    offset_path: Optional[str] = None,
+    params: Optional[DictStrAny] = None,
+    use_cursor_pagination: bool = False,
+    key_field: Optional[str] = None,
+    deduplicate: bool = False,
+) -> Iterable[TDataItem]:
+    """
+    Function to fetch paginated data from a Jira API endpoint.
+
+    Args:
+        subdomain: The subdomain for the Jira instance.
+        email: The email to authenticate with.
+        api_token: The API token to authenticate with.
+        page_size: Maximum number of results per page
+        api_path: The API path for the Jira endpoint.
+        data_path: Optional data path to extract from the response.
+        offset_path: Optional response key whose row count advances `startAt`. Defaults to
+            `data_path`, and differs when the rows taken sit under a sibling key.
+        params: Optional parameters for the API request.
+        use_cursor_pagination: If True, uses cursor-based pagination (nextPageToken)
+            for the /search/jql endpoint. If False, uses offset-based pagination (startAt).
+        key_field: Optional response field holding the key. Rows missing it are logged once.
+        deduplicate: If True, drops rows whose `key_field` was yielded before.
+    Yields:
+        Iterable[TDataItem]: Yields pages of data from the API.
+    """
+    if deduplicate and not key_field:
+        raise ValueError("deduplicate needs a key_field to deduplicate on")
+    client = RESTClient(
+        base_url=f"https://{subdomain}.atlassian.net/",
+        headers={"Accept": "application/json"},
+        auth=HttpBasicAuth(username=email, password=api_token),
+    )
+    paginator: BasePaginator = (
+        JiraCursorPaginator(api_path, page_size)
+        if use_cursor_pagination
+        else JiraOffsetPaginator(page_size, offset_path)
+    )
+    seen: Optional[Set[Any]] = set() if deduplicate else None
+    warned_on_missing_key = False
+    # "$" selects the whole body for the endpoints that return a bare array
+    for page in client.paginate(
+        api_path,
+        params=dict(params or {}),
+        paginator=paginator,
+        data_selector=data_path or "$",
+        hooks={"response": [_raise_jira_error]},
+    ):
+        if data_path:
+            _check_data_path(api_path, data_path, page.response)
+        rows = list(page)
+        if (
+            key_field
+            and not warned_on_missing_key
+            and _any_row_without_key(rows, key_field)
+        ):
+            logger.warning(
+                f"Jira endpoint {api_path} returned rows without '{key_field}'. They load with"
+                " a null primary key and are reported once per run."
+            )
+            warned_on_missing_key = True
+        if seen is not None and key_field:
+            rows = unseen_rows(rows, key_field, seen)
+        if rows:
+            yield rows

@@ -11,6 +11,7 @@ from sources.facebook_ads import (
     Campaign,
     DEFAULT_CAMPAIGN_FIELDS,
 )
+from sources.facebook_ads.settings import FACEBOOK_INSIGHTS_RETENTION_PERIOD
 
 from tests.utils import ALL_DESTINATIONS, assert_load_info, load_table_counts
 
@@ -99,32 +100,39 @@ def test_load_insights_weekly() -> None:
 
 
 def test_get_start_date() -> None:
+    # a fixed date drifts out of the retention window as time passes, so anchor on today
+    recent = pendulum.today("UTC").subtract(months=1)
+
     # Test with an ISO datetime string
-    input_value = "2023-08-09T12:30:00"
+    input_value = recent.replace(hour=12, minute=30).isoformat()
     result = get_start_date(
         incremental_start_date=dlt.sources.incremental("start_date", input_value),
         attribution_window_days_lag=7,
     )
     assert isinstance(result, pendulum.DateTime)
-    assert result.year == 2023
-    assert result.month == 8
-    assert result.day == 2
-    assert result.hour == 12
-    assert result.minute == 30
-    assert result.second == 0
+    assert result == recent.replace(hour=12, minute=30).subtract(days=7)
     assert result.timezone_name == "UTC"
 
     # Test with an ISO date string
-    input_value = "2023-08-09"
+    input_value = recent.to_date_string()
     result = get_start_date(
         incremental_start_date=dlt.sources.incremental("start_date", input_value),
         attribution_window_days_lag=7,
     )
     assert isinstance(result, pendulum.DateTime)
-    assert result.year == 2023
-    assert result.month == 8
-    assert result.day == 2
-    assert result.hour == 00
-    assert result.minute == 00
-    assert result.second == 00
+    assert result == recent.subtract(days=7)
     assert result.timezone_name == "UTC"
+
+    # Test that a date older than the retention period is trimmed to it
+    stale = pendulum.today("UTC").subtract(
+        months=FACEBOOK_INSIGHTS_RETENTION_PERIOD + 1
+    )
+    result = get_start_date(
+        incremental_start_date=dlt.sources.incremental(
+            "start_date", stale.to_date_string()
+        ),
+        attribution_window_days_lag=7,
+    )
+    assert result == pendulum.today("UTC").subtract(
+        months=FACEBOOK_INSIGHTS_RETENTION_PERIOD
+    )

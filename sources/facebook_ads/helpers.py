@@ -54,7 +54,6 @@ def get_start_date(
             min_start_date,
         )
         start_date = min_start_date
-        incremental_start_date.start_value = min_start_date
 
     # lag the incremental start date by attribution window lag
     incremental_start_date.start_value = start_date.isoformat()

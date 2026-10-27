@@ -1,13 +1,28 @@
 """ This source uses Jira API and dlt to load data such as Issues, Users, Workflows and Projects to the database. """
 
-from typing import Iterable, List, Optional
+from itertools import islice
+from typing import Any, Iterable, Iterator, List, Optional, Set
 
 import dlt
-from dlt.common.typing import DictStrAny, TDataItem
+from dlt.common.typing import TDataItem
 from dlt.sources import DltResource
-from dlt.sources.helpers import requests
 
-from .settings import DEFAULT_ENDPOINTS, DEFAULT_PAGE_SIZE
+from .helpers import (
+    JiraResponseError,
+    get_paginated_data,
+    nullable_key_columns,
+    unseen_rows,
+)
+from .settings import DEFAULT_ENDPOINTS, DEFAULT_PAGE_SIZE, TEndpoint
+
+__all__ = [
+    "DEFAULT_ENDPOINTS",
+    "DEFAULT_PAGE_SIZE",
+    "JiraResponseError",
+    "get_paginated_data",
+    "jira",
+    "jira_search",
+]
 
 
 @dlt.source(max_table_nesting=2)
@@ -15,7 +30,7 @@ def jira(
     subdomain: str = dlt.secrets.value,
     email: str = dlt.secrets.value,
     api_token: str = dlt.secrets.value,
-    page_size: int = DEFAULT_PAGE_SIZE,
+    page_size: Optional[int] = None,
 ) -> Iterable[DltResource]:
     """
     Jira source function that generates a list of resource functions based on endpoints.
@@ -24,20 +39,31 @@ def jira(
         subdomain: The subdomain for the Jira instance.
         email: The email to authenticate with.
         api_token: The API token to authenticate with.
-        page_size: Maximum number of results per page
+        page_size: Rows per request. Defaults to the largest page each endpoint serves.
+
     Returns:
         Iterable[DltResource]: List of resource functions.
     """
     resources = []
-    for endpoint_name, endpoint_parameters in DEFAULT_ENDPOINTS.items():
+    for endpoint_name, endpoint in DEFAULT_ENDPOINTS.items():
         res_function = dlt.resource(
-            get_paginated_data, name=endpoint_name, write_disposition="replace"
+            get_paginated_data,
+            name=endpoint_name,
+            write_disposition="replace",
+            primary_key=endpoint["primary_key"],
+            columns=nullable_key_columns(endpoint["primary_key"]),
         )(
-            **endpoint_parameters,  # type: ignore[arg-type]
+            api_path=endpoint["api_path"],
+            data_path=endpoint.get("data_path"),
+            offset_path=endpoint.get("offset_path"),
+            params=endpoint.get("params"),
+            use_cursor_pagination=endpoint.get("use_cursor_pagination", False),
+            key_field=endpoint["key_field"],
+            deduplicate=endpoint.get("deduplicate", False),
             subdomain=subdomain,
             email=email,
             api_token=api_token,
-            page_size=page_size,
+            page_size=page_size or endpoint.get("page_size", DEFAULT_PAGE_SIZE),
         )
         resources.append(res_function)
 
@@ -49,7 +75,7 @@ def jira_search(
     subdomain: str = dlt.secrets.value,
     email: str = dlt.secrets.value,
     api_token: str = dlt.secrets.value,
-    page_size: int = DEFAULT_PAGE_SIZE,
+    page_size: Optional[int] = None,
 ) -> Iterable[DltResource]:
     """
     Jira search source function that generates a resource function for searching issues.
@@ -58,92 +84,55 @@ def jira_search(
         subdomain: The subdomain for the Jira instance.
         email: The email to authenticate with.
         api_token: The API token to authenticate with.
-        page_size: Maximum number of results per page
+        page_size: Rows per request. Defaults to the largest page the endpoint serves.
+
     Returns:
         Iterable[DltResource]: Resource function for searching issues.
     """
+    issues_endpoint: TEndpoint = DEFAULT_ENDPOINTS["issues"]
+    key_field = issues_endpoint["key_field"]
 
-    @dlt.resource(write_disposition="replace")
-    def issues(jql_queries: List[str]) -> Iterable[TDataItem]:
-        api_path = "rest/api/3/search/jql"
-
+    @dlt.resource(
+        write_disposition="replace",
+        primary_key=issues_endpoint["primary_key"],
+        columns=nullable_key_columns(issues_endpoint["primary_key"]),
+    )
+    def issues(
+        jql_queries: List[str], page_limit: Optional[int] = None
+    ) -> Iterable[TDataItem]:
+        """
+        Args:
+            jql_queries: JQL queries to run. A query needs a filtering clause; Jira rejects
+                one that only sorts.
+            page_limit: Maximum number of pages to read per query, since all queries share one
+                generator and `add_limit` would bound them together.
+        """
+        # the queries overlap, so the ids seen are shared across them
+        seen: Set[Any] = set()
         for jql in jql_queries:
-            params = {
-                "fields": "*all",
-                "expand": "fields,changelog,operations,transitions,names",
-                "validateQuery": "strict",
-                "jql": jql,
-            }
+            params = {**issues_endpoint.get("params", {}), "jql": jql}
 
-            yield from get_paginated_data(
-                api_path=api_path,
-                params=params,
-                subdomain=subdomain,
-                email=email,
-                api_token=api_token,
-                page_size=page_size,
-                data_path="issues",
-                use_cursor_pagination=True,
+            pages: Iterator[TDataItem] = iter(
+                get_paginated_data(
+                    api_path=issues_endpoint["api_path"],
+                    params=params,
+                    subdomain=subdomain,
+                    email=email,
+                    api_token=api_token,
+                    page_size=page_size
+                    or issues_endpoint.get("page_size", DEFAULT_PAGE_SIZE),
+                    data_path=issues_endpoint.get("data_path"),
+                    use_cursor_pagination=issues_endpoint.get(
+                        "use_cursor_pagination", False
+                    ),
+                    key_field=key_field,
+                )
             )
+            if page_limit is not None:
+                pages = islice(pages, page_limit)
+            for page in pages:
+                rows = unseen_rows(page, key_field, seen)
+                if rows:
+                    yield rows
 
     return issues
-
-
-def get_paginated_data(
-    subdomain: str,
-    email: str,
-    api_token: str,
-    page_size: int,
-    api_path: str = "rest/api/3/search/jql",
-    data_path: Optional[str] = None,
-    params: Optional[DictStrAny] = None,
-    use_cursor_pagination: bool = False,
-) -> Iterable[TDataItem]:
-    """
-    Function to fetch paginated data from a Jira API endpoint.
-
-    Args:
-        subdomain: The subdomain for the Jira instance.
-        email: The email to authenticate with.
-        api_token: The API token to authenticate with.
-        page_size: Maximum number of results per page
-        api_path: The API path for the Jira endpoint.
-        data_path: Optional data path to extract from the response.
-        params: Optional parameters for the API request.
-        use_cursor_pagination: If True, uses cursor-based pagination (nextPageToken)
-            for the /search/jql endpoint. If False, uses offset-based pagination (startAt).
-    Yields:
-        Iterable[TDataItem]: Yields pages of data from the API.
-    """
-    url = f"https://{subdomain}.atlassian.net/{api_path}"
-    headers = {"Accept": "application/json"}
-    auth = (email, api_token)
-    params = {} if params is None else dict(params)
-    params["maxResults"] = page_size
-
-    if not use_cursor_pagination:
-        params["startAt"] = start_at = 0
-
-    while True:
-        response = requests.get(url, auth=auth, headers=headers, params=params)
-        response.raise_for_status()
-        result = response.json()
-
-        if data_path:
-            results_page = result.pop(data_path)
-        else:
-            results_page = result
-
-        if len(results_page) == 0:
-            break
-
-        yield results_page
-
-        if use_cursor_pagination:
-            next_page_token = result.get("nextPageToken")
-            if not next_page_token:
-                break
-            params["nextPageToken"] = next_page_token
-        else:
-            start_at += len(results_page)
-            params["startAt"] = start_at
