@@ -8,8 +8,9 @@ import requests_mock
 from dlt.common.normalizers.naming.snake_case import NamingConvention
 from dlt.sources.helpers.requests import Response
 
-from sources.jira import helpers, jira, jira_search
-from sources.jira.helpers import JiraResponseError, get_paginated_data
+from sources.jira import jira, jira_search
+from sources.jira.helpers import rest
+from sources.jira.helpers.rest import JiraResponseError, get_paginated_data
 from sources.jira.settings import DEFAULT_ENDPOINTS, DEFAULT_PAGE_SIZE
 
 from tests.utils import assert_load_info, load_table_counts
@@ -294,18 +295,6 @@ def test_key_field_normalizes_to_the_primary_key(endpoint_name: str) -> None:
     assert normalized == endpoint["primary_key"]
 
 
-def test_issues_in_the_jira_source_are_not_deduplicated() -> None:
-    """`jira` runs one query, so every row it gets is loaded. Only `jira_search` overlaps."""
-    with requests_mock.Mocker() as m:
-        serve(
-            m,
-            "rest/api/3/search/jql",
-            {"issues": [{"id": "1"}, {"id": "1"}], "isLast": True},
-        )
-        data = list(jira(**AUTH).resources["issues"])
-    assert [i["id"] for i in data] == ["1", "1"]
-
-
 def test_an_issue_matched_by_two_queries_is_yielded_once() -> None:
     with requests_mock.Mocker() as m:
         serve(
@@ -474,7 +463,7 @@ def test_rows_without_the_key_field_are_reported_once(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     warnings: List[str] = []
-    monkeypatch.setattr(helpers.logger, "warning", warnings.append)
+    monkeypatch.setattr(rest.logger, "warning", warnings.append)
     with requests_mock.Mocker() as m:
         serve(
             m,

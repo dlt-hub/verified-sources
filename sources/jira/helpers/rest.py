@@ -1,4 +1,5 @@
-"""Request and response handling for the Jira endpoints the source reads."""
+"""Request and response handling for the paginated Jira endpoints of users, workflows, projects
+and the issue search"""
 
 from typing import Any, Dict, Iterable, List, Optional, Set
 from urllib.parse import urlparse

@@ -1,0 +1,2619 @@
+{
+ "fields": [
+  {
+   "id": "statuscategorychangedate",
+   "key": "statuscategorychangedate",
+   "name": "Status category changed",
+   "custom": false,
+   "orderable": false,
+   "navigable": true,
+   "searchable": true,
+   "clauseNames": [
+    "statusCategoryChangedDate"
+   ],
+   "schema": {
+    "type": "datetime",
+    "system": "statuscategorychangedate"
+   }
+  },
+  {
+   "id": "issuetype",
+   "key": "issuetype",
+   "name": "Issue Type",
+   "custom": false,
+   "orderable": true,
+   "navigable": true,
+   "searchable": true,
+   "clauseNames": [
+    "issuetype",
+    "type",
+    "worktype"
+   ],
+   "schema": {
+    "type": "issuetype",
+    "system": "issuetype"
+   }
+  },
+  {
+   "id": "project",
+   "key": "project",
+   "name": "Project",
+   "custom": false,
+   "orderable": false,
+   "navigable": true,
+   "searchable": true,
+   "clauseNames": [
+    "project",
+    "spaceJira"
+   ],
+   "schema": {
+    "type": "project",
+    "system": "project"
+   }
+  },
+  {
+   "id": "fixVersions",
+   "key": "fixVersions",
+   "name": "Fix versions",
+   "custom": false,
+   "orderable": true,
+   "navigable": true,
+   "searchable": true,
+   "clauseNames": [
+    "fixVersion"
+   ],
+   "schema": {
+    "type": "array",
+    "items": "version",
+    "system": "fixVersions"
+   }
+  },
+  {
+   "id": "statusCategory",
+   "key": "statusCategory",
+   "name": "Status category",
+   "custom": false,
+   "orderable": false,
+   "navigable": true,
+   "searchable": true,
+   "clauseNames": [
+    "statusCategory"
+   ],
+   "schema": {
+    "type": "statusCategory",
+    "system": "statusCategory"
+   }
+  },
+  {
+   "id": "parent",
+   "key": "parent",
+   "name": "Parent",
+   "custom": false,
+   "orderable": true,
+   "navigable": true,
+   "searchable": true,
+   "clauseNames": [
+    "parent"
+   ]
+  },
+  {
+   "id": "customfield_10036",
+   "key": "customfield_10036",
+   "name": "Status pages",
+   "untranslatedName": "Status pages",
+   "custom": true,
+   "orderable": true,
+   "navigable": true,
+   "searchable": true,
+   "clauseNames": [],
+   "schema": {
+    "type": "array",
+    "items": "string",
+    "custom": "com.atlassian.jira.modules.servicemanagement.status-pages-entity:status-pages-entity-field-cftype",
+    "customId": 10036
+   }
+  },
+  {
+   "id": "workratio",
+   "key": "workratio",
+   "name": "Work Ratio",
+   "custom": false,
+   "orderable": false,
+   "navigable": true,
+   "searchable": true,
+   "clauseNames": [
+    "workratio"
+   ],
+   "schema": {
+    "type": "number",
+    "system": "workratio"
+   }
+  },
+  {
+   "id": "watches",
+   "key": "watches",
+   "name": "Watchers",
+   "custom": false,
+   "orderable": false,
+   "navigable": true,
+   "searchable": false,
+   "clauseNames": [
+    "watchers"
+   ],
+   "schema": {
+    "type": "watches",
+    "system": "watches"
+   }
+  },
+  {
+   "id": "issuerestriction",
+   "key": "issuerestriction",
+   "name": "Restrict to",
+   "custom": false,
+   "orderable": true,
+   "navigable": false,
+   "searchable": true,
+   "clauseNames": [],
+   "schema": {
+    "type": "issuerestriction",
+    "system": "issuerestriction"
+   }
+  },
+  {
+   "id": "created",
+   "key": "created",
+   "name": "Created",
+   "custom": false,
+   "orderable": false,
+   "navigable": true,
+   "searchable": true,
+   "clauseNames": [
+    "created",
+    "createdDate"
+   ],
+   "schema": {
+    "type": "datetime",
+    "system": "created"
+   }
+  },
+  {
+   "id": "customfield_10020",
+   "key": "customfield_10020",
+   "name": "Sprint",
+   "untranslatedName": "Sprint",
+   "custom": true,
+   "orderable": true,
+   "navigable": true,
+   "searchable": true,
+   "clauseNames": [
+    "cf[10020]",
+    "Sprint"
+   ],
+   "schema": {
+    "type": "array",
+    "items": "json",
+    "custom": "com.pyxis.greenhopper.jira:gh-sprint",
+    "customId": 10020
+   }
+  },
+  {
+   "id": "customfield_10021",
+   "key": "customfield_10021",
+   "name": "Flagged",
+   "untranslatedName": "Flagged",
+   "custom": true,
+   "orderable": true,
+   "navigable": true,
+   "searchable": true,
+   "clauseNames": [
+    "Flagged",
+    "Flagged[Checkboxes]",
+    "cf[10021]"
+   ],
+   "schema": {
+    "type": "array",
+    "items": "option",
+    "custom": "com.atlassian.jira.plugin.system.customfieldtypes:multicheckboxes",
+    "customId": 10021
+   }
+  },
+  {
+   "id": "priority",
+   "key": "priority",
+   "name": "Priority",
+   "custom": false,
+   "orderable": true,
+   "navigable": true,
+   "searchable": true,
+   "clauseNames": [
+    "priority"
+   ],
+   "schema": {
+    "type": "priority",
+    "system": "priority"
+   }
+  },
+  {
+   "id": "labels",
+   "key": "labels",
+   "name": "Labels",
+   "custom": false,
+   "orderable": true,
+   "navigable": true,
+   "searchable": true,
+   "clauseNames": [
+    "labels"
+   ],
+   "schema": {
+    "type": "array",
+    "items": "string",
+    "system": "labels"
+   }
+  },
+  {
+   "id": "customfield_10016",
+   "key": "customfield_10016",
+   "name": "Story point estimate",
+   "untranslatedName": "Story point estimate",
+   "custom": true,
+   "orderable": true,
+   "navigable": true,
+   "searchable": true,
+   "clauseNames": [
+    "cf[10016]",
+    "Story point estimate"
+   ],
+   "schema": {
+    "type": "number",
+    "custom": "com.pyxis.greenhopper.jira:jsw-story-points",
+    "customId": 10016
+   }
+  },
+  {
+   "id": "customfield_10019",
+   "key": "customfield_10019",
+   "name": "Rank",
+   "untranslatedName": "Rank",
+   "custom": true,
+   "orderable": true,
+   "navigable": true,
+   "searchable": true,
+   "clauseNames": [
+    "cf[10019]",
+    "Rank"
+   ],
+   "schema": {
+    "type": "any",
+    "custom": "com.pyxis.greenhopper.jira:gh-lexo-rank",
+    "customId": 10019
+   }
+  },
+  {
+   "id": "timeestimate",
+   "key": "timeestimate",
+   "name": "Remaining Estimate",
+   "custom": false,
+   "orderable": false,
+   "navigable": true,
+   "searchable": false,
+   "clauseNames": [
+    "remainingEstimate",
+    "timeestimate"
+   ],
+   "schema": {
+    "type": "number",
+    "system": "timeestimate"
+   }
+  },
+  {
+   "id": "aggregatetimeoriginalestimate",
+   "key": "aggregatetimeoriginalestimate",
+   "name": "Σ Original Estimate",
+   "custom": false,
+   "orderable": false,
+   "navigable": true,
+   "searchable": false,
+   "clauseNames": [],
+   "schema": {
+    "type": "number",
+    "system": "aggregatetimeoriginalestimate"
+   }
+  },
+  {
+   "id": "versions",
+   "key": "versions",
+   "name": "Affects versions",
+   "custom": false,
+   "orderable": true,
+   "navigable": true,
+   "searchable": true,
+   "clauseNames": [
+    "affectedVersion"
+   ],
+   "schema": {
+    "type": "array",
+    "items": "version",
+    "system": "versions"
+   }
+  },
+  {
+   "id": "issuelinks",
+   "key": "issuelinks",
+   "name": "Linked Issues",
+   "custom": false,
+   "orderable": true,
+   "navigable": true,
+   "searchable": true,
+   "clauseNames": [
+    "issueLink",
+    "workItemLink"
+   ],
+   "schema": {
+    "type": "array",
+    "items": "issuelinks",
+    "system": "issuelinks"
+   }
+  },
+  {
+   "id": "assignee",
+   "key": "assignee",
+   "name": "Assignee",
+   "custom": false,
+   "orderable": true,
+   "navigable": true,
+   "searchable": true,
+   "clauseNames": [
+    "assignee"
+   ],
+   "schema": {
+    "type": "user",
+    "system": "assignee"
+   }
+  },
+  {
+   "id": "updated",
+   "key": "updated",
+   "name": "Updated",
+   "custom": false,
+   "orderable": false,
+   "navigable": true,
+   "searchable": true,
+   "clauseNames": [
+    "updated",
+    "updatedDate"
+   ],
+   "schema": {
+    "type": "datetime",
+    "system": "updated"
+   }
+  },
+  {
+   "id": "status",
+   "key": "status",
+   "name": "Status",
+   "custom": false,
+   "orderable": false,
+   "navigable": true,
+   "searchable": true,
+   "clauseNames": [
+    "status"
+   ],
+   "schema": {
+    "type": "status",
+    "system": "status"
+   }
+  },
+  {
+   "id": "components",
+   "key": "components",
+   "name": "Components",
+   "custom": false,
+   "orderable": true,
+   "navigable": true,
+   "searchable": true,
+   "clauseNames": [
+    "component"
+   ],
+   "schema": {
+    "type": "array",
+    "items": "component",
+    "system": "components"
+   }
+  },
+  {
+   "id": "customfield_10050",
+   "key": "customfield_10050",
+   "name": "[dummy] Date time",
+   "untranslatedName": "[dummy] Date time",
+   "custom": true,
+   "orderable": true,
+   "navigable": true,
+   "searchable": true,
+   "clauseNames": [
+    "[dummy] Date time[Time stamp]",
+    "cf[10050]",
+    "[dummy] Date time"
+   ],
+   "schema": {
+    "type": "datetime",
+    "custom": "com.atlassian.jira.plugin.system.customfieldtypes:datetime",
+    "customId": 10050
+   }
+  },
+  {
+   "id": "timeoriginalestimate",
+   "key": "timeoriginalestimate",
+   "name": "Original estimate",
+   "custom": false,
+   "orderable": false,
+   "navigable": true,
+   "searchable": false,
+   "clauseNames": [
+    "originalEstimate",
+    "timeoriginalestimate"
+   ],
+   "schema": {
+    "type": "number",
+    "system": "timeoriginalestimate"
+   }
+  },
+  {
+   "id": "customfield_10051",
+   "key": "customfield_10051",
+   "name": "[dummy] User picker",
+   "untranslatedName": "[dummy] User picker",
+   "custom": true,
+   "orderable": true,
+   "navigable": true,
+   "searchable": true,
+   "clauseNames": [
+    "[dummy] User picker[User Picker (single user)]",
+    "cf[10051]",
+    "[dummy] User picker"
+   ],
+   "schema": {
+    "type": "user",
+    "custom": "com.atlassian.jira.plugin.system.customfieldtypes:userpicker",
+    "customId": 10051
+   }
+  },
+  {
+   "id": "customfield_10052",
+   "key": "customfield_10052",
+   "name": "[dummy] Labels",
+   "untranslatedName": "[dummy] Labels",
+   "custom": true,
+   "orderable": true,
+   "navigable": true,
+   "searchable": true,
+   "clauseNames": [
+    "[dummy] Labels[Labels]",
+    "cf[10052]",
+    "[dummy] Labels"
+   ],
+   "schema": {
+    "type": "array",
+    "items": "string",
+    "custom": "com.atlassian.jira.plugin.system.customfieldtypes:labels",
+    "customId": 10052
+   }
+  },
+  {
+   "id": "customfield_10053",
+   "key": "customfield_10053",
+   "name": "[dummy] Paragraph",
+   "untranslatedName": "[dummy] Paragraph",
+   "custom": true,
+   "orderable": true,
+   "navigable": true,
+   "searchable": true,
+   "clauseNames": [
+    "[dummy] Paragraph[Paragraph]",
+    "cf[10053]",
+    "[dummy] Paragraph"
+   ],
+   "schema": {
+    "type": "string",
+    "custom": "com.atlassian.jira.plugin.system.customfieldtypes:textarea",
+    "customId": 10053
+   }
+  },
+  {
+   "id": "description",
+   "key": "description",
+   "name": "Description",
+   "custom": false,
+   "orderable": true,
+   "navigable": true,
+   "searchable": true,
+   "clauseNames": [
+    "description"
+   ],
+   "schema": {
+    "type": "string",
+    "system": "description"
+   }
+  },
+  {
+   "id": "timetracking",
+   "key": "timetracking",
+   "name": "Time tracking",
+   "custom": false,
+   "orderable": true,
+   "navigable": false,
+   "searchable": true,
+   "clauseNames": [],
+   "schema": {
+    "type": "timetracking",
+    "system": "timetracking"
+   }
+  },
+  {
+   "id": "customfield_10015",
+   "key": "customfield_10015",
+   "name": "Start date",
+   "untranslatedName": "Start date",
+   "custom": true,
+   "orderable": true,
+   "navigable": true,
+   "searchable": true,
+   "clauseNames": [
+    "cf[10015]",
+    "Start date",
+    "Start date[Date]"
+   ],
+   "schema": {
+    "type": "date",
+    "custom": "com.atlassian.jira.plugin.system.customfieldtypes:datepicker",
+    "customId": 10015
+   }
+  },
+  {
+   "id": "customfield_10049",
+   "key": "customfield_10049",
+   "name": "[dummy] Date picker",
+   "untranslatedName": "[dummy] Date picker",
+   "custom": true,
+   "orderable": true,
+   "navigable": true,
+   "searchable": true,
+   "clauseNames": [
+    "[dummy] Date picker[Date]",
+    "cf[10049]",
+    "[dummy] Date picker"
+   ],
+   "schema": {
+    "type": "date",
+    "custom": "com.atlassian.jira.plugin.system.customfieldtypes:datepicker",
+    "customId": 10049
+   }
+  },
+  {
+   "id": "attachment",
+   "key": "attachment",
+   "name": "Attachment",
+   "custom": false,
+   "orderable": true,
+   "navigable": false,
+   "searchable": true,
+   "clauseNames": [
+    "attachments"
+   ],
+   "schema": {
+    "type": "array",
+    "items": "attachment",
+    "system": "attachment"
+   }
+  },
+  {
+   "id": "aggregatetimeestimate",
+   "key": "aggregatetimeestimate",
+   "name": "Σ Remaining Estimate",
+   "custom": false,
+   "orderable": false,
+   "navigable": true,
+   "searchable": false,
+   "clauseNames": [],
+   "schema": {
+    "type": "number",
+    "system": "aggregatetimeestimate"
+   }
+  },
+  {
+   "id": "summary",
+   "key": "summary",
+   "name": "Summary",
+   "custom": false,
+   "orderable": true,
+   "navigable": true,
+   "searchable": true,
+   "clauseNames": [
+    "summary"
+   ],
+   "schema": {
+    "type": "string",
+    "system": "summary"
+   }
+  },
+  {
+   "id": "creator",
+   "key": "creator",
+   "name": "Creator",
+   "custom": false,
+   "orderable": false,
+   "navigable": true,
+   "searchable": true,
+   "clauseNames": [
+    "creator"
+   ],
+   "schema": {
+    "type": "user",
+    "system": "creator"
+   }
+  },
+  {
+   "id": "subtasks",
+   "key": "subtasks",
+   "name": "Sub-tasks",
+   "custom": false,
+   "orderable": false,
+   "navigable": true,
+   "searchable": false,
+   "clauseNames": [
+    "subtasks"
+   ],
+   "schema": {
+    "type": "array",
+    "items": "issuelinks",
+    "system": "subtasks"
+   }
+  },
+  {
+   "id": "customfield_10043",
+   "key": "customfield_10043",
+   "name": "Story Points",
+   "untranslatedName": "Story Points",
+   "custom": true,
+   "orderable": true,
+   "navigable": true,
+   "searchable": true,
+   "clauseNames": [
+    "Story Points[Number]",
+    "cf[10043]",
+    "Story Points"
+   ],
+   "schema": {
+    "type": "number",
+    "custom": "com.atlassian.jira.plugin.system.customfieldtypes:float",
+    "customId": 10043
+   }
+  },
+  {
+   "id": "reporter",
+   "key": "reporter",
+   "name": "Reporter",
+   "custom": false,
+   "orderable": true,
+   "navigable": true,
+   "searchable": true,
+   "clauseNames": [
+    "reporter"
+   ],
+   "schema": {
+    "type": "user",
+    "system": "reporter"
+   }
+  },
+  {
+   "id": "aggregateprogress",
+   "key": "aggregateprogress",
+   "name": "Σ Progress",
+   "custom": false,
+   "orderable": false,
+   "navigable": true,
+   "searchable": false,
+   "clauseNames": [],
+   "schema": {
+    "type": "progress",
+    "system": "aggregateprogress"
+   }
+  },
+  {
+   "id": "customfield_10044",
+   "key": "customfield_10044",
+   "name": "[dummy] Single select",
+   "untranslatedName": "[dummy] Single select",
+   "custom": true,
+   "orderable": true,
+   "navigable": true,
+   "searchable": true,
+   "clauseNames": [
+    "[dummy] Single select",
+    "[dummy] Single select[Dropdown]",
+    "cf[10044]"
+   ],
+   "schema": {
+    "type": "option",
+    "custom": "com.atlassian.jira.plugin.system.customfieldtypes:select",
+    "customId": 10044
+   }
+  },
+  {
+   "id": "customfield_10045",
+   "key": "customfield_10045",
+   "name": "[dummy] Multi select",
+   "untranslatedName": "[dummy] Multi select",
+   "custom": true,
+   "orderable": true,
+   "navigable": true,
+   "searchable": true,
+   "clauseNames": [
+    "[dummy] Multi select[Select List (multiple choices)]",
+    "cf[10045]",
+    "[dummy] Multi select"
+   ],
+   "schema": {
+    "type": "array",
+    "items": "option",
+    "custom": "com.atlassian.jira.plugin.system.customfieldtypes:multiselect",
+    "customId": 10045
+   }
+  },
+  {
+   "id": "customfield_10046",
+   "key": "customfield_10046",
+   "name": "[dummy] Cascading select",
+   "untranslatedName": "[dummy] Cascading select",
+   "custom": true,
+   "orderable": true,
+   "navigable": true,
+   "searchable": true,
+   "clauseNames": [
+    "cf[10046]",
+    "[dummy] Cascading select[Select List (cascading)]",
+    "[dummy] Cascading select"
+   ],
+   "schema": {
+    "type": "option-with-child",
+    "custom": "com.atlassian.jira.plugin.system.customfieldtypes:cascadingselect",
+    "customId": 10046
+   }
+  },
+  {
+   "id": "customfield_10002",
+   "key": "customfield_10002",
+   "name": "Organizations",
+   "untranslatedName": "Organizations",
+   "custom": true,
+   "orderable": true,
+   "navigable": true,
+   "searchable": true,
+   "clauseNames": [
+    "cf[10002]",
+    "Organizations"
+   ],
+   "schema": {
+    "type": "array",
+    "items": "sd-customerorganization",
+    "custom": "com.atlassian.servicedesk:sd-customer-organizations",
+    "customId": 10002
+   }
+  },
+  {
+   "id": "customfield_10047",
+   "key": "customfield_10047",
+   "name": "[dummy] Number",
+   "untranslatedName": "[dummy] Number",
+   "custom": true,
+   "orderable": true,
+   "navigable": true,
+   "searchable": true,
+   "clauseNames": [
+    "[dummy] Number[Number]",
+    "cf[10047]",
+    "[dummy] Number"
+   ],
+   "schema": {
+    "type": "number",
+    "custom": "com.atlassian.jira.plugin.system.customfieldtypes:float",
+    "customId": 10047
+   }
+  },
+  {
+   "id": "customfield_10048",
+   "key": "customfield_10048",
+   "name": "[dummy] URL",
+   "untranslatedName": "[dummy] URL",
+   "custom": true,
+   "orderable": true,
+   "navigable": true,
+   "searchable": true,
+   "clauseNames": [
+    "[dummy] URL",
+    "cf[10048]",
+    "[dummy] URL[URL Field]"
+   ],
+   "schema": {
+    "type": "string",
+    "custom": "com.atlassian.jira.plugin.system.customfieldtypes:url",
+    "customId": 10048
+   }
+  },
+  {
+   "id": "environment",
+   "key": "environment",
+   "name": "Environment",
+   "custom": false,
+   "orderable": true,
+   "navigable": true,
+   "searchable": true,
+   "clauseNames": [
+    "environment"
+   ],
+   "schema": {
+    "type": "string",
+    "system": "environment"
+   }
+  },
+  {
+   "id": "duedate",
+   "key": "duedate",
+   "name": "Due date",
+   "custom": false,
+   "orderable": true,
+   "navigable": true,
+   "searchable": true,
+   "clauseNames": [
+    "due",
+    "duedate"
+   ],
+   "schema": {
+    "type": "date",
+    "system": "duedate"
+   }
+  },
+  {
+   "id": "progress",
+   "key": "progress",
+   "name": "Progress",
+   "custom": false,
+   "orderable": false,
+   "navigable": true,
+   "searchable": false,
+   "clauseNames": [
+    "progress"
+   ],
+   "schema": {
+    "type": "progress",
+    "system": "progress"
+   }
+  },
+  {
+   "id": "votes",
+   "key": "votes",
+   "name": "Votes",
+   "custom": false,
+   "orderable": false,
+   "navigable": true,
+   "searchable": false,
+   "clauseNames": [
+    "votes"
+   ],
+   "schema": {
+    "type": "votes",
+    "system": "votes"
+   }
+  }
+ ],
+ "issues": [
+  {
+   "expand": "operations,versionedRepresentations,editmeta,changelog,renderedFields",
+   "id": "10004",
+   "self": "https://test.atlassian.net/rest/api/2/issue/10004",
+   "key": "KAN-5",
+   "fields": {
+    "statuscategorychangedate": "2026-10-26T13:11:07.951+0100",
+    "issuetype": {
+     "self": "https://test.atlassian.net/rest/api/2/issuetype/10003",
+     "id": "10003",
+     "description": "Tasks track small, distinct pieces of work.",
+     "iconUrl": "https://test.atlassian.net/rest/api/2/universal_avatar/view/type/issuetype/avatar/10318?size=medium",
+     "name": "Task",
+     "subtask": false,
+     "avatarId": 10318,
+     "entityId": "de791649-09c2-428b-b6b1-84471ec75f78",
+     "hierarchyLevel": 0
+    },
+    "parent": {
+     "id": "10000",
+     "key": "KAN-1",
+     "self": "https://test.atlassian.net/rest/api/2/issue/10000",
+     "fields": {
+      "summary": "[test] Bugs",
+      "status": {
+       "self": "https://test.atlassian.net/rest/api/2/status/10000",
+       "description": "",
+       "iconUrl": "https://test.atlassian.net/images/icons/statuses/generic.png",
+       "name": "To Do",
+       "id": "10000",
+       "statusCategory": {
+        "self": "https://test.atlassian.net/rest/api/2/statuscategory/2",
+        "id": 2,
+        "key": "new",
+        "colorName": "blue-gray",
+        "name": "To Do"
+       }
+      },
+      "priority": {
+       "self": "https://test.atlassian.net/rest/api/2/priority/3",
+       "iconUrl": "https://test.atlassian.net/images/icons/priorities/medium_new.svg",
+       "name": "Medium",
+       "id": "3"
+      },
+      "issuetype": {
+       "self": "https://test.atlassian.net/rest/api/2/issuetype/10001",
+       "id": "10001",
+       "description": "Epics track collections of related bugs, stories, and tasks.",
+       "iconUrl": "https://test.atlassian.net/rest/api/2/universal_avatar/view/type/issuetype/avatar/10307?size=medium",
+       "name": "Epic",
+       "subtask": false,
+       "avatarId": 10307,
+       "entityId": "dd176c79-469e-47a6-9869-751f77334bc0",
+       "hierarchyLevel": 1
+      }
+     }
+    },
+    "components": [],
+    "project": {
+     "self": "https://test.atlassian.net/rest/api/2/project/10000",
+     "id": "10000",
+     "key": "KAN",
+     "name": "dlthub",
+     "projectTypeKey": "software",
+     "simplified": true,
+     "avatarUrls": {
+      "48x48": "https://test.atlassian.net/rest/api/2/universal_avatar/view/type/project/avatar/10400",
+      "24x24": "https://test.atlassian.net/rest/api/2/universal_avatar/view/type/project/avatar/10400?size=small",
+      "16x16": "https://test.atlassian.net/rest/api/2/universal_avatar/view/type/project/avatar/10400?size=xsmall",
+      "32x32": "https://test.atlassian.net/rest/api/2/universal_avatar/view/type/project/avatar/10400?size=medium"
+     }
+    },
+    "description": "Test data copied from public GitHub issue: [https://github.com/dlt-hub/dlt/issues/1710|https://github.com/dlt-hub/dlt/issues/1710|smart-link]",
+    "fixVersions": [],
+    "statusCategory": {
+     "self": "https://test.atlassian.net/rest/api/2/statuscategory/2",
+     "id": 2,
+     "key": "new",
+     "colorName": "blue-gray",
+     "name": "To Do"
+    },
+    "timetracking": {},
+    "attachment": [],
+    "workratio": -1,
+    "summary": "High memory usage with incremental",
+    "issuerestriction": {
+     "issuerestrictions": {},
+     "shouldDisplay": true
+    },
+    "watches": {
+     "self": "https://test.atlassian.net/rest/api/2/issue/KAN-5/watchers",
+     "watchCount": 1,
+     "isWatching": true
+    },
+    "creator": {
+     "self": "https://test.atlassian.net/rest/api/2/user?accountId=account-1",
+     "accountId": "account-1",
+     "emailAddress": "account-1@example.com",
+     "avatarUrls": {
+      "48x48": "https://avatar.example.com/account-1/48x48",
+      "24x24": "https://avatar.example.com/account-1/24x24",
+      "16x16": "https://avatar.example.com/account-1/16x16",
+      "32x32": "https://avatar.example.com/account-1/32x32"
+     },
+     "displayName": "User account-1",
+     "active": true,
+     "timeZone": "Europe/Zurich",
+     "accountType": "atlassian"
+    },
+    "subtasks": [],
+    "created": "2026-10-26T13:11:07.558+0100",
+    "customfield_10021": [
+     {
+      "self": "https://test.atlassian.net/rest/api/2/customFieldOption/10019",
+      "value": "Impediment",
+      "id": "10019"
+     }
+    ],
+    "reporter": {
+     "self": "https://test.atlassian.net/rest/api/2/user?accountId=account-1",
+     "accountId": "account-1",
+     "emailAddress": "account-1@example.com",
+     "avatarUrls": {
+      "48x48": "https://avatar.example.com/account-1/48x48",
+      "24x24": "https://avatar.example.com/account-1/24x24",
+      "16x16": "https://avatar.example.com/account-1/16x16",
+      "32x32": "https://avatar.example.com/account-1/32x32"
+     },
+     "displayName": "User account-1",
+     "active": true,
+     "timeZone": "Europe/Zurich",
+     "accountType": "atlassian"
+    },
+    "aggregateprogress": {
+     "progress": 0,
+     "total": 0
+    },
+    "priority": {
+     "self": "https://test.atlassian.net/rest/api/2/priority/1",
+     "iconUrl": "https://test.atlassian.net/images/icons/priorities/highest_new.svg",
+     "name": "Highest",
+     "id": "1"
+    },
+    "labels": [
+     "bug",
+     "test-data"
+    ],
+    "customfield_10019": "0|i0000n:",
+    "versions": [],
+    "duedate": "2026-10-30",
+    "progress": {
+     "progress": 0,
+     "total": 0
+    },
+    "issuelinks": [
+     {
+      "id": "10001",
+      "self": "https://test.atlassian.net/rest/api/2/issueLink/10001",
+      "type": {
+       "id": "10003",
+       "name": "Relates",
+       "inward": "relates to",
+       "outward": "relates to",
+       "self": "https://test.atlassian.net/rest/api/2/issueLinkType/10003"
+      },
+      "outwardIssue": {
+       "id": "10007",
+       "key": "KAN-8",
+       "self": "https://test.atlassian.net/rest/api/2/issue/10007",
+       "fields": {
+        "summary": "Document how to perform incremental loads when source data doesn't have a cursor field",
+        "status": {
+         "self": "https://test.atlassian.net/rest/api/2/status/3",
+         "description": "This issue is being actively worked on at the moment by the assignee.",
+         "iconUrl": "https://test.atlassian.net/images/icons/statuses/inprogress.png",
+         "name": "In Progress",
+         "id": "3",
+         "statusCategory": {
+          "self": "https://test.atlassian.net/rest/api/2/statuscategory/4",
+          "id": 4,
+          "key": "indeterminate",
+          "colorName": "yellow",
+          "name": "In Progress"
+         }
+        },
+        "priority": {
+         "self": "https://test.atlassian.net/rest/api/2/priority/3",
+         "iconUrl": "https://test.atlassian.net/images/icons/priorities/medium_new.svg",
+         "name": "Medium",
+         "id": "3"
+        },
+        "issuetype": {
+         "self": "https://test.atlassian.net/rest/api/2/issuetype/10003",
+         "id": "10003",
+         "description": "Tasks track small, distinct pieces of work.",
+         "iconUrl": "https://test.atlassian.net/rest/api/2/universal_avatar/view/type/issuetype/avatar/10318?size=medium",
+         "name": "Task",
+         "subtask": false,
+         "avatarId": 10318,
+         "entityId": "de791649-09c2-428b-b6b1-84471ec75f78",
+         "hierarchyLevel": 0
+        }
+       }
+      }
+     }
+    ],
+    "votes": {
+     "self": "https://test.atlassian.net/rest/api/2/issue/KAN-5/votes",
+     "votes": 0,
+     "hasVoted": false
+    },
+    "updated": "2026-10-26T14:50:47.297+0100",
+    "status": {
+     "self": "https://test.atlassian.net/rest/api/2/status/10000",
+     "description": "",
+     "iconUrl": "https://test.atlassian.net/images/icons/statuses/generic.png",
+     "name": "To Do",
+     "id": "10000",
+     "statusCategory": {
+      "self": "https://test.atlassian.net/rest/api/2/statuscategory/2",
+      "id": 2,
+      "key": "new",
+      "colorName": "blue-gray",
+      "name": "To Do"
+     }
+    }
+   }
+  },
+  {
+   "expand": "operations,versionedRepresentations,editmeta,changelog,customfield_10010.requestTypePractice,renderedFields",
+   "id": "10028",
+   "self": "https://test.atlassian.net/rest/api/2/issue/10028",
+   "key": "TST-13",
+   "fields": {
+    "statuscategorychangedate": "2026-10-26T16:48:42.017+0100",
+    "issuetype": {
+     "self": "https://test.atlassian.net/rest/api/2/issuetype/10005",
+     "id": "10005",
+     "description": "A small, distinct piece of work.",
+     "iconUrl": "https://test.atlassian.net/rest/api/2/universal_avatar/view/type/issuetype/avatar/10318?size=medium",
+     "name": "Task",
+     "subtask": false,
+     "avatarId": 10318,
+     "hierarchyLevel": 0
+    },
+    "project": {
+     "self": "https://test.atlassian.net/rest/api/2/project/10001",
+     "id": "10001",
+     "key": "TST",
+     "name": "dlt test scrum",
+     "projectTypeKey": "software",
+     "simplified": false,
+     "avatarUrls": {
+      "48x48": "https://test.atlassian.net/rest/api/2/universal_avatar/view/type/project/avatar/10425",
+      "24x24": "https://test.atlassian.net/rest/api/2/universal_avatar/view/type/project/avatar/10425?size=small",
+      "16x16": "https://test.atlassian.net/rest/api/2/universal_avatar/view/type/project/avatar/10425?size=xsmall",
+      "32x32": "https://test.atlassian.net/rest/api/2/universal_avatar/view/type/project/avatar/10425?size=medium"
+     }
+    },
+    "fixVersions": [],
+    "statusCategory": {
+     "self": "https://test.atlassian.net/rest/api/2/statuscategory/2",
+     "id": 2,
+     "key": "new",
+     "colorName": "blue-gray",
+     "name": "To Do"
+    },
+    "customfield_10036": [],
+    "workratio": -1,
+    "watches": {
+     "self": "https://test.atlassian.net/rest/api/2/issue/TST-13/watchers",
+     "watchCount": 1,
+     "isWatching": true
+    },
+    "created": "2026-10-26T16:48:41.788+0100",
+    "customfield_10020": [
+     {
+      "id": 4,
+      "name": "TST Sprint 3",
+      "state": "future",
+      "boardId": 2,
+      "goal": "[dummy] schema contracts"
+     }
+    ],
+    "priority": {
+     "self": "https://test.atlassian.net/rest/api/2/priority/4",
+     "iconUrl": "https://test.atlassian.net/images/icons/priorities/low_new.svg",
+     "name": "Low",
+     "id": "4"
+    },
+    "labels": [
+     "test-data"
+    ],
+    "customfield_10019": "0|i00068:",
+    "versions": [],
+    "issuelinks": [],
+    "updated": "2026-10-26T16:49:09.690+0100",
+    "status": {
+     "self": "https://test.atlassian.net/rest/api/2/status/10002",
+     "description": "",
+     "iconUrl": "https://test.atlassian.net/images/icons/statuses/generic.png",
+     "name": "To Do",
+     "id": "10002",
+     "statusCategory": {
+      "self": "https://test.atlassian.net/rest/api/2/statuscategory/2",
+      "id": 2,
+      "key": "new",
+      "colorName": "blue-gray",
+      "name": "To Do"
+     }
+    },
+    "components": [],
+    "description": "[dummy] plain task, mostly empty fields",
+    "timetracking": {},
+    "attachment": [],
+    "summary": "[dummy] Bump CI matrix to Python 3.13",
+    "creator": {
+     "self": "https://test.atlassian.net/rest/api/2/user?accountId=account-1",
+     "accountId": "account-1",
+     "emailAddress": "account-1@example.com",
+     "avatarUrls": {
+      "48x48": "https://avatar.example.com/account-1/48x48",
+      "24x24": "https://avatar.example.com/account-1/24x24",
+      "16x16": "https://avatar.example.com/account-1/16x16",
+      "32x32": "https://avatar.example.com/account-1/32x32"
+     },
+     "displayName": "User account-1",
+     "active": true,
+     "timeZone": "Europe/Zurich",
+     "accountType": "atlassian"
+    },
+    "subtasks": [],
+    "reporter": {
+     "self": "https://test.atlassian.net/rest/api/2/user?accountId=account-1",
+     "accountId": "account-1",
+     "emailAddress": "account-1@example.com",
+     "avatarUrls": {
+      "48x48": "https://avatar.example.com/account-1/48x48",
+      "24x24": "https://avatar.example.com/account-1/24x24",
+      "16x16": "https://avatar.example.com/account-1/16x16",
+      "32x32": "https://avatar.example.com/account-1/32x32"
+     },
+     "displayName": "User account-1",
+     "active": true,
+     "timeZone": "Europe/Zurich",
+     "accountType": "atlassian"
+    },
+    "aggregateprogress": {
+     "progress": 0,
+     "total": 0
+    },
+    "customfield_10002": [],
+    "progress": {
+     "progress": 0,
+     "total": 0
+    },
+    "votes": {
+     "self": "https://test.atlassian.net/rest/api/2/issue/TST-13/votes",
+     "votes": 0,
+     "hasVoted": false
+    }
+   }
+  },
+  {
+   "expand": "operations,versionedRepresentations,editmeta,changelog,customfield_10010.requestTypePractice,renderedFields",
+   "id": "10033",
+   "self": "https://test.atlassian.net/rest/api/2/issue/10033",
+   "key": "TST-17",
+   "fields": {
+    "statuscategorychangedate": "2026-10-26T19:24:02.055+0100",
+    "issuetype": {
+     "self": "https://test.atlassian.net/rest/api/2/issuetype/10005",
+     "id": "10005",
+     "description": "A small, distinct piece of work.",
+     "iconUrl": "https://test.atlassian.net/rest/api/2/universal_avatar/view/type/issuetype/avatar/10318?size=medium",
+     "name": "Task",
+     "subtask": false,
+     "avatarId": 10318,
+     "hierarchyLevel": 0
+    },
+    "project": {
+     "self": "https://test.atlassian.net/rest/api/2/project/10001",
+     "id": "10001",
+     "key": "TST",
+     "name": "dlt test scrum",
+     "projectTypeKey": "software",
+     "simplified": false,
+     "avatarUrls": {
+      "48x48": "https://test.atlassian.net/rest/api/2/universal_avatar/view/type/project/avatar/10425",
+      "24x24": "https://test.atlassian.net/rest/api/2/universal_avatar/view/type/project/avatar/10425?size=small",
+      "16x16": "https://test.atlassian.net/rest/api/2/universal_avatar/view/type/project/avatar/10425?size=xsmall",
+      "32x32": "https://test.atlassian.net/rest/api/2/universal_avatar/view/type/project/avatar/10425?size=medium"
+     }
+    },
+    "fixVersions": [],
+    "statusCategory": {
+     "self": "https://test.atlassian.net/rest/api/2/statuscategory/2",
+     "id": 2,
+     "key": "new",
+     "colorName": "blue-gray",
+     "name": "To Do"
+    },
+    "customfield_10036": [],
+    "workratio": -1,
+    "watches": {
+     "self": "https://test.atlassian.net/rest/api/2/issue/TST-17/watchers",
+     "watchCount": 1,
+     "isWatching": true
+    },
+    "created": "2026-10-26T19:24:01.833+0100",
+    "priority": {
+     "self": "https://test.atlassian.net/rest/api/2/priority/3",
+     "iconUrl": "https://test.atlassian.net/images/icons/priorities/medium_new.svg",
+     "name": "Medium",
+     "id": "3"
+    },
+    "labels": [
+     "dlt-seed",
+     "dlt-seed-attachment"
+    ],
+    "customfield_10019": "0|i0006z:",
+    "versions": [],
+    "issuelinks": [],
+    "updated": "2026-10-26T19:24:02.851+0100",
+    "status": {
+     "self": "https://test.atlassian.net/rest/api/2/status/10002",
+     "description": "",
+     "iconUrl": "https://test.atlassian.net/images/icons/statuses/generic.png",
+     "name": "To Do",
+     "id": "10002",
+     "statusCategory": {
+      "self": "https://test.atlassian.net/rest/api/2/statuscategory/2",
+      "id": 2,
+      "key": "new",
+      "colorName": "blue-gray",
+      "name": "To Do"
+     }
+    },
+    "components": [],
+    "timetracking": {},
+    "attachment": [
+     {
+      "self": "https://test.atlassian.net/rest/api/2/attachment/10003",
+      "id": "10003",
+      "filename": "dlt-seed.csv",
+      "author": {
+       "self": "https://test.atlassian.net/rest/api/2/user?accountId=account-1",
+       "accountId": "account-1",
+       "emailAddress": "account-1@example.com",
+       "avatarUrls": {
+        "48x48": "https://avatar.example.com/account-1/48x48",
+        "24x24": "https://avatar.example.com/account-1/24x24",
+        "16x16": "https://avatar.example.com/account-1/16x16",
+        "32x32": "https://avatar.example.com/account-1/32x32"
+       },
+       "displayName": "User account-1",
+       "active": true,
+       "timeZone": "Europe/Zurich",
+       "accountType": "atlassian"
+      },
+      "created": "2026-10-26T19:24:02.340+0100",
+      "size": 20,
+      "mimeType": "text/csv",
+      "content": "https://test.atlassian.net/rest/api/2/attachment/content/10003"
+     }
+    ],
+    "summary": "[dlt-seed] attachment",
+    "creator": {
+     "self": "https://test.atlassian.net/rest/api/2/user?accountId=account-1",
+     "accountId": "account-1",
+     "emailAddress": "account-1@example.com",
+     "avatarUrls": {
+      "48x48": "https://avatar.example.com/account-1/48x48",
+      "24x24": "https://avatar.example.com/account-1/24x24",
+      "16x16": "https://avatar.example.com/account-1/16x16",
+      "32x32": "https://avatar.example.com/account-1/32x32"
+     },
+     "displayName": "User account-1",
+     "active": true,
+     "timeZone": "Europe/Zurich",
+     "accountType": "atlassian"
+    },
+    "subtasks": [],
+    "reporter": {
+     "self": "https://test.atlassian.net/rest/api/2/user?accountId=account-1",
+     "accountId": "account-1",
+     "emailAddress": "account-1@example.com",
+     "avatarUrls": {
+      "48x48": "https://avatar.example.com/account-1/48x48",
+      "24x24": "https://avatar.example.com/account-1/24x24",
+      "16x16": "https://avatar.example.com/account-1/16x16",
+      "32x32": "https://avatar.example.com/account-1/32x32"
+     },
+     "displayName": "User account-1",
+     "active": true,
+     "timeZone": "Europe/Zurich",
+     "accountType": "atlassian"
+    },
+    "aggregateprogress": {
+     "progress": 0,
+     "total": 0
+    },
+    "customfield_10002": [],
+    "progress": {
+     "progress": 0,
+     "total": 0
+    },
+    "votes": {
+     "self": "https://test.atlassian.net/rest/api/2/issue/TST-17/votes",
+     "votes": 0,
+     "hasVoted": false
+    }
+   }
+  },
+  {
+   "expand": "operations,versionedRepresentations,editmeta,changelog,customfield_10010.requestTypePractice,renderedFields",
+   "id": "10034",
+   "self": "https://test.atlassian.net/rest/api/2/issue/10034",
+   "key": "TST-18",
+   "fields": {
+    "statuscategorychangedate": "2026-10-26T19:24:03.826+0100",
+    "issuetype": {
+     "self": "https://test.atlassian.net/rest/api/2/issuetype/10005",
+     "id": "10005",
+     "description": "A small, distinct piece of work.",
+     "iconUrl": "https://test.atlassian.net/rest/api/2/universal_avatar/view/type/issuetype/avatar/10318?size=medium",
+     "name": "Task",
+     "subtask": false,
+     "avatarId": 10318,
+     "hierarchyLevel": 0
+    },
+    "project": {
+     "self": "https://test.atlassian.net/rest/api/2/project/10001",
+     "id": "10001",
+     "key": "TST",
+     "name": "dlt test scrum",
+     "projectTypeKey": "software",
+     "simplified": false,
+     "avatarUrls": {
+      "48x48": "https://test.atlassian.net/rest/api/2/universal_avatar/view/type/project/avatar/10425",
+      "24x24": "https://test.atlassian.net/rest/api/2/universal_avatar/view/type/project/avatar/10425?size=small",
+      "16x16": "https://test.atlassian.net/rest/api/2/universal_avatar/view/type/project/avatar/10425?size=xsmall",
+      "32x32": "https://test.atlassian.net/rest/api/2/universal_avatar/view/type/project/avatar/10425?size=medium"
+     }
+    },
+    "fixVersions": [],
+    "statusCategory": {
+     "self": "https://test.atlassian.net/rest/api/2/statuscategory/2",
+     "id": 2,
+     "key": "new",
+     "colorName": "blue-gray",
+     "name": "To Do"
+    },
+    "customfield_10036": [],
+    "workratio": -1,
+    "watches": {
+     "self": "https://test.atlassian.net/rest/api/2/issue/TST-18/watchers",
+     "watchCount": 1,
+     "isWatching": true
+    },
+    "created": "2026-10-26T19:24:03.518+0100",
+    "priority": {
+     "self": "https://test.atlassian.net/rest/api/2/priority/3",
+     "iconUrl": "https://test.atlassian.net/images/icons/priorities/medium_new.svg",
+     "name": "Medium",
+     "id": "3"
+    },
+    "labels": [
+     "dlt-seed",
+     "dlt-seed-links-and-subtasks"
+    ],
+    "customfield_10019": "0|i00078:",
+    "versions": [],
+    "issuelinks": [
+     {
+      "id": "10006",
+      "self": "https://test.atlassian.net/rest/api/2/issueLink/10006",
+      "type": {
+       "id": "10000",
+       "name": "Blocks",
+       "inward": "is blocked by",
+       "outward": "blocks",
+       "self": "https://test.atlassian.net/rest/api/2/issueLinkType/10000"
+      },
+      "outwardIssue": {
+       "id": "10037",
+       "key": "TST-21",
+       "self": "https://test.atlassian.net/rest/api/2/issue/10037",
+       "fields": {
+        "summary": "[dlt-seed] links other",
+        "status": {
+         "self": "https://test.atlassian.net/rest/api/2/status/10002",
+         "description": "",
+         "iconUrl": "https://test.atlassian.net/images/icons/statuses/generic.png",
+         "name": "To Do",
+         "id": "10002",
+         "statusCategory": {
+          "self": "https://test.atlassian.net/rest/api/2/statuscategory/2",
+          "id": 2,
+          "key": "new",
+          "colorName": "blue-gray",
+          "name": "To Do"
+         }
+        },
+        "priority": {
+         "self": "https://test.atlassian.net/rest/api/2/priority/3",
+         "iconUrl": "https://test.atlassian.net/images/icons/priorities/medium_new.svg",
+         "name": "Medium",
+         "id": "3"
+        },
+        "issuetype": {
+         "self": "https://test.atlassian.net/rest/api/2/issuetype/10005",
+         "id": "10005",
+         "description": "A small, distinct piece of work.",
+         "iconUrl": "https://test.atlassian.net/rest/api/2/universal_avatar/view/type/issuetype/avatar/10318?size=medium",
+         "name": "Task",
+         "subtask": false,
+         "avatarId": 10318,
+         "hierarchyLevel": 0
+        }
+       }
+      }
+     },
+     {
+      "id": "10007",
+      "self": "https://test.atlassian.net/rest/api/2/issueLink/10007",
+      "type": {
+       "id": "10003",
+       "name": "Relates",
+       "inward": "relates to",
+       "outward": "relates to",
+       "self": "https://test.atlassian.net/rest/api/2/issueLinkType/10003"
+      },
+      "outwardIssue": {
+       "id": "10037",
+       "key": "TST-21",
+       "self": "https://test.atlassian.net/rest/api/2/issue/10037",
+       "fields": {
+        "summary": "[dlt-seed] links other",
+        "status": {
+         "self": "https://test.atlassian.net/rest/api/2/status/10002",
+         "description": "",
+         "iconUrl": "https://test.atlassian.net/images/icons/statuses/generic.png",
+         "name": "To Do",
+         "id": "10002",
+         "statusCategory": {
+          "self": "https://test.atlassian.net/rest/api/2/statuscategory/2",
+          "id": 2,
+          "key": "new",
+          "colorName": "blue-gray",
+          "name": "To Do"
+         }
+        },
+        "priority": {
+         "self": "https://test.atlassian.net/rest/api/2/priority/3",
+         "iconUrl": "https://test.atlassian.net/images/icons/priorities/medium_new.svg",
+         "name": "Medium",
+         "id": "3"
+        },
+        "issuetype": {
+         "self": "https://test.atlassian.net/rest/api/2/issuetype/10005",
+         "id": "10005",
+         "description": "A small, distinct piece of work.",
+         "iconUrl": "https://test.atlassian.net/rest/api/2/universal_avatar/view/type/issuetype/avatar/10318?size=medium",
+         "name": "Task",
+         "subtask": false,
+         "avatarId": 10318,
+         "hierarchyLevel": 0
+        }
+       }
+      }
+     }
+    ],
+    "updated": "2026-10-26T19:24:06.925+0100",
+    "status": {
+     "self": "https://test.atlassian.net/rest/api/2/status/10002",
+     "description": "",
+     "iconUrl": "https://test.atlassian.net/images/icons/statuses/generic.png",
+     "name": "To Do",
+     "id": "10002",
+     "statusCategory": {
+      "self": "https://test.atlassian.net/rest/api/2/statuscategory/2",
+      "id": 2,
+      "key": "new",
+      "colorName": "blue-gray",
+      "name": "To Do"
+     }
+    },
+    "components": [],
+    "timetracking": {},
+    "attachment": [],
+    "summary": "[dlt-seed] links parent",
+    "creator": {
+     "self": "https://test.atlassian.net/rest/api/2/user?accountId=account-1",
+     "accountId": "account-1",
+     "emailAddress": "account-1@example.com",
+     "avatarUrls": {
+      "48x48": "https://avatar.example.com/account-1/48x48",
+      "24x24": "https://avatar.example.com/account-1/24x24",
+      "16x16": "https://avatar.example.com/account-1/16x16",
+      "32x32": "https://avatar.example.com/account-1/32x32"
+     },
+     "displayName": "User account-1",
+     "active": true,
+     "timeZone": "Europe/Zurich",
+     "accountType": "atlassian"
+    },
+    "subtasks": [
+     {
+      "id": "10035",
+      "key": "TST-19",
+      "self": "https://test.atlassian.net/rest/api/2/issue/10035",
+      "fields": {
+       "summary": "[dlt-seed] subtask 1",
+       "status": {
+        "self": "https://test.atlassian.net/rest/api/2/status/10002",
+        "description": "",
+        "iconUrl": "https://test.atlassian.net/images/icons/statuses/generic.png",
+        "name": "To Do",
+        "id": "10002",
+        "statusCategory": {
+         "self": "https://test.atlassian.net/rest/api/2/statuscategory/2",
+         "id": 2,
+         "key": "new",
+         "colorName": "blue-gray",
+         "name": "To Do"
+        }
+       },
+       "priority": {
+        "self": "https://test.atlassian.net/rest/api/2/priority/3",
+        "iconUrl": "https://test.atlassian.net/images/icons/priorities/medium_new.svg",
+        "name": "Medium",
+        "id": "3"
+       },
+       "issuetype": {
+        "self": "https://test.atlassian.net/rest/api/2/issuetype/10006",
+        "id": "10006",
+        "description": "A small piece of work that's part of a larger task.",
+        "iconUrl": "https://test.atlassian.net/rest/api/2/universal_avatar/view/type/issuetype/avatar/10316?size=medium",
+        "name": "Sub-task",
+        "subtask": true,
+        "avatarId": 10316,
+        "hierarchyLevel": -1
+       }
+      }
+     },
+     {
+      "id": "10036",
+      "key": "TST-20",
+      "self": "https://test.atlassian.net/rest/api/2/issue/10036",
+      "fields": {
+       "summary": "[dlt-seed] subtask 2",
+       "status": {
+        "self": "https://test.atlassian.net/rest/api/2/status/10002",
+        "description": "",
+        "iconUrl": "https://test.atlassian.net/images/icons/statuses/generic.png",
+        "name": "To Do",
+        "id": "10002",
+        "statusCategory": {
+         "self": "https://test.atlassian.net/rest/api/2/statuscategory/2",
+         "id": 2,
+         "key": "new",
+         "colorName": "blue-gray",
+         "name": "To Do"
+        }
+       },
+       "priority": {
+        "self": "https://test.atlassian.net/rest/api/2/priority/3",
+        "iconUrl": "https://test.atlassian.net/images/icons/priorities/medium_new.svg",
+        "name": "Medium",
+        "id": "3"
+       },
+       "issuetype": {
+        "self": "https://test.atlassian.net/rest/api/2/issuetype/10006",
+        "id": "10006",
+        "description": "A small piece of work that's part of a larger task.",
+        "iconUrl": "https://test.atlassian.net/rest/api/2/universal_avatar/view/type/issuetype/avatar/10316?size=medium",
+        "name": "Sub-task",
+        "subtask": true,
+        "avatarId": 10316,
+        "hierarchyLevel": -1
+       }
+      }
+     }
+    ],
+    "reporter": {
+     "self": "https://test.atlassian.net/rest/api/2/user?accountId=account-1",
+     "accountId": "account-1",
+     "emailAddress": "account-1@example.com",
+     "avatarUrls": {
+      "48x48": "https://avatar.example.com/account-1/48x48",
+      "24x24": "https://avatar.example.com/account-1/24x24",
+      "16x16": "https://avatar.example.com/account-1/16x16",
+      "32x32": "https://avatar.example.com/account-1/32x32"
+     },
+     "displayName": "User account-1",
+     "active": true,
+     "timeZone": "Europe/Zurich",
+     "accountType": "atlassian"
+    },
+    "aggregateprogress": {
+     "progress": 0,
+     "total": 0
+    },
+    "customfield_10002": [],
+    "progress": {
+     "progress": 0,
+     "total": 0
+    },
+    "votes": {
+     "self": "https://test.atlassian.net/rest/api/2/issue/TST-18/votes",
+     "votes": 0,
+     "hasVoted": false
+    }
+   }
+  },
+  {
+   "expand": "operations,versionedRepresentations,editmeta,changelog,customfield_10010.requestTypePractice,renderedFields",
+   "id": "10035",
+   "self": "https://test.atlassian.net/rest/api/2/issue/10035",
+   "key": "TST-19",
+   "fields": {
+    "statuscategorychangedate": "2026-10-26T19:24:04.633+0100",
+    "issuetype": {
+     "self": "https://test.atlassian.net/rest/api/2/issuetype/10006",
+     "id": "10006",
+     "description": "A small piece of work that's part of a larger task.",
+     "iconUrl": "https://test.atlassian.net/rest/api/2/universal_avatar/view/type/issuetype/avatar/10316?size=medium",
+     "name": "Sub-task",
+     "subtask": true,
+     "avatarId": 10316,
+     "hierarchyLevel": -1
+    },
+    "parent": {
+     "id": "10034",
+     "key": "TST-18",
+     "self": "https://test.atlassian.net/rest/api/2/issue/10034",
+     "fields": {
+      "summary": "[dlt-seed] links parent",
+      "status": {
+       "self": "https://test.atlassian.net/rest/api/2/status/10002",
+       "description": "",
+       "iconUrl": "https://test.atlassian.net/images/icons/statuses/generic.png",
+       "name": "To Do",
+       "id": "10002",
+       "statusCategory": {
+        "self": "https://test.atlassian.net/rest/api/2/statuscategory/2",
+        "id": 2,
+        "key": "new",
+        "colorName": "blue-gray",
+        "name": "To Do"
+       }
+      },
+      "priority": {
+       "self": "https://test.atlassian.net/rest/api/2/priority/3",
+       "iconUrl": "https://test.atlassian.net/images/icons/priorities/medium_new.svg",
+       "name": "Medium",
+       "id": "3"
+      },
+      "issuetype": {
+       "self": "https://test.atlassian.net/rest/api/2/issuetype/10005",
+       "id": "10005",
+       "description": "A small, distinct piece of work.",
+       "iconUrl": "https://test.atlassian.net/rest/api/2/universal_avatar/view/type/issuetype/avatar/10318?size=medium",
+       "name": "Task",
+       "subtask": false,
+       "avatarId": 10318,
+       "hierarchyLevel": 0
+      }
+     }
+    },
+    "project": {
+     "self": "https://test.atlassian.net/rest/api/2/project/10001",
+     "id": "10001",
+     "key": "TST",
+     "name": "dlt test scrum",
+     "projectTypeKey": "software",
+     "simplified": false,
+     "avatarUrls": {
+      "48x48": "https://test.atlassian.net/rest/api/2/universal_avatar/view/type/project/avatar/10425",
+      "24x24": "https://test.atlassian.net/rest/api/2/universal_avatar/view/type/project/avatar/10425?size=small",
+      "16x16": "https://test.atlassian.net/rest/api/2/universal_avatar/view/type/project/avatar/10425?size=xsmall",
+      "32x32": "https://test.atlassian.net/rest/api/2/universal_avatar/view/type/project/avatar/10425?size=medium"
+     }
+    },
+    "fixVersions": [],
+    "statusCategory": {
+     "self": "https://test.atlassian.net/rest/api/2/statuscategory/2",
+     "id": 2,
+     "key": "new",
+     "colorName": "blue-gray",
+     "name": "To Do"
+    },
+    "customfield_10036": [],
+    "workratio": -1,
+    "watches": {
+     "self": "https://test.atlassian.net/rest/api/2/issue/TST-19/watchers",
+     "watchCount": 1,
+     "isWatching": true
+    },
+    "created": "2026-10-26T19:24:04.320+0100",
+    "priority": {
+     "self": "https://test.atlassian.net/rest/api/2/priority/3",
+     "iconUrl": "https://test.atlassian.net/images/icons/priorities/medium_new.svg",
+     "name": "Medium",
+     "id": "3"
+    },
+    "labels": [
+     "dlt-seed",
+     "dlt-seed-links-and-subtasks"
+    ],
+    "customfield_10019": "0|i00079:",
+    "versions": [],
+    "issuelinks": [],
+    "updated": "2026-10-26T19:24:04.398+0100",
+    "status": {
+     "self": "https://test.atlassian.net/rest/api/2/status/10002",
+     "description": "",
+     "iconUrl": "https://test.atlassian.net/images/icons/statuses/generic.png",
+     "name": "To Do",
+     "id": "10002",
+     "statusCategory": {
+      "self": "https://test.atlassian.net/rest/api/2/statuscategory/2",
+      "id": 2,
+      "key": "new",
+      "colorName": "blue-gray",
+      "name": "To Do"
+     }
+    },
+    "components": [],
+    "timetracking": {},
+    "attachment": [],
+    "summary": "[dlt-seed] subtask 1",
+    "creator": {
+     "self": "https://test.atlassian.net/rest/api/2/user?accountId=account-1",
+     "accountId": "account-1",
+     "emailAddress": "account-1@example.com",
+     "avatarUrls": {
+      "48x48": "https://avatar.example.com/account-1/48x48",
+      "24x24": "https://avatar.example.com/account-1/24x24",
+      "16x16": "https://avatar.example.com/account-1/16x16",
+      "32x32": "https://avatar.example.com/account-1/32x32"
+     },
+     "displayName": "User account-1",
+     "active": true,
+     "timeZone": "Europe/Zurich",
+     "accountType": "atlassian"
+    },
+    "subtasks": [],
+    "reporter": {
+     "self": "https://test.atlassian.net/rest/api/2/user?accountId=account-1",
+     "accountId": "account-1",
+     "emailAddress": "account-1@example.com",
+     "avatarUrls": {
+      "48x48": "https://avatar.example.com/account-1/48x48",
+      "24x24": "https://avatar.example.com/account-1/24x24",
+      "16x16": "https://avatar.example.com/account-1/16x16",
+      "32x32": "https://avatar.example.com/account-1/32x32"
+     },
+     "displayName": "User account-1",
+     "active": true,
+     "timeZone": "Europe/Zurich",
+     "accountType": "atlassian"
+    },
+    "aggregateprogress": {
+     "progress": 0,
+     "total": 0
+    },
+    "customfield_10002": [],
+    "progress": {
+     "progress": 0,
+     "total": 0
+    },
+    "votes": {
+     "self": "https://test.atlassian.net/rest/api/2/issue/TST-19/votes",
+     "votes": 0,
+     "hasVoted": false
+    }
+   }
+  },
+  {
+   "expand": "operations,versionedRepresentations,editmeta,changelog,customfield_10010.requestTypePractice,renderedFields",
+   "id": "10036",
+   "self": "https://test.atlassian.net/rest/api/2/issue/10036",
+   "key": "TST-20",
+   "fields": {
+    "statuscategorychangedate": "2026-10-26T19:24:05.436+0100",
+    "issuetype": {
+     "self": "https://test.atlassian.net/rest/api/2/issuetype/10006",
+     "id": "10006",
+     "description": "A small piece of work that's part of a larger task.",
+     "iconUrl": "https://test.atlassian.net/rest/api/2/universal_avatar/view/type/issuetype/avatar/10316?size=medium",
+     "name": "Sub-task",
+     "subtask": true,
+     "avatarId": 10316,
+     "hierarchyLevel": -1
+    },
+    "parent": {
+     "id": "10034",
+     "key": "TST-18",
+     "self": "https://test.atlassian.net/rest/api/2/issue/10034",
+     "fields": {
+      "summary": "[dlt-seed] links parent",
+      "status": {
+       "self": "https://test.atlassian.net/rest/api/2/status/10002",
+       "description": "",
+       "iconUrl": "https://test.atlassian.net/images/icons/statuses/generic.png",
+       "name": "To Do",
+       "id": "10002",
+       "statusCategory": {
+        "self": "https://test.atlassian.net/rest/api/2/statuscategory/2",
+        "id": 2,
+        "key": "new",
+        "colorName": "blue-gray",
+        "name": "To Do"
+       }
+      },
+      "priority": {
+       "self": "https://test.atlassian.net/rest/api/2/priority/3",
+       "iconUrl": "https://test.atlassian.net/images/icons/priorities/medium_new.svg",
+       "name": "Medium",
+       "id": "3"
+      },
+      "issuetype": {
+       "self": "https://test.atlassian.net/rest/api/2/issuetype/10005",
+       "id": "10005",
+       "description": "A small, distinct piece of work.",
+       "iconUrl": "https://test.atlassian.net/rest/api/2/universal_avatar/view/type/issuetype/avatar/10318?size=medium",
+       "name": "Task",
+       "subtask": false,
+       "avatarId": 10318,
+       "hierarchyLevel": 0
+      }
+     }
+    },
+    "project": {
+     "self": "https://test.atlassian.net/rest/api/2/project/10001",
+     "id": "10001",
+     "key": "TST",
+     "name": "dlt test scrum",
+     "projectTypeKey": "software",
+     "simplified": false,
+     "avatarUrls": {
+      "48x48": "https://test.atlassian.net/rest/api/2/universal_avatar/view/type/project/avatar/10425",
+      "24x24": "https://test.atlassian.net/rest/api/2/universal_avatar/view/type/project/avatar/10425?size=small",
+      "16x16": "https://test.atlassian.net/rest/api/2/universal_avatar/view/type/project/avatar/10425?size=xsmall",
+      "32x32": "https://test.atlassian.net/rest/api/2/universal_avatar/view/type/project/avatar/10425?size=medium"
+     }
+    },
+    "fixVersions": [],
+    "statusCategory": {
+     "self": "https://test.atlassian.net/rest/api/2/statuscategory/2",
+     "id": 2,
+     "key": "new",
+     "colorName": "blue-gray",
+     "name": "To Do"
+    },
+    "customfield_10036": [],
+    "workratio": -1,
+    "watches": {
+     "self": "https://test.atlassian.net/rest/api/2/issue/TST-20/watchers",
+     "watchCount": 1,
+     "isWatching": true
+    },
+    "created": "2026-10-26T19:24:04.967+0100",
+    "priority": {
+     "self": "https://test.atlassian.net/rest/api/2/priority/3",
+     "iconUrl": "https://test.atlassian.net/images/icons/priorities/medium_new.svg",
+     "name": "Medium",
+     "id": "3"
+    },
+    "labels": [
+     "dlt-seed",
+     "dlt-seed-links-and-subtasks"
+    ],
+    "customfield_10019": "0|i0007h:",
+    "versions": [],
+    "issuelinks": [],
+    "updated": "2026-10-26T19:24:05.101+0100",
+    "status": {
+     "self": "https://test.atlassian.net/rest/api/2/status/10002",
+     "description": "",
+     "iconUrl": "https://test.atlassian.net/images/icons/statuses/generic.png",
+     "name": "To Do",
+     "id": "10002",
+     "statusCategory": {
+      "self": "https://test.atlassian.net/rest/api/2/statuscategory/2",
+      "id": 2,
+      "key": "new",
+      "colorName": "blue-gray",
+      "name": "To Do"
+     }
+    },
+    "components": [],
+    "timetracking": {},
+    "attachment": [],
+    "summary": "[dlt-seed] subtask 2",
+    "creator": {
+     "self": "https://test.atlassian.net/rest/api/2/user?accountId=account-1",
+     "accountId": "account-1",
+     "emailAddress": "account-1@example.com",
+     "avatarUrls": {
+      "48x48": "https://avatar.example.com/account-1/48x48",
+      "24x24": "https://avatar.example.com/account-1/24x24",
+      "16x16": "https://avatar.example.com/account-1/16x16",
+      "32x32": "https://avatar.example.com/account-1/32x32"
+     },
+     "displayName": "User account-1",
+     "active": true,
+     "timeZone": "Europe/Zurich",
+     "accountType": "atlassian"
+    },
+    "subtasks": [],
+    "reporter": {
+     "self": "https://test.atlassian.net/rest/api/2/user?accountId=account-1",
+     "accountId": "account-1",
+     "emailAddress": "account-1@example.com",
+     "avatarUrls": {
+      "48x48": "https://avatar.example.com/account-1/48x48",
+      "24x24": "https://avatar.example.com/account-1/24x24",
+      "16x16": "https://avatar.example.com/account-1/16x16",
+      "32x32": "https://avatar.example.com/account-1/32x32"
+     },
+     "displayName": "User account-1",
+     "active": true,
+     "timeZone": "Europe/Zurich",
+     "accountType": "atlassian"
+    },
+    "aggregateprogress": {
+     "progress": 0,
+     "total": 0
+    },
+    "customfield_10002": [],
+    "progress": {
+     "progress": 0,
+     "total": 0
+    },
+    "votes": {
+     "self": "https://test.atlassian.net/rest/api/2/issue/TST-20/votes",
+     "votes": 0,
+     "hasVoted": false
+    }
+   }
+  },
+  {
+   "expand": "operations,versionedRepresentations,editmeta,changelog,customfield_10010.requestTypePractice,renderedFields",
+   "id": "10037",
+   "self": "https://test.atlassian.net/rest/api/2/issue/10037",
+   "key": "TST-21",
+   "fields": {
+    "statuscategorychangedate": "2026-10-26T19:24:05.975+0100",
+    "issuetype": {
+     "self": "https://test.atlassian.net/rest/api/2/issuetype/10005",
+     "id": "10005",
+     "description": "A small, distinct piece of work.",
+     "iconUrl": "https://test.atlassian.net/rest/api/2/universal_avatar/view/type/issuetype/avatar/10318?size=medium",
+     "name": "Task",
+     "subtask": false,
+     "avatarId": 10318,
+     "hierarchyLevel": 0
+    },
+    "project": {
+     "self": "https://test.atlassian.net/rest/api/2/project/10001",
+     "id": "10001",
+     "key": "TST",
+     "name": "dlt test scrum",
+     "projectTypeKey": "software",
+     "simplified": false,
+     "avatarUrls": {
+      "48x48": "https://test.atlassian.net/rest/api/2/universal_avatar/view/type/project/avatar/10425",
+      "24x24": "https://test.atlassian.net/rest/api/2/universal_avatar/view/type/project/avatar/10425?size=small",
+      "16x16": "https://test.atlassian.net/rest/api/2/universal_avatar/view/type/project/avatar/10425?size=xsmall",
+      "32x32": "https://test.atlassian.net/rest/api/2/universal_avatar/view/type/project/avatar/10425?size=medium"
+     }
+    },
+    "fixVersions": [],
+    "statusCategory": {
+     "self": "https://test.atlassian.net/rest/api/2/statuscategory/2",
+     "id": 2,
+     "key": "new",
+     "colorName": "blue-gray",
+     "name": "To Do"
+    },
+    "customfield_10036": [],
+    "workratio": -1,
+    "watches": {
+     "self": "https://test.atlassian.net/rest/api/2/issue/TST-21/watchers",
+     "watchCount": 1,
+     "isWatching": true
+    },
+    "created": "2026-10-26T19:24:05.744+0100",
+    "priority": {
+     "self": "https://test.atlassian.net/rest/api/2/priority/3",
+     "iconUrl": "https://test.atlassian.net/images/icons/priorities/medium_new.svg",
+     "name": "Medium",
+     "id": "3"
+    },
+    "labels": [
+     "dlt-seed",
+     "dlt-seed-links-and-subtasks"
+    ],
+    "customfield_10019": "0|i0007w:",
+    "versions": [],
+    "issuelinks": [
+     {
+      "id": "10006",
+      "self": "https://test.atlassian.net/rest/api/2/issueLink/10006",
+      "type": {
+       "id": "10000",
+       "name": "Blocks",
+       "inward": "is blocked by",
+       "outward": "blocks",
+       "self": "https://test.atlassian.net/rest/api/2/issueLinkType/10000"
+      },
+      "inwardIssue": {
+       "id": "10034",
+       "key": "TST-18",
+       "self": "https://test.atlassian.net/rest/api/2/issue/10034",
+       "fields": {
+        "summary": "[dlt-seed] links parent",
+        "status": {
+         "self": "https://test.atlassian.net/rest/api/2/status/10002",
+         "description": "",
+         "iconUrl": "https://test.atlassian.net/images/icons/statuses/generic.png",
+         "name": "To Do",
+         "id": "10002",
+         "statusCategory": {
+          "self": "https://test.atlassian.net/rest/api/2/statuscategory/2",
+          "id": 2,
+          "key": "new",
+          "colorName": "blue-gray",
+          "name": "To Do"
+         }
+        },
+        "priority": {
+         "self": "https://test.atlassian.net/rest/api/2/priority/3",
+         "iconUrl": "https://test.atlassian.net/images/icons/priorities/medium_new.svg",
+         "name": "Medium",
+         "id": "3"
+        },
+        "issuetype": {
+         "self": "https://test.atlassian.net/rest/api/2/issuetype/10005",
+         "id": "10005",
+         "description": "A small, distinct piece of work.",
+         "iconUrl": "https://test.atlassian.net/rest/api/2/universal_avatar/view/type/issuetype/avatar/10318?size=medium",
+         "name": "Task",
+         "subtask": false,
+         "avatarId": 10318,
+         "hierarchyLevel": 0
+        }
+       }
+      }
+     },
+     {
+      "id": "10007",
+      "self": "https://test.atlassian.net/rest/api/2/issueLink/10007",
+      "type": {
+       "id": "10003",
+       "name": "Relates",
+       "inward": "relates to",
+       "outward": "relates to",
+       "self": "https://test.atlassian.net/rest/api/2/issueLinkType/10003"
+      },
+      "inwardIssue": {
+       "id": "10034",
+       "key": "TST-18",
+       "self": "https://test.atlassian.net/rest/api/2/issue/10034",
+       "fields": {
+        "summary": "[dlt-seed] links parent",
+        "status": {
+         "self": "https://test.atlassian.net/rest/api/2/status/10002",
+         "description": "",
+         "iconUrl": "https://test.atlassian.net/images/icons/statuses/generic.png",
+         "name": "To Do",
+         "id": "10002",
+         "statusCategory": {
+          "self": "https://test.atlassian.net/rest/api/2/statuscategory/2",
+          "id": 2,
+          "key": "new",
+          "colorName": "blue-gray",
+          "name": "To Do"
+         }
+        },
+        "priority": {
+         "self": "https://test.atlassian.net/rest/api/2/priority/3",
+         "iconUrl": "https://test.atlassian.net/images/icons/priorities/medium_new.svg",
+         "name": "Medium",
+         "id": "3"
+        },
+        "issuetype": {
+         "self": "https://test.atlassian.net/rest/api/2/issuetype/10005",
+         "id": "10005",
+         "description": "A small, distinct piece of work.",
+         "iconUrl": "https://test.atlassian.net/rest/api/2/universal_avatar/view/type/issuetype/avatar/10318?size=medium",
+         "name": "Task",
+         "subtask": false,
+         "avatarId": 10318,
+         "hierarchyLevel": 0
+        }
+       }
+      }
+     }
+    ],
+    "updated": "2026-10-26T19:24:06.950+0100",
+    "status": {
+     "self": "https://test.atlassian.net/rest/api/2/status/10002",
+     "description": "",
+     "iconUrl": "https://test.atlassian.net/images/icons/statuses/generic.png",
+     "name": "To Do",
+     "id": "10002",
+     "statusCategory": {
+      "self": "https://test.atlassian.net/rest/api/2/statuscategory/2",
+      "id": 2,
+      "key": "new",
+      "colorName": "blue-gray",
+      "name": "To Do"
+     }
+    },
+    "components": [],
+    "timetracking": {},
+    "attachment": [],
+    "summary": "[dlt-seed] links other",
+    "creator": {
+     "self": "https://test.atlassian.net/rest/api/2/user?accountId=account-1",
+     "accountId": "account-1",
+     "emailAddress": "account-1@example.com",
+     "avatarUrls": {
+      "48x48": "https://avatar.example.com/account-1/48x48",
+      "24x24": "https://avatar.example.com/account-1/24x24",
+      "16x16": "https://avatar.example.com/account-1/16x16",
+      "32x32": "https://avatar.example.com/account-1/32x32"
+     },
+     "displayName": "User account-1",
+     "active": true,
+     "timeZone": "Europe/Zurich",
+     "accountType": "atlassian"
+    },
+    "subtasks": [],
+    "reporter": {
+     "self": "https://test.atlassian.net/rest/api/2/user?accountId=account-1",
+     "accountId": "account-1",
+     "emailAddress": "account-1@example.com",
+     "avatarUrls": {
+      "48x48": "https://avatar.example.com/account-1/48x48",
+      "24x24": "https://avatar.example.com/account-1/24x24",
+      "16x16": "https://avatar.example.com/account-1/16x16",
+      "32x32": "https://avatar.example.com/account-1/32x32"
+     },
+     "displayName": "User account-1",
+     "active": true,
+     "timeZone": "Europe/Zurich",
+     "accountType": "atlassian"
+    },
+    "aggregateprogress": {
+     "progress": 0,
+     "total": 0
+    },
+    "customfield_10002": [],
+    "progress": {
+     "progress": 0,
+     "total": 0
+    },
+    "votes": {
+     "self": "https://test.atlassian.net/rest/api/2/issue/TST-21/votes",
+     "votes": 0,
+     "hasVoted": false
+    }
+   }
+  },
+  {
+   "expand": "operations,versionedRepresentations,editmeta,changelog,customfield_10010.requestTypePractice,renderedFields",
+   "id": "10040",
+   "self": "https://test.atlassian.net/rest/api/2/issue/10040",
+   "key": "TST-24",
+   "fields": {
+    "statuscategorychangedate": "2026-10-26T19:24:15.252+0100",
+    "issuetype": {
+     "self": "https://test.atlassian.net/rest/api/2/issuetype/10005",
+     "id": "10005",
+     "description": "A small, distinct piece of work.",
+     "iconUrl": "https://test.atlassian.net/rest/api/2/universal_avatar/view/type/issuetype/avatar/10318?size=medium",
+     "name": "Task",
+     "subtask": false,
+     "avatarId": 10318,
+     "hierarchyLevel": 0
+    },
+    "project": {
+     "self": "https://test.atlassian.net/rest/api/2/project/10001",
+     "id": "10001",
+     "key": "TST",
+     "name": "dlt test scrum",
+     "projectTypeKey": "software",
+     "simplified": false,
+     "avatarUrls": {
+      "48x48": "https://test.atlassian.net/rest/api/2/universal_avatar/view/type/project/avatar/10425",
+      "24x24": "https://test.atlassian.net/rest/api/2/universal_avatar/view/type/project/avatar/10425?size=small",
+      "16x16": "https://test.atlassian.net/rest/api/2/universal_avatar/view/type/project/avatar/10425?size=xsmall",
+      "32x32": "https://test.atlassian.net/rest/api/2/universal_avatar/view/type/project/avatar/10425?size=medium"
+     }
+    },
+    "fixVersions": [
+     {
+      "self": "https://test.atlassian.net/rest/api/2/version/10004",
+      "id": "10004",
+      "description": "[dummy] released version",
+      "name": "0.1.0",
+      "archived": false,
+      "released": true,
+      "releaseDate": "2026-08-01"
+     },
+     {
+      "self": "https://test.atlassian.net/rest/api/2/version/10005",
+      "id": "10005",
+      "description": "[dummy] unreleased version",
+      "name": "0.2.0",
+      "archived": false,
+      "released": false,
+      "releaseDate": "2026-12-01"
+     }
+    ],
+    "statusCategory": {
+     "self": "https://test.atlassian.net/rest/api/2/statuscategory/2",
+     "id": 2,
+     "key": "new",
+     "colorName": "blue-gray",
+     "name": "To Do"
+    },
+    "customfield_10036": [],
+    "workratio": 0,
+    "watches": {
+     "self": "https://test.atlassian.net/rest/api/2/issue/TST-24/watchers",
+     "watchCount": 1,
+     "isWatching": true
+    },
+    "created": "2026-10-26T19:24:14.685+0100",
+    "priority": {
+     "self": "https://test.atlassian.net/rest/api/2/priority/5",
+     "iconUrl": "https://test.atlassian.net/images/icons/priorities/lowest_new.svg",
+     "name": "Lowest",
+     "id": "5"
+    },
+    "labels": [
+     "dlt-seed",
+     "dlt-seed-all-field-types"
+    ],
+    "customfield_10016": 3.5,
+    "customfield_10019": "0|i0008n:",
+    "timeestimate": 5400,
+    "aggregatetimeoriginalestimate": 7200,
+    "versions": [
+     {
+      "self": "https://test.atlassian.net/rest/api/2/version/10004",
+      "id": "10004",
+      "description": "[dummy] released version",
+      "name": "0.1.0",
+      "archived": false,
+      "released": true,
+      "releaseDate": "2026-08-01"
+     },
+     {
+      "self": "https://test.atlassian.net/rest/api/2/version/10005",
+      "id": "10005",
+      "description": "[dummy] unreleased version",
+      "name": "0.2.0",
+      "archived": false,
+      "released": false,
+      "releaseDate": "2026-12-01"
+     }
+    ],
+    "issuelinks": [],
+    "assignee": {
+     "self": "https://test.atlassian.net/rest/api/2/user?accountId=account-1",
+     "accountId": "account-1",
+     "emailAddress": "account-1@example.com",
+     "avatarUrls": {
+      "48x48": "https://avatar.example.com/account-1/48x48",
+      "24x24": "https://avatar.example.com/account-1/24x24",
+      "16x16": "https://avatar.example.com/account-1/16x16",
+      "32x32": "https://avatar.example.com/account-1/32x32"
+     },
+     "displayName": "User account-1",
+     "active": true,
+     "timeZone": "Europe/Zurich",
+     "accountType": "atlassian"
+    },
+    "updated": "2026-10-26T19:24:15.077+0100",
+    "status": {
+     "self": "https://test.atlassian.net/rest/api/2/status/10002",
+     "description": "",
+     "iconUrl": "https://test.atlassian.net/images/icons/statuses/generic.png",
+     "name": "To Do",
+     "id": "10002",
+     "statusCategory": {
+      "self": "https://test.atlassian.net/rest/api/2/statuscategory/2",
+      "id": 2,
+      "key": "new",
+      "colorName": "blue-gray",
+      "name": "To Do"
+     }
+    },
+    "components": [
+     {
+      "self": "https://test.atlassian.net/rest/api/2/component/10001",
+      "id": "10001",
+      "name": "destinations:duckdb",
+      "description": "[dummy] DuckDB destination component"
+     },
+     {
+      "self": "https://test.atlassian.net/rest/api/2/component/10002",
+      "id": "10002",
+      "name": "docs",
+      "description": "[dummy] documentation component"
+     }
+    ],
+    "customfield_10050": "2026-02-01T06:00:00.000+0100",
+    "customfield_10051": {
+     "self": "https://test.atlassian.net/rest/api/2/user?accountId=account-1",
+     "accountId": "account-1",
+     "emailAddress": "account-1@example.com",
+     "avatarUrls": {
+      "48x48": "https://avatar.example.com/account-1/48x48",
+      "24x24": "https://avatar.example.com/account-1/24x24",
+      "16x16": "https://avatar.example.com/account-1/16x16",
+      "32x32": "https://avatar.example.com/account-1/32x32"
+     },
+     "displayName": "User account-1",
+     "active": true,
+     "timeZone": "Europe/Zurich",
+     "accountType": "atlassian"
+    },
+    "timeoriginalestimate": 7200,
+    "customfield_10052": [
+     "custom-label",
+     "ünïcode-label"
+    ],
+    "description": "h1. Seeded\n*bold* text with emoji 🚀, ünïcode and a\nnew line",
+    "customfield_10053": "h1. Seeded\n*bold* text with emoji 🚀, ünïcode and a\nnew line",
+    "timetracking": {
+     "originalEstimate": "2h",
+     "remainingEstimate": "1h 30m",
+     "originalEstimateSeconds": 7200,
+     "remainingEstimateSeconds": 5400
+    },
+    "customfield_10015": "2026-02-01",
+    "customfield_10049": "2026-02-01",
+    "attachment": [],
+    "aggregatetimeestimate": 5400,
+    "summary": "[dlt-seed] all field types",
+    "creator": {
+     "self": "https://test.atlassian.net/rest/api/2/user?accountId=account-1",
+     "accountId": "account-1",
+     "emailAddress": "account-1@example.com",
+     "avatarUrls": {
+      "48x48": "https://avatar.example.com/account-1/48x48",
+      "24x24": "https://avatar.example.com/account-1/24x24",
+      "16x16": "https://avatar.example.com/account-1/16x16",
+      "32x32": "https://avatar.example.com/account-1/32x32"
+     },
+     "displayName": "User account-1",
+     "active": true,
+     "timeZone": "Europe/Zurich",
+     "accountType": "atlassian"
+    },
+    "subtasks": [],
+    "reporter": {
+     "self": "https://test.atlassian.net/rest/api/2/user?accountId=account-1",
+     "accountId": "account-1",
+     "emailAddress": "account-1@example.com",
+     "avatarUrls": {
+      "48x48": "https://avatar.example.com/account-1/48x48",
+      "24x24": "https://avatar.example.com/account-1/24x24",
+      "16x16": "https://avatar.example.com/account-1/16x16",
+      "32x32": "https://avatar.example.com/account-1/32x32"
+     },
+     "displayName": "User account-1",
+     "active": true,
+     "timeZone": "Europe/Zurich",
+     "accountType": "atlassian"
+    },
+    "customfield_10043": 3.5,
+    "aggregateprogress": {
+     "progress": 0,
+     "total": 5400,
+     "percent": 0
+    },
+    "customfield_10044": {
+     "self": "https://test.atlassian.net/rest/api/2/customFieldOption/10022",
+     "value": "[dummy] high",
+     "id": "10022"
+    },
+    "customfield_10045": [
+     {
+      "self": "https://test.atlassian.net/rest/api/2/customFieldOption/10023",
+      "value": "[dummy] duckdb",
+      "id": "10023"
+     },
+     {
+      "self": "https://test.atlassian.net/rest/api/2/customFieldOption/10024",
+      "value": "[dummy] bigquery",
+      "id": "10024"
+     }
+    ],
+    "customfield_10002": [],
+    "customfield_10046": {
+     "self": "https://test.atlassian.net/rest/api/2/customFieldOption/10027",
+     "value": "[dummy] sources",
+     "id": "10027",
+     "child": {
+      "self": "https://test.atlassian.net/rest/api/2/customFieldOption/10029",
+      "value": "[dummy] rest_api",
+      "id": "10029"
+     }
+    },
+    "customfield_10047": 3.5,
+    "customfield_10048": "https://dlthub.com",
+    "environment": "h1. Seeded\n*bold* text with emoji 🚀, ünïcode and a\nnew line",
+    "duedate": "2026-02-01",
+    "progress": {
+     "progress": 0,
+     "total": 5400,
+     "percent": 0
+    },
+    "votes": {
+     "self": "https://test.atlassian.net/rest/api/2/issue/TST-24/votes",
+     "votes": 0,
+     "hasVoted": false
+    }
+   }
+  }
+ ],
+ "comments": {
+  "10293": [
+   {
+    "self": "https://test.atlassian.net/rest/api/2/issue/10293/comment/10009",
+    "id": "10009",
+    "author": {
+     "self": "https://test.atlassian.net/rest/api/2/user?accountId=account-1",
+     "accountId": "account-1",
+     "emailAddress": "account-1@example.com",
+     "avatarUrls": {
+      "48x48": "https://avatar.example.com/account-1/48x48",
+      "24x24": "https://avatar.example.com/account-1/24x24",
+      "16x16": "https://avatar.example.com/account-1/16x16",
+      "32x32": "https://avatar.example.com/account-1/32x32"
+     },
+     "displayName": "User account-1",
+     "active": true,
+     "timeZone": "Europe/Zurich",
+     "accountType": "atlassian"
+    },
+    "body": "h2. Seeded\n*bold* comment with emoji 🚀, ünïcode and a\nnew line",
+    "updateAuthor": {
+     "self": "https://test.atlassian.net/rest/api/2/user?accountId=account-1",
+     "accountId": "account-1",
+     "emailAddress": "account-1@example.com",
+     "avatarUrls": {
+      "48x48": "https://avatar.example.com/account-1/48x48",
+      "24x24": "https://avatar.example.com/account-1/24x24",
+      "16x16": "https://avatar.example.com/account-1/16x16",
+      "32x32": "https://avatar.example.com/account-1/32x32"
+     },
+     "displayName": "User account-1",
+     "active": true,
+     "timeZone": "Europe/Zurich",
+     "accountType": "atlassian"
+    },
+    "created": "2026-10-27T02:38:39.384+0100",
+    "updated": "2026-10-27T02:38:39.384+0100",
+    "jsdPublic": true
+   },
+   {
+    "self": "https://test.atlassian.net/rest/api/2/issue/10293/comment/10010",
+    "id": "10010",
+    "author": {
+     "self": "https://test.atlassian.net/rest/api/2/user?accountId=account-1",
+     "accountId": "account-1",
+     "emailAddress": "account-1@example.com",
+     "avatarUrls": {
+      "48x48": "https://avatar.example.com/account-1/48x48",
+      "24x24": "https://avatar.example.com/account-1/24x24",
+      "16x16": "https://avatar.example.com/account-1/16x16",
+      "32x32": "https://avatar.example.com/account-1/32x32"
+     },
+     "displayName": "User account-1",
+     "active": true,
+     "timeZone": "Europe/Zurich",
+     "accountType": "atlassian"
+    },
+    "body": "after edit",
+    "updateAuthor": {
+     "self": "https://test.atlassian.net/rest/api/2/user?accountId=account-1",
+     "accountId": "account-1",
+     "emailAddress": "account-1@example.com",
+     "avatarUrls": {
+      "48x48": "https://avatar.example.com/account-1/48x48",
+      "24x24": "https://avatar.example.com/account-1/24x24",
+      "16x16": "https://avatar.example.com/account-1/16x16",
+      "32x32": "https://avatar.example.com/account-1/32x32"
+     },
+     "displayName": "User account-1",
+     "active": true,
+     "timeZone": "Europe/Zurich",
+     "accountType": "atlassian"
+    },
+    "created": "2026-10-27T02:38:39.945+0100",
+    "updated": "2026-10-27T02:38:40.350+0100",
+    "jsdPublic": true
+   }
+  ]
+ }
+}

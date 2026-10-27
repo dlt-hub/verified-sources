@@ -1,7 +1,7 @@
 from typing import List, Optional
 
 import dlt
-from jira import jira, jira_search
+from jira import issue_comments, jira, jira_issues
 
 
 def load(endpoints: Optional[List[str]] = None, limit: Optional[int] = None) -> None:
@@ -27,37 +27,48 @@ def load(endpoints: Optional[List[str]] = None, limit: Optional[int] = None) -> 
     print(f"Load Information: {load_info}")
 
 
-def load_query_data(queries: List[str], limit: Optional[int] = None) -> None:
+def load_issues_with_jql(jql: str, with_comments: bool = True) -> None:
     """
-    Load issues from specified Jira queries into a dataset.
+    Incrementally load issues matching a JQL query, merging issues updated since the last run.
 
     Args:
-        queries: A list of JQL queries. A query needs a filtering clause; Jira rejects one
-            that only sorts.
-        limit: Maximum number of pages per query.
+        jql: JQL query without ORDER BY.
+        with_comments: Also load all comments of the issues, fetched in the same requests.
     """
     pipeline = dlt.pipeline(
-        pipeline_name="jira_search_pipeline",
+        pipeline_name="jira_issues_pipeline",
         destination="duckdb",
-        dataset_name="jira_search",
+        dataset_name="jira_issues",
     )
 
-    source = jira_search()
-    source.issues.bind(jql_queries=queries, page_limit=limit)
+    issues = jira_issues(jql=jql)
+    # pass `issues | issue_comments` alone to load comments without issues
+    data = [issues, issues | issue_comments] if with_comments else issues
+    load_info = pipeline.run(data)
 
-    load_info = pipeline.run(source)
+    print(f"Load Information: {load_info}")
+
+
+def load_issues_arrow() -> None:
+    """
+    Load issues as Arrow tables, nested values are loaded as structs and lists to parquet files.
+    """
+    pipeline = dlt.pipeline(
+        pipeline_name="jira_issues_arrow_pipeline",
+        destination="filesystem",
+        dataset_name="jira_issues",
+    )
+
+    issues = jira_issues(backend="pyarrow", nested_types=True)
+    load_info = pipeline.run(issues, loader_file_format="parquet")
 
     print(f"Load Information: {load_info}")
 
 
 if __name__ == "__main__":
-    # issues load in the query run below
+    # issues load in the run below
     load(endpoints=["users", "projects", "workflows", "workflow_statuses"], limit=2)
 
-    # every query runs, each bounded on its own
-    queries = [
-        "created >= -30d order by created DESC",
-        'status = "In Progress" order by created DESC',
-    ]
+    load_issues_with_jql("updated >= -30d")
 
-    load_query_data(queries=queries, limit=2)
+    # load_issues_arrow()

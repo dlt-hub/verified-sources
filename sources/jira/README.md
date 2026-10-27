@@ -5,13 +5,21 @@ efficiently, prioritize work, and collaborate.
 
 Resources that can be loaded using this verified source are:
 
-| Name      | Description                                                                              |
-| --------- | ---------------------------------------------------------------------------------------- |
-| issues    | individual pieces of work to be completed                                                |
-| users     | all users on the site, including inactive and deleted accounts                           |
-| workflows | the key aspect of managing and tracking the progress of issues or tasks within a project |
-| workflow_statuses | names and categories of the statuses the workflows reference                     |
-| projects  | a collection of tasks that need to be completed to achieve a certain outcome             |
+| Name              | Description                                                                              |
+| ----------------- | ---------------------------------------------------------------------------------------- |
+| issues            | individual pieces of work to be completed, a column per field                            |
+| issue_comments    | all comments of the loaded issues, edited and deleted comments are updated               |
+| issue_changelogs  | full history of changes of the loaded issues                                             |
+| worklogs          | time logged on issues, deleted worklogs are removed                                      |
+| users             | all users on the site, including inactive and deleted accounts                           |
+| workflows         | the key aspect of managing and tracking the progress of issues or tasks within a project |
+| workflow_statuses | names and categories of the statuses the workflows reference                             |
+| projects          | a collection of tasks that need to be completed to achieve a certain outcome             |
+
+Issues, comments, changelogs and worklogs changed since the last run are merged. `jira_issues` loads
+issues matching a JQL query with a custom incremental, as Python dicts or Arrow tables
+(`backend="pyarrow"`). Pipe issues into `issue_comments` to load their comments: when both are
+loaded, comments are fetched with the issues in the same requests.
 
 The `workflows` resource reads `rest/api/3/workflows/search`. It replaces
 `rest/api/3/workflow/search`, which the v3 spec marks deprecated and scheduled for removal on

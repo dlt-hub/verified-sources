@@ -1,11 +1,14 @@
 import os
+from typing import Dict, List
 
 import dlt
 import pytest
+from dlt.sources.helpers.requests import HTTPError
 
-from sources.jira import jira, jira_search
+from sources.jira import issue_comments, jira, jira_issues, jira_search
 from sources.jira.settings import DEFAULT_ENDPOINTS
 
+from tests.jira.seed_test_data import SEED_LABEL, Jira
 from tests.utils import (
     ALL_DESTINATIONS,
     assert_load_info,
@@ -40,7 +43,12 @@ def test_load_all_endpoints(destination_name: str) -> None:
         dataset_name="test_dataset_name",
         dev_mode=True,
     )
-    all_endpoints = jira(page_size=5)
+    # seeded issues with comments, changes and worklogs. `add_limit` does not bound issues,
+    # they are read by a transformer
+    all_endpoints = jira(
+        page_size=5,
+        jql=f'labels = "{SEED_LABEL}" AND NOT labels = "{SEED_LABEL}-bulk-issues"',
+    )
     # disable user - use next test for that
     all_endpoints.users.selected = False
     # do not load child tables
@@ -52,12 +60,23 @@ def test_load_all_endpoints(destination_name: str) -> None:
     counts = load_table_counts(
         pipeline, *[t["name"] for t in pipeline.default_schema.data_tables()]
     )
-    assert set(counts) == {"issues", "projects", "workflows", "workflow_statuses"}
+    keys = {
+        "issues": "id",
+        "issue_comments": "id",
+        "issue_changelogs": "id",
+        "worklogs": "id",
+        **{
+            name: endpoint["primary_key"]
+            for name, endpoint in DEFAULT_ENDPOINTS.items()
+        },
+    }
+    assert set(counts) == set(keys) - {"users"}
     assert all(count > 0 for count in counts.values())
     # the key each resource declares is unique in its table
     for table, count in counts.items():
-        key = DEFAULT_ENDPOINTS[table]["primary_key"]
-        assert load_table_distinct_counts(pipeline, key, table) == {table: count}
+        assert load_table_distinct_counts(pipeline, keys[table], table) == {
+            table: count
+        }
 
 
 @pytest.mark.parametrize("destination_name", ALL_DESTINATIONS)
@@ -150,3 +169,54 @@ def test_workflow_statuses_resolve_the_child_table_references(
     # the resource deduplicates, so the join stays one to one
     assert len(resolved) == len(tables["workflow_statuses"])
     assert all(row["name"] for row in tables["workflow_statuses"])
+
+
+@pytest.mark.parametrize("destination_name", ALL_DESTINATIONS)
+def test_issue_comments_changed(destination_name: str) -> None:
+    """Adds, edits and deletes comments of a seeded issue between loads. Comments of other runs
+    on the same issue are ignored.
+    """
+    site = Jira(
+        dlt.secrets["sources.jira.subdomain"],
+        dlt.secrets["sources.jira.email"],
+        dlt.secrets["sources.jira.api_token"],
+        "TST",
+    )
+    issue_ids = site.search_ids(f'labels = "{SEED_LABEL}-comment-changes"')
+    if not issue_ids:
+        pytest.skip(
+            "seed the test site: seed_test_data.py --apply --cases comment_changes"
+        )
+    path = f"issue/{issue_ids[0]}/comment"
+    created: List[str] = [
+        site.request("POST", path, json={"body": f"online test {n}"})["id"]
+        for n in (1, 2)
+    ]
+    pipeline = dlt.pipeline(
+        pipeline_name="test_jira_comments_changed",
+        destination=destination_name,
+        dataset_name="test_jira_comments_changed",
+        dev_mode=True,
+    )
+
+    def load() -> Dict[str, str]:
+        issues = jira_issues(jql=f"id = {issue_ids[0]}")
+        assert_load_info(pipeline.run([issues, issues | issue_comments]))
+        with pipeline.sql_client() as client:
+            rows = client.execute_sql("SELECT id, body FROM issue_comments")
+        return {comment_id: body for comment_id, body in rows if comment_id in created}
+
+    try:
+        assert load() == {created[0]: "online test 1", created[1]: "online test 2"}
+        site.request("PUT", f"{path}/{created[0]}", json={"body": "edited"})
+        site.request("DELETE", f"{path}/{created[1]}")
+        # the issue was updated within lag and is read again
+        assert load() == {created[0]: "edited"}
+        site.request("DELETE", f"{path}/{created[0]}")
+        assert load() == {}
+    finally:
+        for comment_id in created:
+            try:
+                site.request("DELETE", f"{path}/{comment_id}")
+            except HTTPError:
+                pass
