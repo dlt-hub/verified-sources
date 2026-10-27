@@ -153,6 +153,8 @@ Not breaking, but report them: new columns or tables, dropped columns (left in t
 
 **Every change to a source that goes into a PR bumps its version and updates its README, in the same PR.** `dlt init` copies both files into user projects, and the copies carry no git history.
 
+`make lint` enforces it with `tools/check_source_versions.py`: each source with changes to files other than its README, compared with the merge base of `master`, needs a `version.py` higher than on `master` and a README with a changelog heading for that version, e.g. `### 1.1.0`.
+
 `sources/<name>/version.py` holds the version of the source. Add it with `1.0.0` when it is missing:
 
 ```py
