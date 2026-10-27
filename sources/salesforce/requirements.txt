@@ -1,2 +1,2 @@
 simple-salesforce>=1.12.4
-dlt>=0.5.1
+dlt>=1.31.0

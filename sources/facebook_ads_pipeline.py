@@ -117,6 +117,25 @@ def load_insights() -> None:
     print(info)
 
 
+def load_insights_with_breakdowns() -> None:
+    """Shows how to load insights with custom breakdowns and action breakdowns"""
+    pipeline = dlt.pipeline(
+        pipeline_name="facebook_insights_breakdowns",
+        destination="duckdb",
+        dataset_name="facebook_insights_data",
+        dev_mode=True,
+    )
+    # Load insights with age and gender breakdowns
+    i_with_breakdowns = facebook_insights_source(
+        initial_load_past_days=7,
+        breakdowns="ads_insights_age_and_gender",
+        # Uncomment to add action breakdowns:
+        # action_breakdowns=["action_type", "action_target_id"]
+    )
+    info = pipeline.run(i_with_breakdowns)
+    print(info)
+
+
 if __name__ == "__main__":
     # load_all_ads_objects()
     merge_ads_objects()
@@ -124,3 +143,4 @@ if __name__ == "__main__":
     # load_only_disapproved_ads()
     # load_and_enrich_objects()
     # load_insights()
+    # load_insights_with_breakdowns()

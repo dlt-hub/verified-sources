@@ -135,7 +135,6 @@ class ShopifyPartnerApi:
         variables = dict(variables or {})
         while True:
             data = self.run_graphql_query(query, variables)
-            print(data)
             data_items = jsonpath.find_values(data_items_path, data)
             if not data_items:
                 break

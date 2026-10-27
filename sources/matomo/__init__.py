@@ -197,15 +197,20 @@ def get_last_visits(
     primary_key="visitorId",
 )
 def get_unique_visitors(
-    visits: List[DictStrAny], client: MatomoAPIClient, site_id: int
+    visits: List[DictStrAny],
+    client: MatomoAPIClient,
+    site_id: int,
+    chunk_size: int = 20,
 ) -> Iterator[TDataItem]:
     """
     Dlt transformer. Receives information about visits from get_last_visits.
+    This version allows batch loading for visitors data, which is to avoid too-long-URL issue
 
     Args:
         visits (List[DictStrAny]): List of dicts containing information on last visits in the given timeframe.
         client (MatomoAPIClient): Used to make calls to Matomo API.
         site_id (int): Every site in Matomo has a unique id.
+        chunk_size (int): Number of visitor IDs to process in each batch. Defaults to 20.
 
     Returns:
         Iterator[TDataItem]: Dict containing information about the visitor.
@@ -213,7 +218,7 @@ def get_unique_visitors(
 
     visitor_ids = [visit["visitorId"] for visit in visits]
     indexed_visitor_ids = [
-        visitor_ids[i : i + 100] for i in range(0, len(visitor_ids), 100)
+        visitor_ids[i : i + chunk_size] for i in range(0, len(visitor_ids), chunk_size)
     ]
     for visitor_list in indexed_visitor_ids:
         method_data = client.get_visitors_batch(

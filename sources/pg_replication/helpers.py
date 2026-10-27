@@ -42,7 +42,7 @@ from dlt.sources.config import with_config
 from dlt.sources.credentials import ConnectionStringCredentials
 from dlt.sources.sql_database import (
     sql_table as core_sql_table,
-    sql_database as core_sql_datbase,
+    sql_database as core_sql_database,
 )
 
 from .schema_types import _to_dlt_column_schema, _to_dlt_val
@@ -114,7 +114,8 @@ def init_replication(
         table_names (Optional[Union[str, Sequence[str]]]):  Name(s) of the table(s)
           to include in the publication. If not provided, the whole schema with `schema_name` will be replicated
           (also tables added to the schema after the publication was created). You need superuser privileges
-          for the schema replication.
+          for the whole schema replication. When specifying individual table names, the database role must
+          own the tables if it's not a superuser.
         credentials (ConnectionStringCredentials): Postgres database credentials.
         publish (str): Comma-separated string of DML operations. Can be used to
           control which changes are included in the publication. Allowed operations
@@ -184,7 +185,7 @@ def init_replication(
                     # do not include dlt tables
                     table_names = [
                         table_name
-                        for table_name in core_sql_datbase(
+                        for table_name in core_sql_database(
                             credentials, schema=schema_name, reflection_level="minimal"
                         ).resources.keys()
                         if not table_name.lower().startswith(DLT_NAME_PREFIX)

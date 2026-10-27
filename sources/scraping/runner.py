@@ -4,67 +4,104 @@ import typing as t
 import dlt
 
 from dlt.common import logger
-from pydispatch import dispatcher
-from typing_extensions import Self
+from twisted.internet import reactor as _reactor_module
+
+import logging as _logging
 
 from scrapy import signals, Item, Spider
-from scrapy.crawler import CrawlerProcess
+from scrapy.crawler import Crawler, CrawlerRunner
 
 from .types import AnyDict, Runnable
 from .queue import ScrapingQueue
 
 T = t.TypeVar("T", bound=Item)
 
+_REACTOR: t.Any = _reactor_module
+_REACTOR_THREAD: t.Optional[threading.Thread] = None
+_REACTOR_LOCK = threading.Lock()
+
+
+def _ensure_reactor() -> None:
+    """Start the Twisted reactor in a daemon thread if not already running."""
+    global _REACTOR_THREAD
+    with _REACTOR_LOCK:
+        if _REACTOR_THREAD is not None and _REACTOR_THREAD.is_alive():
+            return
+
+        started = threading.Event()
+
+        def _run_reactor() -> None:
+            _REACTOR.callWhenRunning(started.set)
+            _REACTOR.run(installSignalHandlers=False)
+
+        _REACTOR_THREAD = threading.Thread(target=_run_reactor, daemon=True)
+        _REACTOR_THREAD.start()
+        started.wait()
+
 
 class Signals(t.Generic[T]):
-    """Signals context wrapper
+    """Manages signal connections between a Scrapy Crawler and the scraping queue.
 
-    This wrapper is also a callable which accepts `CrawlerProcess` instance
-    this is required to stop the scraping process as soon as the queue closes.
+    Connects to spider_closed (not engine_stopped) to close the queue. This is
+    important because spider_closed fires AFTER all item_scraped callbacks —
+    guaranteed by the engine's deferred chain:
+      scraper.close_spider() waits for slot.is_idle() → spider_closed signal
+    Using engine_stopped would race with pending item_scraped callbacks.
     """
 
     def __init__(self, pipeline_name: str, queue: ScrapingQueue[T]) -> None:
-        self.stopping = False
+        self._stopped = False
         self.queue = queue
         self.pipeline_name = pipeline_name
+        self._crawler: t.Optional[Crawler] = None
+        self._runner: t.Optional[CrawlerRunner] = None
+
+    def connect(self, crawler: Crawler, runner: CrawlerRunner) -> None:
+        """Connect signal handlers to a Crawler. Must be called from the reactor thread."""
+        if self._crawler is not None:
+            raise RuntimeError("Signals already connected to a crawler")
+        self._crawler = crawler
+        self._runner = runner
+        crawler.signals.connect(self.on_item_scraped, signals.item_scraped)
+        crawler.signals.connect(self.on_spider_closed, signals.spider_closed)
+
+    def disconnect(self) -> None:
+        """Disconnect signal handlers. Must be called from the reactor thread."""
+        if self._crawler is not None:
+            self._crawler.signals.disconnect(self.on_item_scraped, signals.item_scraped)
+            self._crawler.signals.disconnect(
+                self.on_spider_closed, signals.spider_closed
+            )
+            self._crawler = None
+            self._runner = None
 
     def on_item_scraped(self, item: T) -> None:
-        if not self.queue.is_closed:
-            self.queue.put(item)
-        else:
-            logger.info(
-                "Queue is closed, stopping",
-                extra={"pipeline_name": self.pipeline_name},
-            )
-            if not self.stopping:
-                self.on_engine_stopped()
+        self.queue.put(item)
 
-    def on_engine_stopped(self) -> None:
-        logger.info(f"Crawling engine stopped for pipeline={self.pipeline_name}")
-        self.stopping = True
-        self.crawler.stop()
+    def on_spider_closed(self, spider: t.Any, reason: str) -> None:
+        logger.info(f"Spider closed for pipeline={self.pipeline_name} reason={reason}")
+        self._initiate_stop()
+
+    def _initiate_stop(self) -> None:
+        """Idempotent stop: close the queue and stop the crawler.
+
+        Uses reactor.callFromThread to stop the runner, which is safe
+        from both the reactor thread and non-reactor threads.
+        """
+        if self._stopped:
+            return
+        self._stopped = True
         self.queue.close()
-        self.queue.join()
-
-    def __call__(self, crawler: CrawlerProcess) -> Self:
-        self.crawler = crawler
-        return self
-
-    def __enter__(self) -> None:
-        # We want to receive on_item_scraped callback from
-        # outside so we don't have to know about any queue instance.
-        dispatcher.connect(self.on_item_scraped, signals.item_scraped)
-
-        # Once crawling engine stops we would like to know about it as well.
-        dispatcher.connect(self.on_engine_stopped, signals.engine_stopped)
-
-    def __exit__(self, exc_type: t.Any, exc_val: t.Any, exc_tb: t.Any) -> None:
-        dispatcher.disconnect(self.on_item_scraped, signals.item_scraped)
-        dispatcher.disconnect(self.on_engine_stopped, signals.engine_stopped)
+        if self._runner is not None:
+            _REACTOR.callFromThread(self._runner.stop)
 
 
 class ScrapyRunner(Runnable):
-    """Scrapy runner handles setup and teardown of scrapy crawling"""
+    """Scrapy runner handles setup and teardown of scrapy crawling.
+
+    Uses a persistent Twisted reactor running in a daemon thread,
+    allowing sequential pipeline runs in the same process.
+    """
 
     def __init__(
         self,
@@ -75,32 +112,60 @@ class ScrapyRunner(Runnable):
     ) -> None:
         self.spider = spider
         self.start_urls = start_urls
-        self.crawler = CrawlerProcess(settings=settings)
         self.signals = signals
+        self.runner = CrawlerRunner(settings=settings)
+        # apply scrapy log level without touching root handlers (dlt owns those)
+        log_level = self.runner.settings.get("LOG_LEVEL", "WARNING")
+        _logging.getLogger("scrapy").setLevel(log_level)
+        _logging.getLogger("twisted").setLevel(_logging.ERROR)
 
     def run(self, *args: t.Any, **kwargs: t.Any) -> None:
-        """Runs scrapy crawler process
+        """Runs scrapy crawler via the persistent reactor.
 
-        All `kwargs` are forwarded to `crawler.crawl(**kwargs)`.
-        Also manages relevant signal handling in proper way.
+        Schedules the crawl in the reactor thread via callFromThread,
+        then blocks until the crawl completes.
         """
-        self.crawler.crawl(
-            self.spider,
-            name="scraping_spider",
-            start_urls=self.start_urls,
-            **kwargs,
-        )
+        _ensure_reactor()
+
+        done = threading.Event()
+        crawl_error: t.List[BaseException] = []
+
+        def _schedule() -> None:
+            crawler = self.runner.create_crawler(self.spider)
+            self.signals.connect(crawler, self.runner)
+
+            d = self.runner.crawl(
+                crawler,
+                name="scraping_spider",
+                start_urls=self.start_urls,
+                **kwargs,
+            )
+
+            def _on_done(result: t.Any) -> None:
+                self.signals.disconnect()
+                done.set()
+
+            def _on_error(failure: t.Any) -> None:
+                self.signals.disconnect()
+                crawl_error.append(failure.value)
+                done.set()
+
+            d.addCallback(_on_done)
+            d.addErrback(_on_error)
 
         try:
             logger.info("Starting the crawler")
-            with self.signals(self.crawler):
-                self.crawler.start()
+            _REACTOR.callFromThread(_schedule)
+            done.wait()
         except Exception:
             logger.error("Was unable to start crawling process")
             raise
         finally:
-            self.signals.on_engine_stopped()
+            self.signals._initiate_stop()
             logger.info("Scraping stopped")
+
+        if crawl_error:
+            raise crawl_error[0]
 
 
 class PipelineRunner(Runnable):
@@ -191,5 +256,10 @@ class ScrapingHost:
         logger.info("Starting scrapy crawler")
         self.scrapy_runner.run()
 
-        # Wait to for pipeline finish its job
-        pipeline_worker.join()
+        # Wait for pipeline to finish its job
+        pipeline_worker.join(timeout=60)
+        if pipeline_worker.is_alive():
+            logger.warning(
+                "Pipeline worker did not finish within timeout. Forcing queue close."
+            )
+            self.queue.close()

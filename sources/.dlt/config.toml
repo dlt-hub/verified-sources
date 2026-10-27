@@ -39,7 +39,7 @@ queries = [
 ]
 site_id = 2
 live_events_site_id = 2
-url = "https://dlthub.matomo.cloud/"
+url = "https://dlthubtest.matomo.cloud"
 
 ## sql_database
 [sources.sql_database.data_writer]

@@ -4,31 +4,37 @@ import dlt
 from jira import jira, jira_search
 
 
-def load(endpoints: Optional[List[str]] = None) -> None:
+def load(endpoints: Optional[List[str]] = None, limit: Optional[int] = None) -> None:
     """
     Load data from specified Jira endpoints into a dataset.
 
     Args:
         endpoints: A list of Jira endpoints. If not provided, defaults to all resources.
+        limit: Maximum number of pages per resource.
     """
-    if not endpoints:
-        endpoints = list(jira().resources.keys())
-
     pipeline = dlt.pipeline(
         pipeline_name="jira_pipeline", destination="duckdb", dataset_name="jira"
     )
 
-    load_info = pipeline.run(jira().with_resources(*endpoints))
+    source = jira()
+    if endpoints:
+        source = source.with_resources(*endpoints)
+    if limit is not None:
+        source.add_limit(limit)
+
+    load_info = pipeline.run(source)
 
     print(f"Load Information: {load_info}")
 
 
-def load_query_data(queries: List[str]) -> None:
+def load_query_data(queries: List[str], limit: Optional[int] = None) -> None:
     """
     Load issues from specified Jira queries into a dataset.
 
     Args:
-        queries: A list of JQL queries.
+        queries: A list of JQL queries. A query needs a filtering clause; Jira rejects one
+            that only sorts.
+        limit: Maximum number of pages per query.
     """
     pipeline = dlt.pipeline(
         pipeline_name="jira_search_pipeline",
@@ -36,18 +42,22 @@ def load_query_data(queries: List[str]) -> None:
         dataset_name="jira_search",
     )
 
-    load_info = pipeline.run(jira_search().issues(jql_queries=queries))
+    source = jira_search()
+    source.issues.bind(jql_queries=queries, page_limit=limit)
+
+    load_info = pipeline.run(source)
 
     print(f"Load Information: {load_info}")
 
 
 if __name__ == "__main__":
-    # Add your desired endpoints to the list 'endpoints'
-    load(endpoints=None)
+    # issues load in the query run below
+    load(endpoints=["users", "projects", "workflows", "workflow_statuses"], limit=2)
 
+    # every query runs, each bounded on its own
     queries = [
         "created >= -30d order by created DESC",
-        'project = KAN AND status = "In Progress" order by created DESC',
+        'status = "In Progress" order by created DESC',
     ]
 
-    load_query_data(queries=queries)
+    load_query_data(queries=queries, limit=2)

@@ -8,8 +8,12 @@ from dlt.common.utils import set_working_dir
 
 from dlt.sources import SourceReference
 
-from dlt.cli import init_command, echo
-from dlt.cli.init_command import SOURCES_MODULE_NAME, utils as cli_utils, files_ops
+from dlt._workspace.cli import echo, _init_command as init_command
+from dlt._workspace.cli._init_command import (
+    SOURCES_MODULE_NAME,
+    utils as cli_utils,
+    files_ops,
+)
 from dlt.reflection import names as n
 
 from tests.utils import TEST_STORAGE_ROOT

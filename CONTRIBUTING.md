@@ -98,23 +98,6 @@ your source will be distributed to other users once it is accepted into our repo
 
 6. Proceed to the pull request section to [create a pull request to the main repo](#making-a-pull-request-to-the-main-repo-from-fork).
 
-## Walkthrough: Modify or add rules files for LLM-enabled IDEs
-In this section, you will learn how to contribute rules files.
-
-### 1. How the `ai/` directory works
-
-1. The `.rules` folder is the master folder from which the files are rendered and copied into the respective IDE folders with the appropriate structure and format.
-2. Rendering and copying of the files are handled by the `make transpile-rules` command.
-3. The make transpile-rules command relies on Continue's [rules CLI](https://github.com/continuedev/rules).
-
-### 1. How to modify or add rules
-
-1. Follow the [coding prerequisites](#coding-prerequisites) to setup the repository.
-2. On your branch, add or modify rules files under the `/ai/.rules/` directory.
-3. Verify that the rules are properly formatted.
-4. Run `make transpile-rules` to update the respective IDE folders.
-4. Proceed to the pull request section to [create a pull request to the main repo](#making-a-pull-request-to-the-main-repo-from-fork). Please explain for what use cases these rules are useful and share what IDE version you're using.
-
 ## Coding Prerequisites
 
 To start development in the verified sources repository, there are a few steps you need to do to
@@ -137,7 +120,7 @@ ensure you have a working setup.
 
 ### 2. Prepare the development environment
 
-Development on the verified sources repository depends on Python 3.9 or higher and `uv` being
+Development on the verified sources repository depends on Python 3.10 or higher and `uv` being
 available as well as the needed dependencies being installed. Make is used to automate tasks.
 
 1. Install uv: https://docs.astral.sh/uv/getting-started/installation/
@@ -376,13 +359,13 @@ We are happy to add you as contributor to avoid the hurdles of setting up creden
 
 ### Ensuring the correct Python version
 
-Use Python 3.9 for development which is the lowest supported version for `dlt`. You'll need
-`distutils` and `venv`:
+Use Python 3.10 for development which is the lowest supported version for this repository.
+You'll need `distutils` and `venv`:
 
 ```shell
-sudo apt-get install python3.9
-sudo apt-get install python3.9-distutils
-sudo apt install python3.9-venv
+sudo apt-get install python3.10
+sudo apt-get install python3.10-distutils
+sudo apt install python3.10-venv
 ```
 
 `uv` will manage virtual environments for you.

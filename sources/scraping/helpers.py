@@ -2,6 +2,7 @@ import os
 import typing as t
 
 import dlt
+from dlt.common import logger
 from dlt.common.configuration.inject import with_config
 from dlt.common.configuration.specs.base_configuration import (
     configspec,
@@ -77,10 +78,16 @@ def create_pipeline_runner(
         queue=queue,
     )
 
-    # Just to simple merge
     settings = {**SOURCE_SCRAPY_SETTINGS}
     if scrapy_settings:
-        settings = {**scrapy_settings}
+        settings = {**SOURCE_SCRAPY_SETTINGS, **scrapy_settings}
+
+    # sync scrapy log level with dlt's logger unless explicitly overridden
+    if "LOG_LEVEL" not in settings:
+        if logger.is_logging():
+            settings["LOG_LEVEL"] = logger.log_level()
+        else:
+            settings["LOG_LEVEL"] = "INFO"
 
     scrapy_runner = ScrapyRunner(
         spider=spider,

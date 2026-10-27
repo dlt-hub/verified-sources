@@ -1,0 +1,301 @@
+{
+  "name": "DltTypes__c",
+  "fields": [
+    {
+      "name": "Id",
+      "type": "id",
+      "precision": 0,
+      "scale": 0,
+      "nillable": false,
+      "calculated": false
+    },
+    {
+      "name": "OwnerId",
+      "type": "reference",
+      "precision": 0,
+      "scale": 0,
+      "nillable": false,
+      "calculated": false
+    },
+    {
+      "name": "IsDeleted",
+      "type": "boolean",
+      "precision": 0,
+      "scale": 0,
+      "nillable": false,
+      "calculated": false
+    },
+    {
+      "name": "Name",
+      "type": "string",
+      "precision": 0,
+      "scale": 0,
+      "nillable": true,
+      "calculated": false
+    },
+    {
+      "name": "CreatedDate",
+      "type": "datetime",
+      "precision": 0,
+      "scale": 0,
+      "nillable": false,
+      "calculated": false
+    },
+    {
+      "name": "CreatedById",
+      "type": "reference",
+      "precision": 0,
+      "scale": 0,
+      "nillable": false,
+      "calculated": false
+    },
+    {
+      "name": "LastModifiedDate",
+      "type": "datetime",
+      "precision": 0,
+      "scale": 0,
+      "nillable": false,
+      "calculated": false
+    },
+    {
+      "name": "LastModifiedById",
+      "type": "reference",
+      "precision": 0,
+      "scale": 0,
+      "nillable": false,
+      "calculated": false
+    },
+    {
+      "name": "SystemModstamp",
+      "type": "datetime",
+      "precision": 0,
+      "scale": 0,
+      "nillable": false,
+      "calculated": false
+    },
+    {
+      "name": "Account__c",
+      "type": "reference",
+      "precision": 0,
+      "scale": 0,
+      "nillable": true,
+      "calculated": false
+    },
+    {
+      "name": "AutoNumber__c",
+      "type": "string",
+      "precision": 0,
+      "scale": 0,
+      "nillable": false,
+      "calculated": false
+    },
+    {
+      "name": "Category__c",
+      "type": "string",
+      "precision": 0,
+      "scale": 0,
+      "nillable": true,
+      "calculated": false
+    },
+    {
+      "name": "Checkbox__c",
+      "type": "boolean",
+      "precision": 0,
+      "scale": 0,
+      "nillable": false,
+      "calculated": false
+    },
+    {
+      "name": "Currency__c",
+      "type": "currency",
+      "precision": 16,
+      "scale": 2,
+      "nillable": true,
+      "calculated": false
+    },
+    {
+      "name": "DateTime__c",
+      "type": "datetime",
+      "precision": 0,
+      "scale": 0,
+      "nillable": true,
+      "calculated": false
+    },
+    {
+      "name": "Date__c",
+      "type": "date",
+      "precision": 0,
+      "scale": 0,
+      "nillable": true,
+      "calculated": false
+    },
+    {
+      "name": "Email__c",
+      "type": "email",
+      "precision": 0,
+      "scale": 0,
+      "nillable": true,
+      "calculated": false
+    },
+    {
+      "name": "Location__Latitude__s",
+      "type": "double",
+      "precision": 9,
+      "scale": 6,
+      "nillable": true,
+      "calculated": false
+    },
+    {
+      "name": "Location__Longitude__s",
+      "type": "double",
+      "precision": 9,
+      "scale": 6,
+      "nillable": true,
+      "calculated": false
+    },
+    {
+      "name": "Location__c",
+      "type": "location",
+      "precision": 0,
+      "scale": 0,
+      "nillable": true,
+      "calculated": false
+    },
+    {
+      "name": "LongText__c",
+      "type": "textarea",
+      "precision": 0,
+      "scale": 0,
+      "nillable": true,
+      "calculated": false
+    },
+    {
+      "name": "MultiPicklist__c",
+      "type": "multipicklist",
+      "precision": 4,
+      "scale": 0,
+      "nillable": true,
+      "calculated": false
+    },
+    {
+      "name": "Number16_2__c",
+      "type": "double",
+      "precision": 16,
+      "scale": 2,
+      "nillable": true,
+      "calculated": false
+    },
+    {
+      "name": "Number18__c",
+      "type": "double",
+      "precision": 18,
+      "scale": 0,
+      "nillable": true,
+      "calculated": false
+    },
+    {
+      "name": "Percent__c",
+      "type": "percent",
+      "precision": 5,
+      "scale": 2,
+      "nillable": true,
+      "calculated": false
+    },
+    {
+      "name": "Phone__c",
+      "type": "phone",
+      "precision": 0,
+      "scale": 0,
+      "nillable": true,
+      "calculated": false
+    },
+    {
+      "name": "Picklist__c",
+      "type": "picklist",
+      "precision": 0,
+      "scale": 0,
+      "nillable": true,
+      "calculated": false
+    },
+    {
+      "name": "RichText__c",
+      "type": "textarea",
+      "precision": 0,
+      "scale": 0,
+      "nillable": true,
+      "calculated": false
+    },
+    {
+      "name": "Seed_Id__c",
+      "type": "string",
+      "precision": 0,
+      "scale": 0,
+      "nillable": true,
+      "calculated": false
+    },
+    {
+      "name": "TextArea__c",
+      "type": "textarea",
+      "precision": 0,
+      "scale": 0,
+      "nillable": true,
+      "calculated": false
+    },
+    {
+      "name": "Text__c",
+      "type": "string",
+      "precision": 0,
+      "scale": 0,
+      "nillable": true,
+      "calculated": false
+    },
+    {
+      "name": "Time__c",
+      "type": "time",
+      "precision": 0,
+      "scale": 0,
+      "nillable": true,
+      "calculated": false
+    },
+    {
+      "name": "Url__c",
+      "type": "url",
+      "precision": 0,
+      "scale": 0,
+      "nillable": true,
+      "calculated": false
+    },
+    {
+      "name": "FormulaCheckbox__c",
+      "type": "boolean",
+      "precision": 0,
+      "scale": 0,
+      "nillable": false,
+      "calculated": true
+    },
+    {
+      "name": "FormulaDate__c",
+      "type": "date",
+      "precision": 0,
+      "scale": 0,
+      "nillable": true,
+      "calculated": true
+    },
+    {
+      "name": "FormulaNumber__c",
+      "type": "double",
+      "precision": 18,
+      "scale": 2,
+      "nillable": true,
+      "calculated": true
+    },
+    {
+      "name": "FormulaText__c",
+      "type": "string",
+      "precision": 0,
+      "scale": 0,
+      "nillable": true,
+      "calculated": true
+    }
+  ]
+}

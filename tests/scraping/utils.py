@@ -1,15 +1,12 @@
 from queue import Empty
-from typing import Any, Iterator, List, Type, Union
+from typing import Any, Iterator, List
 import time
 import threading
 
 import dlt
 
 from scrapy import Spider  # type: ignore
-from scrapy.crawler import Crawler, CrawlerRunner  # type: ignore
 from scrapy.http import Response  # type: ignore
-from twisted.internet import reactor
-from twisted.internet.defer import Deferred
 
 from sources.scraping.queue import QueueClosedError, ScrapingQueue
 
@@ -32,7 +29,7 @@ class MySpider(Spider):
             yield result
 
 
-class TestQueue(ScrapingQueue):
+class MockQueue(ScrapingQueue):
     """Test queue alters the default get_batches behavior by
     adding max attempts count on queue read timeout
     """
@@ -53,9 +50,12 @@ class TestQueue(ScrapingQueue):
 
             try:
                 if self.is_closed:
-                    raise QueueClosedError("Queue is closed")
-
-                item = self.get(timeout=self.read_timeout)
+                    try:
+                        item = self.get_nowait()
+                    except Empty:
+                        raise QueueClosedError("Queue is closed")
+                else:
+                    item = self.get(timeout=self.read_timeout)
                 batch.append(item)
 
                 # Mark task as completed
@@ -72,31 +72,10 @@ class TestQueue(ScrapingQueue):
                 print("Get attempt #", get_attempts)
                 get_attempts += 1
             except QueueClosedError:
-                # Return the last batch before exiting
                 if batch:
                     yield batch
 
                 break
-
-
-class TestCrawlerProcess(CrawlerRunner):
-    def crawl(
-        self,
-        crawler_or_spidercls: Union[Type[Spider], str, Crawler],
-        *args: Any,
-        **kwargs: Any,
-    ) -> Deferred:
-        deferred = super().crawl(crawler_or_spidercls, *args, **kwargs)
-        deferred.addBoth(lambda _: reactor.stop())
-        return deferred
-
-    def start(
-        self, stop_after_crawl: bool = True, install_signal_handlers: bool = True
-    ) -> None:
-        try:
-            reactor.run()
-        except Exception:
-            pass
 
 
 def queue_closer(
@@ -121,7 +100,6 @@ def queue_closer(
 
 def table_expect_at_least_n_records(table_name: str, n: int, pipeline: dlt.Pipeline):
     with pipeline.sql_client() as client:
-        with client.execute_query(f"SELECT * FROM {table_name}") as cursor:
-            loaded_values = [item for item in cursor.fetchall()]
-            n_loaded_values = len(loaded_values)
-            assert n_loaded_values == n, f"Expected {n} records, got {n_loaded_values}"
+        with client.execute_query(f"SELECT count(*) FROM {table_name}") as cursor:
+            count = cursor.fetchone()[0]
+            assert count >= n, f"Expected at least {n} records, got {count}"

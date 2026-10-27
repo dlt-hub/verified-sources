@@ -190,7 +190,6 @@ def slack_source(
             "ts",
             initial_value=start_dt,
             end_value=end_dt,
-            allow_external_schedulers=True,
         ),
     ) -> Iterable[TDataItem]:
         """
@@ -213,7 +212,6 @@ def slack_source(
             "ts",
             initial_value=start_dt,
             end_value=end_dt,
-            allow_external_schedulers=True,
         ),
     ) -> Iterable[TDataItem]:
         """Yield all messages for a given channel as a DLT resource. Keep blocks column without normalization.
