@@ -108,6 +108,7 @@ Using absolute paths under `WORKTREE`:
 - **Loaded schema** — changes to resource or table names, column names or types, primary or merge keys, write dispositions or nesting change the data that existing users already loaded. Flag each one as breaking.
 - **State and incremental cursors** — changes to resource state keys, incremental cursor fields or initial values must stay compatible with the state that existing pipelines already stored. Check what happens on the first run after an upgrade.
 - For both, follow [Data shape and upgrade compatibility](../refresh-source/SKILL.md#data-shape-and-upgrade-compatibility): what to compare, how to observe an upgrade and how to classify each change.
+- **Version and changelog** — every PR that changes a source must bump `sources/<name>/version.py` (added with `1.0.0` if missing) and add a changelog entry to its README, see [Source version and README](../refresh-source/SKILL.md#source-version-and-readme). A breaking change needs a `major` bump and its upgrade path in the changelog. A missing bump or entry blocks the merge.
 
 ### 7. Review test coverage
 
@@ -152,7 +153,7 @@ If the PR fixes a bug:
 
 Documentation is split between two repos:
 
-- **Source README** (`sources/<name>/README.md`) — must stay super short: what the source does and a link to the docs. Flag PRs that add setup guides, configuration reference or usage examples to the README; that content belongs in the dlt docs.
+- **Source README** (`sources/<name>/README.md`) — the maintenance document of the source: changelog, architecture and extension points, tests and seeding, operations, see [Source version and README](../refresh-source/SKILL.md#source-version-and-readme). Check that the PR updates the sections it affects. Setup guides, configuration reference and usage examples belong in the dlt docs.
 - **User docs** — live in the `dlt-hub/dlt` repo under `docs/website/docs/dlt-ecosystem/verified-sources/`, as `<doc>.md` or a `<doc>/` folder. The doc name does not always match the source folder (e.g. `stripe_analytics` → `stripe.md`, `asana_dlt` → `asana.md`, `kinesis` → `amazon_kinesis.md`). List and fetch them with `gh api repos/dlt-hub/dlt/contents/docs/website/docs/dlt-ecosystem/verified-sources?ref=devel`.
 
 If the PR changes user-facing behavior (source or resource arguments, defaults, loaded schema, setup steps, required permissions, dependencies):
@@ -173,6 +174,6 @@ Write a structured analysis covering:
 - **Observations & Potential Issues**: Bugs, edge cases, missing error handling, performance concerns, memory issues, security issues.
 - **Breaking Changes**: Changes to source/resource signatures, loaded schema or stored state that affect existing users (step 6a), each with what fails after an upgrade and the upgrade path.
 - **Test Coverage**: Required scenarios checklist with pass/fail status, misplaced tests, duplication issues, parametrization opportunities.
-- **Documentation**: README length, whether a `dlt-hub/dlt` docs update is needed, demo script.
+- **Documentation**: version bump and changelog entry, README sections the change affects, whether a `dlt-hub/dlt` docs update is needed, demo script.
 - **Reviewer Instructions**: If reviewer instructions were provided, include a dedicated section addressing each point raised. If no instructions were provided, omit this section.
 - **Verdict**: Overall assessment.

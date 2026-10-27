@@ -15,7 +15,7 @@ When working on this repository, follow these guidelines from CONTRIBUTING.md an
 
 ## Source structure
 - Each source is a self-contained folder under `sources/`
-- Source folder contains: Python modules with relative imports, `requirements.txt`, optional `README.md`
+- Source folder contains: Python modules with relative imports, `requirements.txt`, `version.py` and `README.md`, the maintenance document with the changelog (see [Source version and README](../refresh-source/SKILL.md#source-version-and-readme))
 - Pipeline demo script: `sources/<name>_pipeline.py` (outside the source folder)
 - Tests: `tests/<source_name>/`
 

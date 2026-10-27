@@ -31,5 +31,5 @@ Use this checklist when reviewing a PR that adds a new verified source. These it
 
 ## 5. Documentation
 
-- `sources/<name>/README.md` is super short: what the source does and a link to the docs.
+- `sources/<name>/version.py` with `__version__ = "1.0.0"` and `sources/<name>/README.md` as the maintenance document of the source: changelog, architecture, tests and seeding, operations, see [Source version and README](../refresh-source/SKILL.md#source-version-and-readme).
 - The user docs page is a separate PR to `dlt-hub/dlt` (`docs/website/docs/dlt-ecosystem/verified-sources/<name>.md`, plus its sidebar entry). Flag it as required if missing.

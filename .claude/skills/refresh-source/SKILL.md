@@ -10,12 +10,12 @@ Arguments: `$ARGUMENTS` — first token is the source folder name under `sources
 
 Work through the phases in order. Do not skip phase 0 — wrong conclusions are usually formed by analyzing code that is no longer alive or pins that no longer reflect reality.
 
-**New source**: when `sources/<name>/` does not exist, skip the steps about existing code, pins and dead code, and follow "Walkthrough: Create and contribute a new source" in `CONTRIBUTING.md` and the [new source checklist](../review-pr/new-source-checklist.md).
+**New source**: when `sources/<name>/` does not exist, skip the steps about existing code, pins and dead code, and follow "Walkthrough: Create and contribute a new source" in `CONTRIBUTING.md` and the [new source checklist](../review-pr/new-source-checklist.md). Start the source at version `1.0.0` with the README described in [Source version and README](#source-version-and-readme).
 
 ## Phase 0 — Ground truth
 
 0. Build the context with [create-source-context](../create-source-context/SKILL.md): the data the upstream offers, authoritative docs, existing connectors, auth, pagination, limits and a data inventory. For a new source, stop after it until the user confirms the scope.
-1. Read everything in `sources/<name>/`, `sources/<name>_pipeline.py`, `tests/<name>/`.
+1. Read everything in `sources/<name>/`, `sources/<name>_pipeline.py`, `tests/<name>/`. Start with `README.md` and `version.py`: the changelog, architecture and operations notes of the source.
 2. `git log --oneline -- sources/<name>` — look for past removals/refactors. **Hunt dead code**: files, fixtures, conftest helpers, docstrings and README claims orphaned by earlier PRs. Dead code should be deleted, never "fixed". Dead code may also be the only reason for a heavy dependency — deleting it can drop whole packages from `requirements.txt`.
 3. Compare the THREE dependency declarations and flag mismatches:
    - `sources/<name>/requirements.txt` — what `dlt init` users actually install (often unbounded!)
@@ -113,7 +113,7 @@ Tier the findings; keep tiers separable:
 
 For a new source, the plan lists the resources from the data inventory, the structure (see [Source structure and dlt building blocks](#source-structure-and-dlt-building-blocks)), write dispositions and tests instead of tiers.
 
-Classify every planned change with [Data shape and upgrade compatibility](#data-shape-and-upgrade-compatibility) before presenting the plan.
+Classify every planned change with [Data shape and upgrade compatibility](#data-shape-and-upgrade-compatibility) before presenting the plan, and name the version bump it leads to (see [Source version and README](#source-version-and-readme)).
 
 Prefer dlt built-ins over hand-rolled code (see [Source structure and dlt building blocks](#source-structure-and-dlt-building-blocks), and `dlt.common.time.ensure_datetime_in_tz` / `ensure_date`, the `dlt.common` logger) — but verify the utility exists in the oldest dlt allowed by the source's requirements.txt before using it, and bump that minimum when needed. Do not add new `pendulum` code: use stdlib `datetime` with dlt's helpers.
 
@@ -145,9 +145,39 @@ Without an account, run both versions on captured responses (phase 4) and compar
 
 Not breaking, but report them: new columns or tables, dropped columns (left in the destination with nulls), type widening the destination coerces.
 
-**4. Warn the user** in the plan, the PR description, the README and the dlt docs (phase 6): list every change, mark the breaking ones with what fails, and give the upgrade path, e.g. `pipeline.run(source, refresh="drop_sources")`, `dlt pipeline <name> drop <resource>`, a config option or an option that keeps the old behavior.
+**4. Warn the user** in the plan, the PR description, the README changelog and the dlt docs (phase 6): list every change, mark the breaking ones with what fails, and give the upgrade path, e.g. `pipeline.run(source, refresh="drop_sources")`, `dlt pipeline <name> drop <resource>`, a config option or an option that keeps the old behavior.
 
 **5. Test it**: run the pipeline twice so the state carries over between runs, and test switches users can make between runs (e.g. a backend picked automatically when a package gets installed).
+
+## Source version and README
+
+**Every change to a source that goes into a PR bumps its version and updates its README, in the same PR.** `dlt init` copies both files into user projects, and the copies carry no git history.
+
+`sources/<name>/version.py` holds the version of the source. Add it with `1.0.0` when it is missing:
+
+```py
+__version__ = "1.0.0"
+```
+
+The version follows the [semantic versioning of dlt](https://github.com/dlt-hub/dlt#adding-as-dependency):
+- `major`: breaking changes, see [Data shape and upgrade compatibility](#data-shape-and-upgrade-compatibility), and removed deprecations;
+- `minor`: new features, e.g. resources and options, sometimes automatic migrations;
+- `patch`: bug fixes.
+
+`sources/<name>/README.md` is the maintenance document of the source, for developers and coding agents that change it. Setup, configuration and usage for users belong in the dlt docs (phase 6). The README holds:
+- **Changelog**: one entry per version, newest first. Breaking changes are marked, with what fails after an upgrade and the upgrade path;
+- **Architecture**: a short recap of the layers, resources and helpers, and the extension points, e.g. how to add an endpoint or a field type;
+- **Tests and seeding**: which tests run without credentials, the test account, how to seed it and capture responses;
+- **Operations**: throttling and quotas, scaling to large volumes, troubleshooting and anything else needed to change the source safely.
+
+```md
+## Changelog
+
+### 2.0.0
+- **Breaking**: `orders` are merged on `id` instead of replaced. A dataset loaded before fails on
+  merge, run once with `pipeline.run(source, refresh="drop_resources")`.
+- New `order_items` resource.
+```
 
 ## Phase 4 — Tests (the biggest pain point)
 
@@ -182,7 +212,7 @@ Hand-made fixtures encode our assumptions; they hid the header-only page bug in 
 3. Integration tests `pytest tests/<name>` only if credentials exist; otherwise state plainly they were not run.
    With a test account, run the upgrade from [Data shape and upgrade compatibility](#data-shape-and-upgrade-compatibility) and report what changed.
 4. `make lint-code` and `make format-lint`.
-5. Update stale docstrings/README touched by the changes. Report findings with file:line references and the doc URLs that back each claim.
+5. Bump `version.py` and add the README changelog entry, then update the README sections and docstrings the changes touched (see [Source version and README](#source-version-and-readme)). Report findings with file:line references and the doc URLs that back each claim.
 
 ## Phase 6 — Assess the public dlt docs
 
