@@ -1,18 +1,45 @@
-"""Builders and an offline mock of the Jira REST API"""
+"""Builders, helpers and an offline mock of the Jira REST API"""
 
+import glob
 import json
 import os
 import re
 from datetime import datetime, timezone
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, Iterator, List, Optional, Tuple
 from urllib.parse import parse_qs, urlparse
 
+import dlt
 import requests_mock
 from dlt.common.time import datetime_to_timestamp_ms, ensure_datetime
+
+from sources.jira.helpers.client import JiraClient
+from sources.jira.helpers.paginators import JiraCursorPaginator
+
+from tests.utils import TEST_STORAGE_ROOT, assert_load_info
 
 BASE_URL = "https://test.atlassian.net/"
 CAPTURED_RESPONSES = os.path.join(os.path.dirname(__file__), "captured_responses.json")
 CREDENTIALS = {"subdomain": "test", "email": "user@example.com", "api_token": "token"}
+# credentials and the page size of the endpoint tests
+AUTH: Dict[str, Any] = {**CREDENTIALS, "page_size": 2}
+UPDATED_1 = "2024-01-15T10:30:00.123+0100"
+UPDATED_2 = "2024-01-16T08:00:00.000-0800"
+START = datetime(2024, 1, 15, 9, 30, 15, tzinfo=timezone.utc)
+# 2024-01-01T10:00:00Z
+T1 = 1704103200000
+# params the Jira Cloud v3 spec does not accept on the endpoints this source calls
+UNACCEPTED_PARAMS = {"validatequery", "includeinactiveusers"}
+UNACCEPTED_EXPANDS = {"fields"}
+# endpoint config keys that must not reach the query string
+INTERNAL_KEYS = {
+    "api_path",
+    "data_path",
+    "offset_path",
+    "page_size",
+    "deduplicate",
+    "key_field",
+    "primary_key",
+}
 CUSTOM = "com.atlassian.jira.plugin.system.customfieldtypes:"
 
 
@@ -405,3 +432,73 @@ class JiraMock:
         ids = request.json()["ids"]
         self.worklog_lists.append(ids)
         return [self.worklogs[str(worklog_id)] for worklog_id in ids]
+
+
+def run_to_parquet(
+    name: str, data: Any, table_name: str = "issues"
+) -> Tuple[dlt.Pipeline, Any]:
+    """Loads `data` into parquet files on the local filesystem and reads `table_name` as an
+    Arrow table
+    """
+    import pyarrow as pa
+    import pyarrow.parquet as pq
+
+    bucket_path = os.path.abspath(os.path.join(TEST_STORAGE_ROOT, name))
+    pipeline = dlt.pipeline(
+        name, destination=dlt.destinations.filesystem(bucket_path), dev_mode=True
+    )
+    assert_load_info(pipeline.run(data, loader_file_format="parquet"))
+    files = glob.glob(f"{bucket_path}/{pipeline.dataset_name}/{table_name}/*.parquet")
+    return pipeline, pa.concat_tables(pq.read_table(file) for file in files)
+
+
+def to_rows(items: List[Any]) -> List[Dict[str, Any]]:
+    """Converts items yielded by a resource, dicts or Arrow tables, into rows"""
+    rows: List[Dict[str, Any]] = []
+    for item in items:
+        if hasattr(item, "to_pylist"):
+            rows.extend(item.to_pylist())
+        else:
+            rows.append(item)
+    return rows
+
+
+def url_for(api_path: str) -> str:
+    return BASE_URL + api_path
+
+
+def serve(m: requests_mock.Mocker, api_path: str, *pages: Any) -> None:
+    m.get(url_for(api_path), [{"json": page} for page in pages])
+
+
+def items(pages: Iterator[Any]) -> List[Any]:
+    return [item for page in pages for item in page]
+
+
+def read_endpoint(api_path: str, **endpoint: Any) -> Iterator[Any]:
+    """Pages of rows read from an endpoint by the client with `startAt` pagination"""
+    return JiraClient(**CREDENTIALS).paginate_endpoint(
+        {"api_path": api_path, "key_field": "id", "primary_key": "id", **endpoint},  # type: ignore[typeddict-item]
+        endpoint.get("page_size", AUTH["page_size"]),
+    )
+
+
+def cursor_pages(api_path: str) -> Iterator[Any]:
+    """Pages of issues read from `api_path` by the client with cursor pagination"""
+    return JiraClient(**CREDENTIALS).paginate(
+        api_path, JiraCursorPaginator(api_path, 2), "issues"
+    )
+
+
+def sent_params(m: requests_mock.Mocker) -> List[Dict[str, str]]:
+    """Query string of each request. `request.qs` lowercases values, so parse the url instead."""
+    return [
+        {k: v[0] for k, v in parse_qs(urlparse(r.url).query).items()}
+        for r in m.request_history
+    ]
+
+
+def assert_nullable_key(resource: Any, primary_key: str) -> None:
+    key_column = resource.compute_table_schema()["columns"][primary_key]
+    assert key_column["primary_key"] is True
+    assert key_column["nullable"] is True

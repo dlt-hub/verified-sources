@@ -1,5 +1,5 @@
 import os
-from typing import Dict, List
+from typing import Any, Dict, List
 
 import dlt
 import pytest
@@ -9,6 +9,7 @@ from sources.jira import issue_comments, jira, jira_issues, jira_search
 from sources.jira.settings import DEFAULT_ENDPOINTS
 
 from tests.jira.seed_test_data import SEED_LABEL, Jira
+from tests.jira.utils import CREDENTIALS
 from tests.utils import (
     ALL_DESTINATIONS,
     assert_load_info,
@@ -220,3 +221,80 @@ def test_issue_comments_changed(destination_name: str) -> None:
                 site.request("DELETE", f"{path}/{comment_id}")
             except HTTPError:
                 pass
+
+
+# the structured types are checked in Snowflake
+@pytest.mark.parametrize(
+    "destination_name", [name for name in ALL_DESTINATIONS if name == "snowflake"]
+)
+def test_issues_nested_types_snowflake(
+    destination_name: str, captured_mock: Dict[str, Any]
+) -> None:
+    os.environ["DESTINATION__SNOWFLAKE__USE_NESTED_TYPES"] = "true"
+    pipeline = dlt.pipeline(
+        "jira_nested_snowflake", destination=destination_name, dev_mode=True
+    )
+    for _ in range(2):
+        # the second run merges issues updated within lag into the structured columns
+        issues = jira_issues(**CREDENTIALS, backend="pyarrow", nested_types=True)
+        assert_load_info(pipeline.run(issues, loader_file_format="parquet"))
+
+    text, number = "VARCHAR(16777216)", "NUMBER(19,0)"
+    issue_ref = f"OBJECT(id {text}, key {text})"
+    with pipeline.sql_client() as client:
+        table = client.make_qualified_table_name("issues")
+        types = {
+            row[0]: row[1] for row in client.execute_sql(f"DESCRIBE TABLE {table}")
+        }
+        rows = client.execute_sql(
+            f"""
+            SELECT
+                key,
+                customfield_10020[0]:"name"::string,
+                customfield_10020[0]:"boardId"::int,
+                customfield_10046:"child":"value"::string,
+                attachment[0]:"author":"accountId"::string,
+                issuelinks[0]:"outwardIssue":"key"::string,
+                subtasks[1]:"key"::string,
+                parent:"key"::string,
+                status:"statusCategory":"key"::string,
+                ARRAY_SIZE(labels),
+                customfield_10019
+            FROM {table}
+            """
+        )
+    # nested types are created as structured types with Jira keys
+    assert types["CUSTOMFIELD_10020"] == (
+        f"ARRAY(OBJECT(id {number}, name {text}, state {text}, boardId {number}, goal {text},"
+        f" startDate {text}, endDate {text}, completeDate {text}))"
+    )
+    assert types["ISSUELINKS"] == (
+        f"ARRAY(OBJECT(id {text}, type OBJECT(id {text}, name {text}, inward {text}, outward"
+        f" {text}), inwardIssue {issue_ref}, outwardIssue {issue_ref}))"
+    )
+    assert types["ATTACHMENT"] == (
+        f"ARRAY(OBJECT(id {text}, filename {text}, mimeType {text}, size {number}, created"
+        f" {text}, author OBJECT(accountId {text}, displayName {text})))"
+    )
+    assert types["CUSTOMFIELD_10046"] == (
+        f"OBJECT(id {text}, value {text}, child OBJECT(id {text}, value {text}))"
+    )
+    assert types["STATUS"] == (
+        f"OBJECT(id {text}, name {text}, statusCategory OBJECT(id {number}, key {text}, name"
+        f" {text}))"
+    )
+    assert types["PARENT"] == issue_ref
+    assert types["LABELS"] == f"ARRAY({text})"
+    assert types["CUSTOMFIELD_10019"] == text
+
+    values = {row[0]: row[1:] for row in rows}
+    assert len(values) == 8
+    assert values["TST-13"][:2] == ("TST Sprint 3", 2)
+    assert values["TST-24"][2] == "[dummy] rest_api"
+    assert values["TST-17"][3] == "account-1"
+    assert values["TST-18"][4:6] == ("TST-21", "TST-20")
+    assert values["TST-19"][6] == "TST-18"
+    labels = next(i for i in captured_mock["issues"] if i["key"] == "TST-24")["fields"][
+        "labels"
+    ]
+    assert values["TST-24"][7:] == ("new", len(labels), "0|i0008n:")
