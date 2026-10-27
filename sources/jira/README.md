@@ -1,124 +1,64 @@
 # Jira
 
-Loads issues, their comments, changelogs and worklogs, users, workflows and projects from a
-[Jira Cloud](https://www.atlassian.com/software/jira) site. This file is for developers and coding
-agents that change the source. Setup and usage are in the
+Maintenance notes of the [Jira Cloud](https://www.atlassian.com/software/jira) source for developers
+and coding agents. Setup and usage are in the
 [dlt docs](https://dlthub.com/docs/dlt-ecosystem/verified-sources/jira).
-
-| Resource          | Loads                                                                | Disposition |
-| ----------------- | -------------------------------------------------------------------- | ----------- |
-| issues            | issues matching JQL, a column per field                              | merge on `id`, incremental on `updated` |
-| issue_comments    | all comments of the loaded issues, piped from `issues`               | merge, merge key `issueId` |
-| issue_changelogs  | all changes of the loaded issues, piped from `issues`                | merge on `id` |
-| worklogs          | worklogs changed since the last run, deleted worklogs are removed    | merge on `id`, incremental on `updated` |
-| users             | all users on the site, including inactive and deleted accounts       | replace |
-| workflows         | workflows, `workflows__statuses` holds status references             | replace |
-| workflow_statuses | names and categories of the statuses the workflows reference         | replace |
-| projects          | projects                                                             | replace |
-
-`jira()` composes them. `jira_issues` loads issues matching one JQL query with any incremental, and
-`jira_search` loads issues matching several queries, replaced on each run.
 
 ## Changelog
 
 ### 1.0.0
+- **breaking** `issues`: loaded incrementally on `updated` with a 10 minute lag and merged on `id`
+  instead of replaced. Upgrade: if the merge fails with `No root_key column (e.g. _dlt_root_id)`,
+  run `dlt pipeline <name> abort-packages`, then run once with `refresh="drop_resources"`
+- **breaking** `issues`: fields are top level columns named by the field id (`fields__summary` is
+  `summary`), nested tables are `issues__<field>`, rich text is wiki markup (API v2), no
+  `changelog`, `operations`, `transitions`, `comment` and `worklog` data
+- **breaking** `jira_search`: issues load like in `jira_issues` with a `query_index` column, the
+  primary key is `id` and `query_index`, an issue found by two queries loads twice.
+  `jql_queries` and `page_limit` are source arguments. Upgrade: run once with
+  `refresh="drop_resources"`
+- **breaking** `workflows`: read from `rest/api/3/workflows/search`, `id` is text and the primary
+  key, `id__name`, `id__entity_id`, `has_draft_workflow`, `is_default`, `projects` and `schemes` are
+  gone. Upgrade: run once with `refresh="drop_resources"` to drop the empty columns
+- new resources `issue_comments`, `issue_changelogs`, `worklogs` and `workflow_statuses`
+- new `jira_issues`: issues matching JQL with any incremental, as dicts or Arrow tables
+- changed `users`, `workflows`, `projects`: primary keys, the largest page each endpoint serves
+- changed: `get_paginated_data` is removed, `JiraClient.paginate_endpoint` reads the same endpoints
 
-First versioned release.
+Versions before 1.0.0 were not numbered. Copies taken with `dlt init` have no `version.py`,
+`.dlt/.sources` records the repository commit they came from.
 
-- **Breaking**: `issues` are read incrementally on `updated` with a 10 minute lag and merged on
-  `id`, instead of replaced on each run. Fields are top level columns named by the field id
-  (`fields__summary` is now `summary`), nested tables are renamed (`issues__fields__labels` is now
-  `issues__labels`), the `changelog`, `operations` and `transitions` tables are gone, rich text is
-  wiki markup (API v2) instead of Atlassian Document Format, comments and worklogs are not columns.
-  A dataset loaded before fails on merge with `No root_key column (e.g. _dlt_root_id)` and the
-  failed package stays pending. To upgrade, abort it with
-  `dlt pipeline <pipeline_name> abort-packages` and run once with
-  `pipeline.run(source, refresh="drop_resources")`.
-- **Breaking**: `jira_search` loads issues like `jira_issues`, with the columns above. Each row
-  has the `query_index` of the query that found it and the primary key is `id` and `query_index`:
-  an issue found by two queries is loaded twice instead of once. Queries and `page_limit` are
-  arguments of `jira_search`, `jira_search().issues.bind(jql_queries=...)` no longer works. Load
-  into a fresh dataset or run once with `refresh="drop_resources"`.
-- **Breaking**: `workflows` reads `rest/api/3/workflows/search`, which replaces
-  `rest/api/3/workflow/search`, removed on June 1, 2026. Its `id` was an object and arrived as
-  `id__name` and `id__entity_id`, it is now a text `id` and the primary key. `name`,
-  `is_editable`, `scope` and `version` are new. `has_draft_workflow`, `is_default`, `projects` and
-  `schemes` are gone. The load succeeds on an existing dataset but the old columns stay empty, run
-  once with `refresh="drop_resources"` to drop them.
-- New resources: `issue_comments` fetched with the issues, `issue_changelogs`, `worklogs` and
-  `workflow_statuses`. Users, workflows and projects have primary keys and request the largest
-  page each endpoint serves.
-- `jira_issues` loads issues matching JQL with a custom incremental, as dicts or Arrow tables.
-- `get_paginated_data` is removed, `JiraClient.paginate_endpoint` reads the same endpoints.
+## Extension points
 
-Versions before 1.0.0 were not numbered. A copy of the source taken with `dlt init` before it has
-no `version.py`, `.dlt/.sources` records the repository commit it came from. All its breaking
-changes are listed in 1.0.0.
-
-## Architecture
-
-All endpoints are REST APIs called by one client. Layers, bottom up, in `helpers/`:
-
-- `paginators.py`: `JiraCursorPaginator` (`nextPageToken`, stops on `isLast`),
-  `JiraOffsetPaginator` (`startAt`, advances by the rows a page held because Jira clamps
-  `maxResults` silently), `WorklogFeedPaginator` (`since`/`until` feeds), `JiraResponseError` and
-  the response hook that raises it with Jira's `errorMessages`.
-- `client.py`: `JiraClient` on dlt `RESTClient` with basic auth. Each thread gets its own
-  `RESTClient` on a thread local session of the dlt requests `Client`, which retries 429 and 5xx.
-  Typed calls: `fields`, `time_zone`, `search`, `bulk_fetch` (splits into 100s after a 400),
-  `changelogs`, `comments`, `changed_worklogs`, `worklogs`, `paginate_endpoint` for the
-  endpoints in `settings.DEFAULT_ENDPOINTS` (users, workflows, workflow statuses, projects), and
-  `paginate` for anything else. `jira()` shares one client among its resources.
-- `jql.py`: `CursorRange` from an incremental and `make_jql`, which widens the range to whole
-  minutes in the time zone of the user. The incremental filters the exact range.
-- `schema_types.py`: maps `/field` metadata to dlt types and nested shapes. Shapes trim nested
-  values to useful keys. The python backend flattens them into columns and nested tables, the
-  pyarrow backend loads them as json or as nested types (`x-nested-type`).
-- `issues.py`: `IssuesReader` selects fields, plans what to fetch and converts issues to rows or
-  Arrow tables. `issue_ids` (holds the incremental) lists ids with search,
-  `issues` (parallelized transformer) fetches pages with bulk fetch. `make_issues_resource` wires
-  both, `jira_issues` and `jira_search` use it.
-- `comments.py`, `worklogs.py`: conversion of comments and worklogs.
-
-Issues are fetched once for all consumers. `plan_fetch` looks at the selected resources when
-`issue_ids` starts: issue fields are fetched when `issues` are loaded or consumed by an unknown
-transformer, the `comment` field when `issue_comments` consumes them, nothing for
-`issue_changelogs` alone. Comments reach `issue_comments` in the meta of each page (`IssuesPage`),
-so they never land in the `issues` table.
-
-Extension points:
-- A replaced endpoint: add an entry to `DEFAULT_ENDPOINTS` with its key and page size.
-- A field type: add its shape to `SYSTEM_FIELD_TYPES` or `CUSTOM_FIELD_TYPES`. Unknown types load as
+- A replaced endpoint: an entry in `settings.DEFAULT_ENDPOINTS` with its key and page size.
+- A field type: its shape in `SYSTEM_FIELD_TYPES` or `CUSTOM_FIELD_TYPES`. Unknown types load as
   text.
 - A transformer on issues: pipe it from `issues`, it receives issue pages and `IssuesPage` meta.
-  Name it in `plan_fetch` if it needs less than all fields.
+  Name it in `plan_fetch` if it needs less than all fields: issues are fetched once for all
+  consumers.
 - A new API: a typed call on `JiraClient`, with a paginator from `paginators.py` or dlt.
 
-## Tests and seeding
+## Seeding
 
-- `tests/jira/test_helpers.py` and `tests/jira/test_jira_issues.py` run without credentials. They
-  mock the REST API with `JiraMock` (`tests/jira/utils.py`), which serves search, bulk fetch,
-  changelogs, comments and worklog feeds from in-memory issues, and with real responses captured
-  from the test site in `tests/jira/captured_responses.json`.
-- `test_issues_nested_types_snowflake` loads nested types to Snowflake and skips without the
-  connector or credentials.
-- `tests/jira/test_jira_source.py` runs against a live site and fails in CI without
-  credentials. `test_load_all_endpoints` loads seeded issues only. `test_issue_comments_changed`
-  adds, edits and deletes its own comments on the issue labeled `dlt-seed-comment-changes`.
-- `tests/jira/seed_test_data.py` seeds the test site with cases labeled `dlt-seed-<case>`: more
-  issues than a bulk fetch batch, long changelogs, many worklogs and comments, deleted worklogs and
-  comments, all field types, attachments, links and subtasks. A case is skipped when its label
-  exists. `--capture` rewrites the captured responses, anonymized.
+Seeded issues are labeled `dlt-seed-<case>`, a case is skipped when its label exists. Run from
+`sources/` so the script reads credentials from `sources/.dlt`:
 
-```sh
-cd sources
-uv run python ../tests/jira/seed_test_data.py            # shows missing cases
-uv run python ../tests/jira/seed_test_data.py --apply    # creates missing cases
-uv run python ../tests/jira/seed_test_data.py --capture  # captures responses for offline tests
-```
+1. `uv run python ../tests/jira/seed_test_data.py` lists the missing cases.
+2. `uv run python ../tests/jira/seed_test_data.py --apply` creates them.
+3. `uv run python ../tests/jira/seed_test_data.py --capture` rewrites
+   `tests/jira/captured_responses.json` with anonymized responses for the unit tests.
 
-On the current test site the account cannot delete issues and cannot restrict comments to a group
-or role, so `--delete` fails and restricted comments are only tested offline.
+The test account cannot delete issues and cannot restrict comments to a group or role, so `--delete`
+fails and restricted comments are tested offline only.
+
+## Tests
+
+- `JiraMock` in `tests/jira/utils.py` serves search, bulk fetch, changelogs, comments and worklog
+  feeds from in-memory issues.
+- `test_issue_comments_changed` writes to the live site: it adds, edits and deletes its own comments
+  on the issue labeled `dlt-seed-comment-changes`.
+- `test_issues_nested_types_snowflake` runs when `ALL_DESTINATIONS` includes `snowflake` and needs
+  `snowflake-connector-python`.
 
 ## Operations
 
