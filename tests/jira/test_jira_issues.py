@@ -1128,6 +1128,22 @@ def test_issues_user_column_hints(jira_mock: JiraMock) -> None:
     assert columns["updated"]["data_type"] == "timestamp"
 
 
+def test_issues_dynamic_column_hints_with_pyarrow(
+    jira_mock: JiraMock, mocker: MockerFixture
+) -> None:
+    jira_mock.add_issues(make_issue(1, UPDATED_1))
+    warning = mocker.patch("sources.jira.helpers.issues.logger.warning")
+    issues = jira_issues(**CREDENTIALS, backend="pyarrow")
+    # dlt requires a dynamic table name with other dynamic hints
+    issues.apply_hints(
+        table_name=lambda item: "issues",
+        columns=lambda item: {"summary": {"data_type": "text"}},
+    )
+
+    assert len(to_rows(list(issues))) == 1
+    assert "cannot be applied with the pyarrow backend" in warning.call_args.args[0]
+
+
 @pytest.mark.parametrize("backend", ["python", "pyarrow"])
 def test_issue_changelogs(jira_mock: JiraMock, backend: str) -> None:
     jira_mock.add_issues(*(make_issue(issue_id, UPDATED_1) for issue_id in (1, 2, 3)))

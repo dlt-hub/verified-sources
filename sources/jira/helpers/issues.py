@@ -235,7 +235,6 @@ class IssuesReader:
         self.selected: List[DictStrAny] = []
         self.field_types: Dict[str, Optional[TShape]] = {}
         self.fetched_fields: List[str] = []
-        self.columns: TTableSchemaColumns = {}
         # column hints are computed once per run by the first of the parallel transformer calls
         self._hints_lock = Lock()
         self._column_hints: Optional[TTableSchemaColumns] = None
@@ -305,8 +304,19 @@ class IssuesReader:
                 columns = fields_to_columns(
                     self.selected, self.backend, self.nested_types
                 )
-                # transformers consuming `issues` run them as a parent without resource
+                # hints are emitted at run time and would override hints applied by the user, so they
+                # are merged like `sql_table` merges hints of deferred reflection. transformers
+                # consuming `issues` run them as a parent without resource
                 resource = dlt.current.resource() if self.plan.issues_selected else None
+                if (
+                    resource is not None
+                    and callable(resource.columns)
+                    and self.backend == "pyarrow"
+                ):
+                    logger.warning(
+                        "Dynamic column hints of Jira issues cannot be applied with the pyarrow"
+                        " backend. Use static hints (dict/list) to override the field types."
+                    )
                 if resource is not None and not callable(resource.columns):
                     source_columns = {
                         **ID_COLUMNS,
@@ -324,11 +334,6 @@ class IssuesReader:
                     columns = merge_columns(columns, resource.columns)
                 if self.queries is not None:
                     columns[QUERY_INDEX] = dict(QUERY_INDEX_COLUMN)  # type: ignore[assignment]
-                # queried columns in the order of values in Arrow rows, without user columns
-                queried_columns = [*ID_COLUMNS, *self.field_types, QUERY_INDEX]
-                self.columns = {
-                    name: columns[name] for name in queried_columns if name in columns
-                }
                 self._column_hints = columns
             return self._column_hints
 
@@ -369,8 +374,12 @@ class IssuesReader:
             yield items
 
     def convert(
-        self, issues: List[DictStrAny], query_index: Optional[int] = None
+        self,
+        issues: List[DictStrAny],
+        hints: TTableSchemaColumns,
+        query_index: Optional[int] = None,
     ) -> TDataItem:
+        """Converts `issues` to rows or an Arrow table with types from the column `hints`"""
         invalid_fields: Set[str] = set()
         rows = [self._to_row(issue, invalid_fields) for issue in issues]
         if query_index is not None:
@@ -381,7 +390,13 @@ class IssuesReader:
                 f"Jira fields {sorted(invalid_fields)} have values of unexpected structure that"
                 " are loaded as null"
             )
-        return rows_to_items(rows, self.columns, self.backend)
+        # fetched columns in the order of values in Arrow rows, without columns only users hinted
+        columns = {
+            name: hints[name]
+            for name in (*ID_COLUMNS, *self.field_types, QUERY_INDEX)
+            if name in hints
+        }
+        return rows_to_items(rows, columns, self.backend)
 
     def _to_row(self, issue: DictStrAny, invalid_fields: Set[str]) -> DictStrAny:
         row: DictStrAny = {"id": issue["id"], "key": issue.get("key")}
@@ -478,7 +493,8 @@ def issue_details(ids: TDataItem, reader: IssuesReader) -> Iterator[TDataItem]:
     call yields the column hints before its page. Comments fetched with the issues are passed in
     the meta of the page to the transformers piped from `issues`.
     """
-    yield dlt.mark.with_hints([], dlt.mark.make_hints(columns=reader.column_hints()))
+    hints = reader.column_hints()
+    yield dlt.mark.with_hints([], dlt.mark.make_hints(columns=hints))
     # a page of ids holds issues found by one query
     query_index: Optional[int] = ids[0].get(QUERY_INDEX) if ids else None
     issues = reader.fetch([item["id"] for item in ids])
@@ -492,7 +508,7 @@ def issue_details(ids: TDataItem, reader: IssuesReader) -> Iterator[TDataItem]:
             else None
         )
         yield DataItemWithMeta(
-            IssuesPage(reader, comments), reader.convert(issues, query_index)
+            IssuesPage(reader, comments), reader.convert(issues, hints, query_index)
         )
 
 
