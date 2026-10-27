@@ -49,6 +49,17 @@ sources.pg_replication.credentials="postgresql://loader:password@host.rds.amazon
 ```
 
 
+## Replication details
+
+- Requires Postgres 10 or higher with `wal_level=logical`. Replicating a whole schema (no `table_names`) requires Postgres 15.
+- Each run reads changes committed before the run started. Bound long runs with `replication_resource(...).add_limit(max_time=3600)`, the next run continues where it stopped.
+- Updates that do not change a large (TOASTed) value do not send it, unless the table has `REPLICA IDENTITY FULL`. Without it such an update stops the replication with an error. `init_replication` warns about tables at risk.
+- `init_replication(initial_snapshot=...)` returns resources that load the tables as they were when the replication slot was created:
+  - `table`: copies into tables `_dlt_<table>_s_<snapshot>`, loaded any time later. Drop them after the initial load.
+  - `unlogged_table`: same, but the copies are not written to the WAL and are emptied if the server crashes before the load.
+  - `direct`: no copies. Load the returned resources in the same process right after `init_replication`. To configure each table yourself (query adapter, chunk size, hints), create `sql_table` resources with `engine_adapter_callback` and `type_adapter_callback` of the returned snapshot within `with init_replication(...) as snapshot:`.
+- `backend="pyarrow"` (in `init_replication` and `replication_resource`) decodes and loads much faster than the default `python` backend. Switching an existing pipeline changes how `_dlt_id` is created.
+
 ## Add credentials
 1. Open `.dlt/secrets.toml`.
 2. Enter your Postgres credentials:
