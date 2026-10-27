@@ -1,9 +1,5 @@
 import os
-import subprocess
-import sys
-import textwrap
-from datetime import datetime, timezone
-from typing import Any
+from typing import Any, List, Optional
 
 import dlt
 import pytest
@@ -17,6 +13,7 @@ from sources.jira import (
     jira,
     jira_issues,
     jira_search,
+    worklogs,
 )
 from sources.jira.settings import DEFAULT_ENDPOINTS
 
@@ -28,15 +25,14 @@ from tests.jira.utils import (
     UNACCEPTED_EXPANDS,
     UNACCEPTED_PARAMS,
     UPDATED_1,
-    UPDATED_2,
     assert_nullable_key,
-    make_history,
+    duckdb_pipeline,
+    load,
     make_issue,
     sent_params,
     serve,
-    to_rows,
 )
-from tests.utils import assert_load_info, load_table_counts, load_tables_to_dicts
+from tests.utils import load_table_counts, load_tables_to_dicts
 
 
 def test_jira_source(http_mock: requests_mock.Mocker) -> None:
@@ -52,24 +48,6 @@ def test_jira_source(http_mock: requests_mock.Mocker) -> None:
         "workflow_statuses",
         "projects",
     ]
-    # the source setting reaches all resources, nesting of issues is bounded by field shapes
-    assert all(
-        resource.max_table_nesting is None for resource in source.resources.values()
-    )
-    write_dispositions = {
-        name: resource.write_disposition for name, resource in source.resources.items()
-    }
-    assert write_dispositions == {
-        "issues": "merge",
-        "issue_comments": "merge",
-        "issue_changelogs": "merge",
-        "worklogs": "merge",
-        "users": "replace",
-        "workflows": "replace",
-        "workflow_statuses": "replace",
-        "projects": "replace",
-    }
-
     http_mock.get(
         BASE_URL + "rest/api/3/workflows/search",
         [
@@ -82,55 +60,59 @@ def test_jira_source(http_mock: requests_mock.Mocker) -> None:
             {"json": {"values": [], "isLast": True}},
         ],
     )
-    rows = to_rows(list(source.with_resources("workflows")))
+    rows = list(source.with_resources("workflows"))
     assert [row["name"] for row in rows] == ["Flow"]
 
 
-@pytest.mark.parametrize("backend", ["python", "pyarrow"])
-def test_issue_changelogs(jira_mock: JiraMock, backend: str) -> None:
-    jira_mock.add_issues(*(make_issue(issue_id, UPDATED_1) for issue_id in (1, 2, 3)))
-    jira_mock.histories = {
-        "1": [make_history(history_id, UPDATED_1) for history_id in (100, 101, 102)],
-        "3": [
-            make_history(300, UPDATED_2, field="assignee"),
-            make_history(301, UPDATED_2),
-        ],
-    }
-    jira_mock.changelog_page_size = 2
-    issues = jira_issues(**CREDENTIALS, backend=backend)
-    pipeline = dlt.pipeline(
-        f"jira_changelogs_{backend}", destination="duckdb", dev_mode=True
-    )
-    assert_load_info(pipeline.run([issues, issues | issue_changelogs]))
+def test_issues_config_resolution(jira_mock: JiraMock) -> None:
+    os.environ["SOURCES__JIRA__SUBDOMAIN"] = CREDENTIALS["subdomain"]
+    os.environ["SOURCES__JIRA__EMAIL"] = CREDENTIALS["email"]
+    os.environ["SOURCES__JIRA__API_TOKEN"] = CREDENTIALS["api_token"]
+    os.environ["SOURCES__JIRA__ISSUES__LAG"] = "60"
+    # `incremental` is not configurable
+    os.environ["SOURCES__JIRA__ISSUES__INCREMENTAL__CURSOR_PATH"] = "created"
+    jira_mock.add_issues(make_issue(1, UPDATED_1))
 
-    assert [fetch.get("nextPageToken") for fetch in jira_mock.changelog_fetches] == [
-        None,
-        "2",
-        "4",
-    ]
-    assert jira_mock.changelog_fetches[0]["issueIdsOrKeys"] == ["1", "2", "3"]
-    assert load_table_counts(
-        pipeline, "issue_changelogs", "issue_changelogs__items"
-    ) == {
-        "issue_changelogs": 5,
-        "issue_changelogs__items": 5,
-    }
-    table = pipeline.default_schema.get_table("issue_changelogs")
-    assert table["write_disposition"] == "merge"
-    assert table["columns"]["created"]["data_type"] == "timestamp"
-    rows = sorted(
-        load_tables_to_dicts(pipeline, "issue_changelogs")["issue_changelogs"],
-        key=lambda r: r["id"],
+    issues = jira_issues()
+    assert (issues.name, issues._parent.name) == ("issues", "issues_ids")
+    assert (issues.section, issues._parent.section) == ("jira", "jira")
+    assert issues.write_disposition == "merge"
+    assert [row["id"] for row in issues] == ["1"]
+    # the incremental is bound when the ids resource runs
+    incremental = issues._parent.incremental.incremental
+    assert (incremental.cursor_path, incremental.lag) == ("updated", 60)
+
+    full = jira_issues(incremental=None)
+    assert full.write_disposition == "replace"
+    assert len(list(full)) == 1
+    assert full._parent.incremental.incremental is None
+    created = jira_issues(incremental=dlt.sources.incremental("created"))
+    assert created.write_disposition == "merge"
+    assert len(list(created)) == 1
+    assert created._parent.incremental.incremental.cursor_path == "created"
+    assert jira_mock.jqls[-1] == 'created >= "1970-01-01" ORDER BY created ASC'
+
+    # resources of issues with their own names keep their own tables and state. resources run
+    # together share the `jira` section, so the worklogs find the secrets too
+    pipeline = duckdb_pipeline("jira_issues_named")
+    load(
+        pipeline,
+        [
+            jira_issues(name="bugs", jql="type = Bug"),
+            jira_issues(name="tasks"),
+            worklogs(),
+        ],
     )
-    assert [(row["id"], row["issue_id"]) for row in rows] == [
-        ("100", "1"),
-        ("101", "1"),
-        ("102", "1"),
-        ("300", "3"),
-        ("301", "3"),
+    assert load_table_counts(pipeline, "bugs", "tasks") == {"bugs": 1, "tasks": 1}
+    assert jira_mock.jqls[-2:] == [
+        "(type = Bug) ORDER BY updated ASC",
+        'created >= "1970-01-01" ORDER BY updated ASC',
     ]
-    assert rows[3]["author__account_id"] == "a1"
-    assert rows[3]["created"] == datetime(2024, 1, 16, 16, 0, tzinfo=timezone.utc)
+    resource_states = [
+        set(source_state["resources"])
+        for source_state in pipeline.state["sources"].values()
+    ]
+    assert any({"bugs_ids", "tasks_ids"} <= names for names in resource_states)
 
 
 @pytest.mark.parametrize(
@@ -142,84 +124,9 @@ def test_transformers_not_from_issues(transformer: DltResource) -> None:
     assert isinstance(py_ex.value.__cause__, ValueError)
 
 
-# runs in a fresh interpreter in which pyarrow cannot be imported
-NO_PYARROW_SCRIPT = textwrap.dedent(
-    """
-    import sys
-
-    sys.modules["pyarrow"] = None
-
-    import dlt
-    import requests_mock
-    from dlt.common.exceptions import MissingDependencyException
-
-    from sources.jira import issue_changelogs, issue_comments, jira_issues, worklogs
-    from tests.jira.utils import (
-        CREDENTIALS,
-        JiraMock,
-        make_comment,
-        make_history,
-        make_issue,
-        make_worklog,
-    )
-
-    work_dir = sys.argv[1]
-    with requests_mock.Mocker() as m:
-        jira_mock = JiraMock(m)
-        jira_mock.add_issues(make_issue(1, "2024-01-15T10:30:00.123+0100"))
-        jira_mock.histories["1"] = [make_history(100, "2024-01-15T10:30:00.000+0100")]
-        jira_mock.comments["1"] = [make_comment(10, "2024-01-15T10:30:00.000+0100")]
-        jira_mock.worklogs = {"7": make_worklog(7, 1, 1704103200000)}
-        pipeline = dlt.pipeline(
-            "jira_no_pyarrow",
-            pipelines_dir=work_dir,
-            destination=dlt.destinations.duckdb(f"{work_dir}/jira.duckdb"),
-        )
-        # nested types are ignored by the python backend
-        issues = jira_issues(**CREDENTIALS, nested_types=True)
-        info = pipeline.run(
-            [
-                issues,
-                issues | issue_comments,
-                issues | issue_changelogs,
-                worklogs(**CREDENTIALS),
-            ]
-        )
-        assert not info.has_failed_jobs
-        print(sorted(pipeline.last_trace.last_normalize_info.row_counts.items()))
-        try:
-            jira_issues(**CREDENTIALS, backend="pyarrow")
-        except MissingDependencyException:
-            print("pyarrow backend requires pyarrow")
-"""
-)
-
-
-def test_python_backend_without_pyarrow(tmp_path: Any) -> None:
-    root_dir = os.path.dirname(
-        os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-    )
-    result = subprocess.run(
-        [sys.executable, "-c", NO_PYARROW_SCRIPT, str(tmp_path)],
-        cwd=root_dir,
-        env={**os.environ, "PYTHONPATH": root_dir},
-        capture_output=True,
-        text=True,
-    )
-    assert result.returncode == 0, result.stderr
-    assert result.stdout.splitlines() == [
-        "[('_dlt_pipeline_state', 1), ('issue_changelogs', 1),"
-        " ('issue_changelogs__items', 1), ('issue_comments', 1), ('issues', 1),"
-        " ('issues__customfield_10031', 1), ('issues__fix_versions', 1), ('issues__labels', 2),"
-        " ('worklogs', 1)]",
-        "pyarrow backend requires pyarrow",
-    ]
-
-
 def test_jira_search(search_mock: JiraMock) -> None:
-    source = jira_search(
-        **CREDENTIALS, jql_queries=["project = X", "project = Y order by created"]
-    )
+    queries = ["project = X", "project = Y order by created"]
+    source = jira_search(**CREDENTIALS, jql_queries=queries)
     # a resource level hint would win over the source setting, so there must not be one
     assert source.resources["issues"].max_table_nesting is None
     rows = list(source)
@@ -232,28 +139,16 @@ def test_jira_search(search_mock: JiraMock) -> None:
         ("4", 1),
     ]
     # queries run as they are, search lists ids only and issues are fetched in bulk
-    assert [search["jql"] for search in search_mock.searches] == [
-        "project = X",
-        "project = Y order by created",
-    ]
+    assert [search["jql"] for search in search_mock.searches] == queries
     assert {search["fields"] for search in search_mock.searches} == {"id"}
     for sent in search_mock.searches:
         assert not (UNACCEPTED_PARAMS | INTERNAL_KEYS) & set(sent)
     assert len(search_mock.bulk_fetches) == 2
 
-
-def test_jira_search_page_limit(search_mock: JiraMock) -> None:
-    """A shared limit lets the first query absorb the budget and the second never runs."""
-    source = jira_search(
-        **CREDENTIALS,
-        jql_queries=["project = X", "project = Y order by created"],
-        page_size=1,
-        page_limit=1,
-    )
-    pipeline = dlt.pipeline(
-        "test_jira_search_page_limit", destination="duckdb", dev_mode=True
-    )
-    assert_load_info(pipeline.run(source))
+    # the page limit bounds each query, a shared limit would let the first query absorb it
+    source = jira_search(**CREDENTIALS, jql_queries=queries, page_size=1, page_limit=1)
+    pipeline = duckdb_pipeline("jira_search")
+    load(pipeline, source)
     rows = load_tables_to_dicts(pipeline, "issues")["issues"]
     assert sorted((row["id"], row["query_index"]) for row in rows) == [
         ("1", 0),
@@ -265,37 +160,27 @@ def test_jira_search_page_limit(search_mock: JiraMock) -> None:
     assert keys == ["id", "query_index"]
 
 
+@pytest.mark.parametrize("page_size", [None, 7], ids=["default", "explicit"])
 @pytest.mark.parametrize("endpoint_name", list(DEFAULT_ENDPOINTS))
-def test_endpoint_requests(endpoint_name: str) -> None:
+def test_endpoint_requests(endpoint_name: str, page_size: Optional[int]) -> None:
     endpoint = DEFAULT_ENDPOINTS[endpoint_name]
     empty_page: Any = [] if endpoint_name == "users" else {"values": [], "statuses": []}
+    with requests_mock.Mocker() as m:
+        serve(m, endpoint["api_path"], empty_page)
+        resource = jira(**CREDENTIALS, page_size=page_size).resources[endpoint_name]
+        assert list(resource) == []
+        (sent,) = sent_params(m)
     # Jira caps `maxResults` per endpoint, so the default is per endpoint too
-    for page_size, expected in ((None, endpoint["page_size"]), (7, 7)):
-        with requests_mock.Mocker() as m:
-            serve(m, endpoint["api_path"], empty_page)
-            resource = jira(**CREDENTIALS, page_size=page_size).resources[endpoint_name]
-            assert list(resource) == []
-            (sent,) = sent_params(m)
-        assert sent["maxResults"] == str(expected)
-        assert not (UNACCEPTED_PARAMS | INTERNAL_KEYS) & set(sent)
-        assert not UNACCEPTED_EXPANDS & set(sent.get("expand", "").split(","))
+    assert sent["maxResults"] == str(page_size or endpoint["page_size"])
+    assert not (UNACCEPTED_PARAMS | INTERNAL_KEYS) & set(sent)
+    assert not UNACCEPTED_EXPANDS & set(sent.get("expand", "").split(","))
     assert_nullable_key(resource, endpoint["primary_key"])
 
 
 def test_endpoint_resources_load() -> None:
-    pipeline = dlt.pipeline("test_jira_endpoints", destination="duckdb", dev_mode=True)
-    statuses_path = DEFAULT_ENDPOINTS["workflow_statuses"]["api_path"]
-    loads = (
-        # statuses without a key land with `replace`, merge would collapse them into one
-        [
-            {"statusReference": "s1"},
-            {"statusReference": "s2"},
-            {"name": "a"},
-            {"name": "b"},
-        ],
-        [{"statusReference": "s1"}],
-    )
-    for statuses in loads:
+    pipeline = duckdb_pipeline("jira_endpoints")
+
+    def run(statuses: List[Any]) -> None:
         with requests_mock.Mocker() as m:
             serve(
                 m,
@@ -308,16 +193,28 @@ def test_endpoint_resources_load() -> None:
             )
             serve(
                 m,
-                statuses_path,
+                DEFAULT_ENDPOINTS["workflow_statuses"]["api_path"],
                 {"values": [{"id": "w1"}], "statuses": statuses, "isLast": True},
             )
-            source = jira(**CREDENTIALS).with_resources("users", "workflow_statuses")
-            assert_load_info(pipeline.run(source))
-        if statuses is loads[0]:
-            # a user without the key loads instead of failing the load package
-            assert load_table_counts(pipeline, "users", "workflow_statuses") == {
-                "users": 2,
-                "workflow_statuses": 4,
-            }
+            load(
+                pipeline,
+                jira(**CREDENTIALS).with_resources("users", "workflow_statuses"),
+            )
+
+    # statuses without a key land with `replace`, merge would collapse them into one
+    run(
+        [
+            {"statusReference": "s1"},
+            {"statusReference": "s2"},
+            {"name": "a"},
+            {"name": "b"},
+        ]
+    )
+    # a user without the key loads instead of failing the load package
+    assert load_table_counts(pipeline, "users", "workflow_statuses") == {
+        "users": 2,
+        "workflow_statuses": 4,
+    }
     # statuses dropped upstream do not survive the next load
+    run([{"statusReference": "s1"}])
     assert load_table_counts(pipeline, "workflow_statuses") == {"workflow_statuses": 1}

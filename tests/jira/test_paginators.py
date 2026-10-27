@@ -1,10 +1,11 @@
-from typing import Any, List
+from typing import Any, Dict, List
 
 import pytest
 import requests_mock
 from dlt.extract.exceptions import ResourceExtractionError
+from dlt.sources.helpers.requests import HTTPError
 
-from sources.jira import worklogs
+from sources.jira import jira_issues, worklogs
 from sources.jira.helpers.paginators import JiraResponseError
 
 from tests.jira.utils import (
@@ -17,7 +18,31 @@ from tests.jira.utils import (
     read_endpoint,
     sent_params,
     serve,
+    url_for,
 )
+
+
+def test_errors(http_mock: requests_mock.Mocker) -> None:
+    # Jira answers an invalid or unbounded JQL query with 400 and the reason in the body
+    JiraMock(http_mock)
+    http_mock.get(
+        url_for("rest/api/2/search/jql"),
+        status_code=400,
+        json={"errorMessages": ["Field 'colour' does not exist"], "errors": {}},
+    )
+    with pytest.raises(ResourceExtractionError) as py_ex:
+        list(jira_issues(**CREDENTIALS))
+    http_ex = py_ex.value.__cause__
+    assert isinstance(http_ex, JiraResponseError)
+    # callers handle Jira errors as HTTP errors with the response
+    assert isinstance(http_ex, HTTPError)
+    assert http_ex.response.status_code == 400
+    assert "Field 'colour' does not exist" in str(http_ex)
+
+    # errors without messages are raised with the status
+    http_mock.get(url_for("rest/api/3/project/search"), status_code=403, json={})
+    with pytest.raises(HTTPError, match="403"):
+        list(read_endpoint("rest/api/3/project/search", data_path="values"))
 
 
 def test_cursor_paginator() -> None:
@@ -131,14 +156,22 @@ OFFSET_CASES: List[Any] = [
 ]
 
 
-def test_offset_paginator() -> None:
+@pytest.mark.parametrize(
+    "pages, endpoint, expected_ids, expected_starts",
+    [pytest.param(*case[1:], id=case[0]) for case in OFFSET_CASES],
+)
+def test_offset_paginator(
+    http_mock: requests_mock.Mocker,
+    pages: List[Any],
+    endpoint: Dict[str, Any],
+    expected_ids: List[str],
+    expected_starts: List[str],
+) -> None:
     path = "rest/api/3/workflows/search"
-    for case, pages, endpoint, expected_ids, expected_starts in OFFSET_CASES:
-        with requests_mock.Mocker() as m:
-            serve(m, path, *pages)
-            data = items(read_endpoint(path, **endpoint))
-            assert [i["id"] for i in data] == expected_ids, case
-            assert [p["startAt"] for p in sent_params(m)] == expected_starts, case
+    serve(http_mock, path, *pages)
+    data = items(read_endpoint(path, **endpoint))
+    assert [i["id"] for i in data] == expected_ids
+    assert [p["startAt"] for p in sent_params(http_mock)] == expected_starts
 
 
 def test_worklog_feed_paginator_does_not_advance(jira_mock: JiraMock) -> None:

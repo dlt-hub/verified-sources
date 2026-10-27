@@ -1,27 +1,33 @@
 """Builders, helpers and an offline mock of the Jira REST API"""
 
-import glob
 import json
 import os
 import re
 from datetime import datetime, timezone
-from typing import Any, Dict, Iterator, List, Optional, Tuple
+from typing import Any, Dict, Iterator, List, Optional, Set
 from urllib.parse import parse_qs, urlparse
 
 import dlt
 import requests_mock
-from dlt.common.time import datetime_to_timestamp_ms, ensure_datetime
+from dlt.common.time import (
+    datetime_to_timestamp_ms,
+    ensure_datetime,
+    ensure_datetime_in_tz,
+    to_tzinfo,
+)
 
 from sources.jira.helpers.client import JiraClient
 from sources.jira.helpers.paginators import JiraCursorPaginator
 
-from tests.utils import TEST_STORAGE_ROOT, assert_load_info
+from tests.utils import assert_load_info, load_tables_to_dicts
 
 BASE_URL = "https://test.atlassian.net/"
 CAPTURED_RESPONSES = os.path.join(os.path.dirname(__file__), "captured_responses.json")
 CREDENTIALS = {"subdomain": "test", "email": "user@example.com", "api_token": "token"}
 # credentials and the page size of the endpoint tests
 AUTH: Dict[str, Any] = {**CREDENTIALS, "page_size": 2}
+# label of the issues seeded on the test site by `seed_test_data.py`
+SEED_LABEL = "dlt-seed"
 UPDATED_1 = "2024-01-15T10:30:00.123+0100"
 UPDATED_2 = "2024-01-16T08:00:00.000-0800"
 START = datetime(2024, 1, 15, 9, 30, 15, tzinfo=timezone.utc)
@@ -41,6 +47,9 @@ INTERNAL_KEYS = {
     "primary_key",
 }
 CUSTOM = "com.atlassian.jira.plugin.system.customfieldtypes:"
+# clauses the source generates for the `updated` cursor, e.g. updated >= "2024-01-16 07:50"
+UPDATED_CLAUSE = re.compile(r'\bupdated\s*(>=|<)\s*"([^"]+)"')
+UPDATED_ORDER = re.compile(r"\bORDER BY updated (ASC|DESC)\b", re.IGNORECASE)
 
 
 def system_field(
@@ -105,6 +114,7 @@ FIELDS = [
     custom_field(10031, "array", CUSTOM + "multiuserpicker", "user"),
     custom_field(10032, "date", CUSTOM + "datepicker"),
     custom_field(10033, "datetime", CUSTOM + "datetime"),
+    custom_field(10034, "group", CUSTOM + "grouppicker"),
     custom_field(10050, "any", "com.example.app:widget"),
 ]
 # fields loaded by default, comments and worklogs have their own resources
@@ -153,6 +163,7 @@ def make_issue(issue_id: int, updated: str, **fields: Any) -> Dict[str, Any]:
         "customfield_10031": [USER],
         "customfield_10032": "2024-03-01",
         "customfield_10033": "2024-03-02T08:00:00.000-0800",
+        "customfield_10034": {"self": "https://g", "name": "admins", "groupId": "g1"},
         "customfield_10050": {"anything": ["goes", 1]},
     }
     all_fields.update(fields)
@@ -165,13 +176,24 @@ def make_issue(issue_id: int, updated: str, **fields: Any) -> Dict[str, Any]:
     }
 
 
+def issues_updated_at(
+    ids: Iterator[int], updated: str = UPDATED_1
+) -> List[Dict[str, Any]]:
+    """Returns issues with `ids` all updated at `updated`"""
+    return [make_issue(issue_id, updated) for issue_id in ids]
+
+
 def make_history(
-    history_id: int, created: str, field: str = "status"
+    history_id: int, created: str, field: str = "status", as_text: bool = False
 ) -> Dict[str, Any]:
-    """Returns a change as returned by changelog bulk fetch, with `created` in milliseconds"""
+    """Returns a change as returned by changelog bulk fetch, with `created` in milliseconds
+    unless `as_text`
+    """
     return {
         "id": str(history_id),
-        "created": datetime_to_timestamp_ms(ensure_datetime(created)),
+        "created": (
+            created if as_text else datetime_to_timestamp_ms(ensure_datetime(created))
+        ),
         "author": USER,
         "items": [
             {
@@ -235,6 +257,7 @@ def load_captured() -> Dict[str, Any]:
 class JiraMock:
     """Serves Jira endpoints from in-memory issues, changelogs and worklogs with `requests_mock`.
 
+    Search applies the `updated` range and order of the JQL to the issues, like Jira does.
     Records query params and bodies of all requests.
     """
 
@@ -244,13 +267,18 @@ class JiraMock:
         fields: Optional[List[Dict[str, Any]]] = None,
         time_zone: Optional[str] = "UTC",
     ) -> None:
+        self.time_zone = time_zone
         self.issues: Dict[str, Dict[str, Any]] = {}
-        # pages of issue ids returned by search, all issues in a single page if not set
+        # the responses captured from the test site when served by the mock
+        self.captured: Dict[str, Any] = {}
+        # pages of issue ids returned by search as they are, the JQL is ignored
         self.search_pages: Optional[List[List[str]]] = None
         # issue ids returned by search for a JQL query, overrides `search_pages`
         self.jql_results: Dict[str, List[str]] = {}
         # the last search page has a next page token and is marked with `isLast`
         self.last_page_token = False
+        # issues listed by search that bulk fetch reports as missing, e.g. deleted after search
+        self.missing_issues: Set[str] = set()
         # bulk fetch of more issues is rejected with HTTP 400
         self.max_bulk_issues: Optional[int] = None
         self.histories: Dict[str, List[Dict[str, Any]]] = {}
@@ -296,6 +324,26 @@ class JiraMock:
             search["jql"] for search in self.searches if "nextPageToken" not in search
         ]
 
+    def matching_ids(self, jql: str) -> List[str]:
+        """Ids of the issues in the `updated` range of `jql`, in its order"""
+        tz = to_tzinfo(self.time_zone or "UTC")
+        bounds = [
+            (op, datetime.strptime(literal, "%Y-%m-%d %H:%M").replace(tzinfo=tz))
+            for op, literal in UPDATED_CLAUSE.findall(jql)
+        ]
+        matching = []
+        for issue_id, issue in self.issues.items():
+            updated = ensure_datetime_in_tz(issue["fields"]["updated"])
+            if all(
+                updated >= bound if op == ">=" else updated < bound
+                for op, bound in bounds
+            ):
+                matching.append((updated, issue_id))
+        order = UPDATED_ORDER.search(jql)
+        if order:
+            matching.sort(key=lambda m: m[0], reverse=order.group(1).upper() == "DESC")
+        return [issue_id for _, issue_id in matching]
+
     def _search(self, request: Any, context: Any) -> Dict[str, Any]:
         params = {k: v[0] for k, v in parse_qs(urlparse(request.url).query).items()}
         self.searches.append(params)
@@ -306,7 +354,7 @@ class JiraMock:
         elif self.search_pages is not None:
             pages = self.search_pages
         else:
-            pages = [list(self.issues)]
+            pages = [self.matching_ids(params["jql"])]
         page_idx = int(params.get("nextPageToken", 0))
         is_last = page_idx + 1 >= len(pages)
         page: Dict[str, Any] = {
@@ -340,27 +388,25 @@ class JiraMock:
             context.status_code = 400
             return {"errorMessages": [f"Too many issues requested: {len(ids)}"]}
         issues = []
+        errors = []
         for issue_id in ids:
-            if issue_id in self.issues:
-                issue = dict(self.issues[issue_id])
-                issue["fields"] = {
-                    k: v for k, v in issue["fields"].items() if k in body["fields"]
+            if issue_id not in self.issues or issue_id in self.missing_issues:
+                errors.append({"id": issue_id, "errorMessage": "Issue does not exist"})
+                continue
+            issue = dict(self.issues[issue_id])
+            issue["fields"] = {
+                k: v for k, v in issue["fields"].items() if k in body["fields"]
+            }
+            if "comment" in body["fields"] and issue_id in self.comments:
+                comments = self.comments[issue_id]
+                start = max(len(comments) - self.embedded_comments, 0)
+                issue["fields"]["comment"] = {
+                    "comments": comments[start:],
+                    "maxResults": self.embedded_comments,
+                    "total": len(comments),
+                    "startAt": start,
                 }
-                if "comment" in body["fields"] and issue_id in self.comments:
-                    comments = self.comments[issue_id]
-                    start = max(len(comments) - self.embedded_comments, 0)
-                    issue["fields"]["comment"] = {
-                        "comments": comments[start:],
-                        "maxResults": self.embedded_comments,
-                        "total": len(comments),
-                        "startAt": start,
-                    }
-                issues.append(issue)
-        errors = [
-            {"id": issue_id, "errorMessage": "Issue does not exist"}
-            for issue_id in ids
-            if issue_id not in self.issues
-        ]
+            issues.append(issue)
         return {"issues": issues, "issueErrors": errors}
 
     def _changelogs(self, request: Any, context: Any) -> Dict[str, Any]:
@@ -434,33 +480,20 @@ class JiraMock:
         return [self.worklogs[str(worklog_id)] for worklog_id in ids]
 
 
-def run_to_parquet(
-    name: str, data: Any, table_name: str = "issues"
-) -> Tuple[dlt.Pipeline, Any]:
-    """Loads `data` into parquet files on the local filesystem and reads `table_name` as an
-    Arrow table
-    """
-    import pyarrow as pa
-    import pyarrow.parquet as pq
-
-    bucket_path = os.path.abspath(os.path.join(TEST_STORAGE_ROOT, name))
-    pipeline = dlt.pipeline(
-        name, destination=dlt.destinations.filesystem(bucket_path), dev_mode=True
-    )
-    assert_load_info(pipeline.run(data, loader_file_format="parquet"))
-    files = glob.glob(f"{bucket_path}/{pipeline.dataset_name}/{table_name}/*.parquet")
-    return pipeline, pa.concat_tables(pq.read_table(file) for file in files)
+def duckdb_pipeline(name: str) -> dlt.Pipeline:
+    return dlt.pipeline(name, destination="duckdb", dev_mode=True)
 
 
-def to_rows(items: List[Any]) -> List[Dict[str, Any]]:
-    """Converts items yielded by a resource, dicts or Arrow tables, into rows"""
-    rows: List[Dict[str, Any]] = []
-    for item in items:
-        if hasattr(item, "to_pylist"):
-            rows.extend(item.to_pylist())
-        else:
-            rows.append(item)
-    return rows
+def load(pipeline: dlt.Pipeline, data: Any, **run_kwargs: Any) -> Any:
+    """Runs `pipeline` with `data` and asserts the load succeeded, returns the load info"""
+    info = pipeline.run(data, **run_kwargs)
+    assert_load_info(info)
+    return info
+
+
+def rows_by_id(pipeline: dlt.Pipeline, table: str) -> List[Dict[str, Any]]:
+    """Rows of `table` sorted by `id`"""
+    return sorted(load_tables_to_dicts(pipeline, table)[table], key=lambda r: r["id"])
 
 
 def url_for(api_path: str) -> str:

@@ -1,4 +1,4 @@
-from typing import Any, Dict, Iterator
+from typing import Iterator
 
 import pytest
 import requests_mock
@@ -18,12 +18,13 @@ def jira_mock(http_mock: requests_mock.Mocker) -> JiraMock:
 
 
 @pytest.fixture
-def captured_mock(http_mock: requests_mock.Mocker) -> Dict[str, Any]:
-    """Serves field metadata and issues captured from the test site"""
+def captured_mock(http_mock: requests_mock.Mocker) -> JiraMock:
+    """Serves field metadata and issues captured from the test site, kept in `captured`"""
     captured = load_captured()
     jira_mock = JiraMock(http_mock, fields=captured["fields"])
     jira_mock.add_issues(*captured["issues"])
-    return captured
+    jira_mock.captured = captured
+    return jira_mock
 
 
 @pytest.fixture
