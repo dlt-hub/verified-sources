@@ -86,6 +86,7 @@ def test_load_all_endpoints(destination_name: str) -> None:
         "issue_comments": "id",
         "issue_changelogs": "id",
         "worklogs": "id",
+        "issue_fields": "id",
         **{
             name: endpoint["primary_key"]
             for name, endpoint in DEFAULT_ENDPOINTS.items()

@@ -22,13 +22,14 @@ and coding agents. Setup and usage are in the
 - **breaking** `workflows`: read from `rest/api/3/workflows/search`, `id` is text and the primary
   key, `id__name`, `id__entity_id`, `has_draft_workflow`, `is_default`, `projects` and `schemes` are
   gone. Upgrade: run once with `refresh="drop_resources"` to drop the empty columns
-- new resources `issue_comments`, `issue_changelogs`, `worklogs` and `workflow_statuses`
+- new resources `issue_comments`, `issue_changelogs`, `worklogs`, `workflow_statuses` and
+  `issue_fields`, the names and schemas of fields, e.g. of custom fields
 - new `jira_issues`: issues matching JQL with any incremental
+- new `drop_keys`: a function for `add_map` that removes REST links and avatar and icon urls, or
+  other keys, from rows and their nested values
 - changed `users`, `workflows`, `projects`: primary keys, the largest page each endpoint serves
 - changed: `get_paginated_data` is removed, `JiraClient.paginate_endpoint` reads the same endpoints
 
-- new `drop_keys`: a function for `add_map` that removes REST links and avatar and icon urls, or
-  other keys, from rows and their nested values
 Versions before 1.0.0 were not numbered. Copies taken with `dlt init` have no `version.py`,
 `.dlt/.sources` records the repository commit they came from.
 

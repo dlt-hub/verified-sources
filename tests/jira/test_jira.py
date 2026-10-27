@@ -20,6 +20,8 @@ from sources.jira.settings import DEFAULT_ENDPOINTS
 from tests.jira.utils import (
     BASE_URL,
     CREDENTIALS,
+    CUSTOM,
+    FIELDS,
     INTERNAL_KEYS,
     JiraMock,
     UNACCEPTED_EXPANDS,
@@ -29,6 +31,7 @@ from tests.jira.utils import (
     duckdb_pipeline,
     load,
     make_issue,
+    rows_by_id,
     sent_params,
     serve,
 )
@@ -43,6 +46,7 @@ def test_jira_source(http_mock: requests_mock.Mocker) -> None:
         "issue_comments",
         "issue_changelogs",
         "worklogs",
+        "issue_fields",
         "users",
         "workflows",
         "workflow_statuses",
@@ -113,6 +117,21 @@ def test_issues_config_resolution(jira_mock: JiraMock) -> None:
         for source_state in pipeline.state["sources"].values()
     ]
     assert any({"bugs_ids", "tasks_ids"} <= names for names in resource_states)
+
+
+def test_issue_fields(jira_mock: JiraMock) -> None:
+    pipeline = duckdb_pipeline("jira_issue_fields")
+    load(pipeline, jira(**CREDENTIALS).with_resources("issue_fields"))
+    assert jira_mock.searches == []
+    table = pipeline.default_schema.get_table("issue_fields")
+    assert table["write_disposition"] == "replace"
+    assert table["columns"]["id"]["primary_key"] is True
+    rows = {row["id"]: row for row in rows_by_id(pipeline, "issue_fields")}
+    assert len(rows) == len(FIELDS)
+    # custom field columns of `issues` are named by the field id
+    assert rows["customfield_10016"]["name"] == "Custom 10016"
+    assert rows["customfield_10016"]["schema__custom"] == CUSTOM + "float"
+    assert rows["customfield_10016"]["custom"] is True
 
 
 @pytest.mark.parametrize(

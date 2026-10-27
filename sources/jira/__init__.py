@@ -41,6 +41,7 @@ __all__ = [
     "drop_keys",
     "issue_changelogs",
     "issue_comments",
+    "issue_fields",
     "jira",
     "jira_issues",
     "jira_search",
@@ -59,8 +60,8 @@ def jira(
     """
     Jira source function that generates a list of resource functions based on endpoints.
 
-    Issues, their comments, changelogs and worklogs are loaded incrementally and merged. Users,
-    workflows, workflow statuses and projects are replaced on each run.
+    Issues, their comments, changelogs and worklogs are loaded incrementally and merged. Issue
+    fields, users, workflows, workflow statuses and projects are replaced on each run.
 
     Args:
         subdomain: The subdomain for the Jira instance.
@@ -80,6 +81,7 @@ def jira(
         issues | issue_comments,
         issues | issue_changelogs,
         worklogs(subdomain=subdomain, email=email, api_token=api_token),
+        issue_fields(subdomain=subdomain, email=email, api_token=api_token),
     ]
     for endpoint_name, endpoint in DEFAULT_ENDPOINTS.items():
         res_function = dlt.resource(
@@ -261,6 +263,18 @@ def worklogs(
 ) -> Iterator[TDataItem]:
     """Loads worklogs changed since the last run and removes the deleted ones"""
     yield from worklog_rows(JiraClient(subdomain, email, api_token), updated)
+
+
+@dlt.resource(name="issue_fields", write_disposition="replace", primary_key="id")
+def issue_fields(
+    subdomain: str = dlt.secrets.value,
+    email: str = dlt.secrets.value,
+    api_token: str = dlt.secrets.value,
+) -> Iterator[TDataItem]:
+    """Loads the names, schemas and JQL clause names of all issue fields, e.g. of custom fields.
+    Columns of `issues` are named by the field `id`.
+    """
+    yield JiraClient(subdomain, email, api_token).fields()
 
 
 @dlt.source(max_table_nesting=2)
