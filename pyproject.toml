@@ -43,6 +43,7 @@ dev = [
     # numpy 1.x has no python 3.13 wheels, fork the resolution so 3.13+ gets numpy 2.x
     # (1.x stays for python < 3.13 where langchain 0.0.x requires numpy<2)
     "numpy>=2 ; python_version >= '3.13'",
+    "snowflake-connector-python>=3.5.0",
 ]
 sql_database = [
     "sqlalchemy>=1.4",

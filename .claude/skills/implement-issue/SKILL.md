@@ -130,16 +130,17 @@ Enter plan mode and design a plan that **will pass the `/review-pr` skill**. The
 3. **Test coverage**: Required scenarios identified, tests in the right location, no duplication, proper parametrization.
 4. **Breaking changes**: Changes to loaded schema, source/resource signatures or stored state are flagged, see [Data shape and upgrade compatibility](../refresh-source/SKILL.md#data-shape-and-upgrade-compatibility).
 5. **Dependencies**: New packages declared in both `sources/<name>/requirements.txt` and the `pyproject.toml` group, `uv.lock` updated.
-6. **Documentation**: The source README stays super short; user-facing changes need a docs update in `dlt-hub/dlt`.
+6. **Version and documentation**: The change bumps `sources/<name>/version.py`, adds a changelog entry to the source README unless it is a patch version, and updates the README sections it affects, see [Source version and README](../refresh-source/SKILL.md#source-version-and-readme). User-facing changes need a docs update in `dlt-hub/dlt`.
 
 The plan must include:
 
 - **Working environment**: Worktree path, branch name, and `cd` instruction (see `.claude/rules/worktree.md`).
 - **Root cause**: Precise code location and explanation.
 - **Fix**: Minimal change following existing patterns in the source.
-- **Test**: A test that **fails without the fix and passes with it**. Prefer a credential-free test that runs the resource through dlt with the upstream mocked at the API/transport boundary, so it runs for contributors and on fork CI. Place it where similar functionality is already tested in `tests/<name>/`.
+- **Test**: A test that **fails without the fix and passes with it**. Prefer a credential-free test that runs the resource through dlt with the upstream mocked at the API/transport boundary, so it runs for contributors and on fork CI. Place it as in [Test modules](../../rules/testing.md#test-modules).
 - **Test scope**: Which tests need upstream credentials and whether they are available in the worktree. Use `ALL_DESTINATIONS='["duckdb"]'` unless the fix is destination-specific; local postgres is available via `tests/postgres/docker-compose.yml`.
 - **Verification commands**: Exact selective pytest commands to run (specific test functions, not entire modules).
+- **Version and changelog**: The version bump (`major` for breaking changes, `minor` for features, `patch` for fixes) and the README changelog entry.
 - **Docs**: Whether the `dlt-hub/dlt` docs page or the demo script needs an update.
 - **Files changed**: List with expected line counts.
 
@@ -156,6 +157,7 @@ Apply the changes from the approved plan. Follow these rules:
 - **Type hints**: All new function signatures need full type hints with generic parametrization (`Dict[str, Any]` not `dict`).
 - **Test conventions**: `def test_*() -> None:`, pytest fixtures, `@pytest.mark.parametrize` for variants, `dev_mode` pipelines (see `.claude/rules/testing.md`).
 - **Dependencies**: Add packages with `uv add --group <name> <package>` and to `sources/<name>/requirements.txt`.
+- **Version and README**: Bump `sources/<name>/version.py` (add it with `1.0.0` if missing) and, unless it is a patch version, add the changelog entry to the source README, see [Source version and README](../refresh-source/SKILL.md#source-version-and-readme). Never leave it for a follow-up.
 
 ### 7. Verify
 
@@ -210,6 +212,9 @@ Summarize results:
 - tests not run (no credentials): <list> [if applicable]
 - make format: pass
 - make lint: pass
+
+### Version
+- `sources/<name>/version.py`: <old> -> <new>, changelog entry added
 
 ### Docs
 - dlt-hub/dlt update: <not needed | drafted below>
