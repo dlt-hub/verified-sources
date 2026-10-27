@@ -69,7 +69,8 @@ def jira(
         api_token: The API token to authenticate with.
         page_size: Rows per request of users, workflows and projects. Defaults to the largest
             page each endpoint serves.
-        jql: JQL restricting loaded issues, e.g. `project = KAN`.
+        jql: JQL restricting loaded issues and their comments and changelogs, e.g.
+            `project = KAN`. Worklogs are read for all issues of the site.
     Returns:
         Iterable[DltResource]: List of resource functions.
     """
@@ -233,10 +234,14 @@ def issue_comments(issues: TDataItem, meta: Any = None) -> Iterator[TDataItem]:
     name=CHANGELOGS_RESOURCE,
     write_disposition="merge",
     primary_key="id",
+    parallelized=True,
 )
 def issue_changelogs(issues: TDataItem, meta: Any = None) -> Iterator[TDataItem]:
     """Loads all changelogs of issues piped into it from `jira_issues`, e.g.
-    `jira_issues() | issue_changelogs`
+    `jira_issues() | issue_changelogs`.
+
+    The whole changelog of each issue is fetched, since Jira cannot filter it by date. Changes
+    loaded before are merged on `id`.
     """
     if isinstance(meta, IssuesPage):
         yield from changelog_rows(meta.reader.client, issues, meta.reader.chunk_size)
@@ -261,7 +266,11 @@ def worklogs(
         "updated", lag=DEFAULT_LAG
     ),
 ) -> Iterator[TDataItem]:
-    """Loads worklogs changed since the last run and removes the deleted ones"""
+    """Loads worklogs changed since the last run and removes the deleted ones.
+
+    Worklogs of all issues of the site are read, not only of issues loaded by `jira_issues`. The
+    first run reads all worklogs, set `initial_value` of `updated` to start later.
+    """
     yield from worklog_rows(JiraClient(subdomain, email, api_token), updated)
 
 
@@ -298,7 +307,7 @@ def jira_search(
         subdomain: The subdomain for the Jira instance.
         email: The email to authenticate with.
         api_token: The API token to authenticate with.
-        page_size: Issue ids listed in a single search request, at most 5000.
+        page_size: Issue ids listed in a single search request, at most 5000 (the default).
         jql_queries: JQL queries to run. A query needs a filtering clause; Jira rejects
             one that only sorts.
         page_limit: Maximum number of search pages of `page_size` issues to read per query,

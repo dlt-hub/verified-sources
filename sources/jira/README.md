@@ -17,8 +17,10 @@ and coding agents. Setup and usage are in the
   Jira returns them, fields of unknown structure are JSON text
 - **breaking** `jira_search`: issues load like in `jira_issues` with a `query_index` column, the
   primary key is `id` and `query_index`, an issue found by two queries loads twice.
-  `jql_queries` and `page_limit` are source arguments. Upgrade: run once with
-  `refresh="drop_resources"`
+  `jql_queries` and `page_limit` are source arguments. `page_size` is the number of ids per
+  search request, 5000 by default instead of 100 issues, and `page_limit` counts these pages, so
+  the same `page_limit` loads up to 50 times more issues. Upgrade: run once with
+  `refresh="drop_resources"`, set `page_size=100` to keep the old limits
 - **breaking** `workflows`: read from `rest/api/3/workflows/search`, `id` is text and the primary
   key, `id__name`, `id__entity_id`, `has_draft_workflow`, `is_default`, `projects` and `schemes` are
   gone. Upgrade: run once with `refresh="drop_resources"` to drop the empty columns
@@ -89,6 +91,10 @@ fails and restricted comments are tested offline only.
   again from `startAt=0` with the comment endpoint, which returns about 100 per page. An issue left
   without comments gets a row flagged `deleted` that deletes its comments loaded before, except on
   the first run. Selecting `issue_comments` alone still runs `issues`, its parent.
+- **Changelogs**: `issue_changelogs` fetches the whole changelog of each issue in the incremental
+  range, since changelog bulk fetch has no date filter, and merge on `id` absorbs the changes
+  loaded before. Changelogs of issues not updated since `issue_changelogs` was added are not
+  loaded: reset the state of `issues` to load them.
 - **State**: the incremental state of `issues` is kept by its parent `issues_ids`, which lists the
   ids (`<name>_ids` for `jira_issues(name=...)`). `refresh="drop_resources"` resets it with the
   table, the CLI matches exact names: `dlt pipeline <name> drop issues issues_ids`. Load several
@@ -103,8 +109,10 @@ fails and restricted comments are tested offline only.
   clause, `created >= "1970-01-01"` bounds a full load.
 - **Limits**: `add_limit` on a transformer is ignored. Limit the `issues_ids` resource, the parent
   of `issues`, or use `page_limit` of `jira_search`.
-- **Worklogs**: the feeds page by the youngest change of a page. More than 1000 worklogs changed in
-  the same millisecond stop the load with an error.
+- **Worklogs**: the feeds list worklogs of all issues of the site the user can see, `jql` does not
+  restrict them, and the first run reads all worklogs. Set `initial_value` of the `updated`
+  incremental to start later. The feeds page by the youngest change of a page. More than 1000
+  worklogs changed in the same millisecond stop the load with an error.
 - **Workflow statuses**: `workflows__statuses` holds a `status_reference` and no name, join it to
   `workflow_statuses.status_reference`. `rest/api/3/status` omits unused statuses and
   `rest/api/3/statuses/search` omits project scoped ones, so the `statuses` key of
