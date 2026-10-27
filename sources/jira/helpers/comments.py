@@ -9,7 +9,7 @@ from dlt.common.time import ensure_datetime_in_tz
 from dlt.common.typing import DictStrAny, TDataItem
 from dlt.sources.helpers.requests import HTTPError
 
-from .client import JiraClient
+from .client import JiraClient, batched
 from .issues import IssuesPage, page_ids, rows_to_items
 from .schema_types import (
     USER,
@@ -50,18 +50,28 @@ def comment_columns(backend: TBackend, nested_types: bool) -> TTableSchemaColumn
 
 
 def comment_rows(issues: TDataItem, page: IssuesPage) -> Iterator[TDataItem]:
-    """Yields all comments of a page of `issues`.
+    """Yields all comments of a page of `issues` in pages of `chunk_size` comments.
 
     Each issue without comments gets a row with the `deleted` flag that deletes its comments
     loaded before, except on the first run of an incremental load.
     """
+    reader = page.reader
+    columns = comment_columns(reader.backend, reader.nested_types)
+    for index, rows in enumerate(
+        batched(_comment_rows(issues, page), reader.chunk_size)
+    ):
+        if index == 0:
+            yield dlt.mark.with_hints([], dlt.mark.make_hints(columns=columns))
+        yield rows_to_items(rows, columns, reader.backend)
+
+
+def _comment_rows(issues: TDataItem, page: IssuesPage) -> Iterator[DictStrAny]:
     reader = page.reader
     ids = page_ids(issues)
     comments = page.comments
     if comments is None:
         # `issue_comments` was renamed or there is no pipeline context
         comments = reader.fetch_comments(ids)
-    rows: List[DictStrAny] = []
     for issue_id in ids:
         embedded = comments.get(issue_id)
         if embedded is None:
@@ -75,15 +85,9 @@ def comment_rows(issues: TDataItem, page: IssuesPage) -> Iterator[TDataItem]:
             for name in ("created", "updated"):
                 if row.get(name):
                     row[name] = ensure_datetime_in_tz(row[name])
-            rows.append(row)
+            yield row
         if not issue_comments and not reader.initial_load:
-            rows.append(
-                {"id": f"issue-{issue_id}", "issueId": issue_id, "deleted": True}
-            )
-    if rows:
-        columns = comment_columns(reader.backend, reader.nested_types)
-        yield dlt.mark.with_hints([], dlt.mark.make_hints(columns=columns))
-        yield rows_to_items(rows, columns, reader.backend)
+            yield {"id": f"issue-{issue_id}", "issueId": issue_id, "deleted": True}
 
 
 def read_comments(

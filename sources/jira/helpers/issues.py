@@ -276,10 +276,7 @@ class IssuesReader:
         self.bulk_fetch_size = self._bulk_fetch_size or get_bulk_size(
             self.fetched_fields
         )
-        # a page fetched with a single request when possible, more pages are fetched in parallel
-        self.chunk_size = self._chunk_size or max(
-            self.bulk_fetch_size, DEFAULT_CHUNK_SIZE
-        )
+        self.chunk_size = self._chunk_size or DEFAULT_CHUNK_SIZE
         self.client.split_batches = False
         self._column_hints = None
         return cursor_name
@@ -538,11 +535,18 @@ def make_issues_resource(
     )(reader)
 
 
-def changelog_rows(client: JiraClient, issues: TDataItem) -> Iterator[TDataItem]:
-    """Fetches all changelogs of `issues`, a page of issues as list or Arrow table"""
-    for batch in batched(page_ids(issues), MAX_CHANGELOG_ISSUES):
+def changelog_rows(
+    client: JiraClient, issues: TDataItem, chunk_size: int = DEFAULT_CHUNK_SIZE
+) -> Iterator[TDataItem]:
+    """Fetches all changelogs of `issues`, a page of issues as list or Arrow table, and yields
+    them in pages of `chunk_size` changes
+    """
+    yield from batched(_changelog_rows(client, page_ids(issues)), chunk_size)
+
+
+def _changelog_rows(client: JiraClient, ids: List[str]) -> Iterator[DictStrAny]:
+    for batch in batched(ids, MAX_CHANGELOG_ISSUES):
         for page in client.changelogs(batch):
-            rows: List[DictStrAny] = []
             for issue_changelog in page:
                 for history in issue_changelog.get("changeHistories") or []:
                     row = trim_to_shape(history, CHANGELOG)
@@ -555,6 +559,4 @@ def changelog_rows(client: JiraClient, issues: TDataItem) -> Iterator[TDataItem]
                         )
                     elif created:
                         row["created"] = ensure_datetime_in_tz(created)
-                    rows.append(row)
-            if rows:
-                yield rows
+                    yield row

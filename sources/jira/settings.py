@@ -89,9 +89,9 @@ MAX_BULK_ISSUES_FIELDS = 100
 MULTI_VALUE_FIELDS = {"comment", "worklog", "attachment"}
 # loaded by dedicated resources, restrictions are permission metadata with dynamic keys
 EXCLUDED_FIELDS = {"comment", "worklog", "issuerestriction"}
-# min issues in a page yielded by the issues resource: pages are fetched in parallel and each
-# page has a fixed cost on extract
-DEFAULT_CHUNK_SIZE = 200
+# rows in a page of issues, comments and changelogs yielded by the resources, independent of the
+# sizes of API requests: each page has a fixed cost on extract
+DEFAULT_CHUNK_SIZE = 1000
 MAX_CHANGELOG_ISSUES = 1000
 # max comments in a page of comments of an issue
 MAX_COMMENTS_PAGE_SIZE = 5000

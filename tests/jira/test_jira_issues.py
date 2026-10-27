@@ -898,7 +898,7 @@ def test_issues_pagination(jira_mock: JiraMock, last_page_token: bool) -> None:
     "included_columns,max_bulk_issues,expected_batches,expected_pages",
     [
         (["summary"], None, [50, 1000], [50, 1000]),
-        (None, None, [50] + [100] * 10, [50] + [200] * 5),
+        (None, None, [50] + [100] * 10, [50, 1000]),
         (["summary"], 100, [50] + [100] * 10 + [1000], [50, 1000]),
     ],
     ids=["single_value_fields", "multi_value_fields", "large_batches_rejected"],
@@ -919,7 +919,7 @@ def test_issues_bulk_fetch_batches(
         jira_issues(**CREDENTIALS, backend="pyarrow", included_columns=included_columns)
     )
 
-    # a page is fetched with a single request when possible, at least 200 issues per page
+    # pages hold 1000 issues, fetched with the largest requests the fields allow
     assert sorted(page.num_rows for page in pages) == expected_pages
     # pages are fetched in parallel, each in batches
     assert (
@@ -1189,6 +1189,29 @@ def test_issue_changelogs(jira_mock: JiraMock, backend: str) -> None:
     ]
     assert rows[3]["author__account_id"] == "a1"
     assert rows[3]["created"] == datetime(2024, 1, 16, 16, 0, tzinfo=timezone.utc)
+
+
+def test_changelogs_in_pages_of_chunk_size(jira_mock: JiraMock) -> None:
+    jira_mock.histories = {
+        "1": [make_history(history_id, UPDATED_1) for history_id in range(5)]
+    }
+    jira_mock.changelog_page_size = 2
+    pages = list(changelog_rows(JiraClient(**CREDENTIALS), [{"id": "1"}], chunk_size=3))
+    # rows of API pages of 2 changes are yielded in pages of 3
+    assert [len(page) for page in pages] == [3, 2]
+    assert len(jira_mock.changelog_fetches) == 3
+
+
+def test_comments_in_pages_of_chunk_size(jira_mock: JiraMock) -> None:
+    jira_mock.add_issues(make_issue(1, UPDATED_1), make_issue(2, UPDATED_1))
+    jira_mock.comments = {
+        "1": [make_comment(comment_id, UPDATED_1) for comment_id in range(10, 13)],
+        "2": [make_comment(20, UPDATED_1)],
+    }
+    issues = jira_issues(**CREDENTIALS, backend="pyarrow", chunk_size=3)
+    pages = list(issues | issue_comments)
+    # comments of the issues in a page are yielded in pages of `chunk_size`
+    assert [page.num_rows for page in pages] == [3, 1]
 
 
 def test_changelogs_of_many_issues(jira_mock: JiraMock) -> None:

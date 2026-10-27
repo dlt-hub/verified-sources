@@ -161,8 +161,9 @@ def jira_issues(
             and nested tables, "pyarrow" yields Arrow tables and loads nested values as json.
         nested_types (bool): Loads nested values with the pyarrow backend as nested types
             (structs and lists) on destinations that support them.
-        chunk_size (Optional[int]): Issues in a yielded page (list of dicts or Arrow table),
-            pages are fetched in parallel. If not set: the bulk fetch size, at least 200.
+        chunk_size (Optional[int]): Rows in a yielded page (list of dicts or Arrow table) of
+            issues and of the comments and changelogs piped from them, 1000 if not set. Pages of
+            issues are fetched in parallel, each in requests of `bulk_fetch_size` issues.
         bulk_fetch_size (Optional[int]): Issues fetched in a single request, at most 1000. If not
             set: 1000 if at most 100 fields with a single value are loaded, 100 otherwise.
         search_page_size (int): Issue ids listed in a single search request, at most 5000.
@@ -252,7 +253,7 @@ def issue_changelogs(issues: TDataItem, meta: Any = None) -> Iterator[TDataItem]
     `jira_issues() | issue_changelogs`
     """
     if isinstance(meta, IssuesPage):
-        yield from changelog_rows(meta.reader.client, issues)
+        yield from changelog_rows(meta.reader.client, issues, meta.reader.chunk_size)
     elif issues:
         raise ValueError(
             "issue_changelogs must be piped from jira_issues,"

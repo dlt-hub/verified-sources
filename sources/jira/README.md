@@ -122,10 +122,12 @@ or role, so `--delete` fails and restricted comments are only tested offline.
 
 ## Operations
 
-- **Request sizes**: search lists up to 5000 ids per page. Bulk fetch takes 1000 issues for at most
-  100 single value fields, 100 otherwise. Pages of `chunk_size` issues (at least 200) are fetched in
-  parallel by the dlt extract `workers` (5 by default). Changelogs are fetched for 1000 issues per
-  request, worklogs by 1000 ids.
+- **Page and request sizes**: resources yield pages of `chunk_size` rows (1000 by default) of
+  issues, comments and changelogs, independent of the size of API requests. Requests take what the
+  API serves: search lists up to 5000 ids, bulk fetch takes 1000 issues for at most 100 single
+  value fields and 100 otherwise, changelogs are fetched for 1000 issues and worklogs by 1000 ids.
+  Pages of issues are fetched in parallel by the dlt extract `workers` (5 by default), each page in
+  sequential requests, so runs with fewer pages than workers fetch with less parallelism.
 - **Comments**: bulk fetch embeds the latest 20 comments of an issue. Issues with more are read
   again from `startAt=0` with the comment endpoint, which returns about 100 per page. An issue left
   without comments gets a row flagged `deleted` that deletes its comments loaded before, except on
