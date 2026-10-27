@@ -16,6 +16,7 @@ dev:
 
 lint-dlt-init:
 	uv run ./check-requirements.py
+	uv run python tools/check_source_versions.py
 	uv run pytest tests/test_dlt_init.py --no-header
 
 lint-code:
