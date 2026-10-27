@@ -1,172 +1,300 @@
-"""SharePoint data source for dlt.
+"""Loads SharePoint list items and files from a document library via Microsoft Graph."""
 
-Provides sources for extracting data from SharePoint lists and files
-using the Microsoft Graph API.
-"""
-from typing import Dict, Any, Iterable
+from typing import Any, Dict, Iterable, Iterator, List, Optional
+from urllib.parse import quote
 
 import dlt
+from dlt.common.configuration.specs import (
+    BaseConfiguration,
+    CredentialsConfiguration,
+    configspec,
+)
+from dlt.common.typing import TDataItems, TSecretStrValue
 from dlt.sources import DltResource
-from dlt.common.typing import TDataItems
-from dlt.common.configuration.specs import configspec, BaseConfiguration
-from dlt.common import logger
+from dlt.sources.filesystem import FileItemDict
+from dlt.sources.filesystem import filesystem as list_files
+from dlt.sources.helpers.requests import HTTPError
+from dlt.sources.helpers.rest_client import RESTClient
 
-from .helpers import SharepointClient
-from .sharepoint_files_config import SharepointFilesConfig, SharepointListConfig
+from .filesystem import SharepointFileSystem, validate_folder_path
+from .graph import entra_auth, graph_client
+from .readers import TFileType, file_rows, validate_reader_kwargs
 
 
 @configspec
-class SharepointCredentials(BaseConfiguration):
-    """Credentials for SharePoint authentication via Azure AD.
+class SharepointCredentials(CredentialsConfiguration):
+    """Entra ID app credentials and the site to read.
 
     Attributes:
-        client_id: Azure AD application client ID
-        tenant_id: Azure AD tenant ID
-        site_id: SharePoint site ID
-        client_secret: Azure AD application client secret
-        sub_site_id: Optional sub-site ID for nested sites
+        tenant_id: Directory (tenant) id of the Entra ID app.
+        client_id: Application (client) id of the Entra ID app.
+        client_secret: Client secret value of the Entra ID app.
+        site_id: Composite Graph site id "<host>.sharepoint.com,<site-collection-guid>,<web-guid>".
     """
 
-    client_id: str = None
     tenant_id: str = None
+    client_id: str = None
+    client_secret: TSecretStrValue = None
     site_id: str = None
-    client_secret: str = None
-    sub_site_id: str = ""
+
+
+@configspec
+class SharepointListConfig(BaseConfiguration):
+    """Which list to load and into which table.
+
+    Attributes:
+        list_title: Display name of the list.
+        table_name: Destination table, the list title when not set.
+        select: Comma-separated internal column names to load. Without it, Graph's default
+            columns are loaded, minus the ones SharePoint uses only for its own UI.
+    """
+
+    list_title: str = None
+    table_name: Optional[str] = None
+    select: Optional[str] = None
+
+
+@configspec
+class SharepointListsConfig(BaseConfiguration):
+    """Which lists of the site to load, one table per list.
+
+    Attributes:
+        list_titles: Display names of the lists; every visible generic list of the site when not set.
+    """
+
+    list_titles: Optional[List[str]] = None
+
+
+@configspec
+class SharepointFilesConfig(BaseConfiguration):
+    """Which files of a document library to load, how to parse them and into which table.
+
+    Attributes:
+        folder_path: Folder relative to the library root; "" loads the root itself.
+        file_type: One of "csv", "jsonl", "parquet" or "excel".
+        table_name: Destination table.
+        library: Display name of the document library, the site's default library when not set.
+        file_glob: Glob matched against paths under the folder; "**/*.csv" also searches subfolders.
+        reader_kwargs: Arguments for the pandas reader, such as "sep" or "sheet_name"; for parquet
+            only "columns" is allowed.
+    """
+
+    folder_path: str = None
+    file_type: TFileType = None
+    table_name: str = None
+    library: Optional[str] = None
+    file_glob: str = "*"
+    reader_kwargs: Optional[Dict[str, Any]] = None
 
 
 @dlt.source(name="sharepoint_list", max_table_nesting=0)
 def sharepoint_list(
-    sharepoint_list_config: SharepointListConfig,
+    sharepoint_list_config: SharepointListConfig = dlt.config.value,
     credentials: SharepointCredentials = dlt.secrets.value,
-) -> Iterable[DltResource]:
-    """Extract data from a SharePoint list.
+) -> DltResource:
+    """Loads the items of one SharePoint list and keeps the table in sync with Graph's delta query.
 
-    This source connects to SharePoint using Microsoft Graph API and retrieves
-    items from a specified list.
+    The first run reads every item. Later runs read only the items added, changed or deleted
+    since the delta link kept in the resource state; deleted items are deleted from the table,
+    which needs a destination that supports merge and leaves a `_deleted` column that is NULL
+    on live rows. `refresh="drop_resources"` reads the whole list again. Multi-value columns
+    load as json columns; for child tables set `source.max_table_nesting = 2` on the source.
 
     Args:
-        sharepoint_list_config: Configuration for the SharePoint list extraction
-        credentials: SharePoint authentication credentials
+        sharepoint_list_config: The list to load and the destination table.
+        credentials: Entra ID app credentials and the site id.
 
-    Yields:
-        DLT resource containing SharePoint list items
-
-    Example:
-        >>> config = SharepointListConfig(
-        ...     table_name="tasks",
-        ...     list_title="Project Tasks"
-        ... )
-        >>> source = sharepoint_list(config)
-        >>> pipeline.run(source)
+    Returns:
+        DltResource: Resource named after the table, merged on the item "id".
     """
-    client: SharepointClient = SharepointClient(**credentials)
-    client.connect()
-    logger.info(f"Connected to SharePoint site: {client.site_info}")
+    config = sharepoint_list_config
+    return list_resource(
+        site_client(credentials),
+        config.list_title,
+        config.table_name or config.list_title,
+        config.select,
+    )
 
-    def get_pipe(sharepoint_list_config: SharepointListConfig):  # type: ignore[no-untyped-def]
-        def get_records(sharepoint_list_config: SharepointListConfig):  # type: ignore[no-untyped-def]
-            data = client.get_items_from_list(
-                list_title=sharepoint_list_config.list_title,
-                select=sharepoint_list_config.select,
+
+@dlt.source(name="sharepoint_lists", max_table_nesting=0)
+def sharepoint_lists(
+    sharepoint_lists_config: SharepointListsConfig = dlt.config.value,
+    credentials: SharepointCredentials = dlt.secrets.value,
+) -> List[DltResource]:
+    """Loads several lists of the site, each into a table named after the list.
+
+    Each list is loaded like `sharepoint_list` does. Without `list_titles`, the site's lists are
+    read when the source is created, and every visible list of the generic list template (the
+    kind made with "Blank list" or "From CSV") is loaded.
+
+    Args:
+        sharepoint_lists_config: The lists to load.
+        credentials: Entra ID app credentials and the site id.
+
+    Returns:
+        List[DltResource]: One resource per list.
+
+    Raises:
+        ValueError: If there is no list to load, or two lists would load into the same table.
+    """
+    client = site_client(credentials)
+    titles = sharepoint_lists_config.list_titles
+    if titles is None:
+        titles = [
+            site_list["displayName"]
+            for site_list in site_lists(client)
+            if site_list.get("list", {}).get("template") == "genericList"
+            and not site_list.get("list", {}).get("hidden")
+        ]
+    if not titles:
+        raise ValueError("sharepoint_lists has no list to load")
+    naming = dlt.current.source_schema().naming
+    tables: Dict[str, str] = {}
+    for title in titles:
+        table = naming.normalize_table_identifier(title)
+        if table in tables:
+            raise ValueError(
+                f"Lists '{tables[table]}' and '{title}' would both load into table '{table}'."
+                " Load one of them with sharepoint_list and another table_name."
             )
-            yield from data
+        tables[table] = title
+    return [list_resource(client, title, title, None) for title in titles]
 
-        return dlt.resource(get_records, name=sharepoint_list_config.table_name)(
-            sharepoint_list_config
-        )
 
-    yield get_pipe(sharepoint_list_config=sharepoint_list_config)
+def site_client(credentials: SharepointCredentials) -> RESTClient:
+    auth = entra_auth(
+        credentials.tenant_id, credentials.client_id, credentials.client_secret
+    )
+    return graph_client(credentials.site_id, auth)
+
+
+def site_lists(client: RESTClient) -> List[Dict[str, Any]]:
+    return [site_list for page in client.paginate("lists") for site_list in page]
+
+
+def list_resource(
+    client: RESTClient, list_title: str, table_name: str, select: Optional[str]
+) -> DltResource:
+    """Returns the resource that syncs one list through Graph's delta query."""
+    expand = f"fields($select={select})" if select else "fields"
+    settings = {"list_title": list_title, "expand": expand}
+
+    @dlt.resource(
+        name=table_name,
+        write_disposition="merge",
+        primary_key="id",
+        columns={"_deleted": {"data_type": "bool", "hard_delete": True}},
+    )
+    def list_items() -> Iterator[TDataItems]:
+        state = dlt.current.resource_state()
+        if state.get("settings", settings) != settings:
+            raise ValueError(
+                f"Table '{table_name}' was loaded with another list or select. Run the pipeline"
+                ' with refresh="drop_resources" to load it again.'
+            )
+        state["settings"] = settings
+        delta_link = state.get("delta_link")
+        if delta_link:
+            pages = client.paginate(delta_link)
+        else:
+            pages = client.paginate(
+                f"lists/{quote(list_title, safe='')}/items/delta",
+                params={"$expand": expand},
+            )
+        try:
+            for page in pages:
+                yield [item_fields(item, keep_all=select is not None) for item in page]
+                next_link = page.response.json().get("@odata.deltaLink")
+                if next_link:
+                    state["delta_link"] = next_link
+        except HTTPError as e:
+            status = e.response.status_code if e.response is not None else None
+            if delta_link and status in (404, 410):
+                raise ValueError(
+                    f"The stored delta link of list '{list_title}' is no longer valid"
+                    f' (Graph {status}). Run the pipeline with refresh="drop_resources" to'
+                    " read the whole list again."
+                ) from e
+            if status == 404:
+                titles = [site_list["displayName"] for site_list in site_lists(client)]
+                raise ValueError(
+                    f"List '{list_title}' not found in the site. Available lists: {titles}"
+                ) from e
+            raise
+
+    return list_items
+
+
+UI_FIELDS = {
+    "Edit",
+    "LinkTitle",
+    "LinkTitleNoMenu",
+    "DocIcon",
+    "FolderChildCount",
+    "ItemChildCount",
+}
+
+
+def item_fields(item: Dict[str, Any], keep_all: bool) -> Dict[str, Any]:
+    """Returns the fields of a list item plus its id, or a deletion marker for a removed item.
+
+    Unless `keep_all` is set, SharePoint's UI-only and `_`-prefixed system fields are left out.
+    """
+    if "deleted" in item:
+        return {"id": item["id"], "_deleted": True}
+    fields = {
+        key: value
+        for key, value in item.get("fields", {}).items()
+        if not key.startswith("@odata.")
+        and (keep_all or (key not in UI_FIELDS and not key.startswith("_")))
+    }
+    return {**fields, "id": item["id"]}
 
 
 @dlt.source(name="sharepoint_files", max_table_nesting=0)
 def sharepoint_files(
-    sharepoint_files_config: SharepointFilesConfig,
+    sharepoint_files_config: SharepointFilesConfig = dlt.config.value,
     credentials: SharepointCredentials = dlt.secrets.value,
-) -> Iterable[DltResource]:
-    """Extract and process files from SharePoint document libraries.
+) -> DltResource:
+    """Loads the rows of the matching files in a folder; only new or modified files are read.
 
-    This source downloads files from SharePoint based on the configuration,
-    processes them using pandas, and yields the data for loading.
-
-    Supports incremental loading based on file modification time.
+    Files are matched by `file_glob` under `folder_path`, so subfolders are read only with a
+    pattern like "**/*.csv". A modified file replaces its own rows, keyed by `_file_url`, which
+    needs a destination that supports merge; a file emptied in SharePoint loses its rows. A
+    renamed file counts as a new file, and files deleted in SharePoint keep their rows.
+    `refresh="drop_resources"` reads every file again. Excel workbooks load one table per
+    sheet, "<table_name>_<sheet>", unless `reader_kwargs` names a `sheet_name`.
 
     Args:
-        sharepoint_files_config: Configuration for file extraction and processing
-        credentials: SharePoint authentication credentials
+        sharepoint_files_config: The folder, file filter, parser settings and destination table.
+        credentials: Entra ID app credentials and the site id.
 
-    Yields:
-        DLT resource containing processed file data
+    Returns:
+        DltResource: The file listing piped into the "<table_name>" rows.
 
-    Example:
-        >>> config = SharepointFilesConfig(
-        ...     file_type=FileType.CSV,
-        ...     folder_path="Documents/Reports",
-        ...     table_name="reports",
-        ...     file_name_startswith="report_"
-        ... )
-        >>> source = sharepoint_files(config)
-        >>> pipeline.run(source)
+    Raises:
+        ValueError: If folder_path, file_type or reader_kwargs is not valid.
     """
-    client: SharepointClient = SharepointClient(**credentials)
-    client.connect()
-    logger.info(f"Connected to SharePoint site: {client.site_info}")
+    config = sharepoint_files_config
+    folder_path = validate_folder_path(config.folder_path)
+    reader_kwargs = dict(config.reader_kwargs or {})
+    validate_reader_kwargs(config.file_type, reader_kwargs)
+    fs = SharepointFileSystem(site_client(credentials), config.library)
 
-    def get_files(  # type: ignore[no-untyped-def]
-        sharepoint_files_config: SharepointFilesConfig,
-        last_update_timestamp: dlt.sources.incremental[Any] = dlt.sources.incremental(
-            cursor_path="lastModifiedDateTime",
-            initial_value="2020-01-01T00:00:00Z",
-            primary_key=(),
-        ),
-    ):
-        current_last_value = last_update_timestamp.last_value
-        logger.debug(f"current_last_value: {current_last_value}")
-        for file_item in client.get_files_from_path(
-            folder_path=sharepoint_files_config.folder_path,
-            file_name_startswith=sharepoint_files_config.file_name_startswith,
-            pattern=sharepoint_files_config.pattern,
-        ):
-            logger.debug(
-                "filtering files based on lastModifiedDateTime, compare to last_value:"
-                f" {current_last_value}"
-            )
-            if (
-                file_item["lastModifiedDateTime"] > current_last_value
-                or not sharepoint_files_config.is_file_incremental
-            ):
-                logger.info(
-                    f"Processing file after lastModifiedDateTime filter: {file_item['name']}"
-                )
+    files = list_files(
+        bucket_url=f"sharepoint://{config.library or ''}/{folder_path}",
+        credentials=fs,
+        file_glob=config.file_glob,
+        incremental=dlt.sources.incremental("modification_date"),
+    ).with_name(f"{config.table_name}_files")
 
-                file_item[
-                    "pd_function"
-                ] = sharepoint_files_config.file_type.get_pd_function()
-                file_item["pd_kwargs"] = sharepoint_files_config.pandas_kwargs
-                yield file_item
-            else:
-                logger.info(
-                    f"Skipping file {file_item['name']} based on lastModifiedDateTime filter"
-                )
+    @dlt.transformer(
+        name=config.table_name,
+        write_disposition="merge",
+        merge_key="_file_url",
+        columns={"_deleted": {"data_type": "bool", "hard_delete": True}},
+    )
+    def rows(items: Iterable[FileItemDict]) -> Iterator[TDataItems]:
+        yield from file_rows(items, config.file_type, reader_kwargs, config.table_name)
 
-    def get_records(file_item: Dict[str, Any]) -> TDataItems:
-        chunksize = file_item["pd_kwargs"].get("chunksize", None)
-        file_io = client.get_file_bytes_io(file_item=file_item)
-
-        if chunksize:
-            with file_item["pd_function"](file_io, **file_item["pd_kwargs"]) as reader:
-                for num, chunk in enumerate(reader):
-                    logger.info(f"Processing chunk {num} of {file_item['name']}")
-                    yield chunk
-        else:
-            df = file_item["pd_function"](file_io, **file_item["pd_kwargs"])
-            yield df
-        logger.debug(f"get_records done for {file_item['name']}")
-
-    def get_pipe(sharepoint_files_config: SharepointFilesConfig):  # type: ignore[no-untyped-def]
-        return dlt.resource(
-            get_files, name=f"{sharepoint_files_config.table_name}_files"
-        )(sharepoint_files_config) | dlt.transformer(
-            get_records, name=sharepoint_files_config.table_name, parallelized=False
-        )
-
-    yield get_pipe(sharepoint_files_config=sharepoint_files_config)
+    return files | rows
