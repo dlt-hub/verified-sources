@@ -1,6 +1,7 @@
 """Checks that each source changed against the base branch bumps its version and adds a changelog
-entry to its README. Sources whose files did not change, or that changed only their README, are
-skipped. See `.claude/skills/refresh-source/SKILL.md#source-version-and-readme`.
+entry to its README, except for a patch version. Sources whose files did not change, or that
+changed only their README, are skipped. See
+`.claude/skills/refresh-source/SKILL.md#source-version-and-readme`.
 
 The base branch is `SOURCES_BASE_REF` if set, `origin/<GITHUB_BASE_REF>` on pull requests,
 otherwise `origin/master` or `master`. Run from the repository root:
@@ -134,17 +135,26 @@ def check_source(root: Path, base: str, name: str, paths: Set[str]) -> List[str]
         except (ValueError, SyntaxError) as ex:
             errors.append(f"{version_path}: {ex}")
     base_code = base_file(root, base, version_path)
+    base_version: Optional[TVersion] = None
     if version and base_code is not None:
         try:
-            base_version: Optional[TVersion] = parse_version(base_code)
+            base_version = parse_version(base_code)
         except (ValueError, SyntaxError):
-            base_version = None
+            pass
         if base_version and version <= base_version:
             errors.append(
                 f"bump the version in {version_path}, it is"
                 f" {format_version(base_version)} on the base branch: major for breaking"
                 " changes, minor for features, patch for fixes"
             )
+    # a fix released as a patch version needs no changelog entry
+    if (
+        version
+        and base_version
+        and version > base_version
+        and version[:2] == base_version[:2]
+    ):
+        return errors
     readme_path = f"{source_dir}/{README_FILE}"
     if not (root / readme_path).is_file():
         errors.append(f"add {readme_path} with a changelog")

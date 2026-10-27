@@ -98,6 +98,14 @@ def repo(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
             False,
             ["not a MAJOR.MINOR.PATCH string"],
         ),
+        (
+            {
+                "sources/a/__init__.py": "x = 1\n",
+                "sources/a/version.py": '__version__ = "1.0.1"\n',
+            },
+            True,
+            [],
+        ),
         ({"sources/a/README.md": README_1_0_0 + "\nmore notes\n"}, True, []),
         (
             {"sources/a_pipeline.py": "x = 1\n", "tests/a/test_a.py": "x = 1\n"},
@@ -152,6 +160,7 @@ def repo(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
         "no_changelog_entry",
         "lower_version",
         "invalid_version",
+        "patch_without_changelog",
         "readme_only",
         "pipeline_and_tests_only",
         "unversioned_source_changed",
