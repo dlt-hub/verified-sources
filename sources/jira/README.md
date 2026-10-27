@@ -49,6 +49,7 @@ First versioned release.
   `workflow_statuses`. Users, workflows and projects have primary keys and request the largest
   page each endpoint serves.
 - `jira_issues` loads issues matching JQL with a custom incremental, as dicts or Arrow tables.
+- `get_paginated_data` is removed, `JiraClient.paginate_endpoint` reads the same endpoints.
 
 Versions before 1.0.0 were not numbered. A copy of the source taken with `dlt init` before it has
 no `version.py`, `.dlt/.sources` records the repository commit it came from. All its breaking
@@ -65,7 +66,9 @@ All endpoints are REST APIs called by one client. Layers, bottom up, in `helpers
 - `client.py`: `JiraClient` on dlt `RESTClient` with basic auth. Each thread gets its own
   `RESTClient` on a thread local session of the dlt requests `Client`, which retries 429 and 5xx.
   Typed calls: `fields`, `time_zone`, `search`, `bulk_fetch` (splits into 100s after a 400),
-  `changelogs`, `comments`, `changed_worklogs`, `worklogs`, and `paginate` for anything else.
+  `changelogs`, `comments`, `changed_worklogs`, `worklogs`, `paginate_endpoint` for the
+  endpoints in `settings.DEFAULT_ENDPOINTS` (users, workflows, workflow statuses, projects), and
+  `paginate` for anything else. `jira()` shares one client among its resources.
 - `jql.py`: `CursorRange` from an incremental and `make_jql`, which widens the range to whole
   minutes in the time zone of the user. The incremental filters the exact range.
 - `schema_types.py`: maps `/field` metadata to dlt types and nested shapes. Shapes trim nested
@@ -75,8 +78,7 @@ All endpoints are REST APIs called by one client. Layers, bottom up, in `helpers
   Arrow tables. `issue_ids` (holds the incremental) lists ids with search,
   `issues` (parallelized transformer) fetches pages with bulk fetch. `make_issues_resource` wires
   both, `jira_issues` and `jira_search` use it.
-- `comments.py`, `worklogs.py`: conversion of comments and worklogs, `endpoints.py`: users,
-  workflows, workflow statuses and projects from `settings.DEFAULT_ENDPOINTS`.
+- `comments.py`, `worklogs.py`: conversion of comments and worklogs.
 
 Issues are fetched once for all consumers. `plan_fetch` looks at the selected resources when
 `issue_ids` starts: issue fields are fetched when `issues` are loaded or consumed by an unknown

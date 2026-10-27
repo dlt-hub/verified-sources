@@ -11,7 +11,6 @@ from dlt.sources import DltResource
 
 from .helpers.client import JiraClient, JiraResponseError
 from .helpers.comments import COMMENT_COLUMNS, comment_rows
-from .helpers.endpoints import get_paginated_data, nullable_key_columns
 from .helpers.issues import (
     CHANGELOG_COLUMNS,
     CHANGELOGS_RESOURCE,
@@ -31,6 +30,7 @@ from .settings import (
     DEFAULT_LAG,
     DEFAULT_PAGE_SIZE,
     MAX_SEARCH_PAGE_SIZE,
+    TEndpoint,
 )
 
 __all__ = [
@@ -38,7 +38,6 @@ __all__ = [
     "DEFAULT_PAGE_SIZE",
     "JiraClient",
     "JiraResponseError",
-    "get_paginated_data",
     "issue_changelogs",
     "issue_comments",
     "jira",
@@ -78,35 +77,39 @@ def jira(
     issues = jira_issues(
         subdomain=subdomain, email=email, api_token=api_token, jql=jql, backend=backend
     )
+    # comments and changelogs use the client of `issues`
+    client = JiraClient(subdomain, email, api_token)
     resources = [
         issues,
         issues | issue_comments,
-        issues
-        | issue_changelogs(subdomain=subdomain, email=email, api_token=api_token),
-        worklogs(subdomain=subdomain, email=email, api_token=api_token),
+        issues | issue_changelogs,
+        dlt.resource(
+            worklog_rows,
+            name="worklogs",
+            write_disposition="merge",
+            primary_key="id",
+            columns=WORKLOG_COLUMNS,
+        )(client, dlt.sources.incremental("updated", lag=DEFAULT_LAG)),
     ]
     for endpoint_name, endpoint in DEFAULT_ENDPOINTS.items():
         res_function = dlt.resource(
-            get_paginated_data,
+            endpoint_rows,
             name=endpoint_name,
             write_disposition="replace",
             primary_key=endpoint["primary_key"],
-            columns=nullable_key_columns(endpoint["primary_key"]),
-        )(
-            api_path=endpoint["api_path"],
-            data_path=endpoint.get("data_path"),
-            offset_path=endpoint.get("offset_path"),
-            params=endpoint.get("params"),
-            key_field=endpoint["key_field"],
-            deduplicate=endpoint.get("deduplicate", False),
-            subdomain=subdomain,
-            email=email,
-            api_token=api_token,
-            page_size=page_size or endpoint.get("page_size", DEFAULT_PAGE_SIZE),
-        )
+            # a row without the key lands instead of failing the load package
+            columns={endpoint["primary_key"]: {"nullable": True}},
+        )(client, endpoint, page_size or endpoint.get("page_size", DEFAULT_PAGE_SIZE))
         resources.append(res_function)
 
     return resources
+
+
+def endpoint_rows(
+    client: JiraClient, endpoint: TEndpoint, page_size: int
+) -> Iterator[TDataItem]:
+    """Yields pages of rows of a paginated endpoint, e.g. users or projects"""
+    yield from client.paginate_endpoint(endpoint, page_size)
 
 
 @dlt.resource(name="issues", spec=JiraIssuesResourceConfiguration)
@@ -244,14 +247,17 @@ def issue_comments(issues: TDataItem, meta: Any = None) -> Iterator[TDataItem]:
     primary_key="id",
     columns=CHANGELOG_COLUMNS,
 )
-def issue_changelogs(
-    issues: TDataItem,
-    subdomain: str = dlt.secrets.value,
-    email: str = dlt.secrets.value,
-    api_token: str = dlt.secrets.value,
-) -> Iterator[TDataItem]:
-    """Loads all changelogs of issues piped into it, e.g. `jira_issues() | issue_changelogs`"""
-    yield from changelog_rows(JiraClient(subdomain, email, api_token), issues)
+def issue_changelogs(issues: TDataItem, meta: Any = None) -> Iterator[TDataItem]:
+    """Loads all changelogs of issues piped into it from `jira_issues`, e.g.
+    `jira_issues() | issue_changelogs`
+    """
+    if isinstance(meta, IssuesPage):
+        yield from changelog_rows(meta.reader.client, issues)
+    elif issues:
+        raise ValueError(
+            "issue_changelogs must be piped from jira_issues,"
+            " e.g. jira_issues() | issue_changelogs"
+        )
 
 
 @dlt.resource(

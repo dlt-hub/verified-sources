@@ -9,9 +9,8 @@ from dlt.common.normalizers.naming.snake_case import NamingConvention
 from dlt.sources.helpers.requests import HTTPError, Response
 
 from sources.jira import jira, jira_search
-from sources.jira.helpers import endpoints
+from sources.jira.helpers import client as jira_client
 from sources.jira.helpers.client import JiraClient
-from sources.jira.helpers.endpoints import get_paginated_data
 from sources.jira.helpers.paginators import JiraCursorPaginator, JiraResponseError
 from sources.jira.settings import DEFAULT_ENDPOINTS, DEFAULT_PAGE_SIZE
 
@@ -46,6 +45,15 @@ def serve(m: requests_mock.Mocker, api_path: str, *pages: Any) -> None:
 
 def items(pages: Iterator[Any]) -> List[Any]:
     return [item for page in pages for item in page]
+
+
+def read_endpoint(api_path: str, **endpoint: Any) -> Iterator[Any]:
+    """Pages of rows read from an endpoint by the client with `startAt` pagination"""
+    client = JiraClient(AUTH["subdomain"], AUTH["email"], AUTH["api_token"])
+    return client.paginate_endpoint(
+        {"api_path": api_path, "key_field": "id", "primary_key": "id", **endpoint},  # type: ignore[typeddict-item]
+        AUTH["page_size"],
+    )
 
 
 def cursor_pages(api_path: str) -> Iterator[Any]:
@@ -99,9 +107,7 @@ def test_offset_pagination_stops_on_is_last() -> None:
             {"values": []},
         )
         data = items(
-            get_paginated_data(
-                api_path="rest/api/3/project/search", data_path="values", **AUTH
-            )
+            read_endpoint(api_path="rest/api/3/project/search", data_path="values")
         )
         assert [i["id"] for i in data] == ["p1"]
         assert m.call_count == 1
@@ -117,9 +123,7 @@ def test_offset_pagination_follows_is_last_false() -> None:
             {"values": []},
         )
         data = items(
-            get_paginated_data(
-                api_path="rest/api/3/workflows/search", data_path="values", **AUTH
-            )
+            read_endpoint(api_path="rest/api/3/workflows/search", data_path="values")
         )
         assert [i["id"] for i in data] == ["w1", "w2", "w3"]
         assert [p["startAt"] for p in sent_params(m)] == ["0", "2"]
@@ -135,9 +139,7 @@ def test_offset_pagination_stops_on_total_without_is_last() -> None:
             {"values": []},
         )
         data = items(
-            get_paginated_data(
-                api_path="rest/api/3/workflows/search", data_path="values", **AUTH
-            )
+            read_endpoint(api_path="rest/api/3/workflows/search", data_path="values")
         )
         assert [i["id"] for i in data] == ["w1", "w2", "w3"]
         assert m.call_count == 2
@@ -153,10 +155,10 @@ def test_offset_pagination_advances_by_rows_when_jira_clamps_the_page_size() -> 
             {"values": [{"id": "p2"}], "total": 2},
         )
         data = items(
-            get_paginated_data(
+            read_endpoint(
                 api_path="rest/api/3/project/search",
                 data_path="values",
-                **{**AUTH, "page_size": 500},
+                **{"page_size": 500},
             )
         )
         assert [i["id"] for i in data] == ["p1", "p2"]
@@ -171,9 +173,7 @@ def test_offset_pagination_stops_on_empty_page_with_is_last_false() -> None:
             {"values": [], "total": 5, "isLast": False},
         )
         data = items(
-            get_paginated_data(
-                api_path="rest/api/3/workflows/search", data_path="values", **AUTH
-            )
+            read_endpoint(api_path="rest/api/3/workflows/search", data_path="values")
         )
         assert data == []
         assert m.call_count == 1
@@ -183,7 +183,7 @@ def test_bare_array_endpoint_stops_on_empty_page() -> None:
     # /rest/api/3/users returns a list of User with no envelope
     with requests_mock.Mocker() as m:
         serve(m, "rest/api/3/users", [{"accountId": "a"}, {"accountId": "b"}], [])
-        data = items(get_paginated_data(api_path="rest/api/3/users", **AUTH))
+        data = items(read_endpoint(api_path="rest/api/3/users"))
         assert [i["accountId"] for i in data] == ["a", "b"]
         assert [p["startAt"] for p in sent_params(m)] == ["0", "2"]
 
@@ -203,9 +203,7 @@ def test_missing_data_path_raises(payload: Any, match: str) -> None:
             JiraResponseError, match="rest/api/3/workflow/search.*" + match
         ):
             list(
-                get_paginated_data(
-                    api_path="rest/api/3/workflow/search", data_path="values", **AUTH
-                )
+                read_endpoint(api_path="rest/api/3/workflow/search", data_path="values")
             )
 
 
@@ -221,9 +219,7 @@ def test_http_error_raises() -> None:
         m.get(url_for("rest/api/3/project/search"), status_code=403, json={})
         with pytest.raises(Exception, match="403"):
             list(
-                get_paginated_data(
-                    api_path="rest/api/3/project/search", data_path="values", **AUTH
-                )
+                read_endpoint(api_path="rest/api/3/project/search", data_path="values")
             )
 
 
@@ -246,7 +242,7 @@ def test_jira_error_messages_reach_the_caller() -> None:
 def test_requests_carry_basic_auth() -> None:
     with requests_mock.Mocker() as m:
         serve(m, "rest/api/3/users", [])
-        list(get_paginated_data(api_path="rest/api/3/users", **AUTH))
+        list(read_endpoint(api_path="rest/api/3/users"))
         header = m.request_history[0].headers["Authorization"]
         assert header.startswith("Basic ")
         assert b64decode(header.split(" ", 1)[1]).decode() == "e@example.com:token"
@@ -258,7 +254,7 @@ def test_workflows_requests_supported_path() -> None:
     assert api_path == "rest/api/3/workflows/search"
     with requests_mock.Mocker() as m:
         serve(m, api_path, {"values": []})
-        list(get_paginated_data(api_path=api_path, data_path="values", **AUTH))
+        list(read_endpoint(api_path=api_path, data_path="values"))
         assert m.request_history[0].url.startswith(url_for(api_path))
 
 
@@ -364,11 +360,10 @@ def test_offset_path_advances_on_the_sibling_key() -> None:
             },
         )
         data = items(
-            get_paginated_data(
+            read_endpoint(
                 api_path="rest/api/3/workflows/search",
                 data_path="statuses",
                 offset_path="values",
-                **AUTH,
             )
         )
         assert [i["statusReference"] for i in data] == ["s1", "s2"]
@@ -389,11 +384,10 @@ def test_offset_path_keeps_paging_past_a_page_with_no_rows_taken() -> None:
             },
         )
         data = items(
-            get_paginated_data(
+            read_endpoint(
                 api_path="rest/api/3/workflows/search",
                 data_path="statuses",
                 offset_path="values",
-                **AUTH,
             )
         )
         assert [i["statusReference"] for i in data] == ["s1"]
@@ -472,7 +466,7 @@ def test_rows_without_the_key_field_are_reported_once(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     warnings: List[str] = []
-    monkeypatch.setattr(endpoints.logger, "warning", warnings.append)
+    monkeypatch.setattr(jira_client.logger, "warning", warnings.append)
     with requests_mock.Mocker() as m:
         serve(
             m,
@@ -530,11 +524,10 @@ def test_each_response_is_parsed_once_by_the_source(
                 {"values": [{"id": "w1"}], "statuses": [], "isLast": True},
             )
             list(
-                get_paginated_data(
+                read_endpoint(
                     api_path="rest/api/3/workflows/search",
                     data_path="statuses",
                     offset_path="values",
-                    **AUTH,
                 )
             )
     # dlt parses the page to apply the data selector, this source parses it once more

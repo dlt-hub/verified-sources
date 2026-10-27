@@ -954,7 +954,7 @@ def test_issues_limit_backfill(jira_mock: JiraMock) -> None:
 
 def test_issues_empty(jira_mock: JiraMock) -> None:
     issues = jira_issues(**CREDENTIALS)
-    assert to_rows(list(issues | issue_changelogs(**CREDENTIALS))) == []
+    assert to_rows(list(issues | issue_changelogs)) == []
     assert to_rows(list(issues | issue_comments)) == []
     assert len(jira_mock.searches) == 2
     assert jira_mock.bulk_fetches == []
@@ -1159,7 +1159,7 @@ def test_issue_changelogs(jira_mock: JiraMock, backend: str) -> None:
     pipeline = dlt.pipeline(
         f"jira_changelogs_{backend}", destination="duckdb", dev_mode=True
     )
-    assert_load_info(pipeline.run([issues, issues | issue_changelogs(**CREDENTIALS)]))
+    assert_load_info(pipeline.run([issues, issues | issue_changelogs]))
 
     assert [fetch.get("nextPageToken") for fetch in jira_mock.changelog_fetches] == [
         None,
@@ -1373,9 +1373,12 @@ def test_issue_comments_renamed(jira_mock: JiraMock) -> None:
     assert [row["id"] for row in rows] == ["10"]
 
 
-def test_issue_comments_not_from_issues() -> None:
+@pytest.mark.parametrize(
+    "transformer", [issue_comments, issue_changelogs], ids=["comments", "changelogs"]
+)
+def test_transformers_not_from_issues(transformer: DltResource) -> None:
     with pytest.raises(ResourceExtractionError) as py_ex:
-        list(dlt.resource([{"id": "1"}], name="other") | issue_comments)
+        list(dlt.resource([{"id": "1"}], name="other") | transformer)
     assert isinstance(py_ex.value.__cause__, ValueError)
 
 
@@ -1515,7 +1518,7 @@ NO_PYARROW_SCRIPT = textwrap.dedent(
             [
                 issues,
                 issues | issue_comments,
-                issues | issue_changelogs(**CREDENTIALS),
+                issues | issue_changelogs,
                 worklogs(**CREDENTIALS),
             ]
         )

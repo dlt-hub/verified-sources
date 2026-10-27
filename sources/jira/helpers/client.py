@@ -2,11 +2,11 @@
 
 from itertools import islice
 from threading import local
-from typing import Any, Iterable, Iterator, List, Optional, TypeVar
+from typing import Any, Iterable, Iterator, List, Optional, Set, TypeVar
 
 from dlt.common import logger
 from dlt.common.typing import DictStrAny
-from dlt.sources.helpers.requests import Client, HTTPError
+from dlt.sources.helpers.requests import Client, HTTPError, Response
 from dlt.sources.helpers.rest_client import RESTClient
 from dlt.sources.helpers.rest_client.auth import HttpBasicAuth
 from dlt.sources.helpers.rest_client.client import PageData
@@ -35,6 +35,7 @@ from ..settings import (
     MYSELF_PATH,
     SEARCH_PATH,
     WORKLOG_LIST_PATH,
+    TEndpoint,
 )
 
 __all__ = ["JiraClient", "JiraResponseError", "batched"]
@@ -104,6 +105,46 @@ class JiraClient:
             data_selector=data_selector,
             hooks=HOOKS,
         )
+
+    def paginate_endpoint(
+        self, endpoint: TEndpoint, page_size: int
+    ) -> Iterator[List[Any]]:
+        """Yields pages of rows of an endpoint with `startAt` pagination, e.g. users or projects.
+
+        Rows without the `key_field` of the endpoint are logged once. Rows whose key was yielded
+        before are dropped when the endpoint deduplicates, e.g. statuses shared by workflows.
+        """
+        api_path, data_path = endpoint["api_path"], endpoint.get("data_path")
+        key_field = endpoint["key_field"]
+        paginator = JiraOffsetPaginator(page_size, endpoint.get("offset_path"))
+        seen: Set[Any] = set()
+        warned_on_missing_key = False
+        # "$" selects the whole body for the endpoints that return a bare array
+        for page in self.paginate(
+            api_path,
+            paginator,
+            data_path or "$",
+            params=dict(endpoint.get("params") or {}),
+        ):
+            if data_path:
+                _check_data_path(api_path, data_path, page.response)
+            rows: List[Any] = []
+            for row in page:
+                key = row.get(key_field) if isinstance(row, dict) else None
+                if key is None:
+                    if not warned_on_missing_key:
+                        logger.warning(
+                            f"Jira endpoint {api_path} returned rows without '{key_field}'. They"
+                            " load with a null primary key and are reported once per run."
+                        )
+                        warned_on_missing_key = True
+                elif endpoint.get("deduplicate"):
+                    if key in seen:
+                        continue
+                    seen.add(key)
+                rows.append(row)
+            if rows:
+                yield rows
 
     def fields(self) -> List[DictStrAny]:
         """Returns the metadata of all issue fields"""
@@ -208,3 +249,14 @@ class JiraClient:
             )
         issues: List[DictStrAny] = result.get("issues") or []
         return issues
+
+
+def _check_data_path(api_path: str, data_path: str, response: Response) -> None:
+    body = response_body(response)
+    if isinstance(body, dict) and data_path in body:
+        return
+    got = sorted(body) if isinstance(body, dict) else type(body).__name__
+    raise JiraResponseError(
+        f"Jira endpoint {api_path} returned no '{data_path}' key. Got: {got}.",
+        response=response,
+    )
