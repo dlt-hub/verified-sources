@@ -15,7 +15,7 @@ Work through the phases in order. Do not skip phase 0 — wrong conclusions are 
 ## Phase 0 — Ground truth
 
 0. Build the context with [create-source-context](../create-source-context/SKILL.md): the data the upstream offers, authoritative docs, existing connectors, auth, pagination, limits and a data inventory. For a new source, stop after it until the user confirms the scope.
-1. Read everything in `sources/<name>/`, `sources/<name>_pipeline.py`, `tests/<name>/`. Start with `README.md` and `version.py`: the changelog, architecture and operations notes of the source.
+1. Read everything in `sources/<name>/`, `sources/<name>_pipeline.py`, `tests/<name>/`. Start with `README.md` and `version.py`: the changelog, extension points and operations notes of the source.
 2. `git log --oneline -- sources/<name>` — look for past removals/refactors. **Hunt dead code**: files, fixtures, conftest helpers, docstrings and README claims orphaned by earlier PRs. Dead code should be deleted, never "fixed". Dead code may also be the only reason for a heavy dependency — deleting it can drop whole packages from `requirements.txt`.
 3. Compare the THREE dependency declarations and flag mismatches:
    - `sources/<name>/requirements.txt` — what `dlt init` users actually install (often unbounded!)
@@ -151,9 +151,9 @@ Not breaking, but report them: new columns or tables, dropped columns (left in t
 
 ## Source version and README
 
-**Every change to a source that goes into a PR bumps its version and updates its README, in the same PR.** `dlt init` copies both files into user projects, and the copies carry no git history.
+**Every change to a source that goes into a PR bumps its version and updates its README, in the same PR.** A patch version may skip the changelog entry. `dlt init` copies both files into user projects, and the copies carry no git history.
 
-`make lint` enforces it with `tools/check_source_versions.py`: each source with changes to files other than its README, compared with the merge base of `master`, needs a `version.py` higher than on `master` and a README with a changelog heading for that version, e.g. `### 1.1.0`.
+`make lint` enforces it with `tools/check_source_versions.py`: each source with changes to files other than its README, compared with the merge base of `master`, needs a `version.py` higher than on `master` and, unless it is a patch version, a README with a changelog heading for that version, e.g. `### 1.1.0`.
 
 `sources/<name>/version.py` holds the version of the source. Add it with `1.0.0` when it is missing:
 
@@ -166,26 +166,27 @@ The version follows the [semantic versioning of dlt](https://github.com/dlt-hub/
 - `minor`: new features, e.g. resources and options, sometimes automatic migrations;
 - `patch`: bug fixes.
 
-`sources/<name>/README.md` is the maintenance document of the source, for developers and coding agents that change it. Setup, configuration and usage for users belong in the dlt docs (phase 6). The README holds:
-- **Changelog**: one entry per version, newest first. Breaking changes are marked, with what fails after an upgrade and the upgrade path;
-- **Architecture**: a short recap of the layers, resources and helpers, and the extension points, e.g. how to add an endpoint or a field type;
-- **Tests and seeding**: which tests run without credentials, the test account, how to seed it and capture responses;
-- **Operations**: throttling and quotas, scaling to large volumes, troubleshooting and anything else needed to change the source safely.
+`sources/<name>/README.md` is the maintenance document of the source, for developers and coding agents that change it. It does not describe the code, and setup and usage belong in the dlt docs (phase 6). The README holds:
+- **Changelog**: an entry per version, newest first, of short bullets. Start a bullet with **breaking**, new, changed or fixed, and name the resource whose data changes shape. Breaking bullets give the upgrade path;
+- **Extension points**: how to add e.g. an endpoint, a field type or a transformer;
+- **Seeding**: numbered steps to seed the test account and capture responses;
+- **Tests**: only setup beyond the standard harness and `.claude/rules/testing.md`;
+- **Operations**: throttling and quotas, scaling, troubleshooting.
 
 ```md
 ## Changelog
 
 ### 2.0.0
-- **Breaking**: `orders` are merged on `id` instead of replaced. A dataset loaded before fails on
-  merge, run once with `pipeline.run(source, refresh="drop_resources")`.
-- New `order_items` resource.
+- **breaking** `orders`: merged on `id` instead of replaced. Upgrade: run once with `refresh="drop_resources"`
+- **breaking** `order_items`: `price` is `decimal` instead of `double`
+- new resource `refunds`
 ```
 
 ## Phase 4 — Tests (the biggest pain point)
 
 Existing source tests are usually credential-gated integration tests that never run for contributors. Always add **credential-free unit tests**:
 
-- New `tests/<name>/test_helpers.py` (module-based `def test_*() -> None`, parametrize with readable ids — see `.claude/rules/testing.md`).
+- In modules that follow the source modules, see [Test modules](../../rules/testing.md#test-modules).
 - **Use proven shapes, not invented ones**: fixtures must mirror request/response shapes, pagination envelopes and cursor semantics found in official docs during phase 1 (cite which doc page a fixture mirrors when it isn't obvious).
 - Mock at the transport/SDK boundary with **real SDK objects** (`construct_from` etc.), monkeypatching the API call — so the installed SDK's serialization actually runs instead of a MagicMock lying about it.
 - Cover: pagination control flow (cursor passed from last item, stop on terminal page flag), parameter construction (filters, special-cased endpoints), and any date/type conversion helpers with one case per accepted input type.
@@ -203,15 +204,15 @@ Hand-made fixtures encode our assumptions; they hid the header-only page bug in 
   - blank values;
   - deleted records.
 - **Capture real responses** from the seeded account into `tests/<name>/cases/`. Use only synthetic seed data, never customer data. Run credential-free unit tests on them, compared field by field with expected values derived from the seed data.
-- **Keep live (end-to-end) tests read-only, few and parallel.** Count only seeded records, because accounts come with their own sample data. Pause between live runs, since vendors throttle.
+- **Keep end-to-end tests read-only, few and parallel**, in `test_<name>_source.py`. Count only seeded records, because accounts come with their own sample data. Pause between live runs, since vendors throttle.
 - **Never read or print secrets files.** Credentials reach the seed script and tests only through dlt config injection.
 - **Check other popular open source connectors** for the same API and their test suites for edge cases not covered yet: value formats, nulls, quoting, pagination, errors, unsupported objects. Add them as test cases. Take the cases, not the code: write fixtures and values ourselves, because their licenses may not allow copying.
 
 ## Phase 5 — Verify and finish
 
 1. `uv lock` if pyproject changed; ensure resolution works on all supported Python versions.
-2. `pytest tests/<name>/test_helpers.py` — must pass without anything in `sources/.dlt`.
-3. Integration tests `pytest tests/<name>` only if credentials exist; otherwise state plainly they were not run.
+2. Unit tests must pass without anything in `sources/.dlt`.
+3. End-to-end tests only if credentials exist; otherwise state plainly they were not run.
    With a test account, run the upgrade from [Data shape and upgrade compatibility](#data-shape-and-upgrade-compatibility) and report what changed.
 4. `make lint-code` and `make format-lint`.
 5. Bump `version.py` and add the README changelog entry, then update the README sections and docstrings the changes touched (see [Source version and README](#source-version-and-readme)). Report findings with file:line references and the doc URLs that back each claim.
