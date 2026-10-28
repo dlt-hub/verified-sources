@@ -13,6 +13,7 @@ import dlt
 from dlt.common import Decimal
 from dlt.common.exceptions import MissingDependencyException
 from dlt.common.schema.typing import TTableSchemaColumns
+from dlt.common.utils import uniq_id
 from dlt.pipeline.exceptions import PipelineStepFailed
 from dlt.sources.credentials import ConnectionStringCredentials
 from dlt.sources.sql_database import sql_table
@@ -29,6 +30,7 @@ from sources.pg_replication.exceptions import (
     IncompatibleColumnTypeException,
     IncompatiblePostgresVersionException,
     NoPrimaryKeyException,
+    PublicationPrivilegesException,
 )
 from sources.pg_replication.schema_types import TReflectionLevel
 
@@ -997,6 +999,84 @@ def test_init_replication(src_config: Tuple[dlt.Pipeline, str, str]) -> None:
                 pub_name=pub_name,
                 schema_name=src_pl.dataset_name,
             )
+
+
+def test_init_replication_without_table_ownership(
+    src_config: Tuple[dlt.Pipeline, str, str]
+) -> None:
+    src_pl, slot_name, pub_name = src_config
+    if not is_super_user(src_pl.sql_client):
+        pytest.skip("Postgres user needs to be superuser to create a role")
+    role = f"repl_{uniq_id(6)}"
+    create_tables(
+        src_pl,
+        "CREATE TABLE {schema}.items (id int PRIMARY KEY, a text);",
+        "CREATE TABLE {schema}.others (id int PRIMARY KEY);",
+        "INSERT INTO {schema}.items VALUES (1, 'one');",
+        f"CREATE ROLE {role} LOGIN REPLICATION PASSWORD '{role}';",
+        f"GRANT USAGE ON SCHEMA {{schema}} TO {role};",
+        f"GRANT SELECT ON ALL TABLES IN SCHEMA {{schema}} TO {role};",
+    )
+    credentials = dlt.secrets.get(
+        "sources.pg_replication.credentials", ConnectionStringCredentials
+    )
+    credentials.username, credentials.password = role, role
+    schema = src_pl.dataset_name
+    try:
+        # the table owner runs the statement from the error
+        with pytest.raises(PublicationPrivilegesException) as exc:
+            init_replication(
+                slot_name, pub_name, schema, "items", credentials=credentials
+            )
+        run_sql(src_pl, exc.value.statement)
+        with pytest.raises(PublicationPrivilegesException) as exc:
+            init_replication(
+                slot_name,
+                pub_name,
+                schema,
+                ["items", "others"],
+                credentials=credentials,
+            )
+        assert exc.value.statement.startswith("ALTER PUBLICATION")
+        # with the publication in place REPLICATION and SELECT are enough
+        snapshot = init_replication(
+            slot_name,
+            pub_name,
+            schema,
+            "items",
+            credentials=credentials,
+            initial_snapshot="direct",
+        )
+        dest_pl = dlt.pipeline(
+            pipeline_name="dest_pl", destination="duckdb", dev_mode=True
+        )
+        assert_load_info(dest_pl.run(snapshot))
+        run_sql(src_pl, "INSERT INTO {schema}.items VALUES (2, 'two');")
+        assert_load_info(
+            dest_pl.run(
+                replication_resource(slot_name, pub_name, credentials=credentials)
+            )
+        )
+        assert table_rows(dest_pl, "items", ["id", "a"]) == [(1, "one"), (2, "two")]
+        # reset keeps the publication of another role
+        init_replication(
+            slot_name, pub_name, schema, "items", credentials=credentials, reset=True
+        )
+        with src_pl.sql_client() as c:
+            assert (
+                c.execute_sql(
+                    "SELECT count(*) FROM pg_publication WHERE pubname = %s;", pub_name
+                )[0][0]
+                == 1
+            )
+    finally:
+        run_sql(
+            src_pl,
+            f"SELECT pg_drop_replication_slot(slot_name) FROM pg_replication_slots"
+            f" WHERE slot_name = '{slot_name}';",
+            f"DROP OWNED BY {role};",
+            f"DROP ROLE {role};",
+        )
 
 
 def test_replicate_schema(src_config: Tuple[dlt.Pipeline, str, str]) -> None:

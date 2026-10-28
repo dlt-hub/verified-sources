@@ -49,6 +49,19 @@ class IncompatibleColumnTypeException(Exception):
         )
 
 
+class PublicationPrivilegesException(Exception):
+    def __init__(self, pub_name: str, statement: str) -> None:
+        self.pub_name = pub_name
+        self.statement = statement
+        super().__init__(
+            f"The user cannot set up publication {pub_name}: creating a publication needs the"
+            " CREATE privilege on the database, adding tables needs their ownership and adding a"
+            " schema a superuser. Ask the table owner or a superuser to run"
+            f" `{statement}`, then call `init_replication` again. The replication itself needs"
+            " only the REPLICATION attribute and SELECT on the tables."
+        )
+
+
 class SnapshotSchemaNotFoundException(Exception):
     def __init__(self, pipeline_name: str) -> None:
         self.pipeline_name = pipeline_name

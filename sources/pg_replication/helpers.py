@@ -65,6 +65,7 @@ from .exceptions import (
     IncompatiblePostgresVersionException,
     NoPrimaryKeyException,
     NullInNotNullColumnException,
+    PublicationPrivilegesException,
     SnapshotSchemaNotFoundException,
     UnchangedToastException,
 )
@@ -241,10 +242,18 @@ def init_replication(
     keep_rep_conn = False
     try:
         with rep_conn.cursor() as cur:
+            owned = get_publication_owned(pub_name, cur)
             if reset:
                 drop_replication_slot(slot_name, cur)
-                drop_publication(pub_name, cur)
-            create_publication(pub_name, cur, publish)
+                if owned:
+                    drop_publication(pub_name, cur)
+                    owned = None
+                elif owned is False:
+                    logger.warning(
+                        f"Publication {pub_name} is kept: it belongs to another role."
+                    )
+            if owned is None:
+                create_publication(pub_name, cur, publish, schema_name, table_names)
             pub_ops = get_pub_ops(pub_name, cur)
             if pub_ops["update"] or pub_ops["delete"]:
                 # checked before the tables are published, Postgres would reject their updates
@@ -254,9 +263,13 @@ def init_replication(
                 if tables_without_key:
                     raise NoPrimaryKeyException(schema_name, tables_without_key)
             if table_names is None:
-                add_schema_to_publication(schema_name, pub_name, cur)
+                if not is_schema_published(pub_name, schema_name, cur):
+                    add_schema_to_publication(schema_name, pub_name, cur)
             else:
-                add_tables_to_publication(table_names, schema_name, pub_name, cur)
+                published = get_published_tables(pub_name, schema_name, cur)
+                missing = [name for name in table_names if name not in published]
+                if missing:
+                    add_tables_to_publication(missing, schema_name, pub_name, cur)
             if pub_ops["update"]:
                 warn_unchanged_toast(pub_name, cur, include_columns, exclude_columns)
 
@@ -386,11 +399,14 @@ def create_publication(
     name: str,
     cur: cursor,
     publish: str = "insert, update, delete",
+    schema_name: Optional[str] = None,
+    table_names: Optional[Sequence[str]] = None,
 ) -> None:
     """Creates a publication for logical replication if it doesn't exist yet.
 
-    Does nothing if the publication already exists.
-    Raises error if the user does not have the CREATE privilege for the database.
+    Does nothing if the publication already exists. Raises `PublicationPrivilegesException`
+    with the statement that creates it with `table_names` or the whole schema if the user does
+    not have the CREATE privilege for the database.
     """
     esc_name = escape_postgres_identifier(name)
     try:
@@ -400,6 +416,57 @@ def create_publication(
         )
     except psycopg2.errors.DuplicateObject:  # the publication already exists
         logger.info(f'Publication "{name}" already exists.')
+    except psycopg2.errors.InsufficientPrivilege:
+        if table_names is not None:
+            members = "TABLE " + ", ".join(
+                _make_qualified_table_name(table_name, schema_name)
+                for table_name in table_names
+            )
+        else:
+            members = f"TABLES IN SCHEMA {escape_postgres_identifier(schema_name)}"
+        raise PublicationPrivilegesException(
+            name,
+            f"CREATE PUBLICATION {esc_name} FOR {members} WITH (publish = '{publish}');",
+        )
+
+
+def get_publication_owned(name: str, cur: cursor) -> Optional[bool]:
+    """Tells if the user may alter and drop the publication, None if it does not exist."""
+    cur.execute(
+        "SELECT pg_has_role(pubowner, 'USAGE') FROM pg_publication WHERE pubname = %s;",
+        (name,),
+    )
+    row = cur.fetchone()
+    return None if row is None else bool(row[0])
+
+
+def get_published_tables(pub_name: str, schema_name: str, cur: cursor) -> List[str]:
+    """Returns the names of tables of `schema_name` that the publication publishes."""
+    cur.execute(
+        "SELECT tablename FROM pg_publication_tables WHERE pubname = %s AND schemaname = %s;",
+        (pub_name, schema_name),
+    )
+    return [row[0] for row in cur.fetchall()]
+
+
+def is_schema_published(pub_name: str, schema_name: str, cur: cursor) -> bool:
+    """Tells if the publication publishes all tables, or all tables of `schema_name`."""
+    cur.execute(
+        "SELECT puballtables FROM pg_publication WHERE pubname = %s;", (pub_name,)
+    )
+    row = cur.fetchone()
+    if row is not None and row[0]:
+        return True
+    if get_pg_version(cur) < 150000:
+        return False
+    cur.execute(
+        "SELECT 1 FROM pg_publication_namespace pn"
+        " JOIN pg_publication p ON p.oid = pn.pnpubid"
+        " JOIN pg_namespace n ON n.oid = pn.pnnspid"
+        " WHERE p.pubname = %s AND n.nspname = %s;",
+        (pub_name, schema_name),
+    )
+    return cur.fetchone() is not None
 
 
 def add_table_to_publication(
@@ -415,8 +482,9 @@ def add_table_to_publication(
     """
     qual_name = _make_qualified_table_name(table_name, schema_name)
     esc_pub_name = escape_postgres_identifier(pub_name)
+    statement = f"ALTER PUBLICATION {esc_pub_name} ADD TABLE {qual_name};"
     try:
-        cur.execute(f"ALTER PUBLICATION {esc_pub_name} ADD TABLE {qual_name};")
+        cur.execute(statement)
         logger.info(
             f"Successfully added table {qual_name} to publication {esc_pub_name}."
         )
@@ -424,6 +492,8 @@ def add_table_to_publication(
         logger.info(
             f"Table {qual_name} is already a member of publication {esc_pub_name}."
         )
+    except psycopg2.errors.InsufficientPrivilege:
+        raise PublicationPrivilegesException(pub_name, statement)
 
 
 def add_tables_to_publication(
@@ -460,10 +530,11 @@ def add_schema_to_publication(
         )
     esc_schema_name = escape_postgres_identifier(schema_name)
     esc_pub_name = escape_postgres_identifier(pub_name)
+    statement = (
+        f"ALTER PUBLICATION {esc_pub_name} ADD TABLES IN SCHEMA {esc_schema_name};"
+    )
     try:
-        cur.execute(
-            f"ALTER PUBLICATION {esc_pub_name} ADD TABLES IN SCHEMA {esc_schema_name};"
-        )
+        cur.execute(statement)
         logger.info(
             f"Successfully added schema {esc_schema_name} to publication {esc_pub_name}."
         )
@@ -471,6 +542,8 @@ def add_schema_to_publication(
         logger.info(
             f"Schema {esc_schema_name} is already a member of publication {esc_pub_name}."
         )
+    except psycopg2.errors.InsufficientPrivilege:
+        raise PublicationPrivilegesException(pub_name, statement)
 
 
 def create_replication_slot(  # type: ignore[return]
