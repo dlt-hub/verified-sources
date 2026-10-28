@@ -2848,9 +2848,9 @@ sqlalchemy==2.0.38 \
     --hash=sha256:f53c0d6a859b2db58332e0e6a921582a02c1677cc93d4cbb36fdf49709b327b2 \
     --hash=sha256:f9d57f1b3061b3e21476b0ad5f0397b112b94ace21d1f439f2db472e568178ae
     # via langchain
-sqlglot==30.25.0 \
-    --hash=sha256:7d5a292d5f61b7fc860e65a8fa41083c726db0e27fb6efb224cca63c3a5980f7 \
-    --hash=sha256:d2d6e4d4865a210b1e33a801b105a6782ef12280cc2b6d0969bdc2634aef427a
+sqlglot==30.21.0 \
+    --hash=sha256:6787ac202a3adc0e25434f1512370a655e51cb3de8c792544de5f6ff9c618d25 \
+    --hash=sha256:816d1a4815b7562b3976efcc0b561c928a743f976efd0fb8ad6db7a5b96c069e
     # via dlt
 starlette==0.20.4 ; python_full_version < '3.13' \
     --hash=sha256:42fcf3122f998fefce3e2c5ad7e5edbf0f02cf685d646a83a08d404726af5084 \
