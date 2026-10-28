@@ -28,10 +28,7 @@ def assert_loaded_data(
     where_clause: Optional[str] = None,
 ) -> None:
     """Asserts loaded data meets expectation."""
-    qual_name = pipeline.sql_client().make_qualified_table_name(table_name)
-    escape_id = pipeline.destination_client().capabilities.escape_identifier
-    column_str = ", ".join(map(escape_id, column_names))
-    qry = f"SELECT {column_str} FROM {qual_name}"
+    qry = f"SELECT {', '.join(column_names)} FROM {table_name}"
     if where_clause is not None:
         qry += " WHERE " + where_clause
     observation = [
@@ -61,12 +58,11 @@ def table_rows(
     column_names: Sequence[str],
     order_by: str = "id",
 ) -> List[Tuple[Any, ...]]:
-    qual_name = pipeline.sql_client().make_qualified_table_name(table_name)
     return [
         tuple(row)
         for row in select_data(
             pipeline,
-            f"SELECT {', '.join(column_names)} FROM {qual_name} ORDER BY {order_by}",
+            f"SELECT {', '.join(column_names)} FROM {table_name} ORDER BY {order_by}",
         )
     ]
 

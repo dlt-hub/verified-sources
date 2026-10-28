@@ -13,7 +13,6 @@ import dlt
 from dlt.common import Decimal
 from dlt.common.exceptions import MissingDependencyException
 from dlt.common.schema.typing import TTableSchemaColumns
-from dlt.destinations.job_client_impl import SqlJobClientBase
 from dlt.pipeline.exceptions import PipelineStepFailed
 from dlt.sources.credentials import ConnectionStringCredentials
 from dlt.sources.sql_database import sql_table
@@ -685,14 +684,9 @@ def test_include_columns(
     init_load: bool,
     backend: str,
 ) -> None:
-    def get_cols(pipeline: dlt.Pipeline, table_name: str) -> set:
-        with pipeline.destination_client(pipeline.default_schema_name) as client:
-            client: SqlJobClientBase
-            return {
-                k
-                for k in client.get_storage_table(table_name)[1].keys()
-                if not k.startswith("_dlt_")
-            }
+    def get_cols(pipeline: dlt.Pipeline, table_name: str) -> Set[str]:
+        columns = pipeline.dataset()[table_name].columns
+        return {name for name in columns if not name.startswith("_dlt_")}
 
     @dlt.resource
     def tbl_x(data):
