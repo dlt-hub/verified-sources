@@ -1282,6 +1282,49 @@ def test_add_limit_makes_progress(src_config: Tuple[dlt.Pipeline, str, str]) -> 
     assert load_table_counts(dest_pl, "items") == {"items": 1000}
 
 
+def test_changes_of_lost_run_load_again(
+    src_config: Tuple[dlt.Pipeline, str, str]
+) -> None:
+    src_pl, slot_name, pub_name = src_config
+    create_tables(
+        src_pl,
+        "CREATE TABLE {schema}.items (id int PRIMARY KEY, a text);",
+        "INSERT INTO {schema}.items VALUES (1, 'one'), (4, 'four');",
+    )
+    snapshot = init_replication(
+        slot_name, pub_name, src_pl.dataset_name, "items", initial_snapshot="direct"
+    )
+    # outside of the working dir, which the test drops
+    destination = dlt.destinations.duckdb("lost_run.duckdb")
+    dest_pl = dlt.pipeline(
+        pipeline_name="dest_pl", destination=destination, dev_mode=True
+    )
+    assert_load_info(dest_pl.run(snapshot))
+    run_sql(src_pl, "INSERT INTO {schema}.items VALUES (2, 'two');")
+    assert_load_info(dest_pl.run(replication_resource(slot_name, pub_name)))
+    run_sql(
+        src_pl,
+        "INSERT INTO {schema}.items VALUES (3, 'three');",
+        "UPDATE {schema}.items SET a = 'uno' WHERE id = 1;",
+        "DELETE FROM {schema}.items WHERE id = 2;",
+    )
+    # the run stops before loading and its working dir is lost, ie. a container without volume
+    dest_pl.extract(replication_resource(slot_name, pub_name))
+    dataset_name = dest_pl.dataset_name
+    dest_pl.drop()
+    dest_pl = dlt.pipeline(
+        pipeline_name="dest_pl", destination=destination, dataset_name=dataset_name
+    )
+    dest_pl.sync_destination()
+    assert "items" in dest_pl.default_schema.tables
+    assert_load_info(dest_pl.run(replication_resource(slot_name, pub_name)))
+    assert table_rows(dest_pl, "items", ["id", "a"]) == [
+        (1, "uno"),
+        (3, "three"),
+        (4, "four"),
+    ]
+
+
 @pytest.mark.parametrize(
     "publish", ["insert", "insert, update, delete"], ids=["append", "merge"]
 )
