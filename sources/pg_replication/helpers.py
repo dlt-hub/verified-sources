@@ -198,8 +198,12 @@ def init_replication(
     """
     if isinstance(table_names, str):
         table_names = [table_names]
-    if persist_snapshots and initial_snapshot is None:
-        initial_snapshot = "table"
+    if persist_snapshots:
+        logger.warning(
+            '`persist_snapshots` is deprecated, use `initial_snapshot="table"` instead.'
+        )
+        if initial_snapshot is None:
+            initial_snapshot = "table"
     if initial_snapshot == "direct":
         ensure_sqlalchemy_2()
 

@@ -1,20 +1,11 @@
-"""Converts replicated changes to arrow tables. Requires `pyarrow` and `numpy`.
+"""Converts replicated changes to arrow tables for the `pyarrow` backend. Requires `pyarrow` and `numpy`.
 
-Used by the `pyarrow` backend. A segment (changes of one table with the same schema) becomes
-one arrow table in three steps:
-
-1. Every column becomes an arrow string array with the text values sent by Postgres.
-   Inserts, usually most of the changes, are decoded from the raw messages with numpy
-   (see `insert_columns`). Updates and deletes were already decoded into python lists by
-   `MessageConsumer` (to handle changed primary keys and unchanged TOAST values) and are
-   appended to the same arrays.
-2. Values in formats that arrow cannot parse are converted first (see `to_castable_array`).
-3. `cast_arrow_as_columns_schema` from dlt casts the strings to the types of the dlt columns,
-   the same way it casts tables of the `sql_table` `pyarrow` backend.
+Values arrive as text: inserts are decoded with numpy (`insert_columns`), values arrow cannot
+parse are converted first (`to_castable_array`) and dlt casts the strings to the column types.
 """
 
 from functools import partial
-from typing import TYPE_CHECKING, Any, Iterator, List, Optional
+from typing import TYPE_CHECKING, Any, Dict, Iterator, List, Optional, Sequence
 
 import numpy as np
 import pyarrow.compute as pc
@@ -70,20 +61,22 @@ def _read_int32(data: Any, at: Any) -> Any:
     )
 
 
-def insert_columns(payloads: List[bytes], n_columns: int) -> List[Any]:
-    """Decodes Insert messages of one table into one chunked arrow string array per column.
+def insert_columns(
+    payloads: List[bytes], n_columns: int, indices: Sequence[int]
+) -> Dict[int, Any]:
+    """Decodes columns `indices` of Insert messages of one table into chunked arrow string arrays.
 
-    Messages are decoded in chunks of at most `INSERT_CHUNK_SIZE` bytes (see
-    `_decode_insert_chunk`), so temporary arrays stay bounded also for large transactions.
-    Chunks are not copied into one array.
+    Messages are decoded in chunks of at most `INSERT_CHUNK_SIZE` bytes, so temporary arrays stay
+    bounded also for large transactions.
     """
     chunks = [
-        _decode_insert_chunk(chunk, n_columns) for chunk in _split_payloads(payloads)
+        _decode_insert_chunk(chunk, n_columns, indices)
+        for chunk in _split_payloads(payloads)
     ]
-    return [
-        pa.chunked_array([chunk[idx] for chunk in chunks], type=pa.large_string())
-        for idx in range(n_columns)
-    ]
+    return {
+        idx: pa.chunked_array([chunk[idx] for chunk in chunks], type=pa.large_string())
+        for idx in indices
+    }
 
 
 def _split_payloads(payloads: List[bytes]) -> Iterator[List[bytes]]:
@@ -99,31 +92,16 @@ def _split_payloads(payloads: List[bytes]) -> Iterator[List[bytes]]:
         yield chunk
 
 
-def _decode_insert_chunk(payloads: List[bytes], n_columns: int) -> List[Any]:
-    """Decodes Insert messages into one arrow string array per column.
+def _decode_insert_chunk(
+    payloads: List[bytes], n_columns: int, indices: Sequence[int]
+) -> Dict[int, Any]:
+    """Decodes columns `indices` of Insert messages into arrow string arrays.
 
-    An Insert message (protocol version 1, text format) is laid out as:
-
-        "I" | relation id (int32) | "N" | number of columns (int16) | column 1 | column 2 | ...
-
-    and every column is either `"n"` for NULL or `"t" | length (int32) | value (utf-8)`.
-
-    A column starts at a different offset in every message, because the values before it
-    have different lengths. Instead of walking each message in python, all messages are
-    concatenated into one numpy array and walked together, one column at a time:
-
-    1. `pos` holds, for every message, the offset of the current column.
-    2. The kind byte at `pos` tells NULLs from text values, text values have their length
-       at `pos + 1` and their bytes start at `pos + 5`.
-    3. Arrow stores strings as one buffer with all values back to back, plus offsets of
-       each value in it. The value bytes of all messages are copied into such a buffer with
-       a single numpy indexing operation (see `gather` below).
-    4. `pos` moves past the column in every message and the next column is read.
-
-    Python code runs once per column, not once per value. numpy has no operation that copies
-    many byte ranges at once, so the copy in step 3 indexes every byte: `_gather_index` holds
-    an int64 index per byte of the column, which is why messages are decoded in chunks.
+    A message is `"I" | relation id (int32) | "N" | n columns (int16) | columns` (protocol 1,
+    text), a column is `"n"` (NULL) or `"t" | length (int32) | utf-8 value`. All messages are
+    walked together, one column at a time, so python runs once per column, not per value.
     """
+    wanted = set(indices)
     n = len(payloads)
     data = np.frombuffer(b"".join(payloads), dtype=np.uint8)
     message_lengths = np.fromiter(map(len, payloads), dtype=np.int64, count=n)
@@ -136,10 +114,11 @@ def _decode_insert_chunk(payloads: List[bytes], n_columns: int) -> List[Any]:
         raise ValueError(
             f"Insert messages have {set(counts.tolist())} columns, {n_columns} expected."
         )
+    # offset of the current column in every message
     pos = message_starts + 8
 
-    columns = []
-    for _ in range(n_columns):
+    columns: Dict[int, Any] = {}
+    for idx in range(n_columns):
         kind = data[pos]
         is_text = kind == _TEXT_KIND
         if not (is_text | (kind == _NULL_KIND)).all():
@@ -148,23 +127,26 @@ def _decode_insert_chunk(payloads: List[bytes], n_columns: int) -> List[Any]:
         value_lengths[is_text] = _read_int32(data, pos[is_text] + 1)
         value_starts = pos + 5
 
-        # value i is stored at `offsets[i]:offsets[i + 1]` in the arrow buffer
-        offsets = np.zeros(n + 1, dtype=np.int64)
-        np.cumsum(value_lengths, out=offsets[1:])
-        values = data[_gather_index(value_starts, value_lengths, offsets)]
-        array = pa.LargeBinaryArray.from_buffers(
-            pa.large_binary(),
-            n,
-            [
-                # validity bitmap: one bit per value, set for text values, unset for NULLs
-                pa.py_buffer(np.packbits(is_text, bitorder="little")),
-                pa.py_buffer(offsets),
-                pa.py_buffer(values),
-            ],
-            null_count=int(n - is_text.sum()),
-        )
-        # binary to string cast validates utf-8
-        columns.append(array.cast(pa.large_string()))
+        if idx in wanted:
+            # value i is stored at `offsets[i]:offsets[i + 1]` in the arrow buffer
+            offsets = np.zeros(n + 1, dtype=np.int64)
+            np.cumsum(value_lengths, out=offsets[1:])
+            # copies the value bytes of all messages with one indexing operation
+            values = data[_gather_index(value_starts, value_lengths, offsets)]
+            array = pa.LargeBinaryArray.from_buffers(
+                pa.large_binary(),
+                n,
+                [
+                    # validity bitmap: one bit per value, set for text values, unset for NULLs
+                    pa.py_buffer(np.packbits(is_text, bitorder="little")),
+                    pa.py_buffer(offsets),
+                    pa.py_buffer(values),
+                ],
+                null_count=int(n - is_text.sum()),
+            )
+            # binary to string cast validates utf-8
+            columns[idx] = array.cast(pa.large_string())
+        # move past the column in every message
         pos = np.where(is_text, value_starts + value_lengths, pos + 1)
     return columns
 
@@ -235,7 +217,9 @@ def segment_to_arrow(segment: "Segment") -> Any:
     relation = segment.relation
     n_inserts = len(segment.insert_payloads)
     inserted = (
-        insert_columns(segment.insert_payloads, len(relation.columns))
+        insert_columns(
+            segment.insert_payloads, len(relation.columns), relation.included_indices
+        )
         if n_inserts
         else None
     )
