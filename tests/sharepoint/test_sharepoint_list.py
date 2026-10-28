@@ -1,7 +1,7 @@
 """Mocked tests of the SharePoint list sources: Graph calls go to requests_mock, loads go to duckdb."""
 
 import re
-from typing import List, Optional
+from typing import Any, Dict, List, Optional, Set
 from urllib.parse import urlparse
 
 import pytest
@@ -43,7 +43,7 @@ WITH_NAME_HINT = "Load one of them with sharepoint_list renamed with with_name."
         pytest.param(
             "Documents",
             ["Title", "Due_x0020_Date"],
-            "fields($select=Title,Due_x0020_Date)",
+            "fields($select=Due_x0020_Date,Title)",
             id="document_library_with_columns",
         ),
         pytest.param("R&D tasks", None, "fields", id="title_with_space_and_ampersand"),
@@ -102,7 +102,7 @@ def test_sharepoint_list_pagination(
     ],
 )
 def test_sharepoint_list_system_fields(
-    graph: Mocker, included_columns: List[str], expected_keys: set
+    graph: Mocker, included_columns: List[str], expected_keys: Set[str]
 ) -> None:
     item = list_item("1", "a")
     item["fields"].update(
@@ -132,38 +132,20 @@ def test_sharepoint_list_with_name(graph: Mocker) -> None:
     assert load_table_counts(pipeline, "task_status") == {"task_status": 1}
 
 
-def test_sharepoint_list_not_found(graph: Mocker) -> None:
-    graph.get(list_delta_url("Nope"), status_code=404, json=NOT_FOUND)
-    mock_pages(graph, LISTS_URL, SITE_LISTS)
-
-    with pytest.raises(ResourceExtractionError) as exc_info:
-        list(sharepoint_list("Nope"))
-
-    assert (
-        str(cause_of_type(exc_info.value, ValueError))
-        == "List 'Nope' not found in the site. Available lists: ['Documents', 'Contacts', 'Tasks']"
-    )
-
-
 @pytest.mark.parametrize(
-    "failing_url",
-    [
-        pytest.param(TASKS_DELTA_URL, id="items"),
-        pytest.param(LISTS_URL, id="lists_looked_up_for_a_missing_list"),
-    ],
+    "status_code",
+    [pytest.param(404, id="list_not_found"), pytest.param(400, id="bad_request")],
 )
-def test_sharepoint_list_graph_errors(graph: Mocker, failing_url: str) -> None:
-    graph.get(TASKS_DELTA_URL, status_code=404, json=NOT_FOUND)
-    graph.get(
-        failing_url,
-        status_code=400,
-        json={"error": {"code": "invalidRequest", "message": "Bad request."}},
-    )
+def test_sharepoint_list_graph_errors(graph: Mocker, status_code: int) -> None:
+    graph.get(TASKS_DELTA_URL, status_code=status_code, json=NOT_FOUND)
 
     with pytest.raises(ResourceExtractionError) as exc_info:
         list(sharepoint_list("Tasks"))
 
-    assert str(cause_of_type(exc_info.value, HTTPError)).startswith("400 Client Error")
+    assert str(cause_of_type(exc_info.value, HTTPError)).startswith(
+        f"{status_code} Client Error"
+    )
+    assert lists_requests(graph) == []
 
 
 def test_sharepoint_list_delta_sync(graph: Mocker) -> None:
@@ -229,7 +211,7 @@ def test_sharepoint_list_delta_sync(graph: Mocker) -> None:
     ],
 )
 def test_sharepoint_list_expired_delta_link(
-    graph: Mocker, status_code: int, body: dict
+    graph: Mocker, status_code: int, body: Dict[str, str]
 ) -> None:
     pipeline = new_pipeline("sharepoint_list")
     delta_link = mock_list(graph, "Tasks", [[list_item("1", "a")]])
@@ -254,7 +236,7 @@ def test_sharepoint_list_expired_delta_link(
     ],
 )
 def test_sharepoint_lists_tables(
-    graph: Mocker, list_titles: list, expected_tables: list
+    graph: Mocker, list_titles: Optional[List[str]], expected_tables: List[str]
 ) -> None:
     hidden = site_list("Hidden", "genericList")
     hidden["list"]["hidden"] = True
@@ -297,7 +279,10 @@ def test_sharepoint_lists_tables(
     ],
 )
 def test_sharepoint_lists_creation_errors(
-    graph: Mocker, list_titles: Optional[List[str]], site_lists: list, message: str
+    graph: Mocker,
+    list_titles: Optional[List[str]],
+    site_lists: List[List[Dict[str, Any]]],
+    message: str,
 ) -> None:
     mock_pages(graph, LISTS_URL, site_lists)
 
@@ -326,28 +311,30 @@ def test_sharepoint_list_config_from_env(
     }
 
 
-@pytest.mark.parametrize(
-    "list_title,included_columns",
-    [
-        pytest.param("Contacts", None, id="other_list"),
-        pytest.param("Tasks", ["Title"], id="other_columns"),
-    ],
-)
-def test_sharepoint_list_settings_changed(
-    graph: Mocker, list_title: str, included_columns: Optional[List[str]]
-) -> None:
+def test_sharepoint_list_columns_changed(graph: Mocker) -> None:
+    """Other columns start a full sync of the same table, which merges into the earlier rows."""
     pipeline = new_pipeline("sharepoint_list")
     mock_list(graph, "Tasks", [[list_item("1", "a")]])
-    assert_load_info(pipeline.run(sharepoint_list("Tasks")))
-    mock_list(graph, "Contacts", [[list_item("1", "a")]])
-    changed = sharepoint_list(list_title, included_columns).with_name("Tasks")
+    assert_load_info(pipeline.run(sharepoint_list("Tasks", ["Title"])))
+    mock_list(graph, "Tasks", [[list_item("2", "b")]], "t2")
 
-    with pytest.raises(PipelineStepFailed) as exc_info:
-        pipeline.run(changed)
+    assert_load_info(pipeline.run(sharepoint_list("Tasks", ["Title", "Status"])))
 
-    assert str(cause_of_type(exc_info.value, ValueError)) == (
-        f"The table of list '{list_title}' was loaded with another list or columns."
-        f" {FULL_RELOAD_HINT} to load it again."
-    )
-    assert_load_info(pipeline.run(changed, refresh="drop_resources"))
-    assert load_table_counts(pipeline, "tasks") == {"tasks": 1}
+    assert load_table_counts(pipeline, "tasks") == {"tasks": 2}
+    first, second = requests_to(graph, "/items/delta")
+    assert query_of(first) == {"$expand": ["fields($select=Title)"]}
+    assert query_of(second) == {"$expand": ["fields($select=Status,Title)"]}
+
+
+def test_sharepoint_list_column_order_ignored(graph: Mocker) -> None:
+    pipeline = new_pipeline("sharepoint_list")
+    delta_link = mock_list(graph, "Tasks", [[list_item("1", "a")]])
+    assert_load_info(pipeline.run(sharepoint_list("Tasks", ["Title", "Status"])))
+    mock_delta(graph, delta_link, [[list_item("2", "b")]], "t2")
+
+    assert_load_info(pipeline.run(sharepoint_list("Tasks", ["Status", "Title"])))
+
+    assert load_table_counts(pipeline, "tasks") == {"tasks": 2}
+    first, second = requests_to(graph, "/items/delta")
+    assert query_of(first) == {"$expand": ["fields($select=Status,Title)"]}
+    assert second.url == delta_link

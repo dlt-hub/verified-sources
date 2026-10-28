@@ -4,7 +4,18 @@ import io
 import os
 from collections import Counter
 from functools import partial
-from typing import Any, Dict, Iterable, List, NamedTuple, Set, Tuple, Type, TypeVar
+from typing import (
+    Any,
+    Dict,
+    Iterable,
+    List,
+    NamedTuple,
+    Optional,
+    Set,
+    Tuple,
+    Type,
+    TypeVar,
+)
 from urllib.parse import parse_qs, quote, urlparse
 
 import dlt
@@ -58,7 +69,7 @@ def token_response(access_token: str, expires_in: int = 3600) -> Dict[str, Any]:
     }
 
 
-def new_fs(library: str = None) -> SharepointFileSystem:
+def new_fs(library: Optional[str] = None) -> SharepointFileSystem:
     auth = entra_auth(TENANT_ID, CLIENT_ID, CLIENT_SECRET)
     return SharepointFileSystem(graph_client(SITE_ID, auth), library)
 
@@ -292,11 +303,7 @@ def loaded_columns(
 def data_columns(pipeline: dlt.Pipeline) -> Set[str]:
     """Returns the names of the 'reports' columns read from the files."""
     columns = pipeline.default_schema.get_table_columns("reports")
-    return {
-        name
-        for name in columns
-        if name != "_deleted" and not name.startswith(("_dlt_", "_file_"))
-    }
+    return {name for name in columns if not name.startswith(("_dlt_", "_file_"))}
 
 
 def files_containing(directory: str, data: bytes) -> List[str]:

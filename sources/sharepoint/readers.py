@@ -1,6 +1,7 @@
 """Readers that turn a file of a document library into rows with file columns."""
 
 import codecs
+from datetime import timedelta
 from typing import (
     Any,
     Dict,
@@ -16,7 +17,6 @@ from typing import (
 
 import pandas as pd
 import pyarrow.parquet as pq
-from datetime import timedelta  # noqa: I251
 from dlt.common import json
 from dlt.common.typing import TDataItems
 from dlt.extract import with_table_name
@@ -27,28 +27,6 @@ FILE_TYPES = get_args(TFileType)
 BATCH_SIZE = 10_000
 
 
-def validate_reader_kwargs(file_type: str, reader_kwargs: Dict[str, Any]) -> None:
-    """Checks the reader arguments that would fail only after files were downloaded.
-
-    Raises:
-        ValueError: If the file type is unknown, parquet gets anything but `columns`, or jsonl
-            gets any argument.
-    """
-    if file_type not in FILE_TYPES:
-        raise ValueError(
-            f"file_type must be one of {list(FILE_TYPES)}, got '{file_type}'"
-        )
-    # the other pyarrow arguments change the row shape
-    if file_type == "parquet" and set(reader_kwargs) - {"columns"}:
-        raise ValueError(
-            f"reader_kwargs for parquet files may only contain 'columns', got {sorted(reader_kwargs)}"
-        )
-    if file_type == "jsonl" and reader_kwargs:
-        raise ValueError(
-            f"jsonl files take no reader_kwargs, got {sorted(reader_kwargs)}"
-        )
-
-
 def file_rows(
     items: Iterable[FileItemDict],
     file_type: str,
@@ -57,31 +35,25 @@ def file_rows(
 ) -> Iterator[TDataItems]:
     """Yields the rows of each file in batches, with `_file_url`, `_file_name` and `_file_modified_at`.
 
-    Excel sheets go to "<table_name>_<sheet>" unless one `sheet_name` is given. A file or sheet
-    with no rows yields one row with `_deleted` set, which deletes its earlier rows.
+    Rows of the base table carry no table name, so table hints apply to them; Excel sheets go
+    to "<table_name>_<sheet>" unless one `sheet_name` is given. Blank files are skipped.
     """
-    # dlt's filesystem readers are not used because they add no file columns
     for item in items:
         file_columns = {
             "_file_url": item["file_url"],
             "_file_name": item["file_name"],
             "_file_modified_at": item["modification_date"],
         }
-        has_rows: Dict[str, bool] = {}
         with item.open() as f:
             head = f.read(1024)
-            blank = len(head) < 1024 and not head.removeprefix(codecs.BOM_UTF8).strip()
+            if len(head) < 1024 and not head.removeprefix(codecs.BOM_UTF8).strip():
+                continue
             f.seek(0)
-            batches = [] if blank else read_records(f, file_type, reader_kwargs)
-            for sheet, records in batches:
-                table = table_name if sheet is None else f"{table_name}_{sheet}"
-                has_rows[table] = has_rows.get(table, False) or bool(records)
-                if records:
-                    rows = [{**record, **file_columns} for record in records]
-                    yield with_table_name(rows, table)
-        for table in [table_name] if not has_rows else has_rows:
-            if not has_rows.get(table):
-                yield with_table_name([{**file_columns, "_deleted": True}], table)
+            for sheet, records in read_records(f, file_type, reader_kwargs):
+                rows = [{**record, **file_columns} for record in records]
+                yield rows if sheet is None else with_table_name(
+                    rows, f"{table_name}_{sheet}"
+                )
 
 
 def read_records(
@@ -90,10 +62,9 @@ def read_records(
     """Yields batches of records; the first element is the sheet name for a workbook read whole."""
     if file_type == "parquet":
         parquet_file = pq.ParquetFile(f)
-        columns = reader_kwargs.get("columns") or data_column_names(
-            parquet_file.schema_arrow
-        )
-        for batch in parquet_file.iter_batches(batch_size=BATCH_SIZE, columns=columns):
+        for batch in parquet_file.iter_batches(
+            batch_size=BATCH_SIZE, columns=reader_kwargs.get("columns")
+        ):
             yield None, [
                 {name: duration_to_seconds(value) for name, value in record.items()}
                 for record in batch.to_pylist()
@@ -116,26 +87,25 @@ def read_records(
             for chunk in chunks:
                 for records in frame_records(chunk):
                     yield None, records
-    else:
+    elif file_type == "excel":
         sheets = pd.read_excel(f, **{"sheet_name": None, **reader_kwargs})
         for sheet, frame in (
             sheets.items() if isinstance(sheets, dict) else [(None, sheets)]
         ):
-            # an empty sheet yields one empty batch, so the caller knows the sheet exists
-            for records in frame_records(frame) if len(frame) else [[]]:
+            for records in frame_records(frame):
                 yield None if sheet is None else str(sheet), records
+    else:
+        raise ValueError(
+            f"file_type must be one of {list(FILE_TYPES)}, got '{file_type}'"
+        )
 
 
 def frame_records(df: pd.DataFrame) -> Iterator[List[Dict[str, Any]]]:
     """Yields the frame as lists of at most BATCH_SIZE records, with NaN and NaT as None.
 
-    Durations become seconds, header rows are joined with "_" and a named index becomes a column.
+    Durations become seconds and a named index becomes a column.
     """
     df = df.copy()
-    if isinstance(df.columns, pd.MultiIndex):
-        df.columns = pd.Index(
-            ["_".join(str(level) for level in name) for name in df.columns]
-        )
     if df.index.names != [None]:
         df = df.reset_index()
     for i, dtype in enumerate(df.dtypes):
@@ -154,14 +124,3 @@ def frame_records(df: pd.DataFrame) -> Iterator[List[Dict[str, Any]]]:
 def duration_to_seconds(value: Any) -> Any:
     """Returns a timedelta as float seconds, which dlt can load, and any other value unchanged."""
     return value.total_seconds() if isinstance(value, timedelta) else value
-
-
-def data_column_names(schema: Any) -> List[str]:
-    """Returns the column names without the unnamed index columns that pandas writes."""
-    index_columns = (schema.pandas_metadata or {}).get("index_columns", [])
-    unnamed = {
-        name
-        for name in index_columns
-        if isinstance(name, str) and name.startswith("__index_level_")
-    }
-    return [name for name in schema.names if name not in unnamed]

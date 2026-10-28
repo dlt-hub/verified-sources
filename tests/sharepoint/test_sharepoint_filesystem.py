@@ -3,9 +3,9 @@
 import codecs
 import os
 import re
-from datetime import date, datetime, timedelta, timezone  # noqa: I251
+from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Optional, Tuple, Type
+from typing import Any, Callable, Dict, List, Tuple, Type, cast
 from urllib.parse import parse_qs, urlparse
 
 import dlt
@@ -240,6 +240,21 @@ def test_sharepoint_files_unreadable_folder(
     assert downloaded_ids(graph) == []
 
 
+def test_sharepoint_files_exact_name_glob(graph: Mocker) -> None:
+    """An exact file name is looked up directly: a denied lookup fails the load, a missing file loads nothing."""
+    mock_folder(graph, "Reports", [[File("A", "a.csv", NEW, b"n\n1\n")]])
+    config = files_config(table_name="t", file_glob="a.csv")
+    graph.get(re.compile("/root:/Reports/a.csv:"), status_code=403, json=NOT_FOUND)
+
+    with pytest.raises(ResourceExtractionError) as exc_info:
+        list(sharepoint_files(**config))
+
+    assert str(cause_of_type(exc_info.value, HTTPError)).startswith("403 Client Error")
+    graph.get(re.compile("/root:/Reports/a.csv:"), status_code=404, json=NOT_FOUND)
+    assert list(sharepoint_files(**config)) == []
+    assert downloaded_ids(graph) == []
+
+
 def test_sharepoint_files_root_folder(graph: Mocker) -> None:
     mock_folder(graph, "", [[File("A", "a.csv", NEW, b"n\n1\n")]])
 
@@ -263,42 +278,13 @@ def test_validate_folder_path(folder_path: str, expected: str) -> None:
     assert validate_folder_path(folder_path) == expected
 
 
-@pytest.mark.parametrize(
-    "fields,message",
-    [
-        pytest.param(
-            {"folder_path": "a//b"}, "empty segment ('//'): 'a//b'", id="empty_segment"
-        ),
-        pytest.param(
-            {"folder_path": 'a|\\?><:*"*b'},
-            "['\"', '*', ':', '<', '>', '?', '\\\\', '|']",
-            id="disallowed_characters",
-        ),
-        pytest.param(
-            {"folder_path": "a\x85\x7f\n\tb"},
-            "['\\t', '\\n', '\\x7f', '\\x85']",
-            id="control_characters",
-        ),
-        pytest.param(
-            {"folder_path": "Reports [2024]"},
-            "cannot contain '[' or ']'",
-            id="glob_characters",
-        ),
-        pytest.param(
-            {"file_type": "xml"}, "file_type must be one of", id="unknown_file_type"
-        ),
-        pytest.param(
-            {"file_type": "parquet", "reader_kwargs": {"chunksize": 2}},
-            "may only contain 'columns'",
-            id="parquet_extra_kwargs",
-        ),
-    ],
-)
-def test_sharepoint_files_invalid_config(
-    credentials_env: None, requests_mock: Mocker, fields: Dict[str, Any], message: str
+def test_sharepoint_files_glob_in_folder_path(
+    credentials_env: None, requests_mock: Mocker
 ) -> None:
+    message = "folder_path cannot contain glob characters: 'Reports [2024]'"
+
     with pytest.raises(ValueError, match=re.escape(message)):
-        sharepoint_files(**files_config(**fields))
+        sharepoint_files(**files_config(folder_path="Reports [2024]"))
 
     assert requests_mock.call_count == 0
 
@@ -629,6 +615,7 @@ def test_sharepoint_files_parquet_variants(graph: Mocker) -> None:
     )
 
     expected = {
+        "index_level_0": ("bigint", [0, 2, None, None]),
         "id": ("bigint", [None, None, 1, 2]),
         "value": ("bigint", [5, 6, 7, None]),
         "label": ("text", [None, None, "ok", None]),
@@ -671,57 +658,9 @@ def test_sharepoint_files_parquet_variants(graph: Mocker) -> None:
 def test_sharepoint_files_empty_file(
     graph: Mocker, file_type: str, content: bytes
 ) -> None:
-    """A file without rows yields one deleted row, so an emptied file loses its rows."""
     mock_files(graph, {"blank": content})
 
-    assert list(sharepoint_files(**files_config(file_type=file_type))) == [
-        {
-            "_file_url": "sharepoint:///Reports/blank",
-            "_file_name": "blank",
-            "_file_modified_at": datetime(2024, 1, 1, tzinfo=timezone.utc),
-            "_deleted": True,
-        }
-    ]
-
-
-def test_sharepoint_files_emptied_file(graph: Mocker) -> None:
-    a = File("A", "a.csv", NEW, b"n\n1\n2\n")
-    b = File("B", "b.csv", NEW, b"n\n3\n")
-    mock_folder(graph, "Reports", [[a, b]])
-    pipeline = new_pipeline("sharepoint_emptied")
-    assert_load_info(pipeline.run(sharepoint_files(**files_config())))
-    assert rows_per_file(pipeline) == {"a.csv": 2, "b.csv": 1}
-
-    graph.reset_mock()
-    mock_folder(graph, "Reports", [[File("A", "a.csv", NEWER, b"n\n"), b]])
-    assert_load_info(pipeline.run(sharepoint_files(**files_config())))
-
-    assert downloaded_ids(graph) == ["A"]
-    assert rows_per_file(pipeline) == {"b.csv": 1}
-    columns = pipeline.default_schema.tables["reports"]["columns"]
-    assert columns["_deleted"]["hard_delete"] is True
-
-
-def test_sharepoint_files_emptied_sheet(graph: Mocker) -> None:
-    book = excel_bytes({"Data": [["n"], [1], [2]], "Other": [["n"], [3]]})
-    mock_folder(graph, "Reports", [[File("A", "book.xlsx", NEW, book)]])
-    config = files_config(file_type="excel", table_name="book")
-    pipeline = new_pipeline("sharepoint_emptied_sheet")
-    assert_load_info(pipeline.run(sharepoint_files(**config)))
-    assert load_table_counts(pipeline, "book_data", "book_other") == {
-        "book_data": 2,
-        "book_other": 1,
-    }
-
-    graph.reset_mock()
-    book = excel_bytes({"Data": [["n"]], "Other": [["n"], [3]]})
-    mock_folder(graph, "Reports", [[File("A", "book.xlsx", NEWER, book)]])
-    assert_load_info(pipeline.run(sharepoint_files(**config)))
-
-    assert load_table_counts(pipeline, "book_data", "book_other") == {
-        "book_data": 0,
-        "book_other": 1,
-    }
+    assert list(sharepoint_files(**files_config(file_type=file_type))) == []
 
 
 def test_filesystem_credentials_required() -> None:
@@ -763,15 +702,11 @@ def test_sharepoint_files_excel_sheets(graph: Mocker) -> None:
     )
 
     tables = {t["name"]: t for t in pipeline.default_schema.data_tables()}
-    assert set(tables) == {"book_data", "book_empty", "book_sales_2024"}
+    assert set(tables) == {"book_data", "book_sales_2024"}
     assert tables["book_sales_2024"]["write_disposition"] == "merge"
     assert tables["book_sales_2024"]["columns"]["_file_url"]["merge_key"] is True
-    assert tables["book_sales_2024"]["columns"]["_deleted"]["hard_delete"] is True
-    assert load_table_counts(
-        pipeline, "book_data", "book_empty", "book_sales_2024"
-    ) == {
+    assert load_table_counts(pipeline, "book_data", "book_sales_2024") == {
         "book_data": 1,
-        "book_empty": 0,
         "book_sales_2024": 1,
     }
 
@@ -826,31 +761,15 @@ def test_read_files_over_local_filesystem(tmp_path: Path) -> None:
     } == {("book.xlsx", True, True)}
 
 
-@pytest.mark.parametrize(
-    "file_type,reader_kwargs,message",
-    [
-        pytest.param("xml", None, "file_type must be one of", id="unknown_file_type"),
-        pytest.param(
-            "parquet",
-            {"chunksize": 2},
-            "may only contain 'columns'",
-            id="parquet_extra_kwargs",
-        ),
-    ],
-)
-def test_read_files_invalid_config(
-    graph: Mocker,
-    file_type: TFileType,
-    reader_kwargs: Optional[Dict[str, Any]],
-    message: str,
-) -> None:
+def test_read_files_unknown_file_type(graph: Mocker) -> None:
     mock_files(graph, {"a.csv": b"n\n1\n"})
 
     with pytest.raises(ResourceExtractionError) as exc_info:
-        list(sharepoint_folder("Reports") | read_files(file_type, reader_kwargs))
+        list(sharepoint_folder("Reports") | read_files(cast(TFileType, "xml")))
 
-    assert message in str(cause_of_type(exc_info.value, ValueError))
-    assert downloaded_ids(graph) == []
+    assert str(cause_of_type(exc_info.value, ValueError)) == (
+        "file_type must be one of ['csv', 'jsonl', 'parquet', 'excel'], got 'xml'"
+    )
 
 
 def file_rows_of(pipeline: dlt.Pipeline, table: str) -> List[Dict[str, Any]]:
@@ -873,6 +792,19 @@ def test_sharepoint_files_same_as_pipe(graph: Mocker) -> None:
     assert_load_info(pipeline.run(piped))
 
     assert file_rows_of(pipeline, "piped") == file_rows_of(pipeline, "reports")
+
+
+def test_read_files_table_name_hint(graph: Mocker) -> None:
+    mock_files(graph, {"a.csv": b"n\n1\n2\n"})
+    pipeline = new_pipeline("sharepoint_table_hint")
+    rows = sharepoint_folder("Reports") | read_files("csv").apply_hints(
+        table_name="my_table"
+    )
+
+    assert_load_info(pipeline.run(rows))
+
+    assert [t["name"] for t in pipeline.default_schema.data_tables()] == ["my_table"]
+    assert load_table_counts(pipeline, "my_table") == {"my_table": 2}
 
 
 def test_filesystem_fsspec_registration(graph: Mocker) -> None:

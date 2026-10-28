@@ -36,14 +36,16 @@ def test_list(destination_name: str) -> None:
     }
     assert {row["story_points"] for row in rows} == {3, 8, 2, 5, None}
 
-    assert pipeline.run(tasks).loads_ids == []
+    pipeline.run(tasks)
+    assert pipeline.last_trace.last_normalize_info.row_counts.get("tasks", 0) == 0
     assert load_table_counts(pipeline, "tasks") == {"tasks": 5}
 
 
-def test_list_pages() -> None:
+@pytest.mark.parametrize("destination_name", ALL_DESTINATIONS)
+def test_list_pages(destination_name: str) -> None:
     pipeline = dlt.pipeline(
         pipeline_name="sharepoint_list_pages",
-        destination="duckdb",
+        destination=destination_name,
         dataset_name="sharepoint_data",
         dev_mode=True,
     )
@@ -125,7 +127,9 @@ def test_files(destination_name: str) -> None:
         "folder_with_205_files",
     ],
 )
+@pytest.mark.parametrize("destination_name", ALL_DESTINATIONS)
 def test_files_variants(
+    destination_name: str,
     config: Dict[str, Any],
     row_count: int,
     column: Optional[str],
@@ -133,7 +137,7 @@ def test_files_variants(
 ) -> None:
     pipeline = dlt.pipeline(
         pipeline_name="sharepoint_files_variants",
-        destination="duckdb",
+        destination=destination_name,
         dataset_name="sharepoint_data",
         dev_mode=True,
     )

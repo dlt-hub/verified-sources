@@ -26,10 +26,6 @@ class EntraClientCredentials(OAuth2ClientCredentials):
                 f"{e}: {entra_error(e.response)}", response=e.response
             ) from e
 
-    def parse_expiration_in_seconds(self, response_json: Any) -> int:
-        # a minute early, so a request near the end of the token's life is not rejected
-        return max(0, super().parse_expiration_in_seconds(response_json) - 60)
-
 
 def entra_auth(
     tenant_id: str, client_id: str, client_secret: str

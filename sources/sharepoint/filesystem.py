@@ -1,6 +1,6 @@
 """Read-only fsspec filesystem over one SharePoint document library."""
 
-import unicodedata
+from glob import has_magic
 from operator import itemgetter
 from typing import Any, Dict, List, Optional
 from urllib.parse import quote
@@ -18,8 +18,6 @@ from .graph import entra_auth, graph_client
 
 PREFIX = "sharepoint://"
 ITEM_FIELDS = "id,name,size,file,folder,lastModifiedDateTime"
-INVALID_PATH_CHARS = set('"*:<>?\\|')
-GLOB_CHARS = set("[]")
 
 
 class SharepointFileSystem(AbstractFileSystem):
@@ -97,17 +95,10 @@ class SharepointFileSystem(AbstractFileSystem):
                 )
         return self._strip_protocol(path)
 
-    def walk(
-        self,
-        path: str,
-        maxdepth: Optional[int] = None,
-        topdown: bool = True,
-        on_error: str = "raise",
-        **kwargs: Any,
-    ) -> Any:
-        """Walks the folder tree, failing on a folder that cannot be listed."""
-        # fsspec skips such folders by default, which would load a partial result
-        return super().walk(path, maxdepth, topdown, on_error="raise", **kwargs)
+    def walk(self, path: str, *args: Any, **kwargs: Any) -> Any:
+        # fsspec skips folders it cannot list by default, which would load a partial result
+        kwargs["on_error"] = "raise"
+        return super().walk(path, *args, **kwargs)
 
     def open(self, path: str, mode: str = "rb", **kwargs: Any) -> Any:  # noqa: A003
         self._path(path)
@@ -159,6 +150,14 @@ class SharepointFileSystem(AbstractFileSystem):
             raise
         return self._entry(path.rpartition("/")[0], response.json())
 
+    def exists(self, path: str, **kwargs: Any) -> bool:
+        # fsspec's default swallows every error, which would turn a denied file into "absent"
+        try:
+            self.info(path, **kwargs)
+        except FileNotFoundError:
+            return False
+        return True
+
     def _open(
         self,
         path: str,
@@ -202,32 +201,12 @@ def validate_folder_path(folder_path: str) -> str:
     """Returns the folder path without leading and trailing slashes, "" for the library root.
 
     Raises:
-        ValueError: If the path has an empty segment or a character SharePoint does not allow.
+        ValueError: If the path contains glob characters, which dlt's filesystem source would
+            read as a pattern.
     """
-    path = folder_path.strip("/")
-    if not path:
-        return ""
-    for segment in path.split("/"):
-        if not segment:
-            raise ValueError(
-                f"folder_path has an empty segment ('//'): {folder_path!r}"
-            )
-        invalid = sorted(
-            char
-            for char in set(segment)
-            if char in INVALID_PATH_CHARS or unicodedata.category(char) == "Cc"
-        )
-        if invalid:
-            raise ValueError(
-                f"folder_path contains characters SharePoint does not allow {invalid}:"
-                f" {folder_path!r}"
-            )
-        if GLOB_CHARS & set(segment):
-            raise ValueError(
-                "folder_path cannot contain '[' or ']', which file_glob reads as a pattern:"
-                f" {folder_path!r}"
-            )
-    return path
+    if has_magic(folder_path):
+        raise ValueError(f"folder_path cannot contain glob characters: {folder_path!r}")
+    return folder_path.strip("/")
 
 
 def make_url(scheme: str, fs_path: str, bucket_url: str) -> str:

@@ -1,17 +1,11 @@
 """Mocked tests of the Entra ID auth of the Graph client: token calls go to requests_mock."""
 
-from datetime import datetime, timezone  # noqa: I251
-
 import pytest
 from dlt.sources.helpers.requests import HTTPError
 from requests_mock import Mocker
 
-from sources.sharepoint.graph import entra_auth
 from tests.sharepoint.utils import (
     AADSTS_ERROR,
-    CLIENT_ID,
-    CLIENT_SECRET,
-    TENANT_ID,
     TOKEN_URL,
     File,
     mock_folder,
@@ -35,22 +29,6 @@ def test_entra_auth_token_refresh(graph: Mocker) -> None:
     assert methods == ["POST", "GET", "POST", "GET", "GET"]
     tokens = [r.headers["Authorization"] for r in requests_to(graph, "/children")]
     assert tokens == ["Bearer first", "Bearer second", "Bearer second"]
-
-
-@pytest.mark.parametrize(
-    "expires_in,expected_seconds",
-    [pytest.param(3600, 3540, id="an_hour"), pytest.param(30, 0, id="under_a_minute")],
-)
-def test_entra_auth_expiry_margin(
-    graph: Mocker, expires_in: int, expected_seconds: int
-) -> None:
-    graph.post(TOKEN_URL, **token_response("t", expires_in=expires_in))
-    auth = entra_auth(TENANT_ID, CLIENT_ID, CLIENT_SECRET)
-
-    auth.obtain_token()
-
-    remaining = auth.token_expiry.timestamp() - datetime.now(timezone.utc).timestamp()
-    assert remaining == pytest.approx(expected_seconds, abs=5)
 
 
 def test_entra_auth_token_error(graph: Mocker) -> None:
