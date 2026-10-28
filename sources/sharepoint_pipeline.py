@@ -24,18 +24,19 @@ def load_list_columns() -> None:
 
 
 def load_files() -> None:
-    """Loads every csv file of the default library, subfolders included, into one table."""
+    """Loads the csv files of one folder of the default library into one table."""
     pipeline = dlt.pipeline(
         pipeline_name="sharepoint", destination="duckdb", dataset_name="sharepoint_data"
     )
-    csv_files = sharepoint_files(
-        "", "csv", table_name="csv_files", file_glob="**/*.csv"
+    reports = sharepoint_files(
+        "Reports", "csv", table_name="reports", file_glob="*.csv"
     )
-    load_info = pipeline.run(csv_files)
+    load_info = pipeline.run(reports)
     print(load_info)
 
 
 if __name__ == "__main__":
     load_lists()
-    load_files()
+    # these need a list and a folder of your site
     # load_list_columns()
+    # load_files()
