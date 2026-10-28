@@ -140,7 +140,7 @@ The plan must include:
 - **Test**: A test that **fails without the fix and passes with it**. Prefer a credential-free test that runs the resource through dlt with the upstream mocked at the API/transport boundary, so it runs for contributors and on fork CI. Place it as in [Test modules](../../rules/testing.md#test-modules).
 - **Test scope**: Which tests need upstream credentials and whether they are available in the worktree. Use `ALL_DESTINATIONS='["duckdb"]'` unless the fix is destination-specific; local postgres is available via `tests/postgres/docker-compose.yml`.
 - **Verification commands**: Exact selective pytest commands to run (specific test functions, not entire modules).
-- **Version and changelog**: The version bump (`major` for breaking changes, `minor` for features, `patch` for fixes) and the README changelog entry.
+- **Version and changelog**: The version bump (`major` for breaking changes, `minor` for features, `patch` for fixes) and the README changelog entry with its **Upgrade** line: whether existing pipelines keep working and lose no data.
 - **Docs**: Whether the `dlt-hub/dlt` docs page or the demo script needs an update.
 - **Files changed**: List with expected line counts.
 

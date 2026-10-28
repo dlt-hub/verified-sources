@@ -119,18 +119,21 @@ Prefer dlt built-ins over hand-rolled code (see [Source structure and dlt buildi
 
 ## Data shape and upgrade compatibility
 
-The most important part of any change to a source: users upgrade a pipeline that already loaded data and stored state. Any change that stops that pipeline from loading, or makes it load wrong data, is **breaking**. Understand the shape of the data before and after the change, and warn the user about every difference.
+The most important part of any change to a source: users upgrade a pipeline that already loaded data and stored state. Any change that stops that pipeline from loading, or makes it load wrong data, is **breaking**. Answer the question of every user: can I upgrade my pipeline, does it keep working, and do I lose data? Understand the data before and after the change, and warn the user about every difference.
 
 **1. Inventory the shape** of every resource, before and after:
 - tables: names, nested (child) tables created from lists;
-- columns: names, data types with precision, scale and timezone, nullability, variant columns;
+- columns: names, data types with precision, scale and timezone, nullability, variant columns, the format of values, e.g. of dates or arrays stored as text;
 - hints: primary and merge keys, write disposition, `hard_delete` and other column hints;
-- incremental: cursor field, the type of its values, the state key (resource name and cursor path), initial value, lag, deduplication key.
+- incremental: cursor field, the type of its values, the state key (resource name and cursor path), initial value, `start_date` default, lag, deduplication key;
+- change positions kept in state: CDC positions (replication slots, LSNs), change tokens, page cursors;
+- requirements: minimum dlt and package versions, arguments, config keys and secrets.
 
-**2. Observe the upgrade on a live account**, which is better than reasoning about it. Run the old version (a worktree from `origin/master`) and then the new one with the same pipeline name, the same dataset and the same destination, as users do. Use a disposable dataset. Compare:
+**2. Observe the upgrade on a live account**, which is better than reasoning about it. Run the old version (a worktree from `origin/master`) and then the new one with the same pipeline name, the same dataset and the same destination, as users do. Use a disposable dataset. Change upstream records between the runs. Compare:
 - the schemas, e.g. `dlt pipeline <name> schema` after each run;
-- the incremental state in `pipeline.state`;
-- the loaded rows: new `__v_` variant columns, duplicates, missing rows, failed load jobs.
+- the incremental state in `pipeline.state`, and whether the first run after the upgrade continues from it: no records missed, none loaded again;
+- the loaded rows: new `__v_` variant columns, duplicates, missing rows, failed load jobs, values in a new format next to old ones in the same column;
+- the upgrade path you recommend: run it and check that it ends with the new shape and no missing rows.
 
 Without an account, run both versions on captured responses (phase 4) and compare the same.
 
@@ -141,11 +144,15 @@ Without an account, run both versions on captured responses (phase 4) and compar
 - renamed resources or tables: a new empty table, the state starts over and a full reload follows;
 - a different cursor field or cursor value type: stored `last_value` cannot be compared with new data (e.g. a string state compared with an Arrow timestamp column), or queries start from a wrong value;
 - a different deduplication key: boundary records are loaded twice;
+- a gap or an overlap in incremental loading: the first run after the upgrade starts from another position, because of a changed state key, initial value, `start_date` default or lag, or a CDC position that is not carried over. Records are missed, or loaded again beyond what merge absorbs;
+- a new format of values in an existing column of the same type, e.g. arrays as JSON instead of Postgres literals: old and new values mix in one column, with no variant column and no failed load;
+- changed handling of deletes and key updates: rows remain in or disappear from the destination, unlike in earlier loads;
+- removed or renamed arguments and config keys, new required secrets: the pipeline fails before it loads;
 - data format switches that change dlt columns, e.g. JSON rows to Arrow tables needs `[normalize.parquet_normalizer] add_dlt_load_id` and `add_dlt_id` for tables created from rows.
 
-Not breaking, but report them: new columns or tables, dropped columns (left in the destination with nulls), type widening the destination coerces.
+Not breaking, but report them: new columns or tables, dropped columns (left in the destination with nulls), type widening the destination coerces, a higher minimum dlt or package version, fixed bugs whose wrong rows stay in the destination until a reload.
 
-**4. Warn the user** in the plan, the PR description, the README changelog and the dlt docs (phase 6): list every change, mark the breaking ones with what fails, and give the upgrade path, e.g. `pipeline.run(source, refresh="drop_sources")`, `dlt pipeline <name> drop <resource>`, a config option or an option that keeps the old behavior.
+**4. Warn the user** in the plan, the PR description, the README changelog and the dlt docs (phase 6): answer whether existing pipelines can upgrade, list every change, mark the breaking ones with what fails, and give the upgrade path, e.g. `pipeline.run(source, refresh="drop_sources")`, `dlt pipeline <name> drop <resource>`, a config option or an option that keeps the old behavior.
 
 **5. Test it**: run the pipeline twice so the state carries over between runs, and test switches users can make between runs (e.g. a backend picked automatically when a package gets installed).
 
@@ -167,7 +174,7 @@ The version follows the [semantic versioning of dlt](https://github.com/dlt-hub/
 - `patch`: bug fixes.
 
 `sources/<name>/README.md` is the maintenance document of the source, for developers and coding agents that change it. It does not describe the code, and setup and usage belong in the dlt docs (phase 6). The README holds:
-- **Changelog**: an entry per version, newest first, of short bullets. Start a bullet with **breaking**, new, changed or fixed, and name the resource whose data changes shape. Breaking bullets give the upgrade path;
+- **Changelog**: an entry per version, newest first. It answers the question of a user whose pipeline already loaded data: can I upgrade, and do I lose data? The entry starts with an **Upgrade** line, from what [Data shape and upgrade compatibility](#data-shape-and-upgrade-compatibility) found: `safe` when existing pipelines continue with no action, otherwise the steps in order and what happens without them, i.e. failed runs, missed, duplicated or mixed rows. It says whether incremental state carries over. Short bullets follow: start each with **breaking**, new, changed or fixed and name the resource whose data changes. Breaking bullets say what fails;
 - **Extension points**: how to add e.g. an endpoint, a field type or a transformer;
 - **Seeding**: numbered steps to seed the test account and capture responses;
 - **Tests**: only setup beyond the standard harness and `.claude/rules/testing.md`;
@@ -177,9 +184,17 @@ The version follows the [semantic versioning of dlt](https://github.com/dlt-hub/
 ## Changelog
 
 ### 2.0.0
-- **breaking** `orders`: merged on `id` instead of replaced. Upgrade: run once with `refresh="drop_resources"`
+**Upgrade**: run `dlt pipeline <name> drop order_items`, the next run loads it again with `price`
+as `decimal`. Without it the existing column stays `double`. `orders` loads into the new
+`sales_orders` from `start_date`, drop the `orders` table afterwards. The incremental state of
+`invoices` carries over.
+- **breaking** `orders`: renamed to `sales_orders`, with a new table and new incremental state
 - **breaking** `order_items`: `price` is `decimal` instead of `double`
 - new resource `refunds`
+
+### 1.1.0
+**Upgrade**: safe, incremental state carries over.
+- new resource `invoices`
 ```
 
 ## Phase 4 — Tests (the biggest pain point)
