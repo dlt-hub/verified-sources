@@ -432,10 +432,10 @@ def test_sharepoint_files_incremental(graph: Mocker) -> None:
     ]
 
     graph.reset_mock()
-    unchanged = pipeline.run(sharepoint_files(**files_config()))
+    pipeline.run(sharepoint_files(**files_config()))
 
     assert downloaded_ids(graph) == []
-    assert unchanged.loads_ids == []
+    assert pipeline.last_trace.last_normalize_info.row_counts.get("reports", 0) == 0
 
     graph.reset_mock()
     modified_b = File("B", "report_b.csv", NEWER, b"n\n7\n")

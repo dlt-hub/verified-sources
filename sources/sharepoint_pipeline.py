@@ -18,10 +18,8 @@ def load_list_columns() -> None:
     pipeline = dlt.pipeline(
         pipeline_name="sharepoint", destination="duckdb", dataset_name="sharepoint_data"
     )
-    tasks = sharepoint_list(
-        "Tasks", table_name="task_status", included_columns=["Title", "Status"]
-    )
-    load_info = pipeline.run(tasks)
+    tasks = sharepoint_list("Tasks", included_columns=["Title", "Status"])
+    load_info = pipeline.run(tasks.with_name("task_status"))
     print(load_info)
 
 
