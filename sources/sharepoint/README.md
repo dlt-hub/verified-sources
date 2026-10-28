@@ -14,7 +14,7 @@ source for developers and coding agents. Setup and usage are in the
   `sharepoint_list` table per list
 - new `sharepoint_folder`: dlt's `filesystem` resource over a library folder, new or modified
   files only; `read_files`: a transformer reading csv, jsonl, parquet or excel files into rows
-  with `_file_url`, `_file_name` and `_file_modified_at`, merged on `_file_url` so a modified
+  with `file_url`, `file_name` and `file_modified_at`, merged on `file_url` so a modified
   file replaces its own rows, Excel workbooks one table per sheet; `sharepoint_files`:
   the two piped together. `sharepoint_folder` also feeds dlt's `read_csv`, `read_jsonl` and
   `read_parquet`, and `read_files` also reads from dlt's `filesystem` resource

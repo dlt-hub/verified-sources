@@ -219,13 +219,13 @@ def sharepoint_folder(
     )
 
 
-@dlt.transformer(write_disposition="merge", merge_key="_file_url")
+@dlt.transformer(write_disposition="merge", merge_key="file_url")
 def read_files(
     items: Iterable[FileItemDict],
     file_type: TFileType = dlt.config.value,
     reader_kwargs: Optional[Dict[str, Any]] = None,
 ) -> Iterator[TDataItems]:
-    """Reads csv, jsonl, parquet or excel files into rows that carry `_file_url`, `_file_name` and `_file_modified_at`.
+    """Reads csv, jsonl, parquet or excel files into rows that carry `file_url`, `file_name` and `file_modified_at`.
 
     Pipe it from `sharepoint_folder` or from dlt's `filesystem` resource. A modified file
     replaces its own rows; rename the table with `with_name` or a `table_name` hint. Excel
@@ -277,7 +277,7 @@ def sharepoint_files(
         credentials (SharepointCredentials): Entra ID app credentials and the site id.
 
     Returns:
-        DltResource: The "<table_name>" rows, merged on `_file_url`.
+        DltResource: The "<table_name>" rows, merged on `file_url`.
 
     Raises:
         ValueError: If folder_path contains glob characters.

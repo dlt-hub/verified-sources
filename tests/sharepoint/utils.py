@@ -285,7 +285,7 @@ def loaded_rows(pipeline: dlt.Pipeline, table: str = "reports") -> List[Dict[str
 
 def rows_per_file(pipeline: dlt.Pipeline) -> Dict[str, int]:
     """Returns the number of loaded rows of each file name in the 'reports' table."""
-    return dict(Counter(row["_file_name"] for row in loaded_rows(pipeline)))
+    return dict(Counter(row["file_name"] for row in loaded_rows(pipeline)))
 
 
 def loaded_columns(
@@ -303,7 +303,7 @@ def loaded_columns(
 def data_columns(pipeline: dlt.Pipeline) -> Set[str]:
     """Returns the names of the 'reports' columns read from the files."""
     columns = pipeline.default_schema.get_table_columns("reports")
-    return {name for name in columns if not name.startswith(("_dlt_", "_file_"))}
+    return {name for name in columns if not name.startswith(("_dlt_", "file_"))}
 
 
 def files_containing(directory: str, data: bytes) -> List[str]:

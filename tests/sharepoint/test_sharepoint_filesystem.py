@@ -260,9 +260,7 @@ def test_sharepoint_files_root_folder(graph: Mocker) -> None:
 
     rows = list(sharepoint_files(**files_config(folder_path="")))
 
-    assert [(row["n"], row["_file_url"]) for row in rows] == [
-        (1, "sharepoint:///a.csv")
-    ]
+    assert [(row["n"], row["file_url"]) for row in rows] == [(1, "sharepoint:///a.csv")]
 
 
 @pytest.mark.parametrize(
@@ -333,7 +331,7 @@ def test_filesystem_hash_in_names(graph: Mocker) -> None:
         == f"sharepoint:///{path}"
     )
     rows = list(sharepoint_files(**files_config(folder_path=folder)))
-    assert [(row["n"], row["_file_url"]) for row in rows] == [
+    assert [(row["n"], row["file_url"]) for row in rows] == [
         (1, f"sharepoint:///{path}")
     ]
     assert {urlparse(r.url).path for r in requests_to(graph, "/root:/")} == {
@@ -383,13 +381,13 @@ def test_sharepoint_files_glob(
 
     rows = list(sharepoint_files(**files_config(file_glob=file_glob)))
 
-    assert sorted(row["_file_url"] for row in rows) == file_urls
+    assert sorted(row["file_url"] for row in rows) == file_urls
     assert len(requests_to(graph, "/children")) == listed_folders
 
 
 def test_sharepoint_files_incremental(graph: Mocker) -> None:
     """Loads new and modified files only, merges a modified file over its own rows and reloads everything on refresh."""
-    a = File("A", "report_a.csv", OLD, b"n,_file_name\n1,X\n2,X\n3,X\n")
+    a = File("A", "report_a.csv", OLD, b"n,file_name\n1,X\n2,X\n3,X\n")
     b = File("B", "report_b.csv", NEW, b"n\n4\n5\n")
     blank = File("C", "blank.csv", NEW, b"\n")
     mock_folder(graph, "Reports", [[a, b, blank]])
@@ -399,9 +397,7 @@ def test_sharepoint_files_incremental(graph: Mocker) -> None:
 
     assert downloaded_ids(graph) == ["A", "B", "C"]
     assert rows_per_file(pipeline) == {"report_a.csv": 3, "report_b.csv": 2}
-    assert {
-        (r["_file_url"], r["_file_modified_at"]) for r in loaded_rows(pipeline)
-    } == {
+    assert {(r["file_url"], r["file_modified_at"]) for r in loaded_rows(pipeline)} == {
         (
             "sharepoint:///Reports/report_a.csv",
             datetime(2019, 6, 1, tzinfo=timezone.utc),
@@ -414,8 +410,8 @@ def test_sharepoint_files_incremental(graph: Mocker) -> None:
     assert [t["name"] for t in pipeline.default_schema.data_tables()] == ["reports"]
     table = pipeline.default_schema.tables["reports"]
     assert table["write_disposition"] == "merge"
-    assert table["columns"]["_file_url"]["merge_key"] is True
-    file_columns = ("_file_url", "_file_name", "_file_modified_at")
+    assert table["columns"]["file_url"]["merge_key"] is True
+    file_columns = ("file_url", "file_name", "file_modified_at")
     assert [table["columns"][name]["data_type"] for name in file_columns] == [
         "text",
         "text",
@@ -570,7 +566,7 @@ def test_sharepoint_files_parquet_columns(graph: Mocker) -> None:
             "in_s": pa.array([5400, None], pa.duration("s")),
             "in_ms": pa.array([5_400_000, None], pa.duration("ms")),
             "in_ns": pa.array([5_400_000_000_000, None], pa.duration("ns")),
-            "_file_name": ["X", "X"],
+            "file_name": ["X", "X"],
             "skipped": ["x", "y"],
         }
     )
@@ -591,9 +587,9 @@ def test_sharepoint_files_parquet_columns(graph: Mocker) -> None:
         "in_s": ("double", [5400.0, None]),
         "in_ms": ("double", [5400.0, None]),
         "in_ns": ("double", [5400.0, None]),
-        "_file_name": ("text", ["report.parquet"] * 2),
-        "_file_url": ("text", ["sharepoint:///Reports/report.parquet"] * 2),
-        "_file_modified_at": (
+        "file_name": ("text", ["report.parquet"] * 2),
+        "file_url": ("text", ["sharepoint:///Reports/report.parquet"] * 2),
+        "file_modified_at": (
             "timestamp",
             [datetime(2024, 1, 1, tzinfo=timezone.utc)] * 2,
         ),
@@ -620,7 +616,7 @@ def test_sharepoint_files_parquet_variants(graph: Mocker) -> None:
         "value": ("bigint", [5, 6, 7, None]),
         "label": ("text", [None, None, "ok", None]),
     }
-    assert loaded_columns(pipeline, "_file_name", expected) == expected
+    assert loaded_columns(pipeline, "file_name", expected) == expected
     assert data_columns(pipeline) == set(expected)
 
     c = File("C", "c.parquet", NEWER, pd.DataFrame({"value": [1]}).to_parquet())
@@ -688,7 +684,7 @@ def test_sharepoint_files_config_from_env(
 
     rows = list(sharepoint_files())
 
-    assert [(row["a"], row["b"], row["_file_url"]) for row in rows] == [
+    assert [(row["a"], row["b"], row["file_url"]) for row in rows] == [
         (1, 2, "sharepoint://Archive/Reports/a.csv")
     ]
 
@@ -704,7 +700,7 @@ def test_sharepoint_files_excel_sheets(graph: Mocker) -> None:
     tables = {t["name"]: t for t in pipeline.default_schema.data_tables()}
     assert set(tables) == {"book_data", "book_sales_2024"}
     assert tables["book_sales_2024"]["write_disposition"] == "merge"
-    assert tables["book_sales_2024"]["columns"]["_file_url"]["merge_key"] is True
+    assert tables["book_sales_2024"]["columns"]["file_url"]["merge_key"] is True
     assert load_table_counts(pipeline, "book_data", "book_sales_2024") == {
         "book_data": 1,
         "book_sales_2024": 1,
@@ -738,7 +734,7 @@ def test_sharepoint_folder_with_dlt_readers(
 def test_read_files_over_local_filesystem(tmp_path: Path) -> None:
     book = excel_bytes({"Data": [["n"], [1], [2]], "Other": [["n"], [3]]})
     (tmp_path / "book.xlsx").write_bytes(book)
-    files = filesystem(bucket_url=f"file://{tmp_path}", file_glob="*.xlsx")
+    files = filesystem(bucket_url=tmp_path.as_uri(), file_glob="*.xlsx")
     pipeline = new_pipeline("sharepoint_local_files")
 
     assert_load_info(pipeline.run(files | read_files("excel").with_name("book")))
@@ -752,9 +748,9 @@ def test_read_files_over_local_filesystem(tmp_path: Path) -> None:
     }
     assert {
         (
-            row["_file_name"],
-            row["_file_url"].startswith("file://"),
-            isinstance(row["_file_modified_at"], datetime),
+            row["file_name"],
+            row["file_url"].startswith("file://"),
+            isinstance(row["file_modified_at"], datetime),
         )
         for rows in tables.values()
         for row in rows
