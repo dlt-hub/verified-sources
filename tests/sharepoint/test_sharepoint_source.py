@@ -22,12 +22,10 @@ def test_list(destination_name: str) -> None:
         dataset_name="sharepoint_data",
         dev_mode=True,
     )
-    config: Dict[str, Any] = {
-        "list_title": "dlt toy tasks",
-        "table_name": "tasks",
-        "included_columns": ["Title", "Status", "DueDate", "StoryPoints"],
-    }
-    assert_load_info(pipeline.run(sharepoint_list(**config)))
+    tasks = sharepoint_list(
+        "dlt toy tasks", included_columns=["Title", "Status", "DueDate", "StoryPoints"]
+    ).with_name("tasks")
+    assert_load_info(pipeline.run(tasks))
     rows = load_tables_to_dicts(pipeline, "tasks")["tasks"]
     assert {row["title"] for row in rows} == {
         "Write spec",
@@ -38,7 +36,7 @@ def test_list(destination_name: str) -> None:
     }
     assert {row["story_points"] for row in rows} == {3, 8, 2, 5, None}
 
-    assert pipeline.run(sharepoint_list(**config)).loads_ids == []
+    assert pipeline.run(tasks).loads_ids == []
     assert load_table_counts(pipeline, "tasks") == {"tasks": 5}
 
 
@@ -50,7 +48,7 @@ def test_list_pages() -> None:
         dev_mode=True,
     )
     assert_load_info(
-        pipeline.run(sharepoint_list("dlt toy paging", table_name="paging"))
+        pipeline.run(sharepoint_list("dlt toy paging").with_name("paging"))
     )
     rows = load_tables_to_dicts(pipeline, "paging")["paging"]
     assert len(rows) == 1000

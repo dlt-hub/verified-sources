@@ -205,17 +205,6 @@ def files_config(**fields: Any) -> Dict[str, Any]:
     }
 
 
-def tasks_config(
-    included_columns: List[str] = None, list_title: str = "Tasks"
-) -> Dict[str, Any]:
-    """Returns the arguments loading the list `list_title` into 'tasks'."""
-    return {
-        "list_title": list_title,
-        "table_name": "tasks",
-        "included_columns": included_columns,
-    }
-
-
 def new_pipeline(name: str) -> dlt.Pipeline:
     return dlt.pipeline(
         pipeline_name=name,

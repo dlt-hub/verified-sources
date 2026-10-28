@@ -12,12 +12,11 @@ source for developers and coding agents. Setup and usage are in the
   `included_columns` selects columns by their internal names, `with_name` renames the table
 - new `sharepoint_lists`: every visible generic list of the site, or the named ones, one
   `sharepoint_list` table per list
-- new `sharepoint_folder`: dlt's `filesystem` resource over a library folder, new or modified
-  files only; `read_files`: a transformer reading csv, jsonl, parquet or excel files into rows
-  with `_file_url`, `_file_name` and `_file_modified_at`, merged on `_file_url` so a modified or
-  emptied file replaces its own rows, Excel workbooks one table per sheet; `sharepoint_files`:
-  the two piped together. `sharepoint_folder` also feeds dlt's `read_csv`, `read_jsonl` and
-  `read_parquet`, and `read_files` also reads from dlt's `filesystem` resource
+- new `sharepoint_files`: the rows of the csv, jsonl, parquet or excel files matching a glob in a
+  library folder, listed by dlt's `filesystem` source over `SharepointFileSystem`, read
+  incrementally on `modification_date` and merged on `_file_url`, so a modified or emptied file
+  replaces its own rows. Each row carries `_file_url`, `_file_name` and `_file_modified_at`.
+  Excel workbooks load one table per sheet
 - new `SharepointFileSystem`: read-only fsspec filesystem registered as
   `sharepoint://<library>/<path>`, usable from pandas and other fsspec clients
 
@@ -27,8 +26,6 @@ source for developers and coding agents. Setup and usage are in the
   `validate_reader_kwargs` rejects arguments that would fail only after the download.
 - Another collection of the site, e.g. site pages or list attachments: a resource on
   `site_client(credentials).paginate(...)`, see `list_items`.
-- Another reader: any transformer taking `FileItem`s can follow `sharepoint_folder`, and
-  `read_files` can follow any listing of `FileItem`s, e.g. dlt's `filesystem` on a bucket.
 - More file metadata: `ITEM_FIELDS` and `SharepointFileSystem._entry`.
 - List columns to drop or keep: `UI_FIELDS` and `item_fields`.
 - Deleted files: Graph's drive delta query would also delete their rows; today the listing
