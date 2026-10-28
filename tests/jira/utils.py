@@ -484,6 +484,13 @@ def duckdb_pipeline(name: str) -> dlt.Pipeline:
     return dlt.pipeline(name, destination="duckdb", dev_mode=True)
 
 
+def filesystem_pipeline(name: str, bucket_url: str) -> dlt.Pipeline:
+    """A pipeline loading files, a destination that does not merge and appends instead"""
+    return dlt.pipeline(
+        name, destination=dlt.destinations.filesystem(bucket_url), dev_mode=True
+    )
+
+
 def load(pipeline: dlt.Pipeline, data: Any, **run_kwargs: Any) -> Any:
     """Runs `pipeline` with `data` and asserts the load succeeded, returns the load info"""
     info = pipeline.run(data, **run_kwargs)

@@ -1,7 +1,8 @@
 import os
 from collections import Counter
 from datetime import timedelta
-from typing import Dict, List
+from pathlib import Path
+from typing import Any, Dict, List, Tuple
 
 import dlt
 import pytest
@@ -32,7 +33,7 @@ from tests.jira.seed_test_data import (
     search_ids,
     seeded_issues,
 )
-from tests.jira.utils import SEED_LABEL
+from tests.jira.utils import SEED_LABEL, filesystem_pipeline
 from tests.utils import (
     ALL_DESTINATIONS,
     assert_load_info,
@@ -56,6 +57,16 @@ def jira_credentials() -> None:
             "[sources.jira] is missing from DLT_SECRETS_TOML, so CI tested nothing"
         )
     pytest.skip("set [sources.jira] in sources/.dlt/secrets.toml to run these")
+
+
+def seeded_issues_with_jql() -> Tuple[List[Dict[str, Any]], str]:
+    """Returns the seeded issues and the JQL that finds them, without the issue that
+    `test_issue_comments_changed` writes to
+    """
+    excluded = ("comment_changes",)
+    seeded = seeded_issues(excluded)
+    assert len(seeded) == expected_issues(excluded)
+    return seeded, f'labels = "{SEED_LABEL}" AND NOT labels = "{case_label(*excluded)}"'
 
 
 @pytest.mark.parametrize("destination_name", ALL_DESTINATIONS)
@@ -231,11 +242,7 @@ def test_seeded_issues_full_and_incremental(destination_name: str) -> None:
     windows and incrementally. The expected counts and values come from the seed cases and the
     manifest of seeded issues.
     """
-    # the comments test writes to the comment changes issue
-    excluded = ("comment_changes",)
-    seeded = seeded_issues(excluded)
-    assert len(seeded) == expected_issues(excluded)
-    jql = f'labels = "{SEED_LABEL}" AND NOT labels = "{case_label(*excluded)}"'
+    seeded, jql = seeded_issues_with_jql()
 
     def case_id(case: str) -> str:
         (issue,) = issues_of_case(seeded, case)
@@ -319,4 +326,17 @@ def test_seeded_issues_full_and_incremental(destination_name: str) -> None:
         pipeline.run(jira_issues(jql=jql, lag=lag))
         row_counts = pipeline.last_trace.last_normalize_info.row_counts
         assert row_counts.get("issues", 0) == expected, lag
+        assert load_table_counts(pipeline, "issues") == {"issues": len(seeded)}
+
+
+def test_seeded_issues_replace(tmp_path: Path) -> None:
+    """Replaces the seeded issues on each run, on filesystem that does not merge"""
+    seeded, jql = seeded_issues_with_jql()
+    pipeline = filesystem_pipeline("test_jira_seeded_replace", tmp_path.as_uri())
+    for _ in range(2):
+        issues = jira_issues(jql=jql, write_disposition="replace")
+        assert_load_info(pipeline.run(issues, loader_file_format="parquet"))
+        # each run reads all issues, not only the ones updated since the last run
+        row_counts = pipeline.last_trace.last_normalize_info.row_counts
+        assert row_counts["issues"] == len(seeded)
         assert load_table_counts(pipeline, "issues") == {"issues": len(seeded)}
