@@ -33,13 +33,13 @@ To initialize the verified source, please refer to the [full documentation here]
     site_id = "please set me up!"       # "<host>.sharepoint.com,<site-collection-guid>,<web-guid>"
     ```
 
-3. Open `.dlt/config.toml` and set the list and the files to load. `sharepoint_lists` needs no config: it loads every visible list of the site.
+3. Set the list and the files to load, as arguments of the sources like `sharepoint_pipeline.py` does, or in `.dlt/config.toml`:
 
     ```toml
-    [sources.sharepoint.sharepoint_list_config]
+    [sources.sharepoint.sharepoint_list]
     list_title = "please set me up!"    # display name of the list, also the table name
 
-    [sources.sharepoint.sharepoint_files_config]
+    [sources.sharepoint.sharepoint_files]
     folder_path = "please set me up!"   # relative to the library root, "" for the root
     file_type = "please set me up!"     # csv | jsonl | parquet | excel
     table_name = "please set me up!"
@@ -64,7 +64,7 @@ To initialize the verified source, please refer to the [full documentation here]
 3. To make sure that everything is loaded as expected, use the command:
 
     ```bash
-    dlt pipeline sharepoint_to_duckdb show
+    dlt pipeline sharepoint show
     ```
 
 💡 To explore additional customizations for this pipeline, we recommend referring to the official dlt SharePoint verified source documentation. It provides comprehensive information and guidance on how to further customize and tailor the pipeline to suit your specific needs. You can find the dlt SharePoint documentation in [Setup Guide: SharePoint](https://dlthub.com/docs/dlt-ecosystem/verified-sources/sharepoint).

@@ -1,4 +1,4 @@
-"""Readers that turn a file of a document library into rows with lineage columns."""
+"""Readers that turn a file of a document library into rows with file columns."""
 
 import codecs
 from typing import (
@@ -16,8 +16,8 @@ from typing import (
 
 import pandas as pd
 import pyarrow.parquet as pq
+from datetime import timedelta  # noqa: I251
 from dlt.common import json
-from dlt.common.pendulum import timedelta
 from dlt.common.typing import TDataItems
 from dlt.extract import with_table_name
 from dlt.sources.filesystem import FileItemDict
@@ -30,8 +30,6 @@ BATCH_SIZE = 10_000
 def validate_reader_kwargs(file_type: str, reader_kwargs: Dict[str, Any]) -> None:
     """Checks the reader arguments that would fail only after files were downloaded.
 
-    Parquet takes only `columns`, since the other pyarrow arguments change the row shape.
-
     Raises:
         ValueError: If the file type is unknown, parquet gets anything but `columns`, or jsonl
             gets any argument.
@@ -40,6 +38,7 @@ def validate_reader_kwargs(file_type: str, reader_kwargs: Dict[str, Any]) -> Non
         raise ValueError(
             f"file_type must be one of {list(FILE_TYPES)}, got '{file_type}'"
         )
+    # the other pyarrow arguments change the row shape
     if file_type == "parquet" and set(reader_kwargs) - {"columns"}:
         raise ValueError(
             f"reader_kwargs for parquet files may only contain 'columns', got {sorted(reader_kwargs)}"
@@ -58,13 +57,12 @@ def file_rows(
 ) -> Iterator[TDataItems]:
     """Yields the rows of each file in batches, with `_file_url`, `_file_name` and `_file_modified_at`.
 
-    The readers mirror dlt's filesystem readers, which are not used because they add no file
-    columns, and the file columns are what lets a modified file replace its own rows. Excel
-    sheets go to "<table_name>_<sheet>" unless one `sheet_name` is given. A file or sheet with
-    no rows yields a deletion marker, so its earlier rows are deleted.
+    Excel sheets go to "<table_name>_<sheet>" unless one `sheet_name` is given. A file or sheet
+    with no rows yields one row with `_deleted` set, which deletes its earlier rows.
     """
+    # dlt's filesystem readers are not used because they add no file columns
     for item in items:
-        lineage = {
+        file_columns = {
             "_file_url": item["file_url"],
             "_file_name": item["file_name"],
             "_file_modified_at": item["modification_date"],
@@ -79,20 +77,17 @@ def file_rows(
                 table = table_name if sheet is None else f"{table_name}_{sheet}"
                 has_rows[table] = has_rows.get(table, False) or bool(records)
                 if records:
-                    rows = [{**record, **lineage} for record in records]
+                    rows = [{**record, **file_columns} for record in records]
                     yield with_table_name(rows, table)
         for table in [table_name] if not has_rows else has_rows:
             if not has_rows.get(table):
-                yield with_table_name([{**lineage, "_deleted": True}], table)
+                yield with_table_name([{**file_columns, "_deleted": True}], table)
 
 
 def read_records(
     f: Any, file_type: str, reader_kwargs: Dict[str, Any]
 ) -> Iterator[Tuple[Optional[str], List[Dict[str, Any]]]]:
-    """Yields batches of records; the first element is the sheet name for a workbook read whole.
-
-    An empty sheet yields one empty batch, so the caller learns the sheet exists.
-    """
+    """Yields batches of records; the first element is the sheet name for a workbook read whole."""
     if file_type == "parquet":
         parquet_file = pq.ParquetFile(f)
         columns = reader_kwargs.get("columns") or data_column_names(
@@ -126,6 +121,7 @@ def read_records(
         for sheet, frame in (
             sheets.items() if isinstance(sheets, dict) else [(None, sheets)]
         ):
+            # an empty sheet yields one empty batch, so the caller knows the sheet exists
             for records in frame_records(frame) if len(frame) else [[]]:
                 yield None if sheet is None else str(sheet), records
 

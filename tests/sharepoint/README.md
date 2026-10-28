@@ -1,6 +1,6 @@
 # SharePoint tests
 
-- `test_sharepoint_filesystem.py`, `test_sharepoint_list.py`: unit tests. Graph is mocked with `requests_mock`. No credentials needed.
+- `test_sharepoint_graph.py`, `test_sharepoint_filesystem.py`, `test_sharepoint_list.py`: unit tests. Graph is mocked with `requests_mock`. No credentials needed.
 - `test_sharepoint_source.py`: live tests against the test site. They only read data.
 
 ## Test site
@@ -49,7 +49,7 @@ The live tests expect this content on the site. Create it by hand once; the test
   | Live test | Open | | 5 |
   | Merge | Done | 2024-04-30 | |
 
-  SharePoint names the `Story Points` column `StoryPoints` internally; `select` uses internal names.
+  SharePoint names the `Story Points` column `StoryPoints` internally; `included_columns` uses internal names.
 - `dlt toy paging`, a list imported from a CSV with columns `n` and `label` and 1,000 rows, so the items need several Graph pages.
 
 The local files for the upload can be generated with:

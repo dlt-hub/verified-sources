@@ -1082,9 +1082,9 @@ scrapy = [
     { name = "twisted", specifier = ">=22.10.0,<=25.5.0" },
 ]
 sharepoint = [
-    { name = "openpyxl", specifier = ">=3.1.0" },
-    { name = "pandas", specifier = ">=2.0.0" },
-    { name = "pyarrow", specifier = ">=14.0.0" },
+    { name = "openpyxl", specifier = ">=3.1.0,<4" },
+    { name = "pandas", specifier = ">=2.0.0,<3" },
+    { name = "pyarrow", specifier = ">=14.0.0,<20" },
 ]
 sql-database = [
     { name = "connectorx", specifier = ">=0.4.0" },

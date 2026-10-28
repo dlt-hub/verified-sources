@@ -9,12 +9,7 @@ from dlt.pipeline.exceptions import PipelineStepFailed
 from dlt.sources.helpers.requests import HTTPError
 from requests_mock import Mocker
 
-from sources.sharepoint import (
-    SharepointListConfig,
-    SharepointListsConfig,
-    sharepoint_list,
-    sharepoint_lists,
-)
+from sources.sharepoint import sharepoint_list, sharepoint_lists
 from tests.sharepoint.utils import (
     ACCESS_TOKEN,
     LISTS_URL,
@@ -22,8 +17,6 @@ from tests.sharepoint.utils import (
     SITE_LISTS,
     SITE_URL,
     cause_of_type,
-    credentials_env,
-    graph,
     list_delta_url,
     list_item,
     lists_requests,
@@ -43,27 +36,27 @@ FULL_RELOAD_HINT = 'Run the pipeline with refresh="drop_resources"'
 
 
 @pytest.mark.parametrize(
-    "list_title,select,expand",
+    "list_title,included_columns,expand",
     [
         pytest.param("Tasks", None, "fields", id="generic_list_on_second_page"),
         pytest.param(
             "Documents",
-            "Title,Due_x0020_Date",
+            ["Title", "Due_x0020_Date"],
             "fields($select=Title,Due_x0020_Date)",
-            id="document_library_with_select",
+            id="document_library_with_columns",
         ),
         pytest.param("R&D tasks", None, "fields", id="title_with_space_and_ampersand"),
     ],
 )
-def test_list_items_paged_and_keyed(
-    graph: Mocker, list_title: str, select: str, expand: str
+def test_sharepoint_list_pagination(
+    graph: Mocker, list_title: str, included_columns: List[str], expand: str
 ) -> None:
     inner_id = {"id": "3", "fields": {"id": "inner", "Title": "c"}}
     mock_list(
         graph, list_title, [[list_item("1", "a")], [list_item("2", "b"), inner_id]]
     )
 
-    rows = list(sharepoint_list(tasks_config(select, list_title)))
+    rows = list(sharepoint_list(**tasks_config(included_columns, list_title)))
 
     assert rows == [
         {"Title": "a", "id": "1"},
@@ -84,13 +77,13 @@ def test_list_items_paged_and_keyed(
 
 
 @pytest.mark.parametrize(
-    "select,expected_keys",
+    "included_columns,expected_keys",
     [
         pytest.param(
             None, {"Title", "Status", "Attachments", "id"}, id="default_columns_cleaned"
         ),
         pytest.param(
-            "Title,LinkTitle,_UIVersionString",
+            ["Title", "LinkTitle", "_UIVersionString"],
             {
                 "Title",
                 "Status",
@@ -101,12 +94,12 @@ def test_list_items_paged_and_keyed(
                 "_ComplianceFlags",
                 "id",
             },
-            id="selected_columns_kept",
+            id="included_columns_kept",
         ),
     ],
 )
-def test_ui_and_system_fields_dropped_unless_selected(
-    graph: Mocker, select: str, expected_keys: set
+def test_sharepoint_list_system_fields(
+    graph: Mocker, included_columns: List[str], expected_keys: set
 ) -> None:
     item = list_item("1", "a")
     item["fields"].update(
@@ -121,23 +114,23 @@ def test_ui_and_system_fields_dropped_unless_selected(
     )
     mock_list(graph, "Tasks", [[item]])
 
-    rows = list(sharepoint_list(tasks_config(select)))
+    rows = list(sharepoint_list(**tasks_config(included_columns)))
 
     assert set(rows[0]) == expected_keys
 
 
-def test_table_defaults_to_the_list_title(graph: Mocker) -> None:
+def test_sharepoint_list_default_table_name(graph: Mocker) -> None:
     mock_list(graph, "Tasks", [[list_item("1", "a")]])
-    source = sharepoint_list(SharepointListConfig(list_title="Tasks"))
+    source = sharepoint_list("Tasks")
     assert list(source.resources) == ["Tasks"]
 
 
-def test_list_not_found_lists_available_titles(graph: Mocker) -> None:
+def test_sharepoint_list_not_found(graph: Mocker) -> None:
     graph.get(list_delta_url("Nope"), status_code=404, json=NOT_FOUND)
     mock_pages(graph, LISTS_URL, SITE_LISTS)
 
     with pytest.raises(ResourceExtractionError) as exc_info:
-        list(sharepoint_list(SharepointListConfig(list_title="Nope", table_name="t")))
+        list(sharepoint_list("Nope", table_name="t"))
 
     assert (
         str(cause_of_type(exc_info.value, ValueError))
@@ -152,7 +145,7 @@ def test_list_not_found_lists_available_titles(graph: Mocker) -> None:
         pytest.param(LISTS_URL, id="lists_looked_up_for_a_missing_list"),
     ],
 )
-def test_graph_errors_raise(graph: Mocker, failing_url: str) -> None:
+def test_sharepoint_list_graph_errors(graph: Mocker, failing_url: str) -> None:
     graph.get(TASKS_DELTA_URL, status_code=404, json=NOT_FOUND)
     graph.get(
         failing_url,
@@ -161,19 +154,19 @@ def test_graph_errors_raise(graph: Mocker, failing_url: str) -> None:
     )
 
     with pytest.raises(ResourceExtractionError) as exc_info:
-        list(sharepoint_list(tasks_config()))
+        list(sharepoint_list(**tasks_config()))
 
     assert str(cause_of_type(exc_info.value, HTTPError)).startswith("400 Client Error")
 
 
-def test_list_pipeline_syncs_with_delta(graph: Mocker) -> None:
+def test_sharepoint_list_delta_sync(graph: Mocker) -> None:
     """Loads all items first, then only the changes from the stored delta link, deletions included."""
     nested = {"id": "3", "fields": {"Tags": ["x"], "Owner": {"LookupId": 7}}}
     pipeline = new_pipeline("sharepoint_list")
     delta_link = mock_list(
         graph, "Tasks", [[list_item("1", "a"), list_item("2", "b"), nested]]
     )
-    assert_load_info(pipeline.run(sharepoint_list(tasks_config())))
+    assert_load_info(pipeline.run(sharepoint_list(**tasks_config())))
     assert load_table_counts(pipeline, "tasks") == {"tasks": 3}
     assert lists_requests(graph) == []
     assert [t["name"] for t in pipeline.default_schema.data_tables()] == ["tasks"]
@@ -189,7 +182,7 @@ def test_list_pipeline_syncs_with_delta(graph: Mocker) -> None:
     graph.reset_mock()
     removed = {"id": "3", "deleted": {"state": "deleted"}, "fields": {}}
     next_link = mock_delta(graph, delta_link, [[list_item("2", "b2"), removed]], "t2")
-    assert_load_info(pipeline.run(sharepoint_list(tasks_config())))
+    assert_load_info(pipeline.run(sharepoint_list(**tasks_config())))
     assert [r.url for r in requests_to(graph, TASKS_DELTA_URL)] == [delta_link]
     assert {
         (r["id"], r["title"]) for r in load_tables_to_dicts(pipeline, "tasks")["tasks"]
@@ -200,13 +193,13 @@ def test_list_pipeline_syncs_with_delta(graph: Mocker) -> None:
 
     graph.reset_mock()
     mock_delta(graph, next_link, [[]], "t3")
-    pipeline.run(sharepoint_list(tasks_config()))
+    pipeline.run(sharepoint_list(**tasks_config()))
     assert load_table_counts(pipeline, "tasks") == {"tasks": 2}
 
     graph.reset_mock()
     mock_list(graph, "Tasks", [[list_item("1", "a")]])
     assert_load_info(
-        pipeline.run(sharepoint_list(tasks_config()), refresh="drop_resources")
+        pipeline.run(sharepoint_list(**tasks_config()), refresh="drop_resources")
     )
     assert [r.url.split("?")[0] for r in requests_to(graph, TASKS_DELTA_URL)] == [
         TASKS_DELTA_URL
@@ -221,16 +214,16 @@ def test_list_pipeline_syncs_with_delta(graph: Mocker) -> None:
         pytest.param(404, NOT_FOUND["error"], id="not_found"),
     ],
 )
-def test_expired_delta_link_asks_for_a_full_reload(
+def test_sharepoint_list_expired_delta_link(
     graph: Mocker, status_code: int, body: dict
 ) -> None:
     pipeline = new_pipeline("sharepoint_list")
     delta_link = mock_list(graph, "Tasks", [[list_item("1", "a")]])
-    assert_load_info(pipeline.run(sharepoint_list(tasks_config())))
+    assert_load_info(pipeline.run(sharepoint_list(**tasks_config())))
     graph.get(delta_link, status_code=status_code, json={"error": body})
 
     with pytest.raises(PipelineStepFailed) as exc_info:
-        pipeline.run(sharepoint_list(tasks_config()))
+        pipeline.run(sharepoint_list(**tasks_config()))
 
     assert str(cause_of_type(exc_info.value, ValueError)) == (
         f"The stored delta link of list 'Tasks' is no longer valid (Graph {status_code})."
@@ -246,7 +239,7 @@ def test_expired_delta_link_asks_for_a_full_reload(
         pytest.param(["Tasks", "Contacts"], ["tasks", "contacts"], id="named_lists"),
     ],
 )
-def test_lists_load_one_table_per_list(
+def test_sharepoint_lists_tables(
     graph: Mocker, list_titles: list, expected_tables: list
 ) -> None:
     hidden = site_list("Hidden", "genericList")
@@ -256,7 +249,7 @@ def test_lists_load_one_table_per_list(
         mock_list(graph, title, [[list_item("1", "a")]])
     pipeline = new_pipeline("sharepoint_lists")
 
-    source = sharepoint_lists(SharepointListsConfig(list_titles=list_titles))
+    source = sharepoint_lists(list_titles)
     assert_load_info(pipeline.run(source))
 
     assert sorted(t["name"] for t in pipeline.default_schema.data_tables()) == sorted(
@@ -288,28 +281,26 @@ def test_lists_load_one_table_per_list(
         ),
     ],
 )
-def test_lists_without_one_table_per_list_fail_at_source_creation(
+def test_sharepoint_lists_creation_errors(
     graph: Mocker, list_titles: Optional[List[str]], site_lists: list, message: str
 ) -> None:
     mock_pages(graph, LISTS_URL, site_lists)
 
     with pytest.raises(ValueError, match=message):
-        sharepoint_lists(SharepointListsConfig(list_titles=list_titles))
+        sharepoint_lists(list_titles)
 
     assert requests_to(graph, "/items/delta") == []
 
 
-def test_list_config_resolves_from_env_without_arguments(
+def test_sharepoint_list_config_from_env(
     graph: Mocker, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     for name, value in {
         "LIST_TITLE": "Tasks",
         "TABLE_NAME": "tasks",
-        "SELECT": "Title",
+        "INCLUDED_COLUMNS": '["Title"]',
     }.items():
-        monkeypatch.setenv(
-            f"SOURCES__SHAREPOINT__SHAREPOINT_LIST_CONFIG__{name}", value
-        )
+        monkeypatch.setenv(f"SOURCES__SHAREPOINT__SHAREPOINT_LIST__{name}", value)
     mock_list(graph, "Tasks", [[list_item("1", "a")]])
 
     assert list(sharepoint_list()) == [{"Title": "a", "id": "1"}]
@@ -322,24 +313,24 @@ def test_list_config_resolves_from_env_without_arguments(
     "changed",
     [
         pytest.param({"list_title": "Contacts"}, id="other_list"),
-        pytest.param({"select": "Title"}, id="other_select"),
+        pytest.param({"included_columns": ["Title"]}, id="other_columns"),
     ],
 )
-def test_changing_the_list_or_select_behind_a_table_asks_for_a_full_reload(
-    graph: Mocker, changed: dict
-) -> None:
+def test_sharepoint_list_settings_changed(graph: Mocker, changed: dict) -> None:
     pipeline = new_pipeline("sharepoint_list")
     mock_list(graph, "Tasks", [[list_item("1", "a")]])
-    assert_load_info(pipeline.run(sharepoint_list(tasks_config())))
+    assert_load_info(pipeline.run(sharepoint_list(**tasks_config())))
     mock_list(graph, "Contacts", [[list_item("1", "a")]])
 
     with pytest.raises(PipelineStepFailed) as exc_info:
-        pipeline.run(sharepoint_list(tasks_config(**changed)))
+        pipeline.run(sharepoint_list(**tasks_config(**changed)))
 
     assert str(cause_of_type(exc_info.value, ValueError)) == (
-        "Table 'tasks' was loaded with another list or select."
+        "Table 'tasks' was loaded with another list or columns."
         f" {FULL_RELOAD_HINT} to load it again."
     )
     assert_load_info(
-        pipeline.run(sharepoint_list(tasks_config(**changed)), refresh="drop_resources")
+        pipeline.run(
+            sharepoint_list(**tasks_config(**changed)), refresh="drop_resources"
+        )
     )

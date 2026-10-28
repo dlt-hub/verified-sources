@@ -1,4 +1,4 @@
-"""Graph response builders, requests_mock helpers and readback helpers for the SharePoint tests."""
+"""Graph response builders, requests_mock helpers and load result helpers for the SharePoint tests."""
 
 import io
 import os
@@ -11,14 +11,9 @@ import dlt
 import openpyxl  # type: ignore[import-untyped]
 import pyarrow as pa
 import pyarrow.parquet as pq
-import pytest
 from requests_mock import Mocker
 
-from sources.sharepoint import (
-    SharepointFilesConfig,
-    SharepointListConfig,
-    sharepoint_files,
-)
+from sources.sharepoint import sharepoint_files
 from sources.sharepoint.filesystem import SharepointFileSystem
 from sources.sharepoint.graph import entra_auth, graph_client
 from tests.utils import assert_load_info, load_tables_to_dicts
@@ -50,22 +45,6 @@ class File(NamedTuple):
     modified: str = NEW
     content: bytes = b""
     folder: bool = False
-
-
-@pytest.fixture(autouse=True)
-def credentials_env(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Sets fake credentials as env vars, which win over a local secrets.toml."""
-    monkeypatch.setenv("SOURCES__SHAREPOINT__CREDENTIALS__TENANT_ID", TENANT_ID)
-    monkeypatch.setenv("SOURCES__SHAREPOINT__CREDENTIALS__CLIENT_ID", CLIENT_ID)
-    monkeypatch.setenv("SOURCES__SHAREPOINT__CREDENTIALS__CLIENT_SECRET", CLIENT_SECRET)
-    monkeypatch.setenv("SOURCES__SHAREPOINT__CREDENTIALS__SITE_ID", SITE_ID)
-
-
-@pytest.fixture
-def graph(requests_mock: Mocker) -> Mocker:
-    """Mocks the token endpoint; each test registers the Graph URLs it calls."""
-    requests_mock.post(TOKEN_URL, **token_response(ACCESS_TOKEN))
-    return requests_mock
 
 
 def token_response(access_token: str, expires_in: int = 3600) -> Dict[str, Any]:
@@ -216,27 +195,25 @@ def list_item(item_id: str, title: str) -> Dict[str, Any]:
     return {"id": item_id, "fields": {"@odata.etag": f'"{item_id},1"', "Title": title}}
 
 
-def files_config(**fields: Any) -> SharepointFilesConfig:
-    """Returns a resolved config loading csv files of 'Reports' into 'reports', updated with `fields`."""
-    config = SharepointFilesConfig(
-        **{
-            "folder_path": "Reports",
-            "file_type": "csv",
-            "table_name": "reports",
-            **fields,
-        }
-    )
-    config.resolve()
-    return config
+def files_config(**fields: Any) -> Dict[str, Any]:
+    """Returns the arguments loading csv files of 'Reports' into 'reports', updated with `fields`."""
+    return {
+        "folder_path": "Reports",
+        "file_type": "csv",
+        "table_name": "reports",
+        **fields,
+    }
 
 
-def tasks_config(select: str = None, list_title: str = "Tasks") -> SharepointListConfig:
-    """Returns a resolved config loading the list `list_title` into 'tasks'."""
-    config = SharepointListConfig(
-        list_title=list_title, table_name="tasks", select=select
-    )
-    config.resolve()
-    return config
+def tasks_config(
+    included_columns: List[str] = None, list_title: str = "Tasks"
+) -> Dict[str, Any]:
+    """Returns the arguments loading the list `list_title` into 'tasks'."""
+    return {
+        "list_title": list_title,
+        "table_name": "tasks",
+        "included_columns": included_columns,
+    }
 
 
 def new_pipeline(name: str) -> dlt.Pipeline:
@@ -252,7 +229,7 @@ def load_file(graph: Mocker, name: str, content: bytes, **fields: Any) -> dlt.Pi
     """Loads one file of the 'Reports' folder into a new pipeline and returns the pipeline."""
     mock_files(graph, {name: content})
     pipeline = new_pipeline(f"sharepoint_{name.replace('.', '_')}")
-    assert_load_info(pipeline.run(sharepoint_files(files_config(**fields))))
+    assert_load_info(pipeline.run(sharepoint_files(**files_config(**fields))))
     return pipeline
 
 

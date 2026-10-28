@@ -27,7 +27,7 @@ class EntraClientCredentials(OAuth2ClientCredentials):
             ) from e
 
     def parse_expiration_in_seconds(self, response_json: Any) -> int:
-        """Refreshes a minute early, so a request near the end of the token's life is not rejected."""
+        # a minute early, so a request near the end of the token's life is not rejected
         return max(0, super().parse_expiration_in_seconds(response_json) - 60)
 
 

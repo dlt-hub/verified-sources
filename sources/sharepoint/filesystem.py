@@ -1,6 +1,7 @@
 """Read-only fsspec filesystem over one SharePoint document library."""
 
 import unicodedata
+from operator import itemgetter
 from typing import Any, Dict, List, Optional
 from urllib.parse import quote
 
@@ -24,10 +25,14 @@ GLOB_CHARS = set("[]")
 class SharepointFileSystem(AbstractFileSystem):
     """Lists and reads the files of a document library through Microsoft Graph.
 
-    Paths are relative to the library root. `library` is the library's display name, None for
-    the site's default library. Full urls are sharepoint://<library>/<path>. Pass a Graph
-    client, or the Entra app credentials and the site id as fsspec storage options; fsspec
-    keeps storage options on the instance, so do not log or pickle it.
+    Paths are relative to the library root, full urls are sharepoint://<library>/<path> with an
+    empty library for the site's default library.
+
+    Args:
+        client (Optional[RESTClient]): Graph client rooted at the site.
+        library (Optional[str]): Display name of the library, None for the site's default one.
+        tenant_id (Optional[str]): With client_id, client_secret and site_id, the fsspec storage
+            options that build the client when none is given.
     """
 
     protocol = "sharepoint"
@@ -42,6 +47,7 @@ class SharepointFileSystem(AbstractFileSystem):
         site_id: Optional[str] = None,
         **kwargs: Any,
     ) -> None:
+        # fsspec keeps the storage options, the secret included, on the instance
         super().__init__(**kwargs)
         if client is None:
             if not (tenant_id and client_id and client_secret and site_id):
@@ -75,12 +81,9 @@ class SharepointFileSystem(AbstractFileSystem):
 
     @classmethod
     def _strip_protocol(cls, path: str) -> str:
-        """Returns the path relative to the library root, "" for the root.
-
-        Urls are split by hand: "#" is allowed in SharePoint names, and a url parser would
-        read it as a fragment.
-        """
+        """Returns the path relative to the library root, "" for the root."""
         if path.startswith(PREFIX):
+            # not a url parser: "#" is a valid character in SharePoint names
             path = path[len(PREFIX) :].partition("/")[2]
         return path.strip("/")
 
@@ -102,11 +105,8 @@ class SharepointFileSystem(AbstractFileSystem):
         on_error: str = "raise",
         **kwargs: Any,
     ) -> Any:
-        """Walks the folder tree, failing on a folder that cannot be listed.
-
-        fsspec drops such folders by default, which would turn a wrong path or a denied
-        subfolder into an empty or partial load.
-        """
+        """Walks the folder tree, failing on a folder that cannot be listed."""
+        # fsspec skips such folders by default, which would load a partial result
         return super().walk(path, maxdepth, topdown, on_error="raise", **kwargs)
 
     def open(self, path: str, mode: str = "rb", **kwargs: Any) -> Any:  # noqa: A003
@@ -235,6 +235,7 @@ def make_url(scheme: str, fs_path: str, bucket_url: str) -> str:
     return f"{scheme}://{library}/{fs_path}"
 
 
+# dlt's filesystem source reads the modification time and builds file urls through these tables
 register_implementation("sharepoint", SharepointFileSystem, clobber=True)
-MTIME_DISPATCH["sharepoint"] = lambda entry: entry["modified"]
+MTIME_DISPATCH["sharepoint"] = itemgetter("modified")
 MAKE_URI_DISPATCH["sharepoint"] = make_url

@@ -95,9 +95,9 @@ scrapy = [
     "twisted>=22.10.0,<=25.5.0",
 ]
 sharepoint = [
-    "pandas>=2.0.0",
-    "openpyxl>=3.1.0",
-    "pyarrow>=14.0.0",
+    "pandas>=2.0.0,<3",
+    "openpyxl>=3.1.0,<4",
+    "pyarrow>=14.0.0,<20",
 ]
 
 [tool.uv]
