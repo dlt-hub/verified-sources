@@ -17,8 +17,8 @@ format (`10:11:12+02:00`, `[1,2]`), and rows that a primary key update left unde
 To reload, run `dlt pipeline <name> drop <slot_name>`, which drops the replicated tables and the
 state, call `init_replication` with `reset=True` and an initial snapshot, load the snapshot and run
 `replication_resource`. Tables without a primary key in publications of updates or deletes stop
-the run, see below. Deletes are marked in `_dlt_deleted_ts`, `deleted_ts` of tables loaded before
-stays empty.
+the run, see below. Changes are ordered by `_dlt_lsn` and deletes marked in `_dlt_deleted_ts`,
+`lsn` and `deleted_ts` of tables loaded before stay empty.
 - **breaking** `replication_resource`: `real` columns load as `double`, `timetz` as `time`, arrays
   as `json` and domains as their base type instead of `text`, as in snapshots
 - **breaking** `init_replication` and `replication_resource`: raise `NoPrimaryKeyException` for
@@ -30,9 +30,10 @@ stays empty.
   `reflection_level="full_with_precision"` and `reflect_not_null=True` keep them. Columns loaded
   before keep their types
 - **breaking** `ItemGenerator`, `get_max_lsn` and `advance_slot` are removed, imports of them fail
-- **breaking** `replication_resource`: deletes are marked in `_dlt_deleted_ts` instead of
-  `deleted_ts`. In tables loaded before, `deleted_ts` stays empty in new rows and loses its
-  `hard_delete` hint
+- **breaking** `replication_resource`: changes are ordered by `_dlt_lsn` instead of `lsn` and
+  deletes marked in `_dlt_deleted_ts` instead of `deleted_ts`, so source columns with these names
+  are no longer overwritten. In tables loaded before, `lsn` and `deleted_ts` stay empty in new rows
+  and lose their `dedup_sort` and `hard_delete` hints
 - new `init_replication`: importable from `pg_replication`, the import from `pg_replication.helpers`
   keeps working
 - new `replication_resource`: a column type change whose values may not fit the destination

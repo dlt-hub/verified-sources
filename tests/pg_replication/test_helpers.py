@@ -157,7 +157,7 @@ def test_captured_messages(scenario: str, backend: str) -> None:
     for segment in consumer.take_batch():
         rows = []
         for row in load_segment(segment, backend):
-            assert row.pop("lsn") in lsns
+            assert row.pop("_dlt_lsn") in lsns
             if row.pop("_dlt_deleted_ts", None) is not None:
                 row["deleted"] = True
             rows.append(row)
@@ -178,7 +178,7 @@ def test_column_hints(reflection_level: TReflectionLevel) -> None:
         assert "precision" not in schema["note"]
     else:
         assert schema["note"]["precision"] == 20
-    assert schema["lsn"]["dedup_sort"] == "desc"
+    assert schema["_dlt_lsn"]["dedup_sort"] == "desc"
     assert schema["_dlt_deleted_ts"]["hard_delete"] is True
     assert segment.relation.write_disposition == "merge"
 
@@ -253,18 +253,21 @@ def test_column_type_that_does_not_fit_raises() -> None:
     assert (amount["precision"], amount["scale"]) == (10, 2)
 
 
-def test_legacy_deleted_ts_loses_hard_delete() -> None:
+def test_legacy_columns_lose_hints() -> None:
     schema = destination_schema(
         {
+            "lsn": {"name": "lsn", "data_type": "bigint", "dedup_sort": "desc"},
             "deleted_ts": {
                 "name": "deleted_ts",
                 "data_type": "timestamp",
                 "hard_delete": True,
-            }
+            },
         }
     )
     (segment,) = consume("basic", destination_schema=schema).take_batch()
     columns = segment.relation.column_schemas
+    assert columns["lsn"] == {"name": "lsn", "dedup_sort": None}
+    assert columns["_dlt_lsn"]["dedup_sort"] == "desc"
     assert columns["deleted_ts"] == {"name": "deleted_ts", "hard_delete": False}
     assert columns["_dlt_deleted_ts"]["hard_delete"] is True
 

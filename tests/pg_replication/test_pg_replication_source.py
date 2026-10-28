@@ -13,6 +13,7 @@ import dlt
 from dlt.common import Decimal
 from dlt.common.exceptions import MissingDependencyException
 from dlt.common.schema.typing import TTableSchemaColumns
+from dlt.common.schema.utils import get_dedup_sort_tuple
 from dlt.common.utils import uniq_id
 from dlt.pipeline.exceptions import PipelineStepFailed
 from dlt.sources.credentials import ConnectionStringCredentials
@@ -754,9 +755,9 @@ def test_include_columns(
         assert get_cols(dest_pl, "tbl_y") == {"id_y", "val_y"}
         assert get_cols(dest_pl, "tbl_z") == {"id_z", "val_z", "another_col_z"}
     dest_pl.run(changes)
-    assert get_cols(dest_pl, "tbl_x") == {"id_x", "val_x", "lsn"}
-    assert get_cols(dest_pl, "tbl_y") == {"id_y", "val_y", "lsn"}
-    assert get_cols(dest_pl, "tbl_z") == {"id_z", "val_z", "another_col_z", "lsn"}
+    assert get_cols(dest_pl, "tbl_x") == {"id_x", "val_x"}
+    assert get_cols(dest_pl, "tbl_y") == {"id_y", "val_y"}
+    assert get_cols(dest_pl, "tbl_z") == {"id_z", "val_z", "another_col_z"}
 
 
 @pytest.mark.parametrize("destination_name", ALL_DESTINATIONS)
@@ -2051,12 +2052,12 @@ def test_soft_delete(
         ]
 
 
-def test_legacy_deleted_ts_column(src_config: Tuple[dlt.Pipeline, str, str]) -> None:
+def test_legacy_columns(src_config: Tuple[dlt.Pipeline, str, str]) -> None:
     src_pl, slot_name, pub_name = src_config
     create_tables(src_pl, "CREATE TABLE {schema}.items (id int PRIMARY KEY, a text);")
     init_replication(slot_name, pub_name, src_pl.dataset_name, "items")
     dest_pl = dlt.pipeline(pipeline_name="dest_pl", destination="duckdb", dev_mode=True)
-    # earlier versions of the source marked deletes in `deleted_ts`
+    # earlier versions of the source ordered changes by `lsn` and marked deletes in `deleted_ts`
     dest_pl.run(
         [{"id": 1, "a": "one", "lsn": 1, "deleted_ts": None}],
         table_name="items",
@@ -2071,12 +2072,14 @@ def test_legacy_deleted_ts_column(src_config: Tuple[dlt.Pipeline, str, str]) -> 
         src_pl,
         "INSERT INTO {schema}.items VALUES (1, 'one'), (2, 'two');",
         "DELETE FROM {schema}.items WHERE id = 1;",
+        "UPDATE {schema}.items SET a = 'zwei' WHERE id = 2;",
     )
     assert_load_info(dest_pl.run(replication_resource(slot_name, pub_name)))
-    assert table_rows(dest_pl, "items", ["id", "a"]) == [(2, "two")]
-    columns = dest_pl.default_schema.get_table_columns("items")
-    assert not columns["deleted_ts"].get("hard_delete")
-    assert columns["_dlt_deleted_ts"]["hard_delete"] is True
+    assert table_rows(dest_pl, "items", ["id", "a"]) == [(2, "zwei")]
+    table = dest_pl.default_schema.get_table("items")
+    assert get_dedup_sort_tuple(table) == ("_dlt_lsn", "desc")
+    assert not table["columns"]["deleted_ts"].get("hard_delete")
+    assert table["columns"]["_dlt_deleted_ts"]["hard_delete"] is True
 
 
 @pytest.mark.parametrize(
@@ -2126,7 +2129,7 @@ def test_append_log_table(
     assert table["write_disposition"] == "append"
     assert not [name for name, c in table["columns"].items() if c.get("primary_key")]
     assert "_dlt_deleted_ts" not in table["columns"]
-    assert "dedup_sort" not in table["columns"]["lsn"]
+    assert "dedup_sort" not in table["columns"]["_dlt_lsn"]
     hour = [datetime(2024, 1, 1, h, tzinfo=timezone.utc) for h in range(10, 13)]
     assert table_rows(dest_pl, "events", ["ts", "msg"], order_by="ts, msg") == [
         (hour[0], "a"),

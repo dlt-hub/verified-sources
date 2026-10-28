@@ -32,6 +32,10 @@ DELETED_TS = "_dlt_deleted_ts"
 """Column with the commit time of the delete, set in rows of deleted source rows."""
 LEGACY_DELETED_TS = "deleted_ts"
 """Name of `DELETED_TS` in tables loaded by earlier versions of the source."""
+LSN = "_dlt_lsn"
+"""Column with the WAL position of the change, orders changes of the same row when merging."""
+LEGACY_LSN = "lsn"
+"""Name of `LSN` in tables loaded by earlier versions of the source."""
 
 _DUMMY_VALS: Dict[TDataType, Any] = {
     "bigint": 0,

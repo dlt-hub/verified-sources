@@ -19,6 +19,7 @@ from .exceptions import NullInNotNullColumnException
 from .schema_types import (
     _DUMMY_VALS,
     DELETED_TS,
+    LSN,
     PgType,
     TValueConverter,
     get_value_converter,
@@ -219,7 +220,7 @@ def segment_to_arrow(segment: "Segment") -> Any:
     """Converts changes in a segment to an arrow table with types of the dlt columns.
 
     Rows of inserts come first, then rows of updates and deletes. Their order does not matter:
-    the `lsn` column orders changes of the same row when merging.
+    the `_dlt_lsn` column orders changes of the same row when merging.
     """
     relation = segment.relation
     n_inserts = len(segment.insert_payloads)
@@ -239,7 +240,7 @@ def segment_to_arrow(segment: "Segment") -> Any:
         arrays[name] = to_castable_array(
             array, relation.pg_types[idx], name, relation.table_name
         )
-    arrays["lsn"] = pa.array(segment.insert_lsns + segment.row_lsns, type=pa.int64())
+    arrays[LSN] = pa.array(segment.insert_lsns + segment.row_lsns, type=pa.int64())
     if DELETED_TS in relation.column_schemas:
         arrays[DELETED_TS] = pa.array(
             [None] * n_inserts + segment.row_deleted_ts,

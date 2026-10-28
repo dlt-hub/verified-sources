@@ -74,6 +74,8 @@ from .schema_types import (
     COLUMN_TYPE_HINTS,
     DELETED_TS,
     LEGACY_DELETED_TS,
+    LEGACY_LSN,
+    LSN,
     PgType,
     TReflectionLevel,
     TValueConverter,
@@ -1133,9 +1135,9 @@ class MessageConsumer:
                 column_schemas[column_name] = {"name": column_name, **column_hint}
 
         # add hints for replication columns
-        column_schemas["lsn"] = {"name": "lsn", "data_type": "bigint", "nullable": True}
+        column_schemas[LSN] = {"name": LSN, "data_type": "bigint", "nullable": True}
         if self.pub_ops["update"] or self.pub_ops["delete"]:
-            column_schemas["lsn"]["dedup_sort"] = "desc"
+            column_schemas[LSN]["dedup_sort"] = "desc"
         if self.pub_ops["delete"]:
             column_schemas[DELETED_TS] = {
                 "name": DELETED_TS,
@@ -1144,13 +1146,16 @@ class MessageConsumer:
             }
             if self.hard_delete:
                 column_schemas[DELETED_TS]["hard_delete"] = True
-            # dlt takes the first `hard_delete` column, older versions marked deletes here
-            legacy = self._existing_column(table_name, LEGACY_DELETED_TS)
-            if legacy and legacy.get("hard_delete"):
-                column_schemas[LEGACY_DELETED_TS] = {
-                    "name": LEGACY_DELETED_TS,
-                    "hard_delete": False,
-                }
+        # dlt takes the first `dedup_sort` and `hard_delete` column, clear them on old columns
+        legacy = self._existing_column(table_name, LEGACY_LSN)
+        if legacy and legacy.get("dedup_sort"):
+            column_schemas[LEGACY_LSN] = {"name": LEGACY_LSN, "dedup_sort": None}
+        legacy = self._existing_column(table_name, LEGACY_DELETED_TS)
+        if legacy and legacy.get("hard_delete"):
+            column_schemas[LEGACY_DELETED_TS] = {
+                "name": LEGACY_DELETED_TS,
+                "hard_delete": False,
+            }
         write_disposition: TWriteDisposition = "append"
         if self.pub_ops["update"] or self.pub_ops["delete"]:
             write_disposition = "merge"
@@ -1349,13 +1354,13 @@ def segment_to_rows(segment: Segment) -> List[TDataItem]:
 
     for payload, lsn in zip(segment.insert_payloads, segment.insert_lsns):
         row = _to_row(read_tuple(payload, 6)[0])
-        row["lsn"] = lsn
+        row[LSN] = lsn
         rows.append(row)
     for values, lsn, deleted_ts in zip(
         segment.rows, segment.row_lsns, segment.row_deleted_ts
     ):
         row = _to_row(values)
-        row["lsn"] = lsn
+        row[LSN] = lsn
         if deleted_ts is not None and hard_delete:
             # replace NULLs to prevent NOT NULL violations in staging table
             for name, dummy in zip(names, dummies):
