@@ -11,9 +11,12 @@ from sqlalchemy.dialects import postgresql
 from sqlalchemy.engine import Connection, Engine
 from sqlalchemy.types import TypeEngine
 
+from dlt.common.exceptions import MissingDependencyException
 from dlt.common.typing import TDataItem
 from dlt.extract import DltResource
 from dlt.sources.sql_database.helpers import TableLoader
+
+from .schema_types import add_session_options
 
 # sqlalchemy < 2 reflects domains as their base type
 _PG_DOMAIN = getattr(postgresql, "DOMAIN", ())
@@ -37,6 +40,28 @@ def snapshot_type_adapter(sql_type: TypeEngine) -> TypeEngine:  # type: ignore[t
     if isinstance(sql_type, _PG_DOMAIN):
         return sql_type.data_type  # type: ignore[attr-defined,no-any-return]
     return sql_type
+
+
+def ensure_sqlalchemy_2() -> None:
+    """Raises on SQLAlchemy 1.4, which does not fire `begin` events that set the snapshot."""
+    if int(sa.__version__.split(".")[0]) < 2:
+        raise MissingDependencyException(
+            "pg_replication direct snapshot",
+            ["sqlalchemy>=2.0"],
+            "SQLAlchemy 1.4 reads the live tables instead of the snapshot.",
+        )
+
+
+def pin_session_options(engine: Engine) -> Engine:
+    """Makes `engine` format values like the replication connection, see `SESSION_OPTIONS`."""
+    sa.event.listen(engine, "do_connect", _add_session_options)
+    return engine
+
+
+def _add_session_options(
+    dialect: Any, connection_record: Any, cargs: Any, cparams: Dict[str, Any]
+) -> None:
+    cparams["options"] = add_session_options(cparams.get("options"))
 
 
 def _register_interval_as_text(dbapi_connection: Any, connection_record: Any) -> None:
@@ -71,6 +96,7 @@ class ReplicationSnapshot(List[DltResource]):
 
     def engine_adapter_callback(self, engine: Engine) -> Engine:
         """Makes every transaction of `engine` read the snapshot."""
+        pin_session_options(engine)
         sa.event.listen(engine, "connect", _register_interval_as_text)
         sa.event.listen(engine, "begin", self._set_snapshot)
         return engine

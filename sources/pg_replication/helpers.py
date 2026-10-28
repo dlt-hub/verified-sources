@@ -57,23 +57,23 @@ from .schema_types import (
     _DUMMY_VALS,
     PgType,
     TValueConverter,
+    add_session_options,
     get_value_converter,
     resolve_builtin_type,
     to_dlt_column_schema,
     warn_unknown_type,
 )
-from .snapshot import ReplicationSnapshot, snapshot_type_adapter
+from .snapshot import (
+    ReplicationSnapshot,
+    ensure_sqlalchemy_2,
+    pin_session_options,
+    snapshot_type_adapter,
+)
 
 __source_name__ = "pg_replication"
 
 TBackend = Literal["python", "pyarrow"]
 TInitialSnapshot = Literal["table", "unlogged_table", "direct"]
-
-_SESSION_OPTIONS = (
-    "-c datestyle=ISO -c intervalstyle=postgres -c extra_float_digits=3 -c timezone=UTC"
-    " -c bytea_output=hex -c client_encoding=UTF8"
-)
-"""Pins settings that pgoutput uses to format values as text, same as Postgres' own subscriber."""
 
 _SLOT_IN_USE_TIMEOUT = 60.0
 _FEEDBACK_INTERVAL = 1.0
@@ -191,6 +191,8 @@ def init_replication(
         table_names = [table_names]
     if persist_snapshots and initial_snapshot is None:
         initial_snapshot = "table"
+    if initial_snapshot == "direct":
+        ensure_sqlalchemy_2()
 
     rep_conn = _get_rep_conn(credentials)
     keep_rep_conn = False
@@ -521,6 +523,7 @@ def snapshot_table_resource(
         reflection_level="full_with_precision",
         backend="pyarrow" if backend == "pyarrow" else "sqlalchemy",
         type_adapter_callback=snapshot_type_adapter,
+        engine_adapter_callback=pin_session_options,
     )
     resource.apply_hints(
         table_name=table_name,
@@ -609,13 +612,10 @@ def _get_conn(
     connection_factory: Optional[Any] = None,
 ) -> ConnectionExt:
     """Returns a psycopg2 connection to interact with postgres."""
-    user_options = (credentials.query or {}).get("options")
     conn = psycopg2.connect(
         dsn=credentials.to_native_representation(),
         connection_factory=connection_factory,
-        options=f"{user_options} {_SESSION_OPTIONS}"
-        if user_options
-        else _SESSION_OPTIONS,
+        options=add_session_options((credentials.query or {}).get("options")),
     )
     if connection_factory is not LogicalReplicationConnection:
         conn.autocommit = False

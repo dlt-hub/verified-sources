@@ -1178,7 +1178,7 @@ mongodb = [
 ]
 pg-replication = [
     { name = "psycopg2-binary", specifier = ">=2.9.9" },
-    { name = "sqlalchemy", specifier = ">=1.4" },
+    { name = "sqlalchemy", specifier = ">=2.0" },
 ]
 pytest = [
     { name = "pytest", specifier = ">=7.2.0,<8" },

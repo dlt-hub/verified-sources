@@ -16,7 +16,7 @@ from psycopg2.extras import LogicalReplicationConnection
 import dlt
 from dlt.sources.credentials import ConnectionStringCredentials
 
-from sources.pg_replication.helpers import _SESSION_OPTIONS
+from sources.pg_replication.schema_types import SESSION_OPTIONS
 
 SCHEMA = "capture"
 BIG = "x" * 2500
@@ -105,7 +105,7 @@ def capture(
         rep_conn = psycopg2.connect(
             dsn,
             connection_factory=LogicalReplicationConnection,
-            options=_SESSION_OPTIONS,
+            options=SESSION_OPTIONS,
         )
         rep_cur = rep_conn.cursor()
         rep_cur.start_replication(

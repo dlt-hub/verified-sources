@@ -12,6 +12,18 @@ from .decoders import ColumnType
 
 TValueConverter = Callable[[str], Any]
 
+SESSION_OPTIONS = (
+    "-c datestyle=ISO -c intervalstyle=postgres -c extra_float_digits=3 -c timezone=UTC"
+    " -c bytea_output=hex -c client_encoding=UTF8"
+)
+"""Pins settings that format values as text, same as Postgres' own subscriber."""
+
+
+def add_session_options(options: Optional[str]) -> str:
+    """Appends `SESSION_OPTIONS` to libpq `options`, so they override the user's settings."""
+    return f"{options} {SESSION_OPTIONS}" if options else SESSION_OPTIONS
+
+
 _DUMMY_VALS: Dict[TDataType, Any] = {
     "bigint": 0,
     "binary": b" ",
