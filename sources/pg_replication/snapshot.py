@@ -1,7 +1,7 @@
 """Initial snapshot of replicated tables, consistent with the start of the replication slot."""
 
 import weakref
-from typing import Any, Dict, Iterator, List, Type
+from typing import Any, Callable, Dict, Iterator, List, Optional, Type
 
 import sqlalchemy as sa
 from psycopg2.extensions import new_array_type, new_type, register_type
@@ -42,6 +42,14 @@ def snapshot_type_adapter(sql_type: TypeEngine) -> TypeEngine:  # type: ignore[t
     return sql_type
 
 
+def remove_not_null_adapter(table: sa.Table) -> sa.Table:
+    """Reflects non-key columns as nullable, as replicated columns are."""
+    for column in table.columns:
+        if not column.primary_key:
+            column.nullable = True
+    return table
+
+
 def ensure_sqlalchemy_2() -> None:
     """Raises on SQLAlchemy 1.4, which does not fire `begin` events that set the snapshot."""
     if int(sa.__version__.split(".")[0]) < 2:
@@ -78,15 +86,23 @@ class ReplicationSnapshot(List[DltResource]):
     read its table, with `close()` or when the `with` block ends.
 
     To read the snapshot with your own `sql_database` or `sql_table`, pass them
-    `engine_adapter_callback` and `type_adapter_callback` within the `with` block.
+    `engine_adapter_callback`, `type_adapter_callback` and `table_adapter_callback` within the
+    `with` block. With an arrow backend (`pyarrow`, `pandas`, `connectorx`) replicate with
+    `replication_resource(backend="pyarrow")`, with `sqlalchemy` with the `python` backend.
     """
 
     def __init__(
-        self, rep_conn: LogicalReplicationConnection, snapshot_name: str
+        self,
+        rep_conn: LogicalReplicationConnection,
+        snapshot_name: str,
+        reflect_not_null: bool = False,
     ) -> None:
         super().__init__()
         self.snapshot_name = snapshot_name
         self.type_adapter_callback = snapshot_type_adapter
+        self.table_adapter_callback: Optional[Callable[[sa.Table], sa.Table]] = (
+            None if reflect_not_null else remove_not_null_adapter
+        )
         self._unread_tables = 0
         self._finalizer = weakref.finalize(self, rep_conn.close)
 

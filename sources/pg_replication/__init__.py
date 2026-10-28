@@ -9,7 +9,8 @@ from dlt.common.schema.typing import TTableSchemaColumns
 from dlt.extract.items import DataItemWithMeta
 from dlt.sources.credentials import ConnectionStringCredentials
 
-from .helpers import TBackend, stream_changes
+from .helpers import TBackend, get_destination_schema, init_replication, stream_changes
+from .schema_types import TReflectionLevel
 
 
 @dlt.resource(
@@ -26,6 +27,10 @@ def replication_resource(
     target_batch_size: int = 1000,
     flush_slot: bool = True,
     backend: TBackend = "python",
+    reflection_level: TReflectionLevel = "full",
+    reflect_not_null: bool = False,
+    snapshot_pipeline: Optional[dlt.Pipeline] = None,
+    hard_delete: bool = True,
 ) -> Iterable[Union[TDataItem, DataItemWithMeta]]:
     """Resource yielding data items for changes in one or more postgres tables.
 
@@ -60,8 +65,10 @@ def replication_resource(
           ```
           Unchanged TOASTed values of columns that are not included do not stop the
           replication, so tables without REPLICA IDENTITY FULL replicate without them.
-        columns (Optional[Dict[str, TTableHintTemplate[TAnySchemaColumns]]]): Maps
-          table name(s) to column hints to apply on the replicated table(s). For example:
+        columns (Optional[Dict[str, TTableSchemaColumns]]): Maps table name(s) to column hints
+          to apply on the replicated table(s). Type hints (`data_type`, `precision`, `scale`,
+          `timezone`) are used as is, without checking that the replicated values fit the
+          destination column. For example:
           ```
           columns={
               "table_x": {"col_a": {"data_type": "json"}},
@@ -83,12 +90,32 @@ def replication_resource(
           the changes via all of the currently open replication slots. psycopg2 still
           confirms the server position in runs that receive no changes.
         backend (TBackend): `python` yields rows (dicts), `pyarrow` yields arrow tables which
-          are decoded and normalized much faster. Requires `pyarrow` and `numpy`.
+          are decoded and normalized much faster. Requires `pyarrow` and `numpy`. Use the
+          backend of the initial snapshot: changes as rows add NOT NULL `_dlt_load_id` and
+          `_dlt_id` columns, which fails on a table loaded from arrow tables, changes as arrow
+          tables lack them, which fails on a table loaded from rows.
+        reflection_level (TReflectionLevel): Column types of tables and columns that were not
+          loaded before: `full` without length and integer size, `full_with_precision` as in
+          the source. Columns loaded before keep their types; a column whose new Postgres type
+          may not fit stops the replication with `IncompatibleColumnTypeException`.
+        reflect_not_null (bool): Creates NOT NULL columns for NOT NULL source columns in tables
+          that were not loaded before. Columns added to loaded tables are nullable. NULL in a NOT
+          NULL destination column stops the run with `NullInNotNullColumnException`. Use the
+          same value as in `init_replication`.
+        snapshot_pipeline (Optional[dlt.Pipeline]): Pipeline that loaded the initial snapshot,
+          if not this one. The first run takes the types of the snapshot columns from its
+          schema, restore it with `sync_destination()` if its working dir is gone.
+        hard_delete (bool): Deletes rows deleted in the source. With `False`, they stay with
+          `_dlt_deleted_ts` set: with REPLICA IDENTITY FULL they keep their last values, otherwise
+          only their key.
 
         Yields:
             Data items for changes published in the publication.
     """
     resource_state = dlt.current.resource_state()
+    destination_schema = get_destination_schema(
+        snapshot_pipeline, first_run="last_commit_lsn" not in resource_state
+    )
     for batch in stream_changes(
         credentials=credentials,
         slot_name=slot_name,
@@ -100,6 +127,10 @@ def replication_resource(
         columns=columns,
         flush_slot=flush_slot,
         backend=backend,
+        reflection_level=reflection_level,
+        reflect_not_null=reflect_not_null,
+        destination_schema=destination_schema,
+        hard_delete=hard_delete,
     ):
         yield from batch.items[:-1]
         # recorded before the last item so a generator closed by `add_limit` never records

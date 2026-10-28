@@ -1,7 +1,7 @@
 import json
 from datetime import date, datetime, time, timedelta, timezone
 from functools import partial
-from typing import Any, Callable, Dict, List, NamedTuple, Optional
+from typing import Any, Callable, Dict, List, Literal, NamedTuple, Optional, Tuple
 
 from dlt.common import Decimal, logger
 from dlt.common.data_types.type_helpers import coerce_value
@@ -11,6 +11,10 @@ from dlt.common.schema.typing import TColumnSchema, TColumnType
 from .decoders import ColumnType
 
 TValueConverter = Callable[[str], Any]
+TReflectionLevel = Literal["full", "full_with_precision"]
+
+COLUMN_TYPE_HINTS = ("data_type", "precision", "scale", "timezone")
+"""Column hints that make up the destination column type."""
 
 SESSION_OPTIONS = (
     "-c datestyle=ISO -c intervalstyle=postgres -c extra_float_digits=3 -c timezone=UTC"
@@ -23,6 +27,11 @@ def add_session_options(options: Optional[str]) -> str:
     """Appends `SESSION_OPTIONS` to libpq `options`, so they override the user's settings."""
     return f"{options} {SESSION_OPTIONS}" if options else SESSION_OPTIONS
 
+
+DELETED_TS = "_dlt_deleted_ts"
+"""Column with the commit time of the delete, set in rows of deleted source rows."""
+LEGACY_DELETED_TS = "deleted_ts"
+"""Name of `DELETED_TS` in tables loaded by earlier versions of the source."""
 
 _DUMMY_VALS: Dict[TDataType, Any] = {
     "bigint": 0,
@@ -103,21 +112,26 @@ def resolve_builtin_type(type_id: int, atttypmod: int) -> Optional[PgType]:
     return None
 
 
-def to_dlt_column_type(pg_type: PgType) -> TColumnType:
+def to_dlt_column_type(
+    pg_type: PgType, reflection_level: TReflectionLevel = "full"
+) -> TColumnType:
     """Maps a Postgres type to a dlt column type.
 
-    Follows `sql_table` reflection with `full_with_precision`, so snapshot and replicated
-    tables get the same columns. Unknown types (enums, network types, intervals...) map to text.
+    Follows `sql_table` reflection at `reflection_level`, so snapshot and replicated tables get
+    the same columns. Unknown types (enums, network types, intervals...) map to text.
     """
     type_id, atttypmod = pg_type.type_id, pg_type.atttypmod
+    with_precision = reflection_level == "full_with_precision"
     if pg_type.element_type_id is not None or type_id in (114, 3802):
         return {"data_type": "json"}
     if type_id == 16:
         return {"data_type": "bool"}
     if type_id == 17:
         return {"data_type": "binary"}
-    if type_id == 21:
+    if type_id == 21 and with_precision:
         return {"data_type": "bigint", "precision": 32}
+    if type_id == 21:
+        return {"data_type": "bigint"}
     if type_id in (20, 23, 26):
         return {"data_type": "bigint"}
     if type_id in (700, 701):
@@ -138,17 +152,73 @@ def to_dlt_column_type(pg_type: PgType) -> TColumnType:
         return {"data_type": "timestamp", "timezone": False}
     if type_id == 1184:
         return {"data_type": "timestamp", "timezone": True}
-    if type_id in (1042, 1043) and atttypmod != -1:
+    if type_id in (1042, 1043) and atttypmod != -1 and with_precision:
         return {"data_type": "text", "precision": atttypmod - 4}
     return {"data_type": "text"}
 
 
 def to_dlt_column_schema(
-    col: ColumnType, pg_type: PgType, primary_key: bool
+    col: ColumnType,
+    pg_type: PgType,
+    primary_key: bool,
+    reflection_level: TReflectionLevel = "full",
 ) -> TColumnSchema:
-    column: TColumnSchema = {"name": col.name, **to_dlt_column_type(pg_type)}
+    column: TColumnSchema = {
+        "name": col.name,
+        **to_dlt_column_type(pg_type, reflection_level),
+    }
     column["primary_key"] = primary_key
     return column
+
+
+_INT_BITS = {21: 16, 23: 32, 20: 64, 26: 64}
+"""Bits of the signed integer that holds every value of an integer type, oid is unsigned."""
+
+
+def column_type_fits(
+    existing: TColumnType, pg_type: PgType, decimal_precision: Tuple[int, int]
+) -> bool:
+    """Tells if every value of `pg_type` fits a destination column of the `existing` type.
+
+    A decimal without precision or scale has the destination default `decimal_precision`.
+    """
+    new = to_dlt_column_type(pg_type, "full_with_precision")
+    data_type = existing.get("data_type")
+    if data_type != new["data_type"]:
+        return False
+    precision = existing.get("precision")
+    if data_type == "bigint":
+        return _INT_BITS.get(pg_type.type_id, 64) <= (precision or 64)
+    if data_type == "decimal":
+        scale = existing.get("scale")
+        precision = decimal_precision[0] if precision is None else precision
+        scale = decimal_precision[1] if scale is None else scale
+        if "precision" not in new:
+            # unbounded numeric fits only the default column created for it
+            return (precision, scale) == tuple(decimal_precision)
+        return (
+            new["scale"] <= scale
+            and new["precision"] - new["scale"] <= precision - scale
+        )
+    if data_type in ("text", "binary"):
+        return precision is None or new.get("precision", precision + 1) <= precision
+    if data_type == "timestamp" and existing.get("timezone", True) != new.get(
+        "timezone", True
+    ):
+        return False
+    if data_type in ("timestamp", "time") and precision is not None:
+        # fractional digits, 6 when not set
+        return (6 if pg_type.atttypmod == -1 else pg_type.atttypmod) <= precision
+    return True
+
+
+def format_column_type(column: TColumnType) -> str:
+    """Formats a dlt column type for messages, ie. `decimal(10,2)`."""
+    params = [str(column[h]) for h in ("precision", "scale") if column.get(h) is not None]  # type: ignore[literal-required]
+    formatted = column["data_type"] + (f"({','.join(params)})" if params else "")
+    if column["data_type"] == "timestamp" and column.get("timezone") is False:
+        formatted += " without time zone"
+    return formatted
 
 
 def _to_bytes(value: str) -> bytes:

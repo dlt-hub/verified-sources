@@ -15,7 +15,14 @@ from dlt.common.configuration.container import Container
 from dlt.common.destination import DestinationCapabilitiesContext
 from dlt.common.libs.pyarrow import cast_arrow_as_columns_schema, pyarrow as pa
 
-from .schema_types import _DUMMY_VALS, PgType, TValueConverter, get_value_converter
+from .exceptions import NullInNotNullColumnException
+from .schema_types import (
+    _DUMMY_VALS,
+    DELETED_TS,
+    PgType,
+    TValueConverter,
+    get_value_converter,
+)
 
 if TYPE_CHECKING:
     from .helpers import Segment
@@ -233,8 +240,8 @@ def segment_to_arrow(segment: "Segment") -> Any:
             array, relation.pg_types[idx], name, relation.table_name
         )
     arrays["lsn"] = pa.array(segment.insert_lsns + segment.row_lsns, type=pa.int64())
-    if "deleted_ts" in relation.column_schemas:
-        arrays["deleted_ts"] = pa.array(
+    if DELETED_TS in relation.column_schemas:
+        arrays[DELETED_TS] = pa.array(
             [None] * n_inserts + segment.row_deleted_ts,
             type=pa.timestamp("us", tz="UTC"),
         )
@@ -249,8 +256,15 @@ def segment_to_arrow(segment: "Segment") -> Any:
     is_deleted = pa.array(
         [False] * n_inserts + [ts is not None for ts in segment.row_deleted_ts]
     )
-    if pc.any(is_deleted).as_py():
+    hard_delete = relation.column_schemas.get(DELETED_TS, {}).get("hard_delete")
+    if hard_delete and pc.any(is_deleted).as_py():
         table = _fill_deleted_rows(table, segment, is_deleted)
+    if nulls := [
+        name for name in relation.not_null_columns if table.column(name).null_count
+    ]:
+        raise NullInNotNullColumnException(
+            relation.schema_name, relation.table_name, nulls
+        )
     return table
 
 

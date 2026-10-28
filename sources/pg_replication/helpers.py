@@ -16,6 +16,7 @@ from typing import (
     Sequence,
     Tuple,
     Union,
+    cast,
 )
 
 import psycopg2
@@ -24,18 +25,25 @@ from psycopg2.extras import LogicalReplicationConnection, ReplicationCursor
 
 import dlt
 from dlt.common import logger
+from dlt.common.arithmetics import DEFAULT_NUMERIC_PRECISION, DEFAULT_NUMERIC_SCALE
+from dlt.common.configuration.container import Container
 from dlt.common.configuration.specs.config_section_context import ConfigSectionContext
 from dlt.common.data_writers.escape import escape_postgres_identifier
+from dlt.common.destination import DestinationCapabilitiesContext
 from dlt.common.normalizers.naming.snake_case import NamingConvention
+from dlt.common.pipeline import PipelineContext
+from dlt.common.schema import Schema
 from dlt.common.schema.typing import (
     DLT_NAME_PREFIX,
     TColumnNames,
+    TColumnSchema,
     TTableSchemaColumns,
     TWriteDisposition,
 )
 from dlt.common.schema.utils import merge_column
 from dlt.common.typing import TDataItem
 from dlt.extract import DltResource
+from dlt.extract.source import SourceSchemaInjectableContext
 from dlt.sources.config import with_config
 from dlt.sources.credentials import ConnectionStringCredentials
 from dlt.sources.sql_database import (
@@ -53,18 +61,28 @@ from .decoders import (
     Relation,
 )
 from .exceptions import (
+    IncompatibleColumnTypeException,
     IncompatiblePostgresVersionException,
     NoPrimaryKeyException,
+    NullInNotNullColumnException,
+    SnapshotSchemaNotFoundException,
     UnchangedToastException,
 )
 from .schema_types import (
     _DUMMY_VALS,
+    COLUMN_TYPE_HINTS,
+    DELETED_TS,
+    LEGACY_DELETED_TS,
     PgType,
+    TReflectionLevel,
     TValueConverter,
     add_session_options,
+    column_type_fits,
+    format_column_type,
     get_value_converter,
     resolve_builtin_type,
     to_dlt_column_schema,
+    to_dlt_column_type,
     warn_unknown_type,
 )
 from .snapshot import (
@@ -119,6 +137,8 @@ def init_replication(
     reset: bool = False,
     backend: TBackend = "python",
     initial_snapshot: Optional[TInitialSnapshot] = None,
+    reflection_level: TReflectionLevel = "full",
+    reflect_not_null: bool = False,
 ) -> Optional[Union[DltResource, List[DltResource]]]:
     """Initializes replication for one, several, or all tables within a schema.
 
@@ -179,7 +199,9 @@ def init_replication(
           and recreated. Has no effect if a slot and publication with the provided
           names do not yet exist.
         backend (TBackend): `python` yields rows, `pyarrow` yields arrow tables from the
-          snapshot resources. Use the same backend as in `replication_resource`.
+          snapshot resources. Use the same backend as in `replication_resource`: arrow tables
+          get no `_dlt_load_id` and `_dlt_id` columns, rows of `python` add them as NOT NULL
+          columns, so changes of one backend fail to load into a table loaded with the other.
         initial_snapshot (Optional[TInitialSnapshot]): Returns resources that load the
           tables as they were when the replication slot was created, so the initial load and
           the replicated changes neither miss nor repeat a change:
@@ -189,6 +211,14 @@ def init_replication(
             but is emptied if the server crashes before the initial load.
           - `direct` reads the tables without copies. The resources must be extracted in this
             process right after `init_replication`, see `ReplicationSnapshot`.
+        reflection_level (TReflectionLevel): `full` creates snapshot columns without length
+          and integer size, so later changes of those fit, `full_with_precision` creates them
+          as in the source. Numeric precision and scale are kept on both levels. Use the same
+          level as in `replication_resource`.
+        reflect_not_null (bool): Creates NOT NULL snapshot columns for NOT NULL source columns.
+          By default only primary key columns are NOT NULL, so renamed, dropped or excluded
+          columns can be NULL in later changes. `replication_resource` stops when a NOT NULL
+          destination column would get NULL.
 
     Returns:
         - None without `initial_snapshot`
@@ -255,19 +285,22 @@ def init_replication(
         )
 
         if initial_snapshot == "direct":
-            snapshot = ReplicationSnapshot(rep_conn, slot["snapshot_name"])
+            snapshot = ReplicationSnapshot(
+                rep_conn, slot["snapshot_name"], reflect_not_null
+            )
             keep_rep_conn = True
             for table_name in table_names:
                 resource = core_sql_table(
                     credentials=credentials,
                     table=table_name,
                     schema=schema_name,
-                    reflection_level="full_with_precision",
+                    reflection_level=reflection_level,
                     backend="pyarrow" if backend == "pyarrow" else "sqlalchemy",
                     included_columns=_columns_of_table(include_columns, table_name),
                     excluded_columns=_columns_of_table(exclude_columns, table_name),
                     type_adapter_callback=snapshot.type_adapter_callback,
                     engine_adapter_callback=snapshot.engine_adapter_callback,
+                    table_adapter_callback=snapshot.table_adapter_callback,
                     table_loader_class=snapshot.table_loader_class(),
                 )
                 resource.apply_hints(
@@ -303,6 +336,11 @@ def init_replication(
                             unlogged=initial_snapshot == "unlogged_table",
                         ),
                         _get_pk(cur_snap, table_name, schema_name),
+                        (
+                            _get_not_null_columns(cur_snap, table_name, schema_name)
+                            if reflect_not_null
+                            else []
+                        ),
                     )
                     for table_name in table_names
                 ]
@@ -314,12 +352,15 @@ def init_replication(
                 schema_name=schema_name,
                 table_name=table_name,
                 write_disposition=write_disposition,
-                columns=None if columns is None else columns.get(table_name),
+                columns=_with_not_null(
+                    None if columns is None else columns.get(table_name), not_null
+                ),
                 primary_key=primary_key,
                 credentials=credentials,
                 backend=backend,
+                reflection_level=reflection_level,
             )
-            for table_name, snapshot_table_name, primary_key in snapshot_tables
+            for table_name, snapshot_table_name, primary_key, not_null in snapshot_tables
         ]
         if len(snapshot_table_resources) == 1:
             return snapshot_table_resources[0]
@@ -529,6 +570,7 @@ def snapshot_table_resource(
     columns: TTableSchemaColumns = None,
     credentials: ConnectionStringCredentials = dlt.secrets.value,
     backend: TBackend = "python",
+    reflection_level: TReflectionLevel = "full",
 ) -> DltResource:
     """Returns a resource for a persisted snapshot table.
 
@@ -539,7 +581,7 @@ def snapshot_table_resource(
         credentials=credentials,
         table=snapshot_table_name,
         schema=schema_name,
-        reflection_level="full_with_precision",
+        reflection_level=reflection_level,
         backend="pyarrow" if backend == "pyarrow" else "sqlalchemy",
         type_adapter_callback=snapshot_type_adapter,
         engine_adapter_callback=pin_session_options,
@@ -723,6 +765,30 @@ def _is_column_included(
     )
 
 
+def _with_not_null(
+    columns: Optional[TTableSchemaColumns], not_null: Sequence[str]
+) -> Optional[TTableSchemaColumns]:
+    """Adds NOT NULL to `columns` hints, snapshot copies have no NOT NULL columns."""
+    if not not_null:
+        return columns
+    merged: TTableSchemaColumns = {
+        name: {"name": name, "nullable": False} for name in not_null
+    }
+    for name, hint in (columns or {}).items():
+        merged[name] = {**merged.get(name, {}), **hint}
+    return merged
+
+
+def _get_not_null_columns(cur: cursor, table_name: str, schema_name: str) -> List[str]:
+    """Returns the names of NOT NULL columns of a Postgres table."""
+    cur.execute(
+        "SELECT attname FROM pg_attribute WHERE attrelid = %s::regclass AND attnotnull"
+        " AND attnum > 0 AND NOT attisdropped;",
+        (_make_qualified_table_name(table_name, schema_name),),
+    )
+    return [row[0] for row in cur.fetchall()]
+
+
 def _get_pk(
     cur: cursor,
     table_name: str,
@@ -801,6 +867,15 @@ class CatalogResolver:
             )
             return [row[0] for row in cur.fetchall()]
 
+    def get_not_null_columns(self, relation_id: int) -> List[str]:
+        with self.conn.cursor() as cur:
+            cur.execute(
+                "SELECT attname FROM pg_attribute WHERE attrelid = %s AND attnotnull"
+                " AND attnum > 0 AND NOT attisdropped;",
+                (relation_id,),
+            )
+            return [row[0] for row in cur.fetchall()]
+
 
 @dataclass
 class RelationSchema:
@@ -816,6 +891,7 @@ class RelationSchema:
     column_schemas: TTableSchemaColumns
     write_disposition: TWriteDisposition
     skip: bool = False
+    not_null_columns: List[str] = field(default_factory=list)
 
 
 @dataclass
@@ -855,6 +931,15 @@ class MessageConsumer:
         columns: Optional[Mapping[str, TTableSchemaColumns]] = None,
         resolve_type: Callable[[int, int], PgType] = _default_resolve_type,
         resolve_primary_key: Optional[Callable[[int], List[str]]] = None,
+        reflection_level: TReflectionLevel = "full",
+        destination_schema: Optional[Schema] = None,
+        decimal_precision: Tuple[int, int] = (
+            DEFAULT_NUMERIC_PRECISION,
+            DEFAULT_NUMERIC_SCALE,
+        ),
+        reflect_not_null: bool = False,
+        resolve_not_null: Optional[Callable[[int], List[str]]] = None,
+        hard_delete: bool = True,
     ) -> None:
         self.pub_ops = pub_ops
         self.upto_lsn = upto_lsn
@@ -864,8 +949,15 @@ class MessageConsumer:
         self.columns = columns
         self.resolve_type = resolve_type
         self.resolve_primary_key = resolve_primary_key
+        self.reflection_level = reflection_level
+        self.destination_schema = destination_schema
+        self.decimal_precision = decimal_precision
+        self.reflect_not_null = reflect_not_null
+        self.resolve_not_null = resolve_not_null
+        self.hard_delete = hard_delete
 
         self.relations: Dict[int, RelationSchema] = {}
+        self._emitted_columns: Dict[str, TTableSchemaColumns] = {}
         self.segments: List[Segment] = []
         self.open_segments: Dict[int, Segment] = {}
         self.n_items = 0
@@ -934,13 +1026,31 @@ class MessageConsumer:
             if _is_column_included(c.name, include, exclude)
         ]
 
-        column_schemas: TTableSchemaColumns = {
-            relation.columns[i].name: to_dlt_column_schema(
-                relation.columns[i], pg_types[i], i in key_indices
-            )
-            for i in included_indices
-        }
         hints = {} if self.columns is None else self.columns.get(table_name, {})
+        column_schemas: TTableSchemaColumns = {}
+        for i in included_indices:
+            column = relation.columns[i]
+            column_schemas[column.name] = to_dlt_column_schema(
+                column, pg_types[i], i in key_indices, self.reflection_level
+            )
+            # a type in `columns` wins, the user takes care of the destination column
+            if not skip and not set(COLUMN_TYPE_HINTS) & set(
+                hints.get(column.name, {})
+            ):
+                self._keep_destination_type(
+                    relation, column_schemas[column.name], pg_types[i]
+                )
+        # only a new table gets NOT NULL, a NOT NULL column can't be added to a table with rows
+        if (
+            self.reflect_not_null
+            and self.resolve_not_null
+            and not skip
+            and table_name not in self._emitted_columns
+            and self._existing_table(table_name) is None
+        ):
+            for name in self.resolve_not_null(relation.relation_id):
+                if name in column_schemas:
+                    column_schemas[name]["nullable"] = False
         for column_name, column_hint in hints.items():
             if column_name in column_schemas:
                 column_schemas[column_name] = merge_column(
@@ -954,16 +1064,39 @@ class MessageConsumer:
         if self.pub_ops["update"] or self.pub_ops["delete"]:
             column_schemas["lsn"]["dedup_sort"] = "desc"
         if self.pub_ops["delete"]:
-            column_schemas["deleted_ts"] = {
-                "name": "deleted_ts",
-                "hard_delete": True,
+            column_schemas[DELETED_TS] = {
+                "name": DELETED_TS,
                 "data_type": "timestamp",
                 "nullable": True,
             }
+            if self.hard_delete:
+                column_schemas[DELETED_TS]["hard_delete"] = True
+            # dlt takes the first `hard_delete` column, older versions marked deletes here
+            legacy = self._existing_column(table_name, LEGACY_DELETED_TS)
+            if legacy and legacy.get("hard_delete"):
+                column_schemas[LEGACY_DELETED_TS] = {
+                    "name": LEGACY_DELETED_TS,
+                    "hard_delete": False,
+                }
         write_disposition: TWriteDisposition = "append"
         if self.pub_ops["update"] or self.pub_ops["delete"]:
             write_disposition = "merge"
 
+        not_null_columns: List[str] = []
+        if not skip:
+            missing = self._missing_not_null_columns(table_name, column_schemas)
+            if missing:
+                raise NullInNotNullColumnException(
+                    relation.namespace, table_name, missing
+                )
+            not_null_columns = [
+                relation.columns[i].name
+                for i in included_indices
+                if i not in key_indices
+                and column_schemas[relation.columns[i].name].get("nullable") is False
+            ]
+
+        self._emitted_columns[table_name] = column_schemas
         self.relations[relation.relation_id] = RelationSchema(
             relation_id=relation.relation_id,
             schema_name=relation.namespace,
@@ -975,6 +1108,7 @@ class MessageConsumer:
             column_schemas=column_schemas,
             write_disposition=write_disposition,
             skip=skip,
+            not_null_columns=not_null_columns,
         )
 
     def process_change(self, payload: bytes, data_start: int) -> None:
@@ -1009,6 +1143,69 @@ class MessageConsumer:
                     relation.schema_name, relation.table_name, missing
                 )
         self._add_row(segment, new_values, data_start, None)
+
+    def _keep_destination_type(
+        self, relation: Relation, column_schema: TColumnSchema, pg_type: PgType
+    ) -> None:
+        """Replaces the inferred type with the type of the column loaded before, if any.
+
+        Raises `IncompatibleColumnTypeException` if a value of `pg_type` may not fit it.
+        """
+        existing = self._existing_column(relation.relation_name, column_schema["name"])
+        if not existing or "data_type" not in existing:
+            return
+        if not column_type_fits(existing, pg_type, self.decimal_precision):
+            raise IncompatibleColumnTypeException(
+                relation.namespace,
+                relation.relation_name,
+                column_schema["name"],
+                format_column_type(existing),
+                format_column_type(to_dlt_column_type(pg_type, "full_with_precision")),
+                dict(to_dlt_column_type(pg_type, self.reflection_level)),
+            )
+        schema = cast(Dict[str, Any], column_schema)
+        for hint in (*COLUMN_TYPE_HINTS, "nullable"):
+            schema.pop(hint, None)
+            if hint in existing:
+                schema[hint] = existing[hint]  # type: ignore[literal-required]
+
+    def _existing_column(
+        self, table_name: str, column_name: str
+    ) -> Optional[TColumnSchema]:
+        """Returns the column emitted earlier in this run or in `destination_schema`."""
+        if table_name in self._emitted_columns:
+            return self._emitted_columns[table_name].get(column_name)
+        if existing := self._existing_table(table_name):
+            schema, columns = existing
+            return columns.get(schema.naming.normalize_identifier(column_name))
+        return None
+
+    def _existing_table(
+        self, table_name: str
+    ) -> Optional[Tuple[Schema, TTableSchemaColumns]]:
+        """Returns the columns of `table_name` in `destination_schema`, None if not loaded."""
+        schema = self.destination_schema
+        if schema is None:
+            return None
+        table = schema.tables.get(schema.naming.normalize_table_identifier(table_name))
+        return None if table is None else (schema, table["columns"])
+
+    def _missing_not_null_columns(
+        self, table_name: str, column_schemas: TTableSchemaColumns
+    ) -> List[str]:
+        """Returns NOT NULL columns of the destination table that get no values."""
+        existing = self._existing_table(table_name)
+        if existing is None:
+            return []
+        schema, columns = existing
+        emitted = {schema.naming.normalize_identifier(name) for name in column_schemas}
+        return [
+            name
+            for name, column in columns.items()
+            if column.get("nullable") is False
+            and name not in emitted
+            and not name.startswith(DLT_NAME_PREFIX)
+        ]
 
     def take_batch(self) -> List[Segment]:
         segments = self.segments
@@ -1063,7 +1260,10 @@ def segment_to_rows(segment: Segment) -> List[TDataItem]:
         _DUMMY_VALS[relation.column_schemas[name].get("data_type", "text")]
         for name in names
     ]
-    with_deletes = "deleted_ts" in relation.column_schemas
+    with_deletes = DELETED_TS in relation.column_schemas
+    hard_delete = with_deletes and bool(
+        relation.column_schemas[DELETED_TS].get("hard_delete")
+    )
     rows: List[TDataItem] = []
 
     def _to_row(values: TupleValues) -> Dict[str, Any]:
@@ -1083,16 +1283,47 @@ def segment_to_rows(segment: Segment) -> List[TDataItem]:
     ):
         row = _to_row(values)
         row["lsn"] = lsn
-        if deleted_ts is not None:
+        if deleted_ts is not None and hard_delete:
             # replace NULLs to prevent NOT NULL violations in staging table
             for name, dummy in zip(names, dummies):
                 if row[name] is None:
                     row[name] = dummy
-            row["deleted_ts"] = deleted_ts
-        elif with_deletes:
-            row["deleted_ts"] = None
+        if with_deletes:
+            row[DELETED_TS] = deleted_ts
         rows.append(row)
+    if nulls := [
+        name
+        for name in relation.not_null_columns
+        if any(row[name] is None for row in rows)
+    ]:
+        raise NullInNotNullColumnException(
+            relation.schema_name, relation.table_name, nulls
+        )
     return rows
+
+
+def get_destination_schema(
+    snapshot_pipeline: Optional[dlt.Pipeline], first_run: bool
+) -> Optional[Schema]:
+    """Returns the schema of the tables loaded before, None outside of a pipeline run.
+
+    The first replication run takes the schema of `snapshot_pipeline` if given. Later runs take
+    the schema of the running pipeline, which has the replicated tables by then.
+    """
+    if first_run and snapshot_pipeline is not None:
+        if not snapshot_pipeline.default_schema_name:
+            raise SnapshotSchemaNotFoundException(snapshot_pipeline.pipeline_name)
+        return snapshot_pipeline.default_schema
+    container = Container()
+    if (
+        not container[PipelineContext].is_active()
+        or SourceSchemaInjectableContext not in container
+    ):
+        return None
+    pipeline = dlt.current.pipeline()
+    # the source schema of a resource is a copy without data tables
+    schema_name = dlt.current.source_schema().name
+    return pipeline.schemas[schema_name] if schema_name in pipeline.schemas else None
 
 
 class ChangesBatch(NamedTuple):
@@ -1111,6 +1342,10 @@ def stream_changes(
     columns: Optional[Mapping[str, TTableSchemaColumns]] = None,
     flush_slot: bool = True,
     backend: TBackend = "python",
+    reflection_level: TReflectionLevel = "full",
+    reflect_not_null: bool = False,
+    destination_schema: Optional[Schema] = None,
+    hard_delete: bool = True,
 ) -> Iterator[ChangesBatch]:
     """Streams changes from the slot until the WAL position flushed at the start is reached.
 
@@ -1118,7 +1353,12 @@ def stream_changes(
     `start_lsn` at the start, i.e. changes of the previous run are discarded only when a
     pipeline run with the state containing `start_lsn` succeeded. The last batch has the
     position up to which all changes were received, also when none were published.
+    Columns loaded before keep their types, found in `destination_schema`.
     """
+    caps = (
+        Container().get(DestinationCapabilitiesContext)
+        or DestinationCapabilitiesContext.generic_capabilities()
+    )
     if backend == "pyarrow":
         from .arrow_helpers import segment_to_arrow
 
@@ -1155,6 +1395,13 @@ def stream_changes(
             columns=columns,
             resolve_type=catalog.resolve_type,
             resolve_primary_key=catalog.get_primary_key,
+            reflection_level=reflection_level,
+            destination_schema=destination_schema,
+            decimal_precision=caps.decimal_precision
+            or (DEFAULT_NUMERIC_PRECISION, DEFAULT_NUMERIC_SCALE),
+            reflect_not_null=reflect_not_null,
+            resolve_not_null=catalog.get_not_null_columns,
+            hard_delete=hard_delete,
         )
 
         def _batch(lsn: int) -> ChangesBatch:

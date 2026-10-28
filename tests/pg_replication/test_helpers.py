@@ -8,10 +8,15 @@ import pytest
 import psycopg2
 
 from dlt.common import Decimal
+from dlt.common.schema import Schema
+from dlt.common.schema.typing import TTableSchemaColumns
+from dlt.common.schema.utils import new_table
 from dlt.sources.credentials import ConnectionStringCredentials
 
 from sources.pg_replication.exceptions import (
+    IncompatibleColumnTypeException,
     NoPrimaryKeyException,
+    NullInNotNullColumnException,
     UnchangedToastException,
 )
 from sources.pg_replication.helpers import (
@@ -20,6 +25,7 @@ from sources.pg_replication.helpers import (
     segment_to_rows,
     stream_changes,
 )
+from sources.pg_replication.schema_types import TReflectionLevel
 
 with open(
     os.path.join(os.path.dirname(__file__), "pgoutput_messages.json"), encoding="utf-8"
@@ -152,25 +158,178 @@ def test_captured_messages(scenario: str, backend: str) -> None:
         rows = []
         for row in load_segment(segment, backend):
             assert row.pop("lsn") in lsns
-            if row.pop("deleted_ts", None) is not None:
+            if row.pop("_dlt_deleted_ts", None) is not None:
                 row["deleted"] = True
             rows.append(row)
         loaded.append((segment.relation.table_name, rows))
     assert loaded == EXPECTED_SEGMENTS[scenario]
 
 
-def test_column_hints() -> None:
-    (segment,) = consume("basic").take_batch()
+@pytest.mark.parametrize("reflection_level", ["full", "full_with_precision"])
+def test_column_hints(reflection_level: TReflectionLevel) -> None:
+    (segment,) = consume("basic", reflection_level=reflection_level).take_batch()
     schema = segment.relation.column_schemas
     assert schema["id"] == {"name": "id", "data_type": "bigint", "primary_key": True}
     assert schema["amount"]["precision"] == 10 and schema["amount"]["scale"] == 2
     assert schema["ts"]["timezone"] is True
     assert schema["tags"]["data_type"] == "json"
     assert schema["mood"]["data_type"] == "text"
-    assert schema["note"]["precision"] == 20
+    if reflection_level == "full":
+        assert "precision" not in schema["note"]
+    else:
+        assert schema["note"]["precision"] == 20
     assert schema["lsn"]["dedup_sort"] == "desc"
-    assert schema["deleted_ts"]["hard_delete"] is True
+    assert schema["_dlt_deleted_ts"]["hard_delete"] is True
     assert segment.relation.write_disposition == "merge"
+
+
+def destination_schema(columns: TTableSchemaColumns) -> Schema:
+    """Returns a schema with the `items` table loaded before with `columns`."""
+    schema = Schema("snapshot")
+    columns = {
+        "_dlt_load_id": {
+            "name": "_dlt_load_id",
+            "data_type": "text",
+            "nullable": False,
+        },
+        "_dlt_id": {"name": "_dlt_id", "data_type": "text", "nullable": False},
+        **columns,
+    }
+    schema.update_table(new_table("items", columns=list(columns.values())))
+    return schema
+
+
+def test_columns_keep_destination_types() -> None:
+    schema = destination_schema(
+        {
+            "amount": {"name": "amount", "data_type": "decimal"},
+            "note": {"name": "note", "data_type": "text", "precision": 50},
+        }
+    )
+    (segment,) = consume(
+        "basic", reflection_level="full_with_precision", destination_schema=schema
+    ).take_batch()
+    columns = segment.relation.column_schemas
+    assert columns["amount"] == {
+        "name": "amount",
+        "data_type": "decimal",
+        "primary_key": False,
+    }
+    assert columns["note"]["precision"] == 50
+    # not loaded before, so inferred
+    assert columns["mood"] == {
+        "name": "mood",
+        "data_type": "text",
+        "primary_key": False,
+    }
+
+
+def test_column_type_that_does_not_fit_raises() -> None:
+    schema = destination_schema(
+        {
+            "amount": {
+                "name": "amount",
+                "data_type": "decimal",
+                "precision": 5,
+                "scale": 1,
+            }
+        }
+    )
+    with pytest.raises(IncompatibleColumnTypeException) as exc:
+        consume("basic", destination_schema=schema)
+    assert exc.value.column_name == "amount"
+    assert exc.value.destination_type == "decimal(5,1)"
+    assert exc.value.new_type == "decimal(10,2)"
+    suggested = {
+        "items": {"amount": {"data_type": "decimal", "precision": 10, "scale": 2}}
+    }
+    assert exc.value.columns == suggested
+    assert f"`columns={suggested!r}`" in str(exc.value)
+    # the suggested `columns` load the new type
+    (segment,) = consume(
+        "basic", destination_schema=schema, columns=suggested
+    ).take_batch()
+    amount = segment.relation.column_schemas["amount"]
+    assert (amount["precision"], amount["scale"]) == (10, 2)
+
+
+def test_legacy_deleted_ts_loses_hard_delete() -> None:
+    schema = destination_schema(
+        {
+            "deleted_ts": {
+                "name": "deleted_ts",
+                "data_type": "timestamp",
+                "hard_delete": True,
+            }
+        }
+    )
+    (segment,) = consume("basic", destination_schema=schema).take_batch()
+    columns = segment.relation.column_schemas
+    assert columns["deleted_ts"] == {"name": "deleted_ts", "hard_delete": False}
+    assert columns["_dlt_deleted_ts"]["hard_delete"] is True
+
+
+def test_not_null_column_without_values_raises() -> None:
+    schema = destination_schema(
+        {"old_name": {"name": "old_name", "data_type": "text", "nullable": False}}
+    )
+    with pytest.raises(NullInNotNullColumnException) as exc:
+        consume("basic", destination_schema=schema)
+    assert exc.value.column_names == ["old_name"]
+    # the user made the destination column nullable
+    consume(
+        "basic",
+        destination_schema=schema,
+        columns={"items": {"old_name": {"nullable": True}}},
+    )
+
+
+@pytest.mark.parametrize("backend", ["python", "pyarrow"])
+def test_null_in_not_null_column_raises(backend: str) -> None:
+    if backend == "pyarrow":
+        pytest.importorskip("pyarrow")
+    schema = destination_schema(
+        {"note": {"name": "note", "data_type": "text", "nullable": False}}
+    )
+    (segment,) = consume("basic", destination_schema=schema).take_batch()
+    assert segment.relation.not_null_columns == ["note"]
+    # the second insert has NULL in all columns but the key
+    with pytest.raises(NullInNotNullColumnException) as exc:
+        load_segment(segment, backend)
+    assert exc.value.column_names == ["note"]
+
+
+def test_reflect_not_null_in_new_tables() -> None:
+    def not_null(relation_id: int) -> List[str]:
+        return ["id", "name"]
+
+    (segment,) = consume(
+        "basic", reflect_not_null=True, resolve_not_null=not_null
+    ).take_batch()
+    assert segment.relation.column_schemas["name"]["nullable"] is False
+    assert segment.relation.not_null_columns == ["name"]
+    # a NOT NULL column can't be added to a table loaded before
+    schema = destination_schema({"id": {"name": "id", "data_type": "bigint"}})
+    (segment,) = consume(
+        "basic",
+        reflect_not_null=True,
+        resolve_not_null=not_null,
+        destination_schema=schema,
+    ).take_batch()
+    assert "nullable" not in segment.relation.column_schemas["name"]
+
+
+@pytest.mark.parametrize("backend", ["python", "pyarrow"])
+def test_soft_delete(backend: str) -> None:
+    if backend == "pyarrow":
+        pytest.importorskip("pyarrow")
+    (segment,) = consume("basic", hard_delete=False).take_batch()
+    assert "hard_delete" not in segment.relation.column_schemas["_dlt_deleted_ts"]
+    (deleted,) = [
+        row for row in load_segment(segment, backend) if row.get("_dlt_deleted_ts")
+    ]
+    # a key-only delete keeps NULLs, no dummy values
+    assert {name: deleted[name] for name in ITEM} == {**dict.fromkeys(ITEM), "id": 2}
 
 
 def test_unchanged_toast_from_full_old_tuple() -> None:

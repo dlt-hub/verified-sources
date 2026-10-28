@@ -3,7 +3,7 @@ import pytest
 import threading
 from contextlib import closing
 from datetime import datetime, timezone
-from typing import Any, Dict, List, Set, Tuple
+from typing import Any, Dict, List, Optional, Set, Tuple
 from copy import deepcopy
 import psycopg2
 import sqlalchemy
@@ -23,15 +23,14 @@ from tests.utils import (
     load_table_counts,
     get_table_metrics,
 )
-from sources.pg_replication import helpers, replication_resource
-from sources.pg_replication.helpers import (
-    init_replication,
-    get_pg_version,
-)
+from sources.pg_replication import helpers, init_replication, replication_resource
+from sources.pg_replication.helpers import get_pg_version
 from sources.pg_replication.exceptions import (
+    IncompatibleColumnTypeException,
     IncompatiblePostgresVersionException,
     NoPrimaryKeyException,
 )
+from sources.pg_replication.schema_types import TReflectionLevel
 
 from .cases import (
     PG_TYPES_DDL,
@@ -1494,12 +1493,14 @@ def test_exclude_unchanged_toast_columns(
         ("direct", "pyarrow"),
     ],
 )
+@pytest.mark.parametrize("reflection_level", ["full", "full_with_precision"])
 def test_snapshot_types_match_replication(
     src_config: Tuple[dlt.Pipeline, str, str],
     monkeypatch: pytest.MonkeyPatch,
     initial_snapshot: str,
     backend: str,
     session_options: str,
+    reflection_level: TReflectionLevel,
 ) -> None:
     src_pl, slot_name, pub_name = src_config
     if session_options:
@@ -1521,6 +1522,7 @@ def test_snapshot_types_match_replication(
         "items",
         initial_snapshot=initial_snapshot,
         backend=backend,
+        reflection_level=reflection_level,
     )
     run_sql(src_pl, f"INSERT INTO {{schema}}.items VALUES {PG_TYPES_ROW.format(id=2)};")
 
@@ -1534,7 +1536,11 @@ def test_snapshot_types_match_replication(
     if initial_snapshot == "direct":
         assert snapshot.closed
     assert_load_info(
-        changes_pl.run(replication_resource(slot_name, pub_name, backend=backend))
+        changes_pl.run(
+            replication_resource(
+                slot_name, pub_name, backend=backend, reflection_level=reflection_level
+            )
+        )
     )
 
     snapshot_columns = snapshot_pl.default_schema.get_table_columns("items")
@@ -1636,6 +1642,363 @@ def test_unbounded_numeric_with_precision_hint(
     ]
 
 
+TYPE_CHANGES = {
+    "int_to_bigint": ("n", "bigint", "9000000000", 9000000000),
+    "varchar_longer": ("v", "varchar(50)", "'longer than five'", "longer than five"),
+    "jsonb_to_json": ("j", "json", "'[1]'", None),
+    "numeric_more_scale": ("m", "numeric(6,3)", "1.125", Decimal("1.125")),
+    "int_to_numeric": ("n", "numeric(12,2)", "1.5", Decimal("1.5")),
+    "int_to_text": ("n", "text", "'six'", "six"),
+    "timestamp_to_timestamptz": (
+        "ts",
+        "timestamptz",
+        "'2024-01-02 10:11:12+00'",
+        datetime(2024, 1, 2, 10, 11, 12, tzinfo=timezone.utc),
+    ),
+}
+"""Column, new type, inserted literal and the loaded value, None if not compared."""
+
+TYPE_CHANGES_THAT_DO_NOT_FIT = [
+    ("varchar_longer", "full_with_precision"),
+    ("numeric_more_scale", "full"),
+    ("int_to_numeric", "full"),
+    ("int_to_text", "full"),
+    ("timestamp_to_timestamptz", "full"),
+]
+
+
+def snapshot_then_change_type(
+    src_config: Tuple[dlt.Pipeline, str, str],
+    destination_name: str,
+    change: str,
+    reflection_level: TReflectionLevel,
+) -> dlt.Pipeline:
+    """Loads a snapshot of `events`, then changes the type of a column and inserts a row."""
+    src_pl, slot_name, pub_name = src_config
+    column, new_type, literal, _ = TYPE_CHANGES[change]
+    create_tables(
+        src_pl,
+        "CREATE TABLE {schema}.events (id int PRIMARY KEY, n int, v varchar(5),"
+        " m numeric(7,2), j jsonb, ts timestamp);",
+        "INSERT INTO {schema}.events VALUES (1, 1, 'one', 1.25, '{\"a\": 1}', '2024-01-01');",
+    )
+    snapshot = init_replication(
+        slot_name,
+        pub_name,
+        src_pl.dataset_name,
+        "events",
+        initial_snapshot="direct",
+        reflection_level=reflection_level,
+    )
+    dest_pl = dlt.pipeline(
+        pipeline_name="dest_pl", destination=destination_name, dev_mode=True
+    )
+    assert_load_info(dest_pl.run(snapshot))
+    run_sql(
+        src_pl,
+        f"ALTER TABLE {{schema}}.events ALTER COLUMN {column} TYPE {new_type}"
+        f" USING {column}::{new_type};",
+        f"INSERT INTO {{schema}}.events (id, {column}) VALUES (2, {literal});",
+    )
+    return dest_pl
+
+
+@pytest.mark.parametrize("destination_name", ALL_DESTINATIONS)
+@pytest.mark.parametrize(
+    "change,reflection_level,fits",
+    [
+        ("int_to_bigint", "full", True),
+        ("varchar_longer", "full", True),
+        ("jsonb_to_json", "full", True),
+    ]
+    + [(change, level, False) for change, level in TYPE_CHANGES_THAT_DO_NOT_FIT],
+)
+def test_column_type_change(
+    src_config: Tuple[dlt.Pipeline, str, str],
+    destination_name: str,
+    change: str,
+    reflection_level: TReflectionLevel,
+    fits: bool,
+) -> None:
+    _, slot_name, pub_name = src_config
+    column, _, _, value = TYPE_CHANGES[change]
+    dest_pl = snapshot_then_change_type(
+        src_config, destination_name, change, reflection_level
+    )
+    snapshot_column = dest_pl.default_schema.get_table_columns("events")[column]
+    changes = replication_resource(
+        slot_name, pub_name, reflection_level=reflection_level
+    )
+    if fits:
+        assert_load_info(dest_pl.run(changes))
+        loaded_column = dest_pl.default_schema.get_table_columns("events")[column]
+        for hint in ("data_type", "precision", "scale", "timezone"):
+            assert loaded_column.get(hint) == snapshot_column.get(hint)  # type: ignore[misc]
+        if value is not None:
+            assert table_rows(dest_pl, "events", ["id", column])[-1] == (2, value)
+        return
+    # stops before loading, also in the next run
+    for _ in range(2):
+        with pytest.raises(PipelineStepFailed) as exc:
+            dest_pl.run(changes)
+        assert "does not fit the destination column" in str(exc.value)
+        assert load_table_counts(dest_pl, "events") == {"events": 1}
+    assert_load_info(
+        dest_pl.run(
+            replication_resource(
+                slot_name, pub_name, exclude_columns={"events": [column]}
+            )
+        )
+    )
+    assert table_rows(dest_pl, "events", ["id"]) == [(1,), (2,)]
+
+
+@pytest.mark.parametrize("change,reflection_level", TYPE_CHANGES_THAT_DO_NOT_FIT)
+def test_column_type_change_with_suggested_columns(
+    src_config: Tuple[dlt.Pipeline, str, str],
+    change: str,
+    reflection_level: TReflectionLevel,
+) -> None:
+    src_pl, slot_name, pub_name = src_config
+    column, _, literal, value = TYPE_CHANGES[change]
+    dest_pl = snapshot_then_change_type(src_config, "duckdb", change, reflection_level)
+    with pytest.raises(PipelineStepFailed) as exc:
+        dest_pl.run(
+            replication_resource(slot_name, pub_name, reflection_level=reflection_level)
+        )
+    cause = exc.value.exception.__cause__
+    assert isinstance(cause, IncompatibleColumnTypeException)
+    suggested = cause.columns
+    # do what the message says: change the destination column, pass the suggested `columns`
+    with dest_pl.destination_client() as client:
+        db_type = client.type_mapper.to_destination_type(  # type: ignore[attr-defined]
+            {"name": column, **suggested["events"][column]},
+            dest_pl.default_schema.get_table("events"),
+        )
+    with dest_pl.sql_client() as c:
+        c.execute_sql(
+            f"ALTER TABLE {c.make_qualified_table_name('events')} ALTER COLUMN"
+            f" {c.escape_column_name(column)} TYPE {db_type};"
+        )
+        # merge loads into the staging table first, it is created again with the new type
+        with c.with_staging_dataset():
+            c.drop_tables("events")
+    assert_load_info(
+        dest_pl.run(
+            replication_resource(
+                slot_name,
+                pub_name,
+                reflection_level=reflection_level,
+                columns=suggested,
+            )
+        )
+    )
+    assert table_rows(dest_pl, "events", ["id", column])[-1] == (2, value)
+    # later runs keep the new type without the hint
+    run_sql(
+        src_pl, f"INSERT INTO {{schema}}.events (id, {column}) VALUES (3, {literal});"
+    )
+    assert_load_info(
+        dest_pl.run(
+            replication_resource(slot_name, pub_name, reflection_level=reflection_level)
+        )
+    )
+    assert table_rows(dest_pl, "events", ["id", column])[-1] == (3, value)
+
+
+def test_snapshot_in_other_pipeline(src_config: Tuple[dlt.Pipeline, str, str]) -> None:
+    src_pl, slot_name, pub_name = src_config
+    create_tables(
+        src_pl,
+        "CREATE TABLE {schema}.events (id int PRIMARY KEY, n int);",
+        "INSERT INTO {schema}.events VALUES (1, 1);",
+    )
+    snapshot = init_replication(
+        slot_name, pub_name, src_pl.dataset_name, "events", initial_snapshot="direct"
+    )
+    snapshot_pl = dlt.pipeline(
+        pipeline_name="snapshot_pl", destination="duckdb", dev_mode=True
+    )
+    assert_load_info(snapshot_pl.run(snapshot))
+    # the type changes before the first replication run
+    run_sql(
+        src_pl,
+        "ALTER TABLE {schema}.events ALTER COLUMN n TYPE text;",
+        "INSERT INTO {schema}.events VALUES (2, 'two');",
+    )
+    empty_pl = dlt.pipeline(
+        pipeline_name="empty_pl", destination="duckdb", dev_mode=True
+    )
+    changes_pl = dlt.pipeline(
+        pipeline_name="changes_pl", destination="duckdb", dev_mode=True
+    )
+    with pytest.raises(PipelineStepFailed, match="sync_destination"):
+        changes_pl.run(
+            replication_resource(slot_name, pub_name, snapshot_pipeline=empty_pl)
+        )
+    with pytest.raises(PipelineStepFailed, match="does not fit the destination column"):
+        changes_pl.run(
+            replication_resource(slot_name, pub_name, snapshot_pipeline=snapshot_pl)
+        )
+    # without the snapshot schema the types come from the Relation message
+    assert_load_info(changes_pl.run(replication_resource(slot_name, pub_name)))
+    assert (
+        changes_pl.default_schema.get_table_columns("events")["n"]["data_type"]
+        == "text"
+    )
+    # only the first run takes the types from the snapshot pipeline
+    run_sql(src_pl, "INSERT INTO {schema}.events VALUES (3, 'three');")
+    assert_load_info(
+        changes_pl.run(
+            replication_resource(slot_name, pub_name, snapshot_pipeline=snapshot_pl)
+        )
+    )
+    assert table_rows(changes_pl, "events", ["id", "n"])[-1] == (3, "three")
+
+
+@pytest.mark.parametrize("initial_snapshot", [None, "table", "direct"])
+@pytest.mark.parametrize(
+    "reflect_not_null,change,stops",
+    [
+        (False, "rename", False),
+        (True, "rename", True),
+        (True, "drop_not_null", True),
+    ],
+)
+def test_not_null(
+    src_config: Tuple[dlt.Pipeline, str, str],
+    initial_snapshot: Optional[str],
+    reflect_not_null: bool,
+    change: str,
+    stops: bool,
+) -> None:
+    src_pl, slot_name, pub_name = src_config
+    create_tables(
+        src_pl,
+        "CREATE TABLE {schema}.items (id int PRIMARY KEY, a text NOT NULL, b int);",
+        "INSERT INTO {schema}.items VALUES (1, 'one', 1);",
+    )
+    snapshot = init_replication(
+        slot_name,
+        pub_name,
+        src_pl.dataset_name,
+        "items",
+        initial_snapshot=initial_snapshot,
+        reflect_not_null=reflect_not_null,
+    )
+    dest_pl = dlt.pipeline(pipeline_name="dest_pl", destination="duckdb", dev_mode=True)
+    changes = replication_resource(
+        slot_name, pub_name, reflect_not_null=reflect_not_null
+    )
+    if initial_snapshot:
+        assert_load_info(dest_pl.run(snapshot))
+    else:
+        # the replication creates the table
+        run_sql(src_pl, "UPDATE {schema}.items SET b = 2 WHERE id = 1;")
+        assert_load_info(dest_pl.run(changes))
+    columns = dest_pl.default_schema.get_table_columns("items")
+    assert columns["a"].get("nullable", True) is not reflect_not_null
+    if change == "rename":
+        run_sql(
+            src_pl,
+            "ALTER TABLE {schema}.items RENAME COLUMN a TO c;",
+            "INSERT INTO {schema}.items VALUES (2, 'two', 2);",
+        )
+    else:
+        run_sql(
+            src_pl,
+            "ALTER TABLE {schema}.items ALTER COLUMN a DROP NOT NULL;",
+            "INSERT INTO {schema}.items VALUES (2, NULL, 2);",
+        )
+    if stops:
+        with pytest.raises(PipelineStepFailed, match="are NOT NULL in the destination"):
+            dest_pl.run(changes)
+        assert load_table_counts(dest_pl, "items") == {"items": 1}
+    else:
+        assert_load_info(dest_pl.run(changes))
+        assert table_rows(dest_pl, "items", ["id", "a", "c"]) == [
+            (1, "one", None),
+            (2, None, "two"),
+        ]
+
+
+@pytest.mark.parametrize("backend", ["python", "pyarrow"])
+@pytest.mark.parametrize("replica_identity", ["default", "full"])
+def test_soft_delete(
+    src_config: Tuple[dlt.Pipeline, str, str], replica_identity: str, backend: str
+) -> None:
+    src_pl, slot_name, pub_name = src_config
+    create_tables(
+        src_pl,
+        "CREATE TABLE {schema}.items (id int PRIMARY KEY, a text, b int);",
+        f"ALTER TABLE {{schema}}.items REPLICA IDENTITY {replica_identity.upper()};",
+        "INSERT INTO {schema}.items VALUES (1, 'one', 1), (2, 'two', 2);",
+    )
+    snapshot = init_replication(
+        slot_name,
+        pub_name,
+        src_pl.dataset_name,
+        "items",
+        initial_snapshot="direct",
+        backend=backend,
+    )
+    dest_pl = dlt.pipeline(pipeline_name="dest_pl", destination="duckdb", dev_mode=True)
+    assert_load_info(dest_pl.run(snapshot))
+    run_sql(
+        src_pl,
+        "DELETE FROM {schema}.items WHERE id = 1;",
+        "UPDATE {schema}.items SET id = 20 WHERE id = 2;",
+    )
+    assert_load_info(
+        dest_pl.run(
+            replication_resource(
+                slot_name, pub_name, hard_delete=False, backend=backend
+            )
+        )
+    )
+    rows = [
+        (row[0], row[1], row[2], row[3] is not None)
+        for row in table_rows(dest_pl, "items", ["id", "a", "b", "_dlt_deleted_ts"])
+    ]
+    if replica_identity == "full":
+        # deletes keep the last values
+        assert rows == [(1, "one", 1, True), (2, "two", 2, True), (20, "two", 2, False)]
+    else:
+        assert rows == [
+            (1, None, None, True),
+            (2, None, None, True),
+            (20, "two", 2, False),
+        ]
+
+
+def test_legacy_deleted_ts_column(src_config: Tuple[dlt.Pipeline, str, str]) -> None:
+    src_pl, slot_name, pub_name = src_config
+    create_tables(src_pl, "CREATE TABLE {schema}.items (id int PRIMARY KEY, a text);")
+    init_replication(slot_name, pub_name, src_pl.dataset_name, "items")
+    dest_pl = dlt.pipeline(pipeline_name="dest_pl", destination="duckdb", dev_mode=True)
+    # earlier versions of the source marked deletes in `deleted_ts`
+    dest_pl.run(
+        [{"id": 1, "a": "one", "lsn": 1, "deleted_ts": None}],
+        table_name="items",
+        write_disposition="merge",
+        primary_key="id",
+        columns={
+            "lsn": {"data_type": "bigint", "dedup_sort": "desc"},
+            "deleted_ts": {"data_type": "timestamp", "hard_delete": True},
+        },
+    )
+    run_sql(
+        src_pl,
+        "INSERT INTO {schema}.items VALUES (1, 'one'), (2, 'two');",
+        "DELETE FROM {schema}.items WHERE id = 1;",
+    )
+    assert_load_info(dest_pl.run(replication_resource(slot_name, pub_name)))
+    assert table_rows(dest_pl, "items", ["id", "a"]) == [(2, "two")]
+    columns = dest_pl.default_schema.get_table_columns("items")
+    assert not columns["deleted_ts"].get("hard_delete")
+    assert columns["_dlt_deleted_ts"]["hard_delete"] is True
+
+
 @pytest.mark.parametrize(
     "initial_snapshot,backend",
     [
@@ -1682,7 +2045,7 @@ def test_append_log_table(
     table = dest_pl.default_schema.get_table("events")
     assert table["write_disposition"] == "append"
     assert not [name for name, c in table["columns"].items() if c.get("primary_key")]
-    assert "deleted_ts" not in table["columns"]
+    assert "_dlt_deleted_ts" not in table["columns"]
     assert "dedup_sort" not in table["columns"]["lsn"]
     hour = [datetime(2024, 1, 1, h, tzinfo=timezone.utc) for h in range(10, 13)]
     assert table_rows(dest_pl, "events", ["ts", "msg"], order_by="ts, msg") == [
