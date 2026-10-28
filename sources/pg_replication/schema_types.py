@@ -1,5 +1,5 @@
 import json
-from datetime import date, datetime, time, timedelta, timezone  # noqa: I251
+from datetime import date, datetime, time, timedelta, timezone
 from functools import partial
 from typing import Any, Callable, Dict, List, NamedTuple, Optional
 

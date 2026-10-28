@@ -2,7 +2,7 @@ import select
 import time
 from contextlib import closing
 from dataclasses import dataclass, field
-from datetime import datetime  # noqa: I251
+from datetime import datetime
 from typing import (
     Any,
     Callable,

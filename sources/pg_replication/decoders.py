@@ -4,7 +4,7 @@ https://www.postgresql.org/docs/current/protocol-logicalrep-message-formats.html
 """
 
 import struct
-from datetime import datetime, timedelta, timezone  # noqa: I251
+from datetime import datetime, timedelta, timezone
 from typing import Any, List, NamedTuple, Optional, Tuple
 
 _INT16 = struct.Struct(">h").unpack_from

@@ -1,7 +1,7 @@
 import json
 import os
 import sys
-from datetime import date, datetime, time, timedelta, timezone  # noqa: I251
+from datetime import date, datetime, time, timedelta, timezone
 from typing import Any, Dict, List, Optional, Tuple
 
 import pytest
