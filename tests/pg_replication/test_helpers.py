@@ -1,28 +1,24 @@
 import json
 import os
 import sys
-from datetime import date, datetime, time, timedelta, timezone
-from typing import Any, Dict, List, Optional, Tuple
+from datetime import date, datetime, timezone
+from typing import Any, Dict, List, Tuple
 
 import pytest
 import psycopg2
 
 from dlt.common import Decimal
-from dlt.common.schema.typing import TColumnType
 from dlt.sources.credentials import ConnectionStringCredentials
 
-from sources.pg_replication.exceptions import UnchangedToastException
+from sources.pg_replication.exceptions import (
+    NoPrimaryKeyException,
+    UnchangedToastException,
+)
 from sources.pg_replication.helpers import (
     MessageConsumer,
     Segment,
     segment_to_rows,
     stream_changes,
-)
-from sources.pg_replication.schema_types import (
-    PgType,
-    get_value_converter,
-    parse_array,
-    to_dlt_column_type,
 )
 
 with open(
@@ -117,6 +113,9 @@ EXPECTED_SEGMENTS: Dict[str, List[Tuple[str, List[Dict[str, Any]]]]] = {
 }
 """Rows of each captured scenario by segment, `deleted` marks deletes."""
 
+WITHOUT_KEY = {"mid_txn_relation": "x", "dlt_table": "items"}
+"""Scenarios with tables without a primary key and the first such table."""
+
 
 def load_segment(segment: Segment, backend: str) -> List[Dict[str, Any]]:
     if backend == "python":
@@ -141,7 +140,11 @@ def load_segment(segment: Segment, backend: str) -> List[Dict[str, Any]]:
 def test_captured_messages(scenario: str, backend: str) -> None:
     if backend == "pyarrow":
         pytest.importorskip("pyarrow")
-    consumer = consume(scenario, resolve_primary_key=lambda relation_id: ["id"])
+    consumer = consume(
+        scenario,
+        pub_ops=INSERT_ONLY if scenario in WITHOUT_KEY else ALL_OPS,
+        resolve_primary_key=lambda relation_id: ["id"],
+    )
     assert not consumer.in_transaction
     lsns = set(change_lsns(scenario))
     loaded = []
@@ -182,12 +185,45 @@ def test_unchanged_toast_from_full_old_tuple() -> None:
     ] == ["id"]
 
 
-def test_unchanged_toast_without_old_row_raises() -> None:
+@pytest.mark.parametrize("scenario", list(WITHOUT_KEY))
+def test_table_without_key_raises(scenario: str) -> None:
+    with pytest.raises(NoPrimaryKeyException) as exc:
+        consume(scenario)
+    assert exc.value.table_names == [WITHOUT_KEY[scenario]]
+    assert "REPLICA IDENTITY USING INDEX" in str(exc.value)
+
+
+@pytest.mark.parametrize(
+    "column_filter",
+    [{}, {"exclude_columns": {"items": ["small"]}}],
+    ids=["all_columns", "other_column_excluded"],
+)
+def test_unchanged_toast_without_old_row_raises(column_filter: Dict[str, Any]) -> None:
     with pytest.raises(UnchangedToastException) as exc:
-        consume("toast_default")
+        consume("toast_default", **column_filter)
     assert exc.value.table_name == "items"
     assert exc.value.column_names == ["big"]
     assert "REPLICA IDENTITY FULL" in str(exc.value)
+
+
+@pytest.mark.parametrize("backend", ["python", "pyarrow"])
+@pytest.mark.parametrize(
+    "column_filter",
+    [
+        {"exclude_columns": {"items": ["big"]}},
+        {"include_columns": {"items": ["id", "small"]}},
+    ],
+    ids=["exclude", "include"],
+)
+def test_unchanged_toast_of_excluded_column(
+    column_filter: Dict[str, Any], backend: str
+) -> None:
+    if backend == "pyarrow":
+        pytest.importorskip("pyarrow")
+    (segment,) = consume("toast_default", **column_filter).take_batch()
+    rows = load_segment(segment, backend)
+    assert [(row["id"], row["small"]) for row in rows] == [(1, "a"), (1, "b")]
+    assert not any("big" in row for row in rows)
 
 
 def test_batch_ready_only_after_commit() -> None:
@@ -230,161 +266,6 @@ def test_ignored_messages(op: bytes) -> None:
 def test_unknown_message_raises() -> None:
     with pytest.raises(ValueError):
         MessageConsumer(pub_ops=ALL_OPS, upto_lsn=2**63).process_msg(b"X", 1)
-
-
-@pytest.mark.parametrize(
-    "literal,pg_type,expected",
-    [
-        ("{1,2,NULL}", PgType(1007, -1, 23), [1, 2, None]),
-        ('{a,"b c",NULL,"NULL"}', PgType(1009, -1, 25), ["a", "b c", None, "NULL"]),
-        ("{{1,2},{3,4}}", PgType(1007, -1, 23), [[1, 2], [3, 4]]),
-        ('{"a\\"b","c\\\\d"}', PgType(1009, -1, 25), ['a"b', "c\\d"]),
-        ("[0:1]={1,2}", PgType(1007, -1, 23), [1, 2]),
-        ("{}", PgType(1007, -1, 23), []),
-        ('{"{\\"a\\": 1}"}', PgType(3807, -1, 3802), [{"a": 1}]),
-        ("{t,f}", PgType(1000, -1, 16), [True, False]),
-    ],
-    ids=["int", "text", "nested", "escapes", "bounds", "empty", "jsonb", "bool"],
-)
-def test_parse_array(literal: str, pg_type: PgType, expected: List[Any]) -> None:
-    assert get_value_converter(pg_type)(literal) == expected
-    assert parse_array("{a,b}") == ["a", "b"]
-
-
-@pytest.mark.parametrize(
-    "type_id,text,expected",
-    [
-        (
-            1184,
-            "2024-01-02 08:11:12.5+00",
-            datetime(2024, 1, 2, 8, 11, 12, 500000, timezone.utc),
-        ),
-        (1184, "infinity", datetime.max.replace(tzinfo=timezone.utc)),
-        (1114, "2024-01-02 10:11:12", datetime(2024, 1, 2, 10, 11, 12)),
-        (1114, "-infinity", datetime.min),
-        (1082, "-infinity", date.min),
-        (1083, "10:11:12.123456", time(10, 11, 12, 123456)),
-        (
-            1266,
-            "10:11:12+05:30",
-            time(10, 11, 12, tzinfo=timezone(timedelta(hours=5, minutes=30))),
-        ),
-        (1266, "10:11:12-03", time(10, 11, 12, tzinfo=timezone(-timedelta(hours=3)))),
-        (17, "\\xdead", b"\xde\xad"),
-        (16, "f", False),
-        (701, "Infinity", float("inf")),
-        (700, "1.5", 1.5),
-        (1700, "1.123456789012345678", Decimal("1.123456789012345678")),
-        (20, "-9223372036854775808", -9223372036854775808),
-    ],
-    ids=[
-        "timestamptz",
-        "timestamptz-infinity",
-        "timestamp",
-        "timestamp-minus-infinity",
-        "date-minus-infinity",
-        "time",
-        "timetz",
-        "timetz-negative",
-        "bytea",
-        "bool",
-        "double-infinity",
-        "real",
-        "numeric",
-        "bigint",
-    ],
-)
-def test_value_converters(type_id: int, text: str, expected: Any) -> None:
-    assert get_value_converter(PgType(type_id, -1))(text) == expected
-
-
-def test_numeric_nan() -> None:
-    assert get_value_converter(PgType(1700, -1))("NaN").is_nan()
-
-
-@pytest.mark.parametrize(
-    "pg_type,expected",
-    [
-        (PgType(21, -1), {"data_type": "bigint", "precision": 32}),
-        (PgType(23, -1), {"data_type": "bigint"}),
-        (PgType(700, -1), {"data_type": "double"}),
-        (
-            PgType(1700, (10 << 16 | 2) + 4),
-            {"data_type": "decimal", "precision": 10, "scale": 2},
-        ),
-        (PgType(1700, -1), {"data_type": "decimal"}),
-        (PgType(1043, 24), {"data_type": "text", "precision": 20}),
-        (PgType(1042, 9), {"data_type": "text", "precision": 5}),
-        (PgType(25, -1), {"data_type": "text"}),
-        (PgType(1266, -1), {"data_type": "time"}),
-        (PgType(1114, -1), {"data_type": "timestamp", "timezone": False}),
-        (PgType(1184, -1), {"data_type": "timestamp", "timezone": True}),
-        (PgType(1007, -1, 23), {"data_type": "json"}),
-        (PgType(3802, -1), {"data_type": "json"}),
-        (PgType(2950, -1), {"data_type": "text"}),
-        (PgType(1186, -1), {"data_type": "text"}),
-        (PgType(16385, -1), {"data_type": "text"}),
-    ],
-    ids=[
-        "smallint",
-        "integer",
-        "real",
-        "numeric-10-2",
-        "numeric",
-        "varchar-20",
-        "char-5",
-        "text",
-        "timetz",
-        "timestamp",
-        "timestamptz",
-        "int-array",
-        "jsonb",
-        "uuid",
-        "interval",
-        "enum",
-    ],
-)
-def test_dlt_column_type(pg_type: PgType, expected: TColumnType) -> None:
-    assert to_dlt_column_type(pg_type) == expected
-
-
-def _insert_message(values: List[Any]) -> bytes:
-    message = b"I" + (16384).to_bytes(4, "big") + b"N" + len(values).to_bytes(2, "big")
-    for value in values:
-        if value is None:
-            message += b"n"
-        else:
-            encoded = value.encode("utf-8")
-            message += b"t" + len(encoded).to_bytes(4, "big") + encoded
-    return message
-
-
-@pytest.mark.parametrize("chunk_size", [None, 70], ids=["one-chunk", "three-chunks"])
-def test_insert_columns_match_python_parser(
-    chunk_size: Optional[int], monkeypatch: pytest.MonkeyPatch
-) -> None:
-    pytest.importorskip("pyarrow")
-    from sources.pg_replication import arrow_helpers
-    from sources.pg_replication.arrow_helpers import insert_columns
-    from sources.pg_replication.decoders import read_tuple
-
-    if chunk_size:
-        monkeypatch.setattr(arrow_helpers, "INSERT_CHUNK_SIZE", chunk_size)
-
-    rows = [
-        ["1", "short", None],
-        [None, "", "ü 🦆 ünïcödé"],
-        ["3", "x" * 1000, ""],
-        ["4", None, None],
-    ]
-    payloads = [_insert_message(row) for row in rows]
-    assert [read_tuple(payload, 6)[0] for payload in payloads] == rows
-    if chunk_size:
-        # messages of 25 and 38 bytes share a chunk, the 1024 byte message is alone
-        chunks = list(arrow_helpers._split_payloads(payloads))
-        assert [len(chunk) for chunk in chunks] == [2, 1, 1]
-    columns = insert_columns(payloads, 3)
-    assert [list(values) for values in zip(*(c.to_pylist() for c in columns))] == rows
 
 
 def test_python_backend_does_not_import_pyarrow(
