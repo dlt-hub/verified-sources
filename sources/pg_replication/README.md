@@ -1,91 +1,113 @@
 # Postgres replication
-[Postgres](https://www.postgresql.org/) is one of the most popular relational database management systems. This verified source uses Postgres' replication functionality to efficiently process changes in tables (a process often referred to as _Change Data Capture_ or CDC). It uses [logical decoding](https://www.postgresql.org/docs/current/logicaldecoding.html) and the standard built-in `pgoutput` [output plugin](https://www.postgresql.org/docs/current/logicaldecoding-output-plugin.html).
 
-Resources that can be loaded using this verified source are:
+Maintenance notes of the [Postgres](https://www.postgresql.org/) replication source for developers
+and coding agents. The source reads changes of published tables from a replication slot with
+[logical decoding](https://www.postgresql.org/docs/current/logicaldecoding.html) and the built-in
+`pgoutput` plugin. Setup and usage are in the
+[dlt docs](https://dlthub.com/docs/dlt-ecosystem/verified-sources/pg_replication).
 
-| Name                 | Description                                     |
-|----------------------|-------------------------------------------------|
-| replication_resource | Load published messages from a replication slot |
-| init_replication     | Initialize replication and optionally return snapshot resources for initial data load  |
+## Changelog
 
-## Initialize the pipeline
+### 1.0.0
+**Upgrade**: install `dlt>=1.22.0` and `sqlalchemy>=1.4`. Existing pipelines then continue from
+the stored `last_commit_lsn` and their slot, no changes are missed or loaded again. Rows loaded
+before stay as the previous version wrote them until they change: `real`, `timetz`, array and
+domain columns keep the `text` type, with `timetz` and array values in the old format
+(`10:11:12+02`, `{1,2}`) next to the new one (`10:11:12+02:00`, `[1,2]`), and rows that primary
+key updates left under the old key stay. To reload with the new types, run
+`dlt pipeline <name> drop <slot_name>`, which drops the replicated tables and the state, then
+`init_replication` with `reset=True` and an initial snapshot, load the snapshot and run
+`replication_resource`.
+- **breaking** `replication_resource`: `real` columns load as `double`, `timetz` as `time`, arrays
+  as `json` and domains as their base type instead of `text`, the same as in snapshots
+- **breaking** `ItemGenerator`, `get_max_lsn` and `advance_slot` are removed, `MessageConsumer`
+  yields segments of changes
+- new `initial_snapshot` of `init_replication`: `"table"` copies the tables, `"unlogged_table"`
+  copies them without WAL, `"direct"` reads them with `sql_table` in the snapshot of the slot. Pass
+  the callbacks of the returned `ReplicationSnapshot` to your own `sql_table` or `sql_database`
+- new `backend="pyarrow"` of `replication_resource` and `init_replication`: inserts are decoded
+  with numpy into Arrow tables. Switching an existing pipeline changes how `_dlt_id` is created
+- changed: requires `dlt>=1.22.0`, declares `sqlalchemy>=1.4`
+- changed: `persist_snapshots=True` is deprecated, use `initial_snapshot="table"`
+- changed: an update that leaves a TOASTed value unchanged takes it from the old row with
+  `REPLICA IDENTITY FULL`, otherwise it stops the run with `UnchangedToastException` instead of a
+  decoding error. `init_replication` warns about published tables at risk
+- fixed: primary key updates left the row under the old key
+- fixed: runs reconnected for every batch (`replication slot ... is active for PID`) after an
+  unbounded peek of the slot (#702)
+- fixed: the position was stored only when the slot was drained, runs bounded by `add_limit` made
+  no progress (#703)
+- fixed: runs with `flush_slot=False` and no new changes hung
+- fixed: a schema change in the middle of a transaction loaded it twice or crashed the run
+- fixed: `Type`, `Origin` and logical messages crashed the run (#656)
+- fixed: snapshots of whole-schema publications decoded their own copies (#698), `interval`
+  columns failed snapshots, `REPLICA IDENTITY FULL` made all columns primary keys
+- fixed: `replication_resource` failed on Postgres 10 to 12, `(None,)` defaults (#700)
 
-```bash
-dlt init pg_replication duckdb
-```
+Versions before 1.0.0 were not numbered. Copies taken with `dlt init` have no `version.py`,
+`.dlt/.sources` records the repository commit they came from.
 
-This uses `duckdb` as destination, but you can choose any of the supported [destinations](https://dlthub.com/docs/dlt-ecosystem/destinations/).
+## Extension points
 
-## Set up user
+- A Postgres type: its dlt column type in `to_dlt_column_type` and its converter in `_CONVERTERS`
+  of `schema_types.py`, an array type in `_ARRAY_ELEMENT_TYPES`. Types outside `_KNOWN_TYPES` are
+  resolved from `pg_type` by `CatalogResolver`: domains as their base type, arrays as `json`,
+  others as `text`. Values Arrow cannot cast from text are converted in `to_castable_array` of
+  `arrow_helpers.py`. Add a column to `PG_TYPES_DDL` in `tests/pg_replication/cases.py`, so
+  `test_snapshot_types_match_replication` compares it with the snapshot.
+- A snapshot column type that `sql_table` reflects differently: `snapshot_type_adapter` of
+  `snapshot.py`.
+- A pgoutput message: its decoder in `decoders.py`, handled in `MessageConsumer.process_msg`.
+- A setting that formats values sent as text: `_SESSION_OPTIONS` of `helpers.py`.
 
-The Postgres user needs to have the `LOGIN` and `REPLICATION` attributes assigned:
+## Seeding
 
-```sql
-CREATE ROLE replication_user WITH LOGIN REPLICATION;
-```
+Tests create their tables in a schema of their own, with a publication and a slot per test. The
+credential-free tests in `test_helpers.py` decode pgoutput messages captured from Postgres 17:
 
-It also needs `CREATE` privilege on the database:
+1. Start Postgres with logical decoding, see [Tests](#tests).
+2. `uv run python -m tests.pg_replication.capture_messages` from the repository root rewrites
+   `tests/pg_replication/pgoutput_messages.json` with the messages of its `SCENARIOS`.
+3. Update `EXPECTED_SEGMENTS` of `test_helpers.py` when a scenario changes.
 
-```sql
-GRANT CREATE ON DATABASE dlt_data TO replication_user;
-```
+## Tests
 
-If not a superuser, the user must have ownership of the tables that need to be replicated:
+- Tests other than `test_helpers.py` need Postgres with `wal_level=logical` and a user with the
+  `REPLICATION` attribute in `sources.pg_replication.credentials`. `tests/postgres/docker-compose.yml`
+  starts one.
+- Whole-schema publication tests skip below Postgres 15. Other versions run in the same way, e.g.
+  `docker run -p 5434:5432 -e POSTGRES_USER=loader -e POSTGRES_PASSWORD=loader -e POSTGRES_DB=dlt_data postgres:12 -c wal_level=logical`.
 
-```sql
-ALTER TABLE your_table OWNER TO replication_user;  
-```
+## Operations
 
-
-### Set up RDS
-1. You must enable replication for RDS Postgres instance via **Parameter Group**: https://docs.aws.amazon.com/AmazonRDS/latest/UserGuide/USER_PostgreSQL.Replication.ReadReplicas.html
-2. `WITH LOGIN REPLICATION;` does not work on RDS, instead do:
-```sql
-GRANT rds_replication TO replication_user;
-```
-3. Do not fallback to non SSL connection by setting connection parameters:
-```toml
-sources.pg_replication.credentials="postgresql://loader:password@host.rds.amazonaws.com:5432/dlt_data?sslmode=require&connect_timeout=300"
-```
-
-
-## Replication details
-
-- Requires Postgres 10 or higher with `wal_level=logical`. Replicating a whole schema (no `table_names`) requires Postgres 15.
-- Each run reads changes committed before the run started. Bound long runs with `replication_resource(...).add_limit(max_time=3600)`, the next run continues where it stopped.
-- Updates that do not change a large (TOASTed) value do not send it, unless the table has `REPLICA IDENTITY FULL`. Without it such an update stops the replication with an error. `init_replication` warns about tables at risk.
-- `init_replication(initial_snapshot=...)` returns resources that load the tables as they were when the replication slot was created:
-  - `table`: copies into tables `_dlt_<table>_s_<snapshot>`, loaded any time later. Drop them after the initial load.
-  - `unlogged_table`: same, but the copies are not written to the WAL and are emptied if the server crashes before the load.
-  - `direct`: no copies. Load the returned resources in the same process right after `init_replication`. To configure each table yourself (query adapter, chunk size, hints), create `sql_table` resources with `engine_adapter_callback` and `type_adapter_callback` of the returned snapshot within `with init_replication(...) as snapshot:`.
-- `backend="pyarrow"` (in `init_replication` and `replication_resource`) decodes and loads much faster than the default `python` backend. Switching an existing pipeline changes how `_dlt_id` is created.
-
-## Add credentials
-1. Open `.dlt/secrets.toml`.
-2. Enter your Postgres credentials:
-
-    ```toml
-    [sources.pg_replication]
-    credentials="postgresql://replication_user:<<password>>@localhost:5432/dlt_data"
-    ```
-3. Enter credentials for your chosen destination as per the [docs](https://dlthub.com/docs/dlt-ecosystem/destinations/).
-
-## Run the pipeline
-
-1. Install the necessary dependencies by running the following command:
-
-   ```bash
-   pip install -r requirements.txt
-   ```
-
-1. Now the pipeline can be run by using the command:
-
-   ```bash
-   python pg_replication_pipeline.py
-   ```
-
-1. To make sure that everything is loaded as expected, use the command:
-
-   ```bash
-   dlt pipeline pg_replication_pipeline show
-   ```
+- **Versions**: Postgres 10 or higher. Whole-schema publications (`table_names=None`) need
+  Postgres 15. On a standby (Postgres 16+) a run ends at `pg_last_wal_replay_lsn()`.
+- **Runs**: a run opens one replication connection, starts at `last_commit_lsn` of the resource
+  state and stops at the first commit at or past the WAL position flushed when it started, or when
+  a keepalive passes that position outside a transaction. It requests a keepalive about every
+  second. A slot used by another connection is retried for 60 seconds. `add_limit(max_time=...)`
+  bounds long backlogs, the next run continues.
+- **Batches**: cut at a commit after `target_batch_size` changes, a transaction is never split.
+  `last_commit_lsn` is set before the last item of a batch is yielded. A run that reached the end
+  stores that position, so quiet publications do not hold back WAL.
+- **Slot**: the position stored by a run is confirmed with a standby status update at the start of
+  the next run, so the slot keeps changes until the run that loaded them succeeded. With
+  `flush_slot=False` nothing is confirmed, but psycopg2 confirms keepalive positions in runs
+  without changes. A slot ahead of the state, e.g. created again with `reset=True`, logs a warning
+  and the run starts from the slot.
+- **Types**: pgoutput sends values as text, formatted with the settings of `_SESSION_OPTIONS`.
+  Column types follow `sql_table` with `reflection_level="full_with_precision"`, so snapshots and
+  changes load the same columns. `interval` loads as text in both.
+- **TOAST**: Postgres sends a value stored out of line only when it changes or when the table has
+  `REPLICA IDENTITY FULL`. A merge would replace a missing value with `NULL`, so the run stops
+  with `UnchangedToastException` instead. Values are not read again from the table, that read
+  would see a newer row.
+- **Snapshots**: the `_dlt_<table>_s_<snapshot>` copies are not dropped. A direct snapshot holds
+  the replication connection that created the slot, and with it vacuum of the whole database,
+  until its last table is read, `close()` or the end of the `with` block. Tables added to a
+  publication later get no snapshot.
+- **Not replicated**: `TRUNCATE` logs a warning, `_dlt` tables of a schema publication are skipped.
+- **Performance**: 500k rows from a local Postgres 17 into `filesystem`: 173k rows/s with
+  `pyarrow`, 34k with `python`, 172k receiving messages without decoding, 23k before 1.0.0. Both
+  backends peak at about 240 MB. `pyarrow` decodes inserts in chunks of `INSERT_CHUNK_SIZE`
+  bytes of messages.
