@@ -52,7 +52,11 @@ from .decoders import (
     read_tuple,
     Relation,
 )
-from .exceptions import IncompatiblePostgresVersionException, UnchangedToastException
+from .exceptions import (
+    IncompatiblePostgresVersionException,
+    NoPrimaryKeyException,
+    UnchangedToastException,
+)
 from .schema_types import (
     _DUMMY_VALS,
     PgType,
@@ -110,6 +114,7 @@ def init_replication(
     publish: str = "insert, update, delete",
     persist_snapshots: bool = False,
     include_columns: Optional[Mapping[str, Sequence[str]]] = None,
+    exclude_columns: Optional[Mapping[str, Sequence[str]]] = None,
     columns: Optional[Mapping[str, TTableSchemaColumns]] = None,
     reset: bool = False,
     backend: TBackend = "python",
@@ -155,7 +160,11 @@ def init_replication(
               "table_y": ["col_x", "col_y", "col_z"],
           }
           ```
-          Argument is only used with `initial_snapshot`.
+          Pass the same columns to `replication_resource`.
+        exclude_columns (Optional[Dict[str, Sequence[str]]]): Maps table name(s) to
+          sequence of names of columns to exclude from the snapshot table(s), applied after
+          `include_columns`. Columns that are not included are left out of the warning about
+          TOASTed values. Pass the same columns to `replication_resource`.
         columns (Optional[Dict[str, TTableSchemaColumns]]): Maps
           table name(s) to column hints to apply on the snapshot table resource(s).
           For example:
@@ -202,13 +211,20 @@ def init_replication(
                 drop_replication_slot(slot_name, cur)
                 drop_publication(pub_name, cur)
             create_publication(pub_name, cur, publish)
+            pub_ops = get_pub_ops(pub_name, cur)
+            if pub_ops["update"] or pub_ops["delete"]:
+                # checked before the tables are published, Postgres would reject their updates
+                tables_without_key = get_tables_without_key(
+                    schema_name, table_names, cur
+                )
+                if tables_without_key:
+                    raise NoPrimaryKeyException(schema_name, tables_without_key)
             if table_names is None:
                 add_schema_to_publication(schema_name, pub_name, cur)
             else:
                 add_tables_to_publication(table_names, schema_name, pub_name, cur)
-            pub_ops = get_pub_ops(pub_name, cur)
             if pub_ops["update"]:
-                warn_unchanged_toast(pub_name, cur)
+                warn_unchanged_toast(pub_name, cur, include_columns, exclude_columns)
 
             # no commands may run on `rep_conn` after the slot is created, they would end the
             # exported snapshot
@@ -244,11 +260,8 @@ def init_replication(
                     schema=schema_name,
                     reflection_level="full_with_precision",
                     backend="pyarrow" if backend == "pyarrow" else "sqlalchemy",
-                    included_columns=(
-                        None
-                        if include_columns is None or table_name not in include_columns
-                        else list(include_columns[table_name])
-                    ),
+                    included_columns=_columns_of_table(include_columns, table_name),
+                    excluded_columns=_columns_of_table(exclude_columns, table_name),
                     type_adapter_callback=snapshot.type_adapter_callback,
                     engine_adapter_callback=snapshot.engine_adapter_callback,
                     table_loader_class=snapshot.table_loader_class(),
@@ -277,10 +290,11 @@ def init_replication(
                             table_name=table_name,
                             schema_name=schema_name,
                             cur=cur_snap,
-                            include_columns=(
-                                None
-                                if include_columns is None
-                                else include_columns.get(table_name)
+                            include_columns=_columns_of_table(
+                                include_columns, table_name
+                            ),
+                            exclude_columns=_columns_of_table(
+                                exclude_columns, table_name
                             ),
                             unlogged=initial_snapshot == "unlogged_table",
                         ),
@@ -463,6 +477,7 @@ def persist_snapshot_table(
     schema_name: str,
     cur: cursor,
     include_columns: Optional[Sequence[str]] = None,
+    exclude_columns: Optional[Sequence[str]] = None,
     unlogged: bool = False,
 ) -> str:
     """Persists exported snapshot table state.
@@ -478,7 +493,7 @@ def persist_snapshot_table(
     )
     select_list = []
     for column_name, type_id in cur.fetchall():
-        if include_columns is not None and column_name not in include_columns:
+        if not _is_column_included(column_name, include_columns, exclude_columns):
             continue
         esc_name = escape_postgres_identifier(column_name)
         if type_id in (1186, 1187):  # interval, interval[]
@@ -553,14 +568,50 @@ def get_pub_ops(
     }
 
 
-def warn_unchanged_toast(pub_name: str, cur: cursor) -> None:
-    """Warns about published tables whose updates may not send unchanged TOASTed values.
+def get_tables_without_key(
+    schema_name: str, table_names: Optional[Sequence[str]], cur: cursor
+) -> List[str]:
+    """Returns tables of `table_names`, or of the whole schema, without a primary key or replica
+    identity index. `_dlt` tables are skipped.
+    """
+    names = None if table_names is None else list(table_names)
+    cur.execute(
+        """
+        SELECT c.relname
+        FROM pg_class c
+        JOIN pg_namespace n ON n.oid = c.relnamespace
+        WHERE n.nspname = %s AND c.relkind IN ('r', 'p')
+          AND (%s::text[] IS NULL OR c.relname = ANY(%s::text[]))
+          AND NOT EXISTS (
+            SELECT 1 FROM pg_index i
+            WHERE i.indrelid = c.oid AND CASE c.relreplident
+              WHEN 'i' THEN i.indisreplident WHEN 'n' THEN false ELSE i.indisprimary END
+          )
+        ORDER BY c.relname;
+        """,
+        (schema_name, names, names),
+    )
+    return [
+        name
+        for (name,) in cur.fetchall()
+        if not name.lower().startswith(DLT_NAME_PREFIX)
+    ]
+
+
+def warn_unchanged_toast(
+    pub_name: str,
+    cur: cursor,
+    include_columns: Optional[Mapping[str, Sequence[str]]] = None,
+    exclude_columns: Optional[Mapping[str, Sequence[str]]] = None,
+) -> None:
+    """Warns about included columns of published tables whose updates may not send unchanged
+    TOASTed values.
 
     Such values are sent only with REPLICA IDENTITY FULL, see `UnchangedToastException`.
     """
     cur.execute(
         """
-        SELECT pt.schemaname, pt.tablename, string_agg(a.attname, ', ' ORDER BY a.attnum)
+        SELECT pt.schemaname, pt.tablename, array_agg(a.attname::text ORDER BY a.attnum)
         FROM pg_publication_tables pt
         JOIN pg_namespace n ON n.nspname = pt.schemaname
         JOIN pg_class c ON c.relnamespace = n.oid AND c.relname = pt.tablename
@@ -572,11 +623,19 @@ def warn_unchanged_toast(pub_name: str, cur: cursor) -> None:
         (pub_name,),
     )
     for schema_name, table_name, column_names in cur.fetchall():
+        include = _columns_of_table(include_columns, table_name)
+        exclude = _columns_of_table(exclude_columns, table_name)
+        column_names = [
+            c for c in column_names if _is_column_included(c, include, exclude)
+        ]
+        if not column_names:
+            continue
         logger.warning(
             f"Table {schema_name}.{table_name} does not have REPLICA IDENTITY FULL and columns"
-            f" {column_names} may store large values out of line. An update that does not change"
-            " such a value stops the replication. Run `ALTER TABLE"
-            f" {schema_name}.{table_name} REPLICA IDENTITY FULL` to prevent it."
+            f" {', '.join(column_names)} may store large values out of line. An update that does"
+            " not change such a value stops the replication. Run `ALTER TABLE"
+            f" {schema_name}.{table_name} REPLICA IDENTITY FULL` or exclude the columns with"
+            " `exclude_columns` to prevent it."
         )
 
 
@@ -638,6 +697,25 @@ def _make_qualified_table_name(table_name: str, schema_name: str) -> str:
         escape_postgres_identifier(schema_name)
         + "."
         + escape_postgres_identifier(table_name)
+    )
+
+
+def _columns_of_table(
+    columns: Optional[Mapping[str, Sequence[str]]], table_name: str
+) -> Optional[List[str]]:
+    """Returns the column names of `include_columns` or `exclude_columns` for `table_name`."""
+    if columns is None or table_name not in columns:
+        return None
+    return list(columns[table_name])
+
+
+def _is_column_included(
+    column_name: str,
+    include_columns: Optional[Sequence[str]],
+    exclude_columns: Optional[Sequence[str]],
+) -> bool:
+    return (include_columns is None or column_name in include_columns) and (
+        exclude_columns is None or column_name not in exclude_columns
     )
 
 
@@ -769,6 +847,7 @@ class MessageConsumer:
         upto_lsn: int,
         target_batch_size: int = 1000,
         include_columns: Optional[Mapping[str, Sequence[str]]] = None,
+        exclude_columns: Optional[Mapping[str, Sequence[str]]] = None,
         columns: Optional[Mapping[str, TTableSchemaColumns]] = None,
         resolve_type: Callable[[int, int], PgType] = _default_resolve_type,
         resolve_primary_key: Optional[Callable[[int], List[str]]] = None,
@@ -777,6 +856,7 @@ class MessageConsumer:
         self.upto_lsn = upto_lsn
         self.target_batch_size = target_batch_size
         self.include_columns = include_columns
+        self.exclude_columns = exclude_columns
         self.columns = columns
         self.resolve_type = resolve_type
         self.resolve_primary_key = resolve_primary_key
@@ -836,15 +916,18 @@ class MessageConsumer:
             ]
         else:
             key_indices = [i for i, c in enumerate(relation.columns) if c.part_of_pkey]
-        include = (
-            None
-            if self.include_columns is None
-            else self.include_columns.get(table_name)
-        )
+        if (
+            not skip
+            and not key_indices
+            and (self.pub_ops["update"] or self.pub_ops["delete"])
+        ):
+            raise NoPrimaryKeyException(relation.namespace, [table_name])
+        include = _columns_of_table(self.include_columns, table_name)
+        exclude = _columns_of_table(self.exclude_columns, table_name)
         included_indices = [
             i
             for i, c in enumerate(relation.columns)
-            if include is None or c.name in include
+            if _is_column_included(c.name, include, exclude)
         ]
 
         column_schemas: TTableSchemaColumns = {
@@ -912,15 +995,15 @@ class MessageConsumer:
                     for old, new in zip(old_values, new_values)
                 ]
         if UNCHANGED_TOAST in new_values:
-            raise UnchangedToastException(
-                relation.schema_name,
-                relation.table_name,
-                [
-                    c.name
-                    for c, v in zip(relation.columns, new_values)
-                    if v is UNCHANGED_TOAST
-                ],
-            )
+            missing = [
+                relation.columns[i].name
+                for i in relation.included_indices
+                if new_values[i] is UNCHANGED_TOAST
+            ]
+            if missing:
+                raise UnchangedToastException(
+                    relation.schema_name, relation.table_name, missing
+                )
         self._add_row(segment, new_values, data_start, None)
 
     def take_batch(self) -> List[Segment]:
@@ -1020,6 +1103,7 @@ def stream_changes(
     start_lsn: int = 0,
     target_batch_size: int = 1000,
     include_columns: Optional[Mapping[str, Sequence[str]]] = None,
+    exclude_columns: Optional[Mapping[str, Sequence[str]]] = None,
     columns: Optional[Mapping[str, TTableSchemaColumns]] = None,
     flush_slot: bool = True,
     backend: TBackend = "python",
@@ -1063,6 +1147,7 @@ def stream_changes(
             upto_lsn=upto_lsn,
             target_batch_size=target_batch_size,
             include_columns=include_columns,
+            exclude_columns=exclude_columns,
             columns=columns,
             resolve_type=catalog.resolve_type,
             resolve_primary_key=catalog.get_primary_key,

@@ -21,6 +21,7 @@ def replication_resource(
     pub_name: str,
     credentials: ConnectionStringCredentials = dlt.secrets.value,
     include_columns: Optional[Dict[str, Sequence[str]]] = None,
+    exclude_columns: Optional[Dict[str, Sequence[str]]] = None,
     columns: Optional[Dict[str, TTableSchemaColumns]] = None,
     target_batch_size: int = 1000,
     flush_slot: bool = True,
@@ -51,6 +52,14 @@ def replication_resource(
               "table_y": ["col_x", "col_y", "col_z"],
           }
           ```
+        exclude_columns (Optional[Dict[str, Sequence[str]]]): Maps table name(s) to
+          sequence of names of columns to exclude from the generated data items, applied
+          after `include_columns`. For example:
+          ```
+          exclude_columns={"table_x": ["col_b"]}
+          ```
+          Unchanged TOASTed values of columns that are not included do not stop the
+          replication, so tables without REPLICA IDENTITY FULL replicate without them.
         columns (Optional[Dict[str, TTableHintTemplate[TAnySchemaColumns]]]): Maps
           table name(s) to column hints to apply on the replicated table(s). For example:
           ```
@@ -87,6 +96,7 @@ def replication_resource(
         start_lsn=resource_state.get("last_commit_lsn", 0),
         target_batch_size=target_batch_size,
         include_columns=include_columns,
+        exclude_columns=exclude_columns,
         columns=columns,
         flush_slot=flush_slot,
         backend=backend,
