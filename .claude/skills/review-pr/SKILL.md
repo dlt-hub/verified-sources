@@ -72,7 +72,7 @@ Use `gh pr checks PR_ID` to retrieve the CI check results. The relevant checks:
 - `Runs mypy, flake and bandit` — `make lint`: package structure, mypy, flake8, black, `check-requirements.py` and the `dlt init` tests (`.github/workflows/lint.yml`).
 - `tests dlt init compatibility` — `dlt init` against the affected sources (`.github/workflows/init.yml`).
 - `test destinations postgres and duckdb` (PRs from this repo) or `FORKS - test on local postgres and duckdb` (PRs from forks) — tests of the affected sources only.
-- `test destinations bigquery and redshift` — slow destination tests.
+- `test destinations bigquery and snowflake` — slow destination tests.
 
 Report the status of each check (pass/fail/pending/skipped).
 
@@ -108,6 +108,7 @@ Using absolute paths under `WORKTREE`:
 - **Loaded schema** — changes to resource or table names, column names or types, primary or merge keys, write dispositions or nesting change the data that existing users already loaded. Flag each one as breaking.
 - **State and incremental cursors** — changes to resource state keys, incremental cursor fields or initial values must stay compatible with the state that existing pipelines already stored. Check what happens on the first run after an upgrade.
 - For both, follow [Data shape and upgrade compatibility](../refresh-source/SKILL.md#data-shape-and-upgrade-compatibility): what to compare, how to observe an upgrade and how to classify each change.
+- **Version and changelog** — every PR that changes a source must bump `sources/<name>/version.py` (added with `1.0.0` if missing) and, unless it is a patch version, add a changelog entry to its README, see [Source version and README](../refresh-source/SKILL.md#source-version-and-readme). A breaking change needs a `major` bump and its upgrade path in the changelog. A missing bump or entry blocks the merge.
 
 ### 7. Review test coverage
 
@@ -132,13 +133,13 @@ Produce a checklist of required test scenarios before evaluating existing tests.
 
 - Tests live in `tests/<source_name>/` and import the source as `from sources.<name> import ...`.
 - Search the source's test folder for where similar functionality is already tested (grep for related function names, class names, or feature keywords).
-- New tests should live alongside related existing tests, not in new files unless the PR introduces an entirely new module.
+- Check the layout in [Test modules](../../rules/testing.md#test-modules): unit test modules follow source modules, end-to-end tests only in `test_<name>_source.py`, non-local destinations parametrized with `destination_name`.
 - Flag tests placed in the wrong location.
 
 #### 7d. Check for duplication and over-testing
 
 - Look for tests that cover nearly identical cases and could be merged or parametrized with `@pytest.mark.parametrize`.
-- Look for repeated setup/assertion logic across tests that should be extracted into a helper or fixture (`tests/<source_name>/utils.py`, not the shared `tests/utils.py`).
+- Look for repeated setup/assertion logic across tests that should be extracted into a fixture or helper (`tests/<source_name>/conftest.py` or `utils.py`, not the shared `tests/utils.py`).
 - If multiple tests differ only in a single variable (e.g., `True`/`False`, different type values), they must be parametrized into one test function.
 - Flag any copy-paste test code. Minimizing test code maintenance burden is a priority.
 - Flag tests that are not parallel safe: pipelines without `dev_mode`, fixed names for slots, schemas or accounts, missing cleanup.
@@ -152,7 +153,7 @@ If the PR fixes a bug:
 
 Documentation is split between two repos:
 
-- **Source README** (`sources/<name>/README.md`) — must stay super short: what the source does and a link to the docs. Flag PRs that add setup guides, configuration reference or usage examples to the README; that content belongs in the dlt docs.
+- **Source README** (`sources/<name>/README.md`) — the maintenance document of the source: changelog, extension points, seeding, tests, operations, see [Source version and README](../refresh-source/SKILL.md#source-version-and-readme). Check that the PR updates the sections it affects. Setup guides, configuration reference and usage examples belong in the dlt docs.
 - **User docs** — live in the `dlt-hub/dlt` repo under `docs/website/docs/dlt-ecosystem/verified-sources/`, as `<doc>.md` or a `<doc>/` folder. The doc name does not always match the source folder (e.g. `stripe_analytics` → `stripe.md`, `asana_dlt` → `asana.md`, `kinesis` → `amazon_kinesis.md`). List and fetch them with `gh api repos/dlt-hub/dlt/contents/docs/website/docs/dlt-ecosystem/verified-sources?ref=devel`.
 
 If the PR changes user-facing behavior (source or resource arguments, defaults, loaded schema, setup steps, required permissions, dependencies):
@@ -173,6 +174,6 @@ Write a structured analysis covering:
 - **Observations & Potential Issues**: Bugs, edge cases, missing error handling, performance concerns, memory issues, security issues.
 - **Breaking Changes**: Changes to source/resource signatures, loaded schema or stored state that affect existing users (step 6a), each with what fails after an upgrade and the upgrade path.
 - **Test Coverage**: Required scenarios checklist with pass/fail status, misplaced tests, duplication issues, parametrization opportunities.
-- **Documentation**: README length, whether a `dlt-hub/dlt` docs update is needed, demo script.
+- **Documentation**: version bump and changelog entry, README sections the change affects, whether a `dlt-hub/dlt` docs update is needed, demo script.
 - **Reviewer Instructions**: If reviewer instructions were provided, include a dedicated section addressing each point raised. If no instructions were provided, omit this section.
 - **Verdict**: Overall assessment.

@@ -1,136 +1,128 @@
 # Jira
 
-[Jira](https://www.atlassian.com/software/jira) by Atlassian helps teams manage projects and tasks
-efficiently, prioritize work, and collaborate.
+Maintenance notes of the [Jira Cloud](https://www.atlassian.com/software/jira) source for developers
+and coding agents. Setup and usage are in the
+[dlt docs](https://dlthub.com/docs/dlt-ecosystem/verified-sources/jira).
 
-Resources that can be loaded using this verified source are:
+## Changelog
 
-| Name      | Description                                                                              |
-| --------- | ---------------------------------------------------------------------------------------- |
-| issues    | individual pieces of work to be completed                                                |
-| users     | all users on the site, including inactive and deleted accounts                           |
-| workflows | the key aspect of managing and tracking the progress of issues or tasks within a project |
-| workflow_statuses | names and categories of the statuses the workflows reference                     |
-| projects  | a collection of tasks that need to be completed to achieve a certain outcome             |
+### 1.0.0
+- **breaking** `issues`: loaded incrementally on `updated` with a 10 minute lag and merged on `id`
+  instead of replaced. Upgrade: run once with `refresh="drop_resources"`. If a run already failed
+  on load with an error about `_dlt_root_id` (`No root_key column` or a missing column), run
+  `dlt pipeline <name> abort-packages` first
+- **breaking** `issues`: fields are top level columns named by the field id (`fields__summary` is
+  `summary`), nested tables are `issues__<field>`, rich text is wiki markup (API v2), no
+  `changelog`, `operations`, `transitions`, `comment` and `worklog` data. Nested values load as
+  Jira returns them, fields of unknown structure are JSON text
+- **breaking** `jira_search`: issues load like in `jira_issues` with a `query_index` column, the
+  primary key is `id` and `query_index`, an issue found by two queries loads twice.
+  `jql_queries` and `page_limit` are source arguments. `page_size` is the number of ids per
+  search request, 5000 by default instead of 100 issues, and `page_limit` counts these pages, so
+  the same `page_limit` loads up to 50 times more issues. Upgrade: run once with
+  `refresh="drop_resources"`, set `page_size=100` to keep the old limits
+- **breaking** `workflows`: read from `rest/api/3/workflows/search`, `id` is text and the primary
+  key, `id__name`, `id__entity_id`, `has_draft_workflow`, `is_default`, `projects` and `schemes` are
+  gone. Upgrade: run once with `refresh="drop_resources"` to drop the empty columns
+- new resources `issue_comments`, `issue_changelogs`, `worklogs`, `workflow_statuses` and
+  `issue_fields`, the names and schemas of fields, e.g. of custom fields
+- new `jira_issues`: issues matching JQL, updated since `start_date` or in the range of your own
+  `incremental`
+- new `jira` arguments: `jql` restricts issues, `start_date` starts issues and worklogs,
+  `incremental` is passed to `jira_issues`
+- new `drop_keys`: a function for `add_map` that removes REST links and avatar and icon urls, or
+  other keys, from rows and their nested values
+- changed `users`, `workflows`, `projects`: primary keys, the largest page each endpoint serves
+- changed: `get_paginated_data` is removed, `JiraClient.paginate_endpoint` reads the same endpoints
 
-The `workflows` resource reads `rest/api/3/workflows/search`. It replaces
-`rest/api/3/workflow/search`, which the v3 spec marks deprecated and scheduled for removal on
-June 1, 2026. The new endpoint returns team-managed workflows as well, and its table has
-different columns.
+Versions before 1.0.0 were not numbered. Copies taken with `dlt init` have no `version.py`,
+`.dlt/.sources` records the repository commit they came from.
 
-### Resolving status references
+## Extension points
 
-The `workflows__statuses` child table holds a `status_reference` per status and no name. Join it to
-`workflow_statuses.status_reference` for the name, description and category. `rest/api/3/status`
-omits unused statuses and `rest/api/3/statuses/search` omits project scoped ones, so neither
-resolves every reference.
+- A replaced endpoint: an entry in `settings.DEFAULT_ENDPOINTS` with its key and page size.
+- A field type: its dlt data type, `object` or `array` in `SCHEMA_TYPES`, `SYSTEM_FIELD_TYPES` or
+  `CUSTOM_FIELD_TYPES` of `schema_types.py`. Fields of unknown type load as JSON text.
+- A transformer on issues: pipe it from `issues`, it receives pages of issue rows and the
+  `IssuesReader` in the `IssuesPage` meta, like `issue_comments` and `issue_changelogs`.
+- A new API: a typed call on `JiraClient`, with a paginator from `paginators.py` or dlt.
 
-`workflow_statuses` reads the `statuses` key of the same `rest/api/3/workflows/search` response that
-`workflows` reads under `values`, so it needs no extra permission. Selecting both resources walks
-that endpoint twice. Jira caps the page at 50 workflows, so a site with a few hundred of them
-spends a handful of extra requests, and in exchange each table keeps its own primary key, its own
-`replace` and its own `with_resources` selection.
+## Seeding
 
-### Upgrading an existing dataset
+Seeded issues are labeled `dlt-seed-<case>`, a case is skipped when its label exists. Run from
+`sources/` so the script reads credentials from `sources/.dlt`:
 
-The `workflows` table changes shape the first time you run this version of the source, on the move
-to `rest/api/3/workflows/search`. Its `id` was an object and arrived as `id__name` and
-`id__entity_id`; it is now a text `id` and the declared primary key. `name`, `is_editable`,
-`scope` and `version` are new. If you set `expand` on the old endpoint, `has_draft_workflow`,
-`is_default`, `projects` and `schemes` got removed.
+1. `uv run python ../tests/jira/seed_test_data.py` lists the missing cases.
+2. `uv run python ../tests/jira/seed_test_data.py --apply` creates them.
+3. `uv run python ../tests/jira/seed_test_data.py --capture` rewrites
+   `tests/jira/captured_responses.json` with anonymized responses for the unit tests and the
+   manifest of seeded issues (`seed`: ids, labels, `created`, `updated`) from which the
+   end-to-end tests take the expected counts of full, windowed and incremental loads. Run it again
+   after seeding or editing seeded issues.
 
-The load succeeds on an existing dataset and `replace` truncates `workflows` and its child tables,
-so no old rows survive. The old columns stay as empty columns, because dlt holds them in the
-pipeline schema. Dropping the table in the destination does not remove them, since dlt recreates it
-from that schema on the next run.
+The test account cannot delete issues and cannot restrict comments to a group or role, so `--delete`
+fails and restricted comments are tested offline only.
 
-To get the new column set, run once with `refresh="drop_resources"`:
+## Tests
 
-```py
-pipeline.run(source, refresh="drop_resources")
-```
+- `JiraMock` in `tests/jira/utils.py` serves search, bulk fetch, changelogs, comments and worklog
+  feeds from in-memory issues.
+- `test_issue_comments_changed` writes to the live site: it adds, edits and deletes its own comments
+  on the issue labeled `dlt-seed-comment-changes`.
 
-or load into a fresh dataset. The other resources keep their columns.
+## Operations
 
-## Initialize the pipeline
-
-```bash
-dlt init jira duckdb
-```
-
-Here, we chose `duckdb` as the destination. Alternatively, you can also choose `redshift`,
-`bigquery`, or any of the other [destinations](https://dlthub.com/docs/dlt-ecosystem/destinations/).
-
-## Setup verified source
-
-To grab Jira credentials and configure the verified source, please refer to the
-[full documentation here.](https://dlthub.com/docs/dlt-ecosystem/verified-sources/jira#setup-guide)
-
-## Add credential
-
-1. Inside the `.dlt` folder, you'll find a file called `secrets.toml`, which is where you can
-   securely store your access tokens and other sensitive information. It's important to handle this
-   file with care and keep it safe. Here's what the file looks like:
-
-   ```toml
-   # put your secret values and credentials here. Please do not share this file, and do not push it to GitHub
-   [sources.jira]
-   subdomain = "set me up!" # please set me up!
-   email = "set me up!" # please set me up!
-   api_token = "set me up!" # please set me up!
-   ```
-
-1. A subdomain in a URL identifies your Jira account. For example, in
-   "https://example.atlassian.net", "example" is the subdomain.
-
-1. Use the email address associated with your Jira account.
-
-1. Set up the "api_token" to ensure secure access to your Jira account.
-
-1. Next, follow the instructions in [Destinations](https://dlthub.com/docs/dlt-ecosystem/destinations/) to add credentials for
-   your chosen destination. This will ensure that your data is properly routed to its final
-   destination.
-
-## Run the pipeline
-
-1. Install the necessary dependencies by running the following command:
-
-   ```bash
-   pip install -r requirements.txt
-   ```
-
-1. Now the pipeline can be run by using the command. The example loads two pages per resource and
-   two pages per JQL query; remove the `limit` arguments in `jira_pipeline.py` to load
-   everything.
-
-   ```bash
-   python jira_pipeline.py
-   ```
-
-   Each resource requests the largest page its endpoint serves. Pass `page_size` to `jira` or
-   `jira_search` to request a smaller one.
-
-1. To make sure that everything is loaded as expected, use the command:
-
-   ```bash
-   dlt pipeline <pipeline_name> show
-   ```
-
-   For example, the `pipeline_name` for the above pipeline example is `jira_pipeline`, you may also
-   use any custom name instead.
-
-### Writing JQL queries
-
-`jira_search` takes a list of JQL queries and loads the issues each one matches. An issue matched
-by two queries is loaded once.
-
-`rest/api/3/search/jql` rejects a query that only sorts. Add a filtering clause, as the shipped
-example does with `created >= -30d`.
-
-`page_limit` bounds each query on its own. All queries share one generator, so `add_limit` would
-bound them together.
-
-💡 To explore additional customizations for this pipeline, we recommend referring to the official
-`dlt` [Jira](https://dlthub.com/docs/dlt-ecosystem/verified-sources/jira) documentation. It provides
-comprehensive information and guidance on how to further customize and tailor the pipeline to suit
-your specific needs.
+- **Page and request sizes**: resources yield pages of `chunk_size` rows (1000 by default) of
+  issues, comments and changelogs, independent of the size of API requests. Requests take what the
+  API serves: search lists up to 5000 ids, bulk fetch takes 1000 issues for at most 100 single
+  value fields and 100 otherwise, changelogs are fetched for 1000 issues and worklogs by 1000 ids.
+  Pages of issues and their comments and changelogs are fetched in parallel by the dlt extract
+  `workers` (5 by default), each page in sequential requests, so runs with fewer pages than
+  workers fetch with less parallelism.
+- **Types**: scalar fields are converted to their dlt data types in `schema_types.py`, a value
+  that cannot be converted loads as null with a warning. Objects and arrays reach the
+  normalizer as Jira returns them and `max_table_nesting=2` of the sources bounds their nesting.
+  A field gets a column when it has a value, scalar fields in `included_columns` get typed
+  columns upfront. JSON has no dates, so dates in nested values are typed by the `iso_timestamp`
+  detection of dlt. A standalone `jira_issues` has no nesting limit. Columns of `issues` are
+  named by `issue_fields.id`, which holds the field names, e.g. of `customfield_10016`.
+- **Links and images**: objects carry `self` REST links and `avatarUrls` and `iconUrl` image
+  urls, a quarter of the columns of `issues` on the test site. `resource.add_map(drop_keys())`
+  removes them and `drop_keys(["timeZone"])` other keys, see `jira_pipeline.py`.
+- **Comments**: `issue_comments` bulk fetches the `comment` field of each page of issues, 100
+  issues per request, which embeds the latest 20 comments of an issue. Issues with more are read
+  again from `startAt=0` with the comment endpoint, which returns about 100 per page. An issue left
+  without comments gets a row flagged `deleted` that deletes its comments loaded before, except on
+  the first run. Selecting `issue_comments` alone still runs `issues`, its parent.
+- **Changelogs**: `issue_changelogs` fetches the whole changelog of each issue in the incremental
+  range, since changelog bulk fetch has no date filter, and merge on `id` absorbs the changes
+  loaded before. Changelogs of issues not updated since `issue_changelogs` was added are not
+  loaded: reset the state of `issues` to load them.
+- **State**: the incremental state of `issues` is kept by its parent `issues_ids`, which lists the
+  ids (`<name>_ids` for `jira_issues(name=...)`). `refresh="drop_resources"` resets it with the
+  table, the CLI matches exact names: `dlt pipeline <name> drop issues issues_ids`. Load several
+  resources of issues with `jira_issues(name=...)`, not with `with_name`, which shares the state.
+- **Large loads**: set `[sources.data_writer] file_max_items` (e.g. 100000) so extract rotates
+  files and normalize and load run in parallel. `included_columns` with at most 100 single value
+  fields fetches 1000 issues per request instead of 100.
+- **Throttling**: 429 and 5xx are retried with the `runtime.request_*` settings of dlt.
+- **Incremental**: `start_date` of `jira_issues` and `jira` is the initial value of the default
+  incremental `dlt.sources.incremental("updated", initial_value=start_date, lag=600)` with
+  `dedup_sort="desc"` on `updated`, all issues load on the first run if it is not set. `incremental`
+  replaces it with your own incremental, used as is, without lag and dedup sort. Both are
+  configurable, e.g. `[sources.jira.issues.incremental]`. Replace loads of JQL queries are done by
+  `jira_search`. JQL compares datetimes with minute precision in the time zone of the user
+  (`/myself`, UTC if not set). Search is eventually consistent, so the default 10 minute lag reads
+  recent issues again and merge absorbs them. `/search/jql` rejects a query without a filtering
+  clause, `created >= "1970-01-01"` bounds a full load.
+- **Limits**: `add_limit` on a transformer is ignored. Limit the `issues_ids` resource, the parent
+  of `issues`, or use `page_limit` of `jira_search`.
+- **Worklogs**: the feeds list worklogs of all issues of the site the user can see, `jql` does not
+  restrict them, and the first run reads all worklogs. `start_date` of `jira` or `initial_value` of
+  the `updated` incremental of `worklogs` starts them later. The feeds page by the youngest change
+  of a page. More than 1000 worklogs changed in the same millisecond stop the load with an error.
+- **Workflow statuses**: `workflows__statuses` holds a `status_reference` and no name, join it to
+  `workflow_statuses.status_reference`. `rest/api/3/status` omits unused statuses and
+  `rest/api/3/statuses/search` omits project scoped ones, so the `statuses` key of
+  `workflows/search` is read instead. Selecting both resources walks that endpoint twice. Do not
+  follow its `nextPage` link, it points to an internal Atlassian host.

@@ -17,6 +17,9 @@ jobs:
 
       - name: Check out
         uses: actions/checkout@v4
+        with:
+          # the base branch to check the versions of changed sources against
+          fetch-depth: 0
 
       - name: Install uv
         uses: astral-sh/setup-uv@v4

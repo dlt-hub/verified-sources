@@ -19,7 +19,7 @@ Use this checklist when reviewing a PR that adds a new verified source. These it
 
 ## 3. Tests
 
-- Tests in `tests/<name>/` with an `__init__.py`.
+- Tests in `tests/<name>/` with an `__init__.py`, laid out as in [Test modules](../../rules/testing.md#test-modules).
 - `tests/test_dlt_init.py` passes for the new source (runs as part of `make lint`).
 - Integration tests need a test account. Check whether the dlt team has (or can get) credentials for CI; otherwise those tests will never run.
 - Credential-free unit tests cover parsing, pagination and type conversion with realistic payloads.
@@ -31,5 +31,5 @@ Use this checklist when reviewing a PR that adds a new verified source. These it
 
 ## 5. Documentation
 
-- `sources/<name>/README.md` is super short: what the source does and a link to the docs.
+- `sources/<name>/version.py` with `__version__ = "1.0.0"` and `sources/<name>/README.md` as the maintenance document of the source: changelog, extension points, seeding, tests, operations, see [Source version and README](../refresh-source/SKILL.md#source-version-and-readme).
 - The user docs page is a separate PR to `dlt-hub/dlt` (`docs/website/docs/dlt-ecosystem/verified-sources/<name>.md`, plus its sidebar entry). Flag it as required if missing.
