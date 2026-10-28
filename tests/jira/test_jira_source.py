@@ -136,7 +136,7 @@ def test_load_users(destination_name: str) -> None:
 @pytest.mark.parametrize("destination_name", ALL_DESTINATIONS)
 def test_load_query_issues(destination_name: str) -> None:
     queries = [
-        "created >= -1d order by created DESC",  # issues from the last day
+        f'labels = "{SEED_LABEL}" order by created DESC',  # seeded issues
         "created >= '2000-01-01' order by created DESC",  # every issue, overlaps the first
     ]
     pipeline = dlt.pipeline(
