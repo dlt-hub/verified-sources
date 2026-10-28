@@ -173,12 +173,12 @@ The version follows the [semantic versioning of dlt](https://github.com/dlt-hub/
 - `minor`: new features, e.g. resources and options, sometimes automatic migrations;
 - `patch`: bug fixes.
 
-`sources/<name>/README.md` is the maintenance document of the source, for developers and coding agents that change it. It does not describe the code, and setup and usage belong in the dlt docs (phase 6). The README holds:
+`sources/<name>/README.md` is the maintenance document of the source, for developers and coding agents that change it. It holds only what is not easily read from the code: no defaults, page sizes, type mappings, test helpers or descriptions of how a resource works. Setup and usage belong in the dlt docs (phase 6). The README holds:
 - **Changelog**: an entry per version, newest first. It answers the question of a user whose pipeline already loaded data: can I upgrade, and do I lose data? The entry starts with an **Upgrade** line, from what [Data shape and upgrade compatibility](#data-shape-and-upgrade-compatibility) found: `safe` when existing pipelines continue with no action, otherwise the steps in order and what happens without them, i.e. failed runs, missed, duplicated or mixed rows. It says whether incremental state carries over. Short bullets follow: start each with **breaking**, new, changed or fixed and name the resource whose data changes. Breaking bullets say what fails;
 - **Extension points**: how to add e.g. an endpoint, a field type or a transformer;
 - **Seeding**: numbered steps to seed the test account and capture responses;
-- **Tests**: only setup beyond the standard harness and `.claude/rules/testing.md`;
-- **Operations**: throttling and quotas, scaling, troubleshooting.
+- **Tests**: only what the test code does not show, e.g. tests that write to the test account. Not what mocks, fixtures and helpers do;
+- **Operations**: what running against the upstream taught: run times and request costs, throttling and quotas, paging quirks, troubleshooting. Name the source of each fact: a run on the test account, a doc with its URL, or an earlier PR. A page size or limit stays only when exploring the upstream set it, stated as the upstream limit with its source, e.g. "search serves at most 5000 ids per page (docs)".
 
 ```md
 ## Changelog
