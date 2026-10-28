@@ -44,13 +44,15 @@ dev = [
     # (1.x stays for python < 3.13 where langchain 0.0.x requires numpy<2)
     "numpy>=2 ; python_version >= '3.13'",
     "snowflake-connector-python>=3.5.0",
+    # dlt 1.31 datasets pass `infer_schema` to sqlglot `qualify`, which sqlglot 30.22 removed
+    "sqlglot<30.22",
 ]
 sql_database = [
     "sqlalchemy>=1.4",
     "pymysql>=1.0.3,<2",
     "connectorx>=0.4.0",
 ]
-pg_replication = ["psycopg2-binary>=2.9.9"]
+pg_replication = ["psycopg2-binary>=2.9.9", "sqlalchemy>=2.0"]
 google_sheets = ["google-api-python-client>=2.78.0,<3"]
 google_analytics = [
     "google-analytics-data>=0.16.2,<0.17",
