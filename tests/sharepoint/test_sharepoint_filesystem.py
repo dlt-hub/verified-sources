@@ -4,9 +4,11 @@ import codecs
 import os
 import re
 from datetime import date, datetime, timedelta, timezone  # noqa: I251
-from typing import Any, Dict, List, Tuple, Type
+from pathlib import Path
+from typing import Any, Callable, Dict, List, Optional, Tuple, Type
 from urllib.parse import parse_qs, urlparse
 
+import dlt
 import fsspec
 import pandas as pd
 import pyarrow as pa
@@ -14,16 +16,19 @@ import pytest
 from dlt.common import Decimal
 from dlt.extract.exceptions import ResourceExtractionError
 from dlt.pipeline.exceptions import PipelineStepFailed
+from dlt.sources import DltResource
+from dlt.sources.filesystem import filesystem, read_csv, read_jsonl, read_parquet
 from dlt.sources.helpers.requests import HTTPError
 from requests_mock import Mocker
 
-from sources.sharepoint import sharepoint_files
+from sources.sharepoint import read_files, sharepoint_files, sharepoint_folder
 from sources.sharepoint.filesystem import (
     ITEM_FIELDS,
     SharepointFileSystem,
     make_url,
     validate_folder_path,
 )
+from sources.sharepoint.readers import TFileType
 from tests.sharepoint.utils import (
     ACCESS_TOKEN,
     CLIENT_ID,
@@ -57,7 +62,7 @@ from tests.sharepoint.utils import (
     requests_to,
     rows_per_file,
 )
-from tests.utils import assert_load_info, load_table_counts
+from tests.utils import assert_load_info, load_table_counts, load_tables_to_dicts
 
 SITE_PATH = urlparse(f"https://graph.microsoft.com/v1.0/sites/{SITE_ID}").path
 DRIVE_PAGES = [[{"id": "d1", "name": "Documents"}], [{"id": "d2", "name": "Archive"}]]
@@ -769,6 +774,105 @@ def test_sharepoint_files_excel_sheets(graph: Mocker) -> None:
         "book_empty": 0,
         "book_sales_2024": 1,
     }
+
+
+@pytest.mark.parametrize(
+    "reader,name,content",
+    [
+        pytest.param(read_csv, "a.csv", b"n\n1\n2\n", id="read_csv"),
+        pytest.param(read_jsonl, "a.jsonl", b'{"n": 1}\n{"n": 2}\n', id="read_jsonl"),
+        pytest.param(
+            read_parquet,
+            "a.parquet",
+            parquet_bytes(pa.table({"n": [1, 2]})),
+            id="read_parquet",
+        ),
+    ],
+)
+def test_sharepoint_folder_with_dlt_readers(
+    graph: Mocker, reader: Callable[[], DltResource], name: str, content: bytes
+) -> None:
+    mock_files(graph, {name: content})
+    file_glob = f"*.{name.rpartition('.')[2]}"
+
+    rows = list(sharepoint_folder("Reports", file_glob=file_glob) | reader())
+
+    assert rows == [{"n": 1}, {"n": 2}]
+
+
+def test_read_files_over_local_filesystem(tmp_path: Path) -> None:
+    book = excel_bytes({"Data": [["n"], [1], [2]], "Other": [["n"], [3]]})
+    (tmp_path / "book.xlsx").write_bytes(book)
+    files = filesystem(bucket_url=f"file://{tmp_path}", file_glob="*.xlsx")
+    pipeline = new_pipeline("sharepoint_local_files")
+
+    assert_load_info(pipeline.run(files | read_files("excel").with_name("book")))
+
+    tables = load_tables_to_dicts(pipeline, "book_data", "book_other")
+    assert {
+        name: sorted(row["n"] for row in rows) for name, rows in tables.items()
+    } == {
+        "book_data": [1, 2],
+        "book_other": [3],
+    }
+    assert {
+        (
+            row["_file_name"],
+            row["_file_url"].startswith("file://"),
+            isinstance(row["_file_modified_at"], datetime),
+        )
+        for rows in tables.values()
+        for row in rows
+    } == {("book.xlsx", True, True)}
+
+
+@pytest.mark.parametrize(
+    "file_type,reader_kwargs,message",
+    [
+        pytest.param("xml", None, "file_type must be one of", id="unknown_file_type"),
+        pytest.param(
+            "parquet",
+            {"chunksize": 2},
+            "may only contain 'columns'",
+            id="parquet_extra_kwargs",
+        ),
+    ],
+)
+def test_read_files_invalid_config(
+    graph: Mocker,
+    file_type: TFileType,
+    reader_kwargs: Optional[Dict[str, Any]],
+    message: str,
+) -> None:
+    mock_files(graph, {"a.csv": b"n\n1\n"})
+
+    with pytest.raises(ResourceExtractionError) as exc_info:
+        list(sharepoint_folder("Reports") | read_files(file_type, reader_kwargs))
+
+    assert message in str(cause_of_type(exc_info.value, ValueError))
+    assert downloaded_ids(graph) == []
+
+
+def file_rows_of(pipeline: dlt.Pipeline, table: str) -> List[Dict[str, Any]]:
+    """Returns the rows of `table` without dlt's load columns, in `n` order."""
+    rows = load_tables_to_dicts(pipeline, table)[table]
+    return sorted(
+        ({k: v for k, v in row.items() if not k.startswith("_dlt_")} for row in rows),
+        key=lambda row: row["n"],
+    )
+
+
+def test_sharepoint_files_same_as_pipe(graph: Mocker) -> None:
+    mock_files(graph, {"a.csv": b"n\n1\n2\n", "b.csv": b"n\n3\n"})
+    pipeline = new_pipeline("sharepoint_pipe")
+    piped = sharepoint_folder("Reports", file_glob="*.csv") | read_files(
+        "csv"
+    ).with_name("piped")
+
+    assert_load_info(pipeline.run(sharepoint_files(**files_config(file_glob="*.csv"))))
+    assert_load_info(pipeline.run(piped))
+
+    assert file_rows_of(pipeline, "piped") == file_rows_of(pipeline, "reports")
 
 
 def test_filesystem_fsspec_registration(graph: Mocker) -> None:
