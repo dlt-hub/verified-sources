@@ -229,8 +229,7 @@ def read_files(
 
     Pipe it from `sharepoint_folder` or from dlt's `filesystem` resource. A modified file
     replaces its own rows; rename the table with `with_name` or a `table_name` hint. Excel
-    workbooks load one table per sheet, "<table>_<sheet>", unless `reader_kwargs` names a
-    `sheet_name`.
+    workbooks load one table per sheet, "<table>_<sheet>", unless one `sheet_name` is given.
 
     Args:
         items (Iterable[FileItemDict]): The files, as the listing resource yields them.

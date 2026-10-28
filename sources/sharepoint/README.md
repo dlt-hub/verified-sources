@@ -14,8 +14,9 @@ source for developers and coding agents. Setup and usage are in the
   `sharepoint_list` table per list
 - new `sharepoint_folder`: dlt's `filesystem` resource over a library folder, new or modified
   files only; `read_files`: a transformer reading csv, jsonl, parquet or excel files into rows
-  with `file_url`, `file_name` and `file_modified_at`, merged on `file_url` so a modified
-  file replaces its own rows, Excel workbooks one table per sheet; `sharepoint_files`:
+  with `file_url`, `file_name` and `file_modified_at` (overwriting same-named file columns),
+  merged on `file_url` so a modified file replaces its own rows, Excel workbooks one table
+  per sheet; `sharepoint_files`:
   the two piped together. `sharepoint_folder` also feeds dlt's `read_csv`, `read_jsonl` and
   `read_parquet`, and `read_files` also reads from dlt's `filesystem` resource
 - new `SharepointFileSystem`: read-only fsspec filesystem registered as
@@ -58,7 +59,8 @@ Graph payloads from the API reference in `tests/sharepoint/utils.py`.
   instance, so do not log or pickle it.
 - **Lists**: each run reads one delta page sequence per list, with the full fields of changed
   items only. The delta link is stored per list and column set, so changing `included_columns`
-  starts a full sync of the same table. A stored link that Graph rejects (404 or 410, after
+  starts a full sync of the same table, in which rows deleted since the last run stay (use
+  `refresh="drop_resources"` to drop them). A stored link that Graph rejects (404 or 410, after
   about 30 days without a run) raises and asks for `refresh="drop_resources"`, because a plain
   re-read would keep rows deleted in between. Multi-value columns become child tables, as
   everywhere in dlt;

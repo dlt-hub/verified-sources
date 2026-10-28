@@ -89,7 +89,8 @@ def test_files(destination_name: str) -> None:
     }
     assert next(row["amount"] for row in rows if row["customer"] == "Eve") is None
 
-    assert pipeline.run(sharepoint_files(**config)).loads_ids == []
+    pipeline.run(sharepoint_files(**config))
+    assert pipeline.last_trace.last_normalize_info.row_counts.get("reports", 0) == 0
     assert load_table_counts(pipeline, "reports") == {"reports": 6}
 
 
