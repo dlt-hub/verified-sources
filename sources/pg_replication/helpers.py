@@ -7,6 +7,7 @@ from typing import (
     Any,
     Callable,
     Dict,
+    Iterable,
     Iterator,
     List,
     Literal,
@@ -62,12 +63,14 @@ from .decoders import (
 )
 from .exceptions import (
     ChangePosition,
+    ColumnNameCollisionException,
     IncompatibleColumnTypeException,
     IncompatiblePostgresVersionException,
     NoPrimaryKeyException,
     NullInNotNullColumnException,
     PublicationPrivilegesException,
     SnapshotSchemaNotFoundException,
+    TableNameCollisionException,
     UnchangedToastException,
     ValueConversionException,
 )
@@ -276,6 +279,13 @@ def init_replication(
                     add_tables_to_publication(missing, schema_name, pub_name, cur)
             if pub_ops["update"]:
                 warn_unchanged_toast(pub_name, cur, include_columns, exclude_columns)
+            published_columns = get_published_columns(pub_name, cur)
+            check_published_names(
+                pub_name, published_columns, include_columns, exclude_columns
+            )
+            snapshot_exclude = _without_unreplicated_columns(
+                schema_name, published_columns, exclude_columns
+            )
 
             # no commands may run on `rep_conn` after the slot is created, they would end the
             # exported snapshot
@@ -314,7 +324,7 @@ def init_replication(
                     reflection_level=reflection_level,
                     backend="pyarrow" if backend == "pyarrow" else "sqlalchemy",
                     included_columns=_columns_of_table(include_columns, table_name),
-                    excluded_columns=_columns_of_table(exclude_columns, table_name),
+                    excluded_columns=_columns_of_table(snapshot_exclude, table_name),
                     type_adapter_callback=snapshot.type_adapter_callback,
                     engine_adapter_callback=snapshot.engine_adapter_callback,
                     table_adapter_callback=snapshot.table_adapter_callback,
@@ -348,7 +358,7 @@ def init_replication(
                                 include_columns, table_name
                             ),
                             exclude_columns=_columns_of_table(
-                                exclude_columns, table_name
+                                snapshot_exclude, table_name
                             ),
                             unlogged=initial_snapshot == "unlogged_table",
                         ),
@@ -451,6 +461,51 @@ def get_published_tables(pub_name: str, schema_name: str, cur: cursor) -> List[s
         (pub_name, schema_name),
     )
     return [row[0] for row in cur.fetchall()]
+
+
+def get_published_columns(
+    pub_name: str, cur: cursor
+) -> Dict[Tuple[str, str], List[Tuple[str, bool]]]:
+    """Returns the columns of published tables, with True if Postgres replicates their values.
+
+    Generated columns are replicated only by Postgres 18 with `publish_generated_columns`.
+    """
+    generated = "a.attgenerated" if get_pg_version(cur) >= 120000 else "''::\"char\""
+    cur.execute(
+        f"""
+        SELECT pt.schemaname, pt.tablename, a.attname, {generated} = ''
+          OR ({generated} = 's' AND to_jsonb(p) ->> 'pubgencols' IN ('s', 'true'))
+        FROM pg_publication_tables pt
+        JOIN pg_publication p ON p.pubname = pt.pubname
+        JOIN pg_namespace n ON n.nspname = pt.schemaname
+        JOIN pg_class c ON c.relnamespace = n.oid AND c.relname = pt.tablename
+        JOIN pg_attribute a ON a.attrelid = c.oid AND a.attnum > 0 AND NOT a.attisdropped
+        WHERE pt.pubname = %s
+        ORDER BY pt.schemaname, pt.tablename, a.attnum;
+        """,
+        (pub_name,),
+    )
+    columns: Dict[Tuple[str, str], List[Tuple[str, bool]]] = {}
+    for schema_name, table_name, column_name, replicated in cur.fetchall():
+        columns.setdefault((schema_name, table_name), []).append(
+            (column_name, replicated)
+        )
+    return columns
+
+
+def check_table_names(
+    pub_name: str,
+    tables: Iterable[Tuple[str, str]],
+    normalize: Callable[[str], str],
+) -> None:
+    """Raises if published tables would load into the same destination table."""
+    published = {
+        f"{schema_name}.{table_name}": table_name for schema_name, table_name in tables
+    }
+    if collisions := name_collisions(
+        list(published), lambda qual_name: normalize(published[qual_name])
+    ):
+        raise TableNameCollisionException(pub_name, collisions[0])
 
 
 def is_schema_published(pub_name: str, schema_name: str, cur: cursor) -> bool:
@@ -832,6 +887,61 @@ def _columns_of_table(
     return list(columns[table_name])
 
 
+def check_published_names(
+    pub_name: str,
+    published_columns: Mapping[Tuple[str, str], Sequence[Tuple[str, bool]]],
+    include_columns: Optional[Mapping[str, Sequence[str]]] = None,
+    exclude_columns: Optional[Mapping[str, Sequence[str]]] = None,
+) -> None:
+    """Raises if published tables or their columns would load into the same destination one."""
+    naming = Schema("pg_replication").naming
+    check_table_names(pub_name, published_columns, naming.normalize_table_identifier)
+    for (schema_name, table_name), columns in published_columns.items():
+        include = _columns_of_table(include_columns, table_name)
+        exclude = _columns_of_table(exclude_columns, table_name)
+        names = [
+            name
+            for name, replicated in columns
+            if replicated and _is_column_included(name, include, exclude)
+        ]
+        if collisions := name_collisions(names, naming.normalize_identifier):
+            raise ColumnNameCollisionException(schema_name, table_name, collisions[0])
+
+
+def _without_unreplicated_columns(
+    schema_name: str,
+    published_columns: Mapping[Tuple[str, str], Sequence[Tuple[str, bool]]],
+    exclude_columns: Optional[Mapping[str, Sequence[str]]] = None,
+) -> Dict[str, Sequence[str]]:
+    """Adds columns whose values Postgres does not replicate to `exclude_columns`.
+
+    A snapshot with them would have values that replicated changes set to NULL.
+    """
+    excluded = dict(exclude_columns or {})
+    for (table_schema, table_name), columns in published_columns.items():
+        unreplicated = [name for name, replicated in columns if not replicated]
+        if table_schema != schema_name or not unreplicated:
+            continue
+        logger.warning(
+            f"Generated columns {', '.join(unreplicated)} of table {schema_name}.{table_name}"
+            " are left out of the initial snapshot because Postgres does not replicate their"
+            " values. Postgres 18 replicates stored generated columns of publications with"
+            " `publish_generated_columns = stored`."
+        )
+        excluded[table_name] = [*excluded.get(table_name, []), *unreplicated]
+    return excluded
+
+
+def name_collisions(
+    names: Sequence[str], normalize: Callable[[str], str]
+) -> List[List[str]]:
+    """Returns groups of `names` that normalize to the same identifier."""
+    groups: Dict[str, List[str]] = {}
+    for name in names:
+        groups.setdefault(normalize(name), []).append(name)
+    return [group for group in groups.values() if len(group) > 1]
+
+
 def _is_column_included(
     column_name: str,
     include_columns: Optional[Sequence[str]],
@@ -1043,6 +1153,7 @@ class MessageConsumer:
         self.resolve_not_null = resolve_not_null
         self.hard_delete = hard_delete
         self.slot_name = slot_name
+        self.naming = (destination_schema or Schema("pg_replication")).naming
 
         self.relations: Dict[int, RelationSchema] = {}
         self._emitted_columns: Dict[str, TTableSchemaColumns] = {}
@@ -1119,6 +1230,15 @@ class MessageConsumer:
             for i, c in enumerate(relation.columns)
             if _is_column_included(c.name, include, exclude)
         ]
+        if not skip and (
+            collisions := name_collisions(
+                [relation.columns[i].name for i in included_indices],
+                self.naming.normalize_identifier,
+            )
+        ):
+            raise ColumnNameCollisionException(
+                relation.namespace, table_name, collisions[0], self._position()
+            )
 
         hints = {} if self.columns is None else self.columns.get(table_name, {})
         column_schemas: TTableSchemaColumns = {}
@@ -1533,6 +1653,14 @@ def stream_changes(
             hard_delete=hard_delete,
             slot_name=slot_name,
         )
+        with conn.cursor() as cur:
+            cur.execute(
+                "SELECT schemaname, tablename FROM pg_publication_tables WHERE pubname = %s;",
+                (pub_name,),
+            )
+            check_table_names(
+                pub_name, cur.fetchall(), consumer.naming.normalize_table_identifier
+            )
 
         def _batch(lsn: int) -> ChangesBatch:
             items: List[TDataItem] = []

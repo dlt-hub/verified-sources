@@ -14,9 +14,10 @@ from dlt.common.schema.utils import new_table
 from dlt.sources.credentials import ConnectionStringCredentials
 
 from sources.pg_replication import helpers
-from sources.pg_replication.decoders import decode_begin
+from sources.pg_replication.decoders import ColumnType, Relation, decode_begin
 from sources.pg_replication.exceptions import (
     ChangePosition,
+    ColumnNameCollisionException,
     IncompatibleColumnTypeException,
     NoPrimaryKeyException,
     NullInNotNullColumnException,
@@ -372,6 +373,27 @@ def test_conversion_error_names_transaction(
         assert exc.value.column_name is None
         assert exc.value.position == ChangePosition("", min(lsns), max(lsns))
     assert exc.value.position.skip_lsn in str(exc.value)
+
+
+@pytest.mark.parametrize("naming", ["snake_case", "sql_cs_v1"])
+def test_column_names_that_collide_raise(
+    naming: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("SCHEMA__NAMING", naming)
+    relation = Relation(
+        1,
+        "public",
+        "items",
+        "d",
+        [ColumnType(True, "id", 23, -1), ColumnType(False, "ID", 25, -1)],
+    )
+    consumer = MessageConsumer(pub_ops=ALL_OPS, upto_lsn=2**63)
+    if naming == "sql_cs_v1":
+        consumer.process_relation(relation)
+        return
+    with pytest.raises(ColumnNameCollisionException) as exc:
+        consumer.process_relation(relation)
+    assert exc.value.column_names == ["id", "ID"]
 
 
 def test_reflect_not_null_in_new_tables() -> None:

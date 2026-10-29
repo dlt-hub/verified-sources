@@ -190,3 +190,33 @@ class ValueConversionException(Exception):
             " Stop replicating the column with `exclude_columns`, or skip the change."
             + position.skip_hint()
         )
+
+
+class TableNameCollisionException(Exception):
+    def __init__(self, pub_name: str, table_names: Sequence[str]) -> None:
+        self.pub_name = pub_name
+        self.table_names = table_names
+        super().__init__(
+            f"Tables {', '.join(table_names)} of publication {pub_name} would load into the"
+            " same destination table. Replicate them with separate publications and slots, into"
+            " separate datasets."
+        )
+
+
+class ColumnNameCollisionException(Exception):
+    def __init__(
+        self,
+        schema_name: str,
+        table_name: str,
+        column_names: Sequence[str],
+        position: Optional[ChangePosition] = None,
+    ) -> None:
+        self.schema_name = schema_name
+        self.table_name = table_name
+        self.column_names = column_names
+        self.position = position
+        super().__init__(
+            f"Columns {', '.join(column_names)} of table {schema_name}.{table_name} would load"
+            " into the same destination column. Stop replicating all but one of them with"
+            " `exclude_columns`." + _changed_in(position)
+        )

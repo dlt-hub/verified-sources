@@ -18,9 +18,10 @@ COLUMN_TYPE_HINTS = ("data_type", "precision", "scale", "timezone")
 
 SESSION_OPTIONS = (
     "-c datestyle=ISO -c intervalstyle=postgres -c extra_float_digits=3 -c timezone=UTC"
-    " -c bytea_output=hex -c client_encoding=UTF8"
+    " -c bytea_output=hex -c client_encoding=UTF8 -c row_security=off"
 )
-"""Pins settings that format values as text, same as Postgres' own subscriber."""
+"""Pins settings that format values as text, same as Postgres' own subscriber. Snapshots that
+row-level security would filter fail instead, replicated changes are never filtered."""
 
 
 def add_session_options(options: Optional[str]) -> str:

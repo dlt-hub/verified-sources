@@ -1,5 +1,7 @@
 import pytest
 
+import glob
+import os
 import threading
 from contextlib import closing
 from datetime import datetime, timezone
@@ -21,6 +23,7 @@ from dlt.sources.sql_database import sql_table
 
 from tests.utils import (
     ALL_DESTINATIONS,
+    TEST_STORAGE_ROOT,
     assert_load_info,
     load_table_counts,
     get_table_metrics,
@@ -28,10 +31,12 @@ from tests.utils import (
 from sources.pg_replication import helpers, init_replication, replication_resource
 from sources.pg_replication.helpers import get_pg_version
 from sources.pg_replication.exceptions import (
+    ColumnNameCollisionException,
     IncompatibleColumnTypeException,
     IncompatiblePostgresVersionException,
     NoPrimaryKeyException,
     PublicationPrivilegesException,
+    TableNameCollisionException,
     ValueConversionException,
 )
 from sources.pg_replication.schema_types import TReflectionLevel
@@ -1071,6 +1076,23 @@ def test_init_replication_without_table_ownership(
                 )[0][0]
                 == 1
             )
+        # a snapshot that row-level security would filter fails instead
+        run_sql(
+            src_pl,
+            "ALTER TABLE {schema}.items ENABLE ROW LEVEL SECURITY;",
+            "CREATE POLICY only_one ON {schema}.items USING (id = 1);",
+        )
+        snapshot = init_replication(
+            slot_name,
+            pub_name,
+            schema,
+            "items",
+            credentials=credentials,
+            reset=True,
+            initial_snapshot="direct",
+        )
+        with pytest.raises(PipelineStepFailed, match="row-level security"):
+            dest_pl.run(snapshot)
     finally:
         run_sql(
             src_pl,
@@ -1079,6 +1101,100 @@ def test_init_replication_without_table_ownership(
             f"DROP OWNED BY {role};",
             f"DROP ROLE {role};",
         )
+
+
+@pytest.mark.parametrize("initial_snapshot", ["table", "direct"])
+def test_generated_columns_not_in_snapshot(
+    src_config: Tuple[dlt.Pipeline, str, str], initial_snapshot: str
+) -> None:
+    if get_pg_version() < 120000:
+        pytest.skip("generated columns need Postgres 12")
+    src_pl, slot_name, pub_name = src_config
+    create_tables(
+        src_pl,
+        "CREATE TABLE {schema}.items (id int PRIMARY KEY, a int,"
+        " doubled int GENERATED ALWAYS AS (a * 2) STORED);",
+        "INSERT INTO {schema}.items (id, a) VALUES (1, 1), (2, 2);",
+    )
+    snapshot = init_replication(
+        slot_name,
+        pub_name,
+        src_pl.dataset_name,
+        "items",
+        initial_snapshot=initial_snapshot,
+    )
+    dest_pl = dlt.pipeline(pipeline_name="dest_pl", destination="duckdb", dev_mode=True)
+    assert_load_info(dest_pl.run(snapshot))
+    run_sql(src_pl, "UPDATE {schema}.items SET a = 10 WHERE id = 1;")
+    assert_load_info(dest_pl.run(replication_resource(slot_name, pub_name)))
+    # Postgres does not replicate them, updated rows would get NULL
+    assert "doubled" not in dest_pl.default_schema.get_table_columns("items")
+    assert table_rows(dest_pl, "items", ["id", "a"]) == [(1, 10), (2, 2)]
+
+
+@pytest.mark.parametrize("naming", ["snake_case", "sql_cs_v1"])
+def test_names_that_differ_in_case(
+    src_config: Tuple[dlt.Pipeline, str, str], naming: str
+) -> None:
+    src_pl, slot_name, pub_name = src_config
+    os.environ["SCHEMA__NAMING"] = naming
+    create_tables(
+        src_pl,
+        'CREATE TABLE {schema}.items (id int PRIMARY KEY, "ID" text);',
+        'CREATE TABLE {schema}."Items" (id int PRIMARY KEY);',
+        "INSERT INTO {schema}.items VALUES (1, 'one');",
+        'INSERT INTO {schema}."Items" VALUES (10);',
+    )
+    schema = src_pl.dataset_name
+    if naming == "snake_case":
+        with pytest.raises(ColumnNameCollisionException):
+            init_replication(slot_name, pub_name, schema, "items", publish="insert")
+        with pytest.raises(TableNameCollisionException):
+            init_replication(
+                slot_name, pub_name, schema, ["items", "Items"], publish="insert"
+            )
+        return
+    pq = pytest.importorskip("pyarrow.parquet")
+    snapshot = init_replication(
+        slot_name,
+        pub_name,
+        schema,
+        ["items", "Items"],
+        publish="insert",
+        initial_snapshot="direct",
+    )
+    # duckdb identifiers are case insensitive, files keep both names
+    bucket_url = os.path.abspath(os.path.join(TEST_STORAGE_ROOT, "files"))
+    dest_pl = dlt.pipeline(
+        pipeline_name="dest_pl",
+        destination=dlt.destinations.filesystem(bucket_url),
+        dev_mode=True,
+    )
+    assert_load_info(dest_pl.run(snapshot, loader_file_format="parquet"))
+    run_sql(
+        src_pl,
+        "INSERT INTO {schema}.items VALUES (2, 'two');",
+        'INSERT INTO {schema}."Items" VALUES (20);',
+    )
+    assert_load_info(
+        dest_pl.run(
+            replication_resource(slot_name, pub_name), loader_file_format="parquet"
+        )
+    )
+
+    def file_rows(table_name: str, columns: List[str]) -> List[Tuple[Any, ...]]:
+        pattern = os.path.join(
+            bucket_url, dest_pl.dataset_name, table_name, "*.parquet"
+        )
+        rows = [
+            tuple(row[c] for c in columns)
+            for path in glob.glob(pattern)
+            for row in pq.read_table(path).to_pylist()
+        ]
+        return sorted(rows)
+
+    assert file_rows("items", ["id", "ID"]) == [(1, "one"), (2, "two")]
+    assert file_rows("Items", ["id"]) == [(10,), (20,)]
 
 
 def test_replicate_schema(src_config: Tuple[dlt.Pipeline, str, str]) -> None:
