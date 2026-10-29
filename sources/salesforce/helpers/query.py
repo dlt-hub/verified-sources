@@ -1,7 +1,7 @@
 """Query APIs that run SOQL and yield CSV result pages in the Bulk API 2.0 format"""
 
 from time import sleep
-from typing import Any, Dict, Iterator, Literal, Protocol
+from typing import Any, Dict, Iterator, Literal, NamedTuple, Optional, Protocol
 from urllib.parse import quote
 
 from dlt.common import Decimal, logger
@@ -18,16 +18,25 @@ TQueryApi = Literal["auto", "bulk", "rest"]
 
 # max seconds between query job status checks
 MAX_POLL_INTERVAL = 10.0
+# max seconds to wait for a query job, then it is aborted
+MAX_JOB_WAIT = 24 * 3600.0
 # REST API rejects longer request URIs
 MAX_REST_URL_LENGTH = 16384
 # records in a REST API result page, 2000 is the max
 REST_BATCH_SIZE = 2000
 
 
+class ResultPage(NamedTuple):
+    """A CSV result page and the number of its records if Salesforce sends it"""
+
+    csv: bytes
+    records: Optional[int] = None
+
+
 class QueryApi(Protocol):
     def query(
         self, soql: str, columns: TTableSchemaColumns, query_all: bool, page_size: int
-    ) -> Iterator[bytes]:
+    ) -> Iterator[ResultPage]:
         """Yields CSV result pages of `soql` selecting `columns`.
 
         `query_all` also returns deleted and archived records. `page_size` is the max number of
@@ -44,7 +53,7 @@ class BulkQueryApi:
 
     def query(
         self, soql: str, columns: TTableSchemaColumns, query_all: bool, page_size: int
-    ) -> Iterator[bytes]:
+    ) -> Iterator[ResultPage]:
         job_id = self._create_job(soql, query_all)
         self._wait_for_job(job_id)
         params: Dict[str, Any] = {"maxRecords": page_size}
@@ -56,8 +65,12 @@ class BulkQueryApi:
                 accept="text/csv",
                 params=params,
             )
+            records = response.headers.get("Sforce-NumberOfRecords")
             # null bytes are not valid in CSV
-            yield response.content.replace(b"\x00", b"")
+            yield ResultPage(
+                response.content.replace(b"\x00", b""),
+                None if records is None else int(records),
+            )
             locator = response.headers.get("Sforce-Locator")
             if not locator or locator == "null":
                 return
@@ -79,7 +92,7 @@ class BulkQueryApi:
         return job["id"]  # type: ignore[no-any-return]
 
     def _wait_for_job(self, job_id: str) -> None:
-        delay = 0.5
+        delay, waited = 0.5, 0.0
         while True:
             job = self.connection.request("GET", "bulk2", f"query/{job_id}").json()
             if job["state"] == "JobComplete":
@@ -88,7 +101,16 @@ class BulkQueryApi:
                 raise SalesforceOperationError(
                     f"Bulk API query job {job_id} {job['state']}: {job.get('errorMessage')}"
                 )
+            if waited >= MAX_JOB_WAIT:
+                self.connection.request(
+                    "PATCH", "bulk2", f"query/{job_id}", json={"state": "Aborted"}
+                )
+                raise SalesforceOperationError(
+                    f"Bulk API query job {job_id} is still in state `{job['state']}` after"
+                    f" {MAX_JOB_WAIT} seconds and was aborted"
+                )
             sleep(delay)
+            waited += delay
             delay = min(delay * 1.5, MAX_POLL_INTERVAL)
 
 
@@ -100,7 +122,7 @@ class RestQueryApi:
 
     def query(
         self, soql: str, columns: TTableSchemaColumns, query_all: bool, page_size: int
-    ) -> Iterator[bytes]:
+    ) -> Iterator[ResultPage]:
         path = "queryAll" if query_all else "query"
         if (
             len(self.connection.client.base_url + path) + len(quote(soql)) + 3
@@ -116,7 +138,7 @@ class RestQueryApi:
             "GET", "rest", path, params={"q": soql}, headers=headers
         ).json(parse_float=Decimal)
         while True:
-            yield rest_records_to_csv(result["records"], columns)
+            yield ResultPage(rest_records_to_csv(result["records"], columns))
             if result["done"]:
                 return
             result = self.connection.request(
@@ -133,7 +155,7 @@ class AutoQueryApi:
 
     def query(
         self, soql: str, columns: TTableSchemaColumns, query_all: bool, page_size: int
-    ) -> Iterator[bytes]:
+    ) -> Iterator[ResultPage]:
         pages = self.bulk.query(soql, columns, query_all, page_size)
         try:
             # the job is created when the first page is requested
@@ -173,5 +195,9 @@ def is_bulk_not_supported(ex: SalesforceMalformedRequest) -> bool:
         ):
             return True
         if error.get("errorCode") in ("FeatureNotEnabled", "FEATURE_NOT_ENABLED"):
+            return True
+        if "Selecting compound data not supported in Bulk Query" in error.get(
+            "message", ""
+        ):
             return True
     return False

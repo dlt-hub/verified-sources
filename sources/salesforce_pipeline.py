@@ -30,9 +30,11 @@ def load_table() -> None:
     pipeline = dlt.pipeline(
         pipeline_name="salesforce", destination="duckdb", dataset_name="salesforce_data"
     )
-    # merges records changed since the last run on `Id`, use `Invoice__c` for a custom object
+    # merges records changed since the last run on `Id`, the first run loads records changed
+    # since `start_date`. use `Invoice__c` for a custom object
     account = salesforce_table(
         sobject="Account",
+        start_date="2024-01-01",
         included_columns=["Id", "Name", "Industry", "AnnualRevenue", "SystemModstamp"],
     )
     load_info = pipeline.run(account)

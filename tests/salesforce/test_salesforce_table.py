@@ -1,6 +1,7 @@
 import csv
 import io
 import json
+import operator
 import os
 import re
 import sys
@@ -14,12 +15,15 @@ import pytest
 import requests_mock
 from dlt.common import Decimal
 from dlt.common.schema.typing import TWriteDisposition
+from dlt.common.typing import TAnyDateTime
 from dlt.extract.exceptions import ResourceExtractionError
 from pytest_mock import MockerFixture
+from requests.exceptions import ChunkedEncodingError
 from simple_salesforce.exceptions import (
     SalesforceMalformedRequest,
     SalesforceExpiredSession,
     SalesforceOperationError,
+    SalesforceRefusedRequest,
 )
 
 from sources.salesforce import SOURCE_SOBJECTS, salesforce_source, salesforce_table
@@ -44,6 +48,8 @@ from tests.utils import assert_load_info, load_table_counts, load_tables_to_dict
 
 JOB_ID = "750R0000000zxr8IAA"
 LOCATORS = ["", "MTAw", "MjAw", "MzAw"]
+NOW = datetime(2024, 6, 1, tzinfo=timezone.utc)
+NOW_LITERAL = "2024-06-01T00:00:00.000Z"
 
 DESCRIBE_FIELDS: List[Dict[str, Any]] = [
     {"name": "Id", "type": "id", "nillable": False},
@@ -101,33 +107,66 @@ def mock_bulk2(
     pages: List[str],
     fields: Optional[List[Dict[str, Any]]] = None,
     job_states: Tuple[str, ...] = ("JobComplete",),
-    failures: Optional[Dict[str, List[int]]] = None,
+    failures: Optional[Dict[str, List[Any]]] = None,
     sobject: str = "Account",
 ) -> Dict[str, List[Any]]:
     """Mocks `sobject` describe and a Bulk API 2.0 query job returning `pages`.
 
-    `job_states` are returned by consecutive job status checks. `failures` maps a page locator
-    to HTTP status codes returned before the page is served.
+    `job_states` are returned by consecutive job status checks, the last one repeats. `failures`
+    maps a page locator, "create" or "status" to failures before the request succeeds: an HTTP
+    status code, a status code and its errors, an exception raised when sending, or for a page a
+    truncated body sent with the record count of the full page.
 
-    Returns created job queries, result request params and their authorization headers,
-    recorded as they are made.
+    Returns created job queries, result request params and their authorization headers, and
+    aborted jobs, recorded as they are made.
     """
     calls: Dict[str, List[Any]] = {
         "operations": [],
         "queries": [],
         "results": [],
         "auth": [],
+        "aborts": [],
     }
     failures = failures or {}
+    states = list(job_states)
     m.get(
         re.compile(rf"/sobjects/{sobject}/describe$"),
         json={"name": sobject, "fields": fields or DESCRIBE_FIELDS},
     )
 
-    def create_job(request: Any, context: Any) -> Dict[str, Any]:
+    def fail(failure: Any, context: Any) -> str:
+        if isinstance(failure, type):
+            raise failure("injected failure")
+        status, errors = failure if isinstance(failure, tuple) else (failure, None)
+        context.status_code = status
+        context.headers = {"Retry-After": "0"}
+        if status == 401:
+            errors = [
+                {
+                    "errorCode": "INVALID_SESSION_ID",
+                    "message": "Session expired or invalid",
+                }
+            ]
+        return json.dumps(errors) if errors else ""
+
+    def create_job(request: Any, context: Any) -> str:
+        if failures.get("create"):
+            return fail(failures["create"].pop(0), context)
         calls["operations"].append(request.json()["operation"])
         calls["queries"].append(request.json()["query"])
-        return {"id": JOB_ID, "state": "UploadComplete"}
+        return json.dumps({"id": JOB_ID, "state": "UploadComplete"})
+
+    def job_status(request: Any, context: Any) -> str:
+        if failures.get("status"):
+            return fail(failures["status"].pop(0), context)
+        state = states.pop(0) if len(states) > 1 else states[0]
+        return json.dumps(
+            {"id": JOB_ID, "state": state, "errorMessage": f"job {state}"}
+        )
+
+    def abort_job(request: Any, context: Any) -> str:
+        calls["aborts"].append(request.json())
+        return json.dumps({"id": JOB_ID, "state": "Aborted"})
 
     def get_results(request: Any, context: Any) -> str:
         # requests_mock lowercases `request.qs` but locators are case sensitive
@@ -135,37 +174,31 @@ def mock_bulk2(
         calls["results"].append(params)
         calls["auth"].append(request.headers["Authorization"])
         locator = params.get("locator", [""])[0]
-        if failures.get(locator):
-            context.status_code = failures[locator].pop(0)
-            if context.status_code == 401:
-                return json.dumps(
-                    [
-                        {
-                            "errorCode": "INVALID_SESSION_ID",
-                            "message": "Session expired or invalid",
-                        }
-                    ]
-                )
-            context.headers = {"Retry-After": "0"}
-            return ""
         page_idx = LOCATORS.index(locator)
         next_idx = page_idx + 1
-        context.headers = {
+        headers = {
             "Sforce-Locator": LOCATORS[next_idx] if next_idx < len(pages) else "null",
-            "Sforce-NumberOfRecords": str(max(pages[page_idx].count('"\n') - 1, 0)),
+            "Sforce-NumberOfRecords": str(count_records(pages[page_idx])),
         }
+        if failures.get(locator):
+            failure = failures[locator].pop(0)
+            if not isinstance(failure, str):
+                return fail(failure, context)
+            context.headers = headers
+            return failure
+        context.headers = headers
         return pages[page_idx]
 
-    m.post(re.compile(r"/jobs/query$"), json=create_job)
-    m.get(
-        re.compile(rf"/jobs/query/{JOB_ID}$"),
-        [
-            {"json": {"id": JOB_ID, "state": state, "errorMessage": f"job {state}"}}
-            for state in job_states
-        ],
-    )
+    m.post(re.compile(r"/jobs/query$"), text=create_job)
+    m.get(re.compile(rf"/jobs/query/{JOB_ID}$"), text=job_status)
+    m.patch(re.compile(rf"/jobs/query/{JOB_ID}$"), text=abort_job)
     m.get(re.compile(rf"/jobs/query/{JOB_ID}/results"), text=get_results)
     return calls
+
+
+def count_records(page: str) -> int:
+    """Counts records of a CSV page like Salesforce does in `Sforce-NumberOfRecords`"""
+    return max(len(list(csv.reader(io.StringIO(page.replace("\x00", ""))))) - 1, 0)
 
 
 def make_page(field_names: List[str], value: str) -> str:
@@ -173,6 +206,14 @@ def make_page(field_names: List[str], value: str) -> str:
     header = ",".join(f'"{name}"' for name in field_names)
     row = ",".join(f'"{value}"' for _ in field_names)
     return f"{header}\n{row}\n"
+
+
+@pytest.fixture(autouse=True)
+def clock(mocker: MockerFixture) -> Any:
+    # incremental queries on a timestamp end at the time the query starts
+    clock = mocker.patch.object(table_module, "datetime", wraps=datetime)
+    clock.now.return_value = NOW
+    return clock
 
 
 @pytest.fixture
@@ -283,19 +324,82 @@ def test_salesforce_table_pagination(
         assert "a;b" in tags
 
 
+def test_salesforce_table_results_without_locator(
+    sf_mock: requests_mock.Mocker, credentials: InstanceAuth
+) -> None:
+    # a result page without the Sforce-Locator header is the last one
+    mock_bulk2(sf_mock, [HEADER + ROW_1, HEADER + ROW_2])
+    results = sf_mock.get(
+        re.compile(rf"/jobs/query/{JOB_ID}/results"), text=HEADER + ROW_1
+    )
+    items = list(salesforce_table(credentials=credentials, sobject="Account"))
+    assert [item.num_rows for item in items] == [1]
+    assert results.call_count == 1
+
+
+@pytest.mark.parametrize("backend", ["python", "pyarrow"])
+def test_salesforce_table_long_values(
+    sf_mock: requests_mock.Mocker, credentials: InstanceAuth, backend: TTableBackend
+) -> None:
+    # a value over the CSV field limit of 131,072 characters and a record over 2 MiB, which
+    # spans more than two 1 MiB pyarrow parse blocks
+    values = ['"quoted", line\n' * 15000, ("漢" * 60 + '"x"\n') * 12000]
+    buffer = io.StringIO()
+    writer = csv.writer(buffer, quoting=csv.QUOTE_ALL, lineterminator="\n")
+    writer.writerow(["Id", "Description"])
+    writer.writerows([f"001{n}", value] for n, value in enumerate(values))
+    mock_bulk2(sf_mock, [buffer.getvalue()])
+    items = list(
+        salesforce_table(
+            credentials=credentials,
+            sobject="Account",
+            included_columns=["Id", "Description"],
+            backend=backend,
+        )
+    )
+    if backend == "pyarrow":
+        loaded = [v for item in items for v in item.column("Description").to_pylist()]
+    else:
+        loaded = [row["Description"] for row in items]
+    # compared as a whole so a failure does not diff megabytes of text
+    assert [len(value) for value in loaded] == [len(value) for value in values]
+    assert loaded == values
+
+
+@pytest.mark.parametrize("backend", ["python", "pyarrow"])
+def test_salesforce_table_truncated_page(
+    sf_mock: requests_mock.Mocker, credentials: InstanceAuth, backend: TTableBackend
+) -> None:
+    # the first page arrives without its last record, Salesforce counted 2
+    mock_bulk2(
+        sf_mock,
+        [HEADER + ROW_1 + ROW_2, HEADER + ROW_3],
+        failures={"": [HEADER + ROW_1]},
+    )
+    resource = salesforce_table(
+        credentials=credentials, sobject="Account", backend=backend
+    )
+    with pytest.raises(ResourceExtractionError) as py_ex:
+        list(resource)
+    assert isinstance(py_ex.value.__cause__, SalesforceOperationError)
+    assert "holds 1 of the 2 records" in str(py_ex.value.__cause__)
+
+
 @pytest.mark.parametrize(
     "cursor_path,incremental_kwargs,expected_soql_filter",
     [
-        ("SystemModstamp", {}, ""),
+        ("SystemModstamp", {}, f" WHERE SystemModstamp <= {NOW_LITERAL}"),
         (
             "SystemModstamp",
             {"initial_value": datetime(2024, 1, 1, tzinfo=timezone.utc)},
-            " WHERE SystemModstamp >= 2024-01-01T00:00:00.000Z",
+            " WHERE SystemModstamp >= 2024-01-01T00:00:00.000Z"
+            f" AND SystemModstamp <= {NOW_LITERAL}",
         ),
         (
             "SystemModstamp",
             {"initial_value": "2024-01-01T02:00:00.123+02:00", "range_start": "open"},
-            " WHERE SystemModstamp > 2024-01-01T00:00:00.123Z",
+            " WHERE SystemModstamp > 2024-01-01T00:00:00.123Z"
+            f" AND SystemModstamp <= {NOW_LITERAL}",
         ),
         (
             "SystemModstamp",
@@ -323,12 +427,18 @@ def test_salesforce_table_pagination(
                 "initial_value": datetime(2024, 1, 1, tzinfo=timezone.utc),
                 "row_order": "asc",
             },
-            " WHERE SystemModstamp >= 2024-01-01T00:00:00.000Z ORDER BY SystemModstamp ASC",
+            " WHERE SystemModstamp >= 2024-01-01T00:00:00.000Z"
+            f" AND SystemModstamp <= {NOW_LITERAL} ORDER BY SystemModstamp ASC",
         ),
         (
             "SystemModstamp",
             {"row_order": "desc"},
-            " ORDER BY SystemModstamp DESC",
+            f" WHERE SystemModstamp <= {NOW_LITERAL} ORDER BY SystemModstamp DESC",
+        ),
+        (
+            "SystemModstamp",
+            {"on_cursor_value_missing": "include"},
+            f" WHERE (SystemModstamp <= {NOW_LITERAL}) OR SystemModstamp = null",
         ),
         (
             "CloseDate",
@@ -368,6 +478,7 @@ def test_salesforce_table_pagination(
         "min_closed_range_end",
         "row_order_asc",
         "row_order_desc_no_initial_value",
+        "include_missing_no_initial_value",
         "date_include_missing",
         "date_exclude_missing",
         "bigint",
@@ -434,7 +545,7 @@ def test_salesforce_table_incremental_runs(
     # records again, they are merged on Id
     pipeline.run(account())
     assert calls["queries"][1].endswith(
-        " WHERE SystemModstamp >= 2024-02-01T00:00:00.000Z"
+        f" WHERE SystemModstamp >= 2024-02-01T00:00:00.000Z AND SystemModstamp <= {NOW_LITERAL}"
     )
     assert load_table_counts(pipeline, "account") == {"account": 2}
 
@@ -460,7 +571,9 @@ def test_salesforce_table_columns(
     # user hints override types reflected from describe
     resource.apply_hints(columns={"Amount__c": {"data_type": "double"}})
     tables = list(resource)
-    assert calls["queries"] == ["SELECT Id, Amount__c, SystemModstamp FROM Account"]
+    assert calls["queries"] == [
+        f"SELECT Id, Amount__c, SystemModstamp FROM Account WHERE SystemModstamp <= {NOW_LITERAL}"
+    ]
     assert tables[0].schema.field("Amount__c").type == pa.float64()
     assert tables[0].schema.field("SystemModstamp").type == pa.timestamp("ms", tz="UTC")
     assert tables[0].column("Amount__c").to_pylist() == [1234.56]
@@ -486,7 +599,8 @@ FIELD_TYPES = {
             None,
             "merge",
             ["Id"],
-            " WHERE SystemModstamp >= 2024-01-31T23:50:00.000Z",
+            " WHERE SystemModstamp >= 2024-01-31T23:50:00.000Z"
+            f" AND SystemModstamp <= {NOW_LITERAL}",
         ),
         (
             ["Id", "CreatedDate", "LastModifiedDate"],
@@ -494,7 +608,8 @@ FIELD_TYPES = {
             None,
             "merge",
             ["Id"],
-            " WHERE LastModifiedDate >= 2024-01-31T23:50:00.000Z",
+            " WHERE LastModifiedDate >= 2024-01-31T23:50:00.000Z"
+            f" AND LastModifiedDate <= {NOW_LITERAL}",
         ),
         (
             ["Id", "CreatedDate", "Field"],
@@ -502,7 +617,8 @@ FIELD_TYPES = {
             None,
             "append",
             ["Id"],
-            " WHERE CreatedDate >= 2024-02-01T00:00:00.000Z",
+            " WHERE CreatedDate >= 2024-02-01T00:00:00.000Z"
+            f" AND CreatedDate <= {NOW_LITERAL}",
         ),
         (
             ["Id", "LoginTime"],
@@ -510,7 +626,8 @@ FIELD_TYPES = {
             None,
             "append",
             ["Id"],
-            " WHERE LoginTime >= 2024-02-01T00:00:00.000Z",
+            " WHERE LoginTime >= 2024-02-01T00:00:00.000Z"
+            f" AND LoginTime <= {NOW_LITERAL}",
         ),
         (["Id", "Name"], {}, None, "replace", ["Id"], ""),
         (
@@ -519,7 +636,8 @@ FIELD_TYPES = {
             None,
             "merge",
             ["Id"],
-            " WHERE SystemModstamp >= 2024-01-31T23:59:00.000Z",
+            " WHERE SystemModstamp >= 2024-01-31T23:59:00.000Z"
+            f" AND SystemModstamp <= {NOW_LITERAL}",
         ),
         (
             ["Id", "SystemModstamp"],
@@ -527,9 +645,18 @@ FIELD_TYPES = {
             None,
             "append",
             ["Id"],
-            " WHERE SystemModstamp >= 2024-02-01T00:00:00.000Z",
+            " WHERE SystemModstamp >= 2024-02-01T00:00:00.000Z"
+            f" AND SystemModstamp <= {NOW_LITERAL}",
         ),
-        (["Id", "SystemModstamp"], {"incremental": None}, None, "replace", ["Id"], ""),
+        (
+            ["Id", "SystemModstamp"],
+            {"incremental": None},
+            None,
+            "merge",
+            ["Id"],
+            " WHERE SystemModstamp >= 2024-01-31T23:50:00.000Z"
+            f" AND SystemModstamp <= {NOW_LITERAL}",
+        ),
         (
             ["Id", "SystemModstamp"],
             {"write_disposition": "replace"},
@@ -544,7 +671,8 @@ FIELD_TYPES = {
             None,
             "merge",
             ["Name"],
-            " WHERE SystemModstamp >= 2024-01-31T23:50:00.000Z",
+            " WHERE SystemModstamp >= 2024-01-31T23:50:00.000Z"
+            f" AND SystemModstamp <= {NOW_LITERAL}",
         ),
         (
             ["Id", "SystemModstamp"],
@@ -552,7 +680,8 @@ FIELD_TYPES = {
             "SystemModstamp",
             "merge",
             ["Id"],
-            " WHERE SystemModstamp >= 2024-02-01T00:00:00.000Z",
+            " WHERE SystemModstamp >= 2024-02-01T00:00:00.000Z"
+            f" AND SystemModstamp <= {NOW_LITERAL}",
         ),
         (
             ["Id", "CreatedDate"],
@@ -560,7 +689,8 @@ FIELD_TYPES = {
             "CreatedDate",
             "append",
             ["Id"],
-            " WHERE CreatedDate >= 2024-02-01T00:00:00.000Z",
+            " WHERE CreatedDate >= 2024-02-01T00:00:00.000Z"
+            f" AND CreatedDate <= {NOW_LITERAL}",
         ),
     ],
     ids=[
@@ -571,7 +701,7 @@ FIELD_TYPES = {
         "no_cursor",
         "explicit_lag",
         "explicit_append_no_lag",
-        "no_incremental",
+        "none_is_default_incremental",
         "explicit_replace_no_incremental",
         "explicit_primary_key",
         "explicit_incremental_merge",
@@ -590,7 +720,7 @@ def test_salesforce_table_defaults(
 ) -> None:
     # the sObject has `field_names` and a single record with all of them set to 2024-02-01.
     # the WHERE of the second run shows which cursor was picked and its lag: 10 minutes when
-    # "auto" merges, none on append or with an explicit incremental
+    # the default incremental merges, none on append or with an explicit incremental
     fields = [
         {"name": name, "type": FIELD_TYPES[name], "nillable": name != "Id"}
         for name in field_names
@@ -673,21 +803,61 @@ def test_salesforce_table_session_expired_no_login(
     assert len(calls["results"]) == 2
 
 
-def test_salesforce_table_retries_throttling(
-    sf_mock: requests_mock.Mocker, credentials: InstanceAuth
+@pytest.mark.parametrize(
+    "failures,expected_locators",
+    [
+        ({"MTAw": [429, 503]}, [None, ["MTAw"], ["MTAw"], ["MTAw"]]),
+        ({"MTAw": [ChunkedEncodingError]}, [None, ["MTAw"], ["MTAw"]]),
+        ({"create": [503], "status": [503]}, [None, ["MTAw"]]),
+    ],
+    ids=["throttled", "connection_broken", "job_requests"],
+)
+def test_salesforce_table_retries(
+    sf_mock: requests_mock.Mocker,
+    credentials: InstanceAuth,
+    failures: Dict[str, List[Any]],
+    expected_locators: List[Any],
 ) -> None:
-    # the second result page fails with 429 then 503, the dlt session retries both
-    calls = mock_bulk2(
-        sf_mock, [HEADER + ROW_1, HEADER + ROW_2], failures={"MTAw": [429, 503]}
-    )
+    # the dlt session retries throttling, server errors and broken downloads of the same page
+    calls = mock_bulk2(sf_mock, [HEADER + ROW_1, HEADER + ROW_2], failures=failures)
     items = list(salesforce_table(credentials=credentials, sobject="Account"))
+    assert len(calls["queries"]) == 1
+    assert [params.get("locator") for params in calls["results"]] == expected_locators
+    assert [item.num_rows for item in items] == [1, 1]
+
+
+@pytest.mark.parametrize(
+    "message,retried",
+    [
+        ("ConcurrentPerOrgLongTxn Limit exceeded.", True),
+        ("TotalRequests Limit exceeded.", False),
+    ],
+    ids=["concurrent_requests", "daily_requests"],
+)
+def test_salesforce_table_request_limit(
+    sf_mock: requests_mock.Mocker,
+    credentials: InstanceAuth,
+    message: str,
+    retried: bool,
+) -> None:
+    # Salesforce refuses requests over the concurrent and the daily limit with 403. the first
+    # passes when other long requests end
+    error = (403, [{"errorCode": "REQUEST_LIMIT_EXCEEDED", "message": message}])
+    calls = mock_bulk2(
+        sf_mock, [HEADER + ROW_1, HEADER + ROW_2], failures={"MTAw": [error]}
+    )
+    resource = salesforce_table(credentials=credentials, sobject="Account")
+    if retried:
+        assert [item.num_rows for item in resource] == [1, 1]
+    else:
+        with pytest.raises(ResourceExtractionError) as py_ex:
+            list(resource)
+        assert isinstance(py_ex.value.__cause__, SalesforceRefusedRequest)
+        assert message in str(py_ex.value.__cause__)
     assert [params.get("locator") for params in calls["results"]] == [
         None,
         ["MTAw"],
-        ["MTAw"],
-        ["MTAw"],
-    ]
-    assert [item.num_rows for item in items] == [1, 1]
+    ] + [["MTAw"]] * retried
 
 
 @pytest.mark.parametrize(
@@ -696,8 +866,10 @@ def test_salesforce_table_retries_throttling(
         (("UploadComplete", "InProgress", "JobComplete"), [0.5, 0.75], None),
         (("InProgress", "Failed"), [0.5], "job Failed"),
         (("Aborted",), [], "job Aborted"),
+        (("InProgress",), [0.5, 0.75, 1.125], "still in state `InProgress`"),
+        (("NewState",), [0.5, 0.75, 1.125], "still in state `NewState`"),
     ],
-    ids=["complete", "failed", "aborted"],
+    ids=["complete", "failed", "aborted", "timeout", "unknown_state"],
 )
 def test_salesforce_table_job_status(
     sf_mock: requests_mock.Mocker,
@@ -707,9 +879,11 @@ def test_salesforce_table_job_status(
     expected_sleeps: List[float],
     expected_error: Optional[str],
 ) -> None:
-    # the job status is polled with growing waits until the job completes, fails or is aborted
+    # the job status is polled with growing waits until the job completes, fails or is aborted.
+    # a job that does not complete in time is aborted
+    mocker.patch("sources.salesforce.helpers.query.MAX_JOB_WAIT", 2.0)
     sleep = mocker.patch("sources.salesforce.helpers.query.sleep")
-    mock_bulk2(sf_mock, [HEADER + ROW_1], job_states=job_states)
+    calls = mock_bulk2(sf_mock, [HEADER + ROW_1], job_states=job_states)
     resource = salesforce_table(credentials=credentials, sobject="Account")
     if expected_error:
         with pytest.raises(ResourceExtractionError) as py_ex:
@@ -719,12 +893,23 @@ def test_salesforce_table_job_status(
     else:
         assert [item.num_rows for item in resource] == [1]
     assert [call.args[0] for call in sleep.call_args_list] == expected_sleeps
+    assert calls["aborts"] == (
+        [{"state": "Aborted"}] if "still in state" in (expected_error or "") else []
+    )
 
 
 @pytest.mark.parametrize(
     "kwargs,expected_soql_filter",
     [
-        ({"incremental": None}, " WHERE Name LIKE 'A%' AND IsDeleted = false"),
+        (
+            {"write_disposition": "replace"},
+            " WHERE Name LIKE 'A%' AND IsDeleted = false",
+        ),
+        (
+            {},
+            " WHERE (Name LIKE 'A%' AND IsDeleted = false)"
+            f" AND (SystemModstamp <= {NOW_LITERAL})",
+        ),
         (
             {
                 "incremental": dlt.sources.incremental(
@@ -732,7 +917,8 @@ def test_salesforce_table_job_status(
                 )
             },
             " WHERE (Name LIKE 'A%' AND IsDeleted = false)"
-            " AND (SystemModstamp >= 2024-01-01T00:00:00.000Z)",
+            " AND (SystemModstamp >= 2024-01-01T00:00:00.000Z"
+            f" AND SystemModstamp <= {NOW_LITERAL})",
         ),
         (
             {
@@ -758,6 +944,7 @@ def test_salesforce_table_job_status(
     ],
     ids=[
         "filter_only",
+        "filter_and_default_incremental",
         "filter_and_incremental",
         "filter_and_or_condition",
         "custom_last_value_func",
@@ -983,17 +1170,16 @@ def mock_rest(
     return calls
 
 
-def mock_bulk_not_supported(m: requests_mock.Mocker) -> None:
-    m.post(
-        re.compile(r"/jobs/query$"),
-        status_code=400,
-        json=[
-            {
-                "errorCode": "INVALIDENTITY",
-                "message": f"Entity '{data.DLT_TYPES}' is not supported by the Bulk API.",
-            }
-        ],
-    )
+BULK_NOT_SUPPORTED = {
+    "errorCode": "INVALIDENTITY",
+    "message": f"Entity '{data.DLT_TYPES}' is not supported by the Bulk API.",
+}
+
+
+def mock_bulk_not_supported(
+    m: requests_mock.Mocker, error: Dict[str, str] = BULK_NOT_SUPPORTED
+) -> None:
+    m.post(re.compile(r"/jobs/query$"), status_code=400, json=[error])
 
 
 @pytest.mark.parametrize("backend", ["python", "pyarrow"])
@@ -1011,7 +1197,8 @@ def test_salesforce_table_rest_captured(
     )
     if api == "auto":
         mock_bulk_not_supported(sf_mock)
-    rest_calls = mock_rest(sf_mock, rest_records_from_captured(), page_size=4)
+    records = rest_records_from_captured()
+    rest_calls = mock_rest(sf_mock, records, page_size=4)
     pipeline = dlt.pipeline(
         pipeline_name="salesforce_table_rest", destination="duckdb", dev_mode=True
     )
@@ -1022,10 +1209,38 @@ def test_salesforce_table_rest_captured(
     )
     assert_load_info(load_info)
     assert_dlt_types_loaded(pipeline, double_as_decimal=False)
-    # queryAll returns deleted records, 10 records in pages of 4
+    # queryAll returns deleted records, all records are read in pages of 4
     assert rest_calls["paths"] == ["queryAll"]
-    assert rest_calls["next"] == [1, 2]
+    assert rest_calls["next"] == list(range(1, (len(records) + 3) // 4))
     assert calls["queries"] == []
+
+
+@pytest.mark.parametrize(
+    "error",
+    [
+        BULK_NOT_SUPPORTED,
+        {
+            "errorCode": "INVALID_FIELD",
+            "message": "Selecting compound data not supported in Bulk Query",
+        },
+    ],
+    ids=["sobject", "compound_field"],
+)
+def test_salesforce_table_bulk_api_fallback(
+    sf_mock: requests_mock.Mocker, credentials: InstanceAuth, error: Dict[str, str]
+) -> None:
+    # "auto" reads with REST when the Bulk API rejects the sObject or one of its fields
+    mock_bulk2(sf_mock, [], fields=load_captured_describe(), sobject=data.DLT_TYPES)
+    mock_bulk_not_supported(sf_mock, error)
+    records = rest_records_from_captured()[:2]
+    rest_calls = mock_rest(sf_mock, records, page_size=4)
+    rows = list(
+        salesforce_table(
+            credentials=credentials, sobject=data.DLT_TYPES, backend="python"
+        )
+    )
+    assert rest_calls["paths"] == ["queryAll"]
+    assert [row["Id"] for row in rows] == [record["Id"] for record in records]
 
 
 def test_salesforce_table_bulk_api_not_supported(
@@ -1180,12 +1395,39 @@ def test_salesforce_source_replace_without_pyarrow(
     )
 
 
+@pytest.mark.parametrize(
+    "write_disposition", [None, "replace"], ids=["merge", "replace"]
+)
+def test_salesforce_source_start_date(
+    sf_mock: requests_mock.Mocker,
+    credentials: InstanceAuth,
+    write_disposition: Optional[TWriteDisposition],
+) -> None:
+    os.environ["SOURCES__SALESFORCE__START_DATE"] = "2024-01-15"
+    calls = mock_bulk2(sf_mock, [""], fields=SOURCE_FIELDS, sobject=r"\w+")
+    source = salesforce_source(
+        credentials=credentials, write_disposition=write_disposition
+    )
+    assert {resource.section for resource in source.resources.values()} == {
+        "salesforce"
+    }
+    dlt.pipeline(pipeline_name="salesforce_source_start", dev_mode=True).extract(source)
+    assert sorted(calls["queries"]) == sorted(
+        f"SELECT Id, Name, IsDeleted, SystemModstamp FROM {sobject}"
+        f" WHERE SystemModstamp >= 2024-01-15T00:00:00.000Z AND SystemModstamp <= {NOW_LITERAL}"
+        for sobject in SOURCE_SOBJECTS.values()
+    )
+
+
 def test_salesforce_source_unknown_filter(credentials: InstanceAuth) -> None:
     # filters are keyed by resource name, a typo would silently load unfiltered data
     with pytest.raises(ValueError):
         salesforce_source(
             credentials=credentials, soql_filters={"accounts": "Name = 'x'"}
         )
+
+
+COMPARISONS = {">=": operator.ge, ">": operator.gt, "<=": operator.le, "<": operator.lt}
 
 
 class FakeBulk2Org:
@@ -1217,15 +1459,8 @@ class FakeBulk2Org:
         names = soql[len("SELECT ") : soql.index(" FROM ")].split(", ")
         rows = self.records
         # timestamps in records have the format of SOQL literals so they compare as strings
-        where = re.search(r" WHERE (\w+) (>=|>) (\S+)", soql)
-        if where:
-            field, op, literal = where.groups()
-            rows = [
-                r
-                for r in rows
-                if r[field] >= literal
-                if op == ">=" or r[field] > literal
-            ]
+        for field, op, literal in re.findall(r"(\w+) (>=|>|<=|<) (\d{4}-\S+)", soql):
+            rows = [r for r in rows if COMPARISONS[op](r[field], literal)]
         order_by = re.search(r" ORDER BY (\w+) ASC", soql)
         if order_by:
             rows = sorted(rows, key=lambda r: r[order_by.group(1)])
@@ -1238,7 +1473,10 @@ class FakeBulk2Org:
         return {"id": JOB_ID}
 
     def results(self, request: Any, context: Any) -> str:
-        context.headers = {"Sforce-Locator": "null", "Sforce-NumberOfRecords": "0"}
+        context.headers = {
+            "Sforce-Locator": "null",
+            "Sforce-NumberOfRecords": str(count_records(self._page)),
+        }
         return self._page
 
 
@@ -1474,11 +1712,136 @@ def test_salesforce_table_backend_switch(
                 )
             )
         )
-    assert org.queries[1].endswith(" WHERE SystemModstamp >= 2024-01-01T00:50:00.000Z")
+    assert org.queries[1].endswith(
+        f" WHERE SystemModstamp >= 2024-01-01T00:50:00.000Z AND SystemModstamp <= {NOW_LITERAL}"
+    )
     assert incremental_state(pipeline, "SystemModstamp")["last_value"] == datetime(
         2024, 1, 1, 1, tzinfo=timezone.utc
     )
     assert load_table_counts(pipeline, "account") == {"account": 2}
+
+
+@pytest.mark.parametrize("backend", ["python", "pyarrow"])
+def test_salesforce_table_incremental_read_until(
+    sf_mock: requests_mock.Mocker,
+    credentials: InstanceAuth,
+    clock: Any,
+    backend: TTableBackend,
+) -> None:
+    # a record changed after the query started is read by the next run. a long job could have
+    # missed earlier changes, which must stay after the cursor
+    org = FakeBulk2Org(
+        sf_mock,
+        SOURCE_FIELDS,
+        account_records(
+            ["2024-05-31T23:00:00.000Z", NOW_LITERAL, "2024-06-01T00:30:00.000Z"]
+        ),
+    )
+    pipeline = dlt.pipeline(
+        pipeline_name="salesforce_read_until", destination="duckdb", dev_mode=True
+    )
+
+    def account() -> Any:
+        return salesforce_table(
+            credentials=credentials, sobject="Account", backend=backend
+        )
+
+    assert_load_info(pipeline.run(account()))
+    assert pipeline.last_trace.last_normalize_info.row_counts["account"] == 2
+    assert incremental_state(pipeline, "SystemModstamp")["last_value"] == NOW
+
+    clock.now.return_value = datetime(2024, 6, 1, 1, tzinfo=timezone.utc)
+    assert_load_info(pipeline.run(account()))
+    assert org.queries == [
+        f"SELECT Id, Name, IsDeleted, SystemModstamp FROM Account WHERE SystemModstamp <= {NOW_LITERAL}",
+        "SELECT Id, Name, IsDeleted, SystemModstamp FROM Account"
+        " WHERE SystemModstamp >= 2024-05-31T23:50:00.000Z"
+        " AND SystemModstamp <= 2024-06-01T01:00:00.000Z",
+    ]
+    assert load_table_counts(pipeline, "account") == {"account": 3}
+
+
+@pytest.mark.parametrize(
+    "start_date",
+    ["2024-01-03", date(2024, 1, 3), datetime(2024, 1, 3, tzinfo=timezone.utc), None],
+    ids=["str", "date", "datetime", "config"],
+)
+@pytest.mark.parametrize(
+    "write_disposition,expected_queries,expected_rows",
+    [
+        (
+            None,
+            [
+                " WHERE SystemModstamp >= 2024-01-03T00:00:00.000Z",
+                " WHERE SystemModstamp >= 2024-01-04T23:50:00.000Z",
+            ],
+            [3, 1],
+        ),
+        (
+            "replace",
+            [" WHERE SystemModstamp >= 2024-01-03T00:00:00.000Z"] * 2,
+            [3, 3],
+        ),
+    ],
+    ids=["merge", "replace"],
+)
+def test_salesforce_table_start_date(
+    sf_mock: requests_mock.Mocker,
+    credentials: InstanceAuth,
+    start_date: Optional[TAnyDateTime],
+    write_disposition: Optional[TWriteDisposition],
+    expected_queries: List[str],
+    expected_rows: List[int],
+) -> None:
+    # records modified on 5 consecutive days. replace loads the records since the start date on
+    # every run, merge continues from the last run
+    org = FakeBulk2Org(
+        sf_mock,
+        SOURCE_FIELDS,
+        account_records([f"2024-01-0{day}T00:00:00.000Z" for day in range(1, 6)]),
+    )
+    kwargs: Dict[str, Any] = {"start_date": start_date}
+    if start_date is None:
+        # an explicit None would win over config
+        kwargs = {}
+        os.environ["SOURCES__SALESFORCE__ACCOUNT__START_DATE"] = "2024-01-03"
+    pipeline = dlt.pipeline(
+        pipeline_name="salesforce_start_date", destination="duckdb", dev_mode=True
+    )
+    for expected in expected_rows:
+        account = salesforce_table(
+            credentials=credentials,
+            sobject="Account",
+            write_disposition=write_disposition,
+            **kwargs,
+        )
+        assert account.section == "salesforce"
+        assert_load_info(pipeline.run(account))
+        assert pipeline.last_trace.last_normalize_info.row_counts["account"] == expected
+    assert org.queries == [
+        f"SELECT Id, Name, IsDeleted, SystemModstamp FROM Account{where}"
+        f" AND SystemModstamp <= {NOW_LITERAL}"
+        for where in expected_queries
+    ]
+    assert load_table_counts(pipeline, "account") == {"account": 3}
+
+
+def test_salesforce_table_start_date_errors(
+    sf_mock: requests_mock.Mocker, credentials: InstanceAuth
+) -> None:
+    mock_bulk2(sf_mock, [""], fields=SOURCE_FIELDS[:2])
+    with pytest.raises(ValueError):
+        salesforce_table(
+            credentials=credentials,
+            sobject="Account",
+            start_date="2024-01-03",
+            incremental=dlt.sources.incremental("CreatedDate"),
+        )
+    # the sObject has no field the default incremental could start from
+    with pytest.raises(ValueError):
+        salesforce_table(
+            credentials=credentials, sobject="Account", start_date="2024-01-03"
+        )
 
 
 def mock_login(m: requests_mock.Mocker) -> Any:
@@ -1562,7 +1925,7 @@ def test_salesforce_table_defer_table_reflect(
 def test_salesforce_table_defer_table_reflect_no_system_modstamp(
     sf_mock: requests_mock.Mocker, credentials: InstanceAuth
 ) -> None:
-    # the "auto" incremental of a deferred resource expects SystemModstamp
+    # the default incremental of a deferred resource expects SystemModstamp
     fields = [
         {"name": name, "type": FIELD_TYPES[name], "nillable": name != "Id"}
         for name in ("Id", "CreatedDate")

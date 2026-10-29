@@ -5,11 +5,30 @@ Loads Salesforce sObjects with the Bulk API 2.0, and with the REST API for sObje
 - `salesforce_source` loads User, UserRole, Opportunity, OpportunityLineItem, OpportunityContactRole, Account, Contact, Lead, Campaign, CampaignMember, Product2, Pricebook2, PricebookEntry, Task and Event.
 - `salesforce_table` loads any sObject, including custom objects.
 
-By default records changed since the last run are merged on `Id` and records deleted in Salesforce are deleted from the destination. `write_disposition="replace"` reloads all records. Field types come from the sObject description. `pyarrow` is optional: it is used when installed and is much faster on large sObjects.
+By default records changed since the last run are merged on `Id` and records deleted in Salesforce are deleted from the destination. `start_date` sets where the first run starts. `write_disposition="replace"` reloads all records, or the records changed since `start_date`. Field types come from the sObject description. `pyarrow` is optional: it is used when installed and is much faster on large sObjects.
 
 Creating the source or a resource logs in and describes the sObjects. On Airflow, where DAG files are parsed often, pass `defer_table_reflect=True` so this happens only when the data is extracted.
 
 > Upgrading from an earlier version of this source changes column types, primary keys and write dispositions. Reload the data with `pipeline.run(salesforce_source(), refresh="drop_sources")`.
+
+Incremental loading has limits that come from Salesforce:
+- Formula fields that read related records or use `TODAY()` change without changing `SystemModstamp`, so loaded rows keep old values. Reload the sObject to refresh them.
+- Account and opportunity team members, and sharing changes in general, do not change `SystemModstamp`.
+- Deleted records stay in the recycle bin for 15 days. Records deleted longer than that before a run stay in the destination.
+
+## Changelog
+
+### 1.0.0
+- **breaking** `salesforce_source`: the `incremental` argument is removed. Pass `write_disposition="replace"` to reload all records
+- **breaking** `salesforce_table`: `incremental=None` uses the default incremental instead of reloading all records. Pass `write_disposition="replace"` to reload all records
+- new `start_date` argument of `salesforce_source` and `salesforce_table`: the initial value of the default incremental
+- fixed resources resolve config in the `salesforce` section instead of `table`
+- fixed incremental queries on a timestamp read records changed until the query starts. Records changed while a long query job runs are loaded by the next run instead of being skipped
+- fixed fields longer than 131,072 characters, like Apex code, with the `python` backend and records over 2 MiB with the `pyarrow` backend
+- requests refused because the org runs too many long requests at once are retried
+- a query job that does not complete in 24 hours is aborted and raises
+- a result page with fewer records than Salesforce counted raises
+- `api="auto"` also reads sObjects with compound fields the Bulk API cannot select with the REST API
 
 ## Initialize the pipeline with Salesforce verified source
 ```bash

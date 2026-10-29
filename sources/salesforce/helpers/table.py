@@ -2,34 +2,21 @@
 
 import importlib.util
 from copy import copy
-from typing import (
-    Any,
-    Dict,
-    Iterator,
-    List,
-    Literal,
-    NamedTuple,
-    Optional,
-    Tuple,
-    Union,
-)
+from datetime import datetime, timezone  # noqa: I251
+from typing import Any, Dict, Iterator, List, Literal, NamedTuple, Optional, Tuple
 
 import dlt
 from dlt.common import logger
-from dlt.common.configuration.specs import BaseConfiguration, configspec
 from dlt.common.metrics import TDataLocation
-from dlt.common.schema.typing import (
-    TTableSchemaColumns,
-    TWriteDispositionConfig,
-    TWriteDispositionDict,
-)
+from dlt.common.schema.typing import TTableSchemaColumns, TWriteDispositionConfig
 from dlt.common.schema.utils import merge_columns
-from dlt.common.typing import TColumnNames, TDataItem
+from dlt.common.time import ensure_datetime_in_tz
+from dlt.common.typing import TAnyDateTime, TColumnNames, TDataItem
 from dlt.extract.incremental import Incremental
 from dlt.extract.resource import DltResource
+from simple_salesforce.exceptions import SalesforceOperationError
 
 from .connection import SalesforceConnection
-from .credentials import SalesforceAuth
 from .csv_utils import arrow_column_max, csv_page_to_arrow, csv_page_to_rows
 from .query import QueryApi, TQueryApi, make_query_api
 from .schema import (
@@ -43,27 +30,10 @@ from .schema import (
 from .soql import make_soql, to_soql_literal
 
 TTableBackend = Literal["auto", "python", "pyarrow"]
-TIncrementalArg = Union[Literal["auto"], Incremental[Any], None]
 
-
-@configspec
-class SalesforceTableResourceConfiguration(BaseConfiguration):
-    # `incremental` is not configurable: dlt would parse "auto" as an incremental initial value
-    credentials: SalesforceAuth = None
-    sobject: str = None
-    lag: Optional[float] = None
-    soql_filter: Optional[str] = None
-    include_deleted: bool = True
-    double_as_decimal: bool = False
-    backend: TTableBackend = "auto"
-    api: TQueryApi = "auto"
-    chunk_size: int = 50000
-    included_columns: Optional[List[str]] = None
-    excluded_columns: Optional[List[str]] = None
-    write_disposition: Optional[TWriteDispositionDict] = None
-    primary_key: Optional[TColumnNames] = None
-    merge_key: Optional[TColumnNames] = None
-    defer_table_reflect: bool = False
+SOURCE_SECTION = "salesforce"
+# resources built here resolve config under the section of the source, not of this module
+__source_name__ = SOURCE_SECTION
 
 
 class DeferredDescribe(NamedTuple):
@@ -72,7 +42,7 @@ class DeferredDescribe(NamedTuple):
     included_columns: Optional[List[str]]
     excluded_columns: Optional[List[str]]
     double_as_decimal: bool
-    auto_cursor: bool
+    default_cursor: bool
     has_primary_key: bool
     hard_delete: bool
     skip_dedup: bool
@@ -183,22 +153,35 @@ def table_rows(
             " records may be skipped. Set `row_order='asc'` on the incremental."
         )
 
-    soql = make_soql(sobject, columns_hints, incremental, soql_filter, limit)
+    soql = make_soql(
+        sobject,
+        columns_hints,
+        incremental,
+        soql_filter,
+        limit,
+        read_until=datetime.now(timezone.utc),
+    )
     rows_count, max_cursor = 0, None
     try:
         for page in query_api.query(soql, columns_hints, include_deleted, chunk_size):
             item: Any
             if backend == "pyarrow":
-                item = csv_page_to_arrow(page, columns_hints)
-                if item is None:
-                    continue
-                rows_count += item.num_rows
+                item = csv_page_to_arrow(page.csv, columns_hints)
+                page_rows = 0 if item is None else item.num_rows
+            else:
+                item = csv_page_to_rows(page.csv, columns_hints, cursor_name)
+                page_rows = len(item)
+            if page.records is not None and page_rows != page.records:
+                raise SalesforceOperationError(
+                    f"A result page of sObject `{sobject}` holds {page_rows} of the"
+                    f" {page.records} records Salesforce counted"
+                )
+            if not page_rows:
+                continue
+            rows_count += page_rows
+            if backend == "pyarrow":
                 page_max = arrow_column_max(item, cursor_name) if cursor_name else None
             else:
-                item = csv_page_to_rows(page, columns_hints, cursor_name)
-                if not item:
-                    continue
-                rows_count += len(item)
                 page_max = (
                     max(
                         (
@@ -283,9 +266,9 @@ def _describe_when_extracting(
         columns["IsDeleted"]["hard_delete"] = True
     if incremental is not None:
         cursor_field = incremental.get_cursor_column_name()
-        if deferred.auto_cursor and cursor_field not in columns:
+        if deferred.default_cursor and cursor_field not in columns:
             raise ValueError(
-                f'sObject `{sobject}` has no `{cursor_field}` field, which the "auto"'
+                f"sObject `{sobject}` has no `{cursor_field}` field, which the default"
                 " incremental expects when the describe is deferred. Pass an explicit"
                 " incremental or set `defer_table_reflect=False`."
             )
@@ -304,7 +287,8 @@ def table_resource(
     connection: SalesforceConnection,
     sobject: str,
     name: Optional[str] = None,
-    incremental: TIncrementalArg = "auto",
+    start_date: Optional[TAnyDateTime] = None,
+    incremental: Optional[Incremental[Any]] = None,
     lag: Optional[float] = None,
     soql_filter: Optional[str] = None,
     include_deleted: bool = True,
@@ -337,17 +321,22 @@ def table_resource(
             [primary_key] if isinstance(primary_key, str) else list(primary_key)
         )
 
-    if incremental == "auto":
-        if write_disposition == "replace":
-            # the "replace" shorthand reloads the full table, it resets incremental state in dlt
+    if incremental is None:
+        if write_disposition == "replace" and start_date is None:
+            # the "replace" shorthand resets incremental state in dlt, the full table is reloaded
             cursor_field = None
         elif defer_table_reflect:
             # all custom and nearly all standard sObjects have it, checked when described
             cursor_field = UPDATED_AT_FIELDS[0]
         else:
             cursor_field = get_cursor_field(columns)
+            if cursor_field is None and start_date is not None:
+                raise ValueError(
+                    f"sObject `{sobject}` has no field to load records changed since"
+                    " `start_date`. Pass an explicit incremental."
+                )
     else:
-        cursor_field = incremental.get_cursor_column_name() if incremental else None
+        cursor_field = incremental.get_cursor_column_name()
     write_disposition = write_disposition or get_write_disposition(cursor_field)
     disposition = (
         write_disposition["disposition"]
@@ -356,11 +345,19 @@ def table_resource(
     )
 
     table_incremental: Optional[Incremental[Any]]
-    if incremental == "auto":
+    if incremental is None:
         if lag is None and disposition == "merge":
             lag = DEFAULT_LAG
         table_incremental = (
-            dlt.sources.incremental(cursor_field, lag=lag) if cursor_field else None
+            dlt.sources.incremental(
+                cursor_field,
+                initial_value=(
+                    None if start_date is None else ensure_datetime_in_tz(start_date)
+                ),
+                lag=lag,
+            )
+            if cursor_field
+            else None
         )
     else:
         table_incremental = incremental
@@ -380,7 +377,7 @@ def table_resource(
             included_columns,
             excluded_columns,
             double_as_decimal,
-            auto_cursor=incremental == "auto",
+            default_cursor=incremental is None,
             has_primary_key=bool(primary_key),
             hard_delete=hard_delete,
             skip_dedup=skip_dedup,
