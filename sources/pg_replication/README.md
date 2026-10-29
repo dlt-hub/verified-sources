@@ -48,6 +48,12 @@ the run, see below. Changes are ordered by `_dlt_lsn` and deletes marked in `_dl
 - new `init_replication`: `initial_snapshot="table"` copies the tables, `"unlogged_table"` copies
   them without WAL, `"direct"` reads them with `sql_table` in the snapshot of the slot. Pass the
   callbacks of the returned `ReplicationSnapshot` to your own `sql_table` or `sql_database`
+- new `init_replication`: on an existing slot, `initial_snapshot` returns resources that load
+  `table_names` as they are when read, `replication_resource` merges the replayed changes over
+  them. Before, it raised `RuntimeError`. Needs a publication of updates or deletes, with inserts
+  only it raises `ValueError`
+- new `replication_slot_exists`: tells if the slot exists, check it to pass `initial_snapshot` for
+  all tables only on the first run and later for the added tables
 - new `init_replication` and `replication_resource`: `backend="pyarrow"` decodes inserts with numpy
   into Arrow tables. Switching an existing pipeline changes how `_dlt_id` is created
 - new `init_replication` and `replication_resource`: `exclude_columns`, applied after
@@ -185,7 +191,8 @@ starts one. Other versions run the same way, e.g.
 - **Snapshots**: the `_dlt_<table>_s_<snapshot>` copies are not dropped. The snapshot of a direct
   snapshot lives as long as the replication connection that created the slot
   ([docs](https://www.postgresql.org/docs/current/protocol-replication.html)) and holds back vacuum
-  until the last table is read. Tables added to a publication later get no snapshot.
+  until the last table is read. On an existing slot the tables are read as they are and the
+  replayed changes are merged over them (Postgres 10 and 17).
 - **Performance**: 500k rows from a local Postgres 17 into `filesystem`: 173k rows/s with
   `pyarrow`, 34k with `python`, 172k receiving messages without decoding, 23k before 1.0.0. Both
   backends peak at about 240 MB (#719).

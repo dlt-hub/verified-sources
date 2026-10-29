@@ -9,7 +9,13 @@ from dlt.common.schema.typing import TTableSchemaColumns
 from dlt.extract.items import DataItemWithMeta
 from dlt.sources.credentials import ConnectionStringCredentials
 
-from .helpers import TBackend, get_destination_schema, init_replication, stream_changes
+from .helpers import (
+    TBackend,
+    get_destination_schema,
+    init_replication,
+    replication_slot_exists,
+    stream_changes,
+)
 from .schema_types import TReflectionLevel
 
 

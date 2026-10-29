@@ -27,7 +27,12 @@ from tests.utils import (
     load_table_counts,
     get_table_metrics,
 )
-from sources.pg_replication import helpers, init_replication, replication_resource
+from sources.pg_replication import (
+    helpers,
+    init_replication,
+    replication_resource,
+    replication_slot_exists,
+)
 from sources.pg_replication.helpers import get_pg_version
 from sources.pg_replication.exceptions import (
     ColumnNameCollisionException,
@@ -670,6 +675,16 @@ def test_write_disposition(
     # assert write disposition on snapshot resource
     expected_write_disposition = "append" if publish == "insert" else "merge"
     assert snapshot.write_disposition == expected_write_disposition
+    if publish == "insert":
+        # on the existing slot the appended initial load would repeat the replicated inserts
+        with pytest.raises(ValueError, match="loaded twice"):
+            init_replication(
+                slot_name,
+                pub_name,
+                src_pl.dataset_name,
+                "items",
+                initial_snapshot="direct",
+            )
 
     # assert write disposition on tables dispatched by changes resource
     changes = replication_resource(slot_name, pub_name)
@@ -1007,6 +1022,67 @@ def test_init_replication(src_config: Tuple[dlt.Pipeline, str, str]) -> None:
                 pub_name=pub_name,
                 schema_name=src_pl.dataset_name,
             )
+
+
+@pytest.mark.parametrize("initial_snapshot", ["direct", "table"])
+def test_tables_added_and_removed(
+    src_config: Tuple[dlt.Pipeline, str, str], initial_snapshot: str
+) -> None:
+    src_pl, slot_name, pub_name = src_config
+    create_tables(
+        src_pl,
+        "CREATE TABLE {schema}.a (id int PRIMARY KEY, v text);",
+        "CREATE TABLE {schema}.b (id int PRIMARY KEY, v text);",
+        "INSERT INTO {schema}.a VALUES (1, 'a1');",
+        "INSERT INTO {schema}.b VALUES (1, 'b1'), (2, 'b2'), (3, 'b3');",
+    )
+    schema = src_pl.dataset_name
+    dest_pl = dlt.pipeline(pipeline_name="dest_pl", destination="duckdb", dev_mode=True)
+    assert replication_slot_exists(slot_name) is False
+    snapshot = init_replication(
+        slot_name, pub_name, schema, "a", initial_snapshot="direct"
+    )
+    assert_load_info(dest_pl.run(snapshot))
+    assert replication_slot_exists(slot_name) is True
+
+    # on the existing slot the table is loaded as it is when read
+    added = init_replication(
+        slot_name, pub_name, schema, "b", initial_snapshot=initial_snapshot
+    )
+    run_sql(
+        src_pl,
+        "UPDATE {schema}.a SET v = 'a1 updated' WHERE id = 1;",
+        "UPDATE {schema}.b SET v = 'b2 updated' WHERE id = 2;",
+    )
+    assert_load_info(dest_pl.run(added))
+    assert table_rows(dest_pl, "a", ["id", "v"]) == [(1, "a1")]
+    run_sql(
+        src_pl,
+        "DELETE FROM {schema}.b WHERE id = 2;",
+        "UPDATE {schema}.b SET v = 'b3 updated' WHERE id = 3;",
+    )
+    # changes made since the table was added are replayed over the loaded rows
+    assert_load_info(dest_pl.run(replication_resource(slot_name, pub_name)))
+    assert table_rows(dest_pl, "a", ["id", "v"]) == [(1, "a1 updated")]
+    assert table_rows(dest_pl, "b", ["id", "v"]) == [(1, "b1"), (3, "b3 updated")]
+    # a published table is loaded again, ie. after a failed load
+    reload = init_replication(
+        slot_name, pub_name, schema, "b", initial_snapshot=initial_snapshot
+    )
+    assert_load_info(dest_pl.run(reload))
+    assert table_rows(dest_pl, "b", ["id", "v"]) == [(1, "b1"), (3, "b3 updated")]
+
+    # init_replication never removes tables, the owner drops them from the publication
+    init_replication(slot_name, pub_name, schema, "a")
+    run_sql(
+        src_pl,
+        f"ALTER PUBLICATION {pub_name} DROP TABLE {{schema}}.b;",
+        "INSERT INTO {schema}.a VALUES (2, 'a2');",
+        "INSERT INTO {schema}.b VALUES (4, 'b4');",
+    )
+    assert_load_info(dest_pl.run(replication_resource(slot_name, pub_name)))
+    assert table_rows(dest_pl, "a", ["id", "v"]) == [(1, "a1 updated"), (2, "a2")]
+    assert table_rows(dest_pl, "b", ["id", "v"]) == [(1, "b1"), (3, "b3 updated")]
 
 
 def test_init_replication_without_table_ownership(

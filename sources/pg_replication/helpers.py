@@ -43,6 +43,7 @@ from dlt.common.schema.typing import (
 )
 from dlt.common.schema.utils import merge_column
 from dlt.common.typing import TDataItem
+from dlt.common.utils import uniq_id
 from dlt.extract import DltResource
 from dlt.extract.source import SourceSchemaInjectableContext
 from dlt.sources.config import with_config
@@ -159,8 +160,8 @@ def init_replication(
     - switching from a table selection to an entire schema is possible by omitting
       the `table_names` argument
     - changing `publish` has no effect (altering the published DML operations is not supported)
-    - the initial snapshot can only be taken on the first call (because the snapshot
-      is exported when the slot is created)
+    - the snapshot of the slot is exported only when the slot is created, on an existing slot
+      `initial_snapshot` reads the tables as they are, see `replication_slot_exists`
 
     Args:
         slot_name (str): Name of the replication slot to create if it does not exist yet.
@@ -219,6 +220,10 @@ def init_replication(
             but is emptied if the server crashes before the initial load.
           - `direct` reads the tables without copies. The resources must be extracted in this
             process right after `init_replication`, see `ReplicationSnapshot`.
+          On an existing slot the tables are loaded as they are when read and
+          `replication_resource` merges the replayed changes over them, so the publication must
+          publish updates or deletes. Pass `initial_snapshot` only for the tables you want
+          loaded, ie. all tables when `replication_slot_exists` is False, later the added ones.
         reflection_level (TReflectionLevel): `full` creates snapshot columns without length
           and integer size, so later changes of those fit, `full_with_precision` creates them
           as in the source. Numeric precision and scale are kept on both levels. Use the same
@@ -292,9 +297,17 @@ def init_replication(
             slot = create_replication_slot(slot_name, cur)
         if initial_snapshot is None:
             return None
-        if slot is None:
-            raise RuntimeError(
-                f"Cannot create snapshots because slot {slot_name} is already created."
+        write_disposition: TWriteDisposition = (
+            "merge" if pub_ops["update"] or pub_ops["delete"] else "append"
+        )
+        snapshot_name: Optional[str] = None
+        if slot is not None:
+            snapshot_name = slot["snapshot_name"]
+        elif write_disposition == "append":
+            raise ValueError(
+                f"Slot {slot_name} already exists, the initial load overlaps with replicated"
+                " changes. Only a publication of updates or deletes merges the overlap, publication"
+                f" {pub_name} publishes inserts and the rows would be loaded twice."
             )
 
         # get list of tables via sql_database if not provided
@@ -307,14 +320,9 @@ def init_replication(
                 ).resources.keys()
                 if not table_name.lower().startswith(DLT_NAME_PREFIX)
             ]
-        write_disposition: TWriteDisposition = (
-            "merge" if pub_ops["update"] or pub_ops["delete"] else "append"
-        )
 
         if initial_snapshot == "direct":
-            snapshot = ReplicationSnapshot(
-                rep_conn, slot["snapshot_name"], reflect_not_null
-            )
+            snapshot = ReplicationSnapshot(rep_conn, snapshot_name, reflect_not_null)
             keep_rep_conn = True
             for table_name in table_names:
                 resource = core_sql_table(
@@ -340,17 +348,15 @@ def init_replication(
         # need separate session to read the snapshot: https://stackoverflow.com/q/75852587
         with closing(_get_conn(credentials)) as conn:
             with conn.cursor() as cur_snap:
-                # set the snapshot to the snaphost of the newly created replication slot
-                cur_snap.execute(
-                    "START TRANSACTION ISOLATION LEVEL REPEATABLE READ;"
-                    " SET TRANSACTION SNAPSHOT %s;",
-                    (slot["snapshot_name"],),
-                )
+                cur_snap.execute("START TRANSACTION ISOLATION LEVEL REPEATABLE READ;")
+                if snapshot_name:
+                    cur_snap.execute("SET TRANSACTION SNAPSHOT %s;", (snapshot_name,))
+                copy_suffix = snapshot_name or uniq_id(8)
                 snapshot_tables = [
                     (
                         table_name,
                         persist_snapshot_table(
-                            snapshot_name=slot["snapshot_name"],
+                            snapshot_name=copy_suffix,
                             table_name=table_name,
                             schema_name=schema_name,
                             cur=cur_snap,
@@ -395,6 +401,28 @@ def init_replication(
     finally:
         if not keep_rep_conn:
             rep_conn.close()
+
+
+@with_config(
+    sections=("sources", "pg_replication"),
+    sections_merge_style=ConfigSectionContext.resource_merge_style,
+    section_arg_name="slot_name",
+)
+def replication_slot_exists(
+    slot_name: str = dlt.config.value,
+    credentials: ConnectionStringCredentials = dlt.secrets.value,
+) -> bool:
+    """Tells if replication slot `slot_name` exists.
+
+    The slot exports a snapshot only when `init_replication` creates it. Check the slot before
+    `init_replication` to pass `initial_snapshot` for all tables only on the first run.
+    """
+    with closing(_get_conn(credentials)) as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                "SELECT 1 FROM pg_replication_slots WHERE slot_name = %s;", (slot_name,)
+            )
+            return cur.fetchone() is not None
 
 
 @dlt.sources.config.with_config(sections=("sources", "pg_replication"))
