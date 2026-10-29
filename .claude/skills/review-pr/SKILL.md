@@ -71,13 +71,14 @@ Use `gh pr checks PR_ID` to retrieve the CI check results. The relevant checks:
 
 - `Runs mypy, flake and bandit` — `make lint`: package structure, mypy, flake8, black, `check-requirements.py` and the `dlt init` tests (`.github/workflows/lint.yml`).
 - `tests dlt init compatibility` — `dlt init` against the affected sources (`.github/workflows/init.yml`).
-- `test destinations postgres and duckdb` (PRs from this repo) or `FORKS - test on local postgres and duckdb` (PRs from forks) — tests of the affected sources only.
+- `test destinations postgres and duckdb` — tests of the affected sources only.
 - `test destinations bigquery and snowflake` — slow destination tests.
+- On PRs from forks both test checks run as `fork / ...` in `.github/workflows/fork_tests_with_secrets.yml`.
 
 Report the status of each check (pass/fail/pending/skipped).
 
 - If a check failed, fetch its logs with `gh run view <run-id> --log-failed` and identify the specific errors.
-- For fork PRs, the test workflow only runs after a maintainer adds the `ci from fork` label. When its jobs show as skipped, report that **no tests ran on CI** — never count a skipped check as passing. Recommend adding the label; do not add it yourself.
+- For fork PRs, the tests only run after a maintainer adds the `ci from fork` label and approves the run in the `fork-ci` environment, again after every push. When the jobs show as skipped or waiting, report that **no tests ran on CI** — never count a skipped check as passing. Recommend adding the label or approving the run; do not do either yourself.
 - Source tests that need upstream credentials only pass on CI when the secrets for that source exist. Note when the PR's tests depend on credentials CI may not have.
 
 Include CI status in the final review verdict. A failing lint or `dlt init` check is a required fix.

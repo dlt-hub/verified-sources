@@ -8,6 +8,7 @@ import pytest
 import psycopg2
 
 from dlt.common import Decimal
+from dlt.common.exceptions import MissingDependencyException
 from dlt.common.schema import Schema
 from dlt.common.schema.typing import TTableSchemaColumns
 from dlt.common.schema.utils import new_table
@@ -27,6 +28,7 @@ from sources.pg_replication.exceptions import (
 from sources.pg_replication.helpers import (
     MessageConsumer,
     Segment,
+    init_replication,
     segment_to_rows,
     stream_changes,
 )
@@ -534,9 +536,6 @@ def test_python_backend_does_not_import_pyarrow(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setitem(sys.modules, "pyarrow", None)
-    monkeypatch.delitem(
-        sys.modules, "sources.pg_replication.arrow_helpers", raising=False
-    )
     credentials = ConnectionStringCredentials(
         "postgresql://loader:loader@127.0.0.1:1/dlt_data"
     )
@@ -544,4 +543,18 @@ def test_python_backend_does_not_import_pyarrow(
     with pytest.raises(psycopg2.OperationalError):
         next(stream_changes(credentials, "slot", "pub", backend="python"))
     with pytest.raises(ImportError):
+        next(stream_changes(credentials, "slot", "pub", backend="pyarrow"))
+
+
+def test_pyarrow_backend_without_numpy(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setitem(sys.modules, "numpy", None)
+    # raised before connecting to a server that does not exist
+    credentials = ConnectionStringCredentials(
+        "postgresql://loader:loader@localhost:1/dlt_data"
+    )
+    with pytest.raises(MissingDependencyException, match="numpy"):
+        init_replication(
+            "slot", "pub", "public", "items", credentials, backend="pyarrow"
+        )
+    with pytest.raises(MissingDependencyException, match="numpy"):
         next(stream_changes(credentials, "slot", "pub", backend="pyarrow"))
