@@ -11,6 +11,11 @@ from dlt.common.destination import DestinationCapabilitiesContext
 from dlt.common.schema.typing import TColumnSchema, TTableSchemaColumns
 from dlt.common.typing import TDataItem
 
+# Apex code exceeds the default 131,072 characters, a larger limit overflows a Windows C long
+csv.field_size_limit(2**31 - 1)
+# pyarrow fails on a record longer than two parse blocks, Salesforce records stay under ~6 MiB
+ARROW_BLOCK_SIZE = 8 * 2**20
+
 
 def csv_page_to_rows(
     page: bytes, columns: TTableSchemaColumns, cursor: Optional[str] = None
@@ -78,6 +83,7 @@ def csv_page_to_arrow(page: bytes, columns: TTableSchemaColumns) -> Optional[Any
         return None
     table = pa_csv.read_csv(
         io.BytesIO(page),
+        read_options=pa_csv.ReadOptions(block_size=ARROW_BLOCK_SIZE),
         parse_options=pa_csv.ParseOptions(newlines_in_values=True),
         convert_options=pa_csv.ConvertOptions(
             column_types={name: pa.string() for name in columns},

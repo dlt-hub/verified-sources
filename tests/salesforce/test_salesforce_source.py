@@ -1,14 +1,20 @@
 import os
-from typing import Any, Dict, List
+from datetime import timedelta  # noqa: I251
+from typing import Any, Dict, List, Sequence, Set
 
 import dlt
 import pytest
 
 from sources.salesforce import SOURCE_SOBJECTS, salesforce_source, salesforce_table
 from sources.salesforce.helpers.query import TQueryApi
+from sources.salesforce.helpers.schema import DEFAULT_LAG
 from sources.salesforce.helpers.table import TTableBackend
 from tests.salesforce.seed import data
-from tests.salesforce.utils import assert_dlt_types_loaded, count_rows
+from tests.salesforce.utils import (
+    assert_dlt_types_loaded,
+    count_rows,
+    seeded_modstamps,
+)
 from tests.utils import ALL_DESTINATIONS, assert_load_info, load_table_counts
 
 # tests below read the test org seeded with tests/salesforce/seed/seed.py, see README.md
@@ -38,6 +44,7 @@ def test_all_resources(destination_name: str) -> None:
         "contact": data.CONTACTS,
         "lead": data.LEADS,
         "opportunity": data.OPPORTUNITIES,
+        "opportunity_line_item": data.OPPORTUNITY_LINE_ITEMS,
         "pricebook_2": data.PRICEBOOKS,
         "pricebook_entry": data.PRICEBOOK_ENTRIES,
         "product_2": data.PRODUCTS,
@@ -61,6 +68,92 @@ def test_all_resources(destination_name: str) -> None:
     # Salesforce accepts the datetime literals generated from the last cursor values
     assert_load_info(pipeline.run(salesforce_source()))
     assert load_table_counts(pipeline, *table_names) == table_counts
+
+
+@pytest.mark.parametrize("destination_name", ALL_DESTINATIONS)
+@pytest.mark.parametrize("backend", ["python", "pyarrow"])
+def test_seeded_full_and_incremental(
+    destination_name: str, backend: TTableBackend
+) -> None:
+    """Loads the seeded custom objects in full, then incrementally and from a start date. The
+    expected counts come from the seed data and the `SystemModstamp` of the records in the org
+    """
+    # `DltPages__c` is upserted in batches of 200 with distinct timestamps. `DltTypes__c` has
+    # deleted records in the recycle bin, read with queryAll
+    stamps = {
+        sobject: seeded_modstamps(sobject) for sobject in (data.PAGES, data.DLT_TYPES)
+    }
+    seeded = {
+        data.PAGES: len(data.PAGES_RECORDS),
+        data.DLT_TYPES: len(data.DLT_TYPES_RECORDS),
+    }
+    assert len(stamps[data.PAGES]) == seeded[data.PAGES]
+
+    def make_pipeline(name: str) -> dlt.Pipeline:
+        return dlt.pipeline(
+            pipeline_name=name,
+            destination=destination_name,
+            dataset_name=name,
+            dev_mode=True,
+        )
+
+    def load(
+        pipeline: dlt.Pipeline, sobjects: Sequence[str], **kwargs: Any
+    ) -> Dict[str, int]:
+        """Runs `salesforce_table` of `sobjects`, returns rows read by sObject"""
+        assert_load_info(
+            pipeline.run(
+                [
+                    salesforce_table(sobject=sobject, backend=backend, **kwargs)
+                    for sobject in sobjects
+                ]
+            )
+        )
+        row_counts = pipeline.last_trace.last_normalize_info.row_counts
+        naming = pipeline.default_schema.naming
+        return {
+            sobject: row_counts.get(naming.normalize_path(sobject), 0)
+            for sobject in sobjects
+        }
+
+    def stored(pipeline: dlt.Pipeline, sobjects: Sequence[str]) -> Dict[str, int]:
+        naming = pipeline.default_schema.naming
+        tables = {sobject: naming.normalize_path(sobject) for sobject in sobjects}
+        counts = load_table_counts(pipeline, *tables.values())
+        return {sobject: counts[table] for sobject, table in tables.items()}
+
+    pipeline = make_pipeline("salesforce_seeded")
+    # deleted records are read and deleted from the destination by merge
+    assert load(pipeline, list(seeded)) == {
+        sobject: len(values) for sobject, values in stamps.items()
+    }
+    assert stored(pipeline, list(seeded)) == seeded
+
+    # runs without changes read the records within lag again, with no lag the records with the
+    # last timestamp
+    for lag, window in ((None, timedelta(seconds=DEFAULT_LAG)), (0, timedelta(0))):
+        assert load(pipeline, list(seeded), lag=lag) == {
+            sobject: sum(value >= max(values) - window for value in values)
+            for sobject, values in stamps.items()
+        }, lag
+        assert stored(pipeline, list(seeded)) == seeded
+
+    # start in the middle of the batches of pages
+    batches = sorted(set(stamps[data.PAGES]))
+    start = batches[len(batches) // 2]
+    since = {data.PAGES: sum(value >= start for value in stamps[data.PAGES])}
+    assert 0 < since[data.PAGES] < seeded[data.PAGES]
+    pipeline = make_pipeline("salesforce_seeded_since")
+    assert load(pipeline, [data.PAGES], start_date=start) == since
+    assert stored(pipeline, [data.PAGES]) == since
+    # replace loads the records since the start date on every run
+    pipeline = make_pipeline("salesforce_seeded_replace")
+    for _ in range(2):
+        assert (
+            load(pipeline, [data.PAGES], start_date=start, write_disposition="replace")
+            == since
+        )
+        assert stored(pipeline, [data.PAGES]) == since
 
 
 @pytest.mark.parametrize(
@@ -95,7 +188,7 @@ def test_salesforce_table_dlt_types(
 def test_salesforce_table_filter_deleted_records(include_deleted: bool) -> None:
     resource = salesforce_table(
         sobject=data.DLT_TYPES,
-        incremental=None,
+        write_disposition="replace",
         include_deleted=include_deleted,
         soql_filter="Category__c != 'plain'",
         included_columns=["Id", "Seed_Id__c", "IsDeleted"],
@@ -113,6 +206,28 @@ def test_salesforce_table_filter_deleted_records(include_deleted: bool) -> None:
     deleted = [row for row in rows if row["IsDeleted"] == "true"]
     if not include_deleted:
         assert deleted == []
+
+
+def test_salesforce_table_deleted_line_items() -> None:
+    # line items deleted on their own and with their opportunity are both returned by queryAll,
+    # so merge deletes them in the destination. the recycle bin keeps them for 15 days
+    rows = list(
+        salesforce_table(
+            sobject="OpportunityLineItem",
+            write_disposition="replace",
+            soql_filter=f"{data.SEED_ID_FIELD} LIKE '{data.DELETED_LINE_ITEM_PREFIX}%'",
+            included_columns=["Id", "IsDeleted", data.SEED_ID_FIELD],
+            backend="python",
+        )
+    )
+    assert all(row["IsDeleted"] == "true" for row in rows)
+    kinds_by_run: Dict[str, Set[str]] = {}
+    for row in rows:
+        kind, run_id = row[data.SEED_ID_FIELD][
+            len(data.DELETED_LINE_ITEM_PREFIX) :
+        ].split("-")
+        kinds_by_run.setdefault(run_id, set()).add(kind)
+    assert all(kinds == {"direct", "cascade"} for kinds in kinds_by_run.values())
 
 
 @pytest.mark.parametrize("api", ["bulk", "rest"])

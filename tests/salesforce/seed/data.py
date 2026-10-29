@@ -25,11 +25,16 @@ SEED_ID_OBJECTS = [
     "Pricebook2",
     "PricebookEntry",
     "Case",
+    "OpportunityLineItem",
 ]
 # Pricebook2 reference resolved by the seed script
 STANDARD_PRICEBOOK = "standard"
 
 PICKLIST_VALUES = ["Alpha", "Beta", "Gamma delta", "Ω omega"]
+# max long text length of 3-byte UTF-8 characters, 6 such fields make a CSV row over 2 MiB. a row
+# longer than two parse blocks of 1 MiB fails pyarrow
+HUGE_TEXT = ("漢" * 60 + '"x"\n') * 2047 + "漢" * 64
+HUGE_TEXT_FIELDS = ["LongText__c"] + [f"LongText{n}__c" for n in range(2, 7)]
 
 # custom fields of DltTypes__c as Metadata API CustomField elements
 DLT_TYPES_FIELDS: List[Dict[str, Any]] = [
@@ -44,13 +49,16 @@ DLT_TYPES_FIELDS: List[Dict[str, Any]] = [
     {"fullName": "Category__c", "label": "Category", "type": "Text", "length": 40},
     {"fullName": "Text__c", "label": "Text", "type": "Text", "length": 255},
     {"fullName": "TextArea__c", "label": "Text Area", "type": "TextArea"},
-    {
-        "fullName": "LongText__c",
-        "label": "Long Text",
-        "type": "LongTextArea",
-        "length": 32768,
-        "visibleLines": 3,
-    },
+    *(
+        {
+            "fullName": name,
+            "label": name[:-3].replace("LongText", "Long Text ").strip(),
+            "type": "LongTextArea",
+            "length": 131072,
+            "visibleLines": 3,
+        }
+        for name in HUGE_TEXT_FIELDS
+    ),
     {
         "fullName": "RichText__c",
         "label": "Rich Text",
@@ -180,6 +188,25 @@ DLT_TYPES_FIELDS: List[Dict[str, Any]] = [
         "type": "Checkbox",
         "formula": "Currency__c > 0",
     },
+    # divisions may return more decimals than the field scale
+    {
+        "fullName": "FormulaCurrency__c",
+        "label": "Formula Currency",
+        "type": "Currency",
+        "precision": 18,
+        "scale": 2,
+        "formula": "Currency__c / 3",
+        "formulaTreatBlanksAs": "BlankAsBlank",
+    },
+    {
+        "fullName": "FormulaRatio__c",
+        "label": "Formula Ratio",
+        "type": "Number",
+        "precision": 18,
+        "scale": 2,
+        "formula": "Number16_2__c / 7",
+        "formulaTreatBlanksAs": "BlankAsBlank",
+    },
 ]
 
 # values are python types, the seed script serializes them for the REST API
@@ -278,6 +305,12 @@ DLT_TYPES_RECORDS: List[Dict[str, Any]] = [
         "Seed_Id__c": "blank",
         "Name": "all optional fields blank",
         "Category__c": "plain",
+    },
+    {
+        "Seed_Id__c": "huge",
+        "Name": "long text over 2 MiB",
+        "Category__c": "boundary",
+        **{name: HUGE_TEXT for name in HUGE_TEXT_FIELDS},
     },
 ]
 # rows deleted after each seed so the recycle bin has records for `queryAll`
@@ -415,6 +448,20 @@ OPPORTUNITIES: List[Dict[str, Any]] = [
         start=1,
     )
 ]
+OPPORTUNITY_LINE_ITEMS: List[Dict[str, Any]] = [
+    {
+        SEED_ID_FIELD: f"oli-{n}",
+        "Opportunity": {SEED_ID_FIELD: opportunity},
+        "PricebookEntry": {SEED_ID_FIELD: f"pbe-{STANDARD_PRICEBOOK}-{product}"},
+        "Quantity": quantity,
+        "UnitPrice": 100 * product,
+    }
+    for n, (opportunity, product, quantity) in enumerate(
+        [("opp-1", 1, 2), ("opp-1", 2, 1), ("opp-2", 3, 5)], start=1
+    )
+]
+# line items deleted on each seed run, on their own and with their opportunity
+DELETED_LINE_ITEM_PREFIX = "oli-deleted-"
 CASES: List[Dict[str, Any]] = [
     {
         SEED_ID_FIELD: "case-1",
@@ -445,6 +492,7 @@ UPSERTED: Dict[str, List[Dict[str, Any]]] = {
 # created when missing, matched on the key field
 CREATED: Dict[str, Dict[str, Any]] = {
     "PricebookEntry": {"key": SEED_ID_FIELD, "records": PRICEBOOK_ENTRIES},
+    "OpportunityLineItem": {"key": SEED_ID_FIELD, "records": OPPORTUNITY_LINE_ITEMS},
     "UserRole": {
         "key": "DeveloperName",
         "records": [

@@ -32,11 +32,15 @@ uv run python -m tests.salesforce.seed.seed all  # or deploy | load | capture
 - `deploy`: creates the `DltTypes__c` and `DltPages__c` custom objects and adds the `Dlt_Seed_Id__c` external id
   to standard objects. It assigns the `Dlt_Seed` permission set to the Run As user and makes them a
   Marketing User, which is needed to create campaigns.
-- `load`: writes the records in `seed/data.py`. Most are upserted on their seed id. Pricebook entries, roles,
-  tasks and events are created only when missing. Then it creates and deletes 2 `DltTypes__c` records, so the
-  recycle bin has records for `queryAll`.
+- `load`: writes the records in `seed/data.py`. Most are upserted on their seed id. Pricebook entries,
+  opportunity line items, roles, tasks and events are created only when missing. Then it creates and deletes
+  2 `DltTypes__c` records, a line item, and an opportunity with its line item, so the recycle bin has records
+  for `queryAll`.
 - `capture`: writes the `DltTypes__c` describe and its Bulk API result page to `cases/`. The unit tests compare
   these with `seed/data.py`.
+
+`DltTypes__c` also has a record over 2 MiB in six long text fields and formula fields that divide, which
+Salesforce rounds to the field scale.
 
 `load` is safe to repeat. Pause between live test runs to stay within the org's daily limits.
 
