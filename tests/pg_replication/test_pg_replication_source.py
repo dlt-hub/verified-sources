@@ -22,6 +22,7 @@ from dlt.sources.sql_database import sql_table
 
 from tests.utils import (
     TEST_STORAGE_ROOT,
+    skip_if_not_active,
     assert_load_info,
     load_table_counts,
     get_table_metrics,
@@ -61,6 +62,7 @@ from .utils import (
 )
 
 
+@skip_if_not_active("duckdb")
 def test_schema_replication(src_config: Tuple[dlt.Pipeline, str, str]) -> None:
     @dlt.resource(write_disposition="merge", primary_key="id_x")
     def tbl_x(data):
@@ -290,6 +292,7 @@ def test_core_functionality(
     assert_loaded_data(dest_pl, "tbl_y", ["id_y", "val_y"], exp_tbl_y, "id_y")
 
 
+@skip_if_not_active("duckdb")
 def test_without_init_load(src_config: Tuple[dlt.Pipeline, str, str]) -> None:
     @dlt.resource(write_disposition="merge", primary_key="id_x")
     def tbl_x(data):
@@ -355,6 +358,7 @@ def test_without_init_load(src_config: Tuple[dlt.Pipeline, str, str]) -> None:
     assert_loaded_data(dest_pl, "tbl_y", ["id_y", "val_y"], exp_tbl_y, "id_y")
 
 
+@skip_if_not_active("duckdb")
 def test_insert_only(src_config: Tuple[dlt.Pipeline, str, str]) -> None:
     def items(data):
         yield data
@@ -598,6 +602,7 @@ def test_timestamp_without_tz_and_json(
     assert "json" == col_schemas["col9"]["data_type"]
 
 
+@skip_if_not_active("duckdb")
 def test_unmapped_data_types(src_config: Tuple[dlt.Pipeline, str, str]) -> None:
     """Assert postgres data types that aren't explicitly mapped default to "text" type."""
     src_pl, slot_name, pub_name = src_config
@@ -636,6 +641,7 @@ def test_unmapped_data_types(src_config: Tuple[dlt.Pipeline, str, str]) -> None:
     assert columns["uuid_col"]["data_type"] == "text"
 
 
+@skip_if_not_active("duckdb")
 @pytest.mark.parametrize("publish", ["insert", "insert, update, delete"])
 def test_write_disposition(
     src_config: Tuple[dlt.Pipeline, str, str], publish: str
@@ -685,6 +691,7 @@ def test_write_disposition(
     )
 
 
+@skip_if_not_active("duckdb")
 @pytest.mark.parametrize("init_load", [True, False])
 @pytest.mark.parametrize("backend", ["python", "pyarrow"])
 def test_include_columns(
@@ -764,6 +771,7 @@ def test_include_columns(
     assert get_cols(dest_pl, "tbl_z") == {"id_z", "val_z", "another_col_z"}
 
 
+@skip_if_not_active("duckdb")
 @pytest.mark.parametrize("init_load", [True, False])
 def test_column_hints(
     src_config: Tuple[dlt.Pipeline, str, str], init_load: bool
@@ -867,6 +875,7 @@ def test_column_hints(
     )
 
 
+@skip_if_not_active("duckdb")
 def test_table_schema_change(src_config: Tuple[dlt.Pipeline, str, str]) -> None:
     src_pl, slot_name, pub_name = src_config
 
@@ -909,6 +918,7 @@ def test_table_schema_change(src_config: Tuple[dlt.Pipeline, str, str]) -> None:
     )
 
 
+@skip_if_not_active("duckdb")
 def test_init_replication(src_config: Tuple[dlt.Pipeline, str, str]) -> None:
     def get_table_names_in_pub() -> Set[str]:
         with src_pl.sql_client() as c:
@@ -1000,6 +1010,7 @@ def test_init_replication(src_config: Tuple[dlt.Pipeline, str, str]) -> None:
             )
 
 
+@skip_if_not_active("duckdb")
 @pytest.mark.parametrize("initial_snapshot", ["direct", "table"])
 def test_tables_added_and_removed(
     src_config: Tuple[dlt.Pipeline, str, str], initial_snapshot: str
@@ -1061,6 +1072,7 @@ def test_tables_added_and_removed(
     assert table_rows(dest_pl, "b", ["id", "v"]) == [(1, "b1"), (3, "b3 updated")]
 
 
+@skip_if_not_active("duckdb")
 def test_init_replication_without_table_ownership(
     src_config: Tuple[dlt.Pipeline, str, str]
 ) -> None:
@@ -1156,6 +1168,7 @@ def test_init_replication_without_table_ownership(
         )
 
 
+@skip_if_not_active("duckdb")
 @pytest.mark.parametrize("initial_snapshot", ["table", "direct"])
 def test_generated_columns_not_in_snapshot(
     src_config: Tuple[dlt.Pipeline, str, str], initial_snapshot: str
@@ -1185,6 +1198,7 @@ def test_generated_columns_not_in_snapshot(
     assert table_rows(dest_pl, "items", ["id", "a"]) == [(1, 10), (2, 2)]
 
 
+@skip_if_not_active("duckdb")
 @pytest.mark.parametrize("naming", ["snake_case", "sql_cs_v1"])
 def test_names_that_differ_in_case(
     src_config: Tuple[dlt.Pipeline, str, str], naming: str
@@ -1253,6 +1267,7 @@ def test_names_that_differ_in_case(
     assert file_rows("Items", ["id"]) == [(10,), (20,)]
 
 
+@skip_if_not_active("duckdb")
 def test_replicate_schema(src_config: Tuple[dlt.Pipeline, str, str]) -> None:
     if get_pg_version() < 150000:
         pytest.skip("incompatible Postgres server version")
@@ -1313,6 +1328,7 @@ def test_replicate_schema(src_config: Tuple[dlt.Pipeline, str, str]) -> None:
     assert set(dest_pl.default_schema.data_table_names()) == {"tbl_x", "tbl_y", "tbl_z"}
 
 
+@skip_if_not_active("duckdb")
 def test_batching(src_config: Tuple[dlt.Pipeline, str, str]) -> None:
     # this test asserts the number of data items yielded by the replication resource
     # is not affected by `target_batch_size` and the number of replication messages per transaction
@@ -1376,6 +1392,7 @@ def _extract_with_timeout(
     return result[0]
 
 
+@skip_if_not_active("duckdb")
 def test_multi_batch_with_backlog(
     src_config: Tuple[dlt.Pipeline, str, str], monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -1413,6 +1430,7 @@ def test_multi_batch_with_backlog(
     assert len(rep_conns) == 1
 
 
+@skip_if_not_active("duckdb")
 def test_no_new_changes_without_flush(
     src_config: Tuple[dlt.Pipeline, str, str]
 ) -> None:
@@ -1432,6 +1450,7 @@ def test_no_new_changes_without_flush(
     assert get_table_metrics(extract_info, "items") is None
 
 
+@skip_if_not_active("duckdb")
 def test_add_limit_makes_progress(src_config: Tuple[dlt.Pipeline, str, str]) -> None:
     src_pl, slot_name, pub_name = src_config
     create_tables(src_pl, "CREATE TABLE {schema}.items (id int PRIMARY KEY);")
@@ -1455,6 +1474,7 @@ def test_add_limit_makes_progress(src_config: Tuple[dlt.Pipeline, str, str]) -> 
     assert load_table_counts(dest_pl, "items") == {"items": 1000}
 
 
+@skip_if_not_active("duckdb")
 def test_changes_of_lost_run_load_again(
     src_config: Tuple[dlt.Pipeline, str, str]
 ) -> None:
@@ -1498,6 +1518,7 @@ def test_changes_of_lost_run_load_again(
     ]
 
 
+@skip_if_not_active("duckdb")
 @pytest.mark.parametrize("backend", ["python", "pyarrow"])
 def test_skip_transaction_with_slot_advance(
     src_config: Tuple[dlt.Pipeline, str, str], backend: str
@@ -1534,6 +1555,7 @@ def test_skip_transaction_with_slot_advance(
     assert table_rows(dest_pl, "items", ["id"]) == [(1,), (3,)]
 
 
+@skip_if_not_active("duckdb")
 @pytest.mark.parametrize(
     "publish", ["insert", "insert, update, delete"], ids=["append", "merge"]
 )
@@ -1573,6 +1595,7 @@ def test_schema_change_mid_transaction(
     assert table_rows(dest_pl, "y", ["id"]) == exp_y
 
 
+@skip_if_not_active("duckdb")
 def test_primary_key_update(src_config: Tuple[dlt.Pipeline, str, str]) -> None:
     src_pl, slot_name, pub_name = src_config
     create_tables(src_pl, "CREATE TABLE {schema}.items (id int PRIMARY KEY, val text);")
@@ -1585,6 +1608,7 @@ def test_primary_key_update(src_config: Tuple[dlt.Pipeline, str, str]) -> None:
     assert table_rows(dest_pl, "items", ["id", "val"]) == [(2, "b"), (10, "a")]
 
 
+@skip_if_not_active("duckdb")
 @pytest.mark.parametrize(
     "replica_identity,table_key,initial_snapshot,backend",
     [
@@ -1645,6 +1669,7 @@ def test_compound_primary_key(
     ]
 
 
+@skip_if_not_active("duckdb")
 @pytest.mark.parametrize(
     "items_ddl",
     [
@@ -1685,6 +1710,7 @@ def test_table_without_primary_key(
     )
 
 
+@skip_if_not_active("duckdb")
 def test_replicated_table_loses_primary_key(
     src_config: Tuple[dlt.Pipeline, str, str]
 ) -> None:
@@ -1707,6 +1733,7 @@ def test_replicated_table_loses_primary_key(
     assert "no primary key or replica identity index" in str(exc.value)
 
 
+@skip_if_not_active("duckdb")
 def test_unchanged_toast_with_replica_identity_full(
     src_config: Tuple[dlt.Pipeline, str, str]
 ) -> None:
@@ -1739,6 +1766,7 @@ def test_unchanged_toast_with_replica_identity_full(
     assert [name for name, c in columns.items() if c.get("primary_key")] == ["id"]
 
 
+@skip_if_not_active("duckdb")
 def test_unchanged_toast_without_replica_identity_full(
     src_config: Tuple[dlt.Pipeline, str, str], monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -1762,6 +1790,7 @@ def test_unchanged_toast_without_replica_identity_full(
     assert "REPLICA IDENTITY FULL" in str(exc.value)
 
 
+@skip_if_not_active("duckdb")
 @pytest.mark.parametrize(
     "initial_snapshot,backend", [("table", "python"), ("direct", "pyarrow")]
 )
@@ -1808,6 +1837,7 @@ def test_exclude_unchanged_toast_columns(
     assert "big" not in dest_pl.default_schema.get_table_columns("items")
 
 
+@skip_if_not_active("duckdb")
 @pytest.mark.parametrize(
     "session_options",
     [
@@ -1899,6 +1929,7 @@ def test_snapshot_types_match_replication(
     ]
 
 
+@skip_if_not_active("duckdb")
 @pytest.mark.parametrize("initial_snapshot", ["table", "direct"])
 def test_unbounded_numeric_without_precision_fails_on_pyarrow(
     src_config: Tuple[dlt.Pipeline, str, str], initial_snapshot: str
@@ -1931,6 +1962,7 @@ def test_unbounded_numeric_without_precision_fails_on_pyarrow(
             dest_pl.run(resource)
 
 
+@skip_if_not_active("duckdb")
 @pytest.mark.parametrize(
     "initial_snapshot,backend",
     [
@@ -2088,6 +2120,7 @@ def test_column_type_change(
     assert table_rows(dest_pl, "events", ["id"]) == [(1,), (2,)]
 
 
+@skip_if_not_active("duckdb")
 @pytest.mark.parametrize("change,reflection_level", TYPE_CHANGES_THAT_DO_NOT_FIT)
 def test_column_type_change_with_suggested_columns(
     src_config: Tuple[dlt.Pipeline, str, str],
@@ -2141,6 +2174,7 @@ def test_column_type_change_with_suggested_columns(
     assert table_rows(dest_pl, "events", ["id", column])[-1] == (3, value)
 
 
+@skip_if_not_active("duckdb")
 def test_snapshot_in_other_pipeline(src_config: Tuple[dlt.Pipeline, str, str]) -> None:
     src_pl, slot_name, pub_name = src_config
     create_tables(
@@ -2191,6 +2225,7 @@ def test_snapshot_in_other_pipeline(src_config: Tuple[dlt.Pipeline, str, str]) -
     assert table_rows(changes_pl, "events", ["id", "n"])[-1] == (3, "three")
 
 
+@skip_if_not_active("duckdb")
 @pytest.mark.parametrize("initial_snapshot", [None, "table", "direct"])
 @pytest.mark.parametrize(
     "reflect_not_null,change,stops",
@@ -2257,6 +2292,7 @@ def test_not_null(
         ]
 
 
+@skip_if_not_active("duckdb")
 @pytest.mark.parametrize("backend", ["python", "pyarrow"])
 @pytest.mark.parametrize("replica_identity", ["default", "full"])
 def test_soft_delete(
@@ -2306,6 +2342,7 @@ def test_soft_delete(
         ]
 
 
+@skip_if_not_active("duckdb")
 def test_legacy_columns(src_config: Tuple[dlt.Pipeline, str, str]) -> None:
     src_pl, slot_name, pub_name = src_config
     create_tables(src_pl, "CREATE TABLE {schema}.items (id int PRIMARY KEY, a text);")
@@ -2336,6 +2373,7 @@ def test_legacy_columns(src_config: Tuple[dlt.Pipeline, str, str]) -> None:
     assert table["columns"]["_dlt_deleted_ts"]["hard_delete"] is True
 
 
+@skip_if_not_active("duckdb")
 @pytest.mark.parametrize(
     "initial_snapshot,backend",
     [
@@ -2394,6 +2432,7 @@ def test_append_log_table(
     ]
 
 
+@skip_if_not_active("duckdb")
 @pytest.mark.parametrize("initial_snapshot", ["table", "unlogged_table", "direct"])
 def test_schema_publication_snapshot_not_replicated(
     src_config: Tuple[dlt.Pipeline, str, str], initial_snapshot: str
@@ -2431,6 +2470,7 @@ def test_schema_publication_snapshot_not_replicated(
     assert dest_pl.default_schema.data_table_names() == ["items"]
 
 
+@skip_if_not_active("duckdb")
 @pytest.mark.parametrize("initial_snapshot", ["table", "unlogged_table", "direct"])
 def test_snapshot_isolated_from_concurrent_writes(
     src_config: Tuple[dlt.Pipeline, str, str],
@@ -2530,6 +2570,7 @@ def test_snapshot_isolated_from_concurrent_writes(
         assert table_rows(dest_pl, table, ["id", "v"]) == initial + new_rows
 
 
+@skip_if_not_active("duckdb")
 def test_reset_slot_with_existing_state(
     src_config: Tuple[dlt.Pipeline, str, str], monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -2559,6 +2600,7 @@ def test_reset_slot_with_existing_state(
     assert table_rows(dest_pl, "items", ["id"]) == [(1,), (2,), (3,)]
 
 
+@skip_if_not_active("duckdb")
 def test_direct_snapshot_requires_sqlalchemy_2(
     src_config: Tuple[dlt.Pipeline, str, str], monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -2584,6 +2626,7 @@ def _from_id_2(query: Any, table: Any) -> Any:
     return query.where(table.c.id >= 2)
 
 
+@skip_if_not_active("duckdb")
 def test_direct_snapshot_with_own_sql_tables(
     src_config: Tuple[dlt.Pipeline, str, str]
 ) -> None:

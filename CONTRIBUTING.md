@@ -276,9 +276,7 @@ Look at `tests/chess/test_chess_source.py` for an example. The line
 ```
 
 makes sure that each test runs against all destinations (as defined in the `ALL_DESTINATIONS` global
-variables). Use it only for tests whose result depends on the destination: CI jobs that do not
-test duckdb run only the tests with this parameter, tests without it run on duckdb in the
-`test postgres and duckdb` job.
+variables).
 
 The simplest possible test just creates a pipeline with your source and then issues a run on a
 source. More advanced test will use `sql_client` to check the data and access the schemas to check
@@ -326,12 +324,12 @@ There's also `make test-local` command that will run all the tests on `duckdb` a
 - linter and init checks will run immediately
 - we will review your code
 - [we will setup secrets/credentials on our side (with your help)](#sharing-and-obtaining-source-credentials-test-accounts-destination-access)
-- we will assign a label **ci from fork** that runs your verified sources tests with our secrets against duckdb, postgres, bigquery and snowflake. A maintainer approves each run, also after you push new commits
+- we will assign a label **ci from fork** that will enable your verified sources tests against duckdb and postgres
 
 Overall following checks must pass:
 * mypy and linter
 * `dlt init` test where we make sure you provided all information to your verified source module for the distribution to correctly happen
-* tests for your source must pass on **postgres**, **duckdb**, **bigquery** and **snowflake**
+* tests for your source must pass on **postgres** and **duckdb**
 
 ### If you do pull requests within your fork: to your forked master branch
 If you prefer to run your checks on your own CI, do the following:

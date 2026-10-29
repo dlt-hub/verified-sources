@@ -82,7 +82,7 @@ def destination_cases(
     cases: Sequence[Tuple[Any, ...]], duckdb_cases: Sequence[Tuple[Any, ...]] = ()
 ) -> List[Tuple[Any, ...]]:
     """Parametrizes `destination_name` with `cases` on every destination, `duckdb_cases` only on
-    duckdb. Jobs without duckdb run only tests parametrized with `destination_name`."""
+    duckdb"""
     params = [(name, *case) for name in ALL_DESTINATIONS for case in cases]
     if "duckdb" in ALL_DESTINATIONS:
         params += [("duckdb", *case) for case in duckdb_cases]
