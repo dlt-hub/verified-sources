@@ -1149,13 +1149,14 @@ class MessageConsumer:
         # dlt takes the first `dedup_sort` and `hard_delete` column, clear them on old columns
         legacy = self._existing_column(table_name, LEGACY_LSN)
         if legacy and legacy.get("dedup_sort"):
-            column_schemas[LEGACY_LSN] = {"name": LEGACY_LSN, "dedup_sort": None}
+            column_schemas.setdefault(LEGACY_LSN, {"name": LEGACY_LSN})[
+                "dedup_sort"
+            ] = None
         legacy = self._existing_column(table_name, LEGACY_DELETED_TS)
         if legacy and legacy.get("hard_delete"):
-            column_schemas[LEGACY_DELETED_TS] = {
-                "name": LEGACY_DELETED_TS,
-                "hard_delete": False,
-            }
+            column_schemas.setdefault(LEGACY_DELETED_TS, {"name": LEGACY_DELETED_TS})[
+                "hard_delete"
+            ] = False
         write_disposition: TWriteDisposition = "append"
         if self.pub_ops["update"] or self.pub_ops["delete"]:
             write_disposition = "merge"

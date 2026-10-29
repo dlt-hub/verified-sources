@@ -270,6 +270,18 @@ def test_legacy_columns_lose_hints() -> None:
     assert columns["_dlt_lsn"]["dedup_sort"] == "desc"
     assert columns["deleted_ts"] == {"name": "deleted_ts", "hard_delete": False}
     assert columns["_dlt_deleted_ts"]["hard_delete"] is True
+    # other hints of columns with these names are kept
+    hints = {"lsn": {"data_type": "text"}, "deleted_ts": {"data_type": "bigint"}}
+    (segment,) = consume(
+        "basic", destination_schema=schema, columns={"items": hints}
+    ).take_batch()
+    columns = segment.relation.column_schemas
+    assert columns["lsn"] == {"name": "lsn", "data_type": "text", "dedup_sort": None}
+    assert columns["deleted_ts"] == {
+        "name": "deleted_ts",
+        "data_type": "bigint",
+        "hard_delete": False,
+    }
 
 
 def test_not_null_column_without_values_raises() -> None:
