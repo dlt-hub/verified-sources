@@ -5,7 +5,7 @@ parse are converted first (`to_castable_array`) and dlt casts the strings to the
 """
 
 from functools import partial
-from typing import TYPE_CHECKING, Any, Dict, Iterator, List, Optional, Sequence
+from typing import Any, Dict, Iterator, List, Optional, Sequence
 
 import numpy as np
 import pyarrow.compute as pc
@@ -15,10 +15,16 @@ from dlt.common.configuration.container import Container
 from dlt.common.destination import DestinationCapabilitiesContext
 from dlt.common.libs.pyarrow import cast_arrow_as_columns_schema, pyarrow as pa
 
-from .schema_types import _DUMMY_VALS, PgType, TValueConverter, get_value_converter
-
-if TYPE_CHECKING:
-    from .helpers import Segment
+from .exceptions import NullInNotNullColumnException, ValueConversionException
+from .helpers import Segment, segment_to_rows
+from .schema_types import (
+    _DUMMY_VALS,
+    DELETED_TS,
+    LSN,
+    PgType,
+    TValueConverter,
+    get_value_converter,
+)
 
 _SPECIAL_DATETIMES = ["infinity", "-infinity"]
 
@@ -208,12 +214,42 @@ def to_castable_array(
     return array
 
 
-def segment_to_arrow(segment: "Segment") -> Any:
+def segment_to_arrow(segment: Segment, slot_name: str = "") -> Any:
     """Converts changes in a segment to an arrow table with types of the dlt columns.
 
     Rows of inserts come first, then rows of updates and deletes. Their order does not matter:
-    the `lsn` column orders changes of the same row when merging.
+    the `_dlt_lsn` column orders changes of the same row when merging.
     """
+    try:
+        table = _segment_to_table(segment)
+    except Exception as ex:
+        # the python converters find the row and its transaction for most values
+        segment_to_rows(segment, slot_name)
+        relation = segment.relation
+        raise ValueConversionException(
+            relation.schema_name,
+            relation.table_name,
+            None,
+            str(ex),
+            segment.position(slot_name),
+        ) from ex
+    relation = segment.relation
+    if nulls := [
+        name for name in relation.not_null_columns if table.column(name).null_count
+    ]:
+        index = min(
+            pc.index(pc.is_null(table.column(name)), True).as_py() for name in nulls
+        )
+        raise NullInNotNullColumnException(
+            relation.schema_name,
+            relation.table_name,
+            nulls,
+            segment.position(slot_name, index),
+        )
+    return table
+
+
+def _segment_to_table(segment: Segment) -> Any:
     relation = segment.relation
     n_inserts = len(segment.insert_payloads)
     inserted = (
@@ -232,9 +268,9 @@ def segment_to_arrow(segment: "Segment") -> Any:
         arrays[name] = to_castable_array(
             array, relation.pg_types[idx], name, relation.table_name
         )
-    arrays["lsn"] = pa.array(segment.insert_lsns + segment.row_lsns, type=pa.int64())
-    if "deleted_ts" in relation.column_schemas:
-        arrays["deleted_ts"] = pa.array(
+    arrays[LSN] = pa.array(segment.insert_lsns + segment.row_lsns, type=pa.int64())
+    if DELETED_TS in relation.column_schemas:
+        arrays[DELETED_TS] = pa.array(
             [None] * n_inserts + segment.row_deleted_ts,
             type=pa.timestamp("us", tz="UTC"),
         )
@@ -249,12 +285,13 @@ def segment_to_arrow(segment: "Segment") -> Any:
     is_deleted = pa.array(
         [False] * n_inserts + [ts is not None for ts in segment.row_deleted_ts]
     )
-    if pc.any(is_deleted).as_py():
+    hard_delete = relation.column_schemas.get(DELETED_TS, {}).get("hard_delete")
+    if hard_delete and pc.any(is_deleted).as_py():
         table = _fill_deleted_rows(table, segment, is_deleted)
     return table
 
 
-def _fill_deleted_rows(table: Any, segment: "Segment", is_deleted: Any) -> Any:
+def _fill_deleted_rows(table: Any, segment: Segment, is_deleted: Any) -> Any:
     """Replaces NULLs in deleted rows with dummy values, same as the `python` backend.
 
     Deletes send only key columns, NULLs in other columns would violate NOT NULL constraints

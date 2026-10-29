@@ -7,6 +7,7 @@ from typing import (
     Any,
     Callable,
     Dict,
+    Iterable,
     Iterator,
     List,
     Literal,
@@ -16,6 +17,7 @@ from typing import (
     Sequence,
     Tuple,
     Union,
+    cast,
 )
 
 import psycopg2
@@ -24,18 +26,25 @@ from psycopg2.extras import LogicalReplicationConnection, ReplicationCursor
 
 import dlt
 from dlt.common import logger
+from dlt.common.arithmetics import DEFAULT_NUMERIC_PRECISION, DEFAULT_NUMERIC_SCALE
+from dlt.common.configuration.container import Container
 from dlt.common.configuration.specs.config_section_context import ConfigSectionContext
 from dlt.common.data_writers.escape import escape_postgres_identifier
+from dlt.common.destination import DestinationCapabilitiesContext
 from dlt.common.normalizers.naming.snake_case import NamingConvention
+from dlt.common.pipeline import PipelineContext
+from dlt.common.schema import Schema
 from dlt.common.schema.typing import (
     DLT_NAME_PREFIX,
     TColumnNames,
+    TColumnSchema,
     TTableSchemaColumns,
     TWriteDisposition,
 )
 from dlt.common.schema.utils import merge_column
 from dlt.common.typing import TDataItem
 from dlt.extract import DltResource
+from dlt.extract.source import SourceSchemaInjectableContext
 from dlt.sources.config import with_config
 from dlt.sources.credentials import ConnectionStringCredentials
 from dlt.sources.sql_database import (
@@ -53,18 +62,35 @@ from .decoders import (
     Relation,
 )
 from .exceptions import (
+    ChangePosition,
+    ColumnNameCollisionException,
+    IncompatibleColumnTypeException,
     IncompatiblePostgresVersionException,
     NoPrimaryKeyException,
+    NullInNotNullColumnException,
+    PublicationPrivilegesException,
+    SnapshotSchemaNotFoundException,
+    TableNameCollisionException,
     UnchangedToastException,
+    ValueConversionException,
 )
 from .schema_types import (
     _DUMMY_VALS,
+    COLUMN_TYPE_HINTS,
+    DELETED_TS,
+    LEGACY_DELETED_TS,
+    LEGACY_LSN,
+    LSN,
     PgType,
+    TReflectionLevel,
     TValueConverter,
     add_session_options,
+    column_type_fits,
+    format_column_type,
     get_value_converter,
     resolve_builtin_type,
     to_dlt_column_schema,
+    to_dlt_column_type,
     warn_unknown_type,
 )
 from .snapshot import (
@@ -119,6 +145,8 @@ def init_replication(
     reset: bool = False,
     backend: TBackend = "python",
     initial_snapshot: Optional[TInitialSnapshot] = None,
+    reflection_level: TReflectionLevel = "full",
+    reflect_not_null: bool = False,
 ) -> Optional[Union[DltResource, List[DltResource]]]:
     """Initializes replication for one, several, or all tables within a schema.
 
@@ -179,7 +207,9 @@ def init_replication(
           and recreated. Has no effect if a slot and publication with the provided
           names do not yet exist.
         backend (TBackend): `python` yields rows, `pyarrow` yields arrow tables from the
-          snapshot resources. Use the same backend as in `replication_resource`.
+          snapshot resources. Use the same backend as in `replication_resource`: arrow tables
+          get no `_dlt_load_id` and `_dlt_id` columns, rows of `python` add them as NOT NULL
+          columns, so changes of one backend fail to load into a table loaded with the other.
         initial_snapshot (Optional[TInitialSnapshot]): Returns resources that load the
           tables as they were when the replication slot was created, so the initial load and
           the replicated changes neither miss nor repeat a change:
@@ -189,6 +219,14 @@ def init_replication(
             but is emptied if the server crashes before the initial load.
           - `direct` reads the tables without copies. The resources must be extracted in this
             process right after `init_replication`, see `ReplicationSnapshot`.
+        reflection_level (TReflectionLevel): `full` creates snapshot columns without length
+          and integer size, so later changes of those fit, `full_with_precision` creates them
+          as in the source. Numeric precision and scale are kept on both levels. Use the same
+          level as in `replication_resource`.
+        reflect_not_null (bool): Creates NOT NULL snapshot columns for NOT NULL source columns.
+          By default only primary key columns are NOT NULL, so renamed, dropped or excluded
+          columns can be NULL in later changes. `replication_resource` stops when a NOT NULL
+          destination column would get NULL.
 
     Returns:
         - None without `initial_snapshot`
@@ -211,10 +249,18 @@ def init_replication(
     keep_rep_conn = False
     try:
         with rep_conn.cursor() as cur:
+            owned = get_publication_owned(pub_name, cur)
             if reset:
                 drop_replication_slot(slot_name, cur)
-                drop_publication(pub_name, cur)
-            create_publication(pub_name, cur, publish)
+                if owned:
+                    drop_publication(pub_name, cur)
+                    owned = None
+                elif owned is False:
+                    logger.warning(
+                        f"Publication {pub_name} is kept: it belongs to another role."
+                    )
+            if owned is None:
+                create_publication(pub_name, cur, publish, schema_name, table_names)
             pub_ops = get_pub_ops(pub_name, cur)
             if pub_ops["update"] or pub_ops["delete"]:
                 # checked before the tables are published, Postgres would reject their updates
@@ -224,11 +270,22 @@ def init_replication(
                 if tables_without_key:
                     raise NoPrimaryKeyException(schema_name, tables_without_key)
             if table_names is None:
-                add_schema_to_publication(schema_name, pub_name, cur)
+                if not is_schema_published(pub_name, schema_name, cur):
+                    add_schema_to_publication(schema_name, pub_name, cur)
             else:
-                add_tables_to_publication(table_names, schema_name, pub_name, cur)
+                published = get_published_tables(pub_name, schema_name, cur)
+                missing = [name for name in table_names if name not in published]
+                if missing:
+                    add_tables_to_publication(missing, schema_name, pub_name, cur)
             if pub_ops["update"]:
                 warn_unchanged_toast(pub_name, cur, include_columns, exclude_columns)
+            published_columns = get_published_columns(pub_name, cur)
+            check_published_names(
+                pub_name, published_columns, include_columns, exclude_columns
+            )
+            snapshot_exclude = _without_unreplicated_columns(
+                schema_name, published_columns, exclude_columns
+            )
 
             # no commands may run on `rep_conn` after the slot is created, they would end the
             # exported snapshot
@@ -255,19 +312,22 @@ def init_replication(
         )
 
         if initial_snapshot == "direct":
-            snapshot = ReplicationSnapshot(rep_conn, slot["snapshot_name"])
+            snapshot = ReplicationSnapshot(
+                rep_conn, slot["snapshot_name"], reflect_not_null
+            )
             keep_rep_conn = True
             for table_name in table_names:
                 resource = core_sql_table(
                     credentials=credentials,
                     table=table_name,
                     schema=schema_name,
-                    reflection_level="full_with_precision",
+                    reflection_level=reflection_level,
                     backend="pyarrow" if backend == "pyarrow" else "sqlalchemy",
                     included_columns=_columns_of_table(include_columns, table_name),
-                    excluded_columns=_columns_of_table(exclude_columns, table_name),
+                    excluded_columns=_columns_of_table(snapshot_exclude, table_name),
                     type_adapter_callback=snapshot.type_adapter_callback,
                     engine_adapter_callback=snapshot.engine_adapter_callback,
+                    table_adapter_callback=snapshot.table_adapter_callback,
                     table_loader_class=snapshot.table_loader_class(),
                 )
                 resource.apply_hints(
@@ -298,11 +358,16 @@ def init_replication(
                                 include_columns, table_name
                             ),
                             exclude_columns=_columns_of_table(
-                                exclude_columns, table_name
+                                snapshot_exclude, table_name
                             ),
                             unlogged=initial_snapshot == "unlogged_table",
                         ),
                         _get_pk(cur_snap, table_name, schema_name),
+                        (
+                            _get_not_null_columns(cur_snap, table_name, schema_name)
+                            if reflect_not_null
+                            else []
+                        ),
                     )
                     for table_name in table_names
                 ]
@@ -314,12 +379,15 @@ def init_replication(
                 schema_name=schema_name,
                 table_name=table_name,
                 write_disposition=write_disposition,
-                columns=None if columns is None else columns.get(table_name),
+                columns=_with_not_null(
+                    None if columns is None else columns.get(table_name), not_null
+                ),
                 primary_key=primary_key,
                 credentials=credentials,
                 backend=backend,
+                reflection_level=reflection_level,
             )
-            for table_name, snapshot_table_name, primary_key in snapshot_tables
+            for table_name, snapshot_table_name, primary_key, not_null in snapshot_tables
         ]
         if len(snapshot_table_resources) == 1:
             return snapshot_table_resources[0]
@@ -345,11 +413,14 @@ def create_publication(
     name: str,
     cur: cursor,
     publish: str = "insert, update, delete",
+    schema_name: Optional[str] = None,
+    table_names: Optional[Sequence[str]] = None,
 ) -> None:
     """Creates a publication for logical replication if it doesn't exist yet.
 
-    Does nothing if the publication already exists.
-    Raises error if the user does not have the CREATE privilege for the database.
+    Does nothing if the publication already exists. Raises `PublicationPrivilegesException`
+    with the statement that creates it with `table_names` or the whole schema if the user does
+    not have the CREATE privilege for the database.
     """
     esc_name = escape_postgres_identifier(name)
     try:
@@ -359,6 +430,102 @@ def create_publication(
         )
     except psycopg2.errors.DuplicateObject:  # the publication already exists
         logger.info(f'Publication "{name}" already exists.')
+    except psycopg2.errors.InsufficientPrivilege:
+        if table_names is not None:
+            members = "TABLE " + ", ".join(
+                _make_qualified_table_name(table_name, schema_name)
+                for table_name in table_names
+            )
+        else:
+            members = f"TABLES IN SCHEMA {escape_postgres_identifier(schema_name)}"
+        raise PublicationPrivilegesException(
+            name,
+            f"CREATE PUBLICATION {esc_name} FOR {members} WITH (publish = '{publish}');",
+        )
+
+
+def get_publication_owned(name: str, cur: cursor) -> Optional[bool]:
+    """Tells if the user may alter and drop the publication, None if it does not exist."""
+    cur.execute(
+        "SELECT pg_has_role(pubowner, 'USAGE') FROM pg_publication WHERE pubname = %s;",
+        (name,),
+    )
+    row = cur.fetchone()
+    return None if row is None else bool(row[0])
+
+
+def get_published_tables(pub_name: str, schema_name: str, cur: cursor) -> List[str]:
+    """Returns the names of tables of `schema_name` that the publication publishes."""
+    cur.execute(
+        "SELECT tablename FROM pg_publication_tables WHERE pubname = %s AND schemaname = %s;",
+        (pub_name, schema_name),
+    )
+    return [row[0] for row in cur.fetchall()]
+
+
+def get_published_columns(
+    pub_name: str, cur: cursor
+) -> Dict[Tuple[str, str], List[Tuple[str, bool]]]:
+    """Returns the columns of published tables, with True if Postgres replicates their values.
+
+    Generated columns are replicated only by Postgres 18 with `publish_generated_columns`.
+    """
+    generated = "a.attgenerated" if get_pg_version(cur) >= 120000 else "''::\"char\""
+    cur.execute(
+        f"""
+        SELECT pt.schemaname, pt.tablename, a.attname, {generated} = ''
+          OR ({generated} = 's' AND to_jsonb(p) ->> 'pubgencols' IN ('s', 'true'))
+        FROM pg_publication_tables pt
+        JOIN pg_publication p ON p.pubname = pt.pubname
+        JOIN pg_namespace n ON n.nspname = pt.schemaname
+        JOIN pg_class c ON c.relnamespace = n.oid AND c.relname = pt.tablename
+        JOIN pg_attribute a ON a.attrelid = c.oid AND a.attnum > 0 AND NOT a.attisdropped
+        WHERE pt.pubname = %s
+        ORDER BY pt.schemaname, pt.tablename, a.attnum;
+        """,
+        (pub_name,),
+    )
+    columns: Dict[Tuple[str, str], List[Tuple[str, bool]]] = {}
+    for schema_name, table_name, column_name, replicated in cur.fetchall():
+        columns.setdefault((schema_name, table_name), []).append(
+            (column_name, replicated)
+        )
+    return columns
+
+
+def check_table_names(
+    pub_name: str,
+    tables: Iterable[Tuple[str, str]],
+    normalize: Callable[[str], str],
+) -> None:
+    """Raises if published tables would load into the same destination table."""
+    published = {
+        f"{schema_name}.{table_name}": table_name for schema_name, table_name in tables
+    }
+    if collisions := name_collisions(
+        list(published), lambda qual_name: normalize(published[qual_name])
+    ):
+        raise TableNameCollisionException(pub_name, collisions[0])
+
+
+def is_schema_published(pub_name: str, schema_name: str, cur: cursor) -> bool:
+    """Tells if the publication publishes all tables, or all tables of `schema_name`."""
+    cur.execute(
+        "SELECT puballtables FROM pg_publication WHERE pubname = %s;", (pub_name,)
+    )
+    row = cur.fetchone()
+    if row is not None and row[0]:
+        return True
+    if get_pg_version(cur) < 150000:
+        return False
+    cur.execute(
+        "SELECT 1 FROM pg_publication_namespace pn"
+        " JOIN pg_publication p ON p.oid = pn.pnpubid"
+        " JOIN pg_namespace n ON n.oid = pn.pnnspid"
+        " WHERE p.pubname = %s AND n.nspname = %s;",
+        (pub_name, schema_name),
+    )
+    return cur.fetchone() is not None
 
 
 def add_table_to_publication(
@@ -374,8 +541,9 @@ def add_table_to_publication(
     """
     qual_name = _make_qualified_table_name(table_name, schema_name)
     esc_pub_name = escape_postgres_identifier(pub_name)
+    statement = f"ALTER PUBLICATION {esc_pub_name} ADD TABLE {qual_name};"
     try:
-        cur.execute(f"ALTER PUBLICATION {esc_pub_name} ADD TABLE {qual_name};")
+        cur.execute(statement)
         logger.info(
             f"Successfully added table {qual_name} to publication {esc_pub_name}."
         )
@@ -383,6 +551,8 @@ def add_table_to_publication(
         logger.info(
             f"Table {qual_name} is already a member of publication {esc_pub_name}."
         )
+    except psycopg2.errors.InsufficientPrivilege:
+        raise PublicationPrivilegesException(pub_name, statement)
 
 
 def add_tables_to_publication(
@@ -419,10 +589,11 @@ def add_schema_to_publication(
         )
     esc_schema_name = escape_postgres_identifier(schema_name)
     esc_pub_name = escape_postgres_identifier(pub_name)
+    statement = (
+        f"ALTER PUBLICATION {esc_pub_name} ADD TABLES IN SCHEMA {esc_schema_name};"
+    )
     try:
-        cur.execute(
-            f"ALTER PUBLICATION {esc_pub_name} ADD TABLES IN SCHEMA {esc_schema_name};"
-        )
+        cur.execute(statement)
         logger.info(
             f"Successfully added schema {esc_schema_name} to publication {esc_pub_name}."
         )
@@ -430,6 +601,8 @@ def add_schema_to_publication(
         logger.info(
             f"Schema {esc_schema_name} is already a member of publication {esc_pub_name}."
         )
+    except psycopg2.errors.InsufficientPrivilege:
+        raise PublicationPrivilegesException(pub_name, statement)
 
 
 def create_replication_slot(  # type: ignore[return]
@@ -529,6 +702,7 @@ def snapshot_table_resource(
     columns: TTableSchemaColumns = None,
     credentials: ConnectionStringCredentials = dlt.secrets.value,
     backend: TBackend = "python",
+    reflection_level: TReflectionLevel = "full",
 ) -> DltResource:
     """Returns a resource for a persisted snapshot table.
 
@@ -539,7 +713,7 @@ def snapshot_table_resource(
         credentials=credentials,
         table=snapshot_table_name,
         schema=schema_name,
-        reflection_level="full_with_precision",
+        reflection_level=reflection_level,
         backend="pyarrow" if backend == "pyarrow" else "sqlalchemy",
         type_adapter_callback=snapshot_type_adapter,
         engine_adapter_callback=pin_session_options,
@@ -713,6 +887,61 @@ def _columns_of_table(
     return list(columns[table_name])
 
 
+def check_published_names(
+    pub_name: str,
+    published_columns: Mapping[Tuple[str, str], Sequence[Tuple[str, bool]]],
+    include_columns: Optional[Mapping[str, Sequence[str]]] = None,
+    exclude_columns: Optional[Mapping[str, Sequence[str]]] = None,
+) -> None:
+    """Raises if published tables or their columns would load into the same destination one."""
+    naming = Schema("pg_replication").naming
+    check_table_names(pub_name, published_columns, naming.normalize_table_identifier)
+    for (schema_name, table_name), columns in published_columns.items():
+        include = _columns_of_table(include_columns, table_name)
+        exclude = _columns_of_table(exclude_columns, table_name)
+        names = [
+            name
+            for name, replicated in columns
+            if replicated and _is_column_included(name, include, exclude)
+        ]
+        if collisions := name_collisions(names, naming.normalize_identifier):
+            raise ColumnNameCollisionException(schema_name, table_name, collisions[0])
+
+
+def _without_unreplicated_columns(
+    schema_name: str,
+    published_columns: Mapping[Tuple[str, str], Sequence[Tuple[str, bool]]],
+    exclude_columns: Optional[Mapping[str, Sequence[str]]] = None,
+) -> Dict[str, Sequence[str]]:
+    """Adds columns whose values Postgres does not replicate to `exclude_columns`.
+
+    A snapshot with them would have values that replicated changes set to NULL.
+    """
+    excluded = dict(exclude_columns or {})
+    for (table_schema, table_name), columns in published_columns.items():
+        unreplicated = [name for name, replicated in columns if not replicated]
+        if table_schema != schema_name or not unreplicated:
+            continue
+        logger.warning(
+            f"Generated columns {', '.join(unreplicated)} of table {schema_name}.{table_name}"
+            " are left out of the initial snapshot because Postgres does not replicate their"
+            " values. Postgres 18 replicates stored generated columns of publications with"
+            " `publish_generated_columns = stored`."
+        )
+        excluded[table_name] = [*excluded.get(table_name, []), *unreplicated]
+    return excluded
+
+
+def name_collisions(
+    names: Sequence[str], normalize: Callable[[str], str]
+) -> List[List[str]]:
+    """Returns groups of `names` that normalize to the same identifier."""
+    groups: Dict[str, List[str]] = {}
+    for name in names:
+        groups.setdefault(normalize(name), []).append(name)
+    return [group for group in groups.values() if len(group) > 1]
+
+
 def _is_column_included(
     column_name: str,
     include_columns: Optional[Sequence[str]],
@@ -721,6 +950,30 @@ def _is_column_included(
     return (include_columns is None or column_name in include_columns) and (
         exclude_columns is None or column_name not in exclude_columns
     )
+
+
+def _with_not_null(
+    columns: Optional[TTableSchemaColumns], not_null: Sequence[str]
+) -> Optional[TTableSchemaColumns]:
+    """Adds NOT NULL to `columns` hints, snapshot copies have no NOT NULL columns."""
+    if not not_null:
+        return columns
+    merged: TTableSchemaColumns = {
+        name: {"name": name, "nullable": False} for name in not_null
+    }
+    for name, hint in (columns or {}).items():
+        merged[name] = {**merged.get(name, {}), **hint}
+    return merged
+
+
+def _get_not_null_columns(cur: cursor, table_name: str, schema_name: str) -> List[str]:
+    """Returns the names of NOT NULL columns of a Postgres table."""
+    cur.execute(
+        "SELECT attname FROM pg_attribute WHERE attrelid = %s::regclass AND attnotnull"
+        " AND attnum > 0 AND NOT attisdropped;",
+        (_make_qualified_table_name(table_name, schema_name),),
+    )
+    return [row[0] for row in cur.fetchall()]
 
 
 def _get_pk(
@@ -801,6 +1054,15 @@ class CatalogResolver:
             )
             return [row[0] for row in cur.fetchall()]
 
+    def get_not_null_columns(self, relation_id: int) -> List[str]:
+        with self.conn.cursor() as cur:
+            cur.execute(
+                "SELECT attname FROM pg_attribute WHERE attrelid = %s AND attnotnull"
+                " AND attnum > 0 AND NOT attisdropped;",
+                (relation_id,),
+            )
+            return [row[0] for row in cur.fetchall()]
+
 
 @dataclass
 class RelationSchema:
@@ -816,6 +1078,7 @@ class RelationSchema:
     column_schemas: TTableSchemaColumns
     write_disposition: TWriteDisposition
     skip: bool = False
+    not_null_columns: List[str] = field(default_factory=list)
 
 
 @dataclass
@@ -832,6 +1095,15 @@ class Segment:
     rows: List[TupleValues] = field(default_factory=list)
     row_lsns: List[int] = field(default_factory=list)
     row_deleted_ts: List[Optional[datetime]] = field(default_factory=list)
+    insert_final_lsns: List[int] = field(default_factory=list)
+    row_final_lsns: List[int] = field(default_factory=list)
+
+    def position(self, slot_name: str, index: Optional[int] = None) -> ChangePosition:
+        """Returns the transaction of the row at `index`, inserts first, or of all rows."""
+        final_lsns = self.insert_final_lsns + self.row_final_lsns
+        if index is None:
+            return ChangePosition(slot_name, min(final_lsns), max(final_lsns))
+        return ChangePosition(slot_name, final_lsns[index], final_lsns[index])
 
 
 def _default_resolve_type(type_id: int, atttypmod: int) -> PgType:
@@ -855,6 +1127,16 @@ class MessageConsumer:
         columns: Optional[Mapping[str, TTableSchemaColumns]] = None,
         resolve_type: Callable[[int, int], PgType] = _default_resolve_type,
         resolve_primary_key: Optional[Callable[[int], List[str]]] = None,
+        reflection_level: TReflectionLevel = "full",
+        destination_schema: Optional[Schema] = None,
+        decimal_precision: Tuple[int, int] = (
+            DEFAULT_NUMERIC_PRECISION,
+            DEFAULT_NUMERIC_SCALE,
+        ),
+        reflect_not_null: bool = False,
+        resolve_not_null: Optional[Callable[[int], List[str]]] = None,
+        hard_delete: bool = True,
+        slot_name: str = "",
     ) -> None:
         self.pub_ops = pub_ops
         self.upto_lsn = upto_lsn
@@ -864,13 +1146,23 @@ class MessageConsumer:
         self.columns = columns
         self.resolve_type = resolve_type
         self.resolve_primary_key = resolve_primary_key
+        self.reflection_level = reflection_level
+        self.destination_schema = destination_schema
+        self.decimal_precision = decimal_precision
+        self.reflect_not_null = reflect_not_null
+        self.resolve_not_null = resolve_not_null
+        self.hard_delete = hard_delete
+        self.slot_name = slot_name
+        self.naming = (destination_schema or Schema("pg_replication")).naming
 
         self.relations: Dict[int, RelationSchema] = {}
+        self._emitted_columns: Dict[str, TTableSchemaColumns] = {}
         self.segments: List[Segment] = []
         self.open_segments: Dict[int, Segment] = {}
         self.n_items = 0
         self.in_transaction = False
         self.commit_ts: Optional[datetime] = None
+        self.final_lsn = 0
         self.last_commit_lsn: Optional[int] = None
         self.batch_ready = False
         self.consumed_all = False
@@ -883,12 +1175,15 @@ class MessageConsumer:
                 segment = self._get_segment(relation)
                 segment.insert_payloads.append(payload)
                 segment.insert_lsns.append(data_start)
+                segment.insert_final_lsns.append(self.final_lsn)
                 self.n_items += 1
         elif op in (85, 68):  # U, D
             self.process_change(payload, data_start)
         elif op == 66:  # B
             self.in_transaction = True
-            self.commit_ts = decode_begin(payload).commit_ts
+            begin = decode_begin(payload)
+            self.commit_ts = begin.commit_ts
+            self.final_lsn = begin.final_lsn
         elif op == 67:  # C
             self.in_transaction = False
             self.last_commit_lsn = data_start
@@ -904,7 +1199,7 @@ class MessageConsumer:
                 "Truncate replication messages are ignored."
             )
         elif op not in (89, 79, 77):  # Y(type), O(origin), M(logical message)
-            raise ValueError(f"Unknown replication op {op}")
+            raise ValueError(f"Unknown replication op {op} in {self._position()}")
 
     def process_relation(self, relation: Relation) -> None:
         # changes received from now on have the new table schema
@@ -925,7 +1220,9 @@ class MessageConsumer:
             and not key_indices
             and (self.pub_ops["update"] or self.pub_ops["delete"])
         ):
-            raise NoPrimaryKeyException(relation.namespace, [table_name])
+            raise NoPrimaryKeyException(
+                relation.namespace, [table_name], self._position()
+            )
         include = _columns_of_table(self.include_columns, table_name)
         exclude = _columns_of_table(self.exclude_columns, table_name)
         included_indices = [
@@ -933,14 +1230,41 @@ class MessageConsumer:
             for i, c in enumerate(relation.columns)
             if _is_column_included(c.name, include, exclude)
         ]
-
-        column_schemas: TTableSchemaColumns = {
-            relation.columns[i].name: to_dlt_column_schema(
-                relation.columns[i], pg_types[i], i in key_indices
+        if not skip and (
+            collisions := name_collisions(
+                [relation.columns[i].name for i in included_indices],
+                self.naming.normalize_identifier,
             )
-            for i in included_indices
-        }
+        ):
+            raise ColumnNameCollisionException(
+                relation.namespace, table_name, collisions[0], self._position()
+            )
+
         hints = {} if self.columns is None else self.columns.get(table_name, {})
+        column_schemas: TTableSchemaColumns = {}
+        for i in included_indices:
+            column = relation.columns[i]
+            column_schemas[column.name] = to_dlt_column_schema(
+                column, pg_types[i], i in key_indices, self.reflection_level
+            )
+            # a type in `columns` wins, the user takes care of the destination column
+            if not skip and not set(COLUMN_TYPE_HINTS) & set(
+                hints.get(column.name, {})
+            ):
+                self._keep_destination_type(
+                    relation, column_schemas[column.name], pg_types[i]
+                )
+        # only a new table gets NOT NULL, a NOT NULL column can't be added to a table with rows
+        if (
+            self.reflect_not_null
+            and self.resolve_not_null
+            and not skip
+            and table_name not in self._emitted_columns
+            and self._existing_table(table_name) is None
+        ):
+            for name in self.resolve_not_null(relation.relation_id):
+                if name in column_schemas:
+                    column_schemas[name]["nullable"] = False
         for column_name, column_hint in hints.items():
             if column_name in column_schemas:
                 column_schemas[column_name] = merge_column(
@@ -950,20 +1274,51 @@ class MessageConsumer:
                 column_schemas[column_name] = {"name": column_name, **column_hint}
 
         # add hints for replication columns
-        column_schemas["lsn"] = {"name": "lsn", "data_type": "bigint", "nullable": True}
+        column_schemas[LSN] = {"name": LSN, "data_type": "bigint", "nullable": True}
         if self.pub_ops["update"] or self.pub_ops["delete"]:
-            column_schemas["lsn"]["dedup_sort"] = "desc"
+            column_schemas[LSN]["dedup_sort"] = "desc"
         if self.pub_ops["delete"]:
-            column_schemas["deleted_ts"] = {
-                "name": "deleted_ts",
-                "hard_delete": True,
+            column_schemas[DELETED_TS] = {
+                "name": DELETED_TS,
                 "data_type": "timestamp",
                 "nullable": True,
             }
+            if self.hard_delete:
+                column_schemas[DELETED_TS]["hard_delete"] = True
+        # dlt takes the first `dedup_sort` and `hard_delete` column, clear them on old columns
+        legacy = self._existing_column(table_name, LEGACY_LSN)
+        if legacy and legacy.get("dedup_sort"):
+            column_schemas.setdefault(LEGACY_LSN, {"name": LEGACY_LSN})[
+                "dedup_sort"
+            ] = None
+        legacy = self._existing_column(table_name, LEGACY_DELETED_TS)
+        if legacy and legacy.get("hard_delete"):
+            column_schemas.setdefault(LEGACY_DELETED_TS, {"name": LEGACY_DELETED_TS})[
+                "hard_delete"
+            ] = False
         write_disposition: TWriteDisposition = "append"
         if self.pub_ops["update"] or self.pub_ops["delete"]:
             write_disposition = "merge"
 
+        not_null_columns: List[str] = []
+        if not skip:
+            missing = self._missing_not_null_columns(table_name, column_schemas)
+            if missing:
+                raise NullInNotNullColumnException(
+                    relation.namespace,
+                    table_name,
+                    missing,
+                    self._position(),
+                    missing=True,
+                )
+            not_null_columns = [
+                relation.columns[i].name
+                for i in included_indices
+                if i not in key_indices
+                and column_schemas[relation.columns[i].name].get("nullable") is False
+            ]
+
+        self._emitted_columns[table_name] = column_schemas
         self.relations[relation.relation_id] = RelationSchema(
             relation_id=relation.relation_id,
             schema_name=relation.namespace,
@@ -975,6 +1330,7 @@ class MessageConsumer:
             column_schemas=column_schemas,
             write_disposition=write_disposition,
             skip=skip,
+            not_null_columns=not_null_columns,
         )
 
     def process_change(self, payload: bytes, data_start: int) -> None:
@@ -1006,9 +1362,73 @@ class MessageConsumer:
             ]
             if missing:
                 raise UnchangedToastException(
-                    relation.schema_name, relation.table_name, missing
+                    relation.schema_name, relation.table_name, missing, self._position()
                 )
         self._add_row(segment, new_values, data_start, None)
+
+    def _keep_destination_type(
+        self, relation: Relation, column_schema: TColumnSchema, pg_type: PgType
+    ) -> None:
+        """Replaces the inferred type with the type of the column loaded before, if any.
+
+        Raises `IncompatibleColumnTypeException` if a value of `pg_type` may not fit it.
+        """
+        existing = self._existing_column(relation.relation_name, column_schema["name"])
+        if not existing or "data_type" not in existing:
+            return
+        if not column_type_fits(existing, pg_type, self.decimal_precision):
+            raise IncompatibleColumnTypeException(
+                relation.namespace,
+                relation.relation_name,
+                column_schema["name"],
+                format_column_type(existing),
+                format_column_type(to_dlt_column_type(pg_type, "full_with_precision")),
+                dict(to_dlt_column_type(pg_type, self.reflection_level)),
+                self._position(),
+            )
+        schema = cast(Dict[str, Any], column_schema)
+        for hint in (*COLUMN_TYPE_HINTS, "nullable"):
+            schema.pop(hint, None)
+            if hint in existing:
+                schema[hint] = existing[hint]  # type: ignore[literal-required]
+
+    def _existing_column(
+        self, table_name: str, column_name: str
+    ) -> Optional[TColumnSchema]:
+        """Returns the column emitted earlier in this run or in `destination_schema`."""
+        if table_name in self._emitted_columns:
+            return self._emitted_columns[table_name].get(column_name)
+        if existing := self._existing_table(table_name):
+            schema, columns = existing
+            return columns.get(schema.naming.normalize_identifier(column_name))
+        return None
+
+    def _existing_table(
+        self, table_name: str
+    ) -> Optional[Tuple[Schema, TTableSchemaColumns]]:
+        """Returns the columns of `table_name` in `destination_schema`, None if not loaded."""
+        schema = self.destination_schema
+        if schema is None:
+            return None
+        table = schema.tables.get(schema.naming.normalize_table_identifier(table_name))
+        return None if table is None else (schema, table["columns"])
+
+    def _missing_not_null_columns(
+        self, table_name: str, column_schemas: TTableSchemaColumns
+    ) -> List[str]:
+        """Returns NOT NULL columns of the destination table that get no values."""
+        existing = self._existing_table(table_name)
+        if existing is None:
+            return []
+        schema, columns = existing
+        emitted = {schema.naming.normalize_identifier(name) for name in column_schemas}
+        return [
+            name
+            for name, column in columns.items()
+            if column.get("nullable") is False
+            and name not in emitted
+            and not name.startswith(DLT_NAME_PREFIX)
+        ]
 
     def take_batch(self) -> List[Segment]:
         segments = self.segments
@@ -1035,7 +1455,11 @@ class MessageConsumer:
         segment.rows.append(values)
         segment.row_lsns.append(lsn)
         segment.row_deleted_ts.append(deleted_ts)
+        segment.row_final_lsns.append(self.final_lsn)
         self.n_items += 1
+
+    def _position(self) -> ChangePosition:
+        return ChangePosition(self.slot_name, self.final_lsn, self.final_lsn)
 
 
 def segment_hints(relation: RelationSchema) -> TDataItem:
@@ -1051,7 +1475,7 @@ def segment_hints(relation: RelationSchema) -> TDataItem:
     )
 
 
-def segment_to_rows(segment: Segment) -> List[TDataItem]:
+def segment_to_rows(segment: Segment, slot_name: str = "") -> List[TDataItem]:
     """Converts changes in a segment to rows (dicts)."""
     relation = segment.relation
     indices = relation.included_indices
@@ -1063,36 +1487,92 @@ def segment_to_rows(segment: Segment) -> List[TDataItem]:
         _DUMMY_VALS[relation.column_schemas[name].get("data_type", "text")]
         for name in names
     ]
-    with_deletes = "deleted_ts" in relation.column_schemas
+    with_deletes = DELETED_TS in relation.column_schemas
+    hard_delete = with_deletes and bool(
+        relation.column_schemas[DELETED_TS].get("hard_delete")
+    )
     rows: List[TDataItem] = []
 
     def _to_row(values: TupleValues) -> Dict[str, Any]:
-        return {
-            name: value if value is None or convert is None else convert(value)
-            for name, convert, value in zip(
-                names, converters, [values[i] for i in indices]
-            )
-        }
+        selected = [values[i] for i in indices]
+        try:
+            return {
+                name: value if value is None or convert is None else convert(value)
+                for name, convert, value in zip(names, converters, selected)
+            }
+        except Exception as ex:
+            raise ValueConversionException(
+                relation.schema_name,
+                relation.table_name,
+                _failing_column(names, converters, selected),
+                str(ex),
+                segment.position(slot_name, len(rows)),
+            ) from ex
 
     for payload, lsn in zip(segment.insert_payloads, segment.insert_lsns):
         row = _to_row(read_tuple(payload, 6)[0])
-        row["lsn"] = lsn
+        row[LSN] = lsn
         rows.append(row)
     for values, lsn, deleted_ts in zip(
         segment.rows, segment.row_lsns, segment.row_deleted_ts
     ):
         row = _to_row(values)
-        row["lsn"] = lsn
-        if deleted_ts is not None:
+        row[LSN] = lsn
+        if deleted_ts is not None and hard_delete:
             # replace NULLs to prevent NOT NULL violations in staging table
             for name, dummy in zip(names, dummies):
                 if row[name] is None:
                     row[name] = dummy
-            row["deleted_ts"] = deleted_ts
-        elif with_deletes:
-            row["deleted_ts"] = None
+        if with_deletes:
+            row[DELETED_TS] = deleted_ts
         rows.append(row)
+    for index, row in enumerate(rows if relation.not_null_columns else []):
+        if nulls := [name for name in relation.not_null_columns if row[name] is None]:
+            raise NullInNotNullColumnException(
+                relation.schema_name,
+                relation.table_name,
+                nulls,
+                segment.position(slot_name, index),
+            )
     return rows
+
+
+def _failing_column(
+    names: Sequence[str],
+    converters: Sequence[Optional[TValueConverter]],
+    values: Sequence[Any],
+) -> Optional[str]:
+    for name, convert, value in zip(names, converters, values):
+        if value is not None and convert is not None:
+            try:
+                convert(value)
+            except Exception:
+                return name
+    return None
+
+
+def get_destination_schema(
+    snapshot_pipeline: Optional[dlt.Pipeline], first_run: bool
+) -> Optional[Schema]:
+    """Returns the schema of the tables loaded before, None outside of a pipeline run.
+
+    The first replication run takes the schema of `snapshot_pipeline` if given. Later runs take
+    the schema of the running pipeline, which has the replicated tables by then.
+    """
+    if first_run and snapshot_pipeline is not None:
+        if not snapshot_pipeline.default_schema_name:
+            raise SnapshotSchemaNotFoundException(snapshot_pipeline.pipeline_name)
+        return snapshot_pipeline.default_schema
+    container = Container()
+    if (
+        not container[PipelineContext].is_active()
+        or SourceSchemaInjectableContext not in container
+    ):
+        return None
+    pipeline = dlt.current.pipeline()
+    # the source schema of a resource is a copy without data tables
+    schema_name = dlt.current.source_schema().name
+    return pipeline.schemas[schema_name] if schema_name in pipeline.schemas else None
 
 
 class ChangesBatch(NamedTuple):
@@ -1111,6 +1591,10 @@ def stream_changes(
     columns: Optional[Mapping[str, TTableSchemaColumns]] = None,
     flush_slot: bool = True,
     backend: TBackend = "python",
+    reflection_level: TReflectionLevel = "full",
+    reflect_not_null: bool = False,
+    destination_schema: Optional[Schema] = None,
+    hard_delete: bool = True,
 ) -> Iterator[ChangesBatch]:
     """Streams changes from the slot until the WAL position flushed at the start is reached.
 
@@ -1118,7 +1602,12 @@ def stream_changes(
     `start_lsn` at the start, i.e. changes of the previous run are discarded only when a
     pipeline run with the state containing `start_lsn` succeeded. The last batch has the
     position up to which all changes were received, also when none were published.
+    Columns loaded before keep their types, found in `destination_schema`.
     """
+    caps = (
+        Container().get(DestinationCapabilitiesContext)
+        or DestinationCapabilitiesContext.generic_capabilities()
+    )
     if backend == "pyarrow":
         from .arrow_helpers import segment_to_arrow
 
@@ -1155,7 +1644,23 @@ def stream_changes(
             columns=columns,
             resolve_type=catalog.resolve_type,
             resolve_primary_key=catalog.get_primary_key,
+            reflection_level=reflection_level,
+            destination_schema=destination_schema,
+            decimal_precision=caps.decimal_precision
+            or (DEFAULT_NUMERIC_PRECISION, DEFAULT_NUMERIC_SCALE),
+            reflect_not_null=reflect_not_null,
+            resolve_not_null=catalog.get_not_null_columns,
+            hard_delete=hard_delete,
+            slot_name=slot_name,
         )
+        with conn.cursor() as cur:
+            cur.execute(
+                "SELECT schemaname, tablename FROM pg_publication_tables WHERE pubname = %s;",
+                (pub_name,),
+            )
+            check_table_names(
+                pub_name, cur.fetchall(), consumer.naming.normalize_table_identifier
+            )
 
         def _batch(lsn: int) -> ChangesBatch:
             items: List[TDataItem] = []
@@ -1166,7 +1671,7 @@ def stream_changes(
                 items.append(segment_hints(segment.relation))
                 items.append(
                     dlt.mark.with_table_name(
-                        segment_to_data(segment), segment.relation.table_name
+                        segment_to_data(segment, slot_name), segment.relation.table_name
                     )
                 )
             return ChangesBatch(items, lsn)

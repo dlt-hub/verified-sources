@@ -1,7 +1,8 @@
 """Initial snapshot of replicated tables, consistent with the start of the replication slot."""
 
 import weakref
-from typing import Any, Dict, Iterator, List, Type
+from functools import lru_cache
+from typing import Any, Callable, Dict, Iterator, List, Optional, Tuple, Type
 
 import sqlalchemy as sa
 from psycopg2.extensions import new_array_type, new_type, register_type
@@ -21,13 +22,13 @@ from .schema_types import add_session_options
 # sqlalchemy < 2 reflects domains as their base type
 _PG_DOMAIN = getattr(postgresql, "DOMAIN", ())
 
-# interval values have no dlt data type and are loaded as text, the same as replicated values
-_INTERVAL_AS_TEXT = new_type(
-    (1186,), "PG_REPLICATION_INTERVAL", lambda value, cur: value
-)
-_INTERVAL_ARRAY_AS_TEXT = new_array_type(
-    (1187,), "PG_REPLICATION_INTERVAL_ARRAY", _INTERVAL_AS_TEXT
-)
+
+# created on first use: `dlt init` imports the source with dummy modules instead of psycopg2
+@lru_cache(maxsize=None)
+def _interval_as_text() -> Tuple[Any, Any]:
+    """Casters that load interval values as text, the same as replicated values."""
+    as_text = new_type((1186,), "PG_REPLICATION_INTERVAL", lambda value, cur: value)
+    return as_text, new_array_type((1187,), "PG_REPLICATION_INTERVAL_ARRAY", as_text)
 
 
 def snapshot_type_adapter(sql_type: TypeEngine) -> TypeEngine:  # type: ignore[type-arg]
@@ -40,6 +41,14 @@ def snapshot_type_adapter(sql_type: TypeEngine) -> TypeEngine:  # type: ignore[t
     if isinstance(sql_type, _PG_DOMAIN):
         return sql_type.data_type  # type: ignore[attr-defined,no-any-return]
     return sql_type
+
+
+def remove_not_null_adapter(table: sa.Table) -> sa.Table:
+    """Reflects non-key columns as nullable, as replicated columns are."""
+    for column in table.columns:
+        if not column.primary_key:
+            column.nullable = True
+    return table
 
 
 def ensure_sqlalchemy_2() -> None:
@@ -65,8 +74,8 @@ def _add_session_options(
 
 
 def _register_interval_as_text(dbapi_connection: Any, connection_record: Any) -> None:
-    register_type(_INTERVAL_AS_TEXT, dbapi_connection)
-    register_type(_INTERVAL_ARRAY_AS_TEXT, dbapi_connection)
+    for caster in _interval_as_text():
+        register_type(caster, dbapi_connection)
 
 
 class ReplicationSnapshot(List[DltResource]):
@@ -78,15 +87,23 @@ class ReplicationSnapshot(List[DltResource]):
     read its table, with `close()` or when the `with` block ends.
 
     To read the snapshot with your own `sql_database` or `sql_table`, pass them
-    `engine_adapter_callback` and `type_adapter_callback` within the `with` block.
+    `engine_adapter_callback`, `type_adapter_callback` and `table_adapter_callback` within the
+    `with` block. With an arrow backend (`pyarrow`, `pandas`, `connectorx`) replicate with
+    `replication_resource(backend="pyarrow")`, with `sqlalchemy` with the `python` backend.
     """
 
     def __init__(
-        self, rep_conn: LogicalReplicationConnection, snapshot_name: str
+        self,
+        rep_conn: LogicalReplicationConnection,
+        snapshot_name: str,
+        reflect_not_null: bool = False,
     ) -> None:
         super().__init__()
         self.snapshot_name = snapshot_name
         self.type_adapter_callback = snapshot_type_adapter
+        self.table_adapter_callback: Optional[Callable[[sa.Table], sa.Table]] = (
+            None if reflect_not_null else remove_not_null_adapter
+        )
         self._unread_tables = 0
         self._finalizer = weakref.finalize(self, rep_conn.close)
 
