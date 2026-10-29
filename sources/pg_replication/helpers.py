@@ -61,6 +61,7 @@ from .decoders import (
     Relation,
 )
 from .exceptions import (
+    ChangePosition,
     IncompatibleColumnTypeException,
     IncompatiblePostgresVersionException,
     NoPrimaryKeyException,
@@ -68,6 +69,7 @@ from .exceptions import (
     PublicationPrivilegesException,
     SnapshotSchemaNotFoundException,
     UnchangedToastException,
+    ValueConversionException,
 )
 from .schema_types import (
     _DUMMY_VALS,
@@ -983,6 +985,15 @@ class Segment:
     rows: List[TupleValues] = field(default_factory=list)
     row_lsns: List[int] = field(default_factory=list)
     row_deleted_ts: List[Optional[datetime]] = field(default_factory=list)
+    insert_final_lsns: List[int] = field(default_factory=list)
+    row_final_lsns: List[int] = field(default_factory=list)
+
+    def position(self, slot_name: str, index: Optional[int] = None) -> ChangePosition:
+        """Returns the transaction of the row at `index`, inserts first, or of all rows."""
+        final_lsns = self.insert_final_lsns + self.row_final_lsns
+        if index is None:
+            return ChangePosition(slot_name, min(final_lsns), max(final_lsns))
+        return ChangePosition(slot_name, final_lsns[index], final_lsns[index])
 
 
 def _default_resolve_type(type_id: int, atttypmod: int) -> PgType:
@@ -1015,6 +1026,7 @@ class MessageConsumer:
         reflect_not_null: bool = False,
         resolve_not_null: Optional[Callable[[int], List[str]]] = None,
         hard_delete: bool = True,
+        slot_name: str = "",
     ) -> None:
         self.pub_ops = pub_ops
         self.upto_lsn = upto_lsn
@@ -1030,6 +1042,7 @@ class MessageConsumer:
         self.reflect_not_null = reflect_not_null
         self.resolve_not_null = resolve_not_null
         self.hard_delete = hard_delete
+        self.slot_name = slot_name
 
         self.relations: Dict[int, RelationSchema] = {}
         self._emitted_columns: Dict[str, TTableSchemaColumns] = {}
@@ -1038,6 +1051,7 @@ class MessageConsumer:
         self.n_items = 0
         self.in_transaction = False
         self.commit_ts: Optional[datetime] = None
+        self.final_lsn = 0
         self.last_commit_lsn: Optional[int] = None
         self.batch_ready = False
         self.consumed_all = False
@@ -1050,12 +1064,15 @@ class MessageConsumer:
                 segment = self._get_segment(relation)
                 segment.insert_payloads.append(payload)
                 segment.insert_lsns.append(data_start)
+                segment.insert_final_lsns.append(self.final_lsn)
                 self.n_items += 1
         elif op in (85, 68):  # U, D
             self.process_change(payload, data_start)
         elif op == 66:  # B
             self.in_transaction = True
-            self.commit_ts = decode_begin(payload).commit_ts
+            begin = decode_begin(payload)
+            self.commit_ts = begin.commit_ts
+            self.final_lsn = begin.final_lsn
         elif op == 67:  # C
             self.in_transaction = False
             self.last_commit_lsn = data_start
@@ -1071,7 +1088,7 @@ class MessageConsumer:
                 "Truncate replication messages are ignored."
             )
         elif op not in (89, 79, 77):  # Y(type), O(origin), M(logical message)
-            raise ValueError(f"Unknown replication op {op}")
+            raise ValueError(f"Unknown replication op {op} in {self._position()}")
 
     def process_relation(self, relation: Relation) -> None:
         # changes received from now on have the new table schema
@@ -1092,7 +1109,9 @@ class MessageConsumer:
             and not key_indices
             and (self.pub_ops["update"] or self.pub_ops["delete"])
         ):
-            raise NoPrimaryKeyException(relation.namespace, [table_name])
+            raise NoPrimaryKeyException(
+                relation.namespace, [table_name], self._position()
+            )
         include = _columns_of_table(self.include_columns, table_name)
         exclude = _columns_of_table(self.exclude_columns, table_name)
         included_indices = [
@@ -1166,7 +1185,11 @@ class MessageConsumer:
             missing = self._missing_not_null_columns(table_name, column_schemas)
             if missing:
                 raise NullInNotNullColumnException(
-                    relation.namespace, table_name, missing
+                    relation.namespace,
+                    table_name,
+                    missing,
+                    self._position(),
+                    missing=True,
                 )
             not_null_columns = [
                 relation.columns[i].name
@@ -1219,7 +1242,7 @@ class MessageConsumer:
             ]
             if missing:
                 raise UnchangedToastException(
-                    relation.schema_name, relation.table_name, missing
+                    relation.schema_name, relation.table_name, missing, self._position()
                 )
         self._add_row(segment, new_values, data_start, None)
 
@@ -1241,6 +1264,7 @@ class MessageConsumer:
                 format_column_type(existing),
                 format_column_type(to_dlt_column_type(pg_type, "full_with_precision")),
                 dict(to_dlt_column_type(pg_type, self.reflection_level)),
+                self._position(),
             )
         schema = cast(Dict[str, Any], column_schema)
         for hint in (*COLUMN_TYPE_HINTS, "nullable"):
@@ -1311,7 +1335,11 @@ class MessageConsumer:
         segment.rows.append(values)
         segment.row_lsns.append(lsn)
         segment.row_deleted_ts.append(deleted_ts)
+        segment.row_final_lsns.append(self.final_lsn)
         self.n_items += 1
+
+    def _position(self) -> ChangePosition:
+        return ChangePosition(self.slot_name, self.final_lsn, self.final_lsn)
 
 
 def segment_hints(relation: RelationSchema) -> TDataItem:
@@ -1327,7 +1355,7 @@ def segment_hints(relation: RelationSchema) -> TDataItem:
     )
 
 
-def segment_to_rows(segment: Segment) -> List[TDataItem]:
+def segment_to_rows(segment: Segment, slot_name: str = "") -> List[TDataItem]:
     """Converts changes in a segment to rows (dicts)."""
     relation = segment.relation
     indices = relation.included_indices
@@ -1346,12 +1374,20 @@ def segment_to_rows(segment: Segment) -> List[TDataItem]:
     rows: List[TDataItem] = []
 
     def _to_row(values: TupleValues) -> Dict[str, Any]:
-        return {
-            name: value if value is None or convert is None else convert(value)
-            for name, convert, value in zip(
-                names, converters, [values[i] for i in indices]
-            )
-        }
+        selected = [values[i] for i in indices]
+        try:
+            return {
+                name: value if value is None or convert is None else convert(value)
+                for name, convert, value in zip(names, converters, selected)
+            }
+        except Exception as ex:
+            raise ValueConversionException(
+                relation.schema_name,
+                relation.table_name,
+                _failing_column(names, converters, selected),
+                str(ex),
+                segment.position(slot_name, len(rows)),
+            ) from ex
 
     for payload, lsn in zip(segment.insert_payloads, segment.insert_lsns):
         row = _to_row(read_tuple(payload, 6)[0])
@@ -1370,15 +1406,29 @@ def segment_to_rows(segment: Segment) -> List[TDataItem]:
         if with_deletes:
             row[DELETED_TS] = deleted_ts
         rows.append(row)
-    if nulls := [
-        name
-        for name in relation.not_null_columns
-        if any(row[name] is None for row in rows)
-    ]:
-        raise NullInNotNullColumnException(
-            relation.schema_name, relation.table_name, nulls
-        )
+    for index, row in enumerate(rows if relation.not_null_columns else []):
+        if nulls := [name for name in relation.not_null_columns if row[name] is None]:
+            raise NullInNotNullColumnException(
+                relation.schema_name,
+                relation.table_name,
+                nulls,
+                segment.position(slot_name, index),
+            )
     return rows
+
+
+def _failing_column(
+    names: Sequence[str],
+    converters: Sequence[Optional[TValueConverter]],
+    values: Sequence[Any],
+) -> Optional[str]:
+    for name, convert, value in zip(names, converters, values):
+        if value is not None and convert is not None:
+            try:
+                convert(value)
+            except Exception:
+                return name
+    return None
 
 
 def get_destination_schema(
@@ -1481,6 +1531,7 @@ def stream_changes(
             reflect_not_null=reflect_not_null,
             resolve_not_null=catalog.get_not_null_columns,
             hard_delete=hard_delete,
+            slot_name=slot_name,
         )
 
         def _batch(lsn: int) -> ChangesBatch:
@@ -1492,7 +1543,7 @@ def stream_changes(
                 items.append(segment_hints(segment.relation))
                 items.append(
                     dlt.mark.with_table_name(
-                        segment_to_data(segment), segment.relation.table_name
+                        segment_to_data(segment, slot_name), segment.relation.table_name
                     )
                 )
             return ChangesBatch(items, lsn)

@@ -13,11 +13,15 @@ from dlt.common.schema.typing import TTableSchemaColumns
 from dlt.common.schema.utils import new_table
 from dlt.sources.credentials import ConnectionStringCredentials
 
+from sources.pg_replication import helpers
+from sources.pg_replication.decoders import decode_begin
 from sources.pg_replication.exceptions import (
+    ChangePosition,
     IncompatibleColumnTypeException,
     NoPrimaryKeyException,
     NullInNotNullColumnException,
     UnchangedToastException,
+    ValueConversionException,
 )
 from sources.pg_replication.helpers import (
     MessageConsumer,
@@ -44,6 +48,17 @@ def consume(scenario: str, **kwargs: Any) -> MessageConsumer:
     for data_start, payload in MESSAGES[scenario]:
         consumer.process_msg(bytes.fromhex(payload), data_start)
     return consumer
+
+
+def final_lsns(scenario: str, ops: Tuple[str, ...] = ("49", "55", "44")) -> List[int]:
+    """Returns the final LSN of the transaction of each change with an op in `ops`."""
+    lsns, final_lsn = [], 0
+    for _, payload in MESSAGES[scenario]:
+        if payload.startswith("42"):
+            final_lsn = decode_begin(bytes.fromhex(payload)).final_lsn
+        elif payload[:2] in ops:
+            lsns.append(final_lsn)
+    return lsns
 
 
 def change_lsns(scenario: str) -> List[int]:
@@ -312,6 +327,51 @@ def test_null_in_not_null_column_raises(backend: str) -> None:
     with pytest.raises(NullInNotNullColumnException) as exc:
         load_segment(segment, backend)
     assert exc.value.column_names == ["note"]
+    final_lsn = final_lsns("basic", ("49",))[1]
+    assert exc.value.position == ChangePosition("", final_lsn, final_lsn)
+    assert "pg_replication_slot_advance" in str(exc.value)
+
+
+@pytest.mark.parametrize(
+    "backend,fails_in_python",
+    [("python", True), ("pyarrow", True), ("pyarrow", False)],
+    ids=["python", "pyarrow", "pyarrow-only"],
+)
+def test_conversion_error_names_transaction(
+    backend: str, fails_in_python: bool, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    if backend == "pyarrow":
+        arrow_helpers = pytest.importorskip("sources.pg_replication.arrow_helpers")
+
+        def fail_in_arrow(*args: Any) -> None:
+            raise ValueError("arrow cannot parse it")
+
+        monkeypatch.setattr(arrow_helpers, "to_castable_array", fail_in_arrow)
+    if fails_in_python:
+        get_value_converter = helpers.get_value_converter
+
+        def failing_numeric(pg_type: Any) -> Any:
+            if pg_type.type_id != 1700:
+                return get_value_converter(pg_type)
+
+            def convert(value: str) -> None:
+                raise ValueError("python cannot parse it")
+
+            return convert
+
+        monkeypatch.setattr(helpers, "get_value_converter", failing_numeric)
+    (segment,) = consume("basic").take_batch()
+    with pytest.raises(ValueConversionException) as exc:
+        load_segment(segment, backend)
+    lsns = final_lsns("basic")
+    if fails_in_python:
+        # the first insert has the first numeric value
+        assert exc.value.column_name == "amount"
+        assert exc.value.position == ChangePosition("", lsns[0], lsns[0])
+    else:
+        assert exc.value.column_name is None
+        assert exc.value.position == ChangePosition("", min(lsns), max(lsns))
+    assert exc.value.position.skip_lsn in str(exc.value)
 
 
 def test_reflect_not_null_in_new_tables() -> None:
@@ -374,10 +434,16 @@ def test_table_without_key_raises(scenario: str) -> None:
 )
 def test_unchanged_toast_without_old_row_raises(column_filter: Dict[str, Any]) -> None:
     with pytest.raises(UnchangedToastException) as exc:
-        consume("toast_default", **column_filter)
+        consume("toast_default", slot_name="slot", **column_filter)
     assert exc.value.table_name == "items"
     assert exc.value.column_names == ["big"]
     assert "REPLICA IDENTITY FULL" in str(exc.value)
+    final_lsn = final_lsns("toast_default", ("55",))[0]
+    assert exc.value.position == ChangePosition("slot", final_lsn, final_lsn)
+    assert (
+        f"pg_replication_slot_advance('slot', '{exc.value.position.skip_lsn}')"
+        in str(exc.value)
+    )
 
 
 @pytest.mark.parametrize("backend", ["python", "pyarrow"])

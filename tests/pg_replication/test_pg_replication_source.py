@@ -32,6 +32,7 @@ from sources.pg_replication.exceptions import (
     IncompatiblePostgresVersionException,
     NoPrimaryKeyException,
     PublicationPrivilegesException,
+    ValueConversionException,
 )
 from sources.pg_replication.schema_types import TReflectionLevel
 
@@ -1323,6 +1324,42 @@ def test_changes_of_lost_run_load_again(
         (3, "three"),
         (4, "four"),
     ]
+
+
+@pytest.mark.parametrize("backend", ["python", "pyarrow"])
+def test_skip_transaction_with_slot_advance(
+    src_config: Tuple[dlt.Pipeline, str, str], backend: str
+) -> None:
+    if get_pg_version() < 110000:
+        pytest.skip("pg_replication_slot_advance needs Postgres 11")
+    src_pl, slot_name, pub_name = src_config
+    create_tables(src_pl, "CREATE TABLE {schema}.items (id int PRIMARY KEY, d date);")
+    init_replication(slot_name, pub_name, src_pl.dataset_name, "items")
+    dest_pl = dlt.pipeline(pipeline_name="dest_pl", destination="duckdb", dev_mode=True)
+    run_sql(src_pl, "INSERT INTO {schema}.items VALUES (1, '2024-01-01');")
+    assert_load_info(
+        dest_pl.run(replication_resource(slot_name, pub_name, backend=backend))
+    )
+    run_sql(
+        src_pl,
+        # python dates have no years before 1
+        "INSERT INTO {schema}.items VALUES (2, '0044-03-15 BC');",
+        "INSERT INTO {schema}.items VALUES (3, '2024-01-03');",
+    )
+    with pytest.raises(PipelineStepFailed) as exc:
+        dest_pl.run(replication_resource(slot_name, pub_name, backend=backend))
+    error = exc.value.exception.__cause__
+    assert isinstance(error, ValueConversionException)
+    assert error.column_name == "d"
+    # the statement from the error skips only the transaction with the value
+    run_sql(
+        src_pl,
+        f"SELECT pg_replication_slot_advance('{slot_name}', '{error.position.skip_lsn}');",
+    )
+    assert_load_info(
+        dest_pl.run(replication_resource(slot_name, pub_name, backend=backend))
+    )
+    assert table_rows(dest_pl, "items", ["id"]) == [(1,), (3,)]
 
 
 @pytest.mark.parametrize(
