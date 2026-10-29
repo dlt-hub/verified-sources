@@ -1,5 +1,6 @@
 import os
 from datetime import date, datetime, timezone
+from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 import dlt
@@ -26,13 +27,19 @@ from tests.jira.utils import (
     INTERNAL_KEYS,
     JiraMock,
     START,
+    T1,
     UNACCEPTED_EXPANDS,
     UNACCEPTED_PARAMS,
     UPDATED_1,
+    UPDATED_2,
     assert_nullable_key,
     duckdb_pipeline,
+    filesystem_pipeline,
     load,
+    make_comment,
+    make_history,
     make_issue,
+    make_worklog,
     rows_by_id,
     sent_params,
     serve,
@@ -179,6 +186,37 @@ def test_issue_fields(jira_mock: JiraMock) -> None:
     assert rows["customfield_10016"]["name"] == "Custom 10016"
     assert rows["customfield_10016"]["schema__custom"] == CUSTOM + "float"
     assert rows["customfield_10016"]["custom"] is True
+
+
+def test_jira_replace(jira_mock: JiraMock, tmp_path: Path) -> None:
+    # filesystem does not merge, resources that kept merge would be appended again
+    jira_mock.add_issues(make_issue(1, UPDATED_1), make_issue(2, UPDATED_2))
+    jira_mock.comments = {"1": [make_comment(10, UPDATED_1)]}
+    jira_mock.histories = {"2": [make_history(200, UPDATED_2)]}
+    jira_mock.worklogs = {"1": make_worklog(1, 1, T1)}
+    jira_mock.deleted_worklogs = [{"worklogId": 2, "updatedTime": T1}]
+    os.environ["SOURCES__JIRA__WRITE_DISPOSITION"] = "replace"
+    pipeline = filesystem_pipeline("jira_replace", tmp_path.as_uri())
+    tables = ("issues", "issue_comments", "issue_changelogs", "worklogs")
+    for _ in range(2):
+        source = jira(**CREDENTIALS).with_resources(*tables)
+        load(pipeline, source, loader_file_format="parquet")
+        assert load_table_counts(pipeline, *tables) == {
+            "issues": 2,
+            "issue_comments": 1,
+            "issue_changelogs": 1,
+            "worklogs": 1,
+        }
+
+    # each run reads all issues and worklogs, the incremental state is reset with the table
+    assert jira_mock.jqls == ['created >= "1970-01-01" ORDER BY updated ASC'] * 2
+    assert jira_mock.worklog_feeds == [{"feed": "updated", "since": 0}] * 2
+    schema_tables = pipeline.default_schema.tables
+    assert {schema_tables[table]["write_disposition"] for table in tables} == {
+        "replace"
+    }
+    # the transformers of the module keep their write disposition
+    assert issue_comments.write_disposition == "merge"
 
 
 @pytest.mark.parametrize(

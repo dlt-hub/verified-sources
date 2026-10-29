@@ -20,6 +20,7 @@ from .helpers.issues import (
     IssuesPage,
     IssuesReader,
     changelog_rows,
+    is_replace,
     make_issues_resource,
 )
 from .helpers.jql import ORDER_BY
@@ -59,12 +60,15 @@ def jira(
     jql: Optional[str] = None,
     start_date: Optional[TAnyDateTime] = None,
     incremental: Optional[dlt.sources.incremental[Any]] = None,
+    # Optional, so dlt resolves it from config
+    write_disposition: Optional[TWriteDispositionConfig] = "merge",
 ) -> Iterable[DltResource]:
     """
     Jira source function that generates a list of resource functions based on endpoints.
 
-    Issues, their comments, changelogs and worklogs are loaded incrementally and merged. Issue
-    fields, users, workflows, workflow statuses and projects are replaced on each run.
+    Issues, their comments, changelogs and worklogs are loaded incrementally with
+    `write_disposition`. Issue fields, users, workflows, workflow statuses and projects are
+    replaced on each run.
 
     Args:
         subdomain: The subdomain for the Jira instance.
@@ -77,6 +81,8 @@ def jira(
         start_date: Loads issues and worklogs updated since this date on the first run, all of
             them if not set.
         incremental: Your own incremental of issues instead of `start_date`, see `jira_issues`.
+        write_disposition: Write disposition of issues, their comments and changelogs and of
+            worklogs. "replace" loads all of them, updated since `start_date`, on each run.
     Returns:
         Iterable[DltResource]: List of resource functions.
     """
@@ -88,20 +94,22 @@ def jira(
         jql=jql,
         start_date=start,
         incremental=incremental,
+        write_disposition=write_disposition,
     )
     # client of the endpoint resources, comments and changelogs use the client of `issues`
     client = JiraClient(subdomain, email, api_token)
     resources = [
         issues,
-        issues | issue_comments,
-        issues | issue_changelogs,
+        # copies of the transformers, the ones of the module keep merge
+        (issues | issue_comments()).apply_hints(write_disposition=write_disposition),
+        (issues | issue_changelogs()).apply_hints(write_disposition=write_disposition),
         # merged into the default incremental of worklogs, no start date keeps it as is
         worklogs(
             subdomain=subdomain,
             email=email,
             api_token=api_token,
             updated=dlt.sources.incremental(initial_value=start),
-        ),
+        ).apply_hints(write_disposition=write_disposition),
         issue_fields(subdomain=subdomain, email=email, api_token=api_token),
     ]
     for endpoint_name, endpoint in DEFAULT_ENDPOINTS.items():
@@ -142,7 +150,7 @@ def jira_issues(
     search_page_size: int = MAX_SEARCH_PAGE_SIZE,
     included_columns: Optional[List[str]] = None,
     excluded_columns: Optional[List[str]] = None,
-    write_disposition: Optional[TWriteDispositionConfig] = None,
+    write_disposition: Optional[TWriteDispositionConfig] = "merge",
     primary_key: TColumnNames = None,
     merge_key: TColumnNames = None,
     name: Annotated[str, NotResolved()] = "issues",
@@ -180,7 +188,8 @@ def jira_issues(
         included_columns (Optional[List[str]]): Field ids to load, all fields if not set. Included
             fields get typed columns, also before they have values.
         excluded_columns (Optional[List[str]]): Field ids to skip.
-        write_disposition (Optional[TWriteDispositionConfig]): "merge" if not set.
+        write_disposition (Optional[TWriteDispositionConfig]): "replace" loads all issues,
+            updated since `start_date`, on each run.
         primary_key (TColumnNames): Primary key, the issue `id` if not set.
         merge_key (TColumnNames): Merge key of the resource.
         name (str): Name of the resource and of its table. Its incremental state is kept by the
@@ -288,9 +297,14 @@ def worklogs(
     """Loads worklogs changed since the last run and removes the deleted ones.
 
     Worklogs of all issues of the site are read, not only of issues loaded by `jira_issues`. The
-    first run reads all worklogs, set `initial_value` of `updated` to start later.
+    first run reads all worklogs, set `initial_value` of `updated` to start later. Deleted
+    worklogs are not read when the resource replaces its table.
     """
-    yield from worklog_rows(JiraClient(subdomain, email, api_token), updated)
+    # deleted worklogs are removed on merge, a replaced table would hold them as rows
+    read_deleted = not is_replace(dlt.current.resource().write_disposition)
+    yield from worklog_rows(
+        JiraClient(subdomain, email, api_token), updated, read_deleted
+    )
 
 
 @dlt.resource(name="issue_fields", write_disposition="replace", primary_key="id")

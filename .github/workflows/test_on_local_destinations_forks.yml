@@ -18,9 +18,9 @@ env:
 
 jobs:
   authorize:
-    # run when label is assigned OR when we are not a fork
+    # run on forks when the label is assigned, pull requests from this repository run "test postgres and duckdb"
     # see https://iterative.ai/blog/testing-external-contributions-using-github-actions-secrets for inspiration
-    if: ${{ github.event.label.name == 'ci from fork' || (github.event.pull_request.head.repo.full_name == github.repository && (github.event.action == 'opened' || github.event.action == 'synchronize'))}}
+    if: ${{ github.event.label.name == 'ci from fork' && github.event.pull_request.head.repo.full_name != github.repository }}
     runs-on: ubuntu-latest
     steps:
       - run: true

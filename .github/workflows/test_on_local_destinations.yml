@@ -28,7 +28,7 @@ jobs:
       max-parallel: 2
       fail-fast: false
       matrix:
-        os: ["macos-latest", "windows-latest"]
+        os: ["ubuntu-latest", "windows-latest"]
     defaults:
       run:
         shell: bash
@@ -73,7 +73,9 @@ jobs:
           FOR %%i IN (${{ needs.get_changed_sources.outputs.sources_list }}) DO (
             echo Running tests for: %%i
             uv run pytest tests/%%i
+            IF ERRORLEVEL 1 SET TESTS_FAILED=1
           )
+          IF DEFINED TESTS_FAILED EXIT /B 1
         if: runner.os == 'Windows'
         name: Run tests on Windows
         shell: cmd

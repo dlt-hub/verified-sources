@@ -108,7 +108,7 @@ Using absolute paths under `WORKTREE`:
 - **Loaded schema** — changes to resource or table names, column names or types, primary or merge keys, write dispositions or nesting change the data that existing users already loaded. Flag each one as breaking.
 - **State and incremental cursors** — changes to resource state keys, incremental cursor fields or initial values must stay compatible with the state that existing pipelines already stored. Check what happens on the first run after an upgrade.
 - For both, follow [Data shape and upgrade compatibility](../refresh-source/SKILL.md#data-shape-and-upgrade-compatibility): what to compare, how to observe an upgrade and how to classify each change.
-- **Version and changelog** — every PR that changes a source must bump `sources/<name>/version.py` (added with `1.0.0` if missing) and, unless it is a patch version, add a changelog entry to its README, see [Source version and README](../refresh-source/SKILL.md#source-version-and-readme). A breaking change needs a `major` bump and its upgrade path in the changelog. A missing bump or entry blocks the merge.
+- **Version and changelog** — every PR that changes a source must bump `sources/<name>/version.py` (added with `1.0.0` if missing) and, unless it is a patch version, add a changelog entry to its README, see [Source version and README](../refresh-source/SKILL.md#source-version-and-readme). A breaking change needs a `major` bump and its upgrade path in the changelog. Check that the **Upgrade** line of the entry matches what you found above: whether existing pipelines keep working, whether incremental state carries over and what happens to rows loaded before. A missing bump or entry blocks the merge.
 
 ### 7. Review test coverage
 

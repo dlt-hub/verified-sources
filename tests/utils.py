@@ -270,10 +270,9 @@ def load_table_distinct_counts(
 def select_data(
     p: dlt.Pipeline, sql: str, schema_name: str = None
 ) -> List[Sequence[Any]]:
-    """Returns select `sql` results as list."""
-    with p.sql_client(schema_name=schema_name) as c:
-        with c.execute_query(sql) as cur:
-            return list(cur.fetchall())
+    """Returns select `sql` results as list. Table and column names in `sql` are normalized
+    to the destination, i.e. upper case on Snowflake."""
+    return list(p.dataset(schema=schema_name)(sql).fetchall())
 
 
 def get_table_metrics(

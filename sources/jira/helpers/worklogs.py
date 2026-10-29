@@ -27,10 +27,12 @@ WORKLOG_COLUMNS: TTableSchemaColumns = {
 
 
 def worklog_rows(
-    client: JiraClient, incremental: Optional[Incremental[Any]] = None
+    client: JiraClient,
+    incremental: Optional[Incremental[Any]] = None,
+    read_deleted: bool = True,
 ) -> Iterator[TDataItem]:
     """Yields worklogs of all issues of the site changed since the start of `incremental`, then
-    the deleted worklogs
+    the deleted worklogs if `read_deleted`
     """
     start_value = incremental.get_current_range()[0] if incremental else None
     since = (
@@ -44,6 +46,8 @@ def worklog_rows(
                 convert_record(worklog, WORKLOG_TYPES)
                 for worklog in client.worklogs(ids)
             ]
+    if not read_deleted:
+        return
     for deleted in client.changed_worklogs(WORKLOG_DELETED_PATH, since):
         yield [
             {
