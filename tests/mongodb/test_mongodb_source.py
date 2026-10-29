@@ -201,11 +201,11 @@ def test_limit_on_source(destination_name):
         assert table_counts[col_name] == limit
 
 
-@pytest.mark.parametrize("destination", ALL_DESTINATIONS)
-def test_limit_warning(destination):
+@pytest.mark.parametrize("destination_name", ALL_DESTINATIONS)
+def test_limit_warning(destination_name):
     pipeline = dlt.pipeline(
         pipeline_name="mongodb_test",
-        destination=destination,
+        destination=destination_name,
         dataset_name="mongodb_test_data",
         dev_mode=True,
     )

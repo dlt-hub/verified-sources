@@ -3,6 +3,7 @@ import logging
 
 # will run the following auto use fixtures for all tests ie. to cleanup the datasets, env variables and file system after each test
 from tests.utils import (
+    ALL_DESTINATIONS,
     drop_pipeline,
     test_config_providers,
     patch_pipeline_working_dir,
@@ -53,3 +54,17 @@ def pytest_configure(config):
 
     # disable pyiceberg logging
     logging.getLogger("pyiceberg").setLevel("WARNING")
+
+
+def pytest_collection_modifyitems(config, items):
+    # tests without `destination_name` load to duckdb or nowhere, they run in the duckdb job only
+    if "duckdb" in ALL_DESTINATIONS:
+        return
+    selected, deselected = [], []
+    for item in items:
+        params = getattr(item, "callspec", None)
+        has_destination = params is not None and "destination_name" in params.params
+        (selected if has_destination else deselected).append(item)
+    if deselected:
+        config.hook.pytest_deselected(items=deselected)
+        items[:] = selected

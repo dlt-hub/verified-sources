@@ -276,7 +276,9 @@ Look at `tests/chess/test_chess_source.py` for an example. The line
 ```
 
 makes sure that each test runs against all destinations (as defined in the `ALL_DESTINATIONS` global
-variables).
+variables). Use it only for tests whose result depends on the destination: CI jobs that do not
+test duckdb run only the tests with this parameter, tests without it run on duckdb in the
+`test postgres and duckdb` job.
 
 The simplest possible test just creates a pipeline with your source and then issues a run on a
 source. More advanced test will use `sql_client` to check the data and access the schemas to check

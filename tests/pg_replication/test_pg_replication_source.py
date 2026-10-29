@@ -21,7 +21,6 @@ from dlt.sources.credentials import ConnectionStringCredentials
 from dlt.sources.sql_database import sql_table
 
 from tests.utils import (
-    ALL_DESTINATIONS,
     TEST_STORAGE_ROOT,
     assert_load_info,
     load_table_counts,
@@ -53,6 +52,7 @@ from .cases import (
 )
 from .utils import (
     add_pk,
+    destination_cases,
     assert_loaded_data,
     create_tables,
     is_super_user,
@@ -61,10 +61,7 @@ from .utils import (
 )
 
 
-@pytest.mark.parametrize("destination_name", ALL_DESTINATIONS)
-def test_schema_replication(
-    src_config: Tuple[dlt.Pipeline, str, str], destination_name: str
-) -> None:
+def test_schema_replication(src_config: Tuple[dlt.Pipeline, str, str]) -> None:
     @dlt.resource(write_disposition="merge", primary_key="id_x")
     def tbl_x(data):
         yield data
@@ -104,9 +101,7 @@ def test_schema_replication(
         ]
     )
 
-    dest_pl = dlt.pipeline(
-        pipeline_name="dest_pl", destination=destination_name, dev_mode=True
-    )
+    dest_pl = dlt.pipeline(pipeline_name="dest_pl", destination="duckdb", dev_mode=True)
 
     info = dest_pl.run(snapshots)
     assert_load_info(info)
@@ -168,8 +163,9 @@ def test_schema_replication(
     )
 
 
-@pytest.mark.parametrize("backend", ["python", "pyarrow"])
-@pytest.mark.parametrize("destination_name", ALL_DESTINATIONS)
+@pytest.mark.parametrize(
+    "destination_name,backend", destination_cases([("pyarrow",)], [("python",)])
+)
 def test_core_functionality(
     src_config: Tuple[dlt.Pipeline, str, str], destination_name: str, backend: str
 ) -> None:
@@ -294,10 +290,7 @@ def test_core_functionality(
     assert_loaded_data(dest_pl, "tbl_y", ["id_y", "val_y"], exp_tbl_y, "id_y")
 
 
-@pytest.mark.parametrize("destination_name", ALL_DESTINATIONS)
-def test_without_init_load(
-    src_config: Tuple[dlt.Pipeline, str, str], destination_name: str
-) -> None:
+def test_without_init_load(src_config: Tuple[dlt.Pipeline, str, str]) -> None:
     @dlt.resource(write_disposition="merge", primary_key="id_x")
     def tbl_x(data):
         yield data
@@ -338,9 +331,7 @@ def test_without_init_load(
     )
 
     # load changes to destination and assert expectations
-    dest_pl = dlt.pipeline(
-        pipeline_name="dest_pl", destination=destination_name, dev_mode=True
-    )
+    dest_pl = dlt.pipeline(pipeline_name="dest_pl", destination="duckdb", dev_mode=True)
     info = dest_pl.run(changes)
     assert_load_info(info)
     assert load_table_counts(dest_pl, "tbl_x", "tbl_y") == {"tbl_x": 2, "tbl_y": 1}
@@ -402,9 +393,10 @@ def test_insert_only(src_config: Tuple[dlt.Pipeline, str, str]) -> None:
     )  # there should be no metrics for the "items" table
 
 
-@pytest.mark.parametrize("destination_name", ALL_DESTINATIONS)
-@pytest.mark.parametrize("give_hints", [True, False])
-@pytest.mark.parametrize("init_load", [True, False])
+@pytest.mark.parametrize(
+    "destination_name,give_hints,init_load",
+    destination_cases([(False, True)], [(False, False), (True, True), (True, False)]),
+)
 def test_mapped_data_types(
     src_config: Tuple[dlt.Pipeline, str, str],
     destination_name: str,
@@ -514,8 +506,9 @@ def test_mapped_data_types(
     )
 
 
-@pytest.mark.parametrize("init_load", [True, False])
-@pytest.mark.parametrize("destination_name", ALL_DESTINATIONS)
+@pytest.mark.parametrize(
+    "destination_name,init_load", destination_cases([(True,)], [(False,)])
+)
 def test_timestamp_without_tz_and_json(
     src_config: Tuple[dlt.Pipeline, str, str],
     init_load: bool,
@@ -605,10 +598,7 @@ def test_timestamp_without_tz_and_json(
     assert "json" == col_schemas["col9"]["data_type"]
 
 
-@pytest.mark.parametrize("destination_name", ALL_DESTINATIONS)
-def test_unmapped_data_types(
-    src_config: Tuple[dlt.Pipeline, str, str], destination_name: str
-) -> None:
+def test_unmapped_data_types(src_config: Tuple[dlt.Pipeline, str, str]) -> None:
     """Assert postgres data types that aren't explicitly mapped default to "text" type."""
     src_pl, slot_name, pub_name = src_config
 
@@ -637,9 +627,7 @@ def test_unmapped_data_types(
         )
 
     # run destination pipeline and assert resulting data types
-    dest_pl = dlt.pipeline(
-        pipeline_name="dest_pl", destination=destination_name, dev_mode=True
-    )
+    dest_pl = dlt.pipeline(pipeline_name="dest_pl", destination="duckdb", dev_mode=True)
     dest_pl.extract(changes)
     dest_pl.normalize()
     columns = dest_pl.default_schema.get_table_columns("data_types")
@@ -697,12 +685,10 @@ def test_write_disposition(
     )
 
 
-@pytest.mark.parametrize("destination_name", ALL_DESTINATIONS)
 @pytest.mark.parametrize("init_load", [True, False])
 @pytest.mark.parametrize("backend", ["python", "pyarrow"])
 def test_include_columns(
     src_config: Tuple[dlt.Pipeline, str, str],
-    destination_name: str,
     init_load: bool,
     backend: str,
 ) -> None:
@@ -766,9 +752,7 @@ def test_include_columns(
     )
 
     # load to destination and assert column expectations
-    dest_pl = dlt.pipeline(
-        pipeline_name="dest_pl", destination=destination_name, dev_mode=True
-    )
+    dest_pl = dlt.pipeline(pipeline_name="dest_pl", destination="duckdb", dev_mode=True)
     if init_load:
         dest_pl.run(snapshots)
         assert get_cols(dest_pl, "tbl_x") == {"id_x", "val_x"}
@@ -780,10 +764,9 @@ def test_include_columns(
     assert get_cols(dest_pl, "tbl_z") == {"id_z", "val_z", "another_col_z"}
 
 
-@pytest.mark.parametrize("destination_name", ALL_DESTINATIONS)
 @pytest.mark.parametrize("init_load", [True, False])
 def test_column_hints(
-    src_config: Tuple[dlt.Pipeline, str, str], destination_name: str, init_load: bool
+    src_config: Tuple[dlt.Pipeline, str, str], init_load: bool
 ) -> None:
     @dlt.resource
     def tbl_x(data):
@@ -837,9 +820,7 @@ def test_column_hints(
     )
 
     # load to destination and assert column expectations
-    dest_pl = dlt.pipeline(
-        pipeline_name="dest_pl", destination=destination_name, dev_mode=True
-    )
+    dest_pl = dlt.pipeline(pipeline_name="dest_pl", destination="duckdb", dev_mode=True)
     if init_load:
         dest_pl.run(snapshots)
         assert (
@@ -886,10 +867,7 @@ def test_column_hints(
     )
 
 
-@pytest.mark.parametrize("destination_name", ALL_DESTINATIONS)
-def test_table_schema_change(
-    src_config: Tuple[dlt.Pipeline, str, str], destination_name: str
-) -> None:
+def test_table_schema_change(src_config: Tuple[dlt.Pipeline, str, str]) -> None:
     src_pl, slot_name, pub_name = src_config
 
     # create postgres table
@@ -906,9 +884,7 @@ def test_table_schema_change(
 
     # create resource and pipeline
     changes = replication_resource(slot_name, pub_name)
-    dest_pl = dlt.pipeline(
-        pipeline_name="dest_pl", destination=destination_name, dev_mode=True
-    )
+    dest_pl = dlt.pipeline(pipeline_name="dest_pl", destination="duckdb", dev_mode=True)
 
     # add a column in one commit, this will create one Relation message
     src_pl.run([{"c1": 2, "c2": 1}, {"c1": 3, "c2": 1, "c3": 1}], table_name="items")
@@ -2060,15 +2036,17 @@ def snapshot_then_change_type(
     return dest_pl
 
 
-@pytest.mark.parametrize("destination_name", ALL_DESTINATIONS)
 @pytest.mark.parametrize(
-    "change,reflection_level,fits",
-    [
-        ("int_to_bigint", "full", True),
-        ("varchar_longer", "full", True),
-        ("jsonb_to_json", "full", True),
-    ]
-    + [(change, level, False) for change, level in TYPE_CHANGES_THAT_DO_NOT_FIT],
+    "destination_name,change,reflection_level,fits",
+    # changes that do not fit stop the run before anything is loaded
+    destination_cases(
+        [
+            ("int_to_bigint", "full", True),
+            ("varchar_longer", "full", True),
+            ("jsonb_to_json", "full", True),
+        ],
+        [(change, level, False) for change, level in TYPE_CHANGES_THAT_DO_NOT_FIT],
+    ),
 )
 def test_column_type_change(
     src_config: Tuple[dlt.Pipeline, str, str],

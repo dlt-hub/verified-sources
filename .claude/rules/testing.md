@@ -33,8 +33,11 @@ Tests run within fixtures (see `conftest.py`) that:
 - It is OK to test many related use cases in one test when they share setup
 
 ## Destination testing
-- Tests on a non-local destination, or on a local one run in CI with other destination tests, use
-  `@pytest.mark.parametrize("destination_name", ALL_DESTINATIONS)`. Never hard-code a destination
+- Tests whose result depends on the destination use
+  `@pytest.mark.parametrize("destination_name", ALL_DESTINATIONS)`. CI jobs without duckdb in
+  `ALL_DESTINATIONS` (ie. bigquery and snowflake) run only these tests, see `tests/conftest.py`
+- Parametrize only the cases where the destination matters, run the other cases and
+  destination-independent tests on `duckdb` without the parameter
 - For local development, limit destinations: `ALL_DESTINATIONS='["duckdb"]' pytest tests/<source>`
 - `make test-local` runs all tests on duckdb and postgres
 

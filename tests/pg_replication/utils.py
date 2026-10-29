@@ -5,7 +5,7 @@ from dlt import Pipeline
 from dlt.common.data_writers.escape import escape_postgres_identifier
 from dlt.common.configuration.specs import ConnectionStringCredentials
 
-from tests.utils import select_data
+from tests.utils import ALL_DESTINATIONS, select_data
 
 
 def add_pk(sql_client, table_name: str, column_name: str) -> None:
@@ -76,3 +76,14 @@ def is_super_user(sql_client) -> bool:
         return c.execute_sql(
             f"SELECT rolsuper FROM pg_roles WHERE rolname = '{username}';"
         )[0][0]
+
+
+def destination_cases(
+    cases: Sequence[Tuple[Any, ...]], duckdb_cases: Sequence[Tuple[Any, ...]] = ()
+) -> List[Tuple[Any, ...]]:
+    """Parametrizes `destination_name` with `cases` on every destination, `duckdb_cases` only on
+    duckdb. Jobs without duckdb run only tests parametrized with `destination_name`."""
+    params = [(name, *case) for name in ALL_DESTINATIONS for case in cases]
+    if "duckdb" in ALL_DESTINATIONS:
+        params += [("duckdb", *case) for case in duckdb_cases]
+    return params
