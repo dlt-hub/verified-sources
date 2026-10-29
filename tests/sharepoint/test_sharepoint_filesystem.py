@@ -255,25 +255,31 @@ def test_sharepoint_files_exact_name_glob(graph: Mocker) -> None:
     assert downloaded_ids(graph) == []
 
 
-def test_sharepoint_files_root_folder(graph: Mocker) -> None:
-    mock_folder(graph, "", [[File("A", "a.csv", NEW, b"n\n1\n")]])
-
-    rows = list(sharepoint_files(**files_config(folder_path="")))
-
-    assert [(row["n"], row["file_url"]) for row in rows] == [(1, "sharepoint:///a.csv")]
-
-
 @pytest.mark.parametrize(
-    "folder_path,expected",
+    "folder_path,folder,file_url",
     [
-        pytest.param("", "", id="empty"),
-        pytest.param("/", "", id="slash"),
-        pytest.param("/Reports/2024/", "Reports/2024", id="surrounding_slashes"),
-        pytest.param(QUOTED_FOLDER, QUOTED_FOLDER, id="allowed_punctuation"),
+        pytest.param("", "", "sharepoint:///a.csv", id="root"),
+        pytest.param("/", "", "sharepoint:///a.csv", id="root_slash"),
+        pytest.param(
+            "/Reports/",
+            "Reports",
+            "sharepoint:///Reports/a.csv",
+            id="surrounding_slashes",
+        ),
     ],
 )
-def test_validate_folder_path(folder_path: str, expected: str) -> None:
-    assert validate_folder_path(folder_path) == expected
+def test_sharepoint_files_folder_path(
+    graph: Mocker, folder_path: str, folder: str, file_url: str
+) -> None:
+    mock_folder(graph, folder, [[File("A", "a.csv", NEW, b"n\n1\n")]])
+
+    rows = list(sharepoint_files(**files_config(folder_path=folder_path)))
+
+    assert [(row["n"], row["file_url"]) for row in rows] == [(1, file_url)]
+
+
+def test_validate_folder_path_allows_sharepoint_punctuation() -> None:
+    validate_folder_path(QUOTED_FOLDER)
 
 
 def test_sharepoint_files_glob_in_folder_path(

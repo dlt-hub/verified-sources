@@ -2,8 +2,10 @@
 
 import codecs
 from datetime import timedelta
+from itertools import islice
 from typing import (
     Any,
+    Callable,
     Dict,
     Iterable,
     Iterator,
@@ -26,6 +28,10 @@ TFileType = Literal["csv", "jsonl", "parquet", "excel"]
 FILE_TYPES = get_args(TFileType)
 BATCH_SIZE = 10_000
 
+# a batch of records and the workbook sheet it came from, None for every other file type
+TSheetRecords = Tuple[Optional[str], List[Dict[str, Any]]]
+TReader = Callable[[Any, Dict[str, Any]], Iterator[TSheetRecords]]
+
 
 def file_rows(
     items: Iterable[FileItemDict],
@@ -38,6 +44,7 @@ def file_rows(
     Rows of the base table carry no table name, so table hints apply to them; Excel sheets go
     to "<table_name>_<sheet>" unless one `sheet_name` is given. Blank files are skipped.
     """
+    read = reader_for(file_type)
     for item in items:
         file_columns = {
             "file_url": item["file_url"],
@@ -45,67 +52,88 @@ def file_rows(
             "file_modified_at": item["modification_date"],
         }
         with item.open() as f:
-            head = f.read(1024)
-            if len(head) < 1024 and not head.removeprefix(codecs.BOM_UTF8).strip():
+            if is_blank(f):
                 continue
-            f.seek(0)
-            for sheet, records in read_records(f, file_type, reader_kwargs):
+            for sheet, records in read(f, reader_kwargs):
                 rows = [{**record, **file_columns} for record in records]
-                yield rows if sheet is None else with_table_name(
-                    rows, f"{table_name}_{sheet}"
-                )
+                if sheet is None:
+                    yield rows
+                else:
+                    yield with_table_name(rows, f"{table_name}_{sheet}")
 
 
-def read_records(
-    f: Any, file_type: str, reader_kwargs: Dict[str, Any]
-) -> Iterator[Tuple[Optional[str], List[Dict[str, Any]]]]:
-    """Yields batches of records; the first element is the sheet name for a workbook read whole."""
-    if file_type == "parquet":
-        parquet_file = pq.ParquetFile(f)
-        for batch in parquet_file.iter_batches(
-            batch_size=BATCH_SIZE, columns=reader_kwargs.get("columns")
-        ):
-            yield None, [
-                {name: duration_to_seconds(value) for name, value in record.items()}
-                for record in batch.to_pylist()
-            ]
-    elif file_type == "jsonl":
-        lines = (line.removeprefix(codecs.BOM_UTF8) for line in f if line.strip())
-        for start_line in lines:
-            batch = [json.loadb(start_line)]
-            for line in lines:
-                batch.append(json.loadb(line))
-                if len(batch) >= BATCH_SIZE:
-                    break
-            yield None, batch
-    elif file_type == "csv":
-        try:
-            reader = pd.read_csv(f, **{"chunksize": BATCH_SIZE, **reader_kwargs})
-        except pd.errors.EmptyDataError:
-            return
-        with reader as chunks:
-            for chunk in chunks:
-                for records in frame_records(chunk):
-                    yield None, records
-    elif file_type == "excel":
-        sheets = pd.read_excel(f, **{"sheet_name": None, **reader_kwargs})
-        for sheet, frame in (
-            sheets.items() if isinstance(sheets, dict) else [(None, sheets)]
-        ):
-            for records in frame_records(frame):
-                yield None if sheet is None else str(sheet), records
-    else:
+def is_blank(f: Any) -> bool:
+    """Tells whether the file is empty or holds only whitespace, and rewinds it."""
+    head = f.read(1024)
+    f.seek(0)
+    return len(head) < 1024 and not head.removeprefix(codecs.BOM_UTF8).strip()
+
+
+def read_csv(f: Any, reader_kwargs: Dict[str, Any]) -> Iterator[TSheetRecords]:
+    """Yields batches of records of a csv file, read with pandas."""
+    try:
+        chunk_reader = pd.read_csv(f, **{"chunksize": BATCH_SIZE, **reader_kwargs})
+    except pd.errors.EmptyDataError:
+        return
+    with chunk_reader as chunks:
+        for chunk in chunks:
+            for records in frame_records(chunk):
+                yield None, records
+
+
+def read_jsonl(f: Any, reader_kwargs: Dict[str, Any]) -> Iterator[TSheetRecords]:
+    """Yields batches of records of a json lines file, skipping blank lines; takes no arguments."""
+    records = (
+        json.loadb(line.removeprefix(codecs.BOM_UTF8)) for line in f if line.strip()
+    )
+    while batch := list(islice(records, BATCH_SIZE)):
+        yield None, batch
+
+
+def read_parquet(f: Any, reader_kwargs: Dict[str, Any]) -> Iterator[TSheetRecords]:
+    """Yields batches of records of a parquet file; only the "columns" argument is used."""
+    batches = pq.ParquetFile(f).iter_batches(
+        batch_size=BATCH_SIZE, columns=reader_kwargs.get("columns")
+    )
+    for batch in batches:
+        yield None, [
+            {name: duration_to_seconds(value) for name, value in record.items()}
+            for record in batch.to_pylist()
+        ]
+
+
+def read_excel(f: Any, reader_kwargs: Dict[str, Any]) -> Iterator[TSheetRecords]:
+    """Yields batches of records per workbook sheet, or of the one sheet named in `sheet_name`."""
+    sheets = pd.read_excel(f, **{"sheet_name": None, **reader_kwargs})
+    for sheet, frame in (
+        sheets.items() if isinstance(sheets, dict) else [(None, sheets)]
+    ):
+        for records in frame_records(frame):
+            yield None if sheet is None else str(sheet), records
+
+
+READERS: Dict[str, TReader] = {
+    "csv": read_csv,
+    "jsonl": read_jsonl,
+    "parquet": read_parquet,
+    "excel": read_excel,
+}
+
+
+def reader_for(file_type: str) -> TReader:
+    """Returns the reader of the file type."""
+    if file_type not in READERS:
         raise ValueError(
             f"file_type must be one of {list(FILE_TYPES)}, got '{file_type}'"
         )
+    return READERS[file_type]
 
 
 def frame_records(df: pd.DataFrame) -> Iterator[List[Dict[str, Any]]]:
     """Yields the frame as lists of at most BATCH_SIZE records, with NaN and NaT as None.
 
-    Durations become seconds and a named index becomes a column.
+    Durations become seconds, changing the frame in place, and a named index becomes a column.
     """
-    df = df.copy()
     if df.index.names != [None]:
         df = df.reset_index()
     for i, dtype in enumerate(df.dtypes):

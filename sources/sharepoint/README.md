@@ -24,7 +24,8 @@ source for developers and coding agents. Setup and usage are in the
 
 ## Extension points
 
-- A file type: a value of `TFileType` and a branch of `readers.read_records`.
+- A file type: a value of `TFileType`, a `read_<type>` function in `readers.py` and its entry in
+  `READERS`.
 - Another collection of the site, e.g. site pages or list attachments: a resource on
   `site_client(**credentials).paginate(...)`, see `list_items`.
 - Another reader: any transformer taking `FileItem`s can follow `sharepoint_folder`, and

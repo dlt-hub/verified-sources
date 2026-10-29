@@ -195,16 +195,14 @@ class SharepointFile(AbstractBufferedFile):
         return bytes(response.content)
 
 
-def validate_folder_path(folder_path: str) -> str:
-    """Returns the folder path without leading and trailing slashes, "" for the library root.
+def validate_folder_path(folder_path: str) -> None:
+    """Rejects a folder path that dlt's filesystem source would read as a glob pattern.
 
     Raises:
-        ValueError: If the path contains glob characters, which dlt's filesystem source would
-            read as a pattern.
+        ValueError: If the path contains glob characters.
     """
     if has_magic(folder_path):
         raise ValueError(f"folder_path cannot contain glob characters: {folder_path!r}")
-    return folder_path.strip("/")
 
 
 def make_url(scheme: str, fs_path: str, bucket_url: str) -> str:

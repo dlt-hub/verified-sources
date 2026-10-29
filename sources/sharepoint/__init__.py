@@ -177,9 +177,9 @@ def sharepoint_folder(
         DltResource: dlt's `filesystem` resource over the folder, incremental on `modification_date`.
 
     Raises:
-        ValueError: If folder_path is not valid.
+        ValueError: If folder_path contains glob characters.
     """
-    folder_path = validate_folder_path(folder_path)
+    validate_folder_path(folder_path)
     fs = SharepointFileSystem(site_client(**credentials), library)
     return list_files(
         bucket_url=f"sharepoint://{library or ''}/{folder_path}",
@@ -210,11 +210,10 @@ def read_files(
     Yields:
         TDataItems: Batches of rows.
     """
-    kwargs = dict(reader_kwargs or {})
     resource = dlt.current.resource()
-    hint = resource.table_name
-    table = hint if isinstance(hint, str) else resource.name
-    yield from file_rows(items, file_type, kwargs, table)
+    table_hint = resource.table_name
+    table_name = table_hint if isinstance(table_hint, str) else resource.name
+    yield from file_rows(items, file_type, reader_kwargs or {}, table_name)
 
 
 @dlt.source(name="sharepoint_files", max_table_nesting=0)
@@ -227,26 +226,31 @@ def sharepoint_files(
     reader_kwargs: Optional[Dict[str, Any]] = None,
     credentials: SharepointCredentials = dlt.secrets.value,
 ) -> DltResource:
-    """Loads the rows of the files matching a glob in a folder: `sharepoint_folder` piped into `read_files`.
+    """Loads the rows of the files matching `file_glob` in a folder into one table.
 
-    Only new or modified files are read; a modified file replaces its own rows, a renamed file
-    counts as a new file, and a file emptied or deleted in SharePoint keeps its rows.
-    `refresh="drop_resources"` reads every file again.
+    All matching files share `table_name`, and each row carries the `file_url` and `file_name`
+    it came from. Excel sheets go to their own tables, "<table_name>_<sheet>", unless
+    `reader_kwargs` names one `sheet_name`.
+
+    Each run reads only new or modified files. A modified file replaces its own rows. A renamed
+    file counts as a new file, and the rows of a file emptied or deleted in SharePoint stay in
+    the table. `refresh="drop_resources"` reads every file again.
 
     Args:
         folder_path (str): Folder relative to the library root; "" loads the root itself.
         file_type (TFileType): One of "csv", "jsonl", "parquet" or "excel".
-        table_name (str): Destination table; Excel sheets go to "<table_name>_<sheet>".
-        library (Optional[str]): Display name of the document library, the site's default
+        table_name (str): Destination table.
+        library (Optional[str]): Display name of the document library; the site's default
             library when not set.
         file_glob (str): Glob matched against paths under the folder; "**/*.csv" also
             searches subfolders.
-        reader_kwargs (Optional[Dict[str, Any]]): Arguments for the pandas reader, such as
-            "sep", "encoding" or "sheet_name"; for parquet the pyarrow "columns".
+        reader_kwargs (Optional[Dict[str, Any]]): Arguments for the pandas reader of csv and
+            excel files, such as "sep", "encoding" or "sheet_name"; for parquet only "columns".
+            Ignored for jsonl.
         credentials (SharepointCredentials): Entra ID app credentials and the site id.
 
     Returns:
-        DltResource: The "<table_name>" rows, merged on `file_url`.
+        DltResource: `sharepoint_folder` piped into `read_files`, merged on `file_url`.
 
     Raises:
         ValueError: If folder_path contains glob characters.
