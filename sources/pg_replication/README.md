@@ -42,6 +42,9 @@ the run, see below. Changes are ordered by `_dlt_lsn` and deletes marked in `_dl
   every load failed. Types in `columns` skip the check. `snapshot_pipeline` gives the types of a
   snapshot loaded by another pipeline
 - new `replication_resource`: `hard_delete=False` keeps deleted rows with `_dlt_deleted_ts` set
+- new `replication_resource`: errors caused by a change name the LSN of its transaction and the
+  `pg_replication_slot_advance` statement that skips it. A value that cannot be loaded, ie. a BC
+  date, raises `ValueConversionException` instead of a converter or Arrow error
 - new `init_replication`: `initial_snapshot="table"` copies the tables, `"unlogged_table"` copies
   them without WAL, `"direct"` reads them with `sql_table` in the snapshot of the slot. Pass the
   callbacks of the returned `ReplicationSnapshot` to your own `sql_table` or `sql_database`
@@ -58,6 +61,11 @@ the run, see below. Changes are ordered by `_dlt_lsn` and deletes marked in `_dl
   connection, role or database defaults no longer change snapshot values
 - changed `init_replication`: `persist_snapshots=True` is deprecated and logs a warning, use
   `initial_snapshot="table"`
+- changed `init_replication`: snapshots leave out generated columns, Postgres does not replicate
+  them and updated rows had NULLs. Snapshots that row-level security would filter fail
+- changed `init_replication` and `replication_resource`: tables or columns whose names normalize
+  to the same name raise `TableNameCollisionException` and `ColumnNameCollisionException`. Before,
+  tables of different schemas loaded into one table and the `python` backend dropped a value
 - changed `replication_resource`: an update that leaves a TOASTed value unchanged stops the run with
   `UnchangedToastException` instead of a decoding error, unless the table has
   `REPLICA IDENTITY FULL` or the column is excluded. `init_replication` warns about included
@@ -76,6 +84,7 @@ the run, see below. Changes are ordered by `_dlt_lsn` and deletes marked in `_dl
   `include_columns` or `columns` was not passed (#700)
 - fixed `init_replication`: snapshots of whole-schema publications decoded their own copies (#698),
   `interval` columns failed snapshots
+- fixed: `dlt init` failed to import the source without `psycopg2` installed
 
 Versions before 1.0.0 were not numbered. Copies taken with `dlt init` have no `version.py`,
 `.dlt/.sources` records the repository commit they came from.
@@ -149,7 +158,30 @@ starts one. Other versions run the same way, e.g.
   ([docs](https://www.postgresql.org/docs/current/sql-createpublication.html)). Openflow, Airbyte
   and Fivetran have the DBA create the publication, Debezium a role that shares the table
   ownership (#719). Creating the slot needs REPLICATION, a direct snapshot SELECT, the
-  `table` and `unlogged_table` snapshots CREATE on the schema for their copies.
+  `table` and `unlogged_table` snapshots CREATE on the schema for their copies. Row-level
+  security filters snapshots of a role without BYPASSRLS but not replicated changes, so
+  `SESSION_OPTIONS` sets `row_security=off` and such snapshots fail
+  ([docs](https://www.postgresql.org/docs/current/logical-replication-security.html)).
+- **Skipping changes**: `SELECT pg_replication_slot_advance('<slot>', '<LSN>')` (Postgres 11+,
+  [docs](https://www.postgresql.org/docs/current/functions-admin.html)) while no run is
+  active makes the slot skip transactions committed before the LSN, the next run logs that the
+  slot is past the stored position and continues. Errors caused by a change give the LSN after its
+  transaction (Postgres 12 and 17). It also skips all changes of the published tables not loaded yet: a
+  slot can't skip a single transaction, Postgres' own subscriber drops one while applying changes
+  (`ALTER SUBSCRIPTION ... SKIP`,
+  [docs](https://www.postgresql.org/docs/current/logical-replication-conflicts.html)). Errors of
+  changed table columns can't be skipped, later transactions have the same columns.
+- **Not replicated**: `TRUNCATE` (ignored with a warning); defaults of added columns, existing rows
+  get them without WAL; generated columns before Postgres 18; a renamed table loads into a new
+  table, a dropped and re-created one leaves a publication of listed tables. Partitions replicate
+  under their own names as the publication is created without `publish_via_partition_root`.
+  Snapshots ignore row filters and column lists of the publication (Postgres 15+)
+  ([docs](https://www.postgresql.org/docs/current/logical-replication-restrictions.html)).
+- **Slots**: `max_slot_wal_keep_size` (Postgres 13+) and `idle_replication_slot_timeout`
+  (Postgres 18) invalidate a slot, also one idle between scheduled runs
+  ([docs](https://www.postgresql.org/docs/current/runtime-config-replication.html)). Creating a
+  slot waits for running transactions, `init_replication` hangs while a session is idle in a
+  transaction.
 - **Snapshots**: the `_dlt_<table>_s_<snapshot>` copies are not dropped. The snapshot of a direct
   snapshot lives as long as the replication connection that created the slot
   ([docs](https://www.postgresql.org/docs/current/protocol-replication.html)) and holds back vacuum
