@@ -39,11 +39,13 @@ def entra_auth(
     )
 
 
-def graph_client(site_id: str, auth: EntraClientCredentials) -> RESTClient:
-    """Builds a paging Graph client rooted at the site."""
+def site_client(
+    site_id: str, tenant_id: str, client_id: str, client_secret: str
+) -> RESTClient:
+    """Returns a paging Graph client rooted at the site, authenticated as the Entra app."""
     return RESTClient(
         base_url=f"{GRAPH_URL}/sites/{site_id}",
-        auth=auth,
+        auth=entra_auth(tenant_id, client_id, client_secret),
         paginator=JSONLinkPaginator(next_url_path="['@odata.nextLink']"),
         data_selector="value",
     )

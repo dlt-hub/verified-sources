@@ -26,7 +26,7 @@ from requests_mock import Mocker
 
 from sources.sharepoint import sharepoint_files
 from sources.sharepoint.filesystem import SharepointFileSystem
-from sources.sharepoint.graph import entra_auth, graph_client
+from sources.sharepoint.graph import site_client
 from tests.utils import assert_load_info, load_tables_to_dicts
 
 TENANT_ID = "test-tenant"
@@ -70,8 +70,8 @@ def token_response(access_token: str, expires_in: int = 3600) -> Dict[str, Any]:
 
 
 def new_fs(library: Optional[str] = None) -> SharepointFileSystem:
-    auth = entra_auth(TENANT_ID, CLIENT_ID, CLIENT_SECRET)
-    return SharepointFileSystem(graph_client(SITE_ID, auth), library)
+    client = site_client(SITE_ID, TENANT_ID, CLIENT_ID, CLIENT_SECRET)
+    return SharepointFileSystem(client, library)
 
 
 def item_url(path: str, drive: str = "drive") -> str:

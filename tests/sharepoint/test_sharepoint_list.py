@@ -1,7 +1,7 @@
 """Mocked tests of the SharePoint list sources: Graph calls go to requests_mock, loads go to duckdb."""
 
 import re
-from typing import Any, Dict, List, Optional, Set
+from typing import Any, Dict, List, Optional
 from urllib.parse import urlparse
 
 import pytest
@@ -33,7 +33,9 @@ from tests.utils import assert_load_info, load_table_counts, load_tables_to_dict
 
 TASKS_DELTA_URL = list_delta_url("Tasks")
 FULL_RELOAD_HINT = 'Run the pipeline with refresh="drop_resources"'
-WITH_NAME_HINT = "Load one of them with sharepoint_list renamed with with_name."
+NO_LISTS_MESSAGE = (
+    "No lists to load: list_titles is empty or the site has no visible generic list."
+)
 
 
 @pytest.mark.parametrize(
@@ -79,31 +81,8 @@ def test_sharepoint_list_pagination(
     }
 
 
-@pytest.mark.parametrize(
-    "included_columns,expected_keys",
-    [
-        pytest.param(
-            None, {"Title", "Status", "Attachments", "id"}, id="default_columns_cleaned"
-        ),
-        pytest.param(
-            ["Title", "LinkTitle", "_UIVersionString"],
-            {
-                "Title",
-                "Status",
-                "Attachments",
-                "LinkTitle",
-                "Edit",
-                "_UIVersionString",
-                "_ComplianceFlags",
-                "id",
-            },
-            id="included_columns_kept",
-        ),
-    ],
-)
-def test_sharepoint_list_system_fields(
-    graph: Mocker, included_columns: List[str], expected_keys: Set[str]
-) -> None:
+def test_sharepoint_list_system_fields(graph: Mocker) -> None:
+    """Every field Graph returns is loaded, only the @odata annotations are dropped."""
     item = list_item("1", "a")
     item["fields"].update(
         {
@@ -117,9 +96,18 @@ def test_sharepoint_list_system_fields(
     )
     mock_list(graph, "Tasks", [[item]])
 
-    rows = list(sharepoint_list("Tasks", included_columns))
+    rows = list(sharepoint_list("Tasks"))
 
-    assert set(rows[0]) == expected_keys
+    assert set(rows[0]) == {
+        "Title",
+        "Status",
+        "Attachments",
+        "LinkTitle",
+        "Edit",
+        "_UIVersionString",
+        "_ComplianceFlags",
+        "id",
+    }
 
 
 def test_sharepoint_list_with_name(graph: Mocker) -> None:
@@ -132,19 +120,13 @@ def test_sharepoint_list_with_name(graph: Mocker) -> None:
     assert load_table_counts(pipeline, "task_status") == {"task_status": 1}
 
 
-@pytest.mark.parametrize(
-    "status_code",
-    [pytest.param(404, id="list_not_found"), pytest.param(400, id="bad_request")],
-)
-def test_sharepoint_list_graph_errors(graph: Mocker, status_code: int) -> None:
-    graph.get(TASKS_DELTA_URL, status_code=status_code, json=NOT_FOUND)
+def test_sharepoint_list_graph_error(graph: Mocker) -> None:
+    graph.get(TASKS_DELTA_URL, status_code=400, json=NOT_FOUND)
 
     with pytest.raises(ResourceExtractionError) as exc_info:
         list(sharepoint_list("Tasks"))
 
-    assert str(cause_of_type(exc_info.value, HTTPError)).startswith(
-        f"{status_code} Client Error"
-    )
+    assert str(cause_of_type(exc_info.value, HTTPError)).startswith("400 Client Error")
     assert lists_requests(graph) == []
 
 
@@ -203,26 +185,35 @@ def test_sharepoint_list_delta_sync(graph: Mocker) -> None:
     assert load_table_counts(pipeline, "tasks") == {"tasks": 1}
 
 
-@pytest.mark.parametrize(
-    "status_code,body",
-    [
-        pytest.param(410, {"code": "resyncRequired", "message": "Gone."}, id="gone"),
-        pytest.param(404, NOT_FOUND["error"], id="not_found"),
-    ],
-)
-def test_sharepoint_list_expired_delta_link(
-    graph: Mocker, status_code: int, body: Dict[str, str]
-) -> None:
+def test_sharepoint_list_continues_after_several_pages(graph: Mocker) -> None:
+    """The next run continues from the delta link of the last page of a multi-page read."""
+    pipeline = new_pipeline("sharepoint_list")
+    delta_link = mock_list(
+        graph, "Tasks", [[list_item("1", "a")], [list_item("2", "b")]]
+    )
+    assert_load_info(pipeline.run(sharepoint_list("Tasks")))
+    assert len(requests_to(graph, TASKS_DELTA_URL)) == 2
+
+    graph.reset_mock()
+    mock_delta(graph, delta_link, [[list_item("3", "c")]], "t2")
+    assert_load_info(pipeline.run(sharepoint_list("Tasks")))
+
+    assert [r.url for r in requests_to(graph, TASKS_DELTA_URL)] == [delta_link]
+    assert load_table_counts(pipeline, "tasks") == {"tasks": 3}
+
+
+def test_sharepoint_list_expired_delta_link(graph: Mocker) -> None:
     pipeline = new_pipeline("sharepoint_list")
     delta_link = mock_list(graph, "Tasks", [[list_item("1", "a")]])
     assert_load_info(pipeline.run(sharepoint_list("Tasks")))
-    graph.get(delta_link, status_code=status_code, json={"error": body})
+    body = {"code": "resyncChangesApplyDifferences", "message": "Resync required."}
+    graph.get(delta_link, status_code=410, json={"error": body})
 
     with pytest.raises(PipelineStepFailed) as exc_info:
         pipeline.run(sharepoint_list("Tasks"))
 
     assert str(cause_of_type(exc_info.value, ValueError)) == (
-        f"The stored delta link of list 'Tasks' is no longer valid (Graph {status_code})."
+        "The stored delta link of list 'Tasks' is no longer valid (Graph 410)."
         f" {FULL_RELOAD_HINT} to read the whole list again."
     )
     assert lists_requests(graph) == []
@@ -258,35 +249,20 @@ def test_sharepoint_lists_tables(
 
 
 @pytest.mark.parametrize(
-    "list_titles,site_lists,message",
+    "list_titles,site_lists",
     [
-        pytest.param(
-            [], SITE_LISTS, "sharepoint_lists has no list to load", id="no_titles"
-        ),
-        pytest.param(
-            None,
-            SITE_LISTS[:1],
-            "sharepoint_lists has no list to load",
-            id="no_visible_generic_list",
-        ),
-        pytest.param(
-            ["My List", "my_list"],
-            SITE_LISTS,
-            "Lists 'My List' and 'my_list' would both load into table 'my_list'."
-            f" {WITH_NAME_HINT}",
-            id="same_table_name",
-        ),
+        pytest.param([], SITE_LISTS, id="no_titles"),
+        pytest.param(None, SITE_LISTS[:1], id="no_visible_generic_list"),
     ],
 )
 def test_sharepoint_lists_creation_errors(
     graph: Mocker,
     list_titles: Optional[List[str]],
     site_lists: List[List[Dict[str, Any]]],
-    message: str,
 ) -> None:
     mock_pages(graph, LISTS_URL, site_lists)
 
-    with pytest.raises(ValueError, match=re.escape(message)):
+    with pytest.raises(ValueError, match=re.escape(NO_LISTS_MESSAGE)):
         sharepoint_lists(list_titles)
 
     assert requests_to(graph, "/items/delta") == []

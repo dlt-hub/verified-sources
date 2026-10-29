@@ -26,11 +26,13 @@ source for developers and coding agents. Setup and usage are in the
 
 - A file type: a value of `TFileType` and a branch of `readers.read_records`.
 - Another collection of the site, e.g. site pages or list attachments: a resource on
-  `site_client(credentials).paginate(...)`, see `list_items`.
+  `site_client(**credentials).paginate(...)`, see `list_items`.
 - Another reader: any transformer taking `FileItem`s can follow `sharepoint_folder`, and
   `read_files` can follow any listing of `FileItem`s, e.g. dlt's `filesystem` on a bucket.
 - More file metadata: `ITEM_FIELDS` and `SharepointFileSystem._entry`.
-- List columns to drop or keep: `UI_FIELDS` and `item_fields`.
+- List columns to drop or keep: `item_row`, which keeps every field Graph returns except
+  the `@odata.*` annotations.
+- Lists `sharepoint_lists` picks without `list_titles`: `user_list_titles`.
 - Deleted files: Graph's drive delta query would also delete their rows; today the listing
   walks the folder on every run and deleted files keep their rows.
 
@@ -60,14 +62,19 @@ Graph payloads from the API reference in `tests/sharepoint/utils.py`.
 - **Lists**: each run reads one delta page sequence per list, with the full fields of changed
   items only. The delta link is stored per list and column set, so changing `included_columns`
   starts a full sync of the same table, in which rows deleted since the last run stay (use
-  `refresh="drop_resources"` to drop them). A stored link that Graph rejects (404 or 410, after
-  about 30 days without a run) raises and asks for `refresh="drop_resources"`, because a plain
+  `refresh="drop_resources"` to drop them). A stored link that Graph rejects with 410 (when it can no
+  longer track changes from that link, e.g. after a long time without a run) raises and asks for `refresh="drop_resources"`, because a plain
   re-read would keep rows deleted in between. Multi-value columns become child tables, as
   everywhere in dlt;
   setting `source.max_table_nesting = 0` on a `sharepoint_lists` source keeps them as json. The
   hint is not set on the resource: in dlt 1.31 a resource-level `max_table_nesting` overwrites
   the table's `x-normalizer` on a run without data, after which `drop_resources` no longer
   drops the table.
+- **Picking lists**: without `list_titles`, `sharepoint_lists` reads the site's lists when the
+  source is created and loads every visible `genericList`, so a list added in SharePoint becomes a
+  new table on the next run; pin `list_titles` for a fixed set of tables. Titles that normalize to
+  the same table name share one table and overwrite each other's items, because item ids count
+  from 1 in every list.
 - **Files**: every run lists the folder tree (`children`, Graph's default page of 200 items)
   and downloads only files newer than, or not yet seen at, the stored `modification_date`, in
   ranges through the pre-authenticated download url Graph redirects to. The watermark is kept

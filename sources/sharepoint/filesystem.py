@@ -13,7 +13,7 @@ from dlt.sources.helpers.rest_client import RESTClient
 from fsspec import AbstractFileSystem, register_implementation
 from fsspec.spec import AbstractBufferedFile
 
-from .graph import entra_auth, graph_client
+from .graph import site_client
 
 
 PREFIX = "sharepoint://"
@@ -52,9 +52,7 @@ class SharepointFileSystem(AbstractFileSystem):
                 raise ValueError(
                     "Pass a Graph client, or tenant_id, client_id, client_secret and site_id"
                 )
-            client = graph_client(
-                site_id, entra_auth(tenant_id, client_id, client_secret)
-            )
+            client = site_client(site_id, tenant_id, client_id, client_secret)
         self.client = client
         self.library = library
         self._drive: Optional[str] = None

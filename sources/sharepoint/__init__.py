@@ -6,7 +6,7 @@ https://learn.microsoft.com/graph/api/resources/sharepoint
 """
 
 from typing import Any, Dict, Iterable, Iterator, List, Optional
-from urllib.parse import quote
+from urllib.parse import quote, urlencode
 
 import dlt
 from dlt.common.configuration import with_config
@@ -19,18 +19,8 @@ from dlt.sources.helpers.requests import HTTPError
 from dlt.sources.helpers.rest_client import RESTClient
 
 from .filesystem import SharepointFileSystem, validate_folder_path
-from .graph import entra_auth, graph_client
+from .graph import site_client
 from .readers import TFileType, file_rows
-
-# fields SharePoint fills for its own UI, not data of the item
-UI_FIELDS = {
-    "Edit",
-    "LinkTitle",
-    "LinkTitleNoMenu",
-    "DocIcon",
-    "FolderChildCount",
-    "ItemChildCount",
-}
 
 
 @configspec
@@ -71,13 +61,13 @@ def sharepoint_list(
     Args:
         list_title (str): Display name of the list.
         included_columns (Optional[List[str]]): Internal column names to load. Without it, Graph's
-            default columns are loaded, minus the ones SharePoint uses only in its UI.
+            default columns are loaded.
         credentials (SharepointCredentials): Entra ID app credentials and the site id.
 
     Yields:
         TDataItems: Pages of items keyed by "id"; a deleted item has `_deleted` set and no fields.
     """
-    yield from list_items(site_client(credentials), list_title, included_columns)
+    yield from list_items(site_client(**credentials), list_title, included_columns)
 
 
 @dlt.source(name="sharepoint_lists")
@@ -87,100 +77,80 @@ def sharepoint_lists(
 ) -> Iterable[DltResource]:
     """Loads several lists of the site, one table per list, each synced like `sharepoint_list`.
 
+    Lists whose titles normalize to the same table name, such as "Sales Report" and
+    "Sales-Report", load into one table and overwrite each other's items; load one of them with
+    `sharepoint_list` renamed with `with_name`.
+
     Args:
         list_titles (Optional[List[str]]): Display names of the lists to load. Without it, the
             site's lists are read when the source is created and every visible list of the
-            generic template (made with "Blank list" or "From CSV") is loaded.
+            generic template (made with "Blank list" or "From CSV") is loaded. Lists of other
+            templates, such as Tasks or Contacts, load only when named here.
         credentials (SharepointCredentials): Entra ID app credentials and the site id.
 
     Returns:
         Iterable[DltResource]: One resource per list.
 
     Raises:
-        ValueError: If there is no list to load, or two lists would load into the same table.
+        ValueError: If there is no list to load.
     """
-    client = site_client(credentials)
-    titles = list_titles
-    if titles is None:
-        titles = [
-            site_list["displayName"]
-            for site_list in site_lists(client)
-            if site_list.get("list", {}).get("template") == "genericList"
-            and not site_list.get("list", {}).get("hidden")
-        ]
+    client = site_client(**credentials)
+    titles = list_titles if list_titles is not None else user_list_titles(client)
     if not titles:
-        raise ValueError("sharepoint_lists has no list to load")
-    naming = dlt.current.source_schema().naming
-    tables: Dict[str, str] = {}
-    for title in titles:
-        table = naming.normalize_table_identifier(title)
-        if table in tables:
-            raise ValueError(
-                f"Lists '{tables[table]}' and '{title}' would both load into table '{table}'."
-                " Load one of them with sharepoint_list renamed with with_name."
-            )
-        tables[table] = title
+        raise ValueError(
+            "No lists to load: list_titles is empty or the site has no visible generic list."
+        )
     return [sharepoint_list(title, credentials=credentials) for title in titles]
 
 
-def site_client(credentials: SharepointCredentials) -> RESTClient:
-    """Returns a Graph client rooted at the site of the credentials."""
-    auth = entra_auth(
-        credentials.tenant_id, credentials.client_id, credentials.client_secret
-    )
-    return graph_client(credentials.site_id, auth)
-
-
-def site_lists(client: RESTClient) -> List[Dict[str, Any]]:
-    """Returns every list of the site as Graph describes it."""
-    return [site_list for page in client.paginate("lists") for site_list in page]
+def user_list_titles(client: RESTClient) -> List[str]:
+    """Returns the titles of the site's visible lists of the generic template."""
+    titles = []
+    for page in client.paginate("lists"):
+        for site_list in page:
+            list_info = site_list.get("list", {})
+            if list_info.get("hidden") or list_info.get("template") != "genericList":
+                continue
+            titles.append(site_list["displayName"])
+    return titles
 
 
 def list_items(
     client: RESTClient, list_title: str, included_columns: Optional[List[str]]
 ) -> Iterator[TDataItems]:
     """Yields the pages of one list from Graph's delta query, continuing from the stored delta link."""
-    select = ",".join(sorted(included_columns)) if included_columns else None
+    select = ",".join(sorted(included_columns or []))
     expand = f"fields($select={select})" if select else "fields"
     state = dlt.current.resource_state()
     # a delta link continues exactly the list and columns it was issued for
     key = f"delta_link:{list_title}:{expand}"
-    delta_link = state.get(key)
-    if delta_link:
-        pages = client.paginate(delta_link)
-    else:
-        pages = client.paginate(
-            f"lists/{quote(list_title, safe='')}/items/delta",
-            params={"$expand": expand},
-        )
+    first_link = f"lists/{quote(list_title, safe='')}/items/delta?{urlencode({'$expand': expand})}"
     try:
-        for page in pages:
-            yield [item_fields(item, keep_all=select is not None) for item in page]
-            next_link = page.response.json().get("@odata.deltaLink")
-            if next_link:
-                state[key] = next_link
+        for page in client.paginate(state.get(key, first_link)):
+            yield [item_row(item) for item in page]
+            if not page.paginator.has_next_page:
+                state[key] = page.response.json()["@odata.deltaLink"]
     except HTTPError as e:
-        status = e.response.status_code if e.response is not None else None
-        if delta_link and status in (404, 410):
+        if e.response is not None and e.response.status_code == 410:
             raise ValueError(
                 f"The stored delta link of list '{list_title}' is no longer valid"
-                f' (Graph {status}). Run the pipeline with refresh="drop_resources" to'
-                " read the whole list again."
+                ' (Graph 410). Run the pipeline with refresh="drop_resources" to read the'
+                " whole list again."
             ) from e
         raise
 
 
-def item_fields(item: Dict[str, Any], keep_all: bool) -> Dict[str, Any]:
-    """Returns the fields of a list item plus its id, or its id with `_deleted` for a deleted item."""
+def item_row(item: Dict[str, Any]) -> Dict[str, Any]:
+    """Returns a list item as a row: its fields and id, or its id and `_deleted` when deleted."""
     if "deleted" in item:
         return {"id": item["id"], "_deleted": True}
-    fields = {
+    row = {
         key: value
-        for key, value in item.get("fields", {}).items()
+        for key, value in item["fields"].items()
         if not key.startswith("@odata.")
-        and (keep_all or (key not in UI_FIELDS and not key.startswith("_")))
     }
-    return {**fields, "id": item["id"]}
+    row["id"] = item["id"]
+    return row
 
 
 @with_config(sections=("sources", "sharepoint"))
@@ -210,7 +180,7 @@ def sharepoint_folder(
         ValueError: If folder_path is not valid.
     """
     folder_path = validate_folder_path(folder_path)
-    fs = SharepointFileSystem(site_client(credentials), library)
+    fs = SharepointFileSystem(site_client(**credentials), library)
     return list_files(
         bucket_url=f"sharepoint://{library or ''}/{folder_path}",
         credentials=fs,
