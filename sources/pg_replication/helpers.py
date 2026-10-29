@@ -31,6 +31,7 @@ from dlt.common.configuration.container import Container
 from dlt.common.configuration.specs.config_section_context import ConfigSectionContext
 from dlt.common.data_writers.escape import escape_postgres_identifier
 from dlt.common.destination import DestinationCapabilitiesContext
+from dlt.common.exceptions import MissingDependencyException
 from dlt.common.normalizers.naming.snake_case import NamingConvention
 from dlt.common.pipeline import PipelineContext
 from dlt.common.schema import Schema
@@ -249,6 +250,8 @@ def init_replication(
             initial_snapshot = "table"
     if initial_snapshot == "direct":
         ensure_sqlalchemy_2()
+    if backend == "pyarrow":
+        ensure_pyarrow_backend()
 
     rep_conn = _get_rep_conn(credentials)
     keep_rep_conn = False
@@ -423,6 +426,17 @@ def replication_slot_exists(
                 "SELECT 1 FROM pg_replication_slots WHERE slot_name = %s;", (slot_name,)
             )
             return cur.fetchone() is not None
+
+
+def ensure_pyarrow_backend() -> None:
+    """Raises when `pyarrow` or `numpy` of the `pyarrow` backend is not installed"""
+    try:
+        import numpy  # noqa: F401
+        import pyarrow  # noqa: F401
+    except ImportError as ex:
+        raise MissingDependencyException(
+            "pg_replication pyarrow backend", ["pyarrow", "numpy"]
+        ) from ex
 
 
 @dlt.sources.config.with_config(sections=("sources", "pg_replication"))
@@ -1637,6 +1651,7 @@ def stream_changes(
         or DestinationCapabilitiesContext.generic_capabilities()
     )
     if backend == "pyarrow":
+        ensure_pyarrow_backend()
         from .arrow_helpers import segment_to_arrow
 
         segment_to_data = segment_to_arrow

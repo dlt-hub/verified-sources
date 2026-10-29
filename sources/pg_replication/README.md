@@ -55,7 +55,8 @@ the run, see below. Changes are ordered by `_dlt_lsn` and deletes marked in `_dl
 - new `replication_slot_exists`: tells if the slot exists, check it to pass `initial_snapshot` for
   all tables only on the first run and later for the added tables
 - new `init_replication` and `replication_resource`: `backend="pyarrow"` decodes inserts with numpy
-  into Arrow tables. Switching an existing pipeline changes how `_dlt_id` is created
+  into Arrow tables. Switching an existing pipeline changes how `_dlt_id` is created. Without
+  `pyarrow` or `numpy` both raise `MissingDependencyException` before the slot is created or read
 - new `init_replication` and `replication_resource`: `exclude_columns`, applied after
   `include_columns`
 - changed `init_replication`: a publication that already publishes the tables is used as it is, so
