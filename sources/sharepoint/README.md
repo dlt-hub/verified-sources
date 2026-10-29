@@ -1,0 +1,77 @@
+# SharePoint
+
+Maintenance notes of the [SharePoint](https://learn.microsoft.com/graph/api/resources/sharepoint)
+source for developers and coding agents. Setup and usage are in the
+[dlt docs](https://dlthub.com/docs/dlt-ecosystem/verified-sources/sharepoint).
+
+## Changelog
+
+### 1.0.0
+- new `sharepoint_list`: a resource named after the list, its items synced with Graph's delta
+  query and merged on `id`; items deleted in SharePoint are hard deleted through `_deleted`.
+  `included_columns` selects columns by their internal names, `with_name` renames the table
+- new `sharepoint_lists`: every visible generic list of the site, or the named ones, one
+  `sharepoint_list` table per list
+- new `sharepoint_folder`: dlt's `filesystem` resource over a library folder, new or modified
+  files only; `read_files`: a transformer reading csv, jsonl, parquet or excel files into rows
+  with `file_url`, `file_name` and `file_modified_at`, merged on `file_url` so a modified
+  file replaces its own rows, Excel workbooks one table per sheet; `sharepoint_files`:
+  the two piped together. `sharepoint_folder` also feeds dlt's `read_csv`, `read_jsonl` and
+  `read_parquet`, and `read_files` also reads from dlt's `filesystem` resource
+- new `SharepointFileSystem`: read-only fsspec filesystem registered as
+  `sharepoint://<library>/<path>`, usable from pandas and other fsspec clients
+
+## Extension points
+
+- A file type: a value of `TFileType` and a branch of `readers.read_records`.
+- Another collection of the site, e.g. site pages or list attachments: a resource on
+  `site_client(credentials).paginate(...)`, see `list_items`.
+- Another reader: any transformer taking `FileItem`s can follow `sharepoint_folder`, and
+  `read_files` can follow any listing of `FileItem`s, e.g. dlt's `filesystem` on a bucket.
+- More file metadata: `ITEM_FIELDS` and `SharepointFileSystem._entry`.
+- List columns to drop or keep: `UI_FIELDS` and `item_fields`.
+- Deleted files: Graph's drive delta query would also delete their rows; today the listing
+  walks the folder on every run and deleted files keep their rows.
+
+## Seeding
+
+The test site, the Entra app and the lists and files the live tests expect are described in
+`tests/sharepoint/README.md`. The app has `Sites.Read.All` only, so the data is created by hand
+once and the tests never write to the site. There are no captured responses; the unit tests build
+Graph payloads from the API reference in `tests/sharepoint/utils.py`.
+
+## Tests
+
+- Unit tests mock Graph with `requests_mock` at the URL level, including the token endpoint and
+  the pre-authenticated download host; `conftest.py` sets fake credentials for them.
+- Live tests need `[sources.sharepoint.credentials]`, on CI from `DLT_SECRETS_TOML`; without it
+  they fail, they do not skip.
+- Never run two pytest processes in the repository at once: the storage fixture of one run wipes
+  the load packages of the other.
+
+## Operations
+
+- **Throttling**: Graph answers 429 and 5xx with `Retry-After`, which dlt's REST client honours
+  with its default retries.
+- **Tokens**: the client credentials token is requested on the first call and renewed when it
+  expires. `SharepointFileSystem` keeps the storage options, the secret included, on the
+  instance, so do not log or pickle it.
+- **Lists**: each run reads one delta page sequence per list, with the full fields of changed
+  items only. The delta link is stored per list and column set, so changing `included_columns`
+  starts a full sync of the same table. A stored link that Graph rejects (404 or 410, after
+  about 30 days without a run) raises and asks for `refresh="drop_resources"`, because a plain
+  re-read would keep rows deleted in between. Multi-value columns become child tables, as
+  everywhere in dlt;
+  setting `source.max_table_nesting = 0` on a `sharepoint_lists` source keeps them as json. The
+  hint is not set on the resource: in dlt 1.31 a resource-level `max_table_nesting` overwrites
+  the table's `x-normalizer` on a run without data, after which `drop_resources` no longer
+  drops the table.
+- **Files**: every run lists the folder tree (`children`, Graph's default page of 200 items)
+  and downloads only files newer than, or not yet seen at, the stored `modification_date`, in
+  ranges through the pre-authenticated download url Graph redirects to. The watermark is kept
+  per `table_name`, so a changed folder or glob needs `refresh="drop_resources"`, as with any
+  incremental resource. All files of one glob share one table, so files of different shapes
+  widen it; use one `sharepoint_files` per file shape. Renamed files count as new files; a
+  workbook replaced by a blank file keeps its sheet tables.
+- **Permissions**: the app needs the Graph application permission `Sites.Read.All`, or
+  `Sites.Selected` with read access granted to the site.

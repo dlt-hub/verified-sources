@@ -97,6 +97,11 @@ scrapy = [
     "scrapy>=2.11.0,<3",
     "twisted>=22.10.0,<=25.5.0",
 ]
+sharepoint = [
+    "pandas>=2.0.0,<3",
+    "openpyxl>=3.1.0,<4",
+    "pyarrow>=14.0.0,<20",
+]
 
 [tool.uv]
 default-groups = [
@@ -117,6 +122,7 @@ default-groups = [
     "airtable",
     "filesystem",
     "scrapy",
+    "sharepoint",
 ]
 
 # [tool.uv.sources]
