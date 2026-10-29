@@ -9,7 +9,6 @@ from typing import Any, Dict, List, Optional, Set, Tuple
 from copy import deepcopy
 import psycopg2
 import sqlalchemy
-from psycopg2.errors import InsufficientPrivilege
 
 import dlt
 from dlt.common import Decimal
@@ -998,7 +997,9 @@ def test_init_replication(src_config: Tuple[dlt.Pipeline, str, str]) -> None:
         assert get_table_names_in_pub() >= {"tbl_x", "tbl_y", "tbl_z"}
     else:
         exp_err = (
-            InsufficientPrivilege if not is_su else IncompatiblePostgresVersionException
+            PublicationPrivilegesException
+            if not is_su
+            else IncompatiblePostgresVersionException
         )
         with pytest.raises(exp_err):
             init_replication(
@@ -1155,6 +1156,11 @@ def test_names_that_differ_in_case(
             )
         return
     pq = pytest.importorskip("pyarrow.parquet")
+    # duckdb identifiers are case insensitive, files keep both names
+    bucket_url = os.path.abspath(os.path.join(TEST_STORAGE_ROOT, "files"))
+    os.makedirs(bucket_url, exist_ok=True)
+    if os.path.exists(bucket_url.upper()):
+        pytest.skip("the file system does not tell Items and items apart")
     snapshot = init_replication(
         slot_name,
         pub_name,
@@ -1163,8 +1169,6 @@ def test_names_that_differ_in_case(
         publish="insert",
         initial_snapshot="direct",
     )
-    # duckdb identifiers are case insensitive, files keep both names
-    bucket_url = os.path.abspath(os.path.join(TEST_STORAGE_ROOT, "files"))
     dest_pl = dlt.pipeline(
         pipeline_name="dest_pl",
         destination=dlt.destinations.filesystem(bucket_url),
