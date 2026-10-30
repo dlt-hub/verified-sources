@@ -75,6 +75,16 @@ Breakages are not the only reason to refresh: many sources load correctly but ca
    - **Ordering:** does ORDER BY or LIMIT defeat server-side chunking?
    - **Tests:** plan the [standard incremental tests](#standard-incremental-tests) for each incremental resource.
    - **Defaults:** give mutable resources a default incremental on the "updated at" cursor, with lag and `dedup_sort="desc"` on the cursor, and a `start_date: Optional[TAnyDateTime]` argument as its initial value (all records on the first run if not set). Accept your own `incremental` instead, used as is, and raise if both are passed. Do not overload one argument with sentinels like `"auto"`. dlt resolves every argument typed as an incremental from config and merges config into a passed one, `NotResolved` does not stop it.
+6. **Network compression.** Is the data compressed in transfer?
+   - **Where to look:** `Accept-Encoding: gzip` on HTTP APIs and export downloads, the wire compression of database drivers, e.g. MongoDB `compressors`, and compressed export formats.
+   - **Local vs. remote:** measure both.
+     - A remote upstream is bandwidth bound. MongoDB Atlas sends BSON uncompressed unless the client asks for compression, and zlib took a load from 78 s to 30 s.
+     - A local or same-network upstream is CPU bound, and the same zlib made it about 30% slower.
+     - Report both numbers.
+   - **Default:** check what other connectors of the same upstream do, e.g. if they compress by default.
+     - Most installs reach a remote upstream, so enable it by default.
+     - Let the user's connection string or option override the default, including turning it off. Check precedence: pymongo keyword arguments override the URL.
+     - Prefer a codec from the standard library, e.g. zlib. Offer faster ones, such as zstd and snappy, only when their package is installed, and silence the driver's warnings about missing ones.
 
 ## Source structure and dlt building blocks
 
