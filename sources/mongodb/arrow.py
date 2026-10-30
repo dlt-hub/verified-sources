@@ -114,7 +114,8 @@ class CollectionArrowLoader(CollectionLoader):
         arrow_options: ArrowOptions = DEFAULT_ARROW_OPTIONS,
     ) -> Iterator[Any]:
         """Load documents from the collection as Arrow tables, one per batch of `chunk_size`."""
-        cursor = self.collection.find_raw_batches(
+        # `RawBatchCursor.sort` is typed as returning `Cursor` in some pymongo versions
+        cursor: Any = self.collection.find_raw_batches(
             filter=self._query_filter(filter_),
             batch_size=self.chunk_size,
             projection=self._projection_op(projection),
@@ -122,7 +123,7 @@ class CollectionArrowLoader(CollectionLoader):
         if self._sort_op:
             cursor = cursor.sort(self._sort_op)
 
-        cursor = self._limit(cursor, limit)  # type: ignore
+        cursor = self._limit(cursor, limit)
 
         converter = ArrowBatchConverter(
             self.collection.name, self.collection.codec_options, arrow_options
