@@ -1,6 +1,6 @@
 services:
   mongodb:
-    image: mongo:8
+    image: mongo:7
     container_name: dlt_mongodb
     restart: unless-stopped
     ports:

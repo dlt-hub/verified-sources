@@ -57,7 +57,9 @@ and the object format loads the same tables. In the Arrow format nested document
 
 - Unit tests mock the collection with real BSON documents and run the real `pymongoarrow`.
 - `test_local_*` tests need the local MongoDB:
-  `docker compose -f tests/mongodb/docker-compose.yml up -d`. They seed and drop their own
+  `docker compose -f tests/mongodb/docker-compose.yml up -d`. It runs MongoDB 7: 8.0 and later
+  crash at start on Linux 6.19 and newer, e.g. GitHub runners
+  ([SERVER-121912](https://jira.mongodb.org/browse/SERVER-121912)). The tests seed and drop their own
   database. `test_local_seeded_*` load documents with random `updated_at` in full, incrementally,
   in monthly windows and in chunks with `add_limit`, and compare the counts with the seeded values.
   `test_local_parallel_*` check that partitions read every document once with `_id`s of mixed
