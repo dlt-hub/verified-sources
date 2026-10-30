@@ -51,7 +51,8 @@ and the object format loads the same tables. In the Arrow format nested document
 - Unit tests mock the collection with real BSON documents and run the real `pymongoarrow`.
 - `test_local_*` tests need the local MongoDB:
   `docker compose -f tests/mongodb/docker-compose.yml up -d`. They seed and drop their own
-  database.
+  database. `test_local_seeded_*` load documents with random `updated_at` in full, incrementally,
+  in monthly windows and in chunks with `add_limit`, and compare the counts with the seeded values.
 - Other tests in `test_mongodb_source.py` read the `sample_mflix` sample dataset from the
   `connection_url` in `sources/.dlt/secrets.toml`.
 - Run the Arrow tests with the oldest and newest `pymongoarrow`, e.g.
@@ -86,3 +87,6 @@ and the object format loads the same tables. In the Arrow format nested document
   `pymongoarrow_schema` (`pymongoarrow>=1.7`) loads it as decimal instead.
 - `parallel` reads batches with skip and limit, the server scans all skipped documents
   ([docs](https://www.mongodb.com/docs/manual/reference/method/cursor.skip/)).
+- Loading in chunks with `add_limit` and `row_order` needs `parallel=False`. dlt evaluates
+  parallel batches ahead and its incremental moves the last value past the batches that
+  `add_limit` then drops, so their documents are never loaded.

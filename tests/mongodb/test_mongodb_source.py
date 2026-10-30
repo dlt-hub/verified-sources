@@ -1,6 +1,6 @@
 import json
 from datetime import datetime, timezone
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 from unittest import mock
 
 import bson
@@ -693,6 +693,142 @@ def test_local_incremental(
     local_mongo["docs"].insert_many(make_documents(5, start=25))
     pipeline.run(docs())
     assert load_table_counts(pipeline, "docs") == {"docs": 20}
+
+
+def _seeded_rows_loaded(pipeline: dlt.Pipeline) -> int:
+    return pipeline.last_trace.last_normalize_info.row_counts.get("seeded", 0)
+
+
+def _seeded_ids(pipeline: dlt.Pipeline) -> List[str]:
+    with pipeline.sql_client() as client:
+        return sorted(row[0] for row in client.execute_sql("SELECT _id FROM seeded"))
+
+
+@skipifwindows
+@skip_if_not_active("duckdb")
+@pytest.mark.parametrize("data_item_format", ["object", "arrow"])
+@pytest.mark.parametrize("parallel", [False, True], ids=["sequential", "parallel"])
+def test_local_seeded_full_and_incremental(
+    local_mongo: Database,
+    seeded_documents: List[Dict[str, Any]],
+    data_item_format: str,
+    parallel: bool,
+) -> None:
+    updated_at = [document["updated_at"] for document in seeded_documents]
+    seeded_ids = sorted(str(document["_id"]) for document in seeded_documents)
+
+    def seeded(**incremental_args: Any) -> DltResource:
+        return mongodb_collection(
+            connection_url=LOCAL_MONGO_URL,
+            database=local_mongo.name,
+            collection="seeded",
+            incremental=dlt.sources.incremental("updated_at", **incremental_args),
+            parallel=parallel,
+            chunk_size=200,
+            data_item_format=data_item_format,
+        )
+
+    pipeline = dlt.pipeline(
+        pipeline_name="mongodb_local_seeded", destination="duckdb", dev_mode=True
+    )
+    assert_load_info(pipeline.run(seeded()))
+    assert _seeded_rows_loaded(pipeline) == len(seeded_documents)
+    assert _seeded_ids(pipeline) == seeded_ids
+
+    # the document with the last value is read again and dropped
+    pipeline.run(seeded())
+    assert _seeded_rows_loaded(pipeline) == 0
+    assert load_table_counts(pipeline, "seeded") == {"seeded": len(seeded_documents)}
+
+    backfill = dlt.pipeline(
+        pipeline_name="mongodb_local_seeded_backfill",
+        destination="duckdb",
+        dev_mode=True,
+    )
+    months = [datetime(2024, month, 1, tzinfo=timezone.utc) for month in (1, 2, 3, 4)]
+    for start, end in zip(months, months[1:]):
+        expected = sum(start <= value < end for value in updated_at)
+        assert expected > 0
+        assert_load_info(
+            backfill.run(
+                seeded(
+                    initial_value=start,
+                    end_value=end,
+                    range_start="closed",
+                    range_end="open",
+                )
+            )
+        )
+        assert _seeded_rows_loaded(backfill) == expected
+    # windows with an end value do not store incremental state
+    assert "sources" not in backfill.state
+    assert _seeded_ids(backfill) == seeded_ids
+
+
+@skipifwindows
+@skip_if_not_active("duckdb")
+@pytest.mark.parametrize("data_item_format", ["object", "arrow"])
+@pytest.mark.parametrize(
+    "last_value_func,initial_value",
+    [
+        (max, None),
+        (min, None),
+        (max, datetime(1999, 1, 1, tzinfo=timezone.utc)),
+        (min, datetime(2100, 1, 1, tzinfo=timezone.utc)),
+    ],
+    ids=["max", "min", "max_initial_value", "min_initial_value"],
+)
+def test_local_seeded_chunks(
+    local_mongo: Database,
+    seeded_documents: List[Dict[str, Any]],
+    data_item_format: str,
+    last_value_func: Any,
+    initial_value: Optional[datetime],
+) -> None:
+    chunk_size = 200
+    expected = sorted(
+        (document["updated_at"] for document in seeded_documents),
+        reverse=last_value_func is min,
+    )
+    # not `parallel`: dlt's incremental also sees the batches in flight that `add_limit` drops
+    seeded = mongodb_collection(
+        connection_url=LOCAL_MONGO_URL,
+        database=local_mongo.name,
+        collection="seeded",
+        incremental=dlt.sources.incremental(
+            "updated_at",
+            initial_value=initial_value,
+            # in the order of `last_value_func`, newest first with `min`
+            row_order="asc",
+            last_value_func=last_value_func,
+            range_start="open",  # seeded values are unique, the last one is not read again
+        ),
+        chunk_size=chunk_size,
+        data_item_format=data_item_format,
+    )
+    pipeline = dlt.pipeline(
+        pipeline_name="mongodb_local_seeded_chunks", destination="duckdb", dev_mode=True
+    )
+
+    for start in range(0, len(expected), chunk_size):
+        chunk = expected[start : start + chunk_size]
+        assert_load_info(pipeline.run(seeded.add_limit(1)))
+        assert _seeded_rows_loaded(pipeline) == len(chunk)
+        assert seeded.state["incremental"]["updated_at"]["last_value"] == chunk[-1]
+    pipeline.run(seeded)
+    assert _seeded_rows_loaded(pipeline) == 0
+
+    with pipeline.sql_client() as client:
+        rows = client.execute_sql("SELECT n, updated_at FROM seeded")
+        (distinct_ids,) = client.execute_sql("SELECT COUNT(DISTINCT _id) FROM seeded")[
+            0
+        ]
+    assert sorted(rows) == sorted(
+        (document["n"], document["updated_at"]) for document in seeded_documents
+    )
+    assert distinct_ids == len(seeded_documents)
+    # checked last so that rows skipped or repeated above surface first
+    assert seeded.state["incremental"]["updated_at"]["last_value"].tzinfo is not None
 
 
 @skip_if_not_active("snowflake")

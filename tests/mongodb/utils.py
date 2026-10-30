@@ -1,3 +1,4 @@
+import random
 from copy import copy
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, Iterator, List, Optional, Sequence, Tuple, Union
@@ -163,6 +164,17 @@ def make_documents(count: int, start: int = 0) -> List[Dict[str, Any]]:
         else:
             del document["price"]
         documents.append(document)
+    return documents
+
+
+def make_seeded_documents(count: int) -> List[Dict[str, Any]]:
+    """Documents updated at random, unique seconds within 90 days, not in insert order"""
+    base = datetime(2024, 1, 1, tzinfo=timezone.utc)
+    documents = make_documents(count)
+    for document, seconds in zip(
+        documents, random.sample(range(90 * 24 * 3600), count)
+    ):
+        document["updated_at"] = base + timedelta(seconds=seconds)
     return documents
 
 

@@ -1,4 +1,4 @@
-from typing import Any, Iterator
+from typing import Any, Dict, Iterator, List
 from uuid import uuid4
 
 import pytest
@@ -7,7 +7,13 @@ from pymongo.errors import ServerSelectionTimeoutError
 
 from sources.mongodb import helpers
 
-from tests.mongodb.utils import FakeClient, FakeCollection, FakeDatabase, make_documents
+from tests.mongodb.utils import (
+    FakeClient,
+    FakeCollection,
+    FakeDatabase,
+    make_documents,
+    make_seeded_documents,
+)
 
 LOCAL_MONGO_URL = "mongodb://localhost:27017"
 
@@ -43,3 +49,12 @@ def local_mongo() -> Iterator["Database[Any]"]:
     finally:
         client.drop_database(database.name)
         client.close()
+
+
+@pytest.fixture
+def seeded_documents(local_mongo: "Database[Any]") -> List[Dict[str, Any]]:
+    """Documents seeded into the `seeded` collection of `local_mongo`"""
+    documents = make_seeded_documents(1050)
+    # `insert_many` adds `_id` to the documents
+    local_mongo["seeded"].insert_many(documents)
+    return documents
