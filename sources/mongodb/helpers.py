@@ -134,7 +134,7 @@ class CollectionLoader:
 
         Args:
             projection (Optional[Union[Mapping[str, Any], Iterable[str]]]): A tuple of fields to include or a dict specifying fields to include or exclude.
-            The incremental cursor field is always loaded.
+            The incremental cursor field and `_id` are always loaded.
 
         Returns:
             Optional[Dict[str, Any]]: A dictionary with the projection operator.
@@ -148,16 +148,37 @@ class CollectionLoader:
             projection_dict = {field: 1 for field in projection}
 
         if self.incremental:
+            # the incremental deduplicates by the primary key `_id`
+            if self.incremental.primary_key != () and not projection_dict.get(
+                "_id", True
+            ):
+                del projection_dict["_id"]
+                logger.warning(
+                    "`_id` was removed from the projection, the incremental needs it"
+                )
             cursor_path = self.incremental.cursor_path
             # `_id` may be excluded in an inclusion projection and included in an exclusion one
             if any(
                 value == 1 for field, value in projection_dict.items() if field != "_id"
             ):
-                projection_dict[cursor_path] = 1
-            elif projection_dict.pop(cursor_path, None) is not None:
-                logger.warning(
-                    f"Cursor field `{cursor_path}` was removed from exclusion projection"
-                )
+                # MongoDB rejects a projection of a document together with its fields
+                if not any(
+                    _is_path_prefix(field, cursor_path)
+                    for field, value in projection_dict.items()
+                    if value == 1
+                ):
+                    projection_dict[cursor_path] = 1
+            else:
+                for field in projection_dict:
+                    if field != cursor_path and _is_path_prefix(field, cursor_path):
+                        raise ValueError(
+                            f"Projection excludes `{field}` that holds the cursor field "
+                            f"`{cursor_path}`"
+                        )
+                if projection_dict.pop(cursor_path, None) is not None:
+                    logger.warning(
+                        f"Cursor field `{cursor_path}` was removed from exclusion projection"
+                    )
 
         return projection_dict
 
@@ -276,21 +297,22 @@ def collection_documents(
                 exclude (dict) - {"released": False, "runtime": False}
             Note: Can't mix include and exclude statements '{"title": True, "released": False}`
         pymongoarrow_schema (pymongoarrow.schema.Schema): The mapping of field types to convert BSON to Arrow.
+            Values that do not match it raise `FieldTypeMismatchError` (`pymongoarrow>=1.9`).
         incremental (Optional[dlt.sources.incremental[Any]]): The incremental configuration.
         parallel (bool): Read `_id` partitions of the collection in parallel, as many at once as
             `workers` in the `extract` config: in threads in the object format, in processes in the
             Arrow format. Default is False.
         limit (Optional[int]): The maximum number of documents to load.
-        chunk_size (Optional[int]): The number of documents to load in each batch.
+        chunk_size (Optional[int]): The number of documents loaded in each batch. With `parallel`,
+            the number of documents in an `_id` partition, which loads as one batch.
         data_item_format (Optional[TDataItemFormat]): The data format to use for loading.
             Supported formats:
                 object - Python objects (dicts, lists).
                 arrow - Apache Arrow tables.
-        on_inferred_type_mismatch (TTypeMismatch): Applies when `pymongoarrow_schema` is not passed. The
-            Arrow format then infers the type of a field from its first value in a batch and loads
-            values of other types as null: "ignore" (default, fastest) does that silently, "warn" and
-            "raise" detect such values with a second parse of each batch. Values that do not match
-            `pymongoarrow_schema` always raise `FieldTypeMismatchError`.
+        on_inferred_type_mismatch (TTypeMismatch): Without `pymongoarrow_schema`, values whose type
+            differs from the first value of their field load as null in the Arrow format: "ignore"
+            (default) silently, "warn" with a warning, "raise" fails. "warn" and "raise" parse each
+            batch twice.
         connection_url (Optional[str]): The connection URL of `client`, worker processes of
             parallel Arrow reads connect with it.
 
@@ -381,7 +403,7 @@ def client_from_credentials(connection_url: str) -> TMongoClient:
 
 
 def client_options(connection_url: str) -> Dict[str, Any]:
-    """Options of the clients of the source and of the worker processes of parallel Arrow reads"""
+    """Keyword arguments of `MongoClient` for `connection_url`"""
     options: Dict[str, Any] = dict(
         uuidRepresentation="standard",
         tz_aware=True,
@@ -399,6 +421,10 @@ def ignore_compressor_warnings() -> None:
     """pymongo skips compressors whose package is not installed, zlib is always there"""
     warnings.filterwarnings("ignore", "Wire protocol compression with")
     warnings.filterwarnings("ignore", "Unsupported compressor: $")
+
+
+def _is_path_prefix(parent: str, path: str) -> bool:
+    return path == parent or path.startswith(parent + ".")
 
 
 def _raise_if_intersection(filter1: Dict[str, Any], filter2: Dict[str, Any]) -> None:
