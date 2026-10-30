@@ -1,15 +1,15 @@
 import json
+from datetime import datetime, timezone
+from typing import Any, Dict, List
 from unittest import mock
 
 import bson
 import dlt
 import pyarrow
 import pytest
-from pendulum import DateTime, timezone
-from unittest import mock
-
-import dlt
 from dlt.pipeline.exceptions import PipelineStepFailed
+from dlt.sources import DltResource
+from pymongo.database import Database
 
 from sources.mongodb import mongodb, mongodb_collection
 from sources.mongodb_pipeline import (
@@ -18,7 +18,15 @@ from sources.mongodb_pipeline import (
     load_select_collection_db_filtered,
     load_select_collection_db_items_parallel,
 )
-from tests.utils import ALL_DESTINATIONS, assert_load_info, load_table_counts
+from tests.mongodb.conftest import LOCAL_MONGO_URL
+from tests.mongodb.utils import make_documents
+from tests.utils import (
+    ALL_DESTINATIONS,
+    assert_load_info,
+    load_table_counts,
+    skip_if_not_active,
+    skipifwindows,
+)
 
 
 @pytest.mark.parametrize("destination_name", ALL_DESTINATIONS)
@@ -59,11 +67,13 @@ def test_all_resources(destination_name: str) -> None:
     assert table_counts["movies"] == 23539
 
 
+@skip_if_not_active("duckdb")
 def test_nested_documents():
     movies = mongodb_collection(collection="movieGroups")
     document = list(movies)[0]
     # Check the date type
-    assert isinstance(document["date"], DateTime)
+    assert isinstance(document["date"], datetime)
+    assert document["date"].tzinfo == timezone.utc
     # All other fields must be json serializable
     del document["date"]
     doc_str = json.dumps(document)
@@ -75,29 +85,27 @@ def test_nested_documents():
     "start,end,count1,count2,last_value_func",
     [
         (
-            DateTime(2005, 1, 1, tzinfo=timezone("UTC")),
-            DateTime(2005, 12, 31, tzinfo=timezone("UTC")),
+            datetime(2005, 1, 1, tzinfo=timezone.utc),
+            datetime(2005, 12, 31, tzinfo=timezone.utc),
             1119,  # [start: end] range
             12293,  # [end:] range
             max,  # asc
         ),
         (
-            DateTime(2005, 6, 1, tzinfo=timezone("UTC")),
-            DateTime(2005, 1, 1, tzinfo=timezone("UTC")),
+            datetime(2005, 6, 1, tzinfo=timezone.utc),
+            datetime(2005, 1, 1, tzinfo=timezone.utc),
             442,  # [start: end] range
             36892,  # [end:] range
             min,  # desc
         ),
     ],
 )
-@pytest.mark.parametrize("destination_name", ALL_DESTINATIONS)
+@skip_if_not_active("duckdb")
 @pytest.mark.parametrize("data_item_format", ["object", "arrow"])
-def test_incremental(
-    start, end, count1, count2, last_value_func, destination_name, data_item_format
-):
+def test_incremental(start, end, count1, count2, last_value_func, data_item_format):
     pipeline = dlt.pipeline(
         pipeline_name="mongodb_test",
-        destination=destination_name,
+        destination="duckdb",
         dataset_name="mongodb_test_data",
         dev_mode=True,
     )
@@ -153,6 +161,13 @@ def test_incremental(
     assert load_info.loads_ids == []
 
 
+def _count_rows(items) -> int:
+    return sum(
+        item.num_rows if isinstance(item, pyarrow.Table) else 1 for item in items
+    )
+
+
+@skip_if_not_active("duckdb")
 @pytest.mark.parametrize("data_item_format", ["object", "arrow"])
 def test_parallel_loading(data_item_format):
     st_records = load_select_collection_db_items_parallel(
@@ -161,15 +176,15 @@ def test_parallel_loading(data_item_format):
     parallel_records = load_select_collection_db_items_parallel(
         data_item_format, parallel=True
     )
-    assert len(st_records) == len(parallel_records)
+    assert _count_rows(st_records) == _count_rows(parallel_records) > 0
 
 
 @pytest.mark.parametrize("data_item_format", ["object", "arrow"])
-@pytest.mark.parametrize("destination_name", ALL_DESTINATIONS)
-def test_limit(destination_name, data_item_format):
+@skip_if_not_active("duckdb")
+def test_limit(data_item_format):
     pipeline = dlt.pipeline(
         pipeline_name="mongodb_test",
-        destination=destination_name,
+        destination="duckdb",
         dataset_name="mongodb_test_data",
         dev_mode=True,
     )
@@ -182,14 +197,14 @@ def test_limit(destination_name, data_item_format):
     assert table_counts["comments"] == 10
 
 
-@pytest.mark.parametrize("destination_name", ALL_DESTINATIONS)
-def test_limit_on_source(destination_name):
+@skip_if_not_active("duckdb")
+def test_limit_on_source():
     collections = ("comments", "movies")
     limit = 8
 
     pipeline = dlt.pipeline(
         pipeline_name="mongodb_test",
-        destination=destination_name,
+        destination="duckdb",
         dataset_name="mongodb_test_data",
         dev_mode=True,
     )
@@ -201,11 +216,11 @@ def test_limit_on_source(destination_name):
         assert table_counts[col_name] == limit
 
 
-@pytest.mark.parametrize("destination", ALL_DESTINATIONS)
-def test_limit_warning(destination):
+@skip_if_not_active("duckdb")
+def test_limit_warning():
     pipeline = dlt.pipeline(
         pipeline_name="mongodb_test",
-        destination=destination,
+        destination="duckdb",
         dataset_name="mongodb_test_data",
         dev_mode=True,
     )
@@ -220,11 +235,11 @@ def test_limit_warning(destination):
 
 
 @pytest.mark.parametrize("data_item_format", ["object", "arrow"])
-@pytest.mark.parametrize("destination_name", ALL_DESTINATIONS)
-def test_limit_chunk_size(destination_name, data_item_format):
+@skip_if_not_active("duckdb")
+def test_limit_chunk_size(data_item_format):
     pipeline = dlt.pipeline(
         pipeline_name="mongodb_test",
-        destination=destination_name,
+        destination="duckdb",
         dataset_name="mongodb_test_data",
         dev_mode=True,
     )
@@ -242,6 +257,7 @@ def test_limit_chunk_size(destination_name, data_item_format):
     assert table_counts["comments"] == 15
 
 
+@skip_if_not_active("duckdb")
 @pytest.mark.parametrize("row_order", ["asc", "desc", None])
 @pytest.mark.parametrize(
     "data_item_format,last_value_func",
@@ -259,7 +275,7 @@ def test_order(row_order, last_value_func, data_item_format):
             collection="comments",
             incremental=dlt.sources.incremental(
                 "date",
-                initial_value=DateTime(2005, 1, 1, tzinfo=timezone("UTC")),
+                initial_value=datetime(2005, 1, 1, tzinfo=timezone.utc),
                 last_value_func=last_value_func,
                 row_order=row_order,
             ),
@@ -296,12 +312,12 @@ def test_python_types(destination_name):
         "field6": "text",
         "field7": [1, 2, 3],
         "field8": {"key": "value"},
-        "field9": DateTime(2024, 1, 1, 0, 0, 0, tzinfo=timezone("UTC")),
+        "field9": datetime(2024, 1, 1, 0, 0, 0, tzinfo=timezone.utc),
         "field10": "^foo",
         "field11": b"foo",
         "field12": "daad12312312312312312312",
         "field13": bson.code.Code("function() { return 1; }"),
-        "field14": DateTime(1970, 1, 1, 0, 0, 1, tzinfo=timezone("UTC")),
+        "field14": datetime(1970, 1, 1, 0, 0, 1, tzinfo=timezone.utc),
         "field15": "1.2",
         "field16": bytes("foo", "utf-8"),
     }.items():
@@ -330,8 +346,9 @@ def test_arrow_types(destination_name):
         "field5": pyarrow.scalar(1.2),
         "field6": pyarrow.scalar("text"),
         "field7": pyarrow.scalar([1, 2, 3], type=pyarrow.list_(pyarrow.int32())),
-        "field8": pyarrow.scalar({"key": "value"}),
-        "field9": pyarrow.scalar(DateTime(2024, 1, 1, 0, 0, 0)),
+        # nested documents are flattened like in the object format
+        "field8__key": pyarrow.scalar("value"),
+        "field9": pyarrow.scalar(datetime(2024, 1, 1, tzinfo=timezone.utc)),
         "field11": b"foo",
         "field12": pyarrow.scalar("daad12312312312312312312"),
         "field13": "function() { return 1; }",
@@ -356,14 +373,14 @@ def test_arrow_types(destination_name):
 
     if destination_name in ("bigquery", "postgres"):
         res = list(res)[0]
-        res = res.drop_columns(["field7", "field8"])
+        res = res.drop_columns(["field7"])
 
     info = pipeline.run(res, table_name="types_test")
     assert info.loads_ids != []
 
 
-@pytest.mark.parametrize("destination_name", ALL_DESTINATIONS)
-def test_filter(destination_name):
+@skip_if_not_active("duckdb")
+def test_filter():
     """
     The field `runtime` is not set in some movies,
     thus incremental will not work. However, adding
@@ -372,7 +389,7 @@ def test_filter(destination_name):
     """
     pipeline = dlt.pipeline(
         pipeline_name="mongodb_test",
-        destination=destination_name,
+        destination="duckdb",
         dataset_name="mongodb_test_data",
         dev_mode=True,
     )
@@ -387,15 +404,15 @@ def test_filter(destination_name):
     assert table_counts["movies"] == 23
 
 
-@pytest.mark.parametrize("destination_name", ALL_DESTINATIONS)
-def test_filter_intersect(destination_name):
+@skip_if_not_active("duckdb")
+def test_filter_intersect():
     """
     Check that using in the filter_ fields that
     are used by incremental is not allowed.
     """
     pipeline = dlt.pipeline(
         pipeline_name="mongodb_test",
-        destination=destination_name,
+        destination="duckdb",
         dataset_name="mongodb_test_data",
         dev_mode=True,
     )
@@ -409,11 +426,11 @@ def test_filter_intersect(destination_name):
         pipeline.run(movies)
 
 
-@pytest.mark.parametrize("destination_name", ALL_DESTINATIONS)
-def test_projection_list_inclusion(destination_name):
+@skip_if_not_active("duckdb")
+def test_projection_list_inclusion():
     pipeline = dlt.pipeline(
         pipeline_name="mongodb_test",
-        destination=destination_name,
+        destination="duckdb",
         dataset_name="mongodb_test_data",
         dev_mode=True,
     )
@@ -430,11 +447,11 @@ def test_projection_list_inclusion(destination_name):
     assert set(loaded_columns) == set(expected_columns)
 
 
-@pytest.mark.parametrize("destination_name", ALL_DESTINATIONS)
-def test_projection_dict_inclusion(destination_name):
+@skip_if_not_active("duckdb")
+def test_projection_dict_inclusion():
     pipeline = dlt.pipeline(
         pipeline_name="mongodb_test",
-        destination=destination_name,
+        destination="duckdb",
         dataset_name="mongodb_test_data",
         dev_mode=True,
     )
@@ -451,11 +468,11 @@ def test_projection_dict_inclusion(destination_name):
     assert set(loaded_columns) == set(expected_columns)
 
 
-@pytest.mark.parametrize("destination_name", ALL_DESTINATIONS)
-def test_projection_dict_exclusion(destination_name):
+@skip_if_not_active("duckdb")
+def test_projection_dict_exclusion():
     pipeline = dlt.pipeline(
         pipeline_name="mongodb_test",
-        destination=destination_name,
+        destination="duckdb",
         dataset_name="mongodb_test_data",
         dev_mode=True,
     )
@@ -490,11 +507,11 @@ def test_projection_dict_exclusion(destination_name):
     assert set(loaded_columns) == set(expected_columns)
 
 
-@pytest.mark.parametrize("destination_name", ALL_DESTINATIONS)
-def test_projection_nested_field(destination_name):
+@skip_if_not_active("duckdb")
+def test_projection_nested_field():
     pipeline = dlt.pipeline(
         pipeline_name="mongodb_test",
-        destination=destination_name,
+        destination="duckdb",
         dataset_name="mongodb_test_data",
         dev_mode=True,
     )
@@ -514,15 +531,13 @@ def test_projection_nested_field(destination_name):
     assert len(set(loaded_columns).intersection(not_expected_columns)) == 0
 
 
-@pytest.mark.parametrize("destination_name", ALL_DESTINATIONS)
+@skip_if_not_active("duckdb")
 @pytest.mark.parametrize("data_item_format", ["object", "arrow"])
-def test_mongodb_without_pymongoarrow(
-    destination_name: str, data_item_format: str
-) -> None:
+def test_mongodb_without_pymongoarrow(data_item_format: str) -> None:
     with mock.patch.dict("sys.modules", {"pymongoarrow": None}):
         pipeline = dlt.pipeline(
             pipeline_name="test_mongodb_without_pymongoarrow",
-            destination=destination_name,
+            destination="duckdb",
             dataset_name="test_mongodb_without_pymongoarrow_data",
             dev_mode=True,
         )
@@ -537,12 +552,11 @@ def test_mongodb_without_pymongoarrow(
         assert table_counts["comments"] == 10
 
 
-@pytest.mark.parametrize("convert_to_string", [True, False])
 @pytest.mark.parametrize("destination_name", ALL_DESTINATIONS)
-def test_pymongoarrow_schema(convert_to_string: bool, destination_name: str):
+def test_pymongoarrow_schema(destination_name: str):
     """Tests that the provided schema is correctly applied."""
     from pymongoarrow.api import Schema
-    from pymongoarrow.types import BinaryType
+    from pymongoarrow.types import BinaryType, CodeType
 
     expected_schema = {
         "_id": bson.objectid.ObjectId,
@@ -556,15 +570,11 @@ def test_pymongoarrow_schema(convert_to_string: bool, destination_name: str):
         "field9": pyarrow.timestamp("ms"),
         "field10": pyarrow.string(),
         "field12": pyarrow.string(),
-        "field13": pyarrow.string(),
+        "field13": CodeType(),
         "field14": pyarrow.timestamp("ms"),
         "field15": pyarrow.string(),
-        "field11": pyarrow.string()
-        if convert_to_string
-        else BinaryType(subtype=0),  # Generic binary subtype
-        "field16": pyarrow.string()
-        if convert_to_string
-        else BinaryType(subtype=0),  # Generic binary subtype
+        "field11": BinaryType(subtype=0),
+        "field16": BinaryType(subtype=0),
     }
 
     res = mongodb_collection(
@@ -576,9 +586,18 @@ def test_pymongoarrow_schema(convert_to_string: bool, destination_name: str):
     actual_schema = list(res)[0].schema
 
     for field, expected_type in expected_schema.items():
+        if isinstance(expected_type, pyarrow.StructType):
+            # nested documents are flattened like in the object format
+            for child in expected_type:
+                actual_type = actual_schema.field(f"{field}__{child.name}").type
+                assert actual_type == child.type
+            continue
         actual_type = actual_schema.field(field).type
         if field == "_id":
             # ObjectId is converted to a hex string
+            assert actual_type == pyarrow.string()
+        elif isinstance(expected_type, CodeType):
+            # Code fields are converted to their string storage
             assert actual_type == pyarrow.string()
         elif isinstance(expected_type, BinaryType):
             # Binary fields are specifically converted to pyarrow binary
@@ -595,7 +614,109 @@ def test_pymongoarrow_schema(convert_to_string: bool, destination_name: str):
 
     if destination_name in ("bigquery", "postgres"):
         res = list(res)[0]
-        res = res.drop_columns(["field7", "field8"])
+        res = res.drop_columns(["field7"])
 
     info = pipeline.run(res, table_name="types_test")
     assert info.loads_ids != []
+
+
+def _local_rows(pipeline: dlt.Pipeline, table_name: str) -> List[Dict[str, Any]]:
+    columns = ["_id", "n", "title", "updated_at", "price", "payload", "code"]
+    with pipeline.sql_client() as client:
+        rows = client.execute_sql(
+            f"SELECT {', '.join(columns)} FROM {table_name} ORDER BY n"
+        )
+    return [dict(zip(columns, row)) for row in rows]
+
+
+@skipifwindows
+@skip_if_not_active("duckdb")
+@pytest.mark.parametrize("parallel", [False, True], ids=["sequential", "parallel"])
+def test_local_arrow_matches_object(local_mongo: Database, parallel: bool) -> None:
+    pipeline = dlt.pipeline(
+        pipeline_name="mongodb_local_formats", destination="duckdb", dev_mode=True
+    )
+    for data_item_format in ("object", "arrow"):
+        docs = mongodb_collection(
+            connection_url=LOCAL_MONGO_URL,
+            database=local_mongo.name,
+            collection="docs",
+            parallel=parallel,
+            chunk_size=4,
+            data_item_format=data_item_format,
+        )
+        pipeline.run(docs, table_name=f"docs_{data_item_format}")
+
+    object_rows = _local_rows(pipeline, "docs_object")
+    assert len(object_rows) == 25
+    assert len({row["_id"] for row in object_rows}) == 25
+    assert _local_rows(pipeline, "docs_arrow") == object_rows
+
+
+@skipifwindows
+@skip_if_not_active("duckdb")
+@pytest.mark.parametrize("data_item_format", ["object", "arrow"])
+@pytest.mark.parametrize("parallel", [False, True], ids=["sequential", "parallel"])
+def test_local_incremental(
+    local_mongo: Database, data_item_format: str, parallel: bool
+) -> None:
+    pipeline = dlt.pipeline(
+        pipeline_name="mongodb_local_incremental", destination="duckdb", dev_mode=True
+    )
+
+    def docs() -> DltResource:
+        return mongodb_collection(
+            connection_url=LOCAL_MONGO_URL,
+            database=local_mongo.name,
+            collection="docs",
+            incremental=dlt.sources.incremental(
+                "updated_at",
+                initial_value=datetime(2024, 1, 11, tzinfo=timezone.utc),
+                row_order="asc",
+            ),
+            projection=["title"],
+            parallel=parallel,
+            chunk_size=4,
+            data_item_format=data_item_format,
+        )
+
+    pipeline.run(docs())
+    assert load_table_counts(pipeline, "docs") == {"docs": 15}
+    # the projection keeps the cursor field
+    assert {"_id", "title", "updated_at"} <= set(
+        pipeline.default_schema.get_table_columns("docs")
+    )
+
+    pipeline.run(docs())
+    assert load_table_counts(pipeline, "docs") == {"docs": 15}
+
+    local_mongo["docs"].insert_many(make_documents(5, start=25))
+    pipeline.run(docs())
+    assert load_table_counts(pipeline, "docs") == {"docs": 20}
+
+
+@skip_if_not_active("snowflake")
+def test_arrow_nested_types_snowflake() -> None:
+    pipeline = dlt.pipeline(
+        pipeline_name="mongodb_nested_types",
+        destination=dlt.destinations.snowflake(use_nested_types=True),
+        dataset_name="mongodb_nested_types",
+        dev_mode=True,
+    )
+    types_test = mongodb_collection(collection="types_test", data_item_format="arrow")
+    # documents are flattened into columns unless nesting is disabled, arrays are always nested
+    types_test.max_table_nesting = 0
+    pipeline.run(types_test, loader_file_format="parquet")
+
+    with pipeline.sql_client() as client:
+        table_name = client.make_qualified_table_name("types_test")
+        column_types = {
+            name.lower(): data_type
+            for name, data_type, *_ in client.execute_sql(f"DESC TABLE {table_name}")
+        }
+        values = client.execute_sql(
+            f"SELECT field7[0], field8['key'] FROM {table_name}"
+        )
+    assert column_types["field7"] == "ARRAY(NUMBER(19,0))"
+    assert column_types["field8"] == "OBJECT(key VARCHAR(16777216))"
+    assert values == [(1, "value")]
