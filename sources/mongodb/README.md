@@ -12,8 +12,8 @@ and the object format loads the same tables. In the Arrow format nested document
 - fixed `mongodb_collection`: failed with `InvalidResourceReturnsResource` on dlt 1.12 and later
 - fixed Arrow: failed to import with `pymongoarrow>=1.6`
 - fixed Arrow: the incremental cursor is filtered on the server, before the whole collection was read
-- fixed: a projection with an incremental keeps the cursor field and `_id`, also when the projection
-  includes the document that holds the cursor. Excluding that document raises
+- fixed: a projection with an incremental keeps the cursor field, also when the projection
+  includes the document that holds it. Excluding that document raises
 - fixed: a filter on the cursor field no longer replaces the incremental filter
 - fixed object format: DBRef, MinKey, MaxKey, PCRE-only regexes and dates outside the Python range
   failed the load. Such dates are clamped
@@ -63,7 +63,11 @@ and the object format loads the same tables. In the Arrow format nested document
   `CodeType()` in the schema, fields not in it are not loaded.
 - Arrays load as child tables in the object format and as `json` in the Arrow format. Switching the
   format of a loaded resource needs a reload, e.g. `refresh="drop_resources"`.
-- A null `_id` is valid in MongoDB, dlt rejects it as the primary key.
+- The primary key of the resources is `_id`. A null `_id` is valid in MongoDB, dlt rejects it.
+  Views and time series collections may return documents without `_id`, e.g. a view with
+  `$project: {_id: 0}` or measurements inserted without it, the server does not add it (this PR,
+  local MongoDB). The load then fails, set another key with `apply_hints(primary_key=...)` or none
+  with `()`. Views may also repeat `_id`, e.g. with `$unwind`, which collapses rows with `merge`.
 - `$gte`/`$lt` on `_id` match only values of their own BSON type
   ([type bracketing](https://www.mongodb.com/docs/manual/reference/mql/query-predicates/type-bracketing/)).
   `parallel` splits the most common `_id` type into ranges and reads every other type in one

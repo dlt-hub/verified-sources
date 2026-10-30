@@ -134,7 +134,7 @@ class CollectionLoader:
 
         Args:
             projection (Optional[Union[Mapping[str, Any], Iterable[str]]]): A tuple of fields to include or a dict specifying fields to include or exclude.
-            The incremental cursor field and `_id` are always loaded.
+            The incremental cursor field is always loaded.
 
         Returns:
             Optional[Dict[str, Any]]: A dictionary with the projection operator.
@@ -148,14 +148,6 @@ class CollectionLoader:
             projection_dict = {field: 1 for field in projection}
 
         if self.incremental:
-            # the incremental deduplicates by the primary key `_id`
-            if self.incremental.primary_key != () and not projection_dict.get(
-                "_id", True
-            ):
-                del projection_dict["_id"]
-                logger.warning(
-                    "`_id` was removed from the projection, the incremental needs it"
-                )
             cursor_path = self.incremental.cursor_path
             # `_id` may be excluded in an inclusion projection and included in an exclusion one
             if any(

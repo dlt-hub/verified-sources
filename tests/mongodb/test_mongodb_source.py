@@ -8,6 +8,7 @@ import dlt
 from bson.datetime_ms import DatetimeMS
 import pyarrow
 import pytest
+from dlt.common.schema.exceptions import UnboundColumnException
 from dlt.pipeline.exceptions import PipelineStepFailed
 from dlt.sources import DltResource
 from pymongo.collation import Collation
@@ -665,25 +666,28 @@ def test_local_incremental_server_filter(
 @skipifwindows
 @skip_if_not_active("duckdb")
 @pytest.mark.parametrize(
-    "cursor,projection,present,absent",
+    "cursor,projection,primary_key,present,absent",
     [
-        ("n", ["title"], {"_id", "title", "n"}, {"payload"}),
-        # the incremental deduplicates by `_id`
-        ("n", {"title": 1, "_id": 0}, {"_id", "title", "n"}, {"payload"}),
-        ("n", {"title": 0, "n": 0}, {"_id", "n", "payload"}, {"title"}),
-        ("n", {"_id": 1, "title": 0}, {"_id", "n"}, {"title"}),
+        ("n", ["title"], None, {"_id", "title", "n"}, {"payload"}),
+        # the incremental deduplicates by the primary key
+        ("n", {"title": 1, "_id": 0}, None, "Primary key column `_id`", None),
+        ("n", {"title": 1, "_id": 0}, (), {"title", "n"}, {"_id", "payload"}),
+        ("n", {"title": 0, "n": 0}, None, {"_id", "n", "payload"}, {"title"}),
+        ("n", {"_id": 1, "title": 0}, None, {"_id", "n"}, {"title"}),
         # the server rejects a projection of `ref` together with `ref.x`
-        ("ref.x", ["ref"], {"_id", "ref"}, {"n", "title"}),
+        ("ref.x", ["ref"], None, {"_id", "ref"}, {"n", "title"}),
         (
             "ref.x",
             {"ref": 0},
+            None,
             "excludes `ref` that holds the cursor field `ref.x`",
             None,
         ),
     ],
     ids=[
         "list_inclusion",
-        "dict_inclusion",
+        "id_excluded",
+        "id_excluded_no_primary_key",
         "exclusion",
         "exclusion_with_id",
         "parent_included",
@@ -694,6 +698,7 @@ def test_local_projection_keeps_cursor_field(
     local_mongo: Database,
     cursor: str,
     projection: Any,
+    primary_key: Any,
     present: Any,
     absent: Optional[Set[str]],
 ) -> None:
@@ -704,6 +709,8 @@ def test_local_projection_keeps_cursor_field(
         incremental=dlt.sources.incremental(cursor),
         projection=projection,
     )
+    if primary_key is not None:
+        docs.apply_hints(primary_key=primary_key)
 
     if isinstance(present, str):
         with pytest.raises(Exception, match=present):
@@ -1044,12 +1051,82 @@ def test_local_parallel_view_and_timeseries(
         [{"ts": start + timedelta(minutes=n), "n": n} for n in range(300)]
     )
 
+    names = ["base_view", "series"]
     # no `_id` index to split by: read in one partition
-    for name, expected in (("base_view", range(100)), ("series", range(300))):
+    for name in names:
         assert plan_partitions(local_mongo[name], 50) == [{}]
-        assert sorted(_parallel_n(local_mongo, name, data_item_format)) == list(
-            expected
+
+    source = mongodb(
+        connection_url=LOCAL_MONGO_URL,
+        database=local_mongo.name,
+        collection_names=names,
+        parallel=True,
+        chunk_size=50,
+        data_item_format=data_item_format,
+    )
+    pipeline = dlt.pipeline(
+        pipeline_name="mongodb_local_view_and_timeseries",
+        destination="duckdb",
+        dev_mode=True,
+    )
+    assert_load_info(pipeline.run(source))
+
+    with pipeline.sql_client() as client:
+        for name, expected in zip(names, (range(100), range(300))):
+            rows = client.execute_sql(f"SELECT n FROM {name} ORDER BY n")
+            assert [n for (n,) in rows] == list(expected), name
+            # pymongo adds `_id` to the documents it inserts, the view keeps it
+            (distinct_ids,) = client.execute_sql(
+                f"SELECT COUNT(DISTINCT _id) FROM {name}"
+            )[0]
+            assert distinct_ids == len(expected), name
+
+
+@skipifwindows
+@skip_if_not_active("duckdb")
+@pytest.mark.parametrize("data_item_format", ["object", "arrow"])
+@pytest.mark.parametrize("collection", ["view", "series"])
+def test_local_documents_without_id(
+    local_mongo: Database, collection: str, data_item_format: str
+) -> None:
+    start = datetime(2024, 1, 1, tzinfo=timezone.utc)
+    if collection == "view":
+        local_mongo["base"].insert_many([{"n": n} for n in range(3)])
+        local_mongo.command(
+            "create", "view", viewOn="base", pipeline=[{"$project": {"_id": 0, "n": 1}}]
         )
+    else:
+        local_mongo.create_collection("series", timeseries={"timeField": "ts"})
+        # the insert command does not add `_id` like pymongo does, neither does the server
+        local_mongo.command(
+            "insert",
+            "series",
+            documents=[{"ts": start + timedelta(minutes=n), "n": n} for n in range(3)],
+        )
+
+    def documents() -> DltResource:
+        return mongodb_collection(
+            connection_url=LOCAL_MONGO_URL,
+            database=local_mongo.name,
+            collection=collection,
+            data_item_format=data_item_format,
+        )
+
+    def pipeline() -> dlt.Pipeline:
+        return dlt.pipeline(
+            pipeline_name="mongodb_local_without_id",
+            destination="duckdb",
+            dev_mode=True,
+        )
+
+    # the default primary key `_id` is not in the data
+    with pytest.raises(PipelineStepFailed) as ex:
+        pipeline().run(documents())
+    assert isinstance(ex.value.__cause__, UnboundColumnException)
+
+    loading = pipeline()
+    assert_load_info(loading.run(documents().apply_hints(primary_key=())))
+    assert load_table_counts(loading, collection) == {collection: 3}
 
 
 @skipifwindows
