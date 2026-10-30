@@ -58,3 +58,10 @@ def seeded_documents(local_mongo: "Database[Any]") -> List[Dict[str, Any]]:
     # `insert_many` adds `_id` to the documents
     local_mongo["seeded"].insert_many(documents)
     return documents
+
+
+@pytest.fixture
+def profiled_mongo(local_mongo: "Database[Any]") -> "Database[Any]":
+    """`local_mongo` that records the reads of the server, see `server_reads`"""
+    local_mongo.command("profile", 2)
+    return local_mongo
