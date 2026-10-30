@@ -1,10 +1,5 @@
 """Arrow format of the MongoDB source. Needs `pymongoarrow`, import it only when loading Arrow."""
 
-import json
-import os
-import queue
-import subprocess
-import sys
 import threading
 from typing import (
     Any,
@@ -23,7 +18,6 @@ from typing import (
 
 import dlt
 from dlt.common import logger
-from dlt.common.configuration import resolve_configuration
 from dlt.common.libs.pyarrow import NameNormalizationCollision, pyarrow
 from dlt.common.normalizers.json.relational import DataItemNormalizer
 from dlt.common.normalizers.naming import NamingConvention
@@ -34,15 +28,8 @@ from dlt.extract.exceptions import (
     CurrentSourceNotAvailable,
     CurrentSourceSchemaNotAvailable,
 )
-from dlt.extract.pipe_iterator import PipeIterator
 
-from .arrow_worker import (
-    Mismatch,
-    WorkerError,
-    parse_batch,
-    read_message,
-    write_task,
-)
+from .arrow_worker import Mismatch, MongoArrowWorker, parse_batch
 from .helpers import (
     client_options,
     CollectionLoader,
@@ -50,13 +37,10 @@ from .helpers import (
     TTypeMismatch,
 )
 from .partition import and_filters, plan_partitions
+from .worker_pool import WorkerPool
 
-# runs the worker file by path, so neither dlt nor this source package is imported
-_WORKER_BOOTSTRAP = (
-    "import json, runpy, sys; sys.path[:] = json.loads(sys.argv[1]); "
-    "runpy.run_path(sys.argv[2], run_name='__main__')"
-)
-_WORKER_PATH = os.path.join(os.path.dirname(__file__), "arrow_worker.py")
+# one worker process per extract thread of dlt
+_WORKER_POOL = WorkerPool()
 
 
 class FieldTypeMismatchError(ValueError):
@@ -142,15 +126,9 @@ class CollectionArrowLoaderParallel(CollectionArrowLoader):
         chunk_size: int,
         incremental: Optional[dlt.sources.incremental[Any]] = None,
         connection_url: Optional[str] = None,
-        workers: Optional[int] = None,
     ) -> None:
         super().__init__(client, collection, chunk_size, incremental)
         self.connection_url = connection_url
-        # the processes replace the threads that dlt runs deferred reads in
-        self.workers = (
-            workers
-            or resolve_configuration(PipeIterator.PipeIteratorConfiguration()).workers
-        )
 
     def load_documents(
         self,
@@ -159,15 +137,12 @@ class CollectionArrowLoaderParallel(CollectionArrowLoader):
         projection: Optional[Union[Mapping[str, Any], Iterable[str]]] = None,
         arrow_options: ArrowOptions = DEFAULT_ARROW_OPTIONS,
     ) -> Iterator[Any]:
-        """Load documents from the collection as Arrow tables, with `_id` partitions parsed in
-        worker processes. Reads in one process when the collection is not split.
+        """Load documents from the collection as Arrow tables, one deferred read and table per
+        `_id` partition of about `chunk_size` documents, parsed in worker processes. Reads without
+        workers when the collection is not split.
         """
         # partitions do not tell which documents come first
-        partitions = (
-            []
-            if limit
-            else plan_partitions(self.collection, self.chunk_size, 4 * self.workers)
-        )
+        partitions = [] if limit else plan_partitions(self.collection, self.chunk_size)
         if len(partitions) < 2:
             yield from super().load_documents(filter_, limit, projection, arrow_options)
             return
@@ -183,124 +158,25 @@ class CollectionArrowLoaderParallel(CollectionArrowLoader):
             database=self.collection.database.name,
             collection=self.collection.name,
             projection=self._projection_op(projection),
-            batch_size=self.chunk_size,
             pymongoarrow_schema=arrow_options.pymongoarrow_schema,
             detect_mismatch=arrow_options.on_inferred_type_mismatch != "ignore",
         )
         converter = ArrowBatchConverter(
             self.collection.name, self.collection.codec_options, arrow_options
         )
-        with WorkerPool(min(self.workers, len(partitions))) as pool:
-            for table, mismatch in pool.read(
-                [
-                    {**task, "filter": and_filters(query_filter, partition)}
-                    for partition in partitions
-                ]
-            ):
-                table = converter.finish(table, mismatch)
-                if table is not None:
-                    yield table
-
-
-class WorkerPool:
-    """Worker processes started with the current Python interpreter, each reading partitions
-    from MongoDB and sending them back as Arrow tables, see `arrow_worker.py`.
-    """
-
-    def __init__(self, workers: int) -> None:
-        self.processes = [
-            subprocess.Popen(
-                [
-                    sys.executable,
-                    "-c",
-                    _WORKER_BOOTSTRAP,
-                    json.dumps(sys.path),
-                    _WORKER_PATH,
-                ],
-                stdin=subprocess.PIPE,
-                stdout=subprocess.PIPE,
+        for partition in partitions:
+            yield _read_partition(
+                {**task, "filter": and_filters(query_filter, partition)}, converter
             )
-            for _ in range(workers)
-        ]
-        self._tasks: "queue.Queue[Dict[str, Any]]" = queue.Queue()
-        # a full queue stops the workers on their pipes until the tables are taken
-        self._results: "queue.Queue[Any]" = queue.Queue(maxsize=2 * workers)
-        self._stopped = threading.Event()
-        self._threads: List[threading.Thread] = []
 
-    def read(
-        self, tasks: List[Dict[str, Any]]
-    ) -> Iterator[Tuple[Any, Optional[Mismatch]]]:
-        """Yield the tables of `tasks` in the order the workers read them"""
-        for task in tasks:
-            self._tasks.put(task)
-        self._threads = [
-            threading.Thread(target=self._drive, args=(process,), daemon=True)
-            for process in self.processes
-        ]
-        for thread in self._threads:
-            thread.start()
-        running = len(self._threads)
-        while running:
-            result = self._results.get()
-            if result is None:
-                running -= 1
-            elif isinstance(result, BaseException):
-                raise result
-            else:
-                yield result
 
-    def close(self) -> None:
-        self._stopped.set()
-        for process in self.processes:
-            if process.poll() is None:
-                process.kill()
-            process.wait()
-            process.stdin.close()
-            process.stdout.close()
-        for thread in self._threads:
-            thread.join()
-
-    def __enter__(self) -> "WorkerPool":
-        return self
-
-    def __exit__(self, *_: Any) -> None:
-        self.close()
-
-    def _drive(self, process: "subprocess.Popen[bytes]") -> None:
-        try:
-            while not self._stopped.is_set():
-                try:
-                    task = self._tasks.get_nowait()
-                except queue.Empty:
-                    break
-                write_task(process.stdin, task)
-                while True:
-                    try:
-                        header, table = read_message(process.stdout)
-                    except EOFError:
-                        raise WorkerError(
-                            f"Worker process exited with code {process.wait()}"
-                        )
-                    if header["kind"] == "done":
-                        break
-                    if header["kind"] == "error":
-                        raise WorkerError(header["error"])
-                    mismatch = header["mismatch"]
-                    self._put((table, mismatch and Mismatch(**mismatch)))
-        except BaseException as ex:
-            if not self._stopped.is_set():
-                self._put(ex)
-        finally:
-            self._put(None)
-
-    def _put(self, result: Any) -> None:
-        while not self._stopped.is_set():
-            try:
-                self._results.put(result, timeout=0.1)
-                return
-            except queue.Full:
-                continue
+@dlt.defer
+def _read_partition(
+    task: Dict[str, Any], converter: "ArrowBatchConverter"
+) -> Optional[Any]:
+    ((table, metadata),) = _WORKER_POOL.do_get(MongoArrowWorker, task)
+    mismatch = metadata["mismatch"]
+    return converter.finish(table, mismatch and Mismatch(**mismatch))
 
 
 class ArrowBatchConverter:
@@ -318,6 +194,8 @@ class ArrowBatchConverter:
         self.options = options
         self._field_types: Dict[str, Any] = {}
         self._warned: Set[str] = set()
+        # parallel reads finish their tables in the extract threads of dlt
+        self._lock = threading.Lock()
 
     def convert(self, batches: List[bytes]) -> Optional[Any]:
         return self.finish(
@@ -339,8 +217,9 @@ class ArrowBatchConverter:
                     mismatch.details,
                     with_schema=True,
                 )
-            self._mismatch(mismatch.fields, mismatch.details)
-        if not table.num_rows:
+            with self._lock:
+                self._mismatch(mismatch.fields, mismatch.details)
+        if table is None or not table.num_rows:
             return None
         table = flatten_arrow_structs(
             table,
@@ -348,7 +227,9 @@ class ArrowBatchConverter:
             self.options.naming,
             self.options.is_json_column,
         )
-        return self._check_field_types(table)
+        table = _id_not_nullable(table)
+        with self._lock:
+            return self._check_field_types(table)
 
     def _check_field_types(self, table: Any) -> Any:
         if self.options.pymongoarrow_schema is not None:
@@ -362,9 +243,12 @@ class ArrowBatchConverter:
             if _same_arrow_kind(seen, field.type):
                 continue
             mismatched[field.name] = [str(seen), str(field.type)]
-            table = table.set_column(
-                i, pyarrow.field(field.name, seen), pyarrow.nulls(table.num_rows, seen)
-            )
+            if _is_number(seen) and _is_number(field.type):
+                # like pymongoarrow does within a batch, e.g. `2.5` loads as 2
+                column = pyarrow.compute.cast(table.column(i), seen, safe=False)
+            else:
+                column = pyarrow.nulls(table.num_rows, seen)
+            table = table.set_column(i, pyarrow.field(field.name, seen), column)
         if mismatched:
             self._mismatch(mismatched, "")
         return table
@@ -470,3 +354,19 @@ def _same_arrow_kind(seen: Any, arrow_type: Any) -> bool:
         if is_kind(seen) and is_kind(arrow_type):
             return True
     return False
+
+
+def _id_not_nullable(table: Any) -> Any:
+    """Marks `_id` not nullable like the primary key hint, so dlt does not warn about each table.
+    A null `_id` is valid in MongoDB and keeps the column nullable."""
+    index = table.schema.get_field_index("_id")
+    if index < 0 or table.column(index).null_count:
+        return table
+    field = table.schema.field(index)
+    return table.set_column(index, field.with_nullable(False), table.column(index))
+
+
+def _is_number(arrow_type: Any) -> bool:
+    return bool(
+        pyarrow.types.is_integer(arrow_type) or pyarrow.types.is_floating(arrow_type)
+    )

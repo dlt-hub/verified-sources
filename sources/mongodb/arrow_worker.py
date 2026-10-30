@@ -1,16 +1,11 @@
-"""Parses raw BSON into Arrow tables. Imports neither dlt nor other modules of this source, so the
-worker processes of `parallel` Arrow reads run this file by path and start fast."""
+"""Parses raw BSON into Arrow tables, also in the worker processes of `parallel` Arrow reads.
+Imports neither dlt nor other modules of this source except `worker_pool`, so the processes start
+fast."""
 
-import json
-import pickle
-import struct
-import sys
-import traceback
 import warnings
 from functools import cache
 from inspect import signature
 from typing import (
-    IO,
     Any,
     Dict,
     Iterable,
@@ -24,7 +19,6 @@ from typing import (
 
 import pyarrow
 import pyarrow.compute
-import pyarrow.ipc
 from bson import decode_all
 from pymongo import MongoClient
 from pymongoarrow.context import PyMongoArrowContext  # type: ignore
@@ -36,8 +30,7 @@ from pymongoarrow.types import (  # type: ignore
     _is_objectid,
 )
 
-_HEADER = struct.Struct(">I")
-_BODY = struct.Struct(">Q")
+from .worker_pool import ArrowWorker, TTableWithMetadata
 
 
 class Mismatch(NamedTuple):
@@ -46,10 +39,6 @@ class Mismatch(NamedTuple):
     fields: Dict[str, List[str]]
     details: str
     with_schema: bool
-
-
-class WorkerError(Exception):
-    pass
 
 
 def parse_bson_batches(
@@ -137,18 +126,14 @@ def read_partition(
     collection: Any,
     filter_: Dict[str, Any],
     projection: Optional[Dict[str, Any]],
-    batch_size: int,
     pymongoarrow_schema: Any,
     detect_mismatch: bool,
-) -> Iterator[Tuple[Any, Optional[Mismatch]]]:
-    """Parse the documents matching `filter_`, one table per raw batch of `batch_size`"""
-    cursor = collection.find_raw_batches(
-        filter=filter_, projection=projection, batch_size=batch_size
+) -> Tuple[Any, Optional[Mismatch]]:
+    """Parse the documents matching `filter_` into one table, with the types inferred once"""
+    batches = list(collection.find_raw_batches(filter=filter_, projection=projection))
+    return parse_batch(
+        batches, pymongoarrow_schema, collection.codec_options, detect_mismatch
     )
-    for batch in cursor:
-        yield parse_batch(
-            [batch], pymongoarrow_schema, collection.codec_options, detect_mismatch
-        )
 
 
 def convert_arrow_columns(table: Any) -> Any:
@@ -170,84 +155,29 @@ def convert_arrow_columns(table: Any) -> Any:
     return table
 
 
-def write_message(stream: IO[bytes], header: Dict[str, Any], table: Any = None) -> None:
-    """Write a JSON header and an optional table as an Arrow IPC stream"""
-    encoded = json.dumps(header).encode()
-    stream.write(_HEADER.pack(len(encoded)))
-    stream.write(encoded)
-    if table is None:
-        stream.write(_BODY.pack(0))
-    else:
-        sink = pyarrow.BufferOutputStream()
-        with pyarrow.ipc.new_stream(sink, table.schema) as writer:
-            writer.write_table(table)
-        body = sink.getvalue()
-        stream.write(_BODY.pack(body.size))
-        stream.write(memoryview(body))
-    stream.flush()
+class MongoArrowWorker(ArrowWorker):
+    """Reads `_id` partitions of a collection, a ticket is a task of `CollectionArrowLoaderParallel`"""
 
+    def __init__(self) -> None:
+        self._clients: Dict[str, Any] = {}
 
-def read_message(stream: IO[bytes]) -> Tuple[Dict[str, Any], Any]:
-    """Read a message of `write_message`, raises `EOFError` when the stream ends"""
-    header = json.loads(_read_exact(stream, _read_size(stream, _HEADER)))
-    size = _read_size(stream, _BODY)
-    table = None
-    if size:
-        table = pyarrow.ipc.open_stream(
-            pyarrow.py_buffer(_read_exact(stream, size))
-        ).read_all()
-    return header, table
-
-
-def write_task(stream: IO[bytes], task: Dict[str, Any]) -> None:
-    encoded = pickle.dumps(task)
-    stream.write(_BODY.pack(len(encoded)))
-    stream.write(encoded)
-    stream.flush()
-
-
-def read_task(stream: IO[bytes]) -> Optional[Dict[str, Any]]:
-    """Read a task of `write_task`, None when the parent closed the stream"""
-    try:
-        size = _read_size(stream, _BODY)
-    except EOFError:
-        return None
-    # tasks come only from the parent process that started this one
-    return pickle.loads(_read_exact(stream, size))  # type: ignore[no-any-return]
-
-
-def main() -> None:
-    output = sys.stdout.buffer
-    # stray prints would corrupt the messages
-    sys.stdout = sys.stderr
-    clients: Dict[str, Any] = {}
-    while (task := read_task(sys.stdin.buffer)) is not None:
-        try:
-            url = task["connection_url"]
-            if url not in clients:
-                with warnings.catch_warnings():
-                    # see `ignore_compressor_warnings` in helpers.py
-                    warnings.filterwarnings("ignore", "Wire protocol compression with")
-                    warnings.filterwarnings("ignore", "Unsupported compressor: $")
-                    clients[url] = MongoClient(url, **task["client_options"])
-            collection = clients[url][task["database"]][task["collection"]]
-            for table, mismatch in read_partition(
-                collection,
-                task["filter"],
-                task["projection"],
-                task["batch_size"],
-                task["pymongoarrow_schema"],
-                task["detect_mismatch"],
-            ):
-                write_message(
-                    output,
-                    {"kind": "table", "mismatch": mismatch and mismatch._asdict()},
-                    table,
-                )
-            write_message(output, {"kind": "done"})
-        except Exception:
-            write_message(output, {"kind": "error", "error": traceback.format_exc()})
-            return
+    def do_get(self, ticket: Dict[str, Any]) -> Iterator[TTableWithMetadata]:
+        url = ticket["connection_url"]
+        if url not in self._clients:
+            with warnings.catch_warnings():
+                # see `ignore_compressor_warnings` in helpers.py
+                warnings.filterwarnings("ignore", "Wire protocol compression with")
+                warnings.filterwarnings("ignore", "Unsupported compressor: $")
+                self._clients[url] = MongoClient(url, **ticket["client_options"])
+        collection = self._clients[url][ticket["database"]][ticket["collection"]]
+        table, mismatch = read_partition(
+            collection,
+            ticket["filter"],
+            ticket["projection"],
+            ticket["pymongoarrow_schema"],
+            ticket["detect_mismatch"],
+        )
+        yield table, {"mismatch": mismatch and mismatch._asdict()}
 
 
 @cache
@@ -345,18 +275,3 @@ def _objectid_to_hex(storage: Any) -> Any:
         pyarrow.compute.take(_hex_octets(), octets), width, mask=storage.is_null()
     )
     return pyarrow.compute.binary_join(pairs.cast(pyarrow.list_(pyarrow.string())), "")
-
-
-def _read_size(stream: IO[bytes], size: struct.Struct) -> int:
-    return size.unpack(_read_exact(stream, size.size))[0]  # type: ignore[no-any-return]
-
-
-def _read_exact(stream: IO[bytes], size: int) -> bytes:
-    data = stream.read(size)
-    if len(data) != size:
-        raise EOFError(f"stream ended after {len(data)} of {size} bytes")
-    return data
-
-
-if __name__ == "__main__":
-    main()

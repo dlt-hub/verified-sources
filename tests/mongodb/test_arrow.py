@@ -1,4 +1,4 @@
-import io
+import json
 import subprocess
 import sys
 from typing import Any, Dict, List, Optional
@@ -10,22 +10,20 @@ import pytest
 from bson import Decimal128, ObjectId
 from pymongoarrow.types import Decimal128Type, ObjectIdType
 
-from sources.mongodb.helpers import client_options, collection_documents
+from sources.mongodb.helpers import collection_documents
+from sources.mongodb import worker_pool
 from sources.mongodb.arrow import (
-    _WORKER_PATH,
     ArrowBatchConverter,
     ArrowOptions,
     FieldTypeMismatchError,
 )
 from sources.mongodb.arrow_worker import (
+    MongoArrowWorker,
     _supports_strict_schema,
     convert_arrow_columns,
-    read_message,
     read_partition,
-    read_task,
-    write_message,
-    write_task,
 )
+from sources.mongodb.worker_pool import worker_spec
 
 from tests.mongodb.utils import (
     CODEC_OPTIONS,
@@ -117,57 +115,50 @@ def test_convert_arrow_columns_nested() -> None:
 
 
 def test_read_partition() -> None:
-    collection = FakeCollection("docs", make_documents(5))
+    documents = make_documents(250)
+    for document in documents:
+        document["v"] = document["n"]
+    # in the third raw batch of the fake server
+    documents[240]["v"] = "text"
+    collection = FakeCollection("docs", documents)
 
-    tables = list(
-        read_partition(
-            collection,
-            {"n": {"$gte": 0}},
-            {"n": 1},
-            batch_size=2,
-            pymongoarrow_schema=None,
-            detect_mismatch=False,
-        )
+    table, mismatch = read_partition(
+        collection,
+        {"n": {"$gte": 0}},
+        None,
+        pymongoarrow_schema=None,
+        detect_mismatch=False,
     )
 
     (cursor,) = collection.cursors
-    assert (cursor.filter, cursor.projection) == ({"n": {"$gte": 0}}, {"n": 1})
-    assert [mismatch for _, mismatch in tables] == [None, None, None]
-    assert [table.num_rows for table, _ in tables] == [2, 2, 1]
+    assert cursor.filter == {"n": {"$gte": 0}}
+    assert mismatch is None
+    # raw batches are parsed together, the type of `v` is inferred once for the partition
+    assert table.num_rows == 250
+    assert pa.types.is_integer(table.schema.field("v").type)
+    assert table["v"][240].as_py() is None
     # BSON extension types are converted in the worker, plain Arrow types cross the processes
-    assert tables[0][0].schema.field("_id").type == pa.string()
-    assert tables[0][0].schema.field("price").type == pa.string()
+    assert table.schema.field("_id").type == pa.string()
+    assert table.schema.field("price").type == pa.string()
 
 
-def test_worker_messages() -> None:
-    table = pa.table({"_id": ["a", "b"], "n": [1, None]})
-    stream = io.BytesIO()
-    write_message(stream, {"kind": "table", "mismatch": None}, table)
-    write_message(stream, {"kind": "error", "error": "boom"})
-    task = {
-        "filter": {"_id": {"$gte": ObjectId()}},
-        "client_options": client_options("mongodb://localhost"),
-    }
-    write_task(stream, task)
-    stream.seek(0)
-
-    assert read_message(stream) == ({"kind": "table", "mismatch": None}, table)
-    assert read_message(stream) == ({"kind": "error", "error": "boom"}, None)
-    assert read_task(stream) == task
-    # the parent closed the stream of tasks
-    assert read_task(stream) is None
-    with pytest.raises(EOFError):
-        read_message(io.BytesIO(b"\x00\x00"))
-
-
-def test_worker_imports_no_dlt() -> None:
+def test_mongo_worker_imports_no_dlt() -> None:
+    # loads the worker like `serve` in a worker process does
     probe = (
-        "import runpy, sys; runpy.run_path(sys.argv[1], run_name='probe'); "
+        "import json, runpy, sys; sys.path[:] = json.loads(sys.argv[1]); "
+        "runpy.run_path(sys.argv[2])['load_worker'](*json.loads(sys.argv[3])); "
         "print(sorted(m for m in ('dlt', 'sources') if m in sys.modules))"
     )
 
     result = subprocess.run(
-        [sys.executable, "-c", probe, _WORKER_PATH],
+        [
+            sys.executable,
+            "-c",
+            probe,
+            json.dumps(sys.path),
+            worker_pool.__file__,
+            json.dumps(worker_spec(MongoArrowWorker)),
+        ],
         capture_output=True,
         text=True,
         check=True,
@@ -212,17 +203,56 @@ def test_type_mismatch_in_batch_raises(
     assert "pymongoarrow_schema" in str(error)
 
 
-def test_type_mismatch_across_batches_raises() -> None:
-    collection = FakeCollection("docs", [{"_id": 1, "v": 1}, {"_id": 2, "v": "a"}])
+@pytest.mark.parametrize(
+    "values,on_inferred_type_mismatch,expected,warned",
+    [
+        ([1, 2.5], "ignore", [[1], [2]], False),
+        ([2.5, 3], "ignore", [[2.5], [3.0]], False),
+        ([1, "a"], "ignore", [[1], [None]], False),
+        ([1, 2**40], "raise", [[1], [2**40]], False),
+        ([1, 2.5], "warn", [[1], [2]], True),
+        ([1, 2.5], "raise", "`v` (int32, double)", False),
+        ([1, "a"], "raise", "`v` (int32, string)", False),
+    ],
+    ids=[
+        "int_to_double",
+        "double_to_int",
+        "int_to_string",
+        "wider_int",
+        "warn",
+        "raise_number",
+        "raise_string",
+    ],
+)
+def test_type_mismatch_across_batches(
+    values: List[Any],
+    on_inferred_type_mismatch: str,
+    expected: Any,
+    warned: bool,
+    mocker: Any,
+) -> None:
+    warning = mocker.patch("dlt.common.logger.warning")
+    collection = FakeCollection(
+        "docs", [{"_id": n, "v": value} for n, value in enumerate(values)]
+    )
 
-    with pytest.raises(Exception) as ex:
-        extract(
+    def tables() -> List[Any]:
+        return extract(
             collection,
             data_item_format="arrow",
             chunk_size=1,
-            on_inferred_type_mismatch="raise",
+            on_inferred_type_mismatch=on_inferred_type_mismatch,
         )
-    assert "`v` (int32, string)" in str(ex.value)
+
+    if isinstance(expected, str):
+        with pytest.raises(Exception) as ex:
+            tables()
+        assert expected in str(ex.value)
+        return
+    # numbers are cast to the first type of the field, other values load as null
+    assert [table["v"].to_pylist() for table in tables()] == expected
+    warnings = [call for call in warning.call_args_list if "`v`" in str(call)]
+    assert len(warnings) == warned
 
 
 @pytest.mark.parametrize(
@@ -260,14 +290,6 @@ def test_type_mismatch_loads_null(
         assert "`v`" in str(warned[0])
     if on_inferred_type_mismatch != "warn":
         assert warned == []
-
-
-def test_type_mismatch_allows_wider_integers() -> None:
-    collection = FakeCollection("docs", [{"_id": 1, "v": 1}, {"_id": 2, "v": 2**40}])
-
-    tables = extract(collection, data_item_format="arrow", chunk_size=1)
-
-    assert [table["v"].to_pylist() for table in tables] == [[1], [2**40]]
 
 
 @requires_strict_schema
@@ -372,3 +394,28 @@ def test_arrow_with_dynamic_hints() -> None:
 
     # the nesting comes from the resource without evaluating its dynamic hints
     assert tables[0].column_names == ["_id", "doc"]
+
+
+@pytest.mark.parametrize("null_id", [False, True], ids=["ids", "null_id"])
+def test_arrow_id_not_nullable(null_id: bool, mocker: Any) -> None:
+    warning = mocker.patch("dlt.common.logger.warning")
+    documents = make_documents(3)
+    if null_id:
+        # valid in MongoDB, dlt rejects it as the primary key
+        documents[0]["_id"] = None
+    resource = dlt.resource(collection_documents, name="docs", primary_key="_id")(
+        None,
+        FakeCollection("docs", documents),
+        filter_={},
+        projection=None,
+        pymongoarrow_schema=None,
+        data_item_format="arrow",
+    )
+
+    (table,) = list(resource)
+    assert table.schema.field("_id").nullable == null_id
+    if not null_id:
+        dlt.pipeline(pipeline_name="arrow_id", dev_mode=True).extract(resource)
+        assert not [
+            c for c in warning.call_args_list if "hints were different" in str(c)
+        ]

@@ -1,5 +1,6 @@
 import math
 import random
+import subprocess
 import uuid
 from copy import copy
 from datetime import datetime, timedelta, timezone
@@ -7,6 +8,7 @@ from typing import Any, Dict, Iterator, List, Optional, Sequence, Tuple, Union
 
 import bson
 import dlt
+import pytest
 from bson import (
     Binary,
     Code,
@@ -249,5 +251,36 @@ def extract(collection: FakeCollection, **kwargs: Any) -> List[Any]:
             projection=kwargs.pop("projection", None),
             pymongoarrow_schema=kwargs.pop("pymongoarrow_schema", None),
             **kwargs,
+        )
+    )
+
+
+class ProcessRecorder:
+    """Records the processes started with `subprocess.Popen` and the most that ran at once"""
+
+    def __init__(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        self.processes: List[Any] = []
+        self.most_running = 0
+        popen = subprocess.Popen
+
+        def record(*args: Any, **kwargs: Any) -> Any:
+            process = popen(*args, **kwargs)
+            self.processes.append(process)
+            self.most_running = max(self.most_running, self.running)
+            return process
+
+        monkeypatch.setattr(subprocess, "Popen", record)
+
+    @property
+    def running(self) -> int:
+        return sum(process.poll() is None for process in self.processes)
+
+
+def server_reads(database: Any, collection: str) -> List[Dict[str, Any]]:
+    """Queries and get mores the server ran on `collection`, with the filters and the number of
+    documents it returned. Needs `profiled_mongo`."""
+    return list(
+        database["system.profile"].find(
+            {"ns": f"{database.name}.{collection}", "op": {"$in": ["query", "getmore"]}}
         )
     )
