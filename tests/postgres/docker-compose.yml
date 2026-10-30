@@ -6,6 +6,8 @@ services:
       context: postgres
       dockerfile: Dockerfile
     container_name: dlt_postgres_db
+    # pg_replication tests need logical decoding
+    command: postgres -c wal_level=logical
     restart: unless-stopped
     volumes:
       - db_home:/var/lib/postgresql/data

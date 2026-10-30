@@ -1,8 +1,10 @@
 import re
 from datetime import datetime, timezone
+from pathlib import Path
 from typing import Dict, Optional
 
 import requests_mock
+from dlt.common.schema.typing import TWriteDispositionConfig
 
 from sources.jira import issue_comments, jira_issues
 
@@ -13,9 +15,11 @@ from tests.jira.utils import (
     UPDATED_1,
     UPDATED_2,
     duckdb_pipeline,
+    filesystem_pipeline,
     issues_updated_at,
     load,
     make_comment,
+    make_issue,
     rows_by_id,
 )
 
@@ -135,3 +139,33 @@ def test_issue_comments_edits_and_deletes(jira_mock: JiraMock) -> None:
     assert {
         row["id"]: row["body"] for row in rows_by_id(pipeline, "issue_comments")
     } == expected
+
+
+def test_issue_comments_replace_keeps_state(
+    jira_mock: JiraMock, tmp_path: Path
+) -> None:
+    # the dict form keeps the incremental state, each run replaces the tables with its issues
+    write_disposition: TWriteDispositionConfig = {"disposition": "replace"}
+    jira_mock.add_issues(
+        make_issue(1, UPDATED_1), make_issue(2, UPDATED_2), make_issue(3, UPDATED_2)
+    )
+    jira_mock.comments = {
+        "1": [make_comment(10, UPDATED_1)],
+        "2": [make_comment(20, UPDATED_2)],
+    }
+    pipeline = filesystem_pipeline("jira_comments_replace", tmp_path.as_uri())
+    for expected_issues, expected_comments in (
+        (["1", "2", "3"], ["10", "20"]),
+        (["2", "3"], ["20"]),
+    ):
+        issues = jira_issues(**CREDENTIALS, write_disposition=write_disposition)
+        # a copy of the transformer, so the one of the module keeps merge
+        comments = issues | issue_comments()
+        comments.apply_hints(write_disposition=write_disposition)
+        load(pipeline, [issues, comments], loader_file_format="parquet")
+        assert [row["id"] for row in rows_by_id(pipeline, "issues")] == expected_issues
+        # issue 3 has no comments and loads no row that deletes them
+        assert [
+            row["id"] for row in rows_by_id(pipeline, "issue_comments")
+        ] == expected_comments
+    assert jira_mock.jqls[-1] == 'updated >= "2024-01-16 15:50" ORDER BY updated ASC'

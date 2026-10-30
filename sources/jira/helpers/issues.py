@@ -11,7 +11,7 @@ from dlt.common.exceptions import ResourceNameNotAvailable
 from dlt.common.schema.typing import TTableSchemaColumns, TWriteDispositionConfig
 from dlt.common.schema.utils import merge_columns
 from dlt.common.time import ensure_date, ensure_datetime_in_tz, to_tzinfo
-from dlt.common.typing import DictStrAny, TColumnNames, TDataItem
+from dlt.common.typing import DictStrAny, TColumnNames, TDataItem, TTableHintTemplate
 from dlt.extract.exceptions import CurrentSourceNotAvailable, ResourceNotFoundError
 from dlt.extract.incremental import Incremental
 from dlt.extract.items import DataItemWithMeta
@@ -52,6 +52,15 @@ class IssuesPage(NamedTuple):
     """Meta of a page of issues received by transformers piped from `issues`"""
 
     reader: "IssuesReader"
+
+
+def is_replace(write_disposition: TTableHintTemplate[TWriteDispositionConfig]) -> bool:
+    """True if `write_disposition` replaces the table, as shorthand or dict"""
+    if callable(write_disposition):
+        return False
+    if isinstance(write_disposition, dict):
+        return write_disposition["disposition"] == "replace"
+    return write_disposition == "replace"
 
 
 def select_fields(
@@ -137,6 +146,8 @@ class IssuesReader:
         self.cursor: Optional[CursorRange] = None
         # first run of an incremental load, nothing loaded before needs to be deleted
         self.initial_load = False
+        # write disposition of the issues, set by `make_issues_resource`
+        self.write_disposition: TWriteDispositionConfig = "merge"
 
     def bind(self, incremental: Optional[Incremental[Any]]) -> Optional[str]:
         """Reads field metadata, binds `incremental` and selects the fields to fetch, returns the
@@ -316,9 +327,14 @@ def make_issues_resource(
     """Returns the parallelized `name` transformer of the `<name>_ids` resource, which lists ids
     of issues in the incremental range and holds the incremental state
     """
-    ids = dlt.resource(issue_ids, name=f"{name}_ids", primary_key="id")(
-        reader, incremental=incremental
-    )
+    reader.write_disposition = write_disposition
+    # dlt resets the state of a resource with the `replace` shorthand, here the incremental state
+    ids = dlt.resource(
+        issue_ids,
+        name=f"{name}_ids",
+        primary_key="id",
+        write_disposition=write_disposition,
+    )(reader, incremental=incremental)
     return dlt.transformer(
         issue_details,
         name=name,

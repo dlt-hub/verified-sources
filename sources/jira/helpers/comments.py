@@ -8,7 +8,7 @@ from dlt.common.typing import DictStrAny, TDataItem
 from dlt.sources.helpers.requests import HTTPError
 
 from .client import JiraClient, batched
-from .issues import IssuesPage, IssuesReader
+from .issues import IssuesPage, IssuesReader, is_replace
 from .schema_types import convert_record
 
 COMMENT_TYPES = {"created": "timestamp", "updated": "timestamp"}
@@ -26,7 +26,7 @@ def comment_rows(issues: List[DictStrAny], page: IssuesPage) -> Iterator[TDataIt
     The `comment` field of the issues is bulk fetched, an issue with more comments than Jira
     embeds is read again with the comment endpoint. Each issue without comments gets a row with
     the `deleted` flag that deletes its comments loaded before, except on the first run of an
-    incremental load.
+    incremental load and when the issues replace their table.
     """
     yield from batched(_comment_rows(issues, page.reader), page.reader.chunk_size)
 
@@ -47,7 +47,11 @@ def _comment_rows(
             row = convert_record(comment, COMMENT_TYPES)
             row["issueId"] = issue_id
             yield row
-        if not issue_comments and not reader.initial_load:
+        if (
+            not issue_comments
+            and not reader.initial_load
+            and not is_replace(reader.write_disposition)
+        ):
             yield {"id": f"issue-{issue_id}", "issueId": issue_id, "deleted": True}
 
 
