@@ -21,7 +21,7 @@ from typing import (
 import dlt
 from bson import decode_all
 from dlt.common import logger
-from dlt.common.libs.pyarrow import pyarrow
+from dlt.common.libs.pyarrow import NameNormalizationCollision, pyarrow
 from dlt.common.normalizers.json.relational import DataItemNormalizer
 from dlt.common.normalizers.naming import NamingConvention
 from dlt.common.normalizers.naming.snake_case import (
@@ -324,6 +324,7 @@ def flatten_arrow_structs(
 ) -> Any:
     """Flatten struct columns into columns named like the relational normalizer names nested
     documents, `max_nesting` levels deep. Struct columns typed `json` and lists stay as they are.
+    Raises `NameNormalizationCollision` when two columns get the same name.
     """
     names: List[str] = []
     columns: List[Any] = []
@@ -343,6 +344,12 @@ def flatten_arrow_structs(
 
     for field, column in zip(table.schema, table.columns):
         add(column, (naming.normalize_path(field.name),), max_nesting)
+    if len(set(names)) != len(names):
+        duplicates = sorted({name for name in names if names.count(name) > 1})
+        raise NameNormalizationCollision(
+            f"Fields {table.schema.names} flattened from nested documents produce duplicate"
+            f" columns: {duplicates}"
+        )
     return pyarrow.Table.from_arrays(columns, names=names)
 
 

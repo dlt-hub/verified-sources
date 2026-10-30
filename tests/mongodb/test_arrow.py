@@ -286,6 +286,22 @@ def test_arrow_keeps_json_columns() -> None:
     assert table["doc"].to_pylist() == [{"x": 1}]
 
 
+def test_arrow_flattened_name_collision_raises() -> None:
+    collection = FakeCollection("docs", [{"_id": 1, "a": {"b": 1}, "a__b": 2}])
+
+    with pytest.raises(Exception) as ex:
+        extract(collection, data_item_format="arrow")
+    assert "duplicate columns: ['a__b']" in str(ex.value)
+
+    # nested documents that are not flattened do not collide
+    table = extract(
+        FakeCollection("docs", [{"_id": 1, "a": {"b": 1}, "a__b": 2}]),
+        data_item_format="arrow",
+        max_table_nesting=0,
+    )[0]
+    assert table.column_names == ["_id", "a", "a__b"]
+
+
 def test_arrow_with_dynamic_hints() -> None:
     collection = FakeCollection(
         "docs", [{"_id": 1, "doc": {"x": 1}}, {"_id": 2, "doc": {"x": 2}}]
