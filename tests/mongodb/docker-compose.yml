@@ -9,3 +9,5 @@ services:
       test: ["CMD", "mongosh", "--quiet", "--eval", "db.runCommand({ping: 1}).ok"]
       interval: 2s
       retries: 30
+      start_period: 60s
+      start_interval: 1s
