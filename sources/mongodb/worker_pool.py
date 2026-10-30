@@ -2,6 +2,7 @@
 `do_get` of an Arrow Flight server. Imports neither dlt nor the package it is in: a worker process
 runs this file by path and loads the worker classes from their files, so it starts fast."""
 
+import errno
 import importlib
 import json
 import operator
@@ -94,7 +95,9 @@ class WorkerProcess:
                     worker_spec(worker),
                     pickle.dumps(ticket),
                 )
-            except BrokenPipeError:
+            except OSError as ex:
+                if not _is_closed_pipe(ex):
+                    raise
                 raise self._exited()
             while True:
                 try:
@@ -248,10 +251,16 @@ def _close_process(process: "subprocess.Popen[bytes]") -> None:
     process.wait()
     try:
         process.stdin.close()
-    except BrokenPipeError:
+    except OSError as ex:
         # a task left in the buffer of a dead worker
-        pass
+        if not _is_closed_pipe(ex):
+            raise
     process.stdout.close()
+
+
+def _is_closed_pipe(ex: OSError) -> bool:
+    """Writing to the pipe of an exited process, Windows raises EINVAL like in `subprocess`"""
+    return isinstance(ex, BrokenPipeError) or ex.errno == errno.EINVAL
 
 
 def _table_to_ipc(table: Any) -> Any:
