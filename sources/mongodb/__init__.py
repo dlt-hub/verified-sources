@@ -44,7 +44,9 @@ def mongodb(
         incremental (Optional[dlt.sources.incremental]): Option to enable incremental loading for the collection.
             E.g., `incremental=dlt.sources.incremental('updated_at', pendulum.parse('2022-01-01T00:00:00Z'))`
         write_disposition (str): Write disposition of the resource.
-        parallel (Optional[bool]): Option to enable parallel loading for the collection. Default is False.
+        parallel (Optional[bool]): Read `_id` partitions of the collection in parallel, as many at
+            once as `workers` in the `extract` config: in threads in the object format, in
+            processes in the Arrow format. Default is False.
         limit (Optional[int]):
             The maximum number of documents to load. The limit is
             applied to each requested collection separately.
@@ -108,6 +110,7 @@ def mongodb(
             projection=projection,
             pymongoarrow_schema=pymongoarrow_schema,
             on_inferred_type_mismatch=on_inferred_type_mismatch,
+            connection_url=connection_url,
         )
 
 
@@ -141,7 +144,9 @@ def mongodb_collection(
         incremental (Optional[dlt.sources.incremental]): Option to enable incremental loading for the collection.
             E.g., `incremental=dlt.sources.incremental('updated_at', pendulum.parse('2022-01-01T00:00:00Z'))`
         write_disposition (str): Write disposition of the resource.
-        parallel (Optional[bool]): Option to enable parallel loading for the collection. Default is False.
+        parallel (Optional[bool]): Read `_id` partitions of the collection in parallel, as many at
+            once as `workers` in the `extract` config: in threads in the object format, in
+            processes in the Arrow format. Default is False.
         limit (Optional[int]): The number of documents load.
         chunk_size (Optional[int]): The number of documents load in each batch.
         data_item_format (Optional[TDataItemFormat]): The data format to use for loading.
@@ -192,4 +197,5 @@ def mongodb_collection(
         projection=projection,
         pymongoarrow_schema=pymongoarrow_schema,
         on_inferred_type_mismatch=on_inferred_type_mismatch,
+        connection_url=connection_url,
     )

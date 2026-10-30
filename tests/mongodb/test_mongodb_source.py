@@ -1,5 +1,6 @@
 import json
-from datetime import datetime, timezone
+import subprocess
+from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional
 from unittest import mock
 
@@ -9,9 +10,11 @@ import pyarrow
 import pytest
 from dlt.pipeline.exceptions import PipelineStepFailed
 from dlt.sources import DltResource
+from pymongo.collation import Collation
 from pymongo.database import Database
 
 from sources.mongodb import mongodb, mongodb_collection
+from sources.mongodb.partition import plan_partitions
 from sources.mongodb_pipeline import (
     load_entire_database,
     load_select_collection_db,
@@ -19,7 +22,7 @@ from sources.mongodb_pipeline import (
     load_select_collection_db_items_parallel,
 )
 from tests.mongodb.conftest import LOCAL_MONGO_URL
-from tests.mongodb.utils import make_documents
+from tests.mongodb.utils import make_documents, make_mixed_id_documents
 from tests.utils import (
     ALL_DESTINATIONS,
     assert_load_info,
@@ -829,6 +832,161 @@ def test_local_seeded_chunks(
     assert distinct_ids == len(seeded_documents)
     # checked last so that rows skipped or repeated above surface first
     assert seeded.state["incremental"]["updated_at"]["last_value"].tzinfo is not None
+
+
+def _parallel_n(
+    database: Database, collection: str, data_item_format: str, **kwargs: Any
+) -> List[int]:
+    """`n` of the documents read with `parallel` in `_id` partitions of about 50 documents"""
+    resource = mongodb_collection(
+        connection_url=LOCAL_MONGO_URL,
+        database=database.name,
+        collection=collection,
+        parallel=True,
+        chunk_size=50,
+        data_item_format=data_item_format,
+        **kwargs,
+    )
+    loaded: List[int] = []
+    for item in resource:
+        loaded += item["n"].to_pylist() if data_item_format == "arrow" else [item["n"]]
+    return loaded
+
+
+def _record_processes(monkeypatch: pytest.MonkeyPatch) -> List[Any]:
+    processes: List[Any] = []
+    popen = subprocess.Popen
+
+    def record(*args: Any, **kwargs: Any) -> Any:
+        process = popen(*args, **kwargs)
+        processes.append(process)
+        return process
+
+    monkeypatch.setattr(subprocess, "Popen", record)
+    return processes
+
+
+@skipifwindows
+@skip_if_not_active("duckdb")
+@pytest.mark.parametrize("data_item_format", ["object", "arrow"])
+@pytest.mark.parametrize(
+    "majority", ["objectId", "number", "binData", "date", "string"]
+)
+def test_local_parallel_mixed_ids(
+    local_mongo: Database,
+    data_item_format: str,
+    majority: str,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("EXTRACT__WORKERS", "3")
+    documents = make_mixed_id_documents(majority, 600)
+    # string `_id`s compare case insensitively in the index, the buckets and the ranges
+    collation = Collation(locale="en", strength=2) if majority == "string" else None
+    collection = local_mongo.create_collection("mixed", collation=collation)
+    collection.insert_many(documents)
+
+    partitions = plan_partitions(collection, 50)
+    conditions = [p["_id"] for p in partitions if isinstance(p["_id"], dict)]
+    ranges = [condition for condition in conditions if "$type" not in condition]
+    types = {condition["$type"] for condition in conditions if "$type" in condition}
+    assert len(ranges) > 2
+    assert majority not in types and {"minKey", "null", "maxKey", "object"} <= types
+    # NaN matches no number range
+    assert (majority == "number") == any(
+        isinstance(p["_id"], float) for p in partitions
+    )
+
+    for filter_ in ({}, {"n": {"$mod": [3, 0]}}):
+        loaded = _parallel_n(local_mongo, "mixed", data_item_format, filter_=filter_)
+        assert sorted(loaded) == sorted(
+            document["n"]
+            for document in documents
+            if not filter_ or document["n"] % 3 == 0
+        ), filter_
+
+
+@skipifwindows
+@skip_if_not_active("duckdb")
+@pytest.mark.parametrize("data_item_format", ["object", "arrow"])
+def test_local_parallel_view_and_timeseries(
+    local_mongo: Database, data_item_format: str
+) -> None:
+    local_mongo["base"].insert_many(make_mixed_id_documents("objectId", 300))
+    local_mongo.command(
+        "create", "base_view", viewOn="base", pipeline=[{"$match": {"n": {"$lt": 100}}}]
+    )
+    local_mongo.create_collection("series", timeseries={"timeField": "ts"})
+    start = datetime(2024, 1, 1, tzinfo=timezone.utc)
+    local_mongo["series"].insert_many(
+        [{"ts": start + timedelta(minutes=n), "n": n} for n in range(300)]
+    )
+
+    # no `_id` index to split by: read in one partition
+    for name, expected in (("base_view", range(100)), ("series", range(300))):
+        assert plan_partitions(local_mongo[name], 50) == [{}]
+        assert sorted(_parallel_n(local_mongo, name, data_item_format)) == list(
+            expected
+        )
+
+
+@skipifwindows
+@skip_if_not_active("duckdb")
+def test_local_parallel_concurrent_deletes(
+    local_mongo: Database, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("EXTRACT__WORKERS", "2")
+    documents = make_mixed_id_documents("objectId", 2000)
+    local_mongo["changing"].insert_many(documents)
+    resource = mongodb_collection(
+        connection_url=LOCAL_MONGO_URL,
+        database=local_mongo.name,
+        collection="changing",
+        parallel=True,
+        chunk_size=50,
+    )
+
+    loaded: List[int] = []
+    for document in resource:
+        if not loaded:
+            # skip and limit windows read after the delete would shift and miss documents
+            local_mongo["changing"].delete_many({"n": {"$mod": [3, 0]}})
+        loaded.append(document["n"])
+
+    assert len(loaded) == len(set(loaded))
+    assert {d["n"] for d in documents if d["n"] % 3} <= set(loaded)
+
+
+@skipifwindows
+@skip_if_not_active("duckdb")
+def test_local_parallel_arrow_workers(
+    local_mongo: Database, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("EXTRACT__WORKERS", "2")
+    local_mongo["many"].insert_many(make_documents(300))
+    processes = _record_processes(monkeypatch)
+
+    def many(**kwargs: Any) -> DltResource:
+        return mongodb_collection(
+            connection_url=LOCAL_MONGO_URL,
+            database=local_mongo.name,
+            collection="many",
+            parallel=True,
+            chunk_size=50,
+            data_item_format="arrow",
+            **kwargs,
+        )
+
+    # closing the resource stops the workers
+    assert len(list(many().add_limit(1))) == 1
+    assert len(processes) == 2
+    assert all(process.poll() is not None for process in processes)
+
+    # an error of the server is raised with the traceback of the worker
+    processes.clear()
+    with pytest.raises(Exception) as ex:
+        list(many(filter_={"$bogus": 1}))
+    assert "unknown top level operator: $bogus" in str(ex.value)
+    assert processes and all(process.poll() is not None for process in processes)
 
 
 @skip_if_not_active("snowflake")

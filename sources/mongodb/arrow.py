@@ -1,8 +1,11 @@
 """Arrow format of the MongoDB source. Needs `pymongoarrow`, import it only when loading Arrow."""
 
+import json
+import os
+import queue
+import subprocess
+import sys
 import threading
-from functools import cache
-from inspect import signature
 from typing import (
     Any,
     Callable,
@@ -19,35 +22,41 @@ from typing import (
 )
 
 import dlt
-from bson import decode_all
 from dlt.common import logger
+from dlt.common.configuration import resolve_configuration
 from dlt.common.libs.pyarrow import NameNormalizationCollision, pyarrow
 from dlt.common.normalizers.json.relational import DataItemNormalizer
 from dlt.common.normalizers.naming import NamingConvention
 from dlt.common.normalizers.naming.snake_case import (
     NamingConvention as SnakeCaseNamingConvention,
 )
-from dlt.common.typing import TDataItem
 from dlt.extract.exceptions import (
     CurrentSourceNotAvailable,
     CurrentSourceSchemaNotAvailable,
 )
-from pymongoarrow.api import Schema  # type: ignore
-from pymongoarrow.context import PyMongoArrowContext  # type: ignore
-from pymongoarrow.types import (  # type: ignore
-    _is_binary,
-    _is_code,
-    _is_decimal128,
-    _is_objectid,
-)
+from dlt.extract.pipe_iterator import PipeIterator
 
+from .arrow_worker import (
+    Mismatch,
+    WorkerError,
+    parse_batch,
+    read_message,
+    write_task,
+)
 from .helpers import (
+    client_options,
     CollectionLoader,
-    CollectionLoaderParallel,
     TCodecOptions,
-    TCursor,
     TTypeMismatch,
 )
+from .partition import and_filters, plan_partitions
+
+# runs the worker file by path, so neither dlt nor this source package is imported
+_WORKER_BOOTSTRAP = (
+    "import json, runpy, sys; sys.path[:] = json.loads(sys.argv[1]); "
+    "runpy.run_path(sys.argv[2], run_name='__main__')"
+)
+_WORKER_PATH = os.path.join(os.path.dirname(__file__), "arrow_worker.py")
 
 
 class FieldTypeMismatchError(ValueError):
@@ -124,44 +133,173 @@ class CollectionArrowLoader(CollectionLoader):
                 yield table
 
 
-class CollectionArrowLoaderParallel(CollectionLoaderParallel):
+class CollectionArrowLoaderParallel(CollectionArrowLoader):
+    def __init__(
+        self,
+        client: Any,
+        collection: Any,
+        chunk_size: int,
+        incremental: Optional[dlt.sources.incremental[Any]] = None,
+        connection_url: Optional[str] = None,
+        workers: Optional[int] = None,
+    ) -> None:
+        super().__init__(client, collection, chunk_size, incremental)
+        self.connection_url = connection_url
+        # the processes replace the threads that dlt runs deferred reads in
+        self.workers = (
+            workers
+            or resolve_configuration(PipeIterator.PipeIteratorConfiguration()).workers
+        )
+
     def load_documents(
         self,
         filter_: Dict[str, Any],
         limit: Optional[int] = None,
         projection: Optional[Union[Mapping[str, Any], Iterable[str]]] = None,
         arrow_options: ArrowOptions = DEFAULT_ARROW_OPTIONS,
-    ) -> Iterator[TDataItem]:
-        """Load documents from the collection as Arrow tables, with batches read in parallel."""
-        batches = self._create_batches(filter_=filter_, limit=limit)
-        cursor = self._get_cursor(filter_=filter_, projection=projection)
+    ) -> Iterator[Any]:
+        """Load documents from the collection as Arrow tables, with `_id` partitions parsed in
+        worker processes. Reads in one process when the collection is not split.
+        """
+        # partitions do not tell which documents come first
+        partitions = (
+            []
+            if limit
+            else plan_partitions(self.collection, self.chunk_size, 4 * self.workers)
+        )
+        if len(partitions) < 2:
+            yield from super().load_documents(filter_, limit, projection, arrow_options)
+            return
+        if not self.connection_url:
+            raise ValueError(
+                "Parallel Arrow reads need the `connection_url` of the client"
+            )
+
+        query_filter = self._query_filter(filter_)
+        task = dict(
+            connection_url=self.connection_url,
+            client_options=client_options(self.connection_url),
+            database=self.collection.database.name,
+            collection=self.collection.name,
+            projection=self._projection_op(projection),
+            batch_size=self.chunk_size,
+            pymongoarrow_schema=arrow_options.pymongoarrow_schema,
+            detect_mismatch=arrow_options.on_inferred_type_mismatch != "ignore",
+        )
         converter = ArrowBatchConverter(
             self.collection.name, self.collection.codec_options, arrow_options
         )
-        for batch in batches:
-            yield self._run_batch(cursor=cursor, batch=batch, converter=converter)
+        with WorkerPool(min(self.workers, len(partitions))) as pool:
+            for table, mismatch in pool.read(
+                [
+                    {**task, "filter": and_filters(query_filter, partition)}
+                    for partition in partitions
+                ]
+            ):
+                table = converter.finish(table, mismatch)
+                if table is not None:
+                    yield table
 
-    def _get_cursor(
-        self,
-        filter_: Dict[str, Any],
-        projection: Optional[Union[Mapping[str, Any], Iterable[str]]] = None,
-    ) -> TCursor:
-        cursor = self.collection.find_raw_batches(
-            filter=self._query_filter(filter_),
-            batch_size=self.chunk_size,
-            projection=self._projection_op(projection),
-        )
-        return cursor.sort(self._batches_sort_op)  # type: ignore[no-any-return]
 
-    @dlt.defer
-    def _run_batch(  # type: ignore[override]
-        self,
-        cursor: TCursor,
-        batch: Dict[str, int],
-        converter: "ArrowBatchConverter",
-    ) -> TDataItem:
-        cursor = cursor.clone()
-        return converter.convert(list(cursor.skip(batch["skip"]).limit(batch["limit"])))
+class WorkerPool:
+    """Worker processes started with the current Python interpreter, each reading partitions
+    from MongoDB and sending them back as Arrow tables, see `arrow_worker.py`.
+    """
+
+    def __init__(self, workers: int) -> None:
+        self.processes = [
+            subprocess.Popen(
+                [
+                    sys.executable,
+                    "-c",
+                    _WORKER_BOOTSTRAP,
+                    json.dumps(sys.path),
+                    _WORKER_PATH,
+                ],
+                stdin=subprocess.PIPE,
+                stdout=subprocess.PIPE,
+            )
+            for _ in range(workers)
+        ]
+        self._tasks: "queue.Queue[Dict[str, Any]]" = queue.Queue()
+        # a full queue stops the workers on their pipes until the tables are taken
+        self._results: "queue.Queue[Any]" = queue.Queue(maxsize=2 * workers)
+        self._stopped = threading.Event()
+        self._threads: List[threading.Thread] = []
+
+    def read(
+        self, tasks: List[Dict[str, Any]]
+    ) -> Iterator[Tuple[Any, Optional[Mismatch]]]:
+        """Yield the tables of `tasks` in the order the workers read them"""
+        for task in tasks:
+            self._tasks.put(task)
+        self._threads = [
+            threading.Thread(target=self._drive, args=(process,), daemon=True)
+            for process in self.processes
+        ]
+        for thread in self._threads:
+            thread.start()
+        running = len(self._threads)
+        while running:
+            result = self._results.get()
+            if result is None:
+                running -= 1
+            elif isinstance(result, BaseException):
+                raise result
+            else:
+                yield result
+
+    def close(self) -> None:
+        self._stopped.set()
+        for process in self.processes:
+            if process.poll() is None:
+                process.kill()
+            process.wait()
+            process.stdin.close()
+            process.stdout.close()
+        for thread in self._threads:
+            thread.join()
+
+    def __enter__(self) -> "WorkerPool":
+        return self
+
+    def __exit__(self, *_: Any) -> None:
+        self.close()
+
+    def _drive(self, process: "subprocess.Popen[bytes]") -> None:
+        try:
+            while not self._stopped.is_set():
+                try:
+                    task = self._tasks.get_nowait()
+                except queue.Empty:
+                    break
+                write_task(process.stdin, task)
+                while True:
+                    try:
+                        header, table = read_message(process.stdout)
+                    except EOFError:
+                        raise WorkerError(
+                            f"Worker process exited with code {process.wait()}"
+                        )
+                    if header["kind"] == "done":
+                        break
+                    if header["kind"] == "error":
+                        raise WorkerError(header["error"])
+                    mismatch = header["mismatch"]
+                    self._put((table, mismatch and Mismatch(**mismatch)))
+        except BaseException as ex:
+            if not self._stopped.is_set():
+                self._put(ex)
+        finally:
+            self._put(None)
+
+    def _put(self, result: Any) -> None:
+        while not self._stopped.is_set():
+            try:
+                self._results.put(result, timeout=0.1)
+                return
+            except queue.Full:
+                continue
 
 
 class ArrowBatchConverter:
@@ -179,51 +317,37 @@ class ArrowBatchConverter:
         self.options = options
         self._field_types: Dict[str, Any] = {}
         self._warned: Set[str] = set()
-        # parsing holds the GIL anyway, the lock keeps the seen field types consistent
-        self._lock = threading.Lock()
 
     def convert(self, batches: List[bytes]) -> Optional[Any]:
-        with self._lock:
-            table = self._parse(batches)
-            if not table.num_rows:
-                return None
-            table = flatten_arrow_structs(
-                convert_arrow_columns(table),
-                self.options.max_nesting,
-                self.options.naming,
-                self.options.is_json_column,
+        return self.finish(
+            *parse_batch(
+                batches,
+                self.options.pymongoarrow_schema,
+                self.codec_options,
+                self.options.on_inferred_type_mismatch != "ignore",
             )
-            return self._check_field_types(table)
+        )
 
-    def _parse(self, batches: List[bytes]) -> Any:
-        if self.options.pymongoarrow_schema is not None:
-            try:
-                return parse_bson_batches(
-                    batches,
-                    self.options.pymongoarrow_schema,
-                    self.codec_options,
-                    strict=_supports_strict_schema(),
-                )
-            except TypeError as ex:
+    def finish(self, table: Any, mismatch: Optional[Mismatch]) -> Optional[Any]:
+        """Flatten a table of `parse_batch` and check its field types against earlier tables"""
+        if mismatch is not None:
+            if mismatch.with_schema:
                 raise FieldTypeMismatchError(
                     self.collection_name,
-                    _mismatched_fields(batches, self.codec_options),
-                    str(ex),
+                    mismatch.fields,
+                    mismatch.details,
                     with_schema=True,
-                ) from ex
-
-        table = parse_bson_batches(batches, None, self.codec_options)
-        if (
-            self.options.on_inferred_type_mismatch != "ignore"
-            and _supports_strict_schema()
-        ):
-            # the inferred schema loads values of another type as null, a strict one raises
-            inferred = Schema({field.name: field.type for field in table.schema})
-            try:
-                parse_bson_batches(batches, inferred, self.codec_options, strict=True)
-            except TypeError as ex:
-                self._mismatch(_mismatched_fields(batches, self.codec_options), str(ex))
-        return table
+                )
+            self._mismatch(mismatch.fields, mismatch.details)
+        if not table.num_rows:
+            return None
+        table = flatten_arrow_structs(
+            table,
+            self.options.max_nesting,
+            self.options.naming,
+            self.options.is_json_column,
+        )
+        return self._check_field_types(table)
 
     def _check_field_types(self, table: Any) -> Any:
         if self.options.pymongoarrow_schema is not None:
@@ -257,63 +381,6 @@ class ArrowBatchConverter:
         ):
             self._warned.update(fields)
             logger.warning(str(error))
-
-
-def parse_bson_batches(
-    batches: Iterable[bytes],
-    pymongoarrow_schema: Any,
-    codec_options: TCodecOptions,
-    strict: bool = False,
-) -> Any:
-    """Parse raw BSON batches into a single Arrow table with a new pymongoarrow context.
-
-    Args:
-        batches (Iterable[bytes]): Raw BSON batches, i.e. from `Collection.find_raw_batches`.
-        pymongoarrow_schema (Any): The mapping of field types to convert BSON to Arrow.
-        codec_options (CodecOptions): Codec options of the collection.
-        strict (bool): Raise `TypeError` on values that do not match `pymongoarrow_schema` instead
-            of loading them as null. Needs `pymongoarrow>=1.9`.
-
-    Returns:
-        pyarrow.lib.Table: The table with the BSON extension types of pymongoarrow.
-    """
-    # pymongoarrow 1.6 replaced `from_schema` and `lib.process_bson_stream` and stopped resetting
-    # the context on `finish()`
-    if hasattr(PyMongoArrowContext, "from_schema"):
-        from pymongoarrow.lib import process_bson_stream  # type: ignore
-
-        context = PyMongoArrowContext.from_schema(
-            schema=pymongoarrow_schema, codec_options=codec_options
-        )
-        for batch in batches:
-            process_bson_stream(batch, context)
-    else:
-        kwargs = {"allow_invalid": not strict} if _supports_strict_schema() else {}
-        context = PyMongoArrowContext(
-            pymongoarrow_schema, codec_options=codec_options, **kwargs
-        )
-        for batch in batches:
-            context.process_bson_stream(batch)
-    return context.finish()
-
-
-def convert_arrow_columns(table: Any) -> Any:
-    """Convert the BSON extension types of pymongoarrow into Arrow types, also in nested columns.
-
-    ObjectId is converted into its hex string, the same as `str(ObjectId)` in `convert_mongo_objs`,
-    Decimal128 into its string, BSON binary and code into their binary and string storage.
-    """
-    for i, field in enumerate(table.schema):
-        column = table.column(i)
-        chunks = [_convert_arrow_array(chunk) for chunk in column.chunks]
-        if all(chunk is original for chunk, original in zip(chunks, column.chunks)):
-            continue
-        table = table.set_column(
-            i,
-            pyarrow.field(field.name, chunks[0].type, field.nullable),
-            pyarrow.chunked_array(chunks),
-        )
-    return table
 
 
 def flatten_arrow_structs(
@@ -390,11 +457,6 @@ def arrow_options_from_context(
     )
 
 
-@cache
-def _supports_strict_schema() -> bool:
-    return "allow_invalid" in signature(PyMongoArrowContext.__init__).parameters
-
-
 def _same_arrow_kind(seen: Any, arrow_type: Any) -> bool:
     if seen == arrow_type:
         return True
@@ -407,95 +469,3 @@ def _same_arrow_kind(seen: Any, arrow_type: Any) -> bool:
         if is_kind(seen) and is_kind(arrow_type):
             return True
     return False
-
-
-def _mismatched_fields(
-    batches: List[bytes], codec_options: TCodecOptions
-) -> Dict[str, List[str]]:
-    """Names the fields with values of more than one type, `a.b` for nested ones"""
-    types: Dict[str, Set[str]] = {}
-
-    def visit(value: Any, path: str) -> None:
-        if value is None:
-            return
-        if isinstance(value, dict):
-            type_name = "document"
-            for key, item in value.items():
-                visit(item, f"{path}.{key}")
-        elif isinstance(value, list):
-            type_name = "array"
-            for item in value:
-                visit(item, f"{path}[]")
-        elif isinstance(value, int) and not isinstance(value, bool):
-            type_name = "int"
-        else:
-            type_name = type(value).__name__
-        types.setdefault(path, set()).add(type_name)
-
-    for batch in batches:
-        for document in decode_all(batch, codec_options):
-            for key, value in document.items():
-                visit(value, key)
-    return {path: sorted(names) for path, names in types.items() if len(names) > 1}
-
-
-def _convert_arrow_array(array: Any) -> Any:
-    """Converts BSON extension types in `array`, returns `array` itself if there are none"""
-    arrow_type = array.type
-    if _is_objectid(arrow_type):
-        return _objectid_to_hex(array.storage)
-    if _is_decimal128(arrow_type):
-        # there's no vectorized decoding of BSON decimals
-        return pyarrow.array(
-            [None if value is None else str(value) for value in array.to_pylist()],
-            type=pyarrow.string(),
-        )
-    if _is_binary(arrow_type) or _is_code(arrow_type):
-        return array.storage
-
-    if not pyarrow.types.is_struct(arrow_type) and not pyarrow.types.is_list(
-        arrow_type
-    ):
-        return array
-    if array.offset:
-        # nested arrays are not rebuilt from sliced offsets together with a null mask
-        array = pyarrow.concat_arrays([array])
-    if pyarrow.types.is_struct(arrow_type):
-        children = array.flatten()
-        converted = [_convert_arrow_array(child) for child in children]
-        if all(new is old for new, old in zip(converted, children)):
-            return array
-        return pyarrow.StructArray.from_arrays(
-            converted,
-            fields=[
-                pyarrow.field(field.name, child.type, field.nullable)
-                for field, child in zip(arrow_type, converted)
-            ],
-            mask=array.is_null(),
-        )
-    values = _convert_arrow_array(array.values)
-    if values is array.values:
-        return array
-    return pyarrow.ListArray.from_arrays(array.offsets, values, mask=array.is_null())
-
-
-@cache
-def _hex_octets() -> Any:
-    return pyarrow.array([f"{octet:02x}" for octet in range(256)])
-
-
-def _objectid_to_hex(storage: Any) -> Any:
-    """Vectorized `str(ObjectId)` of a `fixed_size_binary[12]` array"""
-    if len(storage) == 0:
-        return pyarrow.array([], type=pyarrow.string())
-    width = storage.type.byte_width
-    octets = pyarrow.Array.from_buffers(
-        pyarrow.uint8(),
-        len(storage) * width,
-        [None, storage.buffers()[1]],
-        offset=storage.offset * width,
-    )
-    pairs = pyarrow.FixedSizeListArray.from_arrays(
-        pyarrow.compute.take(_hex_octets(), octets), width, mask=storage.is_null()
-    )
-    return pyarrow.compute.binary_join(pairs.cast(pyarrow.list_(pyarrow.string())), "")

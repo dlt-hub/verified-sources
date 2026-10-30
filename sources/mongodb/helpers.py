@@ -1,5 +1,7 @@
 """Mongo database source helpers"""
 
+import re
+import warnings
 from datetime import timezone
 from itertools import islice
 from typing import (
@@ -34,6 +36,7 @@ from pymongo import ASCENDING, DESCENDING, MongoClient
 from pymongo.collection import Collection
 from pymongo.cursor import Cursor
 
+from .partition import and_filters, plan_partitions
 
 if TYPE_CHECKING:
     TMongoClient = MongoClient[Any]
@@ -47,6 +50,9 @@ else:
     TCodecOptions = Any
 
 TTypeMismatch = Literal["raise", "warn", "ignore"]
+
+# compression of the documents sent by the server, the first one the server supports is used
+COMPRESSORS = "zstd,snappy,zlib"
 
 
 class CollectionLoader:
@@ -205,105 +211,40 @@ class CollectionLoader:
 
 
 class CollectionLoaderParallel(CollectionLoader):
-    @property
-    def _batches_sort_op(self) -> List[Tuple[str, int]]:
-        """Sort with a unique field, so skip and limit split the collection without gaps or overlaps"""
-        sort_op = self._sort_op
-        if not any(field == "_id" for field, _ in sort_op):
-            sort_op.append(("_id", ASCENDING))
-        return sort_op
-
-    def _get_document_count(self, filter_: Dict[str, Any]) -> int:
-        return self.collection.count_documents(filter=self._query_filter(filter_))
-
-    def _create_batches(
-        self, filter_: Dict[str, Any], limit: Optional[int] = None
-    ) -> List[Dict[str, int]]:
-        doc_count = self._get_document_count(filter_)
-        if limit:
-            doc_count = min(doc_count, abs(limit))
-
-        batches = []
-        left_to_load = doc_count
-
-        for sk in range(0, doc_count, self.chunk_size):
-            batches.append(dict(skip=sk, limit=min(self.chunk_size, left_to_load)))
-            left_to_load -= self.chunk_size
-
-        return batches
-
-    def _get_cursor(
-        self,
-        filter_: Dict[str, Any],
-        projection: Optional[Union[Mapping[str, Any], Iterable[str]]] = None,
-    ) -> TCursor:
-        """Get a reading cursor for the collection.
-
-        Args:
-            filter_ (Dict[str, Any]): The filter to apply to the collection.
-            projection (Optional[Union[Mapping[str, Any], Iterable[str]]]): The projection to select fields to create the Cursor.
-
-        Returns:
-            Cursor: The cursor for the collection.
-        """
-        cursor = self.collection.find(
-            filter=self._query_filter(filter_),
-            projection=self._projection_op(projection),
-        )
-        return cursor.sort(self._batches_sort_op)  # type: ignore[no-any-return]
-
-    @dlt.defer
-    def _run_batch(self, cursor: TCursor, batch: Dict[str, int]) -> TDataItem:
-        cursor = cursor.clone()
-
-        data = []
-        for document in cursor.skip(batch["skip"]).limit(batch["limit"]):
-            data.append(map_nested_values_in_place(convert_mongo_objs, document))
-
-        return data
-
-    def _get_all_batches(
-        self,
-        filter_: Dict[str, Any],
-        limit: Optional[int] = None,
-        projection: Optional[Union[Mapping[str, Any], Iterable[str]]] = None,
-    ) -> Iterator[TDataItem]:
-        """Load all documents from the collection in parallel batches.
-
-        Args:
-            filter_ (Dict[str, Any]): The filter to apply to the collection.
-            limit (Optional[int]): The maximum number of documents to load.
-            projection (Optional[Union[Mapping[str, Any], Iterable[str]]]): The projection to select fields to create the Cursor.
-
-        Yields:
-            Iterator[TDataItem]: An iterator of the loaded documents.
-        """
-        batches = self._create_batches(filter_=filter_, limit=limit)
-        cursor = self._get_cursor(filter_=filter_, projection=projection)
-
-        for batch in batches:
-            yield self._run_batch(cursor=cursor, batch=batch)
-
     def load_documents(
         self,
         filter_: Dict[str, Any],
         limit: Optional[int] = None,
         projection: Optional[Union[Mapping[str, Any], Iterable[str]]] = None,
     ) -> Iterator[TDataItem]:
-        """Load documents from the collection in parallel.
+        """Load documents from the collection in parallel, one deferred read per `_id` partition
+        of about `chunk_size` documents.
 
         Args:
             filter_ (Dict[str, Any]): The filter to apply to the collection.
-            limit (Optional[int]): The number of documents to load.
+            limit (Optional[int]): The number of documents to load, read without partitions.
             projection (Optional[Union[Mapping[str, Any], Iterable[str]]]): The projection to select fields to create the Cursor.
 
         Yields:
-            Iterator[TDataItem]: An iterator of the loaded documents.
+            Iterator[TDataItem]: Deferred reads of lists of documents.
         """
-        for document in self._get_all_batches(
-            limit=limit, filter_=filter_, projection=projection
-        ):
-            yield document
+        if limit:
+            # partitions do not tell which documents come first
+            yield from super().load_documents(filter_, limit, projection)
+            return
+        query_filter = self._query_filter(filter_)
+        projection_op = self._projection_op(projection)
+        for partition in plan_partitions(self.collection, self.chunk_size):
+            yield self._read_partition(
+                and_filters(query_filter, partition), projection_op
+            )
+
+    @dlt.defer
+    def _read_partition(
+        self, filter_: Dict[str, Any], projection: Optional[Dict[str, Any]]
+    ) -> TDataItem:
+        documents = list(self.collection.find(filter=filter_, projection=projection))
+        return map_nested_values_in_place(convert_mongo_objs, documents)
 
 
 def collection_documents(
@@ -318,6 +259,7 @@ def collection_documents(
     chunk_size: Optional[int] = 10000,
     data_item_format: Optional[TDataItemFormat] = "object",
     on_inferred_type_mismatch: TTypeMismatch = "ignore",
+    connection_url: Optional[str] = None,
 ) -> Iterator[TDataItem]:
     """
     A DLT source which loads data from a Mongo database using PyMongo.
@@ -335,7 +277,9 @@ def collection_documents(
             Note: Can't mix include and exclude statements '{"title": True, "released": False}`
         pymongoarrow_schema (pymongoarrow.schema.Schema): The mapping of field types to convert BSON to Arrow.
         incremental (Optional[dlt.sources.incremental[Any]]): The incremental configuration.
-        parallel (bool): Option to enable parallel loading for the collection. Default is False.
+        parallel (bool): Read `_id` partitions of the collection in parallel, as many at once as
+            `workers` in the `extract` config: in threads in the object format, in processes in the
+            Arrow format. Default is False.
         limit (Optional[int]): The maximum number of documents to load.
         chunk_size (Optional[int]): The number of documents to load in each batch.
         data_item_format (Optional[TDataItemFormat]): The data format to use for loading.
@@ -347,6 +291,8 @@ def collection_documents(
             values of other types as null: "ignore" (default, fastest) does that silently, "warn" and
             "raise" detect such values with a second parse of each batch. Values that do not match
             `pymongoarrow_schema` always raise `FieldTypeMismatchError`.
+        connection_url (Optional[str]): The connection URL of `client`, worker processes of
+            parallel Arrow reads connect with it.
 
     Yields:
         Iterator[TDataItem]: Lists of documents or Arrow tables.
@@ -370,12 +316,18 @@ def collection_documents(
             arrow_options_from_context,
         )
 
-        arrow_loader_class = (
-            CollectionArrowLoaderParallel if parallel else CollectionArrowLoader
-        )
-        arrow_loader = arrow_loader_class(
-            client, collection, incremental=incremental, chunk_size=chunk_size
-        )
+        if parallel:
+            arrow_loader: CollectionArrowLoader = CollectionArrowLoaderParallel(
+                client,
+                collection,
+                incremental=incremental,
+                chunk_size=chunk_size,
+                connection_url=connection_url,
+            )
+        else:
+            arrow_loader = CollectionArrowLoader(
+                client, collection, incremental=incremental, chunk_size=chunk_size
+            )
         yield from arrow_loader.load_documents(
             limit=limit,
             filter_=filter_,
@@ -420,15 +372,33 @@ def _pymongoarrow_available() -> bool:
 
 
 def client_from_credentials(connection_url: str) -> TMongoClient:
-    client: TMongoClient = MongoClient(
-        connection_url,
+    with warnings.catch_warnings():
+        ignore_compressor_warnings()
+        client: TMongoClient = MongoClient(
+            connection_url, **client_options(connection_url)
+        )
+    return client
+
+
+def client_options(connection_url: str) -> Dict[str, Any]:
+    """Options of the clients of the source and of the worker processes of parallel Arrow reads"""
+    options: Dict[str, Any] = dict(
         uuidRepresentation="standard",
         tz_aware=True,
         tzinfo=timezone.utc,
         # dates outside of the python range are clamped instead of failing the load
         datetime_conversion=DatetimeConversion.DATETIME_CLAMP,
     )
-    return client
+    # keyword arguments override the URL, where an empty `compressors=` disables compression
+    if not re.search(r"[?&]compressors=", connection_url, re.IGNORECASE):
+        options["compressors"] = COMPRESSORS
+    return options
+
+
+def ignore_compressor_warnings() -> None:
+    """pymongo skips compressors whose package is not installed, zlib is always there"""
+    warnings.filterwarnings("ignore", "Wire protocol compression with")
+    warnings.filterwarnings("ignore", "Unsupported compressor: $")
 
 
 def _raise_if_intersection(filter1: Dict[str, Any], filter2: Dict[str, Any]) -> None:

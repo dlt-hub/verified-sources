@@ -1,3 +1,4 @@
+import warnings
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
@@ -7,7 +8,12 @@ import pytest
 from bson import DBRef, Decimal128, MaxKey, MinKey, ObjectId, Regex, Timestamp
 from bson.datetime_ms import DatetimeMS
 
-from sources.mongodb.helpers import convert_mongo_objs
+from sources.mongodb.helpers import (
+    COMPRESSORS,
+    client_from_credentials,
+    client_options,
+    convert_mongo_objs,
+)
 
 from tests.mongodb.utils import FakeCollection, FakeCursor, extract, make_documents
 
@@ -103,8 +109,6 @@ def test_incremental_filter(
     )
 
     assert cursor.filter == expected
-    if parallel:
-        assert collection.counted_filters == [expected]
 
 
 def test_incremental_filter_with_user_filter() -> None:
@@ -178,47 +182,30 @@ def test_projection_keeps_cursor_field(
 
 
 @pytest.mark.parametrize("data_item_format", ["object", "arrow"])
-@pytest.mark.parametrize(
-    "incremental_args,expected_sort",
-    [
-        (None, [("_id", 1)]),
-        (dict(cursor_path="n", row_order="desc"), [("n", -1), ("_id", 1)]),
-        (dict(cursor_path="_id", row_order="asc"), [("_id", 1)]),
-    ],
-    ids=["no_incremental", "cursor_sort", "id_cursor_sort"],
-)
-def test_parallel_batches(
-    data_item_format: str,
-    incremental_args: Optional[Dict[str, Any]],
-    expected_sort: Any,
-) -> None:
+@pytest.mark.parametrize("limit", [None, 3], ids=["no_limit", "limit"])
+def test_parallel_single_partition(data_item_format: str, limit: Optional[int]) -> None:
     documents = make_documents(5)
     collection = FakeCollection("docs", documents)
 
     items = extract(
         collection,
         parallel=True,
-        chunk_size=2,
-        incremental=dlt.sources.incremental(**incremental_args)
-        if incremental_args
-        else None,
+        chunk_size=5,
+        limit=limit,
         filter_={"n": {"$lt": 10}},
         data_item_format=data_item_format,
     )
 
-    assert collection.counted_filters == [{"n": {"$lt": 10}}]
-    query, *batches = collection.cursors
-    assert query.sort_spec == expected_sort
-    assert sorted((batch.skip_count, batch.limit_count) for batch in batches) == [
-        (0, 2),
-        (2, 2),
-        (4, 1),
-    ]
+    # fewer documents than two partitions: one query with no `_id` range and no skip
+    (cursor,) = collection.cursors
+    assert cursor.filter == {"n": {"$lt": 10}}
+    assert (cursor.skip_count, cursor.limit_count) == (0, limit or 0)
     if data_item_format == "arrow":
         ids = [oid for table in items for oid in table["_id"].to_pylist()]
     else:
         ids = [document["_id"] for document in items]
-    assert sorted(ids) == sorted(str(document["_id"]) for document in documents)
+    assert len(ids) == (limit or len(documents))
+    assert set(ids) <= {str(document["_id"]) for document in documents}
 
 
 @pytest.mark.parametrize("data_item_format", ["object", "arrow"])
@@ -239,3 +226,24 @@ def test_dates_out_of_python_range(data_item_format: str) -> None:
         ]
     else:
         assert items[0]["d"].cast(pa.int64()).to_pylist() == millis
+
+
+@pytest.mark.parametrize(
+    "url,compressors",
+    [
+        ("mongodb+srv://user:pass@cluster.example.net/db", COMPRESSORS),
+        ("mongodb://localhost/?compressors=snappy", None),
+        ("mongodb://localhost/?retryWrites=true&Compressors=", None),
+    ],
+    ids=["default", "from_url", "disabled_in_url"],
+)
+def test_client_compressors(url: str, compressors: Optional[str]) -> None:
+    # the compressors of the URL win, the client options would override them
+    assert client_options(url).get("compressors") == compressors
+
+
+def test_client_skips_missing_compressors() -> None:
+    with warnings.catch_warnings():
+        warnings.simplefilter("error")
+        client = client_from_credentials("mongodb://localhost:1/?connect=false")
+    assert "zlib" in client.options.pool_options._compression_settings.compressors

@@ -1,11 +1,23 @@
+import math
 import random
+import uuid
 from copy import copy
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, Iterator, List, Optional, Sequence, Tuple, Union
 
 import bson
 import dlt
-from bson import Binary, Code, Decimal128, ObjectId, Regex, Timestamp
+from bson import (
+    Binary,
+    Code,
+    Decimal128,
+    Int64,
+    MaxKey,
+    MinKey,
+    ObjectId,
+    Regex,
+    Timestamp,
+)
 from bson.codec_options import CodecOptions
 
 from sources.mongodb.helpers import (
@@ -89,7 +101,6 @@ class FakeCollection:
         self.documents: List[bytes] = []
         self.codec_options = CODEC_OPTIONS
         self.cursors: List[FakeCursor] = []
-        self.counted_filters: List[Dict[str, Any]] = []
         self.insert_many(documents)
 
     def insert_many(self, documents: Sequence[Dict[str, Any]]) -> None:
@@ -114,9 +125,11 @@ class FakeCollection:
         self.cursors.append(cursor)
         return cursor
 
-    def count_documents(self, filter: Dict[str, Any]) -> int:  # noqa: A002
-        self.counted_filters.append(filter)
+    def estimated_document_count(self) -> int:
         return len(self.documents)
+
+    def options(self) -> Dict[str, Any]:
+        return {}
 
 
 class FakeDatabase:
@@ -175,6 +188,40 @@ def make_seeded_documents(count: int) -> List[Dict[str, Any]]:
         documents, random.sample(range(90 * 24 * 3600), count)
     ):
         document["updated_at"] = base + timedelta(seconds=seconds)
+    return documents
+
+
+def make_mixed_id_documents(majority: str, count: int) -> List[Dict[str, Any]]:
+    """`count` documents with `_id` of the `majority` type in random order and one document with
+    an `_id` of every other type, numbered by `n`"""
+    base = datetime(2024, 1, 1, tzinfo=timezone.utc)
+    majority_ids: Dict[str, Any] = {
+        "objectId": lambda n: ObjectId(),
+        # ints, longs, doubles and decimals are one type in `_id` ranges
+        "number": lambda n: [n, Int64(-n - 1), n + 0.5, Decimal128(f"-{n}.25")][n % 4],
+        "binData": lambda n: uuid.uuid4(),
+        "date": lambda n: base + timedelta(minutes=n),
+        "string": lambda n: f"{'Doc' if n % 2 else 'doc'}-{uuid.uuid4().hex}",
+    }
+    other_ids = [
+        MinKey(),
+        None,
+        7.25,
+        math.nan,
+        float("-inf"),
+        "other",
+        {"compound": 1, "key": "a"},
+        Binary(b"other", 0),
+        ObjectId(),
+        True,
+        base - timedelta(days=1),
+        Timestamp(1, 1),
+        Code("function() {}"),
+        MaxKey(),
+    ]
+    documents = [{"_id": majority_ids[majority](n), "n": n} for n in range(count)]
+    documents += [{"_id": id_, "n": count + i} for i, id_ in enumerate(other_ids)]
+    random.shuffle(documents)
     return documents
 
 

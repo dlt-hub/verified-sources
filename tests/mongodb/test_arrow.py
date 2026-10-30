@@ -1,3 +1,6 @@
+import io
+import subprocess
+import sys
 from typing import Any, Dict, List, Optional
 
 import bson
@@ -7,14 +10,21 @@ import pytest
 from bson import Decimal128, ObjectId
 from pymongoarrow.types import Decimal128Type, ObjectIdType
 
-from sources.mongodb.helpers import collection_documents
+from sources.mongodb.helpers import client_options, collection_documents
 from sources.mongodb.arrow import (
+    _WORKER_PATH,
     ArrowBatchConverter,
     ArrowOptions,
-    CollectionArrowLoaderParallel,
     FieldTypeMismatchError,
+)
+from sources.mongodb.arrow_worker import (
     _supports_strict_schema,
     convert_arrow_columns,
+    read_message,
+    read_partition,
+    read_task,
+    write_message,
+    write_task,
 )
 
 from tests.mongodb.utils import (
@@ -26,15 +36,12 @@ from tests.mongodb.utils import (
 )
 
 
-@pytest.mark.parametrize("parallel", [False, True], ids=["sequential", "parallel"])
-def test_arrow_loader_yields_each_batch_once(parallel: bool) -> None:
+def test_arrow_loader_yields_each_batch_once() -> None:
     collection = FakeCollection(
         "docs", [{"_id": ObjectId(), "name": name} for name in "abc"]
     )
 
-    tables = extract(
-        collection, parallel=parallel, chunk_size=1, data_item_format="arrow"
-    )
+    tables = extract(collection, chunk_size=1, data_item_format="arrow")
 
     assert all(isinstance(table, pa.Table) for table in tables)
     assert sorted(table["name"].to_pylist() for table in tables) == [
@@ -109,24 +116,64 @@ def test_convert_arrow_columns_nested() -> None:
     assert convert_arrow_columns(table.slice(0, 0)).num_rows == 0
 
 
-def test_arrow_run_batch_returns_table() -> None:
-    collection = FakeCollection("docs", make_documents(3))
-    loader = CollectionArrowLoaderParallel(None, collection, chunk_size=2)
-    cursor = loader._get_cursor(filter_={})
-    converter = ArrowBatchConverter("docs", CODEC_OPTIONS, ArrowOptions())
+def test_read_partition() -> None:
+    collection = FakeCollection("docs", make_documents(5))
 
-    # deferred batches run in the thread pool only when they return data, not a generator
-    table = loader._run_batch(
-        cursor=cursor, batch={"skip": 0, "limit": 2}, converter=converter
-    )()
-    assert isinstance(table, pa.Table)
-    assert table.num_rows == 2
-    assert (
-        loader._run_batch(
-            cursor=cursor, batch={"skip": 3, "limit": 2}, converter=converter
-        )()
-        is None
+    tables = list(
+        read_partition(
+            collection,
+            {"n": {"$gte": 0}},
+            {"n": 1},
+            batch_size=2,
+            pymongoarrow_schema=None,
+            detect_mismatch=False,
+        )
     )
+
+    (cursor,) = collection.cursors
+    assert (cursor.filter, cursor.projection) == ({"n": {"$gte": 0}}, {"n": 1})
+    assert [mismatch for _, mismatch in tables] == [None, None, None]
+    assert [table.num_rows for table, _ in tables] == [2, 2, 1]
+    # BSON extension types are converted in the worker, plain Arrow types cross the processes
+    assert tables[0][0].schema.field("_id").type == pa.string()
+    assert tables[0][0].schema.field("price").type == pa.string()
+
+
+def test_worker_messages() -> None:
+    table = pa.table({"_id": ["a", "b"], "n": [1, None]})
+    stream = io.BytesIO()
+    write_message(stream, {"kind": "table", "mismatch": None}, table)
+    write_message(stream, {"kind": "error", "error": "boom"})
+    task = {
+        "filter": {"_id": {"$gte": ObjectId()}},
+        "client_options": client_options("mongodb://localhost"),
+    }
+    write_task(stream, task)
+    stream.seek(0)
+
+    assert read_message(stream) == ({"kind": "table", "mismatch": None}, table)
+    assert read_message(stream) == ({"kind": "error", "error": "boom"}, None)
+    assert read_task(stream) == task
+    # the parent closed the stream of tasks
+    assert read_task(stream) is None
+    with pytest.raises(EOFError):
+        read_message(io.BytesIO(b"\x00\x00"))
+
+
+def test_worker_imports_no_dlt() -> None:
+    probe = (
+        "import runpy, sys; runpy.run_path(sys.argv[1], run_name='probe'); "
+        "print(sorted(m for m in ('dlt', 'sources') if m in sys.modules))"
+    )
+
+    result = subprocess.run(
+        [sys.executable, "-c", probe, _WORKER_PATH],
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+
+    assert result.stdout.strip() == "[]"
 
 
 requires_strict_schema = pytest.mark.skipif(
@@ -135,7 +182,6 @@ requires_strict_schema = pytest.mark.skipif(
 
 
 @requires_strict_schema
-@pytest.mark.parametrize("parallel", [False, True], ids=["sequential", "parallel"])
 @pytest.mark.parametrize(
     "values,fields",
     [
@@ -146,7 +192,7 @@ requires_strict_schema = pytest.mark.skipif(
     ids=["scalar", "nested_document", "array"],
 )
 def test_type_mismatch_in_batch_raises(
-    values: List[Any], fields: Dict[str, List[str]], parallel: bool
+    values: List[Any], fields: Dict[str, List[str]]
 ) -> None:
     collection = FakeCollection(
         "docs", [{"_id": n, "v": value} for n, value in enumerate(values)]
@@ -156,7 +202,6 @@ def test_type_mismatch_in_batch_raises(
         extract(
             collection,
             data_item_format="arrow",
-            parallel=parallel,
             on_inferred_type_mismatch="raise",
         )
     error = ex.value

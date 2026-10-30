@@ -8,7 +8,7 @@ installed, as Arrow tables. Setup and usage are in the
 ## Changelog
 
 ### 1.0.0
-**Upgrade**: safe, install `dlt>=1.16.0` and `pymongo>=4.4`. The incremental state carries over
+**Upgrade**: safe, install `dlt>=1.16.0` and `pymongo[zstd]>=4.4`. The incremental state carries over
 and the object format loads the same tables. In the Arrow format nested documents already loaded as
 `json` columns stay `json`, new nested fields are flattened into columns.
 - fixed `mongodb_collection`: iterating or running the resource failed with
@@ -16,8 +16,15 @@ and the object format loads the same tables. In the Arrow format nested document
 - fixed Arrow (`data_item_format="arrow"`): failed to import with `pymongoarrow>=1.6`
 - fixed Arrow: the incremental cursor is filtered on the server, before every document of the
   collection was read
-- fixed `parallel`: batches are sorted by `_id`, so skip and limit no longer return a document
-  twice or skip it, and the parallel Arrow loader runs in the thread pool
+- changed `parallel`: the collection is split into `_id` ranges instead of skip and limit
+  batches, also with `_id`s of mixed types. Before, batches could return a document twice or miss
+  it, and the server walked every skipped document
+- changed `parallel` Arrow: partitions are parsed in worker processes, as many as `workers` in the
+  `extract` config (default 5). With 4 workers a local read is 2.5x faster than in threads before
+- changed `parallel` with `limit`: reads in one query, the order of a partitioned read is not known
+- new: the server compresses the documents it sends with zstd (`pymongo[zstd]` in the
+  requirements), snappy or zlib, unless the connection URL sets `compressors`. `compressors=`
+  without a value disables it
 - fixed: a projection with an incremental keeps the cursor field. Before the run failed with
   `IncrementalCursorPathMissing`
 - fixed: a filter on the cursor field (e.g. `{"$exists": True}`) no longer replaces the
@@ -53,6 +60,8 @@ and the object format loads the same tables. In the Arrow format nested document
   `docker compose -f tests/mongodb/docker-compose.yml up -d`. They seed and drop their own
   database. `test_local_seeded_*` load documents with random `updated_at` in full, incrementally,
   in monthly windows and in chunks with `add_limit`, and compare the counts with the seeded values.
+  `test_local_parallel_*` check that partitions read every document once with `_id`s of mixed
+  types, in views, time series collections and while documents are deleted.
 - Other tests in `test_mongodb_source.py` read the `sample_mflix` sample dataset from the
   `connection_url` in `sources/.dlt/secrets.toml`.
 - Run the Arrow tests with the oldest and newest `pymongoarrow`, e.g.
@@ -85,8 +94,31 @@ and the object format loads the same tables. In the Arrow format nested document
   MaxKey, they load as null in the Arrow format.
 - Decimal128 loads as text in both formats. Arrow converts it value by value, `pa.decimal128` in
   `pymongoarrow_schema` (`pymongoarrow>=1.7`) loads it as decimal instead.
-- `parallel` reads batches with skip and limit, the server scans all skipped documents
-  ([docs](https://www.mongodb.com/docs/manual/reference/method/cursor.skip/)).
+- `parallel` splits a collection into `_id` partitions (`partition.py`). `$gte`/`$lt` match
+  only values of their own BSON type ([type bracketing](https://www.mongodb.com/docs/manual/reference/mql/query-predicates/type-bracketing/)),
+  so ranges split the most common `_id` type (ObjectId, string, number, date or binary) at
+  `$bucketAuto` boundaries of a `$sample`, and every other type found in the `_id` index gets one
+  partition. NaN matches no range and gets its own. Cursor `min()`/`max()` index bounds skipped
+  MaxKey and Date `_id`s on MongoDB 8. Views, time series collections (no `_id`
+  index) and collections smaller than two partitions are read in one query.
+- Parallel Arrow reads run `arrow_worker.py` by path with `sys.executable`. It imports pymongo,
+  pyarrow and pymongoarrow, not dlt, and starts in about 0.4 s. A worker gets its task (connection
+  URL, filter, projection, schema) pickled on stdin and sends each batch back as an Arrow IPC
+  stream on stdout, with BSON types already converted. Flattening and type checks run in the
+  parent. Multiprocessing `spawn` was not used: it imports the `__main__` of the parent, i.e. the
+  pipeline script and dlt, in each worker. Where `sys.executable` is not a Python interpreter
+  (e.g. uwsgi) use `parallel=False`.
+- In the object format partitions are read in dlt's threads. Decoding holds the GIL, so a local
+  read of 1M documents takes 33 s with 4 threads and 29.5 s without `parallel`. Threads help when
+  the server or the network is the bottleneck: 300k documents (170 MiB) from Atlas take 78 s
+  without `parallel` and 47 s with 8 workers, without compression.
+- BSON is not compressed on the wire. Reads from Atlas are bandwidth bound: zstd loads the 300k
+  documents in 30 s instead of 78 s, with 8 workers in 14 s (Arrow 20 s and 11 s). zlib from the
+  standard library and snappy (`pymongo[snappy]`) were about as fast on raw reads. `pymongo[zstd]`
+  installs `backports.zstd` before Python 3.14, which has zstd in the standard library, and
+  `zstandard` for pymongo before 4.16. A server on the same machine or network is CPU bound and
+  compression makes it about 30% slower (1M local documents: Arrow 16.3 s vs 20.9 s with zlib),
+  set `compressors=` in the connection URL there.
 - Loading in chunks with `add_limit` and `row_order` needs `parallel=False`. dlt evaluates
   parallel batches ahead and its incremental moves the last value past the batches that
   `add_limit` then drops, so their documents are never loaded.
