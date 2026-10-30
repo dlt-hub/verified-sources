@@ -26,7 +26,8 @@ _ID_TYPES = (
     "maxKey",
 )
 _NUMBER_TYPES = ("double", "int", "long", "decimal")
-# types split into `_id` ranges, values of other types are read in one partition per type
+# types split into `_id` ranges, values of other types are read in one partition per type:
+# `$gte` and `$lt` match only values of their own BSON type
 _RANGE_ID_TYPES = ("objectId", "string", "number", "date", "binData")
 
 
@@ -34,10 +35,6 @@ def plan_partitions(
     collection: Any, partition_size: int, max_partitions: Optional[int] = None
 ) -> List[Dict[str, Any]]:
     """Split the collection into filters on `_id` that match every document exactly once.
-
-    `$gte` and `$lt` match only values of their own BSON type, so ranges split the most common
-    type of `_id` that can be ranged, at the boundaries of `$bucketAuto` buckets of a `$sample`.
-    Each other type found in the `_id` index gets one partition, and a NaN `_id` too.
 
     Args:
         collection (Collection): The collection to split.

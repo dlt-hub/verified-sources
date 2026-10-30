@@ -42,7 +42,7 @@ def mongodb(
         collection_names (Optional[List[str]]): The list of collections `pymongo.collection.Collection` to load.
             All collections except `system.*` are loaded if not given.
         incremental (Optional[dlt.sources.incremental]): Option to enable incremental loading for the collection.
-            E.g., `incremental=dlt.sources.incremental('updated_at', pendulum.parse('2022-01-01T00:00:00Z'))`
+            E.g., `incremental=dlt.sources.incremental('updated_at', datetime(2022, 1, 1, tzinfo=timezone.utc))`
         write_disposition (str): Write disposition of the resource.
         parallel (Optional[bool]): Read `_id` partitions of the collection in parallel, as many at
             once as `workers` in the `extract` config: in threads in the object format, in
@@ -58,12 +58,13 @@ def mongodb(
                 exclude (dict) - {"released": False, "runtime": False}
             Note: Can't mix include and exclude statements '{"title": True, "released": False}`
         pymongoarrow_schema (pymongoarrow.schema.Schema): Mapping of expected field types of a collection to convert BSON to Arrow
-        on_inferred_type_mismatch (TTypeMismatch): Applies when `pymongoarrow_schema` is not passed. The
-            Arrow format then infers the type of a field from its first value in a batch and loads
-            values of other types as null: "ignore" (default, fastest) does that silently, "warn" and
-            "raise" detect such values with a second parse of each batch. Values that do not match
-            `pymongoarrow_schema` always raise `FieldTypeMismatchError`.
-        chunk_size (Optional[int]): The number of documents load in each batch.
+            Values that do not match it raise `FieldTypeMismatchError` (`pymongoarrow>=1.9`).
+        on_inferred_type_mismatch (TTypeMismatch): Without `pymongoarrow_schema`, values whose type
+            differs from the first value of their field load as null in the Arrow format: "ignore"
+            (default) silently, "warn" with a warning, "raise" fails. "warn" and "raise" parse each
+            batch twice.
+        chunk_size (Optional[int]): The number of documents loaded in each batch. With `parallel`,
+            the number of documents in an `_id` partition, which loads as one batch.
         data_item_format (Optional[TDataItemFormat]): The data format to use for loading.
             Supported formats:
                 object - Python objects (dicts, lists).
@@ -142,13 +143,14 @@ def mongodb_collection(
         database (Optional[str]): Selected database name, it will use the default database if not passed.
         collection (str): The collection name to load.
         incremental (Optional[dlt.sources.incremental]): Option to enable incremental loading for the collection.
-            E.g., `incremental=dlt.sources.incremental('updated_at', pendulum.parse('2022-01-01T00:00:00Z'))`
+            E.g., `incremental=dlt.sources.incremental('updated_at', datetime(2022, 1, 1, tzinfo=timezone.utc))`
         write_disposition (str): Write disposition of the resource.
         parallel (Optional[bool]): Read `_id` partitions of the collection in parallel, as many at
             once as `workers` in the `extract` config: in threads in the object format, in
             processes in the Arrow format. Default is False.
         limit (Optional[int]): The number of documents load.
-        chunk_size (Optional[int]): The number of documents load in each batch.
+        chunk_size (Optional[int]): The number of documents loaded in each batch. With `parallel`,
+            the number of documents in an `_id` partition, which loads as one batch.
         data_item_format (Optional[TDataItemFormat]): The data format to use for loading.
             Supported formats:
                 object - Python objects (dicts, lists).
@@ -162,11 +164,11 @@ def mongodb_collection(
                 exclude (dict) - {"released": False, "runtime": False}
             Note: Can't mix include and exclude statements '{"title": True, "released": False}`
         pymongoarrow_schema (pymongoarrow.schema.Schema): Mapping of expected field types to convert BSON to Arrow
-        on_inferred_type_mismatch (TTypeMismatch): Applies when `pymongoarrow_schema` is not passed. The
-            Arrow format then infers the type of a field from its first value in a batch and loads
-            values of other types as null: "ignore" (default, fastest) does that silently, "warn" and
-            "raise" detect such values with a second parse of each batch. Values that do not match
-            `pymongoarrow_schema` always raise `FieldTypeMismatchError`.
+            Values that do not match it raise `FieldTypeMismatchError` (`pymongoarrow>=1.9`).
+        on_inferred_type_mismatch (TTypeMismatch): Without `pymongoarrow_schema`, values whose type
+            differs from the first value of their field load as null in the Arrow format: "ignore"
+            (default) silently, "warn" with a warning, "raise" fails. "warn" and "raise" parse each
+            batch twice.
 
     Returns:
         DltResource: The resource loading the collection.
