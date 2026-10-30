@@ -8,8 +8,12 @@ from dlt.sources.helpers.rest_client import RESTClient
 from dlt.sources.helpers.rest_client.auth import OAuth2ClientCredentials
 from dlt.sources.helpers.rest_client.paginators import JSONLinkPaginator
 
+from .version import __version__
+
 GRAPH_URL = "https://graph.microsoft.com/v1.0"
 GRAPH_SCOPE = "https://graph.microsoft.com/.default"
+# SharePoint prioritizes traffic that names its vendor and app over undecorated traffic
+USER_AGENT = f"ISV|dltHub|dlt-sharepoint/{__version__}"
 
 
 @configspec
@@ -45,6 +49,7 @@ def site_client(
     """Returns a paging Graph client rooted at the site, authenticated as the Entra app."""
     return RESTClient(
         base_url=f"{GRAPH_URL}/sites/{site_id}",
+        headers={"User-Agent": USER_AGENT},
         auth=entra_auth(tenant_id, client_id, client_secret),
         paginator=JSONLinkPaginator(next_url_path="['@odata.nextLink']"),
         data_selector="value",

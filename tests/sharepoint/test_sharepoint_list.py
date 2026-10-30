@@ -1,16 +1,19 @@
 """Mocked tests of the SharePoint list sources: Graph calls go to requests_mock, loads go to duckdb."""
 
 import re
-from typing import Any, Dict, List, Optional
+from functools import partial
+from typing import Any, Callable, Dict, List, Optional, Set, Tuple
 from urllib.parse import urlparse
 
+import dlt
 import pytest
 from dlt.extract.exceptions import ResourceExtractionError
 from dlt.pipeline.exceptions import PipelineStepFailed
+from dlt.sources import DltResource
 from dlt.sources.helpers.requests import HTTPError
 from requests_mock import Mocker
 
-from sources.sharepoint import sharepoint_list, sharepoint_lists
+from sources.sharepoint import LIST_PAGE_SIZE, sharepoint_list, sharepoint_lists
 from tests.sharepoint.utils import (
     ACCESS_TOKEN,
     LISTS_URL,
@@ -36,6 +39,20 @@ FULL_RELOAD_HINT = 'Run the pipeline with refresh="drop_resources"'
 NO_LISTS_MESSAGE = (
     "No lists to load: list_titles is empty or the site has no visible generic list."
 )
+
+
+REMOVED = {"id": "1", "deleted": {"state": "deleted"}, "fields": {}}
+
+
+def delta_query(expand: str) -> Dict[str, List[str]]:
+    """Returns the query of the first delta request that selects `expand`."""
+    return {"$expand": [expand], "$top": [str(LIST_PAGE_SIZE)]}
+
+
+def task_rows(pipeline: dlt.Pipeline) -> Set[Tuple[Any, ...]]:
+    """Returns the loaded tasks as (id, title, _deleted)."""
+    rows = load_tables_to_dicts(pipeline, "tasks")["tasks"]
+    return {(row["id"], row.get("title"), row.get("_deleted")) for row in rows}
 
 
 @pytest.mark.parametrize(
@@ -64,9 +81,9 @@ def test_sharepoint_list_pagination(
 
     assert resource.name == list_title
     assert rows == [
-        {"Title": "a", "id": "1"},
-        {"Title": "b", "id": "2"},
-        {"Title": "c", "id": "3"},
+        {"Title": "a", "id": "1", "_dlt_list_idx": 0},
+        {"Title": "b", "id": "2", "_dlt_list_idx": 1},
+        {"Title": "c", "id": "3", "_dlt_list_idx": 2},
     ]
     delta_requests = requests_to(graph, "/items/delta")
     assert len(delta_requests) == 2
@@ -74,7 +91,7 @@ def test_sharepoint_list_pagination(
         urlparse(delta_requests[0].url).path
         == urlparse(list_delta_url(list_title)).path
     )
-    assert query_of(delta_requests[0]) == {"$expand": [expand]}
+    assert query_of(delta_requests[0]) == delta_query(expand)
     assert lists_requests(graph) == []
     assert {r.headers["Authorization"] for r in requests_to(graph, SITE_URL)} == {
         f"Bearer {ACCESS_TOKEN}"
@@ -107,6 +124,7 @@ def test_sharepoint_list_system_fields(graph: Mocker) -> None:
         "_UIVersionString",
         "_ComplianceFlags",
         "id",
+        "_dlt_list_idx",
     }
 
 
@@ -150,7 +168,7 @@ def test_sharepoint_list_delta_sync(graph: Mocker) -> None:
     table = pipeline.default_schema.tables["tasks"]
     assert table["write_disposition"] == "merge"
     assert table["columns"]["id"]["primary_key"] is True
-    assert table["columns"]["_deleted"]["hard_delete"] is True
+    assert table["columns"]["_dlt_list_idx"]["dedup_sort"] == "desc"
     assert table["columns"]["owner__lookup_id"]["data_type"] == "bigint"
     assert "tags" not in table["columns"]
 
@@ -159,11 +177,10 @@ def test_sharepoint_list_delta_sync(graph: Mocker) -> None:
     next_link = mock_delta(graph, delta_link, [[list_item("2", "b2"), removed]], "t2")
     assert_load_info(pipeline.run(sharepoint_list("Tasks")))
     assert [r.url for r in requests_to(graph, TASKS_DELTA_URL)] == [delta_link]
-    assert {
-        (r["id"], r["title"]) for r in load_tables_to_dicts(pipeline, "tasks")["tasks"]
-    } == {
-        ("1", "a"),
-        ("2", "b2"),
+    assert task_rows(pipeline) == {
+        ("1", "a", None),
+        ("2", "b2", None),
+        ("3", None, True),
     }
     assert load_table_counts(pipeline, "tasks__tags") == {"tasks__tags": 0}
 
@@ -172,7 +189,7 @@ def test_sharepoint_list_delta_sync(graph: Mocker) -> None:
     pipeline.run(sharepoint_list("Tasks"))
     assert [r.url for r in requests_to(graph, TASKS_DELTA_URL)] == [next_link]
     assert load_table_counts(pipeline, "tasks", "tasks__tags") == {
-        "tasks": 2,
+        "tasks": 3,
         "tasks__tags": 0,
     }
 
@@ -200,6 +217,63 @@ def test_sharepoint_list_continues_after_several_pages(graph: Mocker) -> None:
 
     assert [r.url for r in requests_to(graph, TASKS_DELTA_URL)] == [delta_link]
     assert load_table_counts(pipeline, "tasks") == {"tasks": 3}
+
+
+@pytest.mark.parametrize(
+    "last_occurrence,expected",
+    [
+        pytest.param(
+            list_item("1", "a2"), {("1", "a2", None), ("2", "b", None)}, id="update"
+        ),
+        pytest.param(REMOVED, {("1", None, True), ("2", "b", None)}, id="delete"),
+    ],
+)
+def test_sharepoint_list_last_occurrence_wins(
+    graph: Mocker, last_occurrence: Dict[str, Any], expected: Set[Tuple[Any, ...]]
+) -> None:
+    """Graph may send an item more than once in a feed; its last occurrence is what loads."""
+    pages = [[list_item("1", "a"), list_item("2", "b")], [last_occurrence]]
+    mock_list(graph, "Tasks", pages)
+    pipeline = new_pipeline("sharepoint_list")
+
+    assert_load_info(pipeline.run(sharepoint_list("Tasks")))
+
+    assert task_rows(pipeline) == expected
+
+
+def hard_deleting_list() -> DltResource:
+    return sharepoint_list("Tasks").apply_hints(
+        columns={"_deleted": {"hard_delete": True}}
+    )
+
+
+@pytest.mark.parametrize(
+    "tasks,hard_delete",
+    [
+        pytest.param(partial(sharepoint_lists, ["Tasks"]), False, id="soft_by_default"),
+        pytest.param(
+            partial(sharepoint_lists, ["Tasks"], hard_delete=True),
+            True,
+            id="lists_argument",
+        ),
+        pytest.param(hard_deleting_list, True, id="list_hint"),
+    ],
+)
+def test_sharepoint_list_hard_delete(
+    graph: Mocker, tasks: Callable[[], Any], hard_delete: bool
+) -> None:
+    """A deleted item keeps its row with `_deleted` set, unless `_deleted` has the hard_delete hint."""
+    pipeline = new_pipeline("sharepoint_list")
+    delta_link = mock_list(graph, "Tasks", [[list_item("1", "a"), list_item("2", "b")]])
+    assert_load_info(pipeline.run(tasks()))
+    mock_delta(graph, delta_link, [[{**REMOVED, "id": "2"}]], "t2")
+
+    assert_load_info(pipeline.run(tasks()))
+
+    kept = {("1", "a", None)}
+    assert task_rows(pipeline) == (kept if hard_delete else kept | {("2", None, True)})
+    columns = pipeline.default_schema.tables["tasks"]["columns"]
+    assert columns["_deleted"].get("hard_delete", False) is hard_delete
 
 
 def test_sharepoint_list_expired_delta_link(graph: Mocker) -> None:
@@ -281,10 +355,12 @@ def test_sharepoint_list_config_from_env(
     monkeypatch.setenv(f"{section}__INCLUDED_COLUMNS", '["Title"]')
     mock_list(graph, "Tasks", [[list_item("1", "a")]])
 
-    assert list(sharepoint_list("Tasks")) == [{"Title": "a", "id": "1"}]
-    assert query_of(requests_to(graph, "/items/delta")[0]) == {
-        "$expand": ["fields($select=Title)"]
-    }
+    assert list(sharepoint_list("Tasks")) == [
+        {"Title": "a", "id": "1", "_dlt_list_idx": 0}
+    ]
+    assert query_of(requests_to(graph, "/items/delta")[0]) == delta_query(
+        "fields($select=Title)"
+    )
 
 
 def test_sharepoint_list_columns_changed(graph: Mocker) -> None:
@@ -298,8 +374,8 @@ def test_sharepoint_list_columns_changed(graph: Mocker) -> None:
 
     assert load_table_counts(pipeline, "tasks") == {"tasks": 2}
     first, second = requests_to(graph, "/items/delta")
-    assert query_of(first) == {"$expand": ["fields($select=Title)"]}
-    assert query_of(second) == {"$expand": ["fields($select=Status,Title)"]}
+    assert query_of(first) == delta_query("fields($select=Title)")
+    assert query_of(second) == delta_query("fields($select=Status,Title)")
 
 
 def test_sharepoint_list_column_order_ignored(graph: Mocker) -> None:
@@ -312,5 +388,5 @@ def test_sharepoint_list_column_order_ignored(graph: Mocker) -> None:
 
     assert load_table_counts(pipeline, "tasks") == {"tasks": 2}
     first, second = requests_to(graph, "/items/delta")
-    assert query_of(first) == {"$expand": ["fields($select=Status,Title)"]}
+    assert query_of(first) == delta_query("fields($select=Status,Title)")
     assert second.url == delta_link

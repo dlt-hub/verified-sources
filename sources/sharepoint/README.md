@@ -8,15 +8,17 @@ source for developers and coding agents. Setup and usage are in the
 
 ### 1.0.0
 - new `sharepoint_list`: a resource named after the list, its items synced with Graph's delta
-  query and merged on `id`; items deleted in SharePoint are hard deleted through `_deleted`.
+  query and merged on `id`; items deleted in SharePoint keep their row with `_deleted` set, or
+  are deleted with the `hard_delete` hint on `_deleted`, and `_dlt_list_idx` keeps the last
+  occurrence of an item Graph sends twice in one run.
   `included_columns` selects columns by their internal names, `with_name` renames the table
 - new `sharepoint_lists`: every visible generic list of the site, or the named ones, one
-  `sharepoint_list` table per list
+  `sharepoint_list` table per list; `hard_delete=True` sets the hint on every table
 - new `sharepoint_folder`: dlt's `filesystem` resource over a library folder, new or modified
   files only; `read_files`: a transformer reading csv, jsonl, parquet or excel files into rows
   with `file_url`, `file_name` and `file_modified_at` (overwriting same-named file columns),
   merged on `file_url` so a modified file replaces its own rows, Excel workbooks one table
-  per sheet; `sharepoint_files`:
+  per sheet, files downloaded in parallel on dlt's extract workers; `sharepoint_files`:
   the two piped together. `sharepoint_folder` also feeds dlt's `read_csv`, `read_jsonl` and
   `read_parquet`, and `read_files` also reads from dlt's `filesystem` resource
 - new `SharepointFileSystem`: read-only fsspec filesystem registered as
@@ -56,12 +58,22 @@ Graph payloads from the API reference in `tests/sharepoint/utils.py`.
 ## Operations
 
 - **Throttling**: Graph answers 429 and 5xx with `Retry-After`, which dlt's REST client honours
-  with its default retries.
+  for up to `runtime.request_max_attempts` (5) attempts per request. SharePoint counts resource
+  units per app and tenant (from 1,250 a minute in tenants up to 1,000 licenses); a file costs
+  about 2 (its info and its `/content`), a page of a listing or of a delta query 1 or 2. Every
+  request carries the User-Agent `ISV|dltHub|dlt-sharepoint/<version>`, which SharePoint
+  prioritizes over undecorated traffic.
 - **Tokens**: the client credentials token is requested on the first call and renewed when it
   expires. `SharepointFileSystem` keeps the storage options, the secret included, on the
   instance, so do not log or pickle it.
-- **Lists**: each run reads one delta page sequence per list, with the full fields of changed
-  items only. The delta link is stored per list and column set, so changing `included_columns`
+- **Lists**: each run reads one delta page sequence per list, `LIST_PAGE_SIZE` (500) items a
+  page, with the full fields of changed items only. Graph may send an item more than once in a
+  feed; `_dlt_list_idx`, dlt's column for positions in a list, counts the rows of a run and
+  its `dedup_sort` makes the merge keep the last one. A deleted item comes as its id only, so
+  by default its row is replaced by one with `_deleted` set and the other columns empty;
+  `sharepoint_lists(hard_delete=True)`, or
+  `apply_hints(columns={"_deleted": {"hard_delete": True}})` on a `sharepoint_list`, deletes
+  the row instead. The delta link is stored per list and column set, so changing `included_columns`
   starts a full sync of the same table, in which rows deleted since the last run stay (use
   `refresh="drop_resources"` to drop them). A stored link that Graph rejects with 410 (when it can no
   longer track changes from that link, e.g. after a long time without a run) raises and asks for `refresh="drop_resources"`, because a plain
@@ -78,7 +90,11 @@ Graph payloads from the API reference in `tests/sharepoint/utils.py`.
   from 1 in every list.
 - **Files**: every run lists the folder tree (`children`, Graph's default page of 200 items)
   and downloads only files newer than, or not yet seen at, the stored `modification_date`, in
-  ranges through the pre-authenticated download url Graph redirects to. The watermark is kept
+  ranges through the pre-authenticated download url Graph redirects to. `read_files` yields one
+  `dlt.defer` call per file: files up to `PREFETCH_MAX_BYTES` (16 MiB) download whole on dlt's
+  extract workers (`extract.workers`, 5 by default) and are parsed in the main thread, larger
+  ones are read in ranges as their rows are parsed. A download host that ignores `Range` and
+  sends the whole file is cut to the requested range. The watermark is kept
   per `table_name`, so a changed folder or glob needs `refresh="drop_resources"`, as with any
   incremental resource. All files of one glob share one table, so files of different shapes
   widen it; use one `sharepoint_files` per file shape. Renamed files count as new files; a

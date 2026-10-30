@@ -3,7 +3,9 @@
 import codecs
 import os
 import re
+import threading
 from datetime import date, datetime, timedelta, timezone
+from functools import partial
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Tuple, Type, cast
 from urllib.parse import parse_qs, urlparse
@@ -21,7 +23,7 @@ from dlt.sources.filesystem import filesystem, read_csv, read_jsonl, read_parque
 from dlt.sources.helpers.requests import HTTPError
 from requests_mock import Mocker
 
-from sources.sharepoint import read_files, sharepoint_files, sharepoint_folder
+from sources.sharepoint import read_files, readers, sharepoint_files, sharepoint_folder
 from sources.sharepoint.filesystem import (
     ITEM_FIELDS,
     SharepointFileSystem,
@@ -59,6 +61,7 @@ from tests.sharepoint.utils import (
     new_pipeline,
     parquet_bytes,
     query_of,
+    ranged_content,
     requests_to,
     rows_per_file,
 )
@@ -321,6 +324,18 @@ def test_filesystem_open_ranges(graph: Mocker) -> None:
         "grant_type": ["client_credentials"],
         "scope": ["https://graph.microsoft.com/.default"],
     }
+
+
+def test_filesystem_open_range_ignored(graph: Mocker) -> None:
+    """A download host that ignores the Range header and sends the whole file still serves the range."""
+    content = bytes(range(10))
+    mock_folder(graph, "Reports", [[File("A", "a.bin", NEW, content)]])
+    graph.get(f"{DOWNLOAD_URL}/A", content=content)
+
+    with new_fs().open("Reports/a.bin", block_size=4) as f:
+        f.seek(5)
+        assert f.read(3) == content[5:8]
+        assert f.read() == content[8:]
 
 
 def test_filesystem_hash_in_names(graph: Mocker) -> None:
@@ -761,6 +776,33 @@ def test_read_files_over_local_filesystem(tmp_path: Path) -> None:
         for rows in tables.values()
         for row in rows
     } == {("book.xlsx", True, True)}
+
+
+def serve_on_thread(
+    threads: Dict[str, str], name: str, content: bytes, request: Any, context: Any
+) -> bytes:
+    """Serves the requested range of `content` and records the thread that downloaded `name`."""
+    threads[name] = threading.current_thread().name
+    return ranged_content(content, request, context)
+
+
+def test_read_files_downloads_small_files_on_workers(
+    graph: Mocker, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Files up to PREFETCH_MAX_BYTES download on dlt's workers, larger ones as their rows are read."""
+    monkeypatch.setattr(readers, "PREFETCH_MAX_BYTES", 8)
+    contents = {"small.csv": b"n\n1\n", "large.csv": b"n\n2\n3\n4\n5\n"}
+    mock_files(graph, contents)
+    threads: Dict[str, str] = {}
+    for name, content in contents.items():
+        serve = partial(serve_on_thread, threads, name, content)
+        graph.get(f"{DOWNLOAD_URL}/{name}", content=serve)
+
+    rows = list(sharepoint_folder("Reports", file_glob="*.csv") | read_files("csv"))
+
+    assert sorted(row["n"] for row in rows) == [1, 2, 3, 4, 5]
+    assert threads["large.csv"] == threading.main_thread().name
+    assert threads["small.csv"] != threading.main_thread().name
 
 
 def test_read_files_unknown_file_type(graph: Mocker) -> None:

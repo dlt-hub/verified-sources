@@ -17,9 +17,11 @@ from typing import (
     get_args,
 )
 
+import dlt
 import pandas as pd
 import pyarrow.parquet as pq
 from dlt.common import json
+from dlt.common.storages.fsspec_filesystem import FileItem
 from dlt.common.typing import TDataItems
 from dlt.extract import with_table_name
 from dlt.sources.filesystem import FileItemDict
@@ -27,10 +29,29 @@ from dlt.sources.filesystem import FileItemDict
 TFileType = Literal["csv", "jsonl", "parquet", "excel"]
 FILE_TYPES = get_args(TFileType)
 BATCH_SIZE = 10_000
+# up to this size a file is downloaded whole on a worker thread, larger ones are read in ranges
+PREFETCH_MAX_BYTES = 16 * 2**20
 
 # a batch of records and the workbook sheet it came from, None for every other file type
 TSheetRecords = Tuple[Optional[str], List[Dict[str, Any]]]
 TReader = Callable[[Any, Dict[str, Any]], Iterator[TSheetRecords]]
+
+
+@dlt.defer
+def read_file(
+    item: FileItemDict, file_type: str, reader_kwargs: Dict[str, Any], table_name: str
+) -> Iterator[TDataItems]:
+    """Downloads the file on a dlt worker thread and returns its rows, which dlt reads in the main thread.
+
+    Files over `PREFETCH_MAX_BYTES` or of unknown size are read in ranges as their rows are read.
+    """
+    size = item.get("size_in_bytes")
+    if size is not None and size <= PREFETCH_MAX_BYTES:
+        content = item.read_bytes()
+        item = FileItemDict(
+            cast(FileItem, {**item, "file_content": content}), item.fsspec
+        )
+    return file_rows([item], file_type, reader_kwargs, table_name)
 
 
 def file_rows(

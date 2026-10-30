@@ -4,8 +4,11 @@ import pytest
 from dlt.sources.helpers.requests import HTTPError
 from requests_mock import Mocker
 
+from sources.sharepoint.graph import USER_AGENT
+from sources.sharepoint.version import __version__
 from tests.sharepoint.utils import (
     AADSTS_ERROR,
+    NEW,
     TOKEN_URL,
     File,
     mock_folder,
@@ -13,6 +16,21 @@ from tests.sharepoint.utils import (
     requests_to,
     token_response,
 )
+
+
+def test_graph_requests_name_the_app(graph: Mocker) -> None:
+    """Graph and the download host get the User-Agent SharePoint expects from an ISV app."""
+    mock_folder(graph, "Reports", [[File("A", "a.csv", NEW, b"n\n1\n")]])
+
+    with new_fs().open("Reports/a.csv") as f:
+        assert f.read() == b"n\n1\n"
+
+    assert USER_AGENT == f"ISV|dltHub|dlt-sharepoint/{__version__}"
+    agents = [
+        r.headers["User-Agent"] for r in graph.request_history if r.method == "GET"
+    ]
+    assert len(agents) == 3
+    assert set(agents) == {USER_AGENT}
 
 
 def test_entra_auth_token_refresh(graph: Mocker) -> None:

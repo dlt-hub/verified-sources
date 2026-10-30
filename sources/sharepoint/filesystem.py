@@ -192,6 +192,9 @@ class SharepointFile(AbstractBufferedFile):
                 f"{response.status_code} error downloading {content_path}",
                 response=response,
             )
+        if response.status_code == 200:
+            # the download host may ignore the range and send the whole file
+            return bytes(response.content[start:end])
         return bytes(response.content)
 
 
