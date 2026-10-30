@@ -1,5 +1,6 @@
+from datetime import datetime, timezone
+
 import dlt
-from dlt.common import pendulum
 from dlt.common.data_writers import TDataItemFormat
 from dlt.common.pipeline import LoadInfo
 from dlt.common.typing import TDataItems
@@ -73,7 +74,7 @@ def load_select_collection_db_filtered(pipeline: Pipeline = None) -> LoadInfo:
     movies = mongodb_collection(
         collection="movies",
         incremental=dlt.sources.incremental(
-            "lastupdated", initial_value=pendulum.DateTime(2016, 1, 1, 0, 0, 0)
+            "lastupdated", initial_value=datetime(2016, 1, 1, tzinfo=timezone.utc)
         ),
     )
 
@@ -130,7 +131,7 @@ def load_entire_database(pipeline: Pipeline = None) -> LoadInfo:
 def load_collection_with_arrow(pipeline: Pipeline = None) -> LoadInfo:
     """
     Load a MongoDB collection, using Apache
-    Error as the data processor.
+    Arrow as the data processor.
     """
     if pipeline is None:
         # Create a pipeline
@@ -146,10 +147,8 @@ def load_collection_with_arrow(pipeline: Pipeline = None) -> LoadInfo:
         collection="comments",
         incremental=dlt.sources.incremental(
             "date",
-            initial_value=pendulum.DateTime(
-                2005, 1, 1, tzinfo=pendulum.timezone("UTC")
-            ),
-            end_value=pendulum.DateTime(2005, 6, 1, tzinfo=pendulum.timezone("UTC")),
+            initial_value=datetime(2005, 1, 1, tzinfo=timezone.utc),
+            end_value=datetime(2005, 6, 1, tzinfo=timezone.utc),
         ),
         data_item_format="arrow",
     )

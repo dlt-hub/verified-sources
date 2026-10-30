@@ -1,5 +1,6 @@
 """Mongo database source helpers"""
 
+from datetime import timezone
 from itertools import islice
 from typing import (
     TYPE_CHECKING,
@@ -7,6 +8,7 @@ from typing import (
     Dict,
     Iterator,
     List,
+    Literal,
     Optional,
     Tuple,
     Union,
@@ -15,38 +17,36 @@ from typing import (
 )
 
 import dlt
+from bson.codec_options import CodecOptions, DatetimeConversion
+from bson.dbref import DBRef
 from bson.decimal128 import Decimal128
+from bson.max_key import MaxKey
+from bson.min_key import MinKey
 from bson.objectid import ObjectId
 from bson.regex import Regex
 from bson.timestamp import Timestamp
 from dlt.common import logger
 from dlt.common.configuration.specs import BaseConfiguration, configspec
 from dlt.common.data_writers import TDataItemFormat
-from dlt.common.time import ensure_pendulum_datetime
 from dlt.common.typing import TDataItem
-from dlt.common.utils import map_nested_in_place
-from pendulum import _datetime
+from dlt.common.utils import map_nested_values_in_place
 from pymongo import ASCENDING, DESCENDING, MongoClient
 from pymongo.collection import Collection
 from pymongo.cursor import Cursor
-from pymongo.helpers_shared import _fields_list_to_dict
 
 
 if TYPE_CHECKING:
     TMongoClient = MongoClient[Any]
     TCollection = Collection[Any]
     TCursor = Cursor[Any]
+    TCodecOptions = CodecOptions[Any]
 else:
     TMongoClient = Any
     TCollection = Any
     TCursor = Any
+    TCodecOptions = Any
 
-try:
-    import pymongoarrow  # type: ignore
-
-    PYMONGOARROW_AVAILABLE = True
-except ImportError:
-    PYMONGOARROW_AVAILABLE = False
+TTypeMismatch = Literal["raise", "warn", "ignore"]
 
 
 class CollectionLoader:
@@ -62,62 +62,64 @@ class CollectionLoader:
         self.incremental = incremental
         self.chunk_size = chunk_size
 
-        if incremental:
-            self.cursor_field = incremental.cursor_path
-            self.last_value = incremental.last_value
-        else:
-            self.cursor_column = None
-            self.last_value = None
-
     @property
-    def _sort_op(self) -> List[Optional[Tuple[str, int]]]:
-        if not self.incremental or not self.last_value:
+    def _sort_op(self) -> List[Tuple[str, int]]:
+        incremental = self.incremental
+        if not incremental or not incremental.row_order:
+            return []
+        if incremental.last_value_func not in (max, min):
             return []
 
-        if (
-            self.incremental.row_order == "asc"
-            and self.incremental.last_value_func is max
-        ) or (
-            self.incremental.row_order == "desc"
-            and self.incremental.last_value_func is min
-        ):
-            return [(self.cursor_field, ASCENDING)]
-
-        elif (
-            self.incremental.row_order == "asc"
-            and self.incremental.last_value_func is min
-        ) or (
-            self.incremental.row_order == "desc"
-            and self.incremental.last_value_func is max
-        ):
-            return [(self.cursor_field, DESCENDING)]
-
-        return []
+        ascending = (incremental.row_order == "asc") == (
+            incremental.last_value_func is max
+        )
+        return [(incremental.cursor_path, ASCENDING if ascending else DESCENDING)]
 
     @property
     def _filter_op(self) -> Dict[str, Any]:
-        """Build a filtering operator.
-
-        Includes a field and the filtering condition for it.
+        """Build a filtering operator from the incremental range.
 
         Returns:
             Dict[str, Any]: A dictionary with the filter operator.
         """
-        if not (self.incremental and self.last_value):
+        incremental = self.incremental
+        if not incremental or incremental.last_value_func not in (max, min):
             return {}
+        start = incremental.last_value
+        if start is None:
+            return {}
+        end = incremental.end_value
+        start_closed = incremental.range_start == "closed"
+        end_closed = incremental.range_end == "closed"
 
-        filt = {}
-        if self.incremental.last_value_func is max:
-            filt = {self.cursor_field: {"$gte": self.last_value}}
-            if self.incremental.end_value:
-                filt[self.cursor_field]["$lt"] = self.incremental.end_value
+        if incremental.last_value_func is max:
+            cursor_filter = {"$gte" if start_closed else "$gt": start}
+            if end is not None:
+                cursor_filter["$lte" if end_closed else "$lt"] = end
+        else:
+            cursor_filter = {"$lte" if start_closed else "$lt": start}
+            if end is not None:
+                cursor_filter["$gte" if end_closed else "$gt"] = end
 
-        elif self.incremental.last_value_func is min:
-            filt = {self.cursor_field: {"$lte": self.last_value}}
-            if self.incremental.end_value:
-                filt[self.cursor_field]["$gt"] = self.incremental.end_value
+        cursor_path = incremental.cursor_path
+        if incremental.on_cursor_value_missing == "include":
+            return {"$or": [{cursor_path: cursor_filter}, {cursor_path: None}]}
+        return {cursor_path: cursor_filter}
 
-        return filt
+    def _query_filter(self, filter_: Dict[str, Any]) -> Dict[str, Any]:
+        """Combine the incremental filter with the user filter.
+
+        Args:
+            filter_ (Dict[str, Any]): The filter to apply to the collection.
+
+        Returns:
+            Dict[str, Any]: The filter to query the collection with.
+        """
+        filter_op = self._filter_op
+        _raise_if_intersection(filter_op, filter_)
+        if filter_op and filter_:
+            return {"$and": [filter_op, filter_]}
+        return filter_op or filter_
 
     def _projection_op(
         self, projection: Optional[Union[Mapping[str, Any], Iterable[str]]]
@@ -126,37 +128,34 @@ class CollectionLoader:
 
         Args:
             projection (Optional[Union[Mapping[str, Any], Iterable[str]]]): A tuple of fields to include or a dict specifying fields to include or exclude.
-            The incremental `primary_key` needs to be handle differently for inclusion
-            and exclusion projections.
+            The incremental cursor field is always loaded.
 
         Returns:
-            Tuple[str, ...] | Dict[str, Any]: A tuple or dictionary with the projection operator.
+            Optional[Dict[str, Any]]: A dictionary with the projection operator.
         """
         if projection is None:
             return None
 
-        projection_dict = dict(_fields_list_to_dict(projection, "projection"))
+        if isinstance(projection, Mapping):
+            projection_dict = dict(projection)
+        else:
+            projection_dict = {field: 1 for field in projection}
 
         if self.incremental:
-            # this is an inclusion projection
-            if any(v == 1 for v in projection_dict.values()):
-                # ensure primary_key is included
-                projection_dict.update(m={self.incremental.primary_key: 1})
-            # this is an exclusion projection
-            else:
-                try:
-                    # ensure primary_key isn't excluded
-                    projection_dict.pop(self.incremental.primary_key)  # type: ignore
-                except KeyError:
-                    pass  # primary_key was properly not included in exclusion projection
-                else:
-                    dlt.common.logger.warn(
-                        f"Primary key `{self.incremental.primary_key}` was removed from exclusion projection"
-                    )
+            cursor_path = self.incremental.cursor_path
+            # `_id` may be excluded in an inclusion projection and included in an exclusion one
+            if any(
+                value == 1 for field, value in projection_dict.items() if field != "_id"
+            ):
+                projection_dict[cursor_path] = 1
+            elif projection_dict.pop(cursor_path, None) is not None:
+                logger.warning(
+                    f"Cursor field `{cursor_path}` was removed from exclusion projection"
+                )
 
         return projection_dict
 
-    def _limit(self, cursor: Cursor, limit: Optional[int] = None) -> TCursor:  # type: ignore
+    def _limit(self, cursor: TCursor, limit: Optional[int] = None) -> TCursor:
         """Apply a limit to the cursor, if needed.
 
         Args:
@@ -167,7 +166,7 @@ class CollectionLoader:
             Cursor: The cursor with the limit applied (if given).
         """
         if limit not in (0, None):
-            if self.incremental is None or self.incremental.last_value_func is None:
+            if not self._sort_op:
                 logger.warning(
                     "Using limit without ordering - results may be inconsistent."
                 )
@@ -192,28 +191,35 @@ class CollectionLoader:
         Yields:
             Iterator[TDataItem]: An iterator of the loaded documents.
         """
-        filter_op = self._filter_op
-        _raise_if_intersection(filter_op, filter_)
-        filter_op.update(filter_)
-
-        projection_op = self._projection_op(projection)
-
-        cursor = self.collection.find(filter=filter_op, projection=projection_op)
+        cursor = self.collection.find(
+            filter=self._query_filter(filter_),
+            projection=self._projection_op(projection),
+        )
         if self._sort_op:
             cursor = cursor.sort(self._sort_op)
 
         cursor = self._limit(cursor, limit)
 
         while docs_slice := list(islice(cursor, self.chunk_size)):
-            yield map_nested_in_place(convert_mongo_objs, docs_slice)
+            yield map_nested_values_in_place(convert_mongo_objs, docs_slice)
 
 
 class CollectionLoaderParallel(CollectionLoader):
-    def _get_document_count(self) -> int:
-        return self.collection.count_documents(filter=self._filter_op)
+    @property
+    def _batches_sort_op(self) -> List[Tuple[str, int]]:
+        """Sort with a unique field, so skip and limit split the collection without gaps or overlaps"""
+        sort_op = self._sort_op
+        if not any(field == "_id" for field, _ in sort_op):
+            sort_op.append(("_id", ASCENDING))
+        return sort_op
 
-    def _create_batches(self, limit: Optional[int] = None) -> List[Dict[str, int]]:
-        doc_count = self._get_document_count()
+    def _get_document_count(self, filter_: Dict[str, Any]) -> int:
+        return self.collection.count_documents(filter=self._query_filter(filter_))
+
+    def _create_batches(
+        self, filter_: Dict[str, Any], limit: Optional[int] = None
+    ) -> List[Dict[str, int]]:
+        doc_count = self._get_document_count(filter_)
         if limit:
             doc_count = min(doc_count, abs(limit))
 
@@ -240,17 +246,11 @@ class CollectionLoaderParallel(CollectionLoader):
         Returns:
             Cursor: The cursor for the collection.
         """
-        filter_op = self._filter_op
-        _raise_if_intersection(filter_op, filter_)
-        filter_op.update(filter_)
-
-        projection_op = self._projection_op(projection)
-
-        cursor = self.collection.find(filter=filter_op, projection=projection_op)
-        if self._sort_op:
-            cursor = cursor.sort(self._sort_op)
-
-        return cursor
+        cursor = self.collection.find(
+            filter=self._query_filter(filter_),
+            projection=self._projection_op(projection),
+        )
+        return cursor.sort(self._batches_sort_op)  # type: ignore[no-any-return]
 
     @dlt.defer
     def _run_batch(self, cursor: TCursor, batch: Dict[str, int]) -> TDataItem:
@@ -258,7 +258,7 @@ class CollectionLoaderParallel(CollectionLoader):
 
         data = []
         for document in cursor.skip(batch["skip"]).limit(batch["limit"]):
-            data.append(map_nested_in_place(convert_mongo_objs, document))
+            data.append(map_nested_values_in_place(convert_mongo_objs, document))
 
         return data
 
@@ -278,7 +278,7 @@ class CollectionLoaderParallel(CollectionLoader):
         Yields:
             Iterator[TDataItem]: An iterator of the loaded documents.
         """
-        batches = self._create_batches(limit=limit)
+        batches = self._create_batches(filter_=filter_, limit=limit)
         cursor = self._get_cursor(filter_=filter_, projection=projection)
 
         for batch in batches:
@@ -306,176 +306,18 @@ class CollectionLoaderParallel(CollectionLoader):
             yield document
 
 
-class CollectionArrowLoader(CollectionLoader):
-    """
-    Mongo DB collection loader, which uses
-    Apache Arrow for data processing.
-    """
-
-    def load_documents(
-        self,
-        filter_: Dict[str, Any],
-        limit: Optional[int] = None,
-        projection: Optional[Union[Mapping[str, Any], Iterable[str]]] = None,
-        pymongoarrow_schema: Any = None,
-    ) -> Iterator[Any]:
-        """
-        Load documents from the collection in Apache Arrow format.
-
-        Args:
-            filter_ (Dict[str, Any]): The filter to apply to the collection.
-            limit (Optional[int]): The number of documents to load.
-            projection (Optional[Union[Mapping[str, Any], Iterable[str]]]): The projection to select fields to create the Cursor.
-            pymongoarrow_schema (Any): The mapping of field types to convert BSON to Arrow.
-
-        Yields:
-            Iterator[Any]: An iterator of the loaded documents.
-        """
-        from pymongoarrow.context import PyMongoArrowContext  # type: ignore
-        from pymongoarrow.lib import process_bson_stream  # type: ignore
-
-        filter_op = self._filter_op
-        _raise_if_intersection(filter_op, filter_)
-        filter_op.update(filter_)
-
-        projection_op = self._projection_op(projection)
-
-        # NOTE the `filter_op` isn't passed
-        cursor = self.collection.find_raw_batches(
-            filter_, batch_size=self.chunk_size, projection=projection_op
-        )
-        if self._sort_op:
-            cursor = cursor.sort(self._sort_op)  # type: ignore
-
-        cursor = self._limit(cursor, limit)  # type: ignore
-
-        context = PyMongoArrowContext.from_schema(
-            schema=pymongoarrow_schema, codec_options=self.collection.codec_options
-        )
-        for batch in cursor:
-            process_bson_stream(batch, context)
-            table = context.finish()
-            yield convert_arrow_columns(table)
-
-
-class CollectionArrowLoaderParallel(CollectionLoaderParallel):
-    """
-    Mongo DB collection parallel loader, which uses
-    Apache Arrow for data processing.
-    """
-
-    def load_documents(
-        self,
-        filter_: Dict[str, Any],
-        limit: Optional[int] = None,
-        projection: Optional[Union[Mapping[str, Any], Iterable[str]]] = None,
-        pymongoarrow_schema: Any = None,
-    ) -> Iterator[TDataItem]:
-        """Load documents from the collection in parallel.
-
-        Args:
-            filter_ (Dict[str, Any]): The filter to apply to the collection.
-            limit (Optional[int]): The number of documents to load.
-            projection (Optional[Union[Mapping[str, Any], Iterable[str]]]): The projection to select fields to create the Cursor.
-            pymongoarrow_schema (Any): The mapping of field types to convert BSON to Arrow.
-
-        Yields:
-            Iterator[TDataItem]: An iterator of the loaded documents.
-        """
-        yield from self._get_all_batches(
-            limit=limit,
-            filter_=filter_,
-            projection=projection,
-            pymongoarrow_schema=pymongoarrow_schema,
-        )
-
-    def _get_all_batches(
-        self,
-        filter_: Dict[str, Any],
-        limit: Optional[int] = None,
-        projection: Optional[Union[Mapping[str, Any], Iterable[str]]] = None,
-        pymongoarrow_schema: Any = None,
-    ) -> Iterator[TDataItem]:
-        """Load all documents from the collection in parallel batches.
-
-        Args:
-            filter_ (Dict[str, Any]): The filter to apply to the collection.
-            limit (Optional[int]): The maximum number of documents to load.
-            projection (Optional[Union[Mapping[str, Any], Iterable[str]]]): The projection to select fields to create the Cursor.
-            pymongoarrow_schema (Any): The mapping of field types to convert BSON to Arrow.
-
-        Yields:
-            Iterator[TDataItem]: An iterator of the loaded documents.
-        """
-        batches = self._create_batches(limit=limit)
-        cursor = self._get_cursor(filter_=filter_, projection=projection)
-        for batch in batches:
-            yield self._run_batch(
-                cursor=cursor,
-                batch=batch,
-                pymongoarrow_schema=pymongoarrow_schema,
-            )
-
-    def _get_cursor(
-        self,
-        filter_: Dict[str, Any],
-        projection: Optional[Union[Mapping[str, Any], Iterable[str]]] = None,
-    ) -> TCursor:
-        """Get a reading cursor for the collection.
-
-        Args:
-            filter_ (Dict[str, Any]): The filter to apply to the collection.
-            projection (Optional[Union[Mapping[str, Any], Iterable[str]]]): The projection to select fields to create the Cursor.
-
-        Returns:
-            Cursor: The cursor for the collection.
-        """
-        filter_op = self._filter_op
-        _raise_if_intersection(filter_op, filter_)
-        filter_op.update(filter_)
-
-        projection_op = self._projection_op(projection)
-
-        cursor = self.collection.find_raw_batches(
-            filter=filter_op, batch_size=self.chunk_size, projection=projection_op
-        )
-        if self._sort_op:
-            cursor = cursor.sort(self._sort_op)  # type: ignore
-
-        return cursor
-
-    @dlt.defer
-    def _run_batch(
-        self,
-        cursor: TCursor,
-        batch: Dict[str, int],
-        pymongoarrow_schema: Any = None,
-    ) -> TDataItem:
-        from pymongoarrow.context import PyMongoArrowContext
-        from pymongoarrow.lib import process_bson_stream
-
-        cursor = cursor.clone()
-
-        context = PyMongoArrowContext.from_schema(
-            schema=pymongoarrow_schema, codec_options=self.collection.codec_options
-        )
-        for chunk in cursor.skip(batch["skip"]).limit(batch["limit"]):
-            process_bson_stream(chunk, context)
-            table = context.finish()
-            yield convert_arrow_columns(table)
-
-
 def collection_documents(
     client: TMongoClient,
     collection: TCollection,
     filter_: Dict[str, Any],
-    projection: Union[Dict[str, Any], List[str]],
-    pymongoarrow_schema: "pymongoarrow.schema.Schema",
+    projection: Optional[Union[Mapping[str, Any], Iterable[str]]],
+    pymongoarrow_schema: Any,
     incremental: Optional[dlt.sources.incremental[Any]] = None,
     parallel: bool = False,
     limit: Optional[int] = None,
     chunk_size: Optional[int] = 10000,
     data_item_format: Optional[TDataItemFormat] = "object",
+    on_inferred_type_mismatch: TTypeMismatch = "ignore",
 ) -> Iterator[TDataItem]:
     """
     A DLT source which loads data from a Mongo database using PyMongo.
@@ -500,127 +342,91 @@ def collection_documents(
             Supported formats:
                 object - Python objects (dicts, lists).
                 arrow - Apache Arrow tables.
+        on_inferred_type_mismatch (TTypeMismatch): Applies when `pymongoarrow_schema` is not passed. The
+            Arrow format then infers the type of a field from its first value in a batch and loads
+            values of other types as null: "ignore" (default, fastest) does that silently, "warn" and
+            "raise" detect such values with a second parse of each batch. Values that do not match
+            `pymongoarrow_schema` always raise `FieldTypeMismatchError`.
 
-    Returns:
-        Iterable[DltResource]: A list of DLT resources for each collection to be loaded.
+    Yields:
+        Iterator[TDataItem]: Lists of documents or Arrow tables.
     """
-    if data_item_format == "arrow" and not PYMONGOARROW_AVAILABLE:
-        dlt.common.logger.warn(
+    if data_item_format == "arrow" and not _pymongoarrow_available():
+        logger.warning(
             "'pymongoarrow' is not installed; falling back to standard MongoDB CollectionLoader."
         )
         data_item_format = "object"
 
     if data_item_format != "arrow" and pymongoarrow_schema:
-        dlt.common.logger.warn(
+        logger.warning(
             "Received value for `pymongoarrow_schema`, but `data_item_format=='object'` "
             "Use `data_item_format=='arrow'` to enforce schema."
         )
 
-    if data_item_format == "arrow" and pymongoarrow_schema and projection:
-        dlt.common.logger.warn(
-            "Received values for both `pymongoarrow_schema` and `projection`. Since both "
-            "create a projection to select fields, `projection` will be ignored."
+    if data_item_format == "arrow":
+        from .arrow import (
+            CollectionArrowLoader,
+            CollectionArrowLoaderParallel,
+            arrow_options_from_context,
         )
 
-    if parallel:
-        if data_item_format == "arrow":
-            LoaderClass = CollectionArrowLoaderParallel
-        else:
-            LoaderClass = CollectionLoaderParallel  # type: ignore
-    else:
-        if data_item_format == "arrow":
-            LoaderClass = CollectionArrowLoader  # type: ignore
-        else:
-            LoaderClass = CollectionLoader  # type: ignore
-
-    loader = LoaderClass(
-        client, collection, incremental=incremental, chunk_size=chunk_size
-    )
-    if isinstance(loader, (CollectionArrowLoader, CollectionArrowLoaderParallel)):
-        yield from loader.load_documents(
+        arrow_loader_class = (
+            CollectionArrowLoaderParallel if parallel else CollectionArrowLoader
+        )
+        arrow_loader = arrow_loader_class(
+            client, collection, incremental=incremental, chunk_size=chunk_size
+        )
+        yield from arrow_loader.load_documents(
             limit=limit,
             filter_=filter_,
             projection=projection,
-            pymongoarrow_schema=pymongoarrow_schema,
+            arrow_options=arrow_options_from_context(
+                pymongoarrow_schema, on_inferred_type_mismatch
+            ),
         )
     else:
+        loader_class = CollectionLoaderParallel if parallel else CollectionLoader
+        loader = loader_class(
+            client, collection, incremental=incremental, chunk_size=chunk_size
+        )
         yield from loader.load_documents(
             limit=limit, filter_=filter_, projection=projection
         )
 
 
 def convert_mongo_objs(value: Any) -> Any:
-    """MongoDB to dlt type conversion when using Python loaders.
-
-    Notes:
-        The method `ObjectId.__str__()` creates a hexstring using `binascii.hexlify(__id).decode()`
-
-    """
+    """MongoDB to dlt type conversion when using Python loaders."""
     if isinstance(value, (ObjectId, Decimal128)):
         return str(value)
-    if isinstance(value, _datetime.datetime):
-        return ensure_pendulum_datetime(value)
     if isinstance(value, Regex):
-        return value.try_compile().pattern
+        # patterns may use PCRE syntax that Python `re` does not compile
+        return value.pattern
     if isinstance(value, Timestamp):
-        date = value.as_datetime()
-        return ensure_pendulum_datetime(date)
+        return value.as_datetime().astimezone(timezone.utc)
+    if isinstance(value, DBRef):
+        return {key: convert_mongo_objs(item) for key, item in value.as_doc().items()}
+    if isinstance(value, (MinKey, MaxKey)):
+        return None
 
     return value
 
 
-def convert_arrow_columns(table: Any) -> Any:
-    """Convert the given table columns to Python types.
-
-    Notes:
-        Calling str() matches the `convert_mongo_obs()` used in non-arrow code.
-        Pymongoarrow converts ObjectId to `fixed_size_binary[12]`, which can't be
-        converted to a string as a vectorized operation because it contains ASCII characters.
-
-        Instead, you need to loop over values using:
-        ```python
-        pyarrow.array([v.as_buffer().hex() for v in object_id_array], type=pyarrow.string())
-        # pymongoarrow simplifies this by allowing this syntax
-        [str(v) for v in object_id_array]
-        ```
-
-    Args:
-        table (pyarrow.lib.Table): The table to convert.
-
-    Returns:
-        pyarrow.lib.Table: The table with the columns converted.
-    """
-    from pymongoarrow.types import _is_binary, _is_code, _is_decimal128, _is_objectid  # type: ignore
-    from dlt.common.libs.pyarrow import pyarrow
-
-    for i, field in enumerate(table.schema):
-        if _is_objectid(field.type) or _is_decimal128(field.type):
-            col_values = [str(value) for value in table[field.name]]
-            table = table.set_column(
-                i,
-                pyarrow.field(field.name, pyarrow.string()),
-                pyarrow.array(col_values, type=pyarrow.string()),
-            )
-        else:
-            type_ = None
-            if _is_binary(field.type):
-                type_ = pyarrow.binary()
-            elif _is_code(field.type):
-                type_ = pyarrow.string()
-
-            if type_:
-                col_values = [value.as_py() for value in table[field.name]]
-                table = table.set_column(
-                    i,
-                    pyarrow.field(field.name, type_),
-                    pyarrow.array(col_values, type=type_),
-                )
-    return table
+def _pymongoarrow_available() -> bool:
+    try:
+        import pymongoarrow  # type: ignore # noqa: F401
+    except ImportError:
+        return False
+    return True
 
 
 def client_from_credentials(connection_url: str) -> TMongoClient:
     client: TMongoClient = MongoClient(
-        connection_url, uuidRepresentation="standard", tz_aware=True
+        connection_url,
+        uuidRepresentation="standard",
+        tz_aware=True,
+        tzinfo=timezone.utc,
+        # dates outside of the python range are clamped instead of failing the load
+        datetime_conversion=DatetimeConversion.DATETIME_CLAMP,
     )
     return client
 
@@ -636,8 +442,11 @@ def _raise_if_intersection(filter1: Dict[str, Any], filter2: Dict[str, Any]) -> 
     """
     field_inter = filter1.keys() & filter2.keys()
     for field in field_inter:
-        if filter1[field].keys() & filter2[field].keys():
-            str_repr = str({field: filter1[field]})
+        operators1, operators2 = filter1[field], filter2[field]
+        if not isinstance(operators1, dict) or not isinstance(operators2, dict):
+            continue
+        if operators1.keys() & operators2.keys():
+            str_repr = str({field: operators1})
             raise ValueError(
                 (
                     f"Filtering operator {str_repr} is already used by the "
