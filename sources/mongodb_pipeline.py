@@ -2,7 +2,7 @@ from datetime import datetime, timezone
 
 import dlt
 from dlt.common.data_writers import TDataItemFormat
-from dlt.common.pipeline import LoadInfo
+from dlt.common.pipeline import ExtractInfo, LoadInfo
 from dlt.common.typing import TDataItems
 from dlt.pipeline.pipeline import Pipeline
 
@@ -157,10 +157,36 @@ def load_collection_with_arrow(pipeline: Pipeline = None) -> LoadInfo:
     return info
 
 
+def extract_local_collection_parallel_arrow(
+    pipeline: Pipeline = None,
+    database: str = "bench",
+    collection: str = "events",
+) -> ExtractInfo:
+    """Extract a collection of a local MongoDB as Arrow tables, read in `_id` partitions by
+    8 worker processes. Only extracts, to measure the read without loading.
+    """
+    if pipeline is None:
+        pipeline = dlt.pipeline(
+            pipeline_name="local_mongo_arrow", destination="duckdb", progress="log"
+        )
+
+    events = mongodb_collection(
+        # compression only slows down a server on the same machine
+        connection_url="mongodb://localhost:27017/?compressors=",
+        database=database,
+        collection=collection,
+        parallel=True,
+        data_item_format="arrow",
+    )
+
+    # one worker process per extract thread
+    return pipeline.extract(events, workers=8)
+
+
 if __name__ == "__main__":
     # Credentials for the sample database.
     # Load selected tables with different settings
-    print(load_select_collection_db())
+    # print(load_select_collection_db())
     # print(load_select_collection_db_filtered())
 
     # Load all tables from the database.
@@ -169,3 +195,6 @@ if __name__ == "__main__":
 
     # Load data with Apache Arrow.
     # print(load_collection_with_arrow())
+
+    # Extract a collection of a local MongoDB with 8 worker processes.
+    print(extract_local_collection_parallel_arrow())
