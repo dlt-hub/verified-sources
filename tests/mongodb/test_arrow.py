@@ -124,6 +124,7 @@ def test_read_partition() -> None:
 
     table, mismatch = read_partition(
         collection,
+        {},
         {"n": {"$gte": 0}},
         None,
         pymongoarrow_schema=None,

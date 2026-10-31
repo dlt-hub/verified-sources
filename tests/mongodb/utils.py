@@ -21,6 +21,7 @@ from bson import (
     Timestamp,
 )
 from bson.codec_options import CodecOptions
+from pymongo.errors import OperationFailure
 
 from sources.mongodb.helpers import (
     client_from_credentials,
@@ -44,11 +45,15 @@ class FakeCursor:
         filter_: Optional[Dict[str, Any]],
         projection: Optional[Dict[str, Any]],
         raw_batch_size: Optional[int] = None,
+        **bounds: Any,
     ) -> None:
         self.collection = collection
         self.filter = filter_
         self.projection = projection
         self.raw_batch_size = raw_batch_size
+        self.hint = bounds.get("hint")
+        self.min = bounds.get("min")
+        self.max = bounds.get("max")
         self.sort_spec: List[Tuple[str, int]] = []
         self.skip_count = 0
         self.limit_count = 0
@@ -112,8 +117,9 @@ class FakeCollection:
         self,
         filter: Optional[Dict[str, Any]] = None,  # noqa: A002
         projection: Optional[Dict[str, Any]] = None,
+        **bounds: Any,
     ) -> FakeCursor:
-        cursor = FakeCursor(self, filter, projection)
+        cursor = FakeCursor(self, filter, projection, **bounds)
         self.cursors.append(cursor)
         return cursor
 
@@ -122,13 +128,22 @@ class FakeCollection:
         filter: Optional[Dict[str, Any]] = None,  # noqa: A002
         batch_size: int = 0,
         projection: Optional[Dict[str, Any]] = None,
+        **bounds: Any,
     ) -> FakeCursor:
-        cursor = FakeCursor(self, filter, projection, raw_batch_size=batch_size or 101)
+        cursor = FakeCursor(
+            self, filter, projection, raw_batch_size=batch_size or 101, **bounds
+        )
         self.cursors.append(cursor)
         return cursor
 
     def estimated_document_count(self) -> int:
         return len(self.documents)
+
+    def count_documents(self, filter: Dict[str, Any]) -> int:  # noqa: A002
+        return len(self.documents)
+
+    def aggregate(self, pipeline: List[Dict[str, Any]]) -> Iterator[Dict[str, Any]]:
+        raise OperationFailure(f"the fake server runs no aggregations: {pipeline}")
 
     def options(self) -> Dict[str, Any]:
         return {}

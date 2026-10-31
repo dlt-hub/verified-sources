@@ -36,6 +36,10 @@ from tests.utils import (
     skipifwindows,
 )
 
+# `partition_size_bytes` of about 50 documents of `make_mixed_id_documents` and `make_documents`
+_PARTITION_OF_50_MIXED_IDS = 2_000
+_PARTITION_OF_50_DOCUMENTS = 15_000
+
 
 @pytest.mark.parametrize("destination_name", ALL_DESTINATIONS)
 def test_all_resources(destination_name: str) -> None:
@@ -513,6 +517,7 @@ def test_local_arrow_matches_object(local_mongo: Database, parallel: bool) -> No
             collection="docs",
             parallel=parallel,
             chunk_size=4,
+            partition_size_bytes=1_000,
             data_item_format=data_item_format,
         )
         pipeline.run(docs, table_name=f"docs_{data_item_format}")
@@ -547,6 +552,7 @@ def test_local_incremental(
             projection=["title"],
             parallel=parallel,
             chunk_size=4,
+            partition_size_bytes=1_000,
             data_item_format=data_item_format,
         )
 
@@ -729,13 +735,12 @@ def test_local_projection_keeps_cursor_field(
 def test_local_parallel_single_partition(
     profiled_mongo: Database, data_item_format: str, limit: Optional[int]
 ) -> None:
-    # the 25 documents of `docs` are fewer than two partitions
+    # the 10 matching documents are fewer than two partitions
     items = mongodb_collection(
         connection_url=LOCAL_MONGO_URL,
         database=profiled_mongo.name,
         collection="docs",
         parallel=True,
-        chunk_size=25,
         limit=limit,
         filter_={"n": {"$lt": 10}},
         data_item_format=data_item_format,
@@ -811,6 +816,7 @@ def test_local_seeded_full_and_incremental(
             incremental=dlt.sources.incremental("updated_at", **incremental_args),
             parallel=parallel,
             chunk_size=200,
+            partition_size_bytes=4 * _PARTITION_OF_50_DOCUMENTS,
             data_item_format=data_item_format,
         )
 
@@ -981,12 +987,12 @@ def _parallel_n(
     database: Database, collection: str, data_item_format: str, **kwargs: Any
 ) -> List[int]:
     """`n` of the documents read with `parallel` in `_id` partitions of about 50 documents"""
+    kwargs.setdefault("partition_size_bytes", _PARTITION_OF_50_MIXED_IDS)
     resource = mongodb_collection(
         connection_url=LOCAL_MONGO_URL,
         database=database.name,
         collection=collection,
         parallel=True,
-        chunk_size=50,
         data_item_format=data_item_format,
         **kwargs,
     )
@@ -1015,15 +1021,35 @@ def test_local_parallel_mixed_ids(
     collection = local_mongo.create_collection("mixed", collation=collation)
     collection.insert_many(documents)
 
-    partitions = plan_partitions(collection, 50)
-    conditions = [p["_id"] for p in partitions if isinstance(p["_id"], dict)]
-    ranges = [condition for condition in conditions if "$type" not in condition]
-    types = {condition["$type"] for condition in conditions if "$type" in condition}
-    assert len(ranges) > 2
-    assert majority not in types and {"minKey", "null", "maxKey", "object"} <= types
-    # NaN matches no number range
-    assert (majority == "number") == any(
-        isinstance(p["_id"], float) for p in partitions
+    # without a filter the `_id` index is split into bounds that hold every type
+    partitions = plan_partitions(collection, {}, _PARTITION_OF_50_MIXED_IDS, 50)
+    bounded = [p for p in partitions if "hint" in p]
+    assert len(bounded) > 2
+    assert "min" not in bounded[0] and "max" not in bounded[-1]
+    assert all(low["max"] == high["min"] for low, high in zip(bounded, bounded[1:]))
+    # a MaxKey `_id` ends the index and is read with its own query
+    assert partitions == bounded + [{"filter": {"_id": {"$type": "maxKey"}}}]
+
+    def assert_typed_ranges(partitions: List[Dict[str, Any]]) -> None:
+        conditions = [p["filter"]["_id"] for p in partitions]
+        ranges = [c for c in conditions if isinstance(c, dict) and "$type" not in c]
+        types = {c["$type"] for c in conditions if isinstance(c, dict) and "$type" in c}
+        assert len(ranges) > 2
+        assert majority not in types and {"minKey", "null", "maxKey", "object"} <= types
+        # NaN matches no number range
+        assert (majority == "number") == any(isinstance(c, float) for c in conditions)
+
+    # the Arrow format keeps one `_id` type per partition, the most common one in ranges
+    assert_typed_ranges(
+        plan_partitions(
+            collection, {}, _PARTITION_OF_50_MIXED_IDS, 50, split_id_types=True
+        )
+    )
+    # a filter is planned on the matching documents, also in ranges
+    assert_typed_ranges(
+        plan_partitions(
+            collection, {"n": {"$mod": [3, 0]}}, _PARTITION_OF_50_MIXED_IDS, 50
+        )
     )
 
     for filter_ in ({}, {"n": {"$mod": [3, 0]}}):
@@ -1054,14 +1080,16 @@ def test_local_parallel_view_and_timeseries(
     names = ["base_view", "series"]
     # no `_id` index to split by: read in one partition
     for name in names:
-        assert plan_partitions(local_mongo[name], 50) == [{}]
+        assert plan_partitions(
+            local_mongo[name], {}, _PARTITION_OF_50_MIXED_IDS, 50
+        ) == [{}]
 
     source = mongodb(
         connection_url=LOCAL_MONGO_URL,
         database=local_mongo.name,
         collection_names=names,
         parallel=True,
-        chunk_size=50,
+        partition_size_bytes=_PARTITION_OF_50_MIXED_IDS,
         data_item_format=data_item_format,
     )
     pipeline = dlt.pipeline(
@@ -1131,6 +1159,60 @@ def test_local_documents_without_id(
 
 @skipifwindows
 @skip_if_not_active("duckdb")
+@pytest.mark.parametrize("data_item_format", ["object", "arrow"])
+def test_local_parallel_clustered(local_mongo: Database, data_item_format: str) -> None:
+    documents = make_mixed_id_documents("objectId", 600)
+    collection = local_mongo.create_collection(
+        "clustered", clusteredIndex={"key": {"_id": 1}, "unique": True}
+    )
+    collection.insert_many(documents)
+
+    # no `_id` index to bound, the ranges match by value
+    partitions = plan_partitions(collection, {}, _PARTITION_OF_50_MIXED_IDS, 50)
+    assert len(partitions) > 2
+    assert all(set(partition) == {"filter"} for partition in partitions)
+
+    loaded = _parallel_n(local_mongo, "clustered", data_item_format)
+    assert sorted(loaded) == sorted(document["n"] for document in documents)
+
+
+@skipifwindows
+@skip_if_not_active("duckdb")
+def test_local_parallel_filtered_plan(profiled_mongo: Database) -> None:
+    profiled_mongo["many"].insert_many(make_documents(1200))
+    filter_ = {"n": {"$lt": 150}}
+
+    # a selective filter is planned on the matching documents, not on the collection
+    unfiltered = plan_partitions(
+        profiled_mongo["many"], {}, _PARTITION_OF_50_DOCUMENTS, 50
+    )
+    filtered = plan_partitions(
+        profiled_mongo["many"], filter_, _PARTITION_OF_50_DOCUMENTS, 50
+    )
+    assert len(unfiltered) >= 15
+    assert 1 < len(filtered) <= 4
+    assert all(set(partition) == {"filter"} for partition in filtered)
+
+    for data_item_format in ("object", "arrow"):
+        loaded = _parallel_n(
+            profiled_mongo,
+            "many",
+            data_item_format,
+            filter_=filter_,
+            partition_size_bytes=_PARTITION_OF_50_DOCUMENTS,
+        )
+        assert sorted(loaded) == list(range(150))
+    # each format read one query per partition, with the filter and an `_id` range
+    range_queries = [
+        read
+        for read in server_reads(profiled_mongo, "many")
+        if read["op"] == "query" and "$and" in read["command"]["filter"]
+    ]
+    assert len(range_queries) == 2 * len(filtered)
+
+
+@skipifwindows
+@skip_if_not_active("duckdb")
 def test_local_parallel_concurrent_deletes(
     local_mongo: Database, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -1142,7 +1224,7 @@ def test_local_parallel_concurrent_deletes(
         database=local_mongo.name,
         collection="changing",
         parallel=True,
-        chunk_size=50,
+        partition_size_bytes=_PARTITION_OF_50_MIXED_IDS,
     )
 
     loaded: List[int] = []
@@ -1171,7 +1253,7 @@ def test_local_parallel_arrow_workers(
             database=local_mongo.name,
             collection="many",
             parallel=True,
-            chunk_size=50,
+            partition_size_bytes=_PARTITION_OF_50_DOCUMENTS,
             data_item_format="arrow",
             **kwargs,
         )
@@ -1207,7 +1289,7 @@ def test_local_parallel_arrow_workers_shared(
         database=local_mongo.name,
         collection_names=names,
         parallel=True,
-        chunk_size=50,
+        partition_size_bytes=_PARTITION_OF_50_DOCUMENTS,
         data_item_format="arrow",
     )
     pipeline = dlt.pipeline(

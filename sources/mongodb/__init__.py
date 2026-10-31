@@ -14,6 +14,7 @@ from .helpers import (
     client_from_credentials,
     collection_documents,
 )
+from .partition import DEFAULT_PARTITION_SIZE_BYTES
 
 
 @dlt.source
@@ -31,6 +32,7 @@ def mongodb(
     chunk_size: Optional[int] = 10000,
     data_item_format: Optional[TDataItemFormat] = "object",
     on_inferred_type_mismatch: TTypeMismatch = "ignore",
+    partition_size_bytes: int = DEFAULT_PARTITION_SIZE_BYTES,
 ) -> Iterable[DltResource]:
     """
     A DLT source which loads data from a mongo database using PyMongo.
@@ -44,9 +46,9 @@ def mongodb(
         incremental (Optional[dlt.sources.incremental]): Option to enable incremental loading for the collection.
             E.g., `incremental=dlt.sources.incremental('updated_at', datetime(2022, 1, 1, tzinfo=timezone.utc))`
         write_disposition (str): Write disposition of the resource.
-        parallel (Optional[bool]): Read `_id` partitions of the collection in parallel, as many at
-            once as `workers` in the `extract` config: in threads in the object format, in
-            processes in the Arrow format. Default is False.
+        parallel (Optional[bool]): Read `_id` partitions of about `partition_size_bytes` in
+            parallel, as many at once as `workers` in the `extract` config: in threads in the
+            object format, in processes in the Arrow format. Default is False.
         limit (Optional[int]):
             The maximum number of documents to load. The limit is
             applied to each requested collection separately.
@@ -63,13 +65,18 @@ def mongodb(
             differs from the first value of their field load as null in the Arrow format: "ignore"
             (default) silently, "warn" with a warning, "raise" fails. "warn" and "raise" parse each
             batch twice.
-        chunk_size (Optional[int]): The number of documents loaded in each batch. With `parallel`,
-            the number of documents in an `_id` partition, which loads as one batch.
+        chunk_size (Optional[int]): The number of documents loaded in each batch of a sequential
+            read. With `parallel` it sizes the partitions only when the server reports no average
+            document size.
         data_item_format (Optional[TDataItemFormat]): The data format to use for loading.
             Supported formats:
                 object - Python objects (dicts, lists).
                 arrow - Apache Arrow tables. Nested documents are flattened into columns up to
                     `max_table_nesting` like in the object format, arrays load as json.
+        partition_size_bytes (int): The largest size of an `_id` partition of `parallel` reads,
+            from the average document size of the collection. Partitions are smaller, down to
+            1 MiB, when that gives every extract worker a few. Each partition loads as one batch.
+            Default is 16 MiB.
 
     Returns:
         Iterable[DltResource]: A list of DLT resources for each collection to be loaded.
@@ -112,6 +119,7 @@ def mongodb(
             pymongoarrow_schema=pymongoarrow_schema,
             on_inferred_type_mismatch=on_inferred_type_mismatch,
             connection_url=connection_url,
+            partition_size_bytes=partition_size_bytes,
         )
 
 
@@ -134,6 +142,7 @@ def mongodb_collection(
     projection: Optional[Union[Mapping[str, Any], Iterable[str]]] = dlt.config.value,
     pymongoarrow_schema: Optional[Any] = None,
     on_inferred_type_mismatch: TTypeMismatch = "ignore",
+    partition_size_bytes: int = DEFAULT_PARTITION_SIZE_BYTES,
 ) -> DltResource:
     """
     A DLT source which loads a collection from a mongo database using PyMongo.
@@ -145,12 +154,13 @@ def mongodb_collection(
         incremental (Optional[dlt.sources.incremental]): Option to enable incremental loading for the collection.
             E.g., `incremental=dlt.sources.incremental('updated_at', datetime(2022, 1, 1, tzinfo=timezone.utc))`
         write_disposition (str): Write disposition of the resource.
-        parallel (Optional[bool]): Read `_id` partitions of the collection in parallel, as many at
-            once as `workers` in the `extract` config: in threads in the object format, in
-            processes in the Arrow format. Default is False.
+        parallel (Optional[bool]): Read `_id` partitions of about `partition_size_bytes` in
+            parallel, as many at once as `workers` in the `extract` config: in threads in the
+            object format, in processes in the Arrow format. Default is False.
         limit (Optional[int]): The number of documents load.
-        chunk_size (Optional[int]): The number of documents loaded in each batch. With `parallel`,
-            the number of documents in an `_id` partition, which loads as one batch.
+        chunk_size (Optional[int]): The number of documents loaded in each batch of a sequential
+            read. With `parallel` it sizes the partitions only when the server reports no average
+            document size.
         data_item_format (Optional[TDataItemFormat]): The data format to use for loading.
             Supported formats:
                 object - Python objects (dicts, lists).
@@ -169,6 +179,10 @@ def mongodb_collection(
             differs from the first value of their field load as null in the Arrow format: "ignore"
             (default) silently, "warn" with a warning, "raise" fails. "warn" and "raise" parse each
             batch twice.
+        partition_size_bytes (int): The largest size of an `_id` partition of `parallel` reads,
+            from the average document size of the collection. Partitions are smaller, down to
+            1 MiB, when that gives every extract worker a few. Each partition loads as one batch.
+            Default is 16 MiB.
 
     Returns:
         DltResource: The resource loading the collection.
@@ -200,4 +214,5 @@ def mongodb_collection(
         pymongoarrow_schema=pymongoarrow_schema,
         on_inferred_type_mismatch=on_inferred_type_mismatch,
         connection_url=connection_url,
+        partition_size_bytes=partition_size_bytes,
     )

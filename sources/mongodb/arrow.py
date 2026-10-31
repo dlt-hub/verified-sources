@@ -33,10 +33,11 @@ from .arrow_worker import Mismatch, MongoArrowWorker, parse_batch
 from .helpers import (
     client_options,
     CollectionLoader,
+    planned_partitions,
     TCodecOptions,
     TTypeMismatch,
 )
-from .partition import and_filters, plan_partitions
+from .partition import DEFAULT_PARTITION_SIZE_BYTES
 from .worker_pool import WorkerPool
 
 # one worker process per extract thread of dlt
@@ -126,9 +127,11 @@ class CollectionArrowLoaderParallel(CollectionArrowLoader):
         chunk_size: int,
         incremental: Optional[dlt.sources.incremental[Any]] = None,
         connection_url: Optional[str] = None,
+        partition_size_bytes: int = DEFAULT_PARTITION_SIZE_BYTES,
     ) -> None:
         super().__init__(client, collection, chunk_size, incremental)
         self.connection_url = connection_url
+        self.partition_size_bytes = partition_size_bytes
 
     def load_documents(
         self,
@@ -138,11 +141,23 @@ class CollectionArrowLoaderParallel(CollectionArrowLoader):
         arrow_options: ArrowOptions = DEFAULT_ARROW_OPTIONS,
     ) -> Iterator[Any]:
         """Load documents from the collection as Arrow tables, one deferred read and table per
-        `_id` partition of about `chunk_size` documents, parsed in worker processes. Reads without
+        `_id` partition of about `partition_size_bytes`, parsed in worker processes. Reads without
         workers when the collection is not split.
         """
-        # partitions do not tell which documents come first
-        partitions = [] if limit else plan_partitions(self.collection, self.chunk_size)
+        query_filter = self._query_filter(filter_)
+        # partitions do not tell which documents come first. pymongoarrow infers one type per
+        # column, `_id`s of several types in one batch fail or load as null
+        partitions = (
+            []
+            if limit
+            else planned_partitions(
+                self.collection,
+                query_filter,
+                self.partition_size_bytes,
+                self.chunk_size,
+                split_id_types=True,
+            )
+        )
         if len(partitions) < 2:
             yield from super().load_documents(filter_, limit, projection, arrow_options)
             return
@@ -151,12 +166,12 @@ class CollectionArrowLoaderParallel(CollectionArrowLoader):
                 "Parallel Arrow reads need the `connection_url` of the client"
             )
 
-        query_filter = self._query_filter(filter_)
         task = dict(
             connection_url=self.connection_url,
             client_options=client_options(self.connection_url),
             database=self.collection.database.name,
             collection=self.collection.name,
+            filter=query_filter,
             projection=self._projection_op(projection),
             pymongoarrow_schema=arrow_options.pymongoarrow_schema,
             detect_mismatch=arrow_options.on_inferred_type_mismatch != "ignore",
@@ -165,9 +180,7 @@ class CollectionArrowLoaderParallel(CollectionArrowLoader):
             self.collection.name, self.collection.codec_options, arrow_options
         )
         for partition in partitions:
-            yield _read_partition(
-                {**task, "filter": and_filters(query_filter, partition)}, converter
-            )
+            yield _read_partition({**task, "partition": partition}, converter)
 
 
 @dlt.defer

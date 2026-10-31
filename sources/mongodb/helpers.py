@@ -35,8 +35,14 @@ from dlt.common.utils import map_nested_values_in_place
 from pymongo import ASCENDING, DESCENDING, MongoClient
 from pymongo.collection import Collection
 from pymongo.cursor import Cursor
+from pymongo.errors import OperationFailure
 
-from .partition import and_filters, plan_partitions
+from .partition import (
+    DEFAULT_PARTITION_SIZE_BYTES,
+    TPartition,
+    find_partition,
+    plan_partitions,
+)
 
 if TYPE_CHECKING:
     TMongoClient = MongoClient[Any]
@@ -53,6 +59,8 @@ TTypeMismatch = Literal["raise", "warn", "ignore"]
 
 # compression of the documents sent by the server, the first one the server supports is used
 COMPRESSORS = "zstd,snappy,zlib"
+# partitions of a parallel read per extract worker, so that the last round leaves few idle
+PARTITIONS_PER_WORKER = 8
 
 
 class CollectionLoader:
@@ -224,6 +232,17 @@ class CollectionLoader:
 
 
 class CollectionLoaderParallel(CollectionLoader):
+    def __init__(
+        self,
+        client: TMongoClient,
+        collection: TCollection,
+        chunk_size: int,
+        incremental: Optional[dlt.sources.incremental[Any]] = None,
+        partition_size_bytes: int = DEFAULT_PARTITION_SIZE_BYTES,
+    ) -> None:
+        super().__init__(client, collection, chunk_size, incremental)
+        self.partition_size_bytes = partition_size_bytes
+
     def load_documents(
         self,
         filter_: Dict[str, Any],
@@ -231,7 +250,7 @@ class CollectionLoaderParallel(CollectionLoader):
         projection: Optional[Union[Mapping[str, Any], Iterable[str]]] = None,
     ) -> Iterator[TDataItem]:
         """Load documents from the collection in parallel, one deferred read per `_id` partition
-        of about `chunk_size` documents.
+        of about `partition_size_bytes`.
 
         Args:
             filter_ (Dict[str, Any]): The filter to apply to the collection.
@@ -247,17 +266,51 @@ class CollectionLoaderParallel(CollectionLoader):
             return
         query_filter = self._query_filter(filter_)
         projection_op = self._projection_op(projection)
-        for partition in plan_partitions(self.collection, self.chunk_size):
-            yield self._read_partition(
-                and_filters(query_filter, partition), projection_op
-            )
+        for partition in planned_partitions(
+            self.collection, query_filter, self.partition_size_bytes, self.chunk_size
+        ):
+            yield self._read_partition(partition, query_filter, projection_op)
 
     @dlt.defer
     def _read_partition(
-        self, filter_: Dict[str, Any], projection: Optional[Dict[str, Any]]
+        self,
+        partition: TPartition,
+        filter_: Dict[str, Any],
+        projection: Optional[Dict[str, Any]],
     ) -> TDataItem:
-        documents = list(self.collection.find(filter=filter_, projection=projection))
+        documents = list(
+            find_partition(self.collection.find, partition, filter_, projection)
+        )
         return map_nested_values_in_place(convert_mongo_objs, documents)
+
+
+def planned_partitions(
+    collection: TCollection,
+    filter_: Dict[str, Any],
+    partition_size_bytes: int,
+    chunk_size: int,
+    split_id_types: bool = False,
+) -> List[TPartition]:
+    """`plan_partitions` with a few partitions per extract worker, that reads the collection in
+    one query when the server rejects a planning query, e.g. `$where` in `filter_` or a server
+    without `$bucketAuto`"""
+    # a `workers` argument of `pipeline.extract` is not in the config, only the `extract` section
+    workers = dlt.config.get("extract.workers", int) or 5
+    try:
+        return plan_partitions(
+            collection,
+            filter_,
+            partition_size_bytes,
+            chunk_size,
+            split_id_types,
+            min_partitions=PARTITIONS_PER_WORKER * workers,
+        )
+    except OperationFailure as ex:
+        logger.warning(
+            f"Collection `{collection.name}` is read in one query, it could not be split "
+            f"into partitions: {ex}"
+        )
+        return [{}]
 
 
 def collection_documents(
@@ -273,6 +326,7 @@ def collection_documents(
     data_item_format: Optional[TDataItemFormat] = "object",
     on_inferred_type_mismatch: TTypeMismatch = "ignore",
     connection_url: Optional[str] = None,
+    partition_size_bytes: int = DEFAULT_PARTITION_SIZE_BYTES,
 ) -> Iterator[TDataItem]:
     """
     A DLT source which loads data from a Mongo database using PyMongo.
@@ -291,12 +345,13 @@ def collection_documents(
         pymongoarrow_schema (pymongoarrow.schema.Schema): The mapping of field types to convert BSON to Arrow.
             Values that do not match it raise `FieldTypeMismatchError` (`pymongoarrow>=1.9`).
         incremental (Optional[dlt.sources.incremental[Any]]): The incremental configuration.
-        parallel (bool): Read `_id` partitions of the collection in parallel, as many at once as
-            `workers` in the `extract` config: in threads in the object format, in processes in the
-            Arrow format. Default is False.
+        parallel (bool): Read `_id` partitions of about `partition_size_bytes` in parallel, as
+            many at once as `workers` in the `extract` config: in threads in the object format, in
+            processes in the Arrow format. Default is False.
         limit (Optional[int]): The maximum number of documents to load.
-        chunk_size (Optional[int]): The number of documents loaded in each batch. With `parallel`,
-            the number of documents in an `_id` partition, which loads as one batch.
+        chunk_size (Optional[int]): The number of documents loaded in each batch of a sequential
+            read. With `parallel` it sizes the partitions only when the server reports no average
+            document size.
         data_item_format (Optional[TDataItemFormat]): The data format to use for loading.
             Supported formats:
                 object - Python objects (dicts, lists).
@@ -307,6 +362,10 @@ def collection_documents(
             batch twice.
         connection_url (Optional[str]): The connection URL of `client`, worker processes of
             parallel Arrow reads connect with it.
+        partition_size_bytes (int): The largest size of an `_id` partition of `parallel` reads,
+            from the average document size of the collection. Partitions are smaller, down to
+            1 MiB, when that gives every extract worker a few. Each partition loads as one batch.
+            Default is 16 MiB.
 
     Yields:
         Iterator[TDataItem]: Lists of documents or Arrow tables.
@@ -337,6 +396,7 @@ def collection_documents(
                 incremental=incremental,
                 chunk_size=chunk_size,
                 connection_url=connection_url,
+                partition_size_bytes=partition_size_bytes,
             )
         else:
             arrow_loader = CollectionArrowLoader(
@@ -351,10 +411,18 @@ def collection_documents(
             ),
         )
     else:
-        loader_class = CollectionLoaderParallel if parallel else CollectionLoader
-        loader = loader_class(
-            client, collection, incremental=incremental, chunk_size=chunk_size
-        )
+        if parallel:
+            loader: CollectionLoader = CollectionLoaderParallel(
+                client,
+                collection,
+                incremental=incremental,
+                chunk_size=chunk_size,
+                partition_size_bytes=partition_size_bytes,
+            )
+        else:
+            loader = CollectionLoader(
+                client, collection, incremental=incremental, chunk_size=chunk_size
+            )
         yield from loader.load_documents(
             limit=limit, filter_=filter_, projection=projection
         )
@@ -456,6 +524,7 @@ class MongoDbCollectionResourceConfiguration(BaseConfiguration):
     incremental: Optional[dlt.sources.incremental] = None  # type: ignore[type-arg]
     write_disposition: Optional[str] = dlt.config.value
     parallel: Optional[bool] = False
+    partition_size_bytes: int = DEFAULT_PARTITION_SIZE_BYTES
     projection: Optional[Union[Mapping[str, Any], Iterable[str]]] = dlt.config.value
 
 

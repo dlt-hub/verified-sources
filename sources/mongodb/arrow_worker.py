@@ -30,6 +30,7 @@ from pymongoarrow.types import (  # type: ignore
     _is_objectid,
 )
 
+from .partition import TPartition, find_partition
 from .worker_pool import ArrowWorker, TTableWithMetadata
 
 
@@ -124,13 +125,17 @@ def parse_batch(
 
 def read_partition(
     collection: Any,
+    partition: TPartition,
     filter_: Dict[str, Any],
     projection: Optional[Dict[str, Any]],
     pymongoarrow_schema: Any,
     detect_mismatch: bool,
 ) -> Tuple[Any, Optional[Mismatch]]:
-    """Parse the documents matching `filter_` into one table, with the types inferred once"""
-    batches = list(collection.find_raw_batches(filter=filter_, projection=projection))
+    """Parse the documents of `partition` matching `filter_` into one table, with the types
+    inferred once"""
+    batches = list(
+        find_partition(collection.find_raw_batches, partition, filter_, projection)
+    )
     return parse_batch(
         batches, pymongoarrow_schema, collection.codec_options, detect_mismatch
     )
@@ -172,6 +177,7 @@ class MongoArrowWorker(ArrowWorker):
         collection = self._clients[url][ticket["database"]][ticket["collection"]]
         table, mismatch = read_partition(
             collection,
+            ticket["partition"],
             ticket["filter"],
             ticket["projection"],
             ticket["pymongoarrow_schema"],
