@@ -123,6 +123,8 @@ Based on the PR changes, identify what needs to be tested:
 
 Produce a checklist of required test scenarios before evaluating existing tests.
 
+If an affected source loads incrementally, the checklist includes the [standard incremental tests](../refresh-source/SKILL.md#standard-incremental-tests). A missing standard test is a gap. A source or test that maps `row_order` to a sort direction without `last_value_func` is a bug.
+
 #### 7b. Evaluate existing tests against the checklist
 
 - Compare the PR's tests against the required scenarios checklist. Flag any gaps.

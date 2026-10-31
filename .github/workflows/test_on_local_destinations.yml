@@ -68,6 +68,14 @@ jobs:
       #   run: pwd && echo "$DESTINATIONS_SECRETS" > sources/.dlt/secrets.toml && echo "$SOURCES_SECRETS" >> sources/.dlt/secrets.toml
       # - name: Setup upterm session
       #   uses: lhotari/action-upterm@v1
+      - name: Start local MongoDB
+        if: runner.os == 'Linux' && contains(needs.get_changed_sources.outputs.sources_list, 'mongodb')
+        run: |
+          docker compose -f tests/mongodb/docker-compose.yml up -d --wait || {
+            docker compose -f tests/mongodb/docker-compose.yml ps -a
+            docker compose -f tests/mongodb/docker-compose.yml logs
+            exit 1
+          }
       - run: |
           sources_list="${{ needs.get_changed_sources.outputs.sources_list }}"
           test_paths=$(echo "$sources_list" | awk '{for(i=1;i<=NF;i++) printf "tests/%s ", $i}')
