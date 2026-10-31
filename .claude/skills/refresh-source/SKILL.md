@@ -236,58 +236,23 @@ Hand-made fixtures encode our assumptions; they hid the header-only page bug in 
 
 ### Standard incremental tests
 
-Every source with incremental loading gets these end-to-end tests, on the seeded test account or on a local container seeded by a fixture (`tests/<name>/docker-compose.yml`). Follow them exactly. Reference implementations:
-- `test_local_seeded_full_and_incremental` and `test_local_seeded_chunks` in `tests/mongodb/test_mongodb_source.py`, with the seed in `tests/mongodb/utils.py` (`make_seeded_documents`);
-- dlt's `assert_incremental_chunks` in `tests/load/sources/sql_database/utils.py`, and `tests/load/sources/sql_database/test_sql_table_backfill.py`.
+Every source with incremental loading has these end-to-end tests, on the seeded test account or on a local container (`tests/<name>/docker-compose.yml`). Reference: `test_local_seeded_full_and_incremental` and `test_local_seeded_chunks` in `tests/mongodb/test_mongodb_source.py`.
 
-**Seed.** The data distribution decides which bugs the tests catch.
-- Keep the seeded records in memory: the fixture returns them, or the seed script writes a manifest. Compute every expected value from them, never from another read of the upstream.
-- Draw cursor values at random and unique, e.g. `start + timedelta(seconds=s)` for `s` in `random.sample(range(90 * 24 * 3600), count)`.
-  - Use the precision the upstream stores, e.g. whole seconds for millisecond dates, so the values round-trip exactly.
-  - Assign them in an order unrelated to insert or primary key order. A missing sort or filter then loads wrong chunks instead of passing by accident.
-- Seed several chunks and a partial last one, e.g. 1050 records with chunks of 200.
-- Ties in the cursor go to a separate case, with counts computed for the deduplication at a closed range start.
-- When the source sets `on_cursor_value_missing`, add records with a missing and a null cursor.
-
-**Expected order.** Derive it from `last_value_func`, never from `row_order`.
-- `row_order` is relative to `last_value_func`. `"asc"` means the rows come in the direction the last value moves: ascending values with `max`, descending with `min`. See the `row_order` docstring and `can_close` of dlt's `Incremental`, and `_make_query` of `sql_database`.
-- The source sorts ascending exactly when `(row_order == "asc") == (last_value_func is max)`. A source or test that maps `row_order` to a sort direction by itself is a bug: dlt closes the generator by `row_order` and rows are lost.
-- Chunk tests always use `row_order="asc"`, with `max` and with `min`.
-- `expected = sorted(seeded_cursor_values, reverse=last_value_func is min)`.
-- Chunk `k` is `expected[k * chunk_size:(k + 1) * chunk_size]`, and after run `k` the `last_value` equals `chunk[-1]`.
+**Seed**
+- Unique random cursor values at the precision of the upstream, in an order unrelated to the insert or primary key order.
+- Several chunks and a partial last one, for example 1050 records in chunks of 200.
+- Expected values come from the seeded records, never from another read of the upstream.
 
 **Tests**
-1. **Full load** with `dlt.sources.incremental(cursor)`:
-   - the run loads all seeded records;
-   - the sorted loaded primary keys equal the sorted seeded ones.
-2. **Next run** on the same pipeline:
-   - `last_normalize_info.row_counts.get(table, 0) == 0`;
-   - the table count stays.
-3. **Windows** on a new `dev_mode` pipeline. Use calendar windows that cover the seed, e.g. months, each run with `initial_value=start, end_value=end, range_start="closed", range_end="open"`.
-   - Each run loads `sum(start <= value < end for value in seeded_cursor_values)`, and that count is not 0.
-   - Afterwards `"sources" not in pipeline.state`: windows with an end value store no state.
-   - The primary keys equal the seeded ones.
-4. **Chunks**, for every incremental that supports `row_order`. Create the resource once with a small `chunk_size` and `dlt.sources.incremental(cursor, initial_value=..., row_order="asc", last_value_func=..., range_start="open")`.
-   - Use `"open"` because the values are unique. A closed start reads the last record again, and every run after the first loads one record less.
-   - For each chunk:
-     - run `pipeline.run(resource.add_limit(1))` and `assert_load_info`;
-     - the run's row count equals `len(chunk)`;
-     - `resource.state["incremental"][cursor]["last_value"] == chunk[-1]`.
-   - Then `pipeline.run(resource)` loads 0 rows.
-   - The sorted loaded (seeded field, cursor) pairs equal the seeded pairs, and the distinct primary keys equal the seed count.
-   - Check last that the stored `last_value` has the cursor's timezone (aware for aware cursors), so that skipped or repeated rows show up first.
+1. Full load: loads all seeded primary keys.
+2. Next run: loads 0 rows.
+3. Windows with `initial_value`, `end_value`, `range_start="closed"` and `range_end="open"`: each window loads the seeded values in it and stores no incremental state.
+4. Chunks with `add_limit(1)`, `row_order="asc"` and `range_start="open"`: each run loads the next `chunk_size` values, ascending with `max` and descending with `min`, and stores the last one as `last_value`. A final run loads 0 rows. The stored `last_value` keeps the timezone of the cursor.
 
 **Parametrization**
-- **Readers:** run every test for every way the source reads data: formats and backends (object, Arrow), sequential and parallel readers, and API variants (Bulk, REST).
-- **Chunk test:** `last_value_func` × `initial_value`: `(max, None)`, `(min, None)`, `(max, <before all values>)`, `(min, <after all values>)`.
-  - Without an initial value the first run must already sort. A source that sorts only once it has a last value loads a random first chunk; only these cases catch it. This was mongodb's bug before 1.0.0.
-  - With an initial value the first run also filters on the server. dlt's `sql_database` tests use only this case.
-- **Parallel readers:** chunk tests with them lose rows. dlt evaluates deferred batches ahead, and the incremental moves its last value past the batches that `add_limit` then drops.
-  - Test it once.
-  - If it fails, keep the chunk test sequential with a one-line comment, and write in Operations that chunked loading needs `parallel=False`.
-- **Ids:** use readable ids, e.g. `max`, `min_initial_value`.
-- **Random seeds:** run the tests several times before trusting them.
-- **Regression check:** prove the tests catch bugs. Break the sort, e.g. sort only when there is a last value, and see the chunk tests fail.
+- Every backend and reader: `python` and `pyarrow`, sequential and parallel, Bulk and REST.
+- Chunks: `max` and `min`, each with and without `initial_value`.
+- A parallel reader that fails the chunk test needs `parallel=False` for chunked loading, written in Operations.
 
 ## Phase 5 — Verify and finish
 
