@@ -1,4 +1,4 @@
-"""Arrow format of the MongoDB source. Needs `pymongoarrow`, import it only when loading Arrow."""
+"""The "pyarrow" backend. Imported only by this backend because it requires `pymongoarrow`."""
 
 import threading
 from typing import (
@@ -37,7 +37,7 @@ from .helpers import (
     TCodecOptions,
     TTypeMismatch,
 )
-from .partition import DEFAULT_PARTITION_SIZE_BYTES
+from .partition import DEFAULT_PARTITION_SIZE_BYTES, TPartition
 from .worker_pool import WorkerPool
 
 # one worker process per extract thread of dlt
@@ -62,20 +62,17 @@ class FieldTypeMismatchError(ValueError):
             message = (
                 f"Collection `{collection_name}` has values that do not match "
                 f"`pymongoarrow_schema`: {described or details}. Correct the field types in the "
-                "schema or use `data_item_format='object'`."
+                'schema or use `backend="python"`.'
             )
         else:
             message = (
                 f"Collection `{collection_name}` has fields with values of different types: "
-                f"{described or details}. The Arrow format loads values that do not match the "
-                "first type of a field as null and truncates numbers to it. Pass the field types "
-                "in `pymongoarrow_schema` or use `data_item_format='object'`"
+                f'{described or details}. The "pyarrow" backend converts them to the type of the '
+                "first value or loads them as null. Set the field types in `pymongoarrow_schema` "
+                'or use `backend="python"` to load them as they are.'
             )
-            message += (
-                ". Set `on_inferred_type_mismatch` to 'warn' or 'ignore' to load them anyway."
-                if raised
-                else " to load them as they are."
-            )
+            if raised:
+                message += ' Set `on_inferred_type_mismatch` to "warn" or "ignore" to load them anyway.'
         super().__init__(message)
 
 
@@ -98,7 +95,7 @@ class CollectionArrowLoader(CollectionLoader):
         projection: Optional[Union[Mapping[str, Any], Iterable[str]]] = None,
         arrow_options: ArrowOptions = DEFAULT_ARROW_OPTIONS,
     ) -> Iterator[Any]:
-        """Load documents from the collection as Arrow tables, one per batch of `chunk_size`."""
+        """Yields an Arrow table for each batch of `chunk_size` documents"""
         # `RawBatchCursor.sort` is typed as returning `Cursor` in some pymongo versions
         cursor: Any = self.collection.find_raw_batches(
             filter=self._query_filter(filter_),
@@ -140,30 +137,25 @@ class CollectionArrowLoaderParallel(CollectionArrowLoader):
         projection: Optional[Union[Mapping[str, Any], Iterable[str]]] = None,
         arrow_options: ArrowOptions = DEFAULT_ARROW_OPTIONS,
     ) -> Iterator[Any]:
-        """Load documents from the collection as Arrow tables, one deferred read and table per
-        `_id` partition of about `partition_size_bytes`, parsed in worker processes. Reads without
-        workers when the collection is not split.
-        """
+        """Yields a deferred read of each `_id` partition, parsed into a table in a worker process"""
         query_filter = self._query_filter(filter_)
-        # partitions do not tell which documents come first. pymongoarrow infers one type per
-        # column, `_id`s of several types in one batch fail or load as null
-        partitions = (
-            []
-            if limit
-            else planned_partitions(
+        partitions: List[TPartition] = []
+        # partitions do not tell which documents come first
+        if not limit:
+            partitions = planned_partitions(
                 self.collection,
                 query_filter,
                 self.partition_size_bytes,
                 self.chunk_size,
+                # pymongoarrow infers one type per column, mixed `_id` types fail or load as null
                 split_id_types=True,
             )
-        )
         if len(partitions) < 2:
             yield from super().load_documents(filter_, limit, projection, arrow_options)
             return
         if not self.connection_url:
             raise ValueError(
-                "Parallel Arrow reads need the `connection_url` of the client"
+                'Parallel reads of the "pyarrow" backend require `connection_url`.'
             )
 
         task = dict(
@@ -193,8 +185,8 @@ def _read_partition(
 
 
 class ArrowBatchConverter:
-    """Converts raw BSON batches of a collection into Arrow tables. Flattens nested documents like
-    the relational normalizer does and detects fields whose values change type."""
+    """Converts raw BSON batches into Arrow tables with the columns of the relational normalizer.
+    Checks the field types across batches."""
 
     def __init__(
         self,
@@ -207,7 +199,7 @@ class ArrowBatchConverter:
         self.options = options
         self._field_types: Dict[str, Any] = {}
         self._warned: Set[str] = set()
-        # parallel reads finish their tables in the extract threads of dlt
+        # parallel reads finish their tables in the extract threads
         self._lock = threading.Lock()
 
     def convert(self, batches: List[bytes]) -> Optional[Any]:
@@ -221,7 +213,7 @@ class ArrowBatchConverter:
         )
 
     def finish(self, table: Any, mismatch: Optional[Mismatch]) -> Optional[Any]:
-        """Flatten a table of `parse_batch` and check its field types against earlier tables"""
+        """Flattens a table of `parse_batch` and checks its field types against earlier tables"""
         if mismatch is not None:
             if mismatch.with_schema:
                 raise FieldTypeMismatchError(
@@ -257,7 +249,7 @@ class ArrowBatchConverter:
                 continue
             mismatched[field.name] = [str(seen), str(field.type)]
             if _is_number(seen) and _is_number(field.type):
-                # like pymongoarrow does within a batch, e.g. `2.5` loads as 2
+                # like pymongoarrow does within a batch, `2.5` loads as 2
                 column = pyarrow.compute.cast(table.column(i), seen, safe=False)
             else:
                 column = pyarrow.nulls(table.num_rows, seen)
@@ -287,10 +279,8 @@ def flatten_arrow_structs(
     naming: NamingConvention,
     is_json_column: Callable[[str], bool],
 ) -> Any:
-    """Flatten struct columns into columns named like the relational normalizer names nested
-    documents, `max_nesting` levels deep. Struct columns typed `json` and lists stay as they are.
-    Raises `NameNormalizationCollision` when two columns get the same name.
-    """
+    """Flattens struct columns `max_nesting` levels deep into the columns of the relational
+    normalizer. Lists and `json` columns stay as they are."""
     names: List[str] = []
     columns: List[Any] = []
 
@@ -321,7 +311,7 @@ def flatten_arrow_structs(
 def arrow_options_from_context(
     pymongoarrow_schema: Any, on_inferred_type_mismatch: TTypeMismatch
 ) -> ArrowOptions:
-    """Take the nesting level, naming and `json` columns from the extracted resource and schema"""
+    """Options with the nesting level, naming and `json` columns of the current resource"""
     try:
         resource = dlt.current.resource()
         schema = dlt.current.source_schema()
@@ -370,9 +360,9 @@ def _same_arrow_kind(seen: Any, arrow_type: Any) -> bool:
 
 
 def _id_not_nullable(table: Any) -> Any:
-    """Marks `_id` not nullable like the primary key hint, so dlt does not warn about each table.
-    A null `_id` is valid in MongoDB and keeps the column nullable."""
+    """Marks `_id` not nullable like its primary key hint, so dlt does not warn about each table"""
     index = table.schema.get_field_index("_id")
+    # a null `_id` is valid in MongoDB
     if index < 0 or table.column(index).null_count:
         return table
     field = table.schema.field(index)

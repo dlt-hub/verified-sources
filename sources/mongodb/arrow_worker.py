@@ -1,6 +1,5 @@
-"""Parses raw BSON into Arrow tables, also in the worker processes of `parallel` Arrow reads.
-Imports neither dlt nor other modules of this source except `worker_pool`, so the processes start
-fast."""
+"""Parses raw BSON into Arrow tables. Worker processes import this module, so it does not
+import dlt."""
 
 import warnings
 from functools import cache
@@ -35,7 +34,7 @@ from .worker_pool import ArrowWorker, TTableWithMetadata
 
 
 class Mismatch(NamedTuple):
-    """Fields with values that do not match their type in the schema, `a.b` for nested ones"""
+    """Fields with values that do not match their type, `a.b` for nested fields"""
 
     fields: Dict[str, List[str]]
     details: str
@@ -48,18 +47,8 @@ def parse_bson_batches(
     codec_options: Any,
     strict: bool = False,
 ) -> Any:
-    """Parse raw BSON batches into a single Arrow table with a new pymongoarrow context.
-
-    Args:
-        batches (Iterable[bytes]): Raw BSON batches, i.e. from `Collection.find_raw_batches`.
-        pymongoarrow_schema (Any): The mapping of field types to convert BSON to Arrow.
-        codec_options (CodecOptions): Codec options of the collection.
-        strict (bool): Raise `TypeError` on values that do not match `pymongoarrow_schema` instead
-            of loading them as null. Needs `pymongoarrow>=1.9`.
-
-    Returns:
-        pyarrow.lib.Table: The table with the BSON extension types of pymongoarrow.
-    """
+    """Parses raw BSON batches into one table with the BSON extension types of pymongoarrow.
+    With `strict`, values that do not match `pymongoarrow_schema` raise `TypeError`."""
     # pymongoarrow 1.6 replaced `from_schema` and `lib.process_bson_stream` and stopped resetting
     # the context on `finish()`
     if hasattr(PyMongoArrowContext, "from_schema"):
@@ -86,14 +75,8 @@ def parse_batch(
     codec_options: Any,
     detect_mismatch: bool,
 ) -> Tuple[Any, Optional[Mismatch]]:
-    """Parse raw BSON batches into a table with plain Arrow types.
-
-    Without `pymongoarrow_schema` the types are inferred from the first value of each field, with
-    `detect_mismatch` a second strict parse finds values of other types, which load as null. Values
-    that do not match `pymongoarrow_schema` give no table.
-
-    Returns:
-        Tuple[Any, Optional[Mismatch]]: The table or None, and the fields with mismatched values.
+    """Parses raw BSON batches into a table with Arrow types, and finds the fields with values of
+    more than one type. Returns no table when values do not match `pymongoarrow_schema`.
     """
     if pymongoarrow_schema is not None:
         try:
@@ -131,8 +114,8 @@ def read_partition(
     pymongoarrow_schema: Any,
     detect_mismatch: bool,
 ) -> Tuple[Any, Optional[Mismatch]]:
-    """Parse the documents of `partition` matching `filter_` into one table, with the types
-    inferred once"""
+    """Parses the documents of `partition` that match `filter_` into one table"""
+    # one parse of all batches infers one type for each field
     batches = list(
         find_partition(collection.find_raw_batches, partition, filter_, projection)
     )
@@ -142,11 +125,7 @@ def read_partition(
 
 
 def convert_arrow_columns(table: Any) -> Any:
-    """Convert the BSON extension types of pymongoarrow into Arrow types, also in nested columns.
-
-    ObjectId is converted into its hex string, the same as `str(ObjectId)` in `convert_mongo_objs`,
-    Decimal128 into its string, BSON binary and code into their binary and string storage.
-    """
+    """Converts the BSON extension types of pymongoarrow to Arrow types, also in nested columns"""
     for i, field in enumerate(table.schema):
         column = table.column(i)
         chunks = [_convert_arrow_array(chunk) for chunk in column.chunks]
@@ -161,7 +140,7 @@ def convert_arrow_columns(table: Any) -> Any:
 
 
 class MongoArrowWorker(ArrowWorker):
-    """Reads `_id` partitions of a collection, a ticket is a task of `CollectionArrowLoaderParallel`"""
+    """Reads a partition of a collection into one table"""
 
     def __init__(self) -> None:
         self._clients: Dict[str, Any] = {}
@@ -222,9 +201,10 @@ def _mismatched_fields(
 
 
 def _convert_arrow_array(array: Any) -> Any:
-    """Converts BSON extension types in `array`, returns `array` itself if there are none"""
+    """Converts the BSON extension types in `array`, returns `array` itself if there are none"""
     arrow_type = array.type
     if _is_objectid(arrow_type):
+        # the hex string of the "python" backend
         return _objectid_to_hex(array.storage)
     if _is_decimal128(arrow_type):
         # there's no vectorized decoding of BSON decimals

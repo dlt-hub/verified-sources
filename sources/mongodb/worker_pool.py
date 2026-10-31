@@ -1,6 +1,5 @@
-"""Worker processes that run tasks offloaded by threads and stream Arrow tables back, like the
-`do_get` of an Arrow Flight server. Imports neither dlt nor the package it is in: a worker process
-runs this file by path and loads the worker classes from their files, so it starts fast."""
+"""Worker processes that run tasks of threads and stream Arrow tables back, like `do_get` of
+Arrow Flight. A worker process runs this file by path, so it imports neither dlt nor its package."""
 
 import errno
 import importlib
@@ -36,9 +35,9 @@ _PACKAGES: Dict[str, str] = {}
 
 
 class MessageKind(IntEnum):
-    """The parent sends tasks, a worker answers each with tables and done or error. ASCII letters
-    are readable in a dump of the pipes."""
+    """The parent sends tasks, a worker answers each with tables and done or error"""
 
+    # ASCII letters are readable in a dump of the pipes
     TASK = ord("T")
     TABLE = ord("A")
     DONE = ord("D")
@@ -46,14 +45,12 @@ class MessageKind(IntEnum):
 
 
 class ArrowWorker:
-    """Runs in a worker process and streams the Arrow tables of a ticket to the parent. Created
-    once per process, so it may keep e.g. connections between tickets. Its module is imported without the `__init__` of its package and should
-    import only what the worker needs, e.g. not dlt.
-    """
+    """Streams the Arrow tables of a ticket from a worker process. A process creates one instance
+    and keeps it between tickets."""
 
     def do_get(self, ticket: Any) -> Iterator[TTableWithMetadata]:
-        """Yield the tables of `ticket`, each with JSON serializable metadata. A table may be None
-        to send only metadata."""
+        """Yields the tables of `ticket`, each with JSON serializable metadata. A None table sends
+        only metadata."""
         raise NotImplementedError()
 
 
@@ -62,7 +59,7 @@ class WorkerError(Exception):
 
 
 class WorkerProcess:
-    """A worker process started with the current Python interpreter, runs one ticket at a time"""
+    """A worker process of the current Python interpreter, runs one ticket at a time"""
 
     def __init__(self) -> None:
         self.process = subprocess.Popen(
@@ -85,7 +82,7 @@ class WorkerProcess:
     def do_get(
         self, worker: Type[ArrowWorker], ticket: Any
     ) -> Iterator[TTableWithMetadata]:
-        """Stream the tables of `ticket` from `worker` in this process"""
+        """Streams the tables of `ticket` from `worker` in this process"""
         done = False
         try:
             try:
@@ -112,7 +109,7 @@ class WorkerProcess:
                     raise WorkerError(metadata)
                 return
         finally:
-            # the rest of a stream that is not read to the end would come with the next ticket
+            # the rest of an unread stream comes with the next ticket
             if not done:
                 self.close()
 
@@ -124,9 +121,7 @@ class WorkerProcess:
 
 
 class WorkerPool:
-    """Worker processes for the threads that offload tasks to them, one per thread, started on
-    first use and closed when the thread ends, so the threads bound the number of processes.
-    """
+    """One worker process for each thread, started on first use and closed when the thread ends"""
 
     def __init__(self) -> None:
         self._local = threading.local()
@@ -136,11 +131,11 @@ class WorkerPool:
     def do_get(
         self, worker: Type[ArrowWorker], ticket: Any
     ) -> Iterator[TTableWithMetadata]:
-        """Stream the tables of `ticket` from `worker` in the process of the current thread"""
+        """Streams the tables of `ticket` from `worker` in the process of the current thread"""
         return self._process().do_get(worker, ticket)
 
     def close(self) -> None:
-        """Close the processes of all threads"""
+        """Closes the processes of all threads"""
         with self._lock:
             processes = list(self._processes)
         for process in processes:
@@ -162,8 +157,7 @@ class WorkerPool:
 
 
 class _ThreadProcess:
-    """Closes the process of a thread when the thread ends, also when e.g. the traceback of an
-    error still refers to it"""
+    """Closes the process when the thread ends, also when a traceback still refers to the process"""
 
     __slots__ = ("process", "__weakref__")
 
@@ -184,8 +178,8 @@ def worker_spec(worker: Type[ArrowWorker]) -> TWorkerSpec:
 
 
 def load_worker(directory: str, module: str, name: str) -> Type[ArrowWorker]:
-    """Import a worker class from its module in `directory`. The directory becomes a package
-    without its `__init__`, so the relative imports of the module work."""
+    """Imports a worker class from its module in `directory`"""
+    # the directory becomes a package without its `__init__`, relative imports of the module work
     package = _PACKAGES.get(directory)
     if package is None:
         package = _PACKAGES[directory] = f"_worker_package_{len(_PACKAGES)}"
@@ -199,12 +193,11 @@ def load_worker(directory: str, module: str, name: str) -> Type[ArrowWorker]:
 
 
 def serve() -> None:
-    """Loop of a worker process: runs the tickets that the parent writes on stdin and writes their
-    tables to stdout, until the parent closes stdin."""
-    # the parent stops its workers, e.g. on ctrl-c
+    """Runs the tickets from stdin and writes their tables to stdout until stdin closes"""
+    # the parent stops its workers on ctrl-c
     signal.signal(signal.SIGINT, signal.SIG_IGN)
     output = sys.stdout.buffer
-    # stray prints would corrupt the messages
+    # stray prints corrupt the messages
     sys.stdout = sys.stderr
     workers: Dict[TWorkerSpec, ArrowWorker] = {}
     while True:
@@ -228,7 +221,7 @@ def serve() -> None:
 def write_message(
     stream: IO[bytes], kind: MessageKind, metadata: Any = None, body: Any = b""
 ) -> None:
-    """Write a message of `kind` with JSON serializable `metadata` and a `body` of bytes"""
+    """Writes a message of `kind` with JSON serializable `metadata` and a `body` of bytes"""
     encoded = json.dumps(metadata).encode()
     body = memoryview(body)
     stream.write(_PREFIX.pack(kind, len(encoded), body.nbytes))
@@ -238,8 +231,7 @@ def write_message(
 
 
 def read_message(stream: IO[bytes]) -> Tuple[MessageKind, Any, bytes]:
-    """Read the kind, metadata and body of a message of `write_message`. Raises `EOFError` when the
-    stream ends."""
+    """Reads the kind, metadata and body of a message. Raises `EOFError` when the stream ends."""
     kind, metadata_size, body_size = _PREFIX.unpack(_read_exact(stream, _PREFIX.size))
     metadata = json.loads(_read_exact(stream, metadata_size))
     return MessageKind(kind), metadata, _read_exact(stream, body_size)

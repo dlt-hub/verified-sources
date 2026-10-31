@@ -24,8 +24,11 @@ from sources.mongodb_pipeline import (
 from tests.mongodb.conftest import LOCAL_MONGO_URL
 from tests.mongodb.utils import (
     ProcessRecorder,
+    last_row_count,
     make_documents,
     make_mixed_id_documents,
+    select_ids,
+    select_rows,
     server_reads,
 )
 from tests.utils import (
@@ -93,22 +96,25 @@ def test_nested_documents():
     assert json.loads(doc_str)["_id"] == "651c075367e4e330ec801dac"
 
 
-@pytest.mark.parametrize("data_item_format", ["object", "arrow"])
+@pytest.mark.parametrize("backend", ["python", "pyarrow"])
 @skip_if_not_active("duckdb")
-def test_limit(data_item_format):
+def test_limit(backend):
     pipeline = dlt.pipeline(
         pipeline_name="mongodb_test",
         destination="duckdb",
         dataset_name="mongodb_test_data",
         dev_mode=True,
     )
-    comments = mongodb_collection(
-        collection="comments", limit=10, data_item_format=data_item_format
-    )
-    pipeline.run(comments)
+    comments = mongodb_collection(collection="comments", limit=10, backend=backend)
+    with mock.patch("dlt.common.logger.warning") as warn_mock:
+        pipeline.run(comments)
 
     table_counts = load_table_counts(pipeline, "comments")
     assert table_counts["comments"] == 10
+    warn_mock.assert_called_once_with(
+        "`limit` without `row_order` of the incremental loads documents in no "
+        "defined order. Set `row_order` to load the first documents."
+    )
 
 
 @skip_if_not_active("duckdb")
@@ -128,47 +134,6 @@ def test_limit_on_source():
     table_counts = load_table_counts(pipeline, *collections)
     for col_name in collections:
         assert table_counts[col_name] == limit
-
-
-@skip_if_not_active("duckdb")
-def test_limit_warning():
-    pipeline = dlt.pipeline(
-        pipeline_name="mongodb_test",
-        destination="duckdb",
-        dataset_name="mongodb_test_data",
-        dev_mode=True,
-    )
-    comments = mongodb_collection(collection="comments", limit=10)
-
-    with mock.patch("dlt.common.logger.warning") as warn_mock:
-        pipeline.run(comments)
-
-        warn_mock.assert_called_once_with(
-            "Using limit without ordering - results may be inconsistent."
-        )
-
-
-@pytest.mark.parametrize("data_item_format", ["object", "arrow"])
-@skip_if_not_active("duckdb")
-def test_limit_chunk_size(data_item_format):
-    pipeline = dlt.pipeline(
-        pipeline_name="mongodb_test",
-        destination="duckdb",
-        dataset_name="mongodb_test_data",
-        dev_mode=True,
-    )
-    comments = mongodb_collection(
-        collection="comments",
-        limit=15,
-        parallel=True,
-        chunk_size=2,
-        incremental=dlt.sources.incremental("date"),
-        data_item_format=data_item_format,
-    )
-    pipeline.run(comments)
-
-    table_counts = load_table_counts(pipeline, "comments")
-    assert table_counts["comments"] == 15
 
 
 @pytest.mark.parametrize("destination_name", ALL_DESTINATIONS)
@@ -210,7 +175,7 @@ def test_python_types(destination_name):
 @pytest.mark.parametrize("destination_name", ALL_DESTINATIONS)
 def test_arrow_types(destination_name):
     # test Arrow types
-    res = mongodb_collection(collection="types_test", data_item_format="arrow")
+    res = mongodb_collection(collection="types_test", backend="pyarrow")
     types = list(res)[0]
 
     for field, value in {
@@ -296,134 +261,58 @@ def test_filter_intersect():
         filter_={"runtime": {"$gte": 20}},
     )
 
-    with pytest.raises(PipelineStepFailed):
+    with pytest.raises(PipelineStepFailed) as ex:
         pipeline.run(movies)
+    assert "is also used by the incremental" in str(ex.value)
 
 
 @skip_if_not_active("duckdb")
-def test_projection_list_inclusion():
+@pytest.mark.parametrize(
+    "projection,columns",
+    [
+        (["title", "poster"], ["title", "poster"]),
+        ({"title": 1, "poster": 1}, ["title", "poster"]),
+        (
+            {
+                column: 0
+                for column in (
+                    "runtime",
+                    "released",
+                    "year",
+                    "plot",
+                    "fullplot",
+                    "lastupdated",
+                    "type",
+                    "directors",
+                    "imdb",
+                    "cast",
+                    "countries",
+                    "genres",
+                    "tomatoes",
+                    "num_mflix_comments",
+                    "rated",
+                    "awards",
+                )
+            },
+            ["title", "poster"],
+        ),
+        # other fields of `imdb` are not loaded
+        (["imdb.votes", "poster"], ["imdb__votes", "poster"]),
+    ],
+    ids=["list_inclusion", "dict_inclusion", "dict_exclusion", "nested_field"],
+)
+def test_projection(projection: Any, columns: List[str]) -> None:
     pipeline = dlt.pipeline(
         pipeline_name="mongodb_test",
         destination="duckdb",
         dataset_name="mongodb_test_data",
         dev_mode=True,
     )
-    collection_name = "movies"
-    projection = ["title", "poster"]
-    expected_columns = projection + ["_id", "_dlt_id", "_dlt_load_id"]
-
-    movies = mongodb_collection(
-        collection=collection_name, projection=projection, limit=2
-    )
+    movies = mongodb_collection(collection="movies", projection=projection, limit=2)
     pipeline.run(movies)
-    loaded_columns = pipeline.default_schema.get_table_columns(collection_name).keys()
 
-    assert set(loaded_columns) == set(expected_columns)
-
-
-@skip_if_not_active("duckdb")
-def test_projection_dict_inclusion():
-    pipeline = dlt.pipeline(
-        pipeline_name="mongodb_test",
-        destination="duckdb",
-        dataset_name="mongodb_test_data",
-        dev_mode=True,
-    )
-    collection_name = "movies"
-    projection = {"title": 1, "poster": 1}
-    expected_columns = list(projection.keys()) + ["_id", "_dlt_id", "_dlt_load_id"]
-
-    movies = mongodb_collection(
-        collection=collection_name, projection=projection, limit=2
-    )
-    pipeline.run(movies)
-    loaded_columns = pipeline.default_schema.get_table_columns(collection_name).keys()
-
-    assert set(loaded_columns) == set(expected_columns)
-
-
-@skip_if_not_active("duckdb")
-def test_projection_dict_exclusion():
-    pipeline = dlt.pipeline(
-        pipeline_name="mongodb_test",
-        destination="duckdb",
-        dataset_name="mongodb_test_data",
-        dev_mode=True,
-    )
-    collection_name = "movies"
-    columns_to_exclude = [
-        "runtime",
-        "released",
-        "year",
-        "plot",
-        "fullplot",
-        "lastupdated",
-        "type",
-        "directors",
-        "imdb",
-        "cast",
-        "countries",
-        "genres",
-        "tomatoes",
-        "num_mflix_comments",
-        "rated",
-        "awards",
-    ]
-    projection = {col: 0 for col in columns_to_exclude}
-    expected_columns = ["title", "poster", "_id", "_dlt_id", "_dlt_load_id"]
-
-    movies = mongodb_collection(
-        collection=collection_name, projection=projection, limit=2
-    )
-    pipeline.run(movies)
-    loaded_columns = pipeline.default_schema.get_table_columns(collection_name).keys()
-
-    assert set(loaded_columns) == set(expected_columns)
-
-
-@skip_if_not_active("duckdb")
-def test_projection_nested_field():
-    pipeline = dlt.pipeline(
-        pipeline_name="mongodb_test",
-        destination="duckdb",
-        dataset_name="mongodb_test_data",
-        dev_mode=True,
-    )
-    collection_name = "movies"
-    projection = ["imdb.votes", "poster"]
-    expected_columns = ["imdb__votes", "poster", "_id", "_dlt_id", "_dlt_load_id"]
-    # other documents nested under `imdb` shouldn't be loaded
-    not_expected_columns = ["imdb__rating", "imdb__id"]
-
-    movies = mongodb_collection(
-        collection=collection_name, projection=projection, limit=2
-    )
-    pipeline.run(movies)
-    loaded_columns = pipeline.default_schema.get_table_columns(collection_name).keys()
-
-    assert set(loaded_columns) == set(expected_columns)
-    assert len(set(loaded_columns).intersection(not_expected_columns)) == 0
-
-
-@skip_if_not_active("duckdb")
-@pytest.mark.parametrize("data_item_format", ["object", "arrow"])
-def test_mongodb_without_pymongoarrow(data_item_format: str) -> None:
-    with mock.patch.dict("sys.modules", {"pymongoarrow": None}):
-        pipeline = dlt.pipeline(
-            pipeline_name="test_mongodb_without_pymongoarrow",
-            destination="duckdb",
-            dataset_name="test_mongodb_without_pymongoarrow_data",
-            dev_mode=True,
-        )
-
-        comments = mongodb_collection(
-            collection="comments", limit=10, data_item_format=data_item_format
-        )
-        load_info = pipeline.run(comments)
-
-        assert load_info.loads_ids != []
-        table_counts = load_table_counts(pipeline, "comments")
-        assert table_counts["comments"] == 10
+    loaded_columns = pipeline.default_schema.get_table_columns("movies").keys()
+    assert set(loaded_columns) == set(columns) | {"_id", "_dlt_id", "_dlt_load_id"}
 
 
 @pytest.mark.parametrize("destination_name", ALL_DESTINATIONS)
@@ -453,7 +342,7 @@ def test_pymongoarrow_schema(destination_name: str):
 
     res = mongodb_collection(
         collection="types_test",
-        data_item_format="arrow",
+        backend="pyarrow",
         pymongoarrow_schema=Schema(expected_schema),
     )
 
@@ -494,15 +383,6 @@ def test_pymongoarrow_schema(destination_name: str):
     assert info.loads_ids != []
 
 
-def _local_rows(pipeline: dlt.Pipeline, table_name: str) -> List[Dict[str, Any]]:
-    columns = ["_id", "n", "title", "updated_at", "price", "payload", "code"]
-    with pipeline.sql_client() as client:
-        rows = client.execute_sql(
-            f"SELECT {', '.join(columns)} FROM {table_name} ORDER BY n"
-        )
-    return [dict(zip(columns, row)) for row in rows]
-
-
 @skipifwindows
 @skip_if_not_active("duckdb")
 @pytest.mark.parametrize("parallel", [False, True], ids=["sequential", "parallel"])
@@ -510,7 +390,7 @@ def test_local_arrow_matches_object(local_mongo: Database, parallel: bool) -> No
     pipeline = dlt.pipeline(
         pipeline_name="mongodb_local_formats", destination="duckdb", dev_mode=True
     )
-    for data_item_format in ("object", "arrow"):
+    for backend in ("python", "pyarrow"):
         docs = mongodb_collection(
             connection_url=LOCAL_MONGO_URL,
             database=local_mongo.name,
@@ -518,57 +398,14 @@ def test_local_arrow_matches_object(local_mongo: Database, parallel: bool) -> No
             parallel=parallel,
             chunk_size=4,
             partition_size_bytes=1_000,
-            data_item_format=data_item_format,
+            backend=backend,
         )
-        pipeline.run(docs, table_name=f"docs_{data_item_format}")
+        pipeline.run(docs, table_name=f"docs_{backend}")
 
-    object_rows = _local_rows(pipeline, "docs_object")
-    assert len(object_rows) == 25
-    assert len({row["_id"] for row in object_rows}) == 25
-    assert _local_rows(pipeline, "docs_arrow") == object_rows
-
-
-@skipifwindows
-@skip_if_not_active("duckdb")
-@pytest.mark.parametrize("data_item_format", ["object", "arrow"])
-@pytest.mark.parametrize("parallel", [False, True], ids=["sequential", "parallel"])
-def test_local_incremental(
-    local_mongo: Database, data_item_format: str, parallel: bool
-) -> None:
-    pipeline = dlt.pipeline(
-        pipeline_name="mongodb_local_incremental", destination="duckdb", dev_mode=True
-    )
-
-    def docs() -> DltResource:
-        return mongodb_collection(
-            connection_url=LOCAL_MONGO_URL,
-            database=local_mongo.name,
-            collection="docs",
-            incremental=dlt.sources.incremental(
-                "updated_at",
-                initial_value=datetime(2024, 1, 11, tzinfo=timezone.utc),
-                row_order="asc",
-            ),
-            projection=["title"],
-            parallel=parallel,
-            chunk_size=4,
-            partition_size_bytes=1_000,
-            data_item_format=data_item_format,
-        )
-
-    pipeline.run(docs())
-    assert load_table_counts(pipeline, "docs") == {"docs": 15}
-    # the projection keeps the cursor field
-    assert {"_id", "title", "updated_at"} <= set(
-        pipeline.default_schema.get_table_columns("docs")
-    )
-
-    pipeline.run(docs())
-    assert load_table_counts(pipeline, "docs") == {"docs": 15}
-
-    local_mongo["docs"].insert_many(make_documents(5, start=25))
-    pipeline.run(docs())
-    assert load_table_counts(pipeline, "docs") == {"docs": 20}
+    python_rows = select_rows(pipeline, "docs_python")
+    assert len(python_rows) == 25
+    assert len({row["_id"] for row in python_rows}) == 25
+    assert select_rows(pipeline, "docs_pyarrow") == python_rows
 
 
 _NUMBERS = list(range(-1, 7))
@@ -630,16 +467,16 @@ _NUMBERS = list(range(-1, 7))
         "custom_last_value_func",
     ],
 )
-@pytest.mark.parametrize("data_item_format", ["object", "arrow"])
+@pytest.mark.parametrize("backend", ["python", "pyarrow"])
 def test_local_incremental_server_filter(
     profiled_mongo: Database,
     incremental_args: Dict[str, Any],
     filter_: Optional[Dict[str, Any]],
     expected: List[Optional[int]],
     returned: int,
-    data_item_format: str,
+    backend: str,
 ) -> None:
-    if data_item_format == "arrow" and incremental_args.get("last_value_func") not in (
+    if backend == "pyarrow" and incremental_args.get("last_value_func") not in (
         None,
         max,
         min,
@@ -656,10 +493,10 @@ def test_local_incremental_server_filter(
         collection="numbers",
         incremental=dlt.sources.incremental("n", **incremental_args),
         filter_=filter_,
-        data_item_format=data_item_format,
+        backend=backend,
     )
 
-    if data_item_format == "arrow":
+    if backend == "pyarrow":
         loaded = [value for table in items for value in table["n"].to_pylist()]
     else:
         loaded = [item.get("n") for item in items]
@@ -730,10 +567,10 @@ def test_local_projection_keeps_cursor_field(
 
 @skipifwindows
 @skip_if_not_active("duckdb")
-@pytest.mark.parametrize("data_item_format", ["object", "arrow"])
+@pytest.mark.parametrize("backend", ["python", "pyarrow"])
 @pytest.mark.parametrize("limit", [None, 3], ids=["no_limit", "limit"])
 def test_local_parallel_single_partition(
-    profiled_mongo: Database, data_item_format: str, limit: Optional[int]
+    profiled_mongo: Database, backend: str, limit: Optional[int]
 ) -> None:
     # the 10 matching documents are fewer than two partitions
     items = mongodb_collection(
@@ -743,10 +580,10 @@ def test_local_parallel_single_partition(
         parallel=True,
         limit=limit,
         filter_={"n": {"$lt": 10}},
-        data_item_format=data_item_format,
+        backend=backend,
     )
 
-    rows = sum(item.num_rows if data_item_format == "arrow" else 1 for item in items)
+    rows = sum(item.num_rows if backend == "pyarrow" else 1 for item in items)
     assert rows == (limit or 10)
     # one query with no `_id` range
     queries = [
@@ -757,10 +594,8 @@ def test_local_parallel_single_partition(
 
 @skipifwindows
 @skip_if_not_active("duckdb")
-@pytest.mark.parametrize("data_item_format", ["object", "arrow"])
-def test_local_dates_out_of_python_range(
-    local_mongo: Database, data_item_format: str
-) -> None:
+@pytest.mark.parametrize("backend", ["python", "pyarrow"])
+def test_local_dates_out_of_python_range(local_mongo: Database, backend: str) -> None:
     # year 0 and year 10000 do not fit python datetime
     millis = [-62198755200000, 253402300800000]
     local_mongo["dates"].insert_many(
@@ -772,11 +607,11 @@ def test_local_dates_out_of_python_range(
             connection_url=LOCAL_MONGO_URL,
             database=local_mongo.name,
             collection="dates",
-            data_item_format=data_item_format,
+            backend=backend,
         )
     )
 
-    if data_item_format == "object":
+    if backend == "python":
         assert [item["d"] for item in items] == [
             datetime.min.replace(tzinfo=timezone.utc),
             # BSON dates have millisecond precision
@@ -786,23 +621,14 @@ def test_local_dates_out_of_python_range(
         assert items[0]["d"].cast(pyarrow.int64()).to_pylist() == millis
 
 
-def _seeded_rows_loaded(pipeline: dlt.Pipeline) -> int:
-    return pipeline.last_trace.last_normalize_info.row_counts.get("seeded", 0)
-
-
-def _seeded_ids(pipeline: dlt.Pipeline) -> List[str]:
-    with pipeline.sql_client() as client:
-        return sorted(row[0] for row in client.execute_sql("SELECT _id FROM seeded"))
-
-
 @skipifwindows
 @skip_if_not_active("duckdb")
-@pytest.mark.parametrize("data_item_format", ["object", "arrow"])
+@pytest.mark.parametrize("backend", ["python", "pyarrow"])
 @pytest.mark.parametrize("parallel", [False, True], ids=["sequential", "parallel"])
 def test_local_seeded_full_and_incremental(
     local_mongo: Database,
     seeded_documents: List[Dict[str, Any]],
-    data_item_format: str,
+    backend: str,
     parallel: bool,
 ) -> None:
     updated_at = [document["updated_at"] for document in seeded_documents]
@@ -817,20 +643,25 @@ def test_local_seeded_full_and_incremental(
             parallel=parallel,
             chunk_size=200,
             partition_size_bytes=4 * _PARTITION_OF_50_DOCUMENTS,
-            data_item_format=data_item_format,
+            backend=backend,
         )
 
     pipeline = dlt.pipeline(
         pipeline_name="mongodb_local_seeded", destination="duckdb", dev_mode=True
     )
     assert_load_info(pipeline.run(seeded()))
-    assert _seeded_rows_loaded(pipeline) == len(seeded_documents)
-    assert _seeded_ids(pipeline) == seeded_ids
+    assert last_row_count(pipeline, "seeded") == len(seeded_documents)
+    assert select_ids(pipeline, "seeded") == seeded_ids
 
     # the document with the last value is read again and dropped
     pipeline.run(seeded())
-    assert _seeded_rows_loaded(pipeline) == 0
+    assert last_row_count(pipeline, "seeded") == 0
     assert load_table_counts(pipeline, "seeded") == {"seeded": len(seeded_documents)}
+
+    # documents added after a run load on the next one, they are later than all windows below
+    local_mongo["seeded"].insert_many(make_documents(5, start=len(seeded_documents)))
+    pipeline.run(seeded())
+    assert last_row_count(pipeline, "seeded") == 5
 
     months = [datetime(2024, month, 1, tzinfo=timezone.utc) for month in (1, 2, 3, 4)]
     # with `min` the windows go back in time, the last one ends before the first seeded value
@@ -860,15 +691,15 @@ def test_local_seeded_full_and_incremental(
                     )
                 )
             )
-            assert _seeded_rows_loaded(backfill) == expected
+            assert last_row_count(backfill, "seeded") == expected
         # windows with an end value do not store incremental state
         assert "sources" not in backfill.state
-        assert _seeded_ids(backfill) == seeded_ids
+        assert select_ids(backfill, "seeded") == seeded_ids
 
 
 @skipifwindows
 @skip_if_not_active("duckdb")
-@pytest.mark.parametrize("data_item_format", ["object", "arrow"])
+@pytest.mark.parametrize("backend", ["python", "pyarrow"])
 @pytest.mark.parametrize(
     "last_value_func,initial_value",
     [
@@ -882,7 +713,7 @@ def test_local_seeded_full_and_incremental(
 def test_local_seeded_chunks(
     local_mongo: Database,
     seeded_documents: List[Dict[str, Any]],
-    data_item_format: str,
+    backend: str,
     last_value_func: Any,
     initial_value: Optional[datetime],
 ) -> None:
@@ -905,7 +736,7 @@ def test_local_seeded_chunks(
             range_start="open",  # seeded values are unique, the last one is not read again
         ),
         chunk_size=chunk_size,
-        data_item_format=data_item_format,
+        backend=backend,
     )
     pipeline = dlt.pipeline(
         pipeline_name="mongodb_local_seeded_chunks", destination="duckdb", dev_mode=True
@@ -914,10 +745,10 @@ def test_local_seeded_chunks(
     for start in range(0, len(expected), chunk_size):
         chunk = expected[start : start + chunk_size]
         assert_load_info(pipeline.run(seeded.add_limit(1)))
-        assert _seeded_rows_loaded(pipeline) == len(chunk)
+        assert last_row_count(pipeline, "seeded") == len(chunk)
         assert seeded.state["incremental"]["updated_at"]["last_value"] == chunk[-1]
     pipeline.run(seeded)
-    assert _seeded_rows_loaded(pipeline) == 0
+    assert last_row_count(pipeline, "seeded") == 0
 
     with pipeline.sql_client() as client:
         rows = client.execute_sql("SELECT n, updated_at FROM seeded")
@@ -934,23 +765,14 @@ def test_local_seeded_chunks(
 
 @skipifwindows
 @skip_if_not_active("duckdb")
-@pytest.mark.parametrize("row_order", ["asc", "desc", None])
-@pytest.mark.parametrize(
-    "data_item_format,last_value_func",
-    [
-        ("object", min),
-        ("object", max),
-        ("object", lambda values: max(values)),
-        ("arrow", min),
-        ("arrow", max),
-    ],
-    ids=["object-min", "object-max", "object-custom", "arrow-min", "arrow-max"],
-)
+@pytest.mark.parametrize("row_order", ["asc", "desc"])
+@pytest.mark.parametrize("backend", ["python", "pyarrow"])
+@pytest.mark.parametrize("last_value_func", [min, max], ids=["min", "max"])
 def test_local_seeded_order(
     local_mongo: Database,
     seeded_documents: List[Dict[str, Any]],
-    row_order: Optional[str],
-    data_item_format: str,
+    row_order: str,
+    backend: str,
     last_value_func: Any,
 ) -> None:
     # before or after all seeded values, so every document is read
@@ -968,49 +790,48 @@ def test_local_seeded_order(
             row_order=row_order,
         ),
         chunk_size=200,
-        data_item_format=data_item_format,
+        backend=backend,
     )
 
-    if data_item_format == "arrow":
+    if backend == "pyarrow":
         values = [value for table in items for value in table["updated_at"].to_pylist()]
     else:
         values = [item["updated_at"] for item in items]
 
     assert len(values) == len(seeded_documents)
-    # the server sorts only with `min` or `max`, ascending in the direction of the last value
-    if row_order and last_value_func in (min, max):
-        ascending = (row_order == "asc") == (last_value_func is max)
-        assert values == sorted(values, reverse=not ascending)
+    # ascending in the direction of the last value
+    ascending = (row_order == "asc") == (last_value_func is max)
+    assert values == sorted(values, reverse=not ascending)
 
 
-def _parallel_n(
-    database: Database, collection: str, data_item_format: str, **kwargs: Any
+def _read_numbers_in_parallel(
+    database: Database, collection: str, backend: str, **kwargs: Any
 ) -> List[int]:
-    """`n` of the documents read with `parallel` in `_id` partitions of about 50 documents"""
+    """Values of `n` read with `parallel` in `_id` partitions of about 50 documents"""
     kwargs.setdefault("partition_size_bytes", _PARTITION_OF_50_MIXED_IDS)
     resource = mongodb_collection(
         connection_url=LOCAL_MONGO_URL,
         database=database.name,
         collection=collection,
         parallel=True,
-        data_item_format=data_item_format,
+        backend=backend,
         **kwargs,
     )
     loaded: List[int] = []
     for item in resource:
-        loaded += item["n"].to_pylist() if data_item_format == "arrow" else [item["n"]]
+        loaded += item["n"].to_pylist() if backend == "pyarrow" else [item["n"]]
     return loaded
 
 
 @skipifwindows
 @skip_if_not_active("duckdb")
-@pytest.mark.parametrize("data_item_format", ["object", "arrow"])
+@pytest.mark.parametrize("backend", ["python", "pyarrow"])
 @pytest.mark.parametrize(
     "majority", ["objectId", "number", "binData", "date", "string"]
 )
 def test_local_parallel_mixed_ids(
     local_mongo: Database,
-    data_item_format: str,
+    backend: str,
     majority: str,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -1053,7 +874,9 @@ def test_local_parallel_mixed_ids(
     )
 
     for filter_ in ({}, {"n": {"$mod": [3, 0]}}):
-        loaded = _parallel_n(local_mongo, "mixed", data_item_format, filter_=filter_)
+        loaded = _read_numbers_in_parallel(
+            local_mongo, "mixed", backend, filter_=filter_
+        )
         assert sorted(loaded) == sorted(
             document["n"]
             for document in documents
@@ -1063,9 +886,9 @@ def test_local_parallel_mixed_ids(
 
 @skipifwindows
 @skip_if_not_active("duckdb")
-@pytest.mark.parametrize("data_item_format", ["object", "arrow"])
+@pytest.mark.parametrize("backend", ["python", "pyarrow"])
 def test_local_parallel_view_and_timeseries(
-    local_mongo: Database, data_item_format: str
+    local_mongo: Database, backend: str
 ) -> None:
     local_mongo["base"].insert_many(make_mixed_id_documents("objectId", 300))
     local_mongo.command(
@@ -1090,7 +913,7 @@ def test_local_parallel_view_and_timeseries(
         collection_names=names,
         parallel=True,
         partition_size_bytes=_PARTITION_OF_50_MIXED_IDS,
-        data_item_format=data_item_format,
+        backend=backend,
     )
     pipeline = dlt.pipeline(
         pipeline_name="mongodb_local_view_and_timeseries",
@@ -1112,10 +935,10 @@ def test_local_parallel_view_and_timeseries(
 
 @skipifwindows
 @skip_if_not_active("duckdb")
-@pytest.mark.parametrize("data_item_format", ["object", "arrow"])
+@pytest.mark.parametrize("backend", ["python", "pyarrow"])
 @pytest.mark.parametrize("collection", ["view", "series"])
 def test_local_documents_without_id(
-    local_mongo: Database, collection: str, data_item_format: str
+    local_mongo: Database, collection: str, backend: str
 ) -> None:
     start = datetime(2024, 1, 1, tzinfo=timezone.utc)
     if collection == "view":
@@ -1137,7 +960,7 @@ def test_local_documents_without_id(
             connection_url=LOCAL_MONGO_URL,
             database=local_mongo.name,
             collection=collection,
-            data_item_format=data_item_format,
+            backend=backend,
         )
 
     def pipeline() -> dlt.Pipeline:
@@ -1159,8 +982,8 @@ def test_local_documents_without_id(
 
 @skipifwindows
 @skip_if_not_active("duckdb")
-@pytest.mark.parametrize("data_item_format", ["object", "arrow"])
-def test_local_parallel_clustered(local_mongo: Database, data_item_format: str) -> None:
+@pytest.mark.parametrize("backend", ["python", "pyarrow"])
+def test_local_parallel_clustered(local_mongo: Database, backend: str) -> None:
     documents = make_mixed_id_documents("objectId", 600)
     collection = local_mongo.create_collection(
         "clustered", clusteredIndex={"key": {"_id": 1}, "unique": True}
@@ -1172,7 +995,7 @@ def test_local_parallel_clustered(local_mongo: Database, data_item_format: str) 
     assert len(partitions) > 2
     assert all(set(partition) == {"filter"} for partition in partitions)
 
-    loaded = _parallel_n(local_mongo, "clustered", data_item_format)
+    loaded = _read_numbers_in_parallel(local_mongo, "clustered", backend)
     assert sorted(loaded) == sorted(document["n"] for document in documents)
 
 
@@ -1193,11 +1016,11 @@ def test_local_parallel_filtered_plan(profiled_mongo: Database) -> None:
     assert 1 < len(filtered) <= 4
     assert all(set(partition) == {"filter"} for partition in filtered)
 
-    for data_item_format in ("object", "arrow"):
-        loaded = _parallel_n(
+    for backend in ("python", "pyarrow"):
+        loaded = _read_numbers_in_parallel(
             profiled_mongo,
             "many",
-            data_item_format,
+            backend,
             filter_=filter_,
             partition_size_bytes=_PARTITION_OF_50_DOCUMENTS,
         )
@@ -1254,7 +1077,7 @@ def test_local_parallel_arrow_workers(
             collection="many",
             parallel=True,
             partition_size_bytes=_PARTITION_OF_50_DOCUMENTS,
-            data_item_format="arrow",
+            backend="pyarrow",
             **kwargs,
         )
 
@@ -1290,7 +1113,7 @@ def test_local_parallel_arrow_workers_shared(
         collection_names=names,
         parallel=True,
         partition_size_bytes=_PARTITION_OF_50_DOCUMENTS,
-        data_item_format="arrow",
+        backend="pyarrow",
     )
     pipeline = dlt.pipeline(
         pipeline_name="mongodb_local_shared_workers",
@@ -1317,7 +1140,7 @@ def test_arrow_nested_types_snowflake() -> None:
         dataset_name="mongodb_nested_types",
         dev_mode=True,
     )
-    types_test = mongodb_collection(collection="types_test", data_item_format="arrow")
+    types_test = mongodb_collection(collection="types_test", backend="pyarrow")
     # documents are flattened into columns unless nesting is disabled, arrays are always nested
     types_test.max_table_nesting = 0
     pipeline.run(types_test, loader_file_format="parquet")

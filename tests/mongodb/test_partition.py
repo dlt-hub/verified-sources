@@ -1,5 +1,5 @@
 import math
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Optional, Tuple
 
 import pytest
 from bson import MaxKey, ObjectId
@@ -11,7 +11,6 @@ from sources.mongodb.partition import (
     _documents_per_partition,
     _sample_size,
     _storage_stats,
-    and_filters,
     bounded_partitions,
     find_partition,
     range_partitions,
@@ -30,14 +29,6 @@ from tests.mongodb.utils import FakeCollection, make_documents
 )
 def test_sample_size(ranges: int, count: int, expected: int) -> None:
     assert _sample_size(ranges, count) == expected
-
-
-def test_and_filters() -> None:
-    assert and_filters({}, {}) == {}
-    assert and_filters({"n": 1}, {}) == {"n": 1}
-    assert and_filters({"n": 1}, {"_id": {"$lt": 2}}) == {
-        "$and": [{"n": 1}, {"_id": {"$lt": 2}}]
-    }
 
 
 def test_bounded_partitions() -> None:

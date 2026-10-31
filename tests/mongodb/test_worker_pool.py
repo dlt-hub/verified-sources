@@ -1,7 +1,7 @@
 import io
 import pickle
 import threading
-from typing import Any, Dict, List
+from typing import Dict, List
 
 import pyarrow as pa
 import pytest
@@ -23,8 +23,8 @@ from tests.mongodb.utils import ProcessRecorder
 from tests.mongodb.workers import EchoWorker
 
 
-def _run_tickets(pool: WorkerPool, count: int = 1) -> List[int]:
-    """Run `count` tickets in the current thread, returns the pids of the processes that ran them"""
+def _worker_pids(pool: WorkerPool, count: int = 1) -> List[int]:
+    """Pids of the processes that run `count` tickets in the current thread"""
     return [
         metadata["pid"]
         for _ in range(count)
@@ -58,10 +58,10 @@ def test_do_get_streams_tables_with_metadata() -> None:
 )
 def test_worker_failure(ticket: str, error: str, same_process: bool) -> None:
     with WorkerPool() as pool:
-        (before,) = _run_tickets(pool)
+        (before,) = _worker_pids(pool)
         with pytest.raises(WorkerError, match=error):
             list(pool.do_get(EchoWorker, ticket))
-        (after,) = _run_tickets(pool)
+        (after,) = _worker_pids(pool)
 
     assert (before == after) == same_process
 
@@ -74,7 +74,7 @@ def test_abandoned_stream_closes_process(monkeypatch: pytest.MonkeyPatch) -> Non
         stream.close()
         # the rest of the stream would come with the next ticket
         assert recorder.running == 0
-        _run_tickets(pool)
+        _worker_pids(pool)
 
     assert len(recorder.processes) == 2
 
@@ -87,7 +87,7 @@ def test_process_per_thread(monkeypatch: pytest.MonkeyPatch) -> None:
     barrier = threading.Barrier(3, timeout=60)
 
     def run(name: str) -> None:
-        pids[name] = _run_tickets(pool, 2)
+        pids[name] = _worker_pids(pool, 2)
         barrier.wait()
         barrier.wait()
 
@@ -111,14 +111,14 @@ def test_process_per_thread(monkeypatch: pytest.MonkeyPatch) -> None:
 def test_close_stops_processes(monkeypatch: pytest.MonkeyPatch) -> None:
     recorder = ProcessRecorder(monkeypatch)
     pool = WorkerPool()
-    _run_tickets(pool)
+    _worker_pids(pool)
     assert recorder.running == 1
 
     pool.close()
     assert recorder.running == 0
 
     # the next ticket starts a new process
-    _run_tickets(pool)
+    _worker_pids(pool)
     assert len(recorder.processes) == 2
     pool.close()
 

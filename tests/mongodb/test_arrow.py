@@ -39,7 +39,7 @@ def test_arrow_loader_yields_each_batch_once() -> None:
         "docs", [{"_id": ObjectId(), "name": name} for name in "abc"]
     )
 
-    tables = extract(collection, chunk_size=1, data_item_format="arrow")
+    tables = extract(collection, chunk_size=1, backend="pyarrow")
 
     assert all(isinstance(table, pa.Table) for table in tables)
     assert sorted(table["name"].to_pylist() for table in tables) == [
@@ -193,7 +193,7 @@ def test_type_mismatch_in_batch_raises(
     with pytest.raises(Exception) as ex:
         extract(
             collection,
-            data_item_format="arrow",
+            backend="pyarrow",
             on_inferred_type_mismatch="raise",
         )
     error = ex.value
@@ -240,7 +240,7 @@ def test_type_mismatch_across_batches(
     def tables() -> List[Any]:
         return extract(
             collection,
-            data_item_format="arrow",
+            backend="pyarrow",
             chunk_size=1,
             on_inferred_type_mismatch=on_inferred_type_mismatch,
         )
@@ -258,8 +258,8 @@ def test_type_mismatch_across_batches(
 
 @pytest.mark.parametrize(
     "on_inferred_type_mismatch",
-    ["warn", "ignore", None],
-    ids=["warn", "ignore", "default"],
+    ["warn", None],
+    ids=["warn", "default"],
 )
 def test_type_mismatch_loads_null(
     on_inferred_type_mismatch: Optional[str], mocker: Any
@@ -281,7 +281,7 @@ def test_type_mismatch_loads_null(
         if on_inferred_type_mismatch
         else {}
     )
-    tables = extract(collection, data_item_format="arrow", chunk_size=3, **kwargs)
+    tables = extract(collection, backend="pyarrow", chunk_size=3, **kwargs)
 
     assert [table["v"].to_pylist() for table in tables] == [[1, None, 2], [None]]
     warned = [call for call in warning.call_args_list if "different types" in str(call)]
@@ -305,7 +305,7 @@ def test_type_mismatch_with_pymongoarrow_schema() -> None:
         with pytest.raises(Exception) as ex:
             extract(
                 FakeCollection("docs", documents),
-                data_item_format="arrow",
+                backend="pyarrow",
                 pymongoarrow_schema=schema,
                 on_inferred_type_mismatch=on_inferred_type_mismatch,
             )
@@ -313,7 +313,7 @@ def test_type_mismatch_with_pymongoarrow_schema() -> None:
 
     tables = extract(
         FakeCollection("docs", [{"_id": 1, "v": 1}]),
-        data_item_format="arrow",
+        backend="pyarrow",
         pymongoarrow_schema=schema,
     )
     assert tables[0]["v"].to_pylist() == [1]
@@ -335,9 +335,9 @@ def test_arrow_flattens_documents_like_object_format(
         "docs", [{"_id": 1, "camelCase": {"x": 1, "inner": {"y": "a"}}, "tags": ["t"]}]
     )
 
-    table = extract(
-        collection, data_item_format="arrow", max_table_nesting=max_table_nesting
-    )[0]
+    table = extract(collection, backend="pyarrow", max_table_nesting=max_table_nesting)[
+        0
+    ]
 
     assert table.column_names == columns
     assert table["tags"].to_pylist() == [["t"]]
@@ -347,7 +347,7 @@ def test_arrow_keeps_json_columns() -> None:
     collection = FakeCollection("docs", [{"_id": 1, "doc": {"x": 1}}])
 
     table = extract(
-        collection, data_item_format="arrow", columns={"doc": {"data_type": "json"}}
+        collection, backend="pyarrow", columns={"doc": {"data_type": "json"}}
     )[0]
 
     assert table.column_names == ["_id", "doc"]
@@ -358,13 +358,13 @@ def test_arrow_flattened_name_collision_raises() -> None:
     collection = FakeCollection("docs", [{"_id": 1, "a": {"b": 1}, "a__b": 2}])
 
     with pytest.raises(Exception) as ex:
-        extract(collection, data_item_format="arrow")
+        extract(collection, backend="pyarrow")
     assert "duplicate columns: ['a__b']" in str(ex.value)
 
     # nested documents that are not flattened do not collide
     table = extract(
         FakeCollection("docs", [{"_id": 1, "a": {"b": 1}, "a__b": 2}]),
-        data_item_format="arrow",
+        backend="pyarrow",
         max_table_nesting=0,
     )[0]
     assert table.column_names == ["_id", "a", "a__b"]
@@ -389,7 +389,7 @@ def test_arrow_with_dynamic_hints() -> None:
             filter_={},
             projection=None,
             pymongoarrow_schema=None,
-            data_item_format="arrow",
+            backend="pyarrow",
         ).add_limit(1)
     )
 
@@ -410,7 +410,7 @@ def test_arrow_id_not_nullable(null_id: bool, mocker: Any) -> None:
         filter_={},
         projection=None,
         pymongoarrow_schema=None,
-        data_item_format="arrow",
+        backend="pyarrow",
     )
 
     (table,) = list(resource)

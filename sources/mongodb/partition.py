@@ -1,5 +1,4 @@
-"""Splits a collection into `_id` partitions that read every document exactly once, for parallel
-reads. Needs only pymongo."""
+"""Splits a collection into `_id` partitions that read every document exactly once"""
 
 import math
 from typing import Any, Callable, Dict, List, Optional, Tuple, TypedDict
@@ -31,21 +30,19 @@ _ID_TYPES = (
     "maxKey",
 )
 _NUMBER_TYPES = ("double", "int", "long", "decimal")
-# types split into `_id` ranges, values of other types are read in one partition per type:
-# `$gte` and `$lt` match only values of their own BSON type
+# `_id` types split into ranges, each other type is read in one partition
 _RANGE_ID_TYPES = ("objectId", "string", "number", "date", "binData")
 _MAX_KEY_FILTER = {"_id": {"$type": "maxKey"}}
 
 
 class TPartition(TypedDict, total=False):
-    """Arguments of `find` that select the documents of one partition, empty for all of them"""
+    """Arguments of `find` that select the documents of a partition, empty for all documents"""
 
+    # predicates on `_id`
     filter: Dict[str, Any]  # noqa: A003
-    """predicates on `_id`"""
+    # inclusive and exclusive bounds on the `_id` index, which `hint` selects
     min: Dict[str, Any]  # noqa: A003
-    """inclusive `_id` index bound, comes with `hint`"""
     max: Dict[str, Any]  # noqa: A003
-    """exclusive `_id` index bound, comes with `hint`"""
     hint: Dict[str, int]
 
 
@@ -57,37 +54,32 @@ def plan_partitions(
     split_id_types: bool = False,
     min_partitions: int = 1,
 ) -> List[TPartition]:
-    """Split the documents of the collection that match `filter_` into partitions of at most
-    about `partition_size_bytes` that together read every document exactly once.
+    """Splits the documents that match `filter_` into partitions of about `partition_size_bytes`.
 
-    Without a filter the partitions are bounds on the `_id` index, which hold `_id`s of every
-    BSON type. With a filter they are planned on the matching documents as `_id` ranges of the
-    most common type plus one partition per other type, because bounds need a hint on the `_id`
-    index that would keep the filter from using its own index. A single empty partition reads
-    the collection in one query: views and time series collections have no `_id` index, and
-    fewer documents than two partitions are not split.
+    Without a filter, partitions are bounds on the `_id` index. Bounds hold `_id`s of all BSON
+    types. With a filter, partitions are `_id` ranges of the most common `_id` type and one
+    partition for each other type. A single empty partition reads the collection in one query.
 
     Args:
-        collection (Collection): The collection to split.
-        filter_ (Dict[str, Any]): The filter of the read, empty for all documents.
-        partition_size_bytes (int): The size of a partition, from the average document size.
-        chunk_size (int): The documents in a partition when the server reports no average size.
-        split_id_types (bool): Use the ranges also without a filter when `_id` holds more than
-            one BSON type, so that every partition holds one type.
-        min_partitions (int): Plan smaller partitions, of at least 1 MiB, to get this many, e.g.
-            a few per extract worker.
+        collection (Collection): Collection to split.
+        filter_ (Dict[str, Any]): Filter of the read.
+        partition_size_bytes (int): Maximum size of a partition.
+        chunk_size (int): Number of documents in a partition when the server has no stats.
+        split_id_types (bool): Splits `_id` types into separate partitions also without a filter.
+        min_partitions (int): Minimum number of partitions of at least `MIN_PARTITION_SIZE_BYTES`.
 
     Returns:
         List[TPartition]: The partitions.
 
     Raises:
-        OperationFailure: When the server rejects a planning query, e.g. `$where` in `filter_`.
+        OperationFailure: The server rejects a query that plans the partitions.
     """
     try:
         options: Optional[Dict[str, Any]] = collection.options()
     except OperationFailure:
         # without `listCollections` the `_id` index is not known to exist
         options = None
+    # views and time series collections have no `_id` index
     if options and ("viewOn" in options or "timeseries" in options):
         return [{}]
     stats = _storage_stats(collection)
@@ -104,6 +96,8 @@ def plan_partitions(
     if ranges < 2:
         return [{}]
     sample_size = _sample_size(ranges, count)
+    # bounds need a hint on the `_id` index, which keeps the filter from using its own index.
+    # clustered collections have no separate `_id` index
     bounds_allowed = (
         not filter_ and options is not None and "clusteredIndex" not in options
     )
@@ -119,8 +113,7 @@ def find_partition(
     filter_: Dict[str, Any],
     projection: Optional[Dict[str, Any]],
 ) -> Any:
-    """Cursor of `find`, e.g. `Collection.find_raw_batches`, over the documents of `partition`
-    that match `filter_`"""
+    """Cursor of `find` over the documents of `partition` that match `filter_`"""
     bounds = {key: value for key, value in partition.items() if key != "filter"}
     return find(
         filter=and_filters(filter_, partition.get("filter", {})),
@@ -137,9 +130,8 @@ def and_filters(*filters: Dict[str, Any]) -> Dict[str, Any]:
 
 
 def bounded_partitions(bounds: List[Any]) -> List[TPartition]:
-    """Partitions between consecutive `_id` index bounds, unbounded at both ends. A trailing
-    MaxKey bound is dropped: an index scan without `max` ends before MaxKey and a bound equal
-    to it is rejected, `plan_partitions` reads a MaxKey `_id` with its own query."""
+    """Partitions between consecutive `_id` index bounds, unbounded at both ends"""
+    # the server rejects a MaxKey bound, `_index_bound_partitions` reads MaxKey `_id`s
     if bounds and isinstance(bounds[-1], MaxKey):
         bounds = bounds[:-1]
     if not bounds:
@@ -167,6 +159,7 @@ def range_partitions(
     if has_nan:
         # NaN matches no range
         filters.append({"_id": float("nan")})
+    # `$gte` and `$lt` match only values of their own BSON type
     filters.extend({"_id": {"$type": id_type}} for id_type in other_types)
     return [{"filter": filter_} for filter_ in filters]
 
@@ -184,6 +177,7 @@ def _index_bound_partitions(
         )
     )
     partitions = bounded_partitions([bucket["_id"]["min"] for bucket in buckets[1:]])
+    # an index scan without `max` ends before MaxKey
     if (
         len(partitions) > 1
         and collection.find_one(_MAX_KEY_FILTER, {"_id": 1}) is not None
@@ -203,13 +197,14 @@ def _id_range_partitions(
         id_type
         for id_type in id_types
         if id_type in _RANGE_ID_TYPES
-        # symbols sort with strings, a string range would also match them
+        # symbols sort with strings, a string range also matches them
         and not (id_type == "string" and "symbol" in id_types)
     ]
     bounds: List[Any] = []
     if range_types:
         range_type = range_types[0]
         if len(range_types) > 1:
+            # ranges of the most common type in a sample
             sampled = collection.aggregate(
                 [
                     {"$sample": {"size": sample_size}},
@@ -233,6 +228,7 @@ def _id_range_partitions(
         )
         bounds = [bucket["_id"]["min"] for bucket in buckets[1:]]
     if not bounds:
+        # too few documents of `range_type` to split
         if len(id_types) < 2:
             return [{}]
         return [{"filter": {"_id": {"$type": id_type}}} for id_type in id_types]
@@ -266,12 +262,13 @@ def _documents_per_partition(
     chunk_size: int,
     min_partitions: int,
 ) -> int:
-    """Documents of `partition_size_bytes` at the average size of `stats`, fewer when `count`
-    documents would make less than `min_partitions` partitions of at least 1 MiB"""
+    """Number of documents in a partition"""
     if not stats or stats[0] <= 0 or stats[1] <= 0:
         return chunk_size
     all_count, all_size = stats
+    # `count` documents at the average document size of the collection
     size = count * all_size // all_count
+    # smaller partitions, down to `MIN_PARTITION_SIZE_BYTES`, to get `min_partitions`
     partition_size = min(
         partition_size_bytes, max(MIN_PARTITION_SIZE_BYTES, size // min_partitions)
     )
@@ -279,8 +276,8 @@ def _documents_per_partition(
 
 
 def _id_types(collection: Any) -> List[str]:
-    """`$type` aliases of the `_id` values in the collection, read from both ends of the `_id`
-    index and probed in between"""
+    """`$type` aliases of the `_id` values in the collection"""
+    # the types at both ends of the `_id` index, the types between them are probed one by one
     ends = [_id_type_at(collection, direction) for direction in (ASCENDING, DESCENDING)]
     if ends[0] is None or ends[1] is None:
         return []

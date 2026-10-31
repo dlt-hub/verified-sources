@@ -29,7 +29,6 @@ from bson.regex import Regex
 from bson.timestamp import Timestamp
 from dlt.common import logger
 from dlt.common.configuration.specs import BaseConfiguration, configspec
-from dlt.common.data_writers import TDataItemFormat
 from dlt.common.typing import TDataItem
 from dlt.common.utils import map_nested_values_in_place
 from pymongo import ASCENDING, DESCENDING, MongoClient
@@ -55,6 +54,7 @@ else:
     TCursor = Any
     TCodecOptions = Any
 
+TBackend = Literal["python", "pyarrow"]
 TTypeMismatch = Literal["raise", "warn", "ignore"]
 
 # compression of the documents sent by the server, the first one the server supports is used
@@ -91,11 +91,7 @@ class CollectionLoader:
 
     @property
     def _filter_op(self) -> Dict[str, Any]:
-        """Build a filtering operator from the incremental range.
-
-        Returns:
-            Dict[str, Any]: A dictionary with the filter operator.
-        """
+        """The filter of the incremental range"""
         incremental = self.incremental
         if not incremental or incremental.last_value_func not in (max, min):
             return {}
@@ -121,14 +117,7 @@ class CollectionLoader:
         return {cursor_path: cursor_filter}
 
     def _query_filter(self, filter_: Dict[str, Any]) -> Dict[str, Any]:
-        """Combine the incremental filter with the user filter.
-
-        Args:
-            filter_ (Dict[str, Any]): The filter to apply to the collection.
-
-        Returns:
-            Dict[str, Any]: The filter to query the collection with.
-        """
+        """The incremental filter and `filter_` combined"""
         filter_op = self._filter_op
         _raise_if_intersection(filter_op, filter_)
         if filter_op and filter_:
@@ -138,15 +127,7 @@ class CollectionLoader:
     def _projection_op(
         self, projection: Optional[Union[Mapping[str, Any], Iterable[str]]]
     ) -> Optional[Dict[str, Any]]:
-        """Build a projection operator.
-
-        Args:
-            projection (Optional[Union[Mapping[str, Any], Iterable[str]]]): A tuple of fields to include or a dict specifying fields to include or exclude.
-            The incremental cursor field is always loaded.
-
-        Returns:
-            Optional[Dict[str, Any]]: A dictionary with the projection operator.
-        """
+        """The projection with the cursor field of the incremental"""
         if projection is None:
             return None
 
@@ -157,7 +138,7 @@ class CollectionLoader:
 
         if self.incremental:
             cursor_path = self.incremental.cursor_path
-            # `_id` may be excluded in an inclusion projection and included in an exclusion one
+            # an inclusion projection can exclude `_id` and an exclusion projection can include it
             if any(
                 value == 1 for field, value in projection_dict.items() if field != "_id"
             ):
@@ -173,29 +154,22 @@ class CollectionLoader:
                     if field != cursor_path and _is_path_prefix(field, cursor_path):
                         raise ValueError(
                             f"Projection excludes `{field}` that holds the cursor field "
-                            f"`{cursor_path}`"
+                            f"`{cursor_path}`. Remove `{field}` from the projection."
                         )
                 if projection_dict.pop(cursor_path, None) is not None:
                     logger.warning(
-                        f"Cursor field `{cursor_path}` was removed from exclusion projection"
+                        f"Cursor field `{cursor_path}` is removed from the exclusion "
+                        "projection because the incremental needs it."
                     )
 
         return projection_dict
 
     def _limit(self, cursor: TCursor, limit: Optional[int] = None) -> TCursor:
-        """Apply a limit to the cursor, if needed.
-
-        Args:
-            cursor (Cursor): The cursor to apply the limit.
-            limit (Optional[int]): The number of documents to load.
-
-        Returns:
-            Cursor: The cursor with the limit applied (if given).
-        """
         if limit not in (0, None):
             if not self._sort_op:
                 logger.warning(
-                    "Using limit without ordering - results may be inconsistent."
+                    "`limit` without `row_order` of the incremental loads documents in no "
+                    "defined order. Set `row_order` to load the first documents."
                 )
 
             cursor = cursor.limit(abs(limit))
@@ -208,16 +182,7 @@ class CollectionLoader:
         limit: Optional[int] = None,
         projection: Optional[Union[Mapping[str, Any], Iterable[str]]] = None,
     ) -> Iterator[TDataItem]:
-        """Construct the query and load the documents from the collection.
-
-        Args:
-            filter_ (Dict[str, Any]): The filter to apply to the collection.
-            limit (Optional[int]): The number of documents to load.
-            projection (Optional[Union[Mapping[str, Any], Iterable[str]]]): The projection to select fields to create the Cursor.
-
-        Yields:
-            Iterator[TDataItem]: An iterator of the loaded documents.
-        """
+        """Yields lists of `chunk_size` documents"""
         cursor = self.collection.find(
             filter=self._query_filter(filter_),
             projection=self._projection_op(projection),
@@ -249,17 +214,7 @@ class CollectionLoaderParallel(CollectionLoader):
         limit: Optional[int] = None,
         projection: Optional[Union[Mapping[str, Any], Iterable[str]]] = None,
     ) -> Iterator[TDataItem]:
-        """Load documents from the collection in parallel, one deferred read per `_id` partition
-        of about `partition_size_bytes`.
-
-        Args:
-            filter_ (Dict[str, Any]): The filter to apply to the collection.
-            limit (Optional[int]): The number of documents to load, read without partitions.
-            projection (Optional[Union[Mapping[str, Any], Iterable[str]]]): The projection to select fields to create the Cursor.
-
-        Yields:
-            Iterator[TDataItem]: Deferred reads of lists of documents.
-        """
+        """Yields a deferred read of each `_id` partition"""
         if limit:
             # partitions do not tell which documents come first
             yield from super().load_documents(filter_, limit, projection)
@@ -291,9 +246,7 @@ def planned_partitions(
     chunk_size: int,
     split_id_types: bool = False,
 ) -> List[TPartition]:
-    """`plan_partitions` with a few partitions per extract worker, that reads the collection in
-    one query when the server rejects a planning query, e.g. `$where` in `filter_` or a server
-    without `$bucketAuto`"""
+    """`plan_partitions` with `PARTITIONS_PER_WORKER` partitions for each extract worker"""
     # a `workers` argument of `pipeline.extract` is not in the config, only the `extract` section
     workers = dlt.config.get("extract.workers", int) or 5
     try:
@@ -306,9 +259,10 @@ def planned_partitions(
             min_partitions=PARTITIONS_PER_WORKER * workers,
         )
     except OperationFailure as ex:
+        # the server rejects `$where` in `filter_`, old servers do not have `$bucketAuto`
         logger.warning(
-            f"Collection `{collection.name}` is read in one query, it could not be split "
-            f"into partitions: {ex}"
+            f"Collection `{collection.name}` is read in one query because the server rejected "
+            f"the query that plans its partitions: {ex}"
         )
         return [{}]
 
@@ -323,66 +277,26 @@ def collection_documents(
     parallel: bool = False,
     limit: Optional[int] = None,
     chunk_size: Optional[int] = 10000,
-    data_item_format: Optional[TDataItemFormat] = "object",
+    backend: TBackend = "python",
     on_inferred_type_mismatch: TTypeMismatch = "ignore",
     connection_url: Optional[str] = None,
     partition_size_bytes: int = DEFAULT_PARTITION_SIZE_BYTES,
 ) -> Iterator[TDataItem]:
-    """
-    A DLT source which loads data from a Mongo database using PyMongo.
-    Resources are automatically created for the collection.
-
-    Args:
-        client (MongoClient): The PyMongo client `pymongo.MongoClient` instance.
-        collection (Collection): The collection `pymongo.collection.Collection` to load.
-        filter_ (Dict[str, Any]): The filter to apply to the collection.
-        projection (Optional[Union[Mapping[str, Any], Iterable[str]]]): The projection to select fields to create the Cursor.
-            when loading the collection. Supported inputs:
-                include (list) - ["year", "title"]
-                include (dict) - {"year": True, "title": True}
-                exclude (dict) - {"released": False, "runtime": False}
-            Note: Can't mix include and exclude statements '{"title": True, "released": False}`
-        pymongoarrow_schema (pymongoarrow.schema.Schema): The mapping of field types to convert BSON to Arrow.
-            Values that do not match it raise `FieldTypeMismatchError` (`pymongoarrow>=1.9`).
-        incremental (Optional[dlt.sources.incremental[Any]]): The incremental configuration.
-        parallel (bool): Read `_id` partitions of about `partition_size_bytes` in parallel, as
-            many at once as `workers` in the `extract` config: in threads in the object format, in
-            processes in the Arrow format. Default is False.
-        limit (Optional[int]): The maximum number of documents to load.
-        chunk_size (Optional[int]): The number of documents loaded in each batch of a sequential
-            read. With `parallel` it sizes the partitions only when the server reports no average
-            document size.
-        data_item_format (Optional[TDataItemFormat]): The data format to use for loading.
-            Supported formats:
-                object - Python objects (dicts, lists).
-                arrow - Apache Arrow tables.
-        on_inferred_type_mismatch (TTypeMismatch): Without `pymongoarrow_schema`, values whose type
-            differs from the first value of their field load as null in the Arrow format: "ignore"
-            (default) silently, "warn" with a warning, "raise" fails. "warn" and "raise" parse each
-            batch twice.
-        connection_url (Optional[str]): The connection URL of `client`, worker processes of
-            parallel Arrow reads connect with it.
-        partition_size_bytes (int): The largest size of an `_id` partition of `parallel` reads,
-            from the average document size of the collection. Partitions are smaller, down to
-            1 MiB, when that gives every extract worker a few. Each partition loads as one batch.
-            Default is 16 MiB.
-
-    Yields:
-        Iterator[TDataItem]: Lists of documents or Arrow tables.
-    """
-    if data_item_format == "arrow" and not _pymongoarrow_available():
+    """Yields the documents of `collection`, see `mongodb` for the arguments"""
+    if backend == "pyarrow" and not _pymongoarrow_available():
         logger.warning(
-            "'pymongoarrow' is not installed; falling back to standard MongoDB CollectionLoader."
+            '`pymongoarrow` is not installed, the "python" backend loads the documents. '
+            'Install `pymongoarrow` to use the "pyarrow" backend.'
         )
-        data_item_format = "object"
+        backend = "python"
 
-    if data_item_format != "arrow" and pymongoarrow_schema:
+    if backend != "pyarrow" and pymongoarrow_schema:
         logger.warning(
-            "Received value for `pymongoarrow_schema`, but `data_item_format=='object'` "
-            "Use `data_item_format=='arrow'` to enforce schema."
+            '`pymongoarrow_schema` is ignored by the "python" backend. Use '
+            '`backend="pyarrow"` to apply it.'
         )
 
-    if data_item_format == "arrow":
+    if backend == "pyarrow":
         from .arrow import (
             CollectionArrowLoader,
             CollectionArrowLoaderParallel,
@@ -429,11 +343,11 @@ def collection_documents(
 
 
 def convert_mongo_objs(value: Any) -> Any:
-    """MongoDB to dlt type conversion when using Python loaders."""
+    """Converts BSON types to the types of the "python" backend"""
     if isinstance(value, (ObjectId, Decimal128)):
         return str(value)
     if isinstance(value, Regex):
-        # patterns may use PCRE syntax that Python `re` does not compile
+        # patterns can use PCRE syntax that Python `re` does not compile
         return value.pattern
     if isinstance(value, Timestamp):
         return value.as_datetime().astimezone(timezone.utc)
@@ -488,14 +402,7 @@ def _is_path_prefix(parent: str, path: str) -> bool:
 
 
 def _raise_if_intersection(filter1: Dict[str, Any], filter2: Dict[str, Any]) -> None:
-    """
-    Raise an exception, if the given filters'
-    fields are intersecting.
-
-    Args:
-        filter1 (Dict[str, Any]): The first filter.
-        filter2 (Dict[str, Any]): The second filter.
-    """
+    """Raises when both filters use the same operator on a field"""
     field_inter = filter1.keys() & filter2.keys()
     for field in field_inter:
         operators1, operators2 = filter1[field], filter2[field]
@@ -504,10 +411,8 @@ def _raise_if_intersection(filter1: Dict[str, Any], filter2: Dict[str, Any]) -> 
         if operators1.keys() & operators2.keys():
             str_repr = str({field: operators1})
             raise ValueError(
-                (
-                    f"Filtering operator {str_repr} is already used by the "
-                    "incremental and can't be used in the filter."
-                )
+                f"Filter operator {str_repr} is also used by the incremental. Remove it "
+                "from `filter_`."
             )
 
 

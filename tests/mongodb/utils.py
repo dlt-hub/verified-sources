@@ -32,6 +32,18 @@ from sources.mongodb.helpers import (
 CODEC_OPTIONS: CodecOptions[Any] = client_from_credentials(
     "mongodb://localhost:1/?connect=false"
 ).codec_options
+# columns of `make_documents` that both backends load the same, arrays differ
+SCALAR_COLUMNS = [
+    "_id",
+    "n",
+    "title",
+    "updated_at",
+    "price",
+    "payload",
+    "code",
+    "ref__oid",
+    "ref__x",
+]
 
 
 class FakeCursor:
@@ -299,3 +311,26 @@ def server_reads(database: Any, collection: str) -> List[Dict[str, Any]]:
             {"ns": f"{database.name}.{collection}", "op": {"$in": ["query", "getmore"]}}
         )
     )
+
+
+def select_rows(
+    pipeline: dlt.Pipeline, table_name: str, columns: Sequence[str] = SCALAR_COLUMNS
+) -> List[Dict[str, Any]]:
+    """Rows of `table_name` ordered by `n`"""
+    with pipeline.sql_client() as client:
+        rows = client.execute_sql(
+            f"SELECT {', '.join(columns)} FROM {table_name} ORDER BY n"
+        )
+    return [dict(zip(columns, row)) for row in rows]
+
+
+def select_ids(pipeline: dlt.Pipeline, table_name: str) -> List[str]:
+    with pipeline.sql_client() as client:
+        return sorted(
+            row[0] for row in client.execute_sql(f"SELECT _id FROM {table_name}")
+        )
+
+
+def last_row_count(pipeline: dlt.Pipeline, table_name: str) -> int:
+    """Rows of `table_name` that the last run of `pipeline` normalized"""
+    return pipeline.last_trace.last_normalize_info.row_counts.get(table_name, 0)

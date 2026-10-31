@@ -1,16 +1,15 @@
 from datetime import datetime, timezone
 
 import dlt
-from dlt.common.data_writers import TDataItemFormat
 from dlt.common.pipeline import ExtractInfo, LoadInfo
 from dlt.common.typing import TDataItems
 from dlt.pipeline.pipeline import Pipeline
 
 # As this pipeline can be run as standalone script or as part of the tests, we need to handle the import differently.
 try:
-    from .mongodb import mongodb, mongodb_collection  # type: ignore
+    from .mongodb import TBackend, mongodb, mongodb_collection  # type: ignore
 except ImportError:
-    from mongodb import mongodb, mongodb_collection
+    from mongodb import TBackend, mongodb, mongodb_collection
 
 
 def load_select_collection_db(pipeline: Pipeline = None) -> LoadInfo:
@@ -46,12 +45,12 @@ def load_select_collection_db_items(parallel: bool = False) -> TDataItems:
 
 
 def load_select_collection_db_items_parallel(
-    data_item_format: TDataItemFormat, parallel: bool = False
+    backend: TBackend, parallel: bool = False
 ) -> TDataItems:
     comments = mongodb_collection(
         incremental=dlt.sources.incremental("date"),
         parallel=parallel,
-        data_item_format=data_item_format,
+        backend=backend,
         collection="comments",
     )
     return list(comments)
@@ -150,7 +149,7 @@ def load_collection_with_arrow(pipeline: Pipeline = None) -> LoadInfo:
             initial_value=datetime(2005, 1, 1, tzinfo=timezone.utc),
             end_value=datetime(2005, 6, 1, tzinfo=timezone.utc),
         ),
-        data_item_format="arrow",
+        backend="pyarrow",
     )
 
     info = pipeline.run(comments)
@@ -176,7 +175,7 @@ def extract_local_collection_parallel_arrow(
         database=database,
         collection=collection,
         parallel=True,
-        data_item_format="arrow",
+        backend="pyarrow",
     )
 
     # one worker process per extract thread
