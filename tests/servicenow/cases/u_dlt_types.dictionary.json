@@ -1,0 +1,146 @@
+[
+  {
+    "sys_id": "0d4b48908394131024865529feaad305",
+    "name": "u_dlt_types",
+    "internal_type": "longint",
+    "element": "u_longint"
+  },
+  {
+    "sys_id": "104b08908394131024865529feaad345",
+    "name": "u_dlt_types",
+    "internal_type": "string",
+    "element": "sys_created_by"
+  },
+  {
+    "sys_id": "144b08908394131024865529feaad347",
+    "name": "u_dlt_types",
+    "internal_type": "glide_date_time",
+    "element": "sys_created_on"
+  },
+  {
+    "sys_id": "184b08908394131024865529feaad349",
+    "name": "u_dlt_types",
+    "internal_type": "integer",
+    "element": "sys_mod_count"
+  },
+  {
+    "sys_id": "1c4b08908394131024865529feaad342",
+    "name": "u_dlt_types",
+    "internal_type": "glide_date_time",
+    "element": "sys_updated_on"
+  },
+  {
+    "sys_id": "284b08908394131024865529feaad370",
+    "name": "u_dlt_types",
+    "internal_type": "string",
+    "element": "u_seed_id"
+  },
+  {
+    "sys_id": "314b88908394131024865529feaad30e",
+    "name": "u_dlt_types",
+    "internal_type": "glide_date",
+    "element": "u_date"
+  },
+  {
+    "sys_id": "324b48908394131024865529feaad3b2",
+    "name": "u_dlt_types",
+    "internal_type": "journal_input",
+    "element": "u_journal"
+  },
+  {
+    "sys_id": "424b88908394131024865529feaad399",
+    "name": "u_dlt_types",
+    "internal_type": "due_date",
+    "element": "u_due_date"
+  },
+  {
+    "sys_id": "4d4b48908394131024865529feaad32e",
+    "name": "u_dlt_types",
+    "internal_type": "decimal",
+    "element": "u_decimal"
+  },
+  {
+    "sys_id": "5a4b88908394131024865529feaad3ce",
+    "name": "u_dlt_types",
+    "internal_type": "reference",
+    "element": "u_reference"
+  },
+  {
+    "sys_id": "5a4b88908394131024865529feaad3ef",
+    "name": "u_dlt_types",
+    "internal_type": "choice",
+    "element": "u_choice"
+  },
+  {
+    "sys_id": "714b88908394131024865529feaad337",
+    "name": "u_dlt_types",
+    "internal_type": "glide_time",
+    "element": "u_time"
+  },
+  {
+    "sys_id": "7a4bc8908394131024865529feaad360",
+    "name": "u_dlt_types",
+    "internal_type": "url",
+    "element": "u_url"
+  },
+  {
+    "sys_id": "824b88908394131024865529feaad360",
+    "name": "u_dlt_types",
+    "internal_type": "glide_duration",
+    "element": "u_duration"
+  },
+  {
+    "sys_id": "994b48908394131024865529feaad399",
+    "name": "u_dlt_types",
+    "internal_type": "currency",
+    "element": "u_currency"
+  },
+  {
+    "sys_id": "a54b48908394131024865529feaad3f1",
+    "name": "u_dlt_types",
+    "internal_type": "glide_date_time",
+    "element": "u_date_time"
+  },
+  {
+    "sys_id": "ad4b84508394131024865529feaad378",
+    "name": "u_dlt_types",
+    "internal_type": "boolean",
+    "element": "u_boolean"
+  },
+  {
+    "sys_id": "b04b08908394131024865529feaad3e9",
+    "name": "u_dlt_types",
+    "internal_type": "integer",
+    "element": "u_integer"
+  },
+  {
+    "sys_id": "d04b08908394131024865529feaad31b",
+    "name": "u_dlt_types",
+    "internal_type": "string",
+    "element": "sys_updated_by"
+  },
+  {
+    "sys_id": "d54b48908394131024865529feaad34b",
+    "name": "u_dlt_types",
+    "internal_type": "float",
+    "element": "u_float"
+  },
+  {
+    "sys_id": "dc4b08908394131024865529feaad317",
+    "name": "u_dlt_types",
+    "internal_type": "GUID",
+    "element": "sys_id"
+  },
+  {
+    "sys_id": "e24b88908394131024865529feaad389",
+    "name": "u_dlt_types",
+    "internal_type": "html",
+    "element": "u_html"
+  },
+  {
+    "sys_id": "fc4b08908394131024865529feaad3bf",
+    "name": "u_dlt_types",
+    "internal_type": "string",
+    "element": "u_string"
+  }
+]
