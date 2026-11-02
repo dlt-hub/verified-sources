@@ -7,22 +7,20 @@ Salesforce API docs: https://developer.salesforce.com/docs/apis
 """
 
 from functools import partial
-from typing import Any, Dict, Iterable, List, Literal, Optional, Union
+from typing import Any, Dict, Iterable, List, Optional
 
 import dlt
+from dlt.common.configuration import with_config
+from dlt.common.configuration.specs import ConfigSectionContext, known_sections
 from dlt.common.schema.typing import TWriteDispositionConfig
-from dlt.common.typing import TColumnNames
+from dlt.common.typing import TAnyDateTime, TColumnNames
 from dlt.sources import DltResource
 from dlt.sources.helpers.requests import Client, Session
 
-from .helpers.connection import SalesforceConnection
+from .helpers.connection import SalesforceConnection, is_concurrent_limit_exceeded
 from .helpers.credentials import SalesforceAuth, make_salesforce_client
 from .helpers.query import TQueryApi
-from .helpers.table import (
-    SalesforceTableResourceConfiguration,
-    TTableBackend,
-    table_resource,
-)
+from .helpers.table import SOURCE_SECTION, TTableBackend, table_resource
 
 # resource names and the sObjects they load
 SOURCE_SOBJECTS = {
@@ -47,8 +45,13 @@ SOURCE_SOBJECTS = {
 def _connection(
     credentials: SalesforceAuth, session: Optional[Session]
 ) -> SalesforceConnection:
-    # retries 429 and 5xx, other errors are raised by simple_salesforce
-    session = session or Client(raise_for_status=False).session
+    # retries 429, 5xx and the concurrent request limit, other errors are raised by simple_salesforce
+    session = (
+        session
+        or Client(
+            raise_for_status=False, retry_condition=is_concurrent_limit_exceeded
+        ).session
+    )
     return SalesforceConnection(partial(make_salesforce_client, credentials, session))
 
 
@@ -56,7 +59,7 @@ def _connection(
 def salesforce_source(
     credentials: SalesforceAuth = dlt.secrets.value,
     session: Optional[Session] = None,
-    incremental: Optional[Literal["auto"]] = "auto",
+    start_date: Optional[TAnyDateTime] = None,
     write_disposition: Optional[TWriteDispositionConfig] = None,
     soql_filters: Optional[Dict[str, str]] = None,
     include_deleted: bool = True,
@@ -75,11 +78,12 @@ def salesforce_source(
     Args:
         credentials (SalesforceAuth): Salesforce credentials.
         session (Optional[Session]): Requests session used by `simple_salesforce`, by default
-            a session retrying HTTP 429 and 5xx.
-        incremental (Optional[Literal["auto"]]): "auto" loads records changed since the last run,
-            None loads all records. See `salesforce_table`.
+            a session retrying HTTP 429, 5xx and the limit of concurrent long requests.
+        start_date (Optional[TAnyDateTime]): Loads records changed since this date on the first
+            run, all records if not set. See `salesforce_table`.
         write_disposition (Optional[TWriteDispositionConfig]): Write disposition of all resources,
-            "replace" reloads all records on each run. Derived per sObject if not set.
+            "replace" reloads all records, or the records changed since `start_date`, on each
+            run. Derived per sObject if not set.
         soql_filters (Optional[Dict[str, str]]): SOQL conditions by resource name, e.g.
             `{"opportunity": "IsClosed = false"}`.
         include_deleted (bool): Also loads deleted records still in the recycle bin and archived
@@ -106,7 +110,7 @@ def salesforce_source(
             connection,
             sobject,
             name=name,
-            incremental=incremental,
+            start_date=start_date,
             soql_filter=soql_filters.get(name),
             include_deleted=include_deleted,
             double_as_decimal=double_as_decimal,
@@ -121,15 +125,16 @@ def salesforce_source(
     ]
 
 
-@dlt.resource(
-    name=lambda args: args["sobject"], spec=SalesforceTableResourceConfiguration
+@with_config(
+    sections=(known_sections.SOURCES, SOURCE_SECTION),
+    section_arg_name="sobject",
+    sections_merge_style=ConfigSectionContext.resource_merge_style,
 )
 def salesforce_table(
     credentials: SalesforceAuth = dlt.secrets.value,
     sobject: str = dlt.config.value,
-    # "auto" goes first so dlt does not bind the incremental to this factory and replace "auto"
-    # with None. the incremental is bound by the resource returned below
-    incremental: Union[Literal["auto"], dlt.sources.incremental[Any], None] = "auto",
+    start_date: Optional[TAnyDateTime] = None,
+    incremental: Optional[dlt.sources.incremental[Any]] = None,
     lag: Optional[float] = None,
     soql_filter: Optional[str] = None,
     include_deleted: bool = True,
@@ -147,17 +152,22 @@ def salesforce_table(
     """Loads a single sObject, including custom objects, with a SOQL query.
 
     Fields and their types are taken from the sObject `describe()` and passed as column hints.
-    Requests are retried on HTTP 429 and 5xx, an expired session is renewed by logging in again.
+    Requests are retried on HTTP 429, 5xx and the limit of concurrent long requests, an expired
+    session is renewed by logging in again.
 
     Args:
         credentials (SalesforceAuth): Salesforce credentials.
-        sobject (str): API name of the sObject, e.g. `Account` or `Invoice__c`.
-        incremental (Union[Literal["auto"], dlt.sources.incremental[Any], None]): Generates
-            the WHERE clause of the query. "auto" picks the first of `SystemModstamp`,
-            `LastModifiedDate`, `CreatedDate` and `LoginTime` present in the sObject, None loads
-            all records. "auto" with the "replace" write disposition loads all records too.
+        sobject (str): API name of the sObject, e.g. `Account` or `Invoice__c`. Config is
+            resolved under `sources.salesforce.<sobject>`.
+        start_date (Optional[TAnyDateTime]): Loads records changed since this date on the first
+            run, all records if not set. It is the initial value of the default incremental on
+            the first of `SystemModstamp`, `LastModifiedDate`, `CreatedDate` and `LoginTime`
+            present in the sObject. The "replace" write disposition loads all records, or the
+            records changed since `start_date`, on each run.
+        incremental (Optional[dlt.sources.incremental[Any]]): Your own incremental instead of the
+            default one, used as is, without lag. It generates the WHERE clause of the query.
             Setting `row_order` adds ORDER BY, which disables PK chunking of Bulk API jobs.
-        lag (Optional[float]): Seconds re-read on each run by the "auto" incremental, to catch
+        lag (Optional[float]): Seconds re-read on each run by the default incremental, to catch
             records committed late. 600 when merging, None otherwise.
         soql_filter (Optional[str]): SOQL condition added to the WHERE clause, e.g.
             `IsClosed = false AND Type = 'Customer'`.
@@ -183,15 +193,18 @@ def salesforce_table(
         merge_key (TColumnNames): Merge key of the resource.
         defer_table_reflect (bool): Logs in and describes the sObject only when extracting, so
             creating the resource makes no API calls. Enable when running on Airflow. Column
-            hints are then set when extracting and the "auto" incremental expects
+            hints are then set when extracting and the default incremental expects
             `SystemModstamp`, which all custom and nearly all standard sObjects have.
 
     Returns:
         DltResource: The dlt resource loading the sObject.
     """
+    if start_date is not None and incremental is not None:
+        raise ValueError("Pass `start_date` or `incremental`, not both")
     return table_resource(
         _connection(credentials, None),
         sobject,
+        start_date=start_date,
         incremental=incremental,
         lag=lag,
         soql_filter=soql_filter,

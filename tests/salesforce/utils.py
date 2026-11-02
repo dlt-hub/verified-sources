@@ -2,11 +2,19 @@ import gzip
 import json
 import os
 import re
-from datetime import date, timedelta  # noqa: I251
+from datetime import date, datetime, timedelta  # noqa: I251
 from typing import Any, Dict, List
 
 import dlt
 from dlt.common import Decimal
+from dlt.common.arithmetics import ROUND_HALF_UP
+from dlt.common.configuration import with_config
+from dlt.common.time import ensure_datetime_in_tz
+
+from sources.salesforce.helpers.credentials import (
+    SalesforceAuth,
+    make_salesforce_client,
+)
 
 from tests.salesforce.seed import data
 from tests.utils import load_tables_to_dicts
@@ -35,7 +43,7 @@ def load_captured_csv() -> str:
 
 def expected_dlt_types(double_as_decimal: bool) -> Dict[str, Dict[str, Any]]:
     """Returns values of seeded `DltTypes__c` records as loaded, by seed id and field name"""
-    decimal_fields = {"Currency__c"}
+    decimal_fields = {"Currency__c", "FormulaCurrency__c"}
     if double_as_decimal:
         decimal_fields |= {
             "Number18__c",
@@ -44,6 +52,7 @@ def expected_dlt_types(double_as_decimal: bool) -> Dict[str, Dict[str, Any]]:
             "Location__Latitude__s",
             "Location__Longitude__s",
             "FormulaNumber__c",
+            "FormulaRatio__c",
         }
     # fields not set in a record are expected to be null
     seeded_fields = {name for seeded in data.DLT_TYPES_RECORDS for name in seeded}
@@ -65,6 +74,12 @@ def expected_dlt_types(double_as_decimal: bool) -> Dict[str, Dict[str, Any]]:
         record["FormulaNumber__c"] = None if currency is None else currency * 2
         record["FormulaText__c"] = (record.get("Text__c") or "") + "!"
         record["FormulaCheckbox__c"] = currency is not None and currency > 0
+        # Salesforce rounds formula values to the field scale
+        record["FormulaCurrency__c"] = (
+            None if currency is None else round_cents(currency / 3)
+        )
+        number = record.get("Number16_2__c")
+        record["FormulaRatio__c"] = None if number is None else round_cents(number / 7)
         day = record.get("Date__c")
         if day is not None and day < date(4000, 12, 31):
             record["FormulaDate__c"] = day + timedelta(days=1)
@@ -77,6 +92,10 @@ def expected_dlt_types(double_as_decimal: bool) -> Dict[str, Dict[str, Any]]:
                 )
         expected[record["Seed_Id__c"]] = record
     return expected
+
+
+def round_cents(value: Decimal) -> Decimal:
+    return value.quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
 
 
 def assert_dlt_types_loaded(pipeline: dlt.Pipeline, double_as_decimal: bool) -> None:
@@ -96,6 +115,17 @@ def assert_dlt_types_loaded(pipeline: dlt.Pipeline, double_as_decimal: bool) -> 
         for name, value in record.items():
             assert row[naming.normalize_path(name)] == value, (seed_id, name)
         assert re.fullmatch(r"DT-\d{4,}", row[naming.normalize_path("AutoNumber__c")])
+
+
+@with_config(sections=("sources", "salesforce"))
+def seeded_modstamps(
+    sobject: str, credentials: SalesforceAuth = dlt.secrets.value
+) -> List[datetime]:
+    """Reads `SystemModstamp` of all records of `sobject` in the test org, including deleted ones"""
+    records = make_salesforce_client(credentials).query_all(
+        f"SELECT SystemModstamp FROM {sobject}", include_deleted=True
+    )["records"]
+    return [ensure_datetime_in_tz(record["SystemModstamp"]) for record in records]
 
 
 def count_rows(pipeline: dlt.Pipeline, table_name: str, condition: str) -> int:

@@ -296,6 +296,62 @@
       "scale": 0,
       "nillable": true,
       "calculated": true
+    },
+    {
+      "name": "FormulaCurrency__c",
+      "type": "currency",
+      "precision": 18,
+      "scale": 2,
+      "nillable": true,
+      "calculated": true
+    },
+    {
+      "name": "FormulaRatio__c",
+      "type": "double",
+      "precision": 18,
+      "scale": 2,
+      "nillable": true,
+      "calculated": true
+    },
+    {
+      "name": "LongText2__c",
+      "type": "textarea",
+      "precision": 0,
+      "scale": 0,
+      "nillable": true,
+      "calculated": false
+    },
+    {
+      "name": "LongText3__c",
+      "type": "textarea",
+      "precision": 0,
+      "scale": 0,
+      "nillable": true,
+      "calculated": false
+    },
+    {
+      "name": "LongText4__c",
+      "type": "textarea",
+      "precision": 0,
+      "scale": 0,
+      "nillable": true,
+      "calculated": false
+    },
+    {
+      "name": "LongText5__c",
+      "type": "textarea",
+      "precision": 0,
+      "scale": 0,
+      "nillable": true,
+      "calculated": false
+    },
+    {
+      "name": "LongText6__c",
+      "type": "textarea",
+      "precision": 0,
+      "scale": 0,
+      "nillable": true,
+      "calculated": false
     }
   ]
 }

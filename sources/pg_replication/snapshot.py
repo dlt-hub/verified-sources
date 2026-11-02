@@ -84,7 +84,8 @@ class ReplicationSnapshot(List[DltResource]):
     The snapshot contains exactly the changes committed before the slot starts. It exists while
     the connection that created the slot is open and only in this process, so the resources must
     be extracted right after `init_replication`. The connection is closed when every resource
-    read its table, with `close()` or when the `with` block ends.
+    read its table, with `close()` or when the `with` block ends. Without `snapshot_name`, on an
+    existing slot, the tables are read as they are.
 
     To read the snapshot with your own `sql_database` or `sql_table`, pass them
     `engine_adapter_callback`, `type_adapter_callback` and `table_adapter_callback` within the
@@ -95,7 +96,7 @@ class ReplicationSnapshot(List[DltResource]):
     def __init__(
         self,
         rep_conn: LogicalReplicationConnection,
-        snapshot_name: str,
+        snapshot_name: Optional[str],
         reflect_not_null: bool = False,
     ) -> None:
         super().__init__()
@@ -115,7 +116,8 @@ class ReplicationSnapshot(List[DltResource]):
         """Makes every transaction of `engine` read the snapshot."""
         pin_session_options(engine)
         sa.event.listen(engine, "connect", _register_interval_as_text)
-        sa.event.listen(engine, "begin", self._set_snapshot)
+        if self.snapshot_name:
+            sa.event.listen(engine, "begin", self._set_snapshot)
         return engine
 
     def table_loader_class(self) -> Type[TableLoader]:

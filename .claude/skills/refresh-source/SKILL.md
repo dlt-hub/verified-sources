@@ -73,7 +73,18 @@ Breakages are not the only reason to refresh: many sources load correctly but ca
    - **Lag:** is there a lag for records committed late?
    - **Deletes:** do they propagate (soft-delete flag as `hard_delete`, deleted-records endpoints)?
    - **Ordering:** does ORDER BY or LIMIT defeat server-side chunking?
+   - **Tests:** plan the [standard incremental tests](#standard-incremental-tests) for each incremental resource.
    - **Defaults:** give mutable resources a default incremental on the "updated at" cursor, with lag and `dedup_sort="desc"` on the cursor, and a `start_date: Optional[TAnyDateTime]` argument as its initial value (all records on the first run if not set). Accept your own `incremental` instead, used as is, and raise if both are passed. Do not overload one argument with sentinels like `"auto"`. dlt resolves every argument typed as an incremental from config and merges config into a passed one, `NotResolved` does not stop it.
+6. **Network compression.** Is the data compressed in transfer?
+   - **Where to look:** `Accept-Encoding: gzip` on HTTP APIs and export downloads, the wire compression of database drivers, e.g. MongoDB `compressors`, and compressed export formats.
+   - **Local vs. remote:** measure both.
+     - A remote upstream is bandwidth bound. MongoDB Atlas sends BSON uncompressed unless the client asks for compression, and zlib took a load from 78 s to 30 s.
+     - A local or same-network upstream is CPU bound, and the same zlib made it about 30% slower.
+     - Report both numbers.
+   - **Default:** check what other connectors of the same upstream do, e.g. if they compress by default.
+     - Most installs reach a remote upstream, so enable it by default.
+     - Let the user's connection string or option override the default, including turning it off. Check precedence: pymongo keyword arguments override the URL.
+     - Prefer a codec from the standard library, e.g. zlib. Offer faster ones, such as zstd and snappy, only when their package is installed, and silence the driver's warnings about missing ones.
 
 ## Source structure and dlt building blocks
 
@@ -222,6 +233,26 @@ Hand-made fixtures encode our assumptions; they hid the header-only page bug in 
 - **Keep end-to-end tests read-only, few and parallel**, in `test_<name>_source.py`. Count only seeded records, because accounts come with their own sample data. Pause between live runs, since vendors throttle.
 - **Never read or print secrets files.** Credentials reach the seed script and tests only through dlt config injection.
 - **Check other popular open source connectors** for the same API and their test suites for edge cases not covered yet: value formats, nulls, quoting, pagination, errors, unsupported objects. Add them as test cases. Take the cases, not the code: write fixtures and values ourselves, because their licenses may not allow copying.
+
+### Standard incremental tests
+
+Every source with incremental loading has these end-to-end tests, on the seeded test account or on a local container (`tests/<name>/docker-compose.yml`). Reference: `test_local_seeded_full_and_incremental` and `test_local_seeded_chunks` in `tests/mongodb/test_mongodb_source.py`.
+
+**Seed**
+- Unique random cursor values at the precision of the upstream, in an order unrelated to the insert or primary key order.
+- Several chunks and a partial last one, for example 1050 records in chunks of 200.
+- Expected values come from the seeded records, never from another read of the upstream.
+
+**Tests**
+1. Full load: loads all seeded primary keys.
+2. Next run: loads 0 rows.
+3. Windows with `initial_value`, `end_value`, `range_start="closed"` and `range_end="open"`: each window loads the seeded values in it and stores no incremental state.
+4. Chunks with `add_limit(1)`, `row_order="asc"` and `range_start="open"`: each run loads the next `chunk_size` values, ascending with `max` and descending with `min`, and stores the last one as `last_value`. A final run loads 0 rows. The stored `last_value` keeps the timezone of the cursor.
+
+**Parametrization**
+- Every backend and reader: `python` and `pyarrow`, sequential and parallel, Bulk and REST.
+- Chunks: `max` and `min`, each with and without `initial_value`.
+- A parallel reader that fails the chunk test needs `parallel=False` for chunked loading, written in Operations.
 
 ## Phase 5 — Verify and finish
 

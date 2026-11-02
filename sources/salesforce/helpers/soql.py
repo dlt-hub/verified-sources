@@ -1,6 +1,6 @@
 """Builds SOQL queries from selected columns, a filter and the incremental cursor range"""
 
-from datetime import timezone  # noqa: I251
+from datetime import datetime, timezone  # noqa: I251
 from typing import Any, List, Optional, Tuple
 
 from dlt.common.schema.typing import TColumnSchema, TTableSchemaColumns
@@ -31,9 +31,11 @@ def make_soql(
     incremental: Optional[Incremental[Any]] = None,
     soql_filter: Optional[str] = None,
     limit: Optional[int] = None,
+    read_until: Optional[datetime] = None,
 ) -> str:
     """Builds a SOQL query selecting `columns`, filtered by `soql_filter` and `incremental`.
 
+    `read_until` ends the range of an incremental on a timestamp without `end_value`.
     ORDER BY is generated only when `row_order` is set and LIMIT only with `limit`: both disable
     PK chunking of Bulk API 2.0 query jobs, which may time out on large sObjects.
     """
@@ -41,7 +43,7 @@ def make_soql(
     order_by = ""
     if incremental:
         incremental_conditions, order_by = _incremental_soql(
-            sobject, columns, incremental
+            sobject, columns, incremental, read_until
         )
         conditions.extend(incremental_conditions)
 
@@ -58,7 +60,10 @@ def make_soql(
 
 
 def _incremental_soql(
-    sobject: str, columns: TTableSchemaColumns, incremental: Incremental[Any]
+    sobject: str,
+    columns: TTableSchemaColumns,
+    incremental: Incremental[Any],
+    read_until: Optional[datetime],
 ) -> Tuple[List[str], str]:
     """Returns WHERE conditions and ORDER BY clause from the `incremental` cursor range"""
     cursor_name = incremental.get_cursor_column_name()
@@ -85,13 +90,22 @@ def _incremental_soql(
         return [], ""
 
     start_value, end_value = incremental.get_current_range()
-    conditions: List[str] = []
+    if (
+        end_value is None
+        and read_until is not None
+        and last_value_func is max
+        and cursor.get("data_type") == "timestamp"
+    ):
+        # later changes go to the next run: a long job may miss earlier ones and move the cursor past
+        end_value, op_end = read_until, "<="
+    bounds: List[str] = []
     if start_value is not None:
-        condition = f"{cursor_name} {op} {to_soql_literal(start_value, cursor)}"
-        if end_value is not None:
-            condition += (
-                f" AND {cursor_name} {op_end} {to_soql_literal(end_value, cursor)}"
-            )
+        bounds.append(f"{cursor_name} {op} {to_soql_literal(start_value, cursor)}")
+    if end_value is not None:
+        bounds.append(f"{cursor_name} {op_end} {to_soql_literal(end_value, cursor)}")
+    conditions: List[str] = []
+    if bounds:
+        condition = " AND ".join(bounds)
         if incremental.on_cursor_value_missing == "include":
             condition = f"({condition}) OR {cursor_name} = null"
         conditions.append(condition)

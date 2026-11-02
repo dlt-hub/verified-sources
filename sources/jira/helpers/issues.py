@@ -339,7 +339,7 @@ def make_issues_resource(
         issue_details,
         name=name,
         data_from=ids,
-        write_disposition=write_disposition,  # type: ignore[arg-type]
+        write_disposition=write_disposition,  # type: ignore[arg-type,unused-ignore]
         primary_key=primary_key,
         merge_key=merge_key,
         columns=columns,

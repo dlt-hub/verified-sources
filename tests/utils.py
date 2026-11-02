@@ -43,6 +43,14 @@ skipifwindows = pytest.mark.skipif(
 )
 
 
+def skip_if_not_active(*destinations: str) -> pytest.MarkDecorator:
+    """Skips a test that loads to `destinations` when none of them is in ALL_DESTINATIONS"""
+    return pytest.mark.skipif(
+        not set(destinations) & set(ALL_DESTINATIONS),
+        reason=f"{', '.join(destinations)} not in ALL_DESTINATIONS",
+    )
+
+
 @pytest.fixture(autouse=True)
 def drop_pipeline() -> Iterator[None]:
     """Drops all the datasets for the pipeline created in the test. Does not drop the working dir - see new_test_storage"""

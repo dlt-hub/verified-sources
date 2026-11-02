@@ -97,3 +97,15 @@ class SalesforceConnection:
             },
             **kwargs,
         )
+
+
+def is_concurrent_limit_exceeded(
+    response: Optional[Response], exception: Optional[BaseException]
+) -> bool:
+    """Tells if Salesforce refused a request because the org runs too many long requests"""
+    # the daily request limit has the same error code and is not retried
+    return (
+        response is not None
+        and response.status_code == 403
+        and "ConcurrentPerOrgLongTxn" in response.text
+    )

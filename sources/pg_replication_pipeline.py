@@ -4,7 +4,11 @@ import dlt
 from dlt.common.destination import Destination
 from dlt.destinations.impl.postgres.configuration import PostgresCredentials
 
-from pg_replication import init_replication, replication_resource
+from pg_replication import (
+    init_replication,
+    replication_resource,
+    replication_slot_exists,
+)
 
 
 PG_CREDS = dlt.secrets.get("sources.pg_replication.credentials", PostgresCredentials)
@@ -16,8 +20,8 @@ def replicate_single_table_with_initial_load(
     """Sets up replication with initial load for your existing PostgreSQL database.
 
     Unlike the other functions, this function does NOT simulate changes in the source table.
-    It connects to your actual database and performs initial load from the specified tables
-    and performs replication if any.
+    It connects to your actual database. The first run creates the replication slot and performs
+    initial load from the specified tables, every run replicates the changes made since.
 
     Args:
         schema_name (str): Name of the schema containing the tables to replicate.
@@ -36,22 +40,23 @@ def replicate_single_table_with_initial_load(
         dataset_name="replicate_with_initial_load",
     )
 
-    # initialize replication for the source table
     slot_name = "example_slot"
     pub_name = "example_pub"
-    snapshot = init_replication(  # requires the Postgres user to have the REPLICATION attribute assigned
-        slot_name=slot_name,
-        pub_name=pub_name,
-        table_names=table_names,  # requires the Postgres user to own the table(s) or be superuser
-        schema_name=schema_name,
-        persist_snapshots=True,  # persist snapshot table(s) and let function return resource(s) for initial load
-        reset=True,
-    )
+    # Postgres exports the snapshot for the initial load only when it creates the slot
+    if not replication_slot_exists(slot_name):
+        # initialize replication for the source table
+        snapshot = init_replication(  # requires the Postgres user to have the REPLICATION attribute assigned
+            slot_name=slot_name,
+            pub_name=pub_name,
+            table_names=table_names,  # requires the Postgres user to own the table(s) or be superuser
+            schema_name=schema_name,
+            initial_snapshot="direct",  # return resource(s) that read the table(s) in the snapshot of the slot
+        )
 
-    # perform initial load to capture all records present in source table prior to replication initialization
-    load_info = repl_pl.run(snapshot)
-    print(load_info)
-    print(repl_pl.last_trace.last_normalize_info)
+        # perform initial load to capture all records present in source table prior to replication initialization
+        load_info = repl_pl.run(snapshot)
+        print(load_info)
+        print(repl_pl.last_trace.last_normalize_info)
 
     # assuming there were changes in the source table, propagate change to destination
     changes = replication_resource(slot_name, pub_name)
@@ -117,7 +122,7 @@ def replicate_single_table_demo() -> None:
 def replicate_with_initial_load_demo() -> None:
     """Demonstrates PostgreSQL replication with initial load by simulating a source table and changes.
 
-    Shows usage of `persist_snapshots` argument and snapshot resource returned by `init_replication` helper.
+    Shows usage of `initial_snapshot` argument and snapshot resource returned by `init_replication` helper.
     This demo creates a source table with existing data, then simulates additional changes to show how
     initial load captures pre-existing records and replication handles subsequent changes.
     """
@@ -148,7 +153,7 @@ def replicate_with_initial_load_demo() -> None:
         pub_name=pub_name,
         schema_name=sim_pl.dataset_name,
         table_names="my_source_table",
-        persist_snapshots=True,  # persist snapshot table(s) and let function return resource(s) for initial load
+        initial_snapshot="table",  # copy the table(s) in the snapshot of the slot and return resource(s) for initial load
         reset=True,
     )
 
@@ -161,6 +166,73 @@ def replicate_with_initial_load_demo() -> None:
     changes = replication_resource(slot_name, pub_name)
     repl_pl.run(changes)
     show_destination_table(repl_pl)
+
+
+def replicate_added_table_demo() -> None:
+    """Demonstrates initial load of a table added to the replication later.
+
+    Postgres exports the snapshot only when it creates the replication slot. On the existing
+    slot, `init_replication` adds the table to the publication and returns a resource that reads
+    the table as it is. The replication merges the changes made while the table is read.
+    """
+    # create simulation and replication pipelines
+    sim_pl = get_postgres_pipeline()
+    repl_pl = dlt.pipeline(
+        pipeline_name="pg_replication_pipeline",
+        destination="duckdb",
+        dataset_name="replicate_added_table",
+        dev_mode=True,
+    )
+
+    # create two source tables with records
+    create_source_table(
+        sim_pl,
+        "CREATE TABLE {table_name} (id integer PRIMARY KEY, val bool);",
+        "tbl_x",
+    )
+    change_source_table(sim_pl, "INSERT INTO {table_name} VALUES (1, true);", "tbl_x")
+    create_source_table(
+        sim_pl,
+        "CREATE TABLE {table_name} (id integer PRIMARY KEY, val varchar);",
+        "tbl_y",
+    )
+    change_source_table(
+        sim_pl, "INSERT INTO {table_name} VALUES (1, 'foo'), (2, 'bar');", "tbl_y"
+    )
+
+    # initialize replication for tbl_x only and perform its initial load
+    slot_name = "example_slot"
+    pub_name = "example_pub"
+    snapshot = init_replication(  # requires the Postgres user to have the REPLICATION attribute assigned
+        slot_name=slot_name,
+        pub_name=pub_name,
+        schema_name=sim_pl.dataset_name,
+        table_names="tbl_x",
+        initial_snapshot="direct",
+        reset=True,
+    )
+    repl_pl.run(snapshot)
+    show_destination_table(repl_pl, "tbl_x")
+
+    # add tbl_y to the existing slot, pass only the table(s) that need the initial load
+    snapshot = init_replication(
+        slot_name=slot_name,
+        pub_name=pub_name,
+        schema_name=sim_pl.dataset_name,
+        table_names="tbl_y",
+        initial_snapshot="direct",
+    )
+    repl_pl.run(snapshot)
+    show_destination_table(repl_pl, "tbl_y")
+
+    # changes of both tables are replicated
+    change_source_table(sim_pl, "INSERT INTO {table_name} VALUES (2, false);", "tbl_x")
+    change_source_table(
+        sim_pl, "UPDATE {table_name} SET val = 'baz' WHERE id = 2;", "tbl_y"
+    )
+    repl_pl.run(replication_resource(slot_name, pub_name))
+    show_destination_table(repl_pl, "tbl_x")
+    show_destination_table(repl_pl, "tbl_y")
 
 
 def replicate_entire_schema_demo() -> None:
@@ -348,5 +420,6 @@ if __name__ == "__main__":
     )
     # replicate_single_table_demo()
     # replicate_with_initial_load_demo()
+    # replicate_added_table_demo()
     # replicate_entire_schema_demo()
     # replicate_with_column_selection_demo()

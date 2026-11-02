@@ -295,19 +295,51 @@ def load(client: Salesforce) -> None:
         for n in range(1, data.DELETED_RECORDS + 1)
     ]
     upsert(client, data.DLT_TYPES, "Seed_Id__c", deleted)
+    delete_where(client, data.DLT_TYPES, "Category__c = 'deleted'")
+
+    prefix = data.DELETED_LINE_ITEM_PREFIX
+    deleted_opportunity = {
+        data.SEED_ID_FIELD: f"opp-deleted-{run_id}",
+        "Name": "dlt deleted deal",
+        "StageName": "Prospecting",
+        "CloseDate": date(2026, 1, 31),
+    }
+    upsert(client, "Opportunity", data.SEED_ID_FIELD, [deleted_opportunity])
+    line_items = [
+        {
+            data.SEED_ID_FIELD: f"{prefix}{kind}-{run_id}",
+            "Opportunity": {data.SEED_ID_FIELD: opportunity},
+            "PricebookEntry": {data.SEED_ID_FIELD: f"pbe-{data.STANDARD_PRICEBOOK}-1"},
+            "Quantity": 1,
+            "UnitPrice": 100,
+        }
+        for kind, opportunity in (
+            ("direct", "opp-1"),
+            ("cascade", deleted_opportunity[data.SEED_ID_FIELD]),
+        )
+    ]
+    upsert(client, "OpportunityLineItem", data.SEED_ID_FIELD, line_items)
+    # the opportunity deletes its line item, then the other one is deleted on its own
+    delete_where(client, "Opportunity", f"{data.SEED_ID_FIELD} LIKE 'opp-deleted-%'")
+    delete_where(
+        client, "OpportunityLineItem", f"{data.SEED_ID_FIELD} LIKE '{prefix}%'"
+    )
+
+
+def delete_where(client: Salesforce, sobject: str, condition: str) -> None:
     ids = [
         record["Id"]
-        for record in client.query(
-            f"SELECT Id FROM {data.DLT_TYPES} WHERE Category__c = 'deleted'"
-        )["records"]
+        for record in client.query_all(f"SELECT Id FROM {sobject} WHERE {condition}")[
+            "records"
+        ]
     ]
     results = client.restful(
         "composite/sobjects",
         method="DELETE",
         params={"ids": ",".join(ids), "allOrNone": "true"},
     )
-    check_results(data.DLT_TYPES, results)
-    print(f"Deleted {len(ids)} {data.DLT_TYPES}")
+    check_results(sobject, results)
+    print(f"Deleted {len(ids)} {sobject}")
 
 
 def capture(client: Salesforce) -> None:
@@ -320,14 +352,15 @@ def capture(client: Salesforce) -> None:
         for field in describe["fields"]
     ]
     columns = fields_to_columns(fields)
-    pages = list(
-        BulkQueryApi(SalesforceConnection(lambda: client, client)).query(
+    pages = [
+        page.csv
+        for page in BulkQueryApi(SalesforceConnection(lambda: client, client)).query(
             make_soql(data.DLT_TYPES, columns),
             columns,
             query_all=True,
             page_size=10000,
         )
-    )
+    ]
     assert len(pages) == 1, "all records are expected in a single page"
     os.makedirs(CASES_DIR, exist_ok=True)
     with open(CAPTURED_DESCRIBE, "w", encoding="utf-8") as f:
@@ -343,10 +376,10 @@ def capture(client: Salesforce) -> None:
 
 if __name__ == "__main__":
     command = sys.argv[1] if len(sys.argv) > 1 else "all"
-    sf_client = get_client()
+    # a new client per step: the Metadata API deploy leaves XML headers on the client
     if command in ("deploy", "all"):
-        deploy(sf_client)
+        deploy(get_client())
     if command in ("load", "all"):
-        load(sf_client)
+        load(get_client())
     if command in ("capture", "all"):
-        capture(sf_client)
+        capture(get_client())

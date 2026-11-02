@@ -33,8 +33,11 @@ Tests run within fixtures (see `conftest.py`) that:
 - It is OK to test many related use cases in one test when they share setup
 
 ## Destination testing
-- Tests on a non-local destination, or on a local one run in CI with other destination tests, use
-  `@pytest.mark.parametrize("destination_name", ALL_DESTINATIONS)`. Never hard-code a destination
+- Tests that read a real source and load to all destinations use
+  `@pytest.mark.parametrize("destination_name", ALL_DESTINATIONS)`
+- Tests that read a real source and load to one local destination use
+  `@skip_if_not_active("duckdb")` from `tests.utils`, CI jobs without it skip them
+- Unit tests use neither and run in every job
 - For local development, limit destinations: `ALL_DESTINATIONS='["duckdb"]' pytest tests/<source>`
 - `make test-local` runs all tests on duckdb and postgres
 

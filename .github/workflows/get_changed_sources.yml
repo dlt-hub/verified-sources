@@ -15,10 +15,12 @@ jobs:
       sources_list: ${{ steps.get_changed_sources.outputs.sources_list }}
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ github.event.pull_request.head.sha || github.ref }}
           fetch-depth: 0
+          # fork code runs only after the `fork-ci` approval in fork_tests_with_secrets.yml
+          allow-unsafe-pr-checkout: true
 
       - name: Get changed sources
         id: get_changed_sources
