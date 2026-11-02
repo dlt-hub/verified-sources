@@ -604,10 +604,10 @@ class ServiceNowClient:
                     " read access to these fields."
                 )
             if previous_keys.intersection(keys):
-                # the instance ignores conditions on fields without `query_range` access
+                # the instance ignores conditions that it cannot parse
                 raise ValueError(
                     f"Records of `{table}` are not ordered by {query.keys}: the instance ignored"
-                    " a part of the query. Grant `query_range` access to these fields."
+                    " a part of the query, and dlt would read the same records again."
                 )
             logger.info(
                 f"Read {len(page)} records of `{table}` in {time.monotonic() - started:.1f}s"

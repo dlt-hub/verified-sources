@@ -106,11 +106,6 @@ def test_servicenow_table_incremental_runs(
     state = source_state["resources"]["incident"]["incremental"]["sys_updated_on"]
     assert state["last_value"] == datetime(2024, 2, 2, 22, tzinfo=timezone.utc)
 
-    # the instance ignores conditions on a field without `query_range` access
-    instance.ignored_fields = {"sys_updated_on"}
-    with pytest.raises(PipelineStepFailed, match="outside of the requested range"):
-        pipeline.run(incident())
-
 
 def test_servicenow_table_deletes(
     instance: FakeInstance, credentials: BasicCredentials

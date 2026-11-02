@@ -20,22 +20,10 @@ PARTITION_BOUND_DIGITS = 8
 LITERAL_TYPES = ("timestamp", "date", "bigint", "decimal", "double", "bool", "text")
 
 
-class CursorRange(NamedTuple):
-    """The lowest and the highest cursor value that the conditions of an incremental select, None
-    if the range is open. Text is compared case-insensitively, like the instance does.
-    """
-
-    cursor: str
-    lowest: Any
-    highest: Any
-    casefold: bool
-
-
 class IncrementalQuery(NamedTuple):
     """Conditions of the current range of an incremental and the order of records by the cursor"""
 
     conditions: List[str]
-    cursor_range: Optional[CursorRange]
     order: Optional[Literal["asc", "desc"]]
 
 
@@ -239,7 +227,7 @@ def incremental_query(
     if incremental.row_order:
         order = "desc" if (incremental.row_order == "asc") == (func is min) else "asc"
     if func not in (max, min) or not has_literals(column, is_duration):
-        return IncrementalQuery([], None, order)
+        return IncrementalQuery([], order)
     start, end = incremental.get_current_range()
     first_run = start is None and end is None
     if func is max:
@@ -254,27 +242,16 @@ def incremental_query(
         upper, upper_op = upper_bound, "<"
 
     conditions: List[str] = []
-    lowest = highest = None
-    if lower is not None:
-        lowest = to_cursor_value(lower, column, round_up=lower_op == ">=")
-        literal = to_glide_literal(lowest, column)
-        if literal is None:
-            lowest = None
-        else:
-            conditions.append(f"{cursor}{lower_op}{literal}")
-    if upper is not None:
-        highest = to_cursor_value(upper, column, round_up=upper_op == "<")
-        literal = to_glide_literal(highest, column)
-        if literal is None:
-            highest = None
-        else:
-            conditions.append(f"{cursor}{upper_op}{literal}")
+    for bound, op in ((lower, lower_op), (upper, upper_op)):
+        if bound is None:
+            continue
+        value = to_cursor_value(bound, column, round_up=op in (">=", "<"))
+        literal = to_glide_literal(value, column)
+        if literal is not None:
+            conditions.append(f"{cursor}{op}{literal}")
     if first_run and incremental.on_cursor_value_missing == "include" and conditions:
         # range conditions do not select empty values
         conditions[-1] += f"^OR{cursor}ISEMPTY"
     if incremental.on_cursor_value_missing == "exclude" and not conditions:
         conditions.append(f"{cursor}ISNOTEMPTY")
-    cursor_range = CursorRange(
-        cursor, lowest, highest, casefold=column.get("data_type") == "text"
-    )
-    return IncrementalQuery(conditions, cursor_range, order)
+    return IncrementalQuery(conditions, order)

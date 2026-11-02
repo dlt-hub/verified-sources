@@ -154,8 +154,7 @@ class FakeInstance:
     Like ACLs, removes records whose `sys_id` is in `hidden` after it applies the limit and counts
     the records. Like field ACLs, removes `hidden_fields` from records and exports them empty. Like
     query ACLs, answers queries with conditions on `denied_fields` with a 403 from the Table API and
-    no records from exports. Tables in `ignore_keyset` drop `sys_id>` conditions, and fields in
-    `ignored_fields` drop their conditions. Values are compared and ordered with `collation`
+    no records from exports. Tables in `ignore_keyset` drop `sys_id>` conditions. Values are compared and ordered with `collation`
     applied.
 
     `failures` maps a table to the responses (status code, error message, headers) to its next
@@ -176,7 +175,6 @@ class FakeInstance:
         self.denied_fields: Set[str] = set()
         self.uncounted: Set[str] = set()
         self.ignore_keyset: Set[str] = set()
-        self.ignored_fields: Set[str] = set()
         self.collation: Callable[[str], str] = str
         self.failures: Dict[
             str, List[Union[Tuple[int, str, Dict[str, str]], Exception]]
@@ -294,14 +292,6 @@ class FakeInstance:
         tokens = params.get("sysparm_query", "").split("^")
         if table in self.ignore_keyset:
             tokens = [token for token in tokens if "sys_id>" not in token]
-        tokens = [
-            token
-            for token in tokens
-            if not any(
-                re.match(rf"^(OR)?{field}([<>=!]|IS)", token)
-                for field in self.ignored_fields
-            )
-        ]
         numeric_fields = {
             field
             for field, type_ in self.field_types.get(table, {}).items()

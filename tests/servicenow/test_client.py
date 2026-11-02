@@ -207,7 +207,7 @@ def test_servicenow_table_ignored_keyset(
         write_disposition="replace",
         page_size=2,
     )
-    with pytest.raises(ResourceExtractionError, match="query_range"):
+    with pytest.raises(ResourceExtractionError, match="ignored a part of the query"):
         list(resource)
 
 

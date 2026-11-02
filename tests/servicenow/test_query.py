@@ -9,7 +9,6 @@ from dlt.common.configuration.specs import TimezoneContext
 from dlt.common.schema.typing import TColumnSchema
 
 from sources.servicenow.helpers.query import (
-    CursorRange,
     TableQuery,
     incremental_query,
     is_literal,
@@ -158,17 +157,17 @@ def test_context_timezone() -> None:
 
 
 @pytest.mark.parametrize(
-    "func,initial_value,end_value,range_start,range_end,expected,expected_range",
+    "func,initial_value,end_value,range_start,range_end,expected",
     [
-        (max, None, None, "closed", "open", ["c<{W}"], (None, "W")),
-        (min, None, None, "closed", "open", ["c<{W}"], (None, "W")),
-        (max, "S", None, "closed", "open", ["c>={S}", "c<{W}"], ("S", "W")),
-        (min, "S", None, "closed", "open", ["c<={S}"], (None, "S")),
-        (max, "S", None, "open", "open", ["c>{S}", "c<{W}"], ("S", "W")),
-        (min, "S", None, "open", "open", ["c<{S}"], (None, "S")),
-        (max, "S", "E", "closed", "open", ["c>={S}", "c<{E}"], ("S", "E")),
-        (min, "S", "E", "closed", "open", ["c>{E}", "c<={S}"], ("E", "S")),
-        (min, "S", "E", "closed", "closed", ["c>={E}", "c<={S}"], ("E", "S")),
+        (max, None, None, "closed", "open", ["c<{W}"]),
+        (min, None, None, "closed", "open", ["c<{W}"]),
+        (max, "S", None, "closed", "open", ["c>={S}", "c<{W}"]),
+        (min, "S", None, "closed", "open", ["c<={S}"]),
+        (max, "S", None, "open", "open", ["c>{S}", "c<{W}"]),
+        (min, "S", None, "open", "open", ["c<{S}"]),
+        (max, "S", "E", "closed", "open", ["c>={S}", "c<{E}"]),
+        (min, "S", "E", "closed", "open", ["c>{E}", "c<={S}"]),
+        (min, "S", "E", "closed", "closed", ["c>={E}", "c<={S}"]),
     ],
     ids=[
         "max",
@@ -189,7 +188,6 @@ def test_incremental_query(
     range_start: str,
     range_end: str,
     expected: List[str],
-    expected_range: Any,
 ) -> None:
     # with `min` the range goes back in time from its start. the time of the instance ends a
     # range without an upper end
@@ -208,53 +206,42 @@ def test_incremental_query(
         range_start=range_start,
         range_end=range_end,
     )
-    assert upper_side_open(incremental) == ("W" in expected_range)
+    assert upper_side_open(incremental) == any("{W}" in c for c in expected)
     query = incremental_query(incremental, column("timestamp"), upper_bound=values["W"])
     literals = {name: to_glide_datetime(value) for name, value in values.items()}
     assert query.conditions == [condition.format(**literals) for condition in expected]
-    lowest, highest = expected_range
-    assert query.cursor_range == CursorRange(
-        "c", values.get(lowest), values[highest], casefold=False
-    )
     assert query.order is None
 
 
 @pytest.mark.parametrize(
-    "data_type,start,expected,expected_range",
+    "data_type,start,expected",
     [
-        ("date", date(2024, 2, 29), ["c>=2024-02-29"], None),
-        ("bigint", Decimal("10.5"), ["c>=11"], (11, None)),
-        ("text", "b", ["c>=b"], None),
-        ("text", "a^b", [], (None, None)),
-        ("time", "12:00:00", [], "none"),
+        ("date", date(2024, 2, 29), ["c>=2024-02-29"]),
+        ("bigint", Decimal("10.5"), ["c>=11"]),
+        ("text", "b", ["c>=b"]),
+        ("text", "a^b", []),
+        ("time", "12:00:00", []),
     ],
 )
 def test_incremental_query_types(
-    data_type: str, start: Any, expected: List[str], expected_range: Any
+    data_type: str, start: Any, expected: List[str]
 ) -> None:
     incremental = dlt.sources.incremental("c", initial_value=start)
     query = incremental_query(incremental, column(data_type))
     # values that cannot be literals select no records on the instance, the incremental filters
     assert query.conditions == expected
-    if expected_range == "none":
-        assert query.cursor_range is None
-    else:
-        lowest, highest = expected_range or (start, None)
-        assert query.cursor_range == CursorRange(
-            "c", lowest, highest, casefold=data_type == "text"
-        )
 
 
 def test_incremental_query_without_conditions() -> None:
     # durations are seconds stored as date-times, they have no literals
     incremental = dlt.sources.incremental("c", initial_value=10)
     query = incremental_query(incremental, column("bigint"), is_duration=True)
-    assert query == ([], None, None)
+    assert query == ([], None)
     # the incremental filters the records of other `last_value_func`s
     custom = dlt.sources.incremental(
         "c", initial_value=10, last_value_func=lambda values: max(values)
     )
-    assert incremental_query(custom, column("bigint")) == ([], None, None)
+    assert incremental_query(custom, column("bigint")) == ([], None)
     assert not upper_side_open(custom)
 
 
