@@ -7,7 +7,7 @@ import threading
 from datetime import date, datetime, timedelta, timezone
 from functools import partial
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Tuple, Type, cast
+from typing import Any, Callable, Dict, List, Set, Tuple, Type, cast
 from urllib.parse import parse_qs, urlparse
 
 import dlt
@@ -497,12 +497,13 @@ def test_sharepoint_files_secret_not_in_trace(graph: Mocker) -> None:
 
 
 @pytest.mark.parametrize(
-    "name,content,fields,sort_by,expected",
+    "name,content,fields,table,sort_by,expected",
     [
         pytest.param(
             "report.csv",
             b"row,k,due\n1,1,2024-01-01\n2,2,\n3,A,2024-01-03\n4,,\n",
             {"reader_kwargs": {"chunksize": 2, "parse_dates": ["due"]}},
+            "reports",
             "row",
             {
                 "k": ("bigint", [1, 2, None, None]),
@@ -533,6 +534,7 @@ def test_sharepoint_files_secret_not_in_trace(graph: Mocker) -> None:
                 }
             ),
             {"file_type": "excel", "reader_kwargs": {"sheet_name": "Data"}},
+            "reports_data",
             "id",
             {
                 "code": ("bigint", [101, None, None]),
@@ -557,6 +559,7 @@ def test_sharepoint_files_secret_not_in_trace(graph: Mocker) -> None:
             "amounts.csv",
             b'id,amount\n1,1234.56\n2,\n3,"$1,000.10"\n4,n/a\n',
             {"reader_kwargs": {"converters": {"amount": to_decimal}}},
+            "reports",
             "id",
             {"amount": DECIMAL_AMOUNTS},
             id="csv_amounts_with_decimal_converter",
@@ -581,6 +584,7 @@ def test_sharepoint_files_secret_not_in_trace(graph: Mocker) -> None:
                     "converters": {"amount": to_decimal},
                 },
             },
+            "reports_data",
             "id",
             {"amount": DECIMAL_AMOUNTS},
             id="excel_amounts_with_decimal_converter",
@@ -592,6 +596,7 @@ def test_sharepoint_files_secret_not_in_trace(graph: Mocker) -> None:
             b'{"n": 2, "a": 2, "obj": {"x": 2}, "seen_at": 1700000060}\n'
             b'{"n": 3, "a": "text", "obj": {"x": 3}, "seen_at": 1700000120}\n',
             {"file_type": "jsonl"},
+            "reports",
             "n",
             {
                 "a": ("bigint", [1, 2, None]),
@@ -608,13 +613,14 @@ def test_sharepoint_files_column_types(
     name: str,
     content: bytes,
     fields: Dict[str, Any],
+    table: str,
     sort_by: str,
     expected: Dict[str, Tuple[str, List[Any]]],
 ) -> None:
     pipeline = load_file(graph, name, content, **fields)
 
-    assert loaded_columns(pipeline, sort_by, expected) == expected
-    assert data_columns(pipeline) == {sort_by, *expected}
+    assert loaded_columns(pipeline, sort_by, expected, table) == expected
+    assert data_columns(pipeline, table) == {sort_by, *expected}
 
 
 def test_sharepoint_files_parquet_columns(graph: Mocker) -> None:
@@ -834,6 +840,34 @@ def test_sharepoint_files_excel_sheets(graph: Mocker) -> None:
         "book_data": 1,
         "book_sales_2024": 1,
     }
+
+
+@pytest.mark.parametrize(
+    "sheet_name,tables",
+    [
+        pytest.param("Data", {"book_data"}, id="by_name"),
+        pytest.param(2, {"book_sales_2024"}, id="by_position"),
+        pytest.param(
+            [0, "Sales 2024"], {"book_data", "book_sales_2024"}, id="name_and_position"
+        ),
+    ],
+)
+def test_sharepoint_files_excel_picked_sheets(
+    graph: Mocker, sheet_name: Any, tables: Set[str]
+) -> None:
+    content = excel_bytes(
+        {"Data": [["id"], [1]], "Empty": [], "Sales 2024": [["id"], [2]]}
+    )
+    pipeline = load_file(
+        graph,
+        "book.xlsx",
+        content,
+        file_type="excel",
+        table_name="book",
+        reader_kwargs={"sheet_name": sheet_name},
+    )
+
+    assert {t["name"] for t in pipeline.default_schema.data_tables()} == tables
 
 
 @pytest.mark.parametrize(

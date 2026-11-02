@@ -289,20 +289,20 @@ def rows_per_file(pipeline: dlt.Pipeline) -> Dict[str, int]:
 
 
 def loaded_columns(
-    pipeline: dlt.Pipeline, sort_by: str, names: Iterable[str]
+    pipeline: dlt.Pipeline, sort_by: str, names: Iterable[str], table: str = "reports"
 ) -> Dict[str, Tuple[str, List[Any]]]:
-    """Returns the data type and the values, in `sort_by` order, of each named column of 'reports'."""
-    columns = pipeline.default_schema.get_table_columns("reports")
-    rows = sorted(loaded_rows(pipeline), key=lambda row: row[sort_by])
+    """Returns the data type and the values, in `sort_by` order, of each named column of `table`."""
+    columns = pipeline.default_schema.get_table_columns(table)
+    rows = sorted(loaded_rows(pipeline, table), key=lambda row: row[sort_by])
     return {
         name: (columns[name]["data_type"], [row[name] for row in rows])
         for name in names
     }
 
 
-def data_columns(pipeline: dlt.Pipeline) -> Set[str]:
-    """Returns the names of the 'reports' columns read from the files."""
-    columns = pipeline.default_schema.get_table_columns("reports")
+def data_columns(pipeline: dlt.Pipeline, table: str = "reports") -> Set[str]:
+    """Returns the names of the `table` columns read from the files."""
+    columns = pipeline.default_schema.get_table_columns(table)
     return {name for name in columns if not name.startswith("_dlt_")}
 
 

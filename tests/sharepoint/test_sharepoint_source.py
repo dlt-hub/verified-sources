@@ -95,16 +95,18 @@ def test_files(destination_name: str) -> None:
 
 
 @pytest.mark.parametrize(
-    "config, row_count, column, values",
+    "config, table, row_count, column, values",
     [
         (
             {"folder_path": "dlt test", "file_glob": "**/report_*.csv"},
+            "t",
             7,
             "customer",
             {"Old", "Alice", "Bob", "Carla", "Dan", "Eve", "Gus"},
         ),
         (
             {"folder_path": "", "file_glob": "root_*.csv", "library": "Documents"},
+            "t",
             2,
             "a",
             {1, 3},
@@ -115,11 +117,12 @@ def test_files(destination_name: str) -> None:
                 "file_type": "excel",
                 "reader_kwargs": {"sheet_name": "Data"},
             },
+            "t_data",
             3,
             "code__v_text",
             {None, "A-7"},
         ),
-        ({"folder_path": "dlt_paging"}, 205, None, None),
+        ({"folder_path": "dlt_paging"}, "t", 205, None, None),
     ],
     ids=[
         "subfolders",
@@ -132,6 +135,7 @@ def test_files(destination_name: str) -> None:
 def test_files_variants(
     destination_name: str,
     config: Dict[str, Any],
+    table: str,
     row_count: int,
     column: Optional[str],
     values: Optional[Set[Any]],
@@ -144,7 +148,7 @@ def test_files_variants(
     )
     source = sharepoint_files(**{"file_type": "csv", "table_name": "t", **config})
     assert_load_info(pipeline.run(source))
-    rows = load_tables_to_dicts(pipeline, "t")["t"]
+    rows = load_tables_to_dicts(pipeline, table)[table]
     assert len(rows) == row_count
     if column:
         assert {row.get(column) for row in rows} == values

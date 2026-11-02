@@ -73,7 +73,7 @@ def file_rows(
     """Yields the rows of each file in batches, with `_dlt_file_url`, `_dlt_file_name` and `_dlt_file_modified_at`.
 
     Rows of the base table carry no table name, so table hints apply to them; Excel sheets go
-    to "<table_name>_<sheet>" unless one `sheet_name` is given. Blank files are skipped.
+    to "<table_name>_<sheet>". Blank files are skipped.
     """
     read = reader_for(file_type)
     for item in items:
@@ -153,13 +153,16 @@ def read_parquet(f: Any, reader_kwargs: Dict[str, Any]) -> Iterator[TSheetRecord
 
 
 def read_excel(f: Any, reader_kwargs: Dict[str, Any]) -> Iterator[TSheetRecords]:
-    """Yields batches of records per workbook sheet, or of the one sheet named in `sheet_name`."""
-    sheets = pd.read_excel(f, **{"sheet_name": None, **reader_kwargs})
-    for sheet, frame in (
-        sheets.items() if isinstance(sheets, dict) else [(None, sheets)]
-    ):
-        for records in frame_records(frame):
-            yield None if sheet is None else str(sheet), records
+    """Yields batches of records per workbook sheet, all or those in `sheet_name`, named after the sheet."""
+    picked = reader_kwargs.get("sheet_name")
+    if isinstance(picked, (str, int)):
+        picked = [picked]
+    with pd.ExcelFile(f, engine=reader_kwargs.get("engine")) as workbook:
+        sheets = workbook.parse(**{**reader_kwargs, "sheet_name": picked})
+        for sheet, frame in sheets.items():
+            name = workbook.sheet_names[sheet] if isinstance(sheet, int) else sheet
+            for records in frame_records(frame):
+                yield str(name), records
 
 
 READERS: Dict[str, TReader] = {

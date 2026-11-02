@@ -228,7 +228,7 @@ def read_files(
 
     Pipe it from `sharepoint_folder` or from dlt's `filesystem` resource. A modified file
     replaces its own rows; rename the table with `with_name` or a `table_name` hint. Excel
-    workbooks load one table per sheet, "<table>_<sheet>", unless one `sheet_name` is given.
+    workbooks load one table per sheet, "<table>_<sheet>".
     Files are downloaded in parallel on dlt's extract workers, see `read_file`.
 
     Args:
@@ -263,8 +263,7 @@ def sharepoint_files(
     """Loads the rows of the files matching `file_glob` in a folder into one table.
 
     All matching files share `table_name`, and each row carries the `_dlt_file_url` and
-    `_dlt_file_name` it came from. Excel sheets go to their own tables, "<table_name>_<sheet>",
-    unless `reader_kwargs` names one `sheet_name`.
+    `_dlt_file_name` it came from. Excel sheets go to their own tables, "<table_name>_<sheet>".
 
     Each run reads only new or modified files. A modified file replaces its own rows. A renamed
     file counts as a new file, and the rows of a file emptied or deleted in SharePoint stay in
