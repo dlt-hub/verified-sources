@@ -154,9 +154,6 @@ def test_servicenow_table_dispositions(
     # the full table is read, without a window
     assert replace.write_disposition == "replace"
     assert instance.queries("incident") == ["ORDERBYsys_id"]
-    with pytest.raises(ValueError, match="no `sys_id`"):
-        instance.add_table("sys_id_less", {"name": "string"})
-        servicenow_table(credentials=credentials, table="sys_id_less")
 
 
 def test_lazy_dictionary(
@@ -176,18 +173,12 @@ def test_lazy_dictionary(
     assert all(result is results[0] for result in results)
     assert {entry["name"] for entry in results[0]} == {"incident", "task"}
 
-
-def test_lazy_dictionary_failure(
-    instance: FakeInstance, credentials: BasicCredentials, mocker: MockerFixture
-) -> None:
-    add_task_tables(instance)
-    client = ServiceNowClient(credentials)
-    dictionary = mocker.patch.object(
+    # a failed read raises in every resource and is not repeated
+    failing = mocker.patch.object(
         client, "dictionary", side_effect=ValueError("no access")
     )
     lazy = LazyDictionary(client, ["incident"])
-    # a failed read raises in every resource and is not repeated
     for _ in range(3):
         with pytest.raises(ValueError, match="no access"):
             lazy()
-    assert dictionary.call_count == 1
+    assert failing.call_count == 1

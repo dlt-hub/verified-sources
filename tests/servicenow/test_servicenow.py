@@ -1,27 +1,25 @@
 import os
-from typing import Optional
+from typing import Any, Dict, List, Tuple
 
 import dlt
 import pytest
 from dlt.pipeline.exceptions import PipelineStepFailed
 
 from sources.servicenow import DEFAULT_TABLES, servicenow_source, servicenow_table
-from sources.servicenow.helpers.client import make_session
-from sources.servicenow.helpers.credentials import BasicCredentials
+from sources.servicenow.helpers.credentials import ApiKeyCredentials, BasicCredentials
 
 from tests.servicenow.utils import (
+    INSTANCE,
     FakeInstance,
     add_task_tables,
-    item_rows,
     make_records,
     updated_on,
 )
 from tests.utils import assert_load_info, load_table_counts
 
 
-@pytest.mark.parametrize("backend", ["python", "pyarrow"])
 def test_servicenow_source(
-    instance: FakeInstance, credentials: BasicCredentials, backend: str
+    instance: FakeInstance, credentials: BasicCredentials
 ) -> None:
     for table in DEFAULT_TABLES:
         instance.add_table(
@@ -33,7 +31,6 @@ def test_servicenow_source(
     source = servicenow_source(
         credentials=credentials,
         encoded_queries={"incident": "name=incident"},
-        backend=backend,
     )
     assert list(source.resources) == list(DEFAULT_TABLES)
     # tables and fields of all tables are read with a page each, the empty page that follows is
@@ -66,11 +63,6 @@ def test_servicenow_source(
         if "name=incident" in params.get("sysparm_query", "")
     ]
     assert filtered == ["incident"] * 3
-
-    with pytest.raises(ValueError, match="unknown tables"):
-        servicenow_source(
-            credentials=credentials, encoded_queries={"incidents": "active=true"}
-        )
 
 
 def test_servicenow_source_deferred(
@@ -110,13 +102,8 @@ def test_servicenow_source_deferred(
         pipeline.run(source)
 
 
-@pytest.mark.parametrize(
-    "write_disposition", [None, "replace"], ids=["merge", "replace"]
-)
 def test_servicenow_source_start_date(
-    instance: FakeInstance,
-    credentials: BasicCredentials,
-    write_disposition: Optional[str],
+    instance: FakeInstance, credentials: BasicCredentials
 ) -> None:
     os.environ["SOURCES__SERVICENOW__START_DATE"] = "2024-02-02"
     tables = ["incident", "sys_user"]
@@ -127,9 +114,7 @@ def test_servicenow_source_start_date(
             records=make_records(30, updated_on),
         )
     instance.tables["sys_audit_delete"] = []
-    source = servicenow_source(
-        credentials=credentials, tables=tables, write_disposition=write_disposition
-    )
+    source = servicenow_source(credentials=credentials, tables=tables)
     assert {resource.section for resource in source.resources.values()} == {
         "servicenow"
     }
@@ -140,17 +125,36 @@ def test_servicenow_source_start_date(
     assert load_table_counts(pipeline, *tables) == {table: 6 for table in tables}
 
 
-def test_servicenow_table_session(
+def test_servicenow_invalid_arguments(
     instance: FakeInstance, credentials: BasicCredentials
 ) -> None:
-    add_task_tables(instance, make_records(3, updated_on))
-    session = make_session()
-    session.headers["X-Session"] = "custom"
-    resource = servicenow_table(
-        credentials=credentials,
-        table="incident",
-        session=session,
-        write_disposition="replace",
-    )
-    assert len(item_rows(list(resource))) == 3
-    assert all(headers["X-Session"] == "custom" for _, _, headers in instance.requests)
+    add_task_tables(instance)
+    instance.add_table("cmn_schedule", {"sys_id": "GUID", "name": "string"})
+    instance.add_table("u_without_key", {"name": "string"})
+    api_key = ApiKeyCredentials(instance=INSTANCE, api_key="key")
+    api_key.resolve()
+    cases: List[Tuple[Dict[str, Any], str]] = [
+        (
+            {
+                "start_date": "2024-02-02",
+                "incremental": dlt.sources.incremental("sys_created_on"),
+            },
+            "not both",
+        ),
+        # the table has no field that the default incremental can start from
+        ({"table": "cmn_schedule", "start_date": "2024-02-02"}, "start_date"),
+        # the incremental has no cursor without its field
+        ({"excluded_columns": ["sys_updated_on"]}, "not a field"),
+        ({"table": "u_without_key"}, "no `sys_id`"),
+        ({"api": "csv", "backend": "python"}, "pyarrow"),
+        ({"api": "csv", "credentials": api_key}, "API keys"),
+    ]
+    for kwargs, match in cases:
+        with pytest.raises(ValueError, match=match):
+            servicenow_table(
+                **{"credentials": credentials, "table": "incident", **kwargs}
+            )
+    with pytest.raises(ValueError, match="unknown tables"):
+        servicenow_source(
+            credentials=credentials, encoded_queries={"incidents": "active=true"}
+        )

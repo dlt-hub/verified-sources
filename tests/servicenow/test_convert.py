@@ -32,28 +32,7 @@ from tests.servicenow.utils import (
 from tests.utils import assert_load_info, load_tables_to_dicts
 
 
-def test_records_to_rows() -> None:
-    columns, durations = dictionary_to_columns(
-        [
-            {"name": "incident", "element": element, "internal_type": type_}
-            for element, type_ in {**TASK_FIELDS, **INCIDENT_FIELDS}.items()
-        ],
-        ["incident"],
-    )
-    assert records_to_rows([INCIDENT], columns, durations) == [INCIDENT_ROW]
-    # empty values and fields hidden by an ACL are None, values that do not convert stay strings
-    rows = records_to_rows(
-        [{"sys_id": "1", "priority": "", "u_cost": "n/a"}], columns, durations
-    )
-    assert rows[0]["priority"] is None and rows[0]["u_due"] is None
-    assert rows[0]["u_cost"] == "n/a"
-    # times stored without the date
-    assert records_to_rows([{"u_start": "08:00:00"}], columns, durations)[0][
-        "u_start"
-    ] == time(8)
-
-
-def test_records_to_arrow() -> None:
+def test_records_to_rows_and_arrow() -> None:
     columns, durations = dictionary_to_columns(
         [
             {"name": "incident", "element": element, "internal_type": type_}
@@ -64,9 +43,19 @@ def test_records_to_arrow() -> None:
     empty = {"sys_id": "2", **{name: "" for name in INCIDENT if name != "sys_id"}}
     table = records_to_arrow([INCIDENT, empty], columns, durations)
     assert table.column_names == list(columns)
-    rows = table.to_pylist()
-    assert rows[0] == INCIDENT_ROW
-    assert rows[1] == {name: "2" if name == "sys_id" else None for name in columns}
+    expected = [
+        INCIDENT_ROW,
+        {name: "2" if name == "sys_id" else None for name in columns},
+    ]
+    assert records_to_rows([INCIDENT, empty], columns, durations) == expected
+    assert table.to_pylist() == expected
+    # fields hidden by an ACL are None, values that do not convert stay strings
+    rows = records_to_rows([{"sys_id": "1", "u_cost": "n/a"}], columns, durations)
+    assert rows[0]["u_due"] is None and rows[0]["u_cost"] == "n/a"
+    # times stored without the date
+    assert records_to_rows([{"u_start": "08:00:00"}], columns, durations)[0][
+        "u_start"
+    ] == time(8)
 
 
 def test_backends_identical(

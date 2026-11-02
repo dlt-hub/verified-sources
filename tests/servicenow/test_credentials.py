@@ -4,6 +4,7 @@ import pytest
 from dlt.extract.exceptions import ResourceExtractionError
 
 from sources.servicenow import servicenow_table
+from sources.servicenow.helpers.client import make_session
 from sources.servicenow.helpers.credentials import (
     ApiKeyCredentials,
     BasicCredentials,
@@ -78,15 +79,18 @@ def test_servicenow_table_auth(
     credentials.resolve()
     # tokens expire within the renewal margin and are renewed for every request
     instance.token_expires_in = 60
-    rows = item_rows(
-        list(
-            servicenow_table(
-                credentials=credentials, table="incident", write_disposition="replace"
-            )
-        )
+    session = make_session()
+    session.headers["X-Session"] = "custom"
+    resource = servicenow_table(
+        credentials=credentials,
+        table="incident",
+        session=session,
+        write_disposition="replace",
     )
-    assert len(rows) == 3
+    assert len(item_rows(list(resource))) == 3
     headers = [headers for _, _, headers in instance.requests]
+    # requests go through the session that you pass
+    assert all(h["X-Session"] == "custom" for h in headers)
     if grant_type is None:
         assert instance.token_requests == []
     else:

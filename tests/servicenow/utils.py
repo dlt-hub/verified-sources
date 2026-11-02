@@ -5,7 +5,7 @@ import threading
 from datetime import date, datetime, time, timezone  # noqa: I251
 from email.utils import format_datetime
 from time import monotonic, sleep
-from typing import Any, Callable, Dict, List, Optional, Set, Tuple
+from typing import Any, Callable, Dict, List, Optional, Set, Tuple, Union
 from urllib.parse import parse_qs, urlparse
 
 import dlt
@@ -159,8 +159,8 @@ class FakeInstance:
     applied.
 
     `failures` maps a table to the responses (status code, error message, headers) to its next
-    requests. A status 200 sends the first half of the page with the error, like a cancelled
-    transaction. CSV exports are encoded with `csv_encoding` and sent with `csv_content_type`.
+    requests, or to the exceptions they raise, like timeouts. A status 200 sends the first half of
+    the page with the error, like a cancelled transaction. CSV exports are encoded with `csv_encoding` and sent with `csv_content_type`.
     They have field labels in the header when `csv_header_labels` is set.
     """
 
@@ -178,7 +178,9 @@ class FakeInstance:
         self.ignore_keyset: Set[str] = set()
         self.ignored_fields: Set[str] = set()
         self.collation: Callable[[str], str] = str
-        self.failures: Dict[str, List[Tuple[int, str, Dict[str, str]]]] = {}
+        self.failures: Dict[
+            str, List[Union[Tuple[int, str, Dict[str, str]], Exception]]
+        ] = {}
         self.requests: List[Tuple[str, Dict[str, str], Dict[str, str]]] = []
         self.token_requests: List[Dict[str, List[str]]] = []
         self.token_expires_in = 1799
@@ -265,7 +267,10 @@ class FakeInstance:
             datetime.fromisoformat(self.now).replace(tzinfo=timezone.utc), usegmt=True
         )
         if self.failures.get(table):
-            context.status_code, message, headers = self.failures[table].pop(0)
+            failure = self.failures[table].pop(0)
+            if isinstance(failure, Exception):
+                raise failure
+            context.status_code, message, headers = failure
             context.headers.update(headers)
             return params, message
         if table not in self.tables:

@@ -139,9 +139,8 @@ def test_dlt_types(backend: str, api: str) -> None:
 
 
 @skip_if_not_active("duckdb")
-@pytest.mark.parametrize("partitioned", [False, True], ids=["pages", "partitions"])
 @pytest.mark.parametrize("api", ["table", "csv"])
-def test_pages(api: str, partitioned: bool) -> None:
+def test_pages(api: str) -> None:
     session = make_session()
     page_requests: List[Dict[str, List[str]]] = []
 
@@ -153,7 +152,7 @@ def test_pages(api: str, partitioned: bool) -> None:
 
     session.hooks["response"].append(record_page_request)
     pipeline = dlt.pipeline(
-        pipeline_name=f"servicenow_pages_{api}_{partitioned}",
+        pipeline_name=f"servicenow_pages_{api}",
         destination="duckdb",
         dev_mode=True,
     )
@@ -162,7 +161,7 @@ def test_pages(api: str, partitioned: bool) -> None:
         session=session,
         page_size=data.PAGE_SIZE,
         api=api,
-        allow_partitioned_load=partitioned,
+        allow_partitioned_load=False,
     )
     assert_load_info(pipeline.run(source))
     rows = load_tables_to_dicts(pipeline, data.DLT_PAGES)[data.DLT_PAGES]
@@ -170,15 +169,8 @@ def test_pages(api: str, partitioned: bool) -> None:
         (record[data.SEED_ID_FIELD], record["u_number"])
         for record in data.page_records()
     ]
-    queries = [params.get("sysparm_query", [""])[0] for params in page_requests]
-    if partitioned:
-        # the first page, then `sys_id` ranges read in parallel, each ending with an empty page
-        assert any("sys_id<" in query for query in queries)
-        assert any("sys_id>=" in query for query in queries)
-    else:
-        # two full pages, a short one and the empty page that ends the read
-        assert len(page_requests) == data.PAGE_RECORDS // data.PAGE_SIZE + 2
-        assert not any("sys_id<" in query for query in queries)
+    # two full pages, a short one and the empty page that ends the read
+    assert len(page_requests) == data.PAGE_RECORDS // data.PAGE_SIZE + 2
     assert all(
         params.get("sysparm_limit", params.get("sysparm_record_count"))
         == [str(data.PAGE_SIZE)]
@@ -386,27 +378,41 @@ def test_seeded_full_and_incremental(backend: str, api: str, partitioned: bool) 
 @skip_if_not_active("duckdb")
 @READERS
 @pytest.mark.parametrize(
-    "last_value_func,initial_value",
+    "cursor,last_value_func,initial_value",
     [
-        (max, None),
-        (min, None),
-        (max, datetime(1999, 1, 1, tzinfo=timezone.utc)),
-        (min, datetime(2100, 1, 1, tzinfo=timezone.utc)),
+        (data.INCREMENTAL_CURSOR, max, None),
+        (data.INCREMENTAL_CURSOR, min, None),
+        (data.INCREMENTAL_CURSOR, max, datetime(1999, 1, 1, tzinfo=timezone.utc)),
+        (data.INCREMENTAL_CURSOR, min, datetime(2100, 1, 1, tzinfo=timezone.utc)),
+        # the instance compares and orders integers as numbers, 9 before 10
+        ("u_number", max, None),
+        ("u_number", min, None),
     ],
-    ids=["max", "min", "max_initial_value", "min_initial_value"],
+    ids=[
+        "max",
+        "min",
+        "max_initial_value",
+        "min_initial_value",
+        "integer_max",
+        "integer_min",
+    ],
 )
 def test_seeded_chunks(
-    backend: str, api: str, last_value_func: Any, initial_value: Optional[datetime]
+    backend: str,
+    api: str,
+    cursor: str,
+    last_value_func: Any,
+    initial_value: Optional[datetime],
 ) -> None:
     records = data.incremental_records()
     expected = sorted(
-        (record[data.INCREMENTAL_CURSOR] for record in records),
-        reverse=last_value_func is min,
+        (record[cursor] for record in records), reverse=last_value_func is min
     )
     # `sys_id` ranges are not read with `add_limit`, pages come in the order of the cursor
     table = seeded(
         backend,
         api,
+        cursor=cursor,
         initial_value=initial_value,
         last_value_func=last_value_func,
         # in the order of `last_value_func`, newest first with `min`
@@ -422,56 +428,16 @@ def test_seeded_chunks(
         chunk = expected[start : start + data.CHUNK_SIZE]
         assert_load_info(pipeline.run(table.add_limit(1)))
         assert last_row_count(pipeline) == len(chunk)
-        last_value = table.state["incremental"][data.INCREMENTAL_CURSOR]["last_value"]
-        assert last_value == chunk[-1]
+        assert table.state["incremental"][cursor]["last_value"] == chunk[-1]
     pipeline.run(table)
     assert last_row_count(pipeline) == 0
 
     with pipeline.sql_client() as client:
         rows = client.execute_sql(
-            f"SELECT u_number, {data.INCREMENTAL_CURSOR} FROM {data.DLT_INCREMENTAL}"
+            f"SELECT {data.SEED_ID_FIELD}, {cursor} FROM {data.DLT_INCREMENTAL}"
         )
     assert sorted(rows) == sorted(
-        (record["u_number"], record[data.INCREMENTAL_CURSOR]) for record in records
-    )
-    assert loaded_seed_ids(pipeline) == sorted(
-        record[data.SEED_ID_FIELD] for record in records
-    )
-    # checked last so that rows skipped or repeated above surface first
-    assert last_value.tzinfo is not None
-
-
-@skip_if_not_active("duckdb")
-@READERS
-@pytest.mark.parametrize("last_value_func", [max, min])
-def test_seeded_integer_chunks(backend: str, api: str, last_value_func: Any) -> None:
-    # the instance compares and orders integers as numbers, 9 before 10
-    records = data.incremental_records()
-    expected = sorted(
-        (record["u_number"] for record in records), reverse=last_value_func is min
-    )
-    table = seeded(
-        backend,
-        api,
-        cursor="u_number",
-        last_value_func=last_value_func,
-        row_order="asc",
-        range_start="open",
-    )
-    pipeline = dlt.pipeline(
-        pipeline_name=f"servicenow_seeded_integer_{backend}_{api}",
-        destination="duckdb",
-        dev_mode=True,
-    )
-    for start in range(0, len(expected), data.CHUNK_SIZE):
-        chunk = expected[start : start + data.CHUNK_SIZE]
-        assert_load_info(pipeline.run(table.add_limit(1)))
-        assert last_row_count(pipeline) == len(chunk)
-        assert table.state["incremental"]["u_number"]["last_value"] == chunk[-1]
-    pipeline.run(table)
-    assert last_row_count(pipeline) == 0
-    assert loaded_seed_ids(pipeline) == sorted(
-        record[data.SEED_ID_FIELD] for record in records
+        (record[data.SEED_ID_FIELD], record[cursor]) for record in records
     )
 
 

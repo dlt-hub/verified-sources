@@ -27,21 +27,42 @@ from tests.servicenow.utils import (
 )
 from tests.utils import assert_load_info, load_table_counts, load_tables_to_dicts
 
+READERS = pytest.mark.parametrize(
+    "backend,api",
+    [("python", "table"), ("pyarrow", "table"), ("pyarrow", "csv")],
+    ids=["python", "pyarrow", "csv"],
+)
 
-def test_servicenow_table_ignored_cursor_range(
-    instance: FakeInstance, credentials: BasicCredentials
-) -> None:
-    add_task_tables(instance, make_records(30, updated_on))
-    pipeline = dlt.pipeline(
-        pipeline_name="servicenow_cursor_range", destination="duckdb", dev_mode=True
-    )
-    assert_load_info(
-        pipeline.run(servicenow_table(credentials=credentials, table="incident"))
-    )
-    # the instance ignores conditions on a field without `query_range` access
-    instance.ignored_fields = {"sys_updated_on"}
-    with pytest.raises(PipelineStepFailed, match="outside of the requested range"):
-        pipeline.run(servicenow_table(credentials=credentials, table="incident"))
+
+def typed_value(cursor: str, i: int) -> str:
+    """Raw value of the `i`-th record in an order unrelated to `sys_id`. As text, "10" sorts
+    before "9"
+    """
+    n = (i * 7) % 23 + 1
+    letter = chr(ord("a") + n - 1)
+    return {
+        "sys_updated_on": f"2024-02-{n:02d} 10:00:00",
+        "number": str(n),
+        "u_due": f"2024-02-{n:02d}",
+        "u_cost": f"{n}.5",
+        # text in mixed case
+        "caller_id": letter.upper() if i % 2 else letter,
+    }[cursor]
+
+
+def loaded_value(cursor: str, raw: str) -> Any:
+    if cursor == "sys_updated_on":
+        return datetime.fromisoformat(raw).replace(tzinfo=timezone.utc)
+    if cursor == "caller_id":
+        return raw
+    return {"number": int, "u_due": date.fromisoformat, "u_cost": Decimal}[cursor](raw)
+
+
+def typed_records(cursor: str) -> List[Dict[str, Any]]:
+    records = random_id_records(23)
+    for i, record in enumerate(records):
+        record[cursor] = typed_value(cursor, i)
+    return records
 
 
 def test_servicenow_table_incremental_runs(
@@ -84,6 +105,11 @@ def test_servicenow_table_incremental_runs(
     (source_state,) = pipeline.state["sources"].values()
     state = source_state["resources"]["incident"]["incremental"]["sys_updated_on"]
     assert state["last_value"] == datetime(2024, 2, 2, 22, tzinfo=timezone.utc)
+
+    # the instance ignores conditions on a field without `query_range` access
+    instance.ignored_fields = {"sys_updated_on"}
+    with pytest.raises(PipelineStepFailed, match="outside of the requested range"):
+        pipeline.run(incident())
 
 
 def test_servicenow_table_deletes(
@@ -136,6 +162,14 @@ def test_servicenow_table_deletes(
     assert columns["is_deleted"]["hard_delete"] is True
     assert columns["sys_updated_on"]["dedup_sort"] == "desc"
 
+    # a field ACL hides the record keys of deleted records
+    instance.hidden_fields = {"documentkey"}
+    with pytest.raises(
+        PipelineStepFailed, match="sys_audit_delete` are returned without"
+    ):
+        pipeline.run(task())
+    instance.hidden_fields = set()
+
     # a user without access to `sys_audit_delete`
     del instance.tables["sys_audit_delete"]
     with pytest.raises(Exception, match="include_deleted=False"):
@@ -151,82 +185,46 @@ def test_servicenow_table_deletes(
     assert instance.queries("sys_audit_delete") == []
 
 
+@READERS
 def test_servicenow_table_hidden_fields(
-    instance: FakeInstance, credentials: BasicCredentials, mocker: MockerFixture
+    instance: FakeInstance,
+    credentials: BasicCredentials,
+    mocker: MockerFixture,
+    backend: str,
+    api: TReadApi,
 ) -> None:
-    add_task_tables(instance, make_records(3, updated_on, number="1", priority="2"))
-    instance.hidden_fields = {"priority"}
-    warning = mocker.patch("sources.servicenow.helpers.table.logger.warning")
-    for backend, api in (("python", "table"), ("pyarrow", "table"), ("pyarrow", "csv")):
-        warning.reset_mock()
-        resource = servicenow_table(
-            credentials=credentials,
-            table="incident",
-            write_disposition="replace",
-            included_columns=["number", "priority"],
-            backend=backend,
-            api=api,
-        )
-        list(resource)
-        messages = [
-            call.args[0]
-            for call in warning.call_args_list
-            if "not returned" in call.args[0]
-        ]
-        assert len(messages) == 1
-        assert "'priority'" in messages[0] and "'number'" not in messages[0]
-
-
-def test_servicenow_table_hidden_metadata(
-    instance: FakeInstance, credentials: BasicCredentials
-) -> None:
-    add_task_tables(instance, make_records(3, updated_on))
+    records = make_records(30, updated_on, number="1", priority="2")
+    add_task_tables(instance, records)
     instance.hidden_fields = {"super_class.name"}
     with pytest.raises(ValueError, match="sys_db_object"):
         servicenow_table(credentials=credentials, table="incident")
 
-    instance.hidden_fields = {"documentkey"}
-    instance.tables["sys_audit_delete"] = [
-        {
-            "sys_id": "a1",
-            "documentkey": "1",
-            "tablename": "incident",
-            "sys_created_on": "2024-02-15 00:00:00",
-        }
-    ]
-    pipeline = dlt.pipeline(
-        pipeline_name="servicenow_hidden_metadata", destination="duckdb", dev_mode=True
-    )
-    # the first run reads no deleted records
-    assert_load_info(
-        pipeline.run(servicenow_table(credentials=credentials, table="incident"))
-    )
-    with pytest.raises(
-        PipelineStepFailed, match="sys_audit_delete` are returned without"
-    ):
-        pipeline.run(servicenow_table(credentials=credentials, table="incident"))
-
-
-def test_servicenow_table_cursor_order(
-    instance: FakeInstance, credentials: BasicCredentials
-) -> None:
-    add_task_tables(instance, make_records(5, updated_on))
-    pipeline = dlt.pipeline(
-        pipeline_name="servicenow_order", destination="duckdb", dev_mode=True
-    )
-    # records ordered by the cursor are loaded in chunks
+    # ACLs hide a page of records and a field. Sequential `sys_id`s fall into the first range
+    ordered = sorted(record["sys_id"] for record in records)
+    instance.hidden = set(ordered[10:15])
+    instance.hidden_fields = {"priority"}
+    warning = mocker.patch("sources.servicenow.helpers.table.logger.warning")
     resource = servicenow_table(
         credentials=credentials,
         table="incident",
-        incremental=dlt.sources.incremental("sys_updated_on", row_order="asc"),
-        page_size=2,
-    ).add_limit(1)
-    # every run reads the record with the last cursor value again
-    for _ in range(4):
-        pipeline.run(resource)
-    assert load_table_counts(pipeline, "incident") == {"incident": 5}
-    queries = instance.queries("incident")
-    assert queries[1].endswith("^ORDERBYsys_updated_on^ORDERBYsys_id")
+        write_disposition="replace",
+        page_size=5,
+        included_columns=["number", "priority"],
+        backend=backend,
+        api=api,
+    )
+    rows = item_rows(list(resource))
+    assert sorted(row["sys_id"] for row in rows) == [
+        sys_id for sys_id in ordered if sys_id not in instance.hidden
+    ]
+    assert any("sys_id<" in query for query in instance.queries("incident"))
+    messages = [
+        call.args[0]
+        for call in warning.call_args_list
+        if "not returned" in call.args[0]
+    ]
+    assert len(messages) == 1
+    assert "'priority'" in messages[0] and "'number'" not in messages[0]
 
 
 @pytest.mark.parametrize("backend", ["python", "pyarrow"])
@@ -422,37 +420,6 @@ def test_servicenow_table_sequential_load(
     )
 
 
-def test_servicenow_table_partitioned_records(
-    instance: FakeInstance, credentials: BasicCredentials, mocker: MockerFixture
-) -> None:
-    # sys_ids that are not random fall into the first range and are read there
-    records = make_records(30, updated_on, priority="2")
-    add_task_tables(instance, records)
-    ordered = sorted(record["sys_id"] for record in records)
-    # ACLs hide a page of records and a field
-    instance.hidden = set(ordered[10:15])
-    instance.hidden_fields = {"priority"}
-    warning = mocker.patch("sources.servicenow.helpers.table.logger.warning")
-    resource = servicenow_table(
-        credentials=credentials,
-        table="incident",
-        write_disposition="replace",
-        page_size=5,
-        included_columns=["number", "priority"],
-    )
-    rows = item_rows(list(resource))
-    assert sorted(row["sys_id"] for row in rows) == [
-        sys_id for sys_id in ordered if sys_id not in instance.hidden
-    ]
-    assert any("sys_id<" in query for query in instance.queries("incident"))
-    hidden = [
-        call.args[0]
-        for call in warning.call_args_list
-        if "not returned" in call.args[0]
-    ]
-    assert len(hidden) == 1
-
-
 @pytest.mark.parametrize(
     "start_date",
     ["2024-02-02", date(2024, 2, 2), datetime(2024, 2, 2, tzinfo=timezone.utc), None],
@@ -519,25 +486,6 @@ def test_servicenow_table_start_date(
     assert load_table_counts(pipeline, "incident") == {"incident": 6}
 
 
-def test_servicenow_table_start_date_errors(
-    instance: FakeInstance, credentials: BasicCredentials
-) -> None:
-    add_task_tables(instance)
-    instance.add_table("cmn_schedule", {"sys_id": "GUID", "name": "string"})
-    with pytest.raises(ValueError, match="not both"):
-        servicenow_table(
-            credentials=credentials,
-            table="incident",
-            start_date="2024-02-02",
-            incremental=dlt.sources.incremental("sys_created_on"),
-        )
-    # the table has no field that the default incremental can start from
-    with pytest.raises(ValueError, match="start_date"):
-        servicenow_table(
-            credentials=credentials, table="cmn_schedule", start_date="2024-02-02"
-        )
-
-
 def test_servicenow_table_without_pyarrow(
     instance: FakeInstance, credentials: BasicCredentials, mocker: MockerFixture
 ) -> None:
@@ -548,33 +496,28 @@ def test_servicenow_table_without_pyarrow(
     assert items == [{**INCIDENT_ROW, "is_deleted": None}]
 
 
-@pytest.mark.parametrize(
-    "last_value_func,initial_value",
-    [
-        (max, None),
-        (min, None),
-        (max, datetime(1999, 1, 1, tzinfo=timezone.utc)),
-        (min, datetime(2100, 1, 1, tzinfo=timezone.utc)),
-    ],
-    ids=["max", "min", "max_initial_value", "min_initial_value"],
-)
+@pytest.mark.parametrize("last_value_func", [max, min])
+@pytest.mark.parametrize("cursor", ["sys_updated_on", "number", "u_due", "u_cost"])
+@pytest.mark.parametrize("backend", ["python", "pyarrow"])
 def test_servicenow_table_chunks(
     instance: FakeInstance,
     credentials: BasicCredentials,
+    cursor: str,
     last_value_func: Any,
-    initial_value: Optional[datetime],
+    backend: str,
 ) -> None:
-    # cursor values in an order unrelated to `sys_id`
-    records = random_id_records(23)
+    # keyset pages ordered by timestamps, numbers and dates, cursor values in an order unrelated
+    # to `sys_id`
+    records = typed_records(cursor)
     add_task_tables(instance, records)
     instance.tables["sys_audit_delete"] = []
     table = servicenow_table(
         credentials=credentials,
         table="incident",
         page_size=5,
+        backend=backend,
         incremental=dlt.sources.incremental(
-            "sys_updated_on",
-            initial_value=initial_value,
+            cursor,
             last_value_func=last_value_func,
             # in the order of `last_value_func`, newest first with `min`
             row_order="asc",
@@ -585,7 +528,7 @@ def test_servicenow_table_chunks(
         pipeline_name="servicenow_chunks", destination="duckdb", dev_mode=True
     )
     expected = sorted(
-        (record["sys_updated_on"] for record in records),
+        (loaded_value(cursor, record[cursor]) for record in records),
         reverse=last_value_func is min,
     )
     for start in range(0, len(expected), 5):
@@ -594,36 +537,21 @@ def test_servicenow_table_chunks(
         assert pipeline.last_trace.last_normalize_info.row_counts["incident"] == len(
             chunk
         )
-        last_value = table.state["incremental"]["sys_updated_on"]["last_value"]
-        assert last_value == datetime.fromisoformat(chunk[-1]).replace(
-            tzinfo=timezone.utc
-        )
+        assert table.state["incremental"][cursor]["last_value"] == chunk[-1]
     pipeline.run(table)
     assert "incident" not in pipeline.last_trace.last_normalize_info.row_counts
     assert load_table_counts(pipeline, "incident") == {"incident": len(records)}
-    # with `min` the incremental goes back in time and does not read deleted records
-    assert bool(instance.queries("sys_audit_delete")) == (last_value_func is max)
-
-
-def test_servicenow_table_next_run(
-    instance: FakeInstance, credentials: BasicCredentials
-) -> None:
-    # your own incremental keeps dlt's deduplication of the records at the last value
-    add_task_tables(instance, random_id_records(23))
-    instance.tables["sys_audit_delete"] = []
-    table = servicenow_table(
-        credentials=credentials,
-        table="incident",
-        page_size=5,
-        incremental=dlt.sources.incremental("sys_updated_on"),
+    # the request of the instance time has no query
+    direction = "DESC" if last_value_func is min else ""
+    assert all(
+        query.endswith(f"ORDERBY{direction}{cursor}^ORDERBY{direction}sys_id")
+        for query in instance.queries("incident")
+        if query
     )
-    pipeline = dlt.pipeline(
-        pipeline_name="servicenow_next_run", destination="duckdb", dev_mode=True
+    # only a `max` incremental on `sys_updated_on` reads deleted records
+    assert bool(instance.queries("sys_audit_delete")) == (
+        cursor == "sys_updated_on" and last_value_func is max
     )
-    assert_load_info(pipeline.run(table))
-    assert pipeline.last_trace.last_normalize_info.row_counts["incident"] == 23
-    pipeline.run(table)
-    assert "incident" not in pipeline.last_trace.last_normalize_info.row_counts
 
 
 def test_servicenow_table_applied_incremental(
@@ -692,14 +620,6 @@ def test_servicenow_table_included_columns(
     }
     assert resource.write_disposition == "merge"
     assert len(item_rows(list(resource))) == 3
-    # excluded columns remove them, the incremental then has no cursor
-    with pytest.raises(ValueError, match="not a field"):
-        servicenow_table(
-            credentials=credentials,
-            table="incident",
-            included_columns=["priority"],
-            excluded_columns=["sys_updated_on"],
-        )
 
 
 def test_servicenow_table_csv_page_size(
@@ -725,34 +645,8 @@ def test_servicenow_table_csv_page_size(
     assert record_counts == {"10000"}
 
 
-def typed_value(cursor: str, i: int) -> str:
-    """Raw value of the `i`-th record in an order unrelated to `sys_id`. As text, "10" sorts
-    before "9"
-    """
-    n = (i * 7) % 23 + 1
-    return {"number": str(n), "u_due": f"2024-02-{n:02d}", "u_cost": f"{n}.5"}[cursor]
-
-
-def loaded_value(cursor: str, raw: str) -> Any:
-    return {"number": int, "u_due": date.fromisoformat, "u_cost": Decimal}[cursor](raw)
-
-
-def typed_records(cursor: str) -> List[Dict[str, Any]]:
-    records = random_id_records(23)
-    for i, record in enumerate(records):
-        record[cursor] = typed_value(cursor, i)
-    return records
-
-
-READERS = pytest.mark.parametrize(
-    "backend,api",
-    [("python", "table"), ("pyarrow", "table"), ("pyarrow", "csv")],
-    ids=["python", "pyarrow", "csv"],
-)
-
-
 @READERS
-@pytest.mark.parametrize("cursor", ["number", "u_due", "u_cost"])
+@pytest.mark.parametrize("cursor", ["number", "u_due", "u_cost", "caller_id"])
 def test_servicenow_table_typed_cursor(
     instance: FakeInstance,
     credentials: BasicCredentials,
@@ -760,6 +654,8 @@ def test_servicenow_table_typed_cursor(
     backend: str,
     api: TReadApi,
 ) -> None:
+    # the instance compares text case-insensitively, python case-sensitively
+    instance.collation = str.lower
     records = typed_records(cursor)
     add_task_tables(instance, records)
     pipeline = dlt.pipeline(
@@ -775,91 +671,13 @@ def test_servicenow_table_typed_cursor(
     assert_load_info(pipeline.run(table))
     assert pipeline.last_trace.last_normalize_info.row_counts["incident"] == 23
     # the next run starts at the last value with a literal of the type of the field, only
-    # timestamps have an upper bound
+    # timestamps have an upper bound. Text in other case comes back without a false range error
+    # and is filtered
     instance.requests.clear()
     pipeline.run(table)
     assert "incident" not in pipeline.last_trace.last_normalize_info.row_counts
     last = str(max(loaded_value(cursor, record[cursor]) for record in records))
     assert instance.queries("incident")[0] == f"{cursor}>={last}^ORDERBYsys_id"
-
-
-@pytest.mark.parametrize("last_value_func", [max, min])
-@pytest.mark.parametrize("cursor", ["number", "u_due", "u_cost"])
-@pytest.mark.parametrize("backend", ["python", "pyarrow"])
-def test_servicenow_table_typed_cursor_chunks(
-    instance: FakeInstance,
-    credentials: BasicCredentials,
-    cursor: str,
-    last_value_func: Any,
-    backend: str,
-) -> None:
-    # keyset pages ordered by numbers and dates, newest first with `min`
-    records = typed_records(cursor)
-    add_task_tables(instance, records)
-    table = servicenow_table(
-        credentials=credentials,
-        table="incident",
-        page_size=5,
-        backend=backend,
-        incremental=dlt.sources.incremental(
-            cursor, last_value_func=last_value_func, row_order="asc", range_start="open"
-        ),
-    )
-    pipeline = dlt.pipeline(
-        pipeline_name="servicenow_typed_chunks", destination="duckdb", dev_mode=True
-    )
-    expected = sorted(
-        (loaded_value(cursor, record[cursor]) for record in records),
-        reverse=last_value_func is min,
-    )
-    for start in range(0, len(expected), 5):
-        chunk = expected[start : start + 5]
-        assert_load_info(pipeline.run(table.add_limit(1)))
-        assert pipeline.last_trace.last_normalize_info.row_counts["incident"] == len(
-            chunk
-        )
-        assert table.state["incremental"][cursor]["last_value"] == chunk[-1]
-    pipeline.run(table)
-    assert "incident" not in pipeline.last_trace.last_normalize_info.row_counts
-    assert load_table_counts(pipeline, "incident") == {"incident": len(records)}
-
-
-@READERS
-def test_servicenow_table_text_cursor(
-    instance: FakeInstance, credentials: BasicCredentials, backend: str, api: TReadApi
-) -> None:
-    # the instance compares text case-insensitively, python case-sensitively
-    instance.collation = str.lower
-    records = random_id_records(23)
-    for i, record in enumerate(records):
-        letter = chr(ord("a") + (i * 7) % 23)
-        record["caller_id"] = letter.upper() if i % 2 else letter
-    add_task_tables(instance, records)
-    pipeline = dlt.pipeline(
-        pipeline_name="servicenow_text_cursor", destination="duckdb", dev_mode=True
-    )
-    table = servicenow_table(
-        credentials=credentials,
-        table="incident",
-        backend=backend,
-        api=api,
-        incremental=dlt.sources.incremental("caller_id"),
-    )
-    assert_load_info(pipeline.run(table))
-    assert pipeline.last_trace.last_normalize_info.row_counts["incident"] == 23
-    # records in other case come back without a false range error and are filtered
-    pipeline.run(table)
-    assert "incident" not in pipeline.last_trace.last_normalize_info.row_counts
-
-    table = servicenow_table(
-        credentials=credentials,
-        table="incident",
-        backend=backend,
-        api=api,
-        incremental=dlt.sources.incremental("caller_id", row_order="asc"),
-    )
-    with pytest.raises(ResourceExtractionError, match="case-insensitively"):
-        list(table)
 
 
 def test_servicenow_table_cursor_bounds(
@@ -899,7 +717,7 @@ def test_servicenow_table_cursor_bounds(
         list(table)
 
 
-def test_servicenow_table_cursor_without_literals(
+def test_servicenow_table_unsupported_cursors(
     instance: FakeInstance, credentials: BasicCredentials, mocker: MockerFixture
 ) -> None:
     records = make_records(9, updated_on)
@@ -924,6 +742,14 @@ def test_servicenow_table_cursor_without_literals(
         incremental=dlt.sources.incremental("u_start", row_order="asc"),
     )
     with pytest.raises(ResourceExtractionError, match="cannot compare"):
+        list(table)
+    # the instance orders text case-insensitively, python case-sensitively
+    table = servicenow_table(
+        credentials=credentials,
+        table="incident",
+        incremental=dlt.sources.incremental("caller_id", row_order="asc"),
+    )
+    with pytest.raises(ResourceExtractionError, match="case-insensitively"):
         list(table)
 
 

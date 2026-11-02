@@ -3,7 +3,7 @@ import threading
 from datetime import datetime, timedelta, timezone  # noqa: I251
 from email.utils import format_datetime
 from http.server import BaseHTTPRequestHandler, HTTPServer
-from typing import Any, List, Optional
+from typing import Any, List, Optional, Set
 
 import pytest
 import requests_mock
@@ -15,7 +15,7 @@ from requests.adapters import HTTPAdapter
 from sources.servicenow import servicenow_table
 from sources.servicenow.helpers.client import (
     MAX_URL_LENGTH,
-    ServiceNowClient,
+    TABLE_API_PARAMS,
     TransactionCancelled,
     _should_retry,
     csv_encoding,
@@ -24,22 +24,25 @@ from sources.servicenow.helpers.client import (
     read_records,
     read_string_table,
 )
-from sources.servicenow.helpers.credentials import ApiKeyCredentials, BasicCredentials
-from sources.servicenow.helpers.query import TableQuery
+from sources.servicenow.helpers.credentials import BasicCredentials
 from sources.servicenow.helpers.table import TReadApi, hidden_fields
 
 from tests.servicenow.seed import data
 from tests.servicenow.utils import (
     INCIDENT,
     BASE_URL,
-    INSTANCE,
     TRANSACTION_CANCELLED,
     FakeInstance,
-    TRecord,
     add_task_tables,
     item_rows,
     make_records,
     updated_on,
+)
+
+READERS = pytest.mark.parametrize(
+    "backend,api",
+    [("python", "table"), ("pyarrow", "table"), ("pyarrow", "csv")],
+    ids=["python", "pyarrow", "csv"],
 )
 
 
@@ -133,43 +136,64 @@ def test_captured_hidden_field() -> None:
     assert pages["csv"].column("u_when").to_pylist()[:2] == ["", ""]
 
 
-@pytest.mark.parametrize("backend", ["python", "pyarrow"])
-def test_servicenow_table_pagination(
-    instance: FakeInstance, credentials: BasicCredentials, backend: str
+@READERS
+def test_servicenow_table_hidden_records(
+    instance: FakeInstance,
+    credentials: BasicCredentials,
+    mocker: MockerFixture,
+    backend: str,
+    api: TReadApi,
 ) -> None:
-    records = make_records(25, updated_on)
+    records = make_records(30, updated_on)
     add_task_tables(instance, records)
-    # hidden records shorten pages, the read continues until an empty page
-    instance.hidden = {records[3]["sys_id"], records[20]["sys_id"]}
+    ordered = sorted(record["sys_id"] for record in records)
     resource = servicenow_table(
         credentials=credentials,
         table="incident",
         write_disposition="replace",
         page_size=10,
         backend=backend,
+        api=api,
         allow_partitioned_load=False,
     )
-    loaded = [row["sys_id"] for row in item_rows(list(resource))]
-    assert loaded == sorted(
-        r["sys_id"] for r in records if r["sys_id"] not in instance.hidden
-    )
-    # pages of 9, 10 and 4 records
+
+    def read(hidden: Set[str]) -> List[str]:
+        instance.requests.clear()
+        instance.hidden = hidden
+        return sorted(row["sys_id"] for row in item_rows(list(resource)))
+
+    def offsets() -> List[Optional[str]]:
+        return [
+            params.get("sysparm_offset")
+            for params, _ in instance.page_requests("incident")
+        ]
+
+    # ACLs hide records after the limit is applied: hidden records shorten pages, the read
+    # continues until an empty page and a count of the records after it
+    hidden = {ordered[3], ordered[20]}
+    assert read(hidden) == [sys_id for sys_id in ordered if sys_id not in hidden]
     assert instance.queries("incident") == [
         "ORDERBYsys_id",
-        f"sys_id>{loaded[8]}^ORDERBYsys_id",
-        f"sys_id>{loaded[18]}^ORDERBYsys_id",
-        f"sys_id>{loaded[22]}^ORDERBYsys_id",
+        *(f"sys_id>{ordered[i]}^ORDERBYsys_id" for i in (9, 19, 29)),
     ]
-    # the last page is empty, the remaining records are counted
-    assert instance.count_queries("incident") == [f"sys_id>{loaded[22]}^ORDERBYsys_id"]
-    params, headers = instance.page_requests("incident")[-1]
-    assert params["sysparm_display_value"] == "false"
-    assert params["sysparm_exclude_reference_link"] == "true"
-    assert params["sysparm_no_count"] == "true"
-    assert params["sysparm_suppress_pagination_header"] == "true"
-    assert params["sysparm_limit"] == "10"
-    assert "work_notes" not in params["sysparm_fields"].split(",")
-    assert headers["Authorization"].startswith("Basic ")
+    assert instance.count_queries("incident") == [f"sys_id>{ordered[29]}^ORDERBYsys_id"]
+
+    # an empty page is skipped with an offset while records are counted after it
+    hidden = set(ordered[10:20]) | {ordered[25]}
+    assert read(hidden) == [sys_id for sys_id in ordered if sys_id not in hidden]
+    assert instance.count_queries("incident") == [
+        f"sys_id>{ordered[9]}^ORDERBYsys_id",
+        f"sys_id>{ordered[29]}^ORDERBYsys_id",
+    ]
+    assert offsets() == [None, None, "10", None]
+    assert read(set(ordered)) == []
+    assert offsets() == [None, "10", "20"]
+
+    # remote tables are not counted, records after a hidden page cannot be found
+    instance.uncounted = {"incident"}
+    warning = mocker.patch("sources.servicenow.helpers.client.logger.warning")
+    assert read(set(ordered[:10])) == []
+    assert any("does not count" in call.args[0] for call in warning.call_args_list)
 
 
 def test_servicenow_table_ignored_keyset(
@@ -185,46 +209,6 @@ def test_servicenow_table_ignored_keyset(
     )
     with pytest.raises(ResourceExtractionError, match="query_range"):
         list(resource)
-
-
-@pytest.mark.parametrize("api", ["table", "csv"])
-def test_servicenow_table_hidden_pages(
-    instance: FakeInstance, credentials: BasicCredentials, api: str
-) -> None:
-    records = make_records(30, updated_on)
-    add_task_tables(instance, records)
-    ordered = sorted(record["sys_id"] for record in records)
-    # ACLs hide a full page and a record of the next one after the limit is applied
-    instance.hidden = set(ordered[10:20]) | {ordered[25]}
-    resource = servicenow_table(
-        credentials=credentials,
-        table="incident",
-        write_disposition="replace",
-        page_size=10,
-        api=api,
-        allow_partitioned_load=False,
-    )
-    rows = item_rows(list(resource))
-    assert sorted(row["sys_id"] for row in rows) == [
-        sys_id for sys_id in ordered if sys_id not in instance.hidden
-    ]
-    # an empty page is skipped while records are counted after it
-    assert instance.count_queries("incident") == [
-        f"sys_id>{ordered[9]}^ORDERBYsys_id",
-        f"sys_id>{ordered[29]}^ORDERBYsys_id",
-    ]
-    offsets = [
-        params.get("sysparm_offset") for params, _ in instance.page_requests("incident")
-    ]
-    assert offsets == [None, None, "10", None]
-
-    instance.requests.clear()
-    instance.hidden = set(ordered)
-    assert item_rows(list(resource)) == []
-    offsets = [
-        params.get("sysparm_offset") for params, _ in instance.page_requests("incident")
-    ]
-    assert offsets == [None, "10", "20"]
 
 
 def test_servicenow_table_collation(
@@ -249,100 +233,54 @@ def test_servicenow_table_collation(
     )
 
 
+@pytest.mark.parametrize(
+    "failure,backend,api",
+    [
+        ((500, TRANSACTION_CANCELLED, {}), "pyarrow", "table"),
+        # cancelled transactions send a part of the page with status 200
+        ((200, TRANSACTION_CANCELLED, {}), "python", "table"),
+        ((200, TRANSACTION_CANCELLED, {}), "pyarrow", "table"),
+        ((200, TRANSACTION_CANCELLED, {}), "pyarrow", "csv"),
+        (ReadTimeout("read timed out"), "pyarrow", "table"),
+    ],
+    ids=["cancelled", "partial-python", "partial-pyarrow", "partial-csv", "timeout"],
+)
 def test_servicenow_table_page_shrink(
-    instance: FakeInstance, credentials: BasicCredentials, mocker: MockerFixture
+    instance: FakeInstance,
+    credentials: BasicCredentials,
+    mocker: MockerFixture,
+    failure: Any,
+    backend: str,
+    api: TReadApi,
 ) -> None:
     sleep = mocker.patch("time.sleep")
     add_task_tables(instance, make_records(450, updated_on))
-    instance.failures["incident"] = [(500, TRANSACTION_CANCELLED, {})] * 2
-    rows = item_rows(
-        list(
-            servicenow_table(
-                credentials=credentials,
-                table="incident",
-                write_disposition="replace",
-                page_size=400,
-            )
+
+    def resource(page_size: int) -> Any:
+        instance.requests.clear()
+        instance.failures["incident"] = [failure] * 2
+        return servicenow_table(
+            credentials=credentials,
+            table="incident",
+            write_disposition="replace",
+            page_size=page_size,
+            backend=backend,
+            api=api,
         )
-    )
-    assert len(rows) == 450
-    # the same page is read again with half of the records, cancellations are not retried
+
+    assert len(item_rows(list(resource(400)))) == 450
+    # the same page is read again with half of the records, failures are not retried
     limits = [
-        int(params["sysparm_limit"]) for params, _ in instance.page_requests("incident")
+        int(params.get("sysparm_limit", params.get("sysparm_record_count")))
+        for params, _ in instance.page_requests("incident")
     ]
     assert limits == [400, 200] + [100] * 6
     assert instance.queries("incident")[:3] == ["ORDERBYsys_id"] * 3
     sleep.assert_not_called()
 
     # a page of 100 records is not split
-    instance.failures["incident"] = [(500, TRANSACTION_CANCELLED, {})] * 2
-    resource = servicenow_table(
-        credentials=credentials,
-        table="incident",
-        write_disposition="replace",
-        page_size=200,
-    )
-    with pytest.raises(
-        ResourceExtractionError, match="HTTP 500 .* Transaction cancelled"
-    ):
-        list(resource)
-
-
-@pytest.mark.parametrize(
-    "api,backend", [("table", "python"), ("table", "pyarrow"), ("csv", "pyarrow")]
-)
-def test_servicenow_table_cancelled_in_response(
-    instance: FakeInstance, credentials: BasicCredentials, api: str, backend: str
-) -> None:
-    add_task_tables(instance, make_records(30, updated_on))
-    # cancelled transactions send a part of the page with status 200
-    instance.failures["incident"] = [(200, TRANSACTION_CANCELLED, {})]
-    resource = servicenow_table(
-        credentials=credentials,
-        table="incident",
-        write_disposition="replace",
-        page_size=200,
-        api=api,
-        backend=backend,
-    )
-    assert len(item_rows(list(resource))) == 30
-    limits = [
-        params.get("sysparm_limit", params.get("sysparm_record_count"))
-        for params, _ in instance.page_requests("incident")
-    ]
-    assert limits[:2] == ["200", "100"]
-
-
-def test_keyset_pages_timeout(
-    credentials: BasicCredentials, mocker: MockerFixture
-) -> None:
-    client = ServiceNowClient(credentials)
-    mocker.patch.object(client, "count", return_value=0)
-    limits: List[int] = []
-
-    def fetch_page(query: str, limit: int, offset: int) -> List[TRecord]:
-        limits.append(limit)
-        if len(limits) == 1:
-            raise ReadTimeout("read timed out")
-        return [{"sys_id": "1"}] if len(limits) == 2 else []
-
-    pages = list(client._keyset_pages("incident", TableQuery(), 400, fetch_page))
-    # a page that times out is read again with half of the records
-    assert pages == [[{"sys_id": "1"}]] and limits == [400, 200, 200]
-
-
-def test_servicenow_table_empty_response(
-    instance: FakeInstance, credentials: BasicCredentials, mocker: MockerFixture
-) -> None:
-    mocker.patch("time.sleep")
-    add_task_tables(instance, make_records(3, updated_on))
-    # under load, the instance can answer with an empty 202, which the client retries
-    instance.failures["incident"] = [(202, "", {})]
-    resource = servicenow_table(
-        credentials=credentials, table="incident", write_disposition="replace"
-    )
-    assert len(item_rows(list(resource))) == 3
-    assert len(instance.page_requests("incident")) == 3
+    with pytest.raises(ResourceExtractionError):
+        list(resource(200))
 
 
 def test_servicenow_table_retries(
@@ -357,6 +295,8 @@ def test_servicenow_table_retries(
         (429, "Too many requests", {"Retry-After": "7"}),
         (429, "Too many requests", {"Retry-After": retry_date}),
         (503, "Service unavailable", {}),
+        # under load, the instance can answer with an empty 202
+        (202, "", {}),
     ]
     rows = item_rows(
         list(
@@ -367,7 +307,7 @@ def test_servicenow_table_retries(
     )
     assert len(rows) == 3
     waits = [call.args[0] for call in sleep.call_args_list]
-    assert len(waits) == 3 and waits[0] == 7 and 20 < waits[1] <= 30
+    assert len(waits) == 4 and waits[0] == 7 and 20 < waits[1] <= 30
 
 
 def test_servicenow_table_html_response(credentials: BasicCredentials) -> None:
@@ -448,10 +388,6 @@ def test_servicenow_table_csv_export_errors(
     instance: FakeInstance, credentials: BasicCredentials
 ) -> None:
     add_task_tables(instance, [INCIDENT])
-    with pytest.raises(ValueError, match="pyarrow"):
-        servicenow_table(
-            credentials=credentials, table="incident", api="csv", backend="python"
-        )
     # the login page is returned for credentials not accepted for exports
     instance.csv_content_type = "text/html;charset=UTF-8"
     with pytest.raises(ResourceExtractionError, match="HTML page"):
@@ -462,11 +398,7 @@ def test_servicenow_table_csv_export_errors(
     with pytest.raises(ResourceExtractionError, match="has no \\['sys_id'\\] columns"):
         list(servicenow_table(credentials=credentials, table="incident", api="csv"))
     instance.csv_header_labels = False
-    # exports do not accept API keys and can reject basic authentication
-    api_key = ApiKeyCredentials(instance=INSTANCE, api_key="key")
-    api_key.resolve()
-    with pytest.raises(ValueError, match="API keys"):
-        servicenow_table(credentials=api_key, table="incident", api="csv")
+    # instances can reject basic authentication for exports
     instance.failures["incident"] = [(401, "User Not Authenticated", {})]
     with pytest.raises(ResourceExtractionError, match="snc_basic_auth_api_access"):
         list(
@@ -480,8 +412,8 @@ def test_servicenow_table_csv_export_errors(
 
 
 @pytest.mark.parametrize("api", ["table", "csv"])
-def test_servicenow_table_long_fields(
-    instance: FakeInstance, credentials: BasicCredentials, api: str
+def test_servicenow_table_long_url(
+    instance: FakeInstance, credentials: BasicCredentials, api: TReadApi
 ) -> None:
     fields = {
         "sys_id": "GUID",
@@ -492,15 +424,27 @@ def test_servicenow_table_long_fields(
         fields,
         records=[{"sys_id": "1", "u_field_with_a_long_name_1": "a", "u_unknown": "b"}],
     )
-    rows = item_rows(
-        list(servicenow_table(credentials=credentials, table="u_wide", api=api))
-    )
-    # all fields are returned and fields not in the dictionary are dropped
+
+    def resource(conditions: int) -> Any:
+        # a condition takes 15 characters in the url
+        return servicenow_table(
+            credentials=credentials,
+            table="u_wide",
+            api=api,
+            write_disposition="replace",
+            encoded_query="^OR".join(["sys_id=1"] * conditions),
+        )
+
+    # the fields do not fit in the url: all fields are returned and fields not in the
+    # dictionary are dropped
+    rows = item_rows(list(resource(1)))
     params = instance.page_requests("u_wide")[-1][0]
     assert "sysparm_fields" not in params
     if api == "csv":
         assert params["sysparm_default_export_fields"] == "all"
     assert rows[0]["u_field_with_a_long_name_1"] == "a" and "u_unknown" not in rows[0]
+    with pytest.raises(ResourceExtractionError, match="Shorten the encoded query"):
+        list(resource(MAX_URL_LENGTH // 15 + 1))
 
 
 def test_servicenow_table_unsafe_keys(
@@ -524,10 +468,10 @@ def test_servicenow_table_unsafe_keys(
     # pages after these records skip the records read after the last valid sys_id
     queries = instance.queries("incident")
     assert not any("javascript" in query or "x^y" in query for query in queries)
-    offsets = [
-        params.get("sysparm_offset") for params, _ in instance.page_requests("incident")
-    ]
-    assert offsets == [None, None, "2", "4"]
+    params = [params for params, _ in instance.page_requests("incident")]
+    assert [page.get("sysparm_offset") for page in params] == [None, None, "2", "4"]
+    # raw values of the fields
+    assert all(TABLE_API_PARAMS.items() <= page.items() for page in params)
 
 
 @pytest.mark.parametrize("api", ["table", "csv"])
@@ -541,58 +485,6 @@ def test_servicenow_table_denied_query(
     resource = servicenow_table(credentials=credentials, table="incident", api=api)
     with pytest.raises(ResourceExtractionError, match="query_match.*sys_updated_on"):
         list(resource)
-
-
-def test_servicenow_table_uncounted(
-    instance: FakeInstance, credentials: BasicCredentials, mocker: MockerFixture
-) -> None:
-    records = make_records(6, updated_on)
-    for i, record in enumerate(records):
-        record["sys_id"] = f"i{i}"
-    add_task_tables(instance, records)
-    # remote tables are not counted, records after a page hidden by ACLs cannot be found
-    instance.uncounted = {"incident"}
-    instance.hidden = {"i0", "i1"}
-    warning = mocker.patch("sources.servicenow.helpers.client.logger.warning")
-    resource = servicenow_table(
-        credentials=credentials,
-        table="incident",
-        write_disposition="replace",
-        page_size=2,
-    )
-    assert item_rows(list(resource)) == []
-    assert any("does not count" in call.args[0] for call in warning.call_args_list)
-
-
-@pytest.mark.parametrize("api", ["table", "csv"])
-def test_servicenow_table_long_query(
-    instance: FakeInstance, credentials: BasicCredentials, api: str
-) -> None:
-    fields = {
-        "sys_id": "GUID",
-        **{f"u_field_with_a_long_name_{i}": "string" for i in range(150)},
-    }
-    instance.add_table(
-        "u_wide", fields, records=[{"sys_id": "1", "u_field_with_a_long_name_1": "a"}]
-    )
-
-    def resource(conditions: int) -> Any:
-        # a condition takes 15 characters in the url
-        return servicenow_table(
-            credentials=credentials,
-            table="u_wide",
-            api=api,
-            write_disposition="replace",
-            encoded_query="^OR".join(["sys_id=1"] * conditions),
-        )
-
-    # the fields and the query each fit in the URL but not together, so all fields are returned
-    rows = item_rows(list(resource(300)))
-    params = instance.page_requests("u_wide")[-1][0]
-    assert "sysparm_fields" not in params
-    assert rows[0]["u_field_with_a_long_name_1"] == "a"
-    with pytest.raises(ResourceExtractionError, match="Shorten the encoded query"):
-        list(resource(MAX_URL_LENGTH // 15 + 1))
 
 
 @pytest.mark.parametrize(
@@ -623,7 +515,7 @@ def test_should_retry(status: int, body: bytes, retried: bool) -> None:
     assert _should_retry(response, None) is retried
 
 
-def test_session_without_cookies() -> None:
+def test_make_session(mocker: MockerFixture) -> None:
     # the instance runs the requests of a session one at a time, tables read in parallel must
     # not send the session cookie back
     cookies: List[Optional[str]] = []
@@ -641,27 +533,19 @@ def test_session_without_cookies() -> None:
 
     server = HTTPServer(("127.0.0.1", 0), Handler)
     threading.Thread(target=server.serve_forever, daemon=True).start()
+    session = make_session()
     try:
-        session = make_session()
         for _ in range(2):
             session.get(f"http://127.0.0.1:{server.server_port}/")
     finally:
         server.shutdown()
     assert cookies == [None, None]
 
-
-def test_session_timeouts(mocker: MockerFixture) -> None:
+    # connection errors are retried, read timeouts halve the page instead
     mocker.patch("time.sleep")
     send = mocker.patch.object(
-        HTTPAdapter, "send", side_effect=ReadTimeout("read timed out")
+        HTTPAdapter, "send", side_effect=ConnectTimeout("connect timed out")
     )
-    session = make_session()
-    # a read timeout is not retried, the page is read again with half of the records instead
-    with pytest.raises(ReadTimeout):
-        session.get(f"{BASE_URL}/api/now/v2/table/incident")
-    assert send.call_count == 1
-    send.reset_mock()
-    send.side_effect = ConnectTimeout("connect timed out")
     with pytest.raises(ConnectTimeout):
         session.get(f"{BASE_URL}/api/now/v2/table/incident")
     assert send.call_count > 1

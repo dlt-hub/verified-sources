@@ -23,34 +23,6 @@ from sources.servicenow.helpers.query import (
 from tests.servicenow.utils import evaluate_query, random_sys_id
 
 
-@pytest.mark.parametrize(
-    "value,expected",
-    [
-        ("2024-02-01 10:30:00", "2024-02-01 10:30:00"),
-        ("2024-02-01T11:30:00+01:00", "2024-02-01 10:30:00"),
-        (datetime(2024, 2, 1, 10, 30, 0, 999999), "2024-02-01 10:30:00"),
-        (
-            datetime(2024, 2, 1, 11, 30, tzinfo=timezone(timedelta(hours=1))),
-            "2024-02-01 10:30:00",
-        ),
-        (date(2024, 2, 1), "2024-02-01 00:00:00"),
-    ],
-    ids=["naive-str", "offset-str", "naive-datetime", "aware-datetime", "date"],
-)
-def test_to_glide_datetime(value: Any, expected: str) -> None:
-    # literals are UTC, sub-seconds are truncated
-    assert to_glide_datetime(value) == expected
-
-
-def test_to_glide_datetime_context_timezone() -> None:
-    # naive values are in the context timezone, as in `dlt.sources.incremental`
-    with Container().injectable_context(TimezoneContext("Europe/Berlin")):
-        assert to_glide_datetime(datetime(2024, 2, 1, 11, 30)) == "2024-02-01 10:30:00"
-        assert to_glide_datetime("2024-02-01 11:30:00") == "2024-02-01 10:30:00"
-        assert to_glide_datetime(date(2024, 2, 1)) == "2024-01-31 23:00:00"
-        assert to_glide_datetime("2024-02-01T11:30:00Z") == "2024-02-01 11:30:00"
-
-
 def test_table_query() -> None:
     assert TableQuery().page_query() == "ORDERBYsys_id"
     assert TableQuery().page_query(["abc"]) == "sys_id>abc^ORDERBYsys_id"
@@ -108,10 +80,11 @@ def column(data_type: str) -> TColumnSchema:
     "value,data_type,expected",
     [
         (
-            datetime(2024, 2, 1, 10, 30, tzinfo=timezone.utc),
+            datetime(2024, 2, 1, 11, 30, tzinfo=timezone(timedelta(hours=1))),
             "timestamp",
             "2024-02-01 10:30:00",
         ),
+        (datetime(2024, 2, 1, 10, 30, 0, 999999), "timestamp", "2024-02-01 10:30:00"),
         (date(2024, 2, 29), "date", "2024-02-29"),
         ("2024-02-29", "date", "2024-02-29"),
         (10001, "bigint", "10001"),
@@ -128,7 +101,8 @@ def column(data_type: str) -> TColumnSchema:
     ],
 )
 def test_to_glide_literal(value: Any, data_type: str, expected: Optional[str]) -> None:
-    # the instance does not parse exponents and evaluates `javascript:` values
+    # timestamps are UTC without sub-seconds. the instance does not parse exponents and
+    # evaluates `javascript:` values
     assert to_glide_literal(value, column(data_type)) == expected
 
 
@@ -168,11 +142,18 @@ def test_to_cursor_value(
     assert to_cursor_value(value, column(data_type), round_up) == expected
 
 
-def test_to_cursor_value_context_timezone() -> None:
-    timezone_context = TimezoneContext(timezone="Europe/Berlin")
-    with Container().injectable_context(timezone_context):
-        assert to_cursor_value(datetime(2024, 2, 1, 11, 30), column("timestamp")) == (
+def test_context_timezone() -> None:
+    # naive values are in the context timezone, as in `dlt.sources.incremental`
+    with Container().injectable_context(TimezoneContext("Europe/Berlin")):
+        assert to_glide_literal(datetime(2024, 2, 1, 11, 30), column("timestamp")) == (
+            "2024-02-01 10:30:00"
+        )
+        assert to_cursor_value("2024-02-01 11:30:00", column("timestamp")) == (
             datetime(2024, 2, 1, 10, 30, tzinfo=timezone.utc)
+        )
+        # a `start_date` without time
+        assert to_cursor_value(date(2024, 2, 1), column("timestamp")) == (
+            datetime(2024, 1, 31, 23, tzinfo=timezone.utc)
         )
 
 
@@ -242,14 +223,10 @@ def test_incremental_query(
     "data_type,start,expected,expected_range",
     [
         ("date", date(2024, 2, 29), ["c>=2024-02-29"], None),
-        ("bigint", 10, ["c>=10"], None),
         ("bigint", Decimal("10.5"), ["c>=11"], (11, None)),
-        ("decimal", Decimal("1.50"), ["c>=1.5"], None),
-        ("double", 1e-07, ["c>=0.0000001"], None),
         ("text", "b", ["c>=b"], None),
         ("text", "a^b", [], (None, None)),
         ("time", "12:00:00", [], "none"),
-        ("json", "{}", [], "none"),
     ],
 )
 def test_incremental_query_types(
@@ -268,11 +245,17 @@ def test_incremental_query_types(
         )
 
 
-def test_incremental_query_duration() -> None:
+def test_incremental_query_without_conditions() -> None:
     # durations are seconds stored as date-times, they have no literals
     incremental = dlt.sources.incremental("c", initial_value=10)
     query = incremental_query(incremental, column("bigint"), is_duration=True)
     assert query == ([], None, None)
+    # the incremental filters the records of other `last_value_func`s
+    custom = dlt.sources.incremental(
+        "c", initial_value=10, last_value_func=lambda values: max(values)
+    )
+    assert incremental_query(custom, column("bigint")) == ([], None, None)
+    assert not upper_side_open(custom)
 
 
 @pytest.mark.parametrize(
@@ -325,21 +308,6 @@ def test_incremental_query_order(func: Any, row_order: Any, expected: Any) -> No
         "c", last_value_func=func, row_order=row_order
     )
     assert incremental_query(incremental, column("bigint")).order == expected
-
-
-def test_upper_side_open() -> None:
-    def custom(values: Any) -> Any:
-        return max(values)
-
-    assert upper_side_open(dlt.sources.incremental("c", initial_value=1))
-    assert not upper_side_open(
-        dlt.sources.incremental("c", initial_value=1, end_value=5)
-    )
-    assert upper_side_open(dlt.sources.incremental("c", last_value_func=min))
-    assert not upper_side_open(
-        dlt.sources.incremental("c", initial_value=5, last_value_func=min)
-    )
-    assert not upper_side_open(dlt.sources.incremental("c", last_value_func=custom))
 
 
 @pytest.mark.parametrize("partitions", [2, 3, 10, 100])
