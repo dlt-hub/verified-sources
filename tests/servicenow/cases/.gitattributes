@@ -1,0 +1,2 @@
+# captured responses are compared byte by byte, Windows checkouts must not convert line endings
+* -text
