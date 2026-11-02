@@ -1,12 +1,18 @@
-"""Maps `sys_dictionary` fields to dlt columns and picks the cursor and write disposition"""
+"""Reads the `sys_dictionary` fields of tables, maps them to dlt columns and picks the cursor and
+write disposition
+"""
 
-from typing import Any, Dict, List, NamedTuple, Optional, Set
+import threading
+from typing import Any, Dict, List, NamedTuple, Optional, Sequence, Set
 
+from dlt.common import logger
 from dlt.common.schema.typing import (
     TColumnSchema,
     TTableSchemaColumns,
     TWriteDisposition,
 )
+
+from .client import ServiceNowClient, TRecord
 
 PRIMARY_KEY = "sys_id"
 UPDATED_AT_FIELD = "sys_updated_on"
@@ -138,3 +144,136 @@ def get_write_disposition(cursor_field: Optional[str]) -> TWriteDisposition:
     if cursor_field == CREATED_AT_FIELD:
         return "append"
     return "merge"
+
+
+def read_dictionary(client: ServiceNowClient, tables: List[str]) -> List[TRecord]:
+    """Reads the `sys_dictionary` fields of `tables` and of the tables they extend"""
+    all_tables = client.tables()
+    names = {name for table in tables for name in table_chain(all_tables, table)}
+    return client.dictionary(sorted(names)) if names else []
+
+
+class LazyDictionary:
+    """Reads the `sys_dictionary` fields of `tables` once, when the first resource is extracted.
+    The resources of a source share one read. Tables not in `sys_db_object` raise in their own
+    resource, and a failed read raises in every resource.
+    """
+
+    def __init__(self, client: ServiceNowClient, tables: Sequence[str]) -> None:
+        self.client = client
+        self.tables = list(tables)
+        self._dictionary: Optional[List[TRecord]] = None
+        self._error: Optional[Exception] = None
+        self._lock = threading.Lock()
+
+    def __call__(self) -> List[TRecord]:
+        with self._lock:
+            if self._dictionary is None and self._error is None:
+                try:
+                    all_tables = self.client.tables()
+                    known = [table for table in self.tables if table in all_tables]
+                    self._dictionary = read_dictionary(self.client, known)
+                except Exception as ex:
+                    self._error = ex
+            if self._error is not None:
+                raise self._error
+            assert self._dictionary is not None
+            return self._dictionary
+
+
+class DeferredReflect(NamedTuple):
+    """Arguments to read the fields of the table when extracting"""
+
+    dictionary: LazyDictionary
+    included_columns: Optional[List[str]]
+    excluded_columns: Optional[List[str]]
+    required_columns: List[str]
+    default_cursor: bool
+
+
+def reflect_columns(
+    table: str,
+    dictionary: List[TRecord],
+    chain: List[str],
+    included_columns: Optional[List[str]],
+    excluded_columns: Optional[List[str]],
+    required_columns: List[str],
+    cursor_field: Optional[str],
+    delete_column: bool,
+) -> TableColumns:
+    """Returns the columns of `table` from the `sys_dictionary` fields of the tables in `chain`.
+
+    `included_columns` also load `required_columns` and `cursor_field`, `excluded_columns` can skip
+    them. With `delete_column`, records deleted in ServiceNow are deleted from the destination and
+    the latest change wins.
+    """
+    fields = dictionary_to_columns(dictionary, chain).columns
+    for argument, names in (
+        ("included_columns", included_columns),
+        ("excluded_columns", excluded_columns),
+    ):
+        unknown = [name for name in names or [] if name not in fields]
+        if unknown:
+            logger.warning(
+                f"`{argument}` {unknown} are not fields of `{table}` that dlt loads, and dlt"
+                " ignores them."
+            )
+    if included_columns:
+        included_columns = list(
+            dict.fromkeys(
+                [*included_columns, *required_columns, *filter(None, [cursor_field])]
+            )
+        )
+    columns, durations = dictionary_to_columns(
+        dictionary, chain, included_columns, excluded_columns
+    )
+    if PRIMARY_KEY not in columns:
+        raise ValueError(
+            f"dlt cannot read table `{table}` because it has no `{PRIMARY_KEY}` field."
+        )
+    if cursor_field and cursor_field not in columns:
+        raise ValueError(
+            f"Cursor field `{cursor_field}` is not a field of table `{table}`, or"
+            " `excluded_columns` skips it."
+        )
+    if delete_column and cursor_field == UPDATED_AT_FIELD:
+        columns[DELETED_COLUMN] = {
+            "name": DELETED_COLUMN,
+            "data_type": "bool",
+            "hard_delete": True,
+        }
+        columns[UPDATED_AT_FIELD] = {**columns[UPDATED_AT_FIELD], "dedup_sort": "desc"}
+    columns[PRIMARY_KEY] = {**columns[PRIMARY_KEY], "nullable": False}
+    return TableColumns(columns, durations)
+
+
+def reflect_when_extracting(
+    client: ServiceNowClient,
+    table: str,
+    cursor: Optional[str],
+    delete_column: bool,
+    deferred: DeferredReflect,
+) -> TableColumns:
+    """Reads the fields of `table` like `table_resource` does when it is not deferred"""
+    dictionary = deferred.dictionary()
+    chain = table_chain(client.tables(), table)
+    if (
+        deferred.default_cursor
+        and cursor == UPDATED_AT_FIELD
+        and cursor not in dictionary_to_columns(dictionary, chain).columns
+    ):
+        raise ValueError(
+            f"Table `{table}` has no `{UPDATED_AT_FIELD}` field, which the default incremental"
+            " expects when `defer_table_reflect` is set. Pass an explicit incremental or set"
+            " `defer_table_reflect=False`."
+        )
+    return reflect_columns(
+        table,
+        dictionary,
+        chain,
+        deferred.included_columns,
+        deferred.excluded_columns,
+        deferred.required_columns,
+        cursor,
+        delete_column,
+    )

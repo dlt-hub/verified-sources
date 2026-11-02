@@ -1,17 +1,42 @@
 """Builds encoded queries that read a table page by page, ordered by `sys_id` or by a cursor and
-`sys_id`
+`sys_id`. Literals are rendered by the type of the field.
 """
 
+import math
 import re
-from datetime import timezone  # noqa: I251
-from typing import Any, List, Optional, Sequence, Tuple
+from datetime import timedelta, timezone  # noqa: I251
+from typing import Any, List, Literal, NamedTuple, Optional, Sequence
 
-from dlt.common.time import ensure_datetime_in_tz
+from dlt.common import Decimal
+from dlt.common.schema.typing import TColumnSchema
+from dlt.common.time import ensure_date, ensure_datetime_in_tz
 from dlt.extract.incremental import Incremental
 
 GLIDE_DATETIME_FORMAT = "%Y-%m-%d %H:%M:%S"
 # hex digits of the `sys_id` bounds of partitions
 PARTITION_BOUND_DIGITS = 8
+# types that the instance compares with literals. durations are `bigint` seconds stored as
+# date-times, they have no literals
+LITERAL_TYPES = ("timestamp", "date", "bigint", "decimal", "double", "bool", "text")
+
+
+class CursorRange(NamedTuple):
+    """The lowest and the highest cursor value that the conditions of an incremental select, None
+    if the range is open. Text is compared case-insensitively, like the instance does.
+    """
+
+    cursor: str
+    lowest: Any
+    highest: Any
+    casefold: bool
+
+
+class IncrementalQuery(NamedTuple):
+    """Conditions of the current range of an incremental and the order of records by the cursor"""
+
+    conditions: List[str]
+    cursor_range: Optional[CursorRange]
+    order: Optional[Literal["asc", "desc"]]
 
 
 def to_glide_datetime(value: Any) -> str:
@@ -24,6 +49,60 @@ def to_glide_datetime(value: Any) -> str:
         .astimezone(timezone.utc)
         .strftime(GLIDE_DATETIME_FORMAT)
     )
+
+
+def has_literals(column: TColumnSchema, is_duration: bool = False) -> bool:
+    """Tells if the instance compares values of a field with `column` schema with literals"""
+    return not is_duration and column.get("data_type") in LITERAL_TYPES
+
+
+def to_glide_literal(value: Any, column: TColumnSchema) -> Optional[str]:
+    """Renders `value` as an encoded query literal for a field with `column` schema. Returns None
+    for types without literals and for text that cannot be a literal.
+    """
+    data_type = column.get("data_type")
+    if data_type == "timestamp":
+        return to_glide_datetime(value)
+    if data_type == "date":
+        return ensure_date(value).isoformat()
+    if data_type == "bool":
+        return "true" if value else "false"
+    if data_type == "bigint":
+        return str(int(value))
+    if data_type in ("decimal", "double"):
+        # the instance does not parse exponents, Arrow decimals carry the trailing zeros of
+        # their scale
+        return format(_to_decimal(value).normalize(), "f")
+    if data_type == "text" and isinstance(value, str) and is_literal(value):
+        return value
+    return None
+
+
+def to_cursor_value(value: Any, column: TColumnSchema, round_up: bool = False) -> Any:
+    """Converts a bound of a cursor range into the type of the loaded values of `column`. Timestamps
+    and integers are rounded up or down to the whole seconds and integers that the instance stores.
+    """
+    data_type = column.get("data_type")
+    if data_type == "timestamp":
+        value = ensure_datetime_in_tz(value).astimezone(timezone.utc)
+        if value.microsecond:
+            value = value.replace(microsecond=0) + timedelta(seconds=int(round_up))
+        return value
+    if data_type == "date":
+        return ensure_date(value)
+    if data_type == "bigint":
+        return math.ceil(value) if round_up else math.floor(value)
+    if data_type == "decimal":
+        # bounds of decimal cursors are decimals or integers, `check_cursor_types` rejects floats
+        return Decimal(value)
+    if data_type == "double":
+        return float(value)
+    return value
+
+
+def _to_decimal(value: Any) -> Decimal:
+    # a float is converted from its shortest text, not from its binary value
+    return Decimal(repr(value)) if isinstance(value, float) else Decimal(value)
 
 
 def is_literal(value: str) -> bool:
@@ -128,55 +207,74 @@ def partition_conditions(after: str, partitions: int) -> List[List[str]]:
     return ranges
 
 
-def incremental_conditions(
-    incremental: Incremental[Any], cursor: str, window_end: Any
-) -> List[str]:
-    """Returns the conditions that select the records in the current range of `incremental` on
-    the `cursor` field. The conditions also select only records changed before `window_end`. With
-    `min` the range goes back from its start. A range without start or end also selects records
-    with an empty cursor, unless the incremental excludes them.
-
-    Returns no conditions for other `last_value_func`s. The incremental then filters the records.
+def upper_side_open(incremental: Incremental[Any]) -> bool:
+    """Tells if the current range of `incremental` has no upper end, so it also selects records
+    written while the run reads the table: no `end_value` with `max`, no start with `min`
     """
     if incremental.last_value_func not in (max, min):
-        return []
-    grows = incremental.last_value_func is max
+        return False
     start, end = incremental.get_current_range()
-    conditions = []
-    if start is not None:
-        op = ">" if grows else "<"
-        if incremental.range_start == "closed":
-            op += "="
-        conditions.append(f"{cursor}{op}{to_glide_datetime(start)}")
-    if end is not None:
-        op = "<" if grows else ">"
-        if incremental.range_end == "closed":
-            op += "="
-        conditions.append(f"{cursor}{op}{to_glide_datetime(end)}")
-    window = f"{cursor}<{to_glide_datetime(window_end)}"
-    if (
-        start is None
-        and end is None
-        and incremental.on_cursor_value_missing != "exclude"
-    ):
+    return (end if incremental.last_value_func is max else start) is None
+
+
+def incremental_query(
+    incremental: Incremental[Any],
+    column: TColumnSchema,
+    is_duration: bool = False,
+    upper_bound: Any = None,
+) -> IncrementalQuery:
+    """Returns the conditions that select the records in the current range of `incremental` on the
+    field of `column`. Also returns the order of records that `row_order` sets.
+
+    `upper_bound`, the time of the instance for a timestamp cursor, ends a range that has no upper
+    end. With `min` the range goes back from its start. On the first run,
+    `on_cursor_value_missing="include"` also selects records with an empty cursor.
+
+    Returns no conditions for types without literals and for other `last_value_func`s. The
+    incremental then filters the records.
+    """
+    cursor = column["name"]
+    func = incremental.last_value_func
+    order: Optional[Literal["asc", "desc"]] = None
+    if incremental.row_order:
+        order = "desc" if (incremental.row_order == "asc") == (func is min) else "asc"
+    if func not in (max, min) or not has_literals(column, is_duration):
+        return IncrementalQuery([], None, order)
+    start, end = incremental.get_current_range()
+    first_run = start is None and end is None
+    if func is max:
+        lower, upper = start, end
+        lower_op = ">=" if incremental.range_start == "closed" else ">"
+        upper_op = "<=" if incremental.range_end == "closed" else "<"
+    else:
+        lower, upper = end, start
+        lower_op = ">=" if incremental.range_end == "closed" else ">"
+        upper_op = "<=" if incremental.range_start == "closed" else "<"
+    if upper is None and upper_bound is not None:
+        upper, upper_op = upper_bound, "<"
+
+    conditions: List[str] = []
+    lowest = highest = None
+    if lower is not None:
+        lowest = to_cursor_value(lower, column, round_up=lower_op == ">=")
+        literal = to_glide_literal(lowest, column)
+        if literal is None:
+            lowest = None
+        else:
+            conditions.append(f"{cursor}{lower_op}{literal}")
+    if upper is not None:
+        highest = to_cursor_value(upper, column, round_up=upper_op == "<")
+        literal = to_glide_literal(highest, column)
+        if literal is None:
+            highest = None
+        else:
+            conditions.append(f"{cursor}{upper_op}{literal}")
+    if first_run and incremental.on_cursor_value_missing == "include" and conditions:
         # range conditions do not select empty values
-        window += f"^OR{cursor}ISEMPTY"
-    conditions.append(window)
-    return conditions
-
-
-def incremental_range(
-    incremental: Incremental[Any], window_end: Any
-) -> Optional[Tuple[Optional[str], str]]:
-    """Returns the lowest and the highest cursor value selected by `incremental_conditions` as
-    literals, None if all values are selected
-    """
-    if incremental.last_value_func not in (max, min):
-        return None
-    start, end = incremental.get_current_range()
-    if incremental.last_value_func is min:
-        start, end = end, start
-    last = to_glide_datetime(window_end)
-    if end is not None:
-        last = min(last, to_glide_datetime(end))
-    return (to_glide_datetime(start) if start is not None else None), last
+        conditions[-1] += f"^OR{cursor}ISEMPTY"
+    if incremental.on_cursor_value_missing == "exclude" and not conditions:
+        conditions.append(f"{cursor}ISNOTEMPTY")
+    cursor_range = CursorRange(
+        cursor, lowest, highest, casefold=column.get("data_type") == "text"
+    )
+    return IncrementalQuery(conditions, cursor_range, order)

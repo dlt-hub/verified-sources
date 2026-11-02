@@ -1,12 +1,15 @@
-from datetime import date, time, timezone  # noqa: I251
+from concurrent.futures import ThreadPoolExecutor
 from typing import Any, Dict, Optional
 
 import dlt
 import pytest
+from pytest_mock import MockerFixture
 
 from sources.servicenow import servicenow_table
+from sources.servicenow.helpers.client import ServiceNowClient
 from sources.servicenow.helpers.credentials import BasicCredentials
 from sources.servicenow.helpers.schema import (
+    LazyDictionary,
     descendant_tables,
     dictionary_to_columns,
     internal_type_to_column,
@@ -154,3 +157,37 @@ def test_servicenow_table_dispositions(
     with pytest.raises(ValueError, match="no `sys_id`"):
         instance.add_table("sys_id_less", {"name": "string"})
         servicenow_table(credentials=credentials, table="sys_id_less")
+
+
+def test_lazy_dictionary(
+    instance: FakeInstance, credentials: BasicCredentials, mocker: MockerFixture
+) -> None:
+    add_task_tables(instance)
+    client = ServiceNowClient(credentials)
+    dictionary = mocker.spy(client, "dictionary")
+    lazy = LazyDictionary(client, ["incident", "u_missing"])
+    assert instance.requests == []
+    # resources of a source call it from the extract worker threads, one of them reads
+    with ThreadPoolExecutor(8) as pool:
+        results = list(pool.map(lambda _: lazy(), range(8)))
+    assert dictionary.call_count == 1
+    # unknown tables are skipped, the tables that `incident` extends are read
+    assert dictionary.call_args.args[0] == ["incident", "task"]
+    assert all(result is results[0] for result in results)
+    assert {entry["name"] for entry in results[0]} == {"incident", "task"}
+
+
+def test_lazy_dictionary_failure(
+    instance: FakeInstance, credentials: BasicCredentials, mocker: MockerFixture
+) -> None:
+    add_task_tables(instance)
+    client = ServiceNowClient(credentials)
+    dictionary = mocker.patch.object(
+        client, "dictionary", side_effect=ValueError("no access")
+    )
+    lazy = LazyDictionary(client, ["incident"])
+    # a failed read raises in every resource and is not repeated
+    for _ in range(3):
+        with pytest.raises(ValueError, match="no access"):
+            lazy()
+    assert dictionary.call_count == 1

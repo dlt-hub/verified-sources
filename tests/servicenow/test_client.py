@@ -1,6 +1,6 @@
 import json
 import threading
-from datetime import datetime, time, timedelta, timezone  # noqa: I251
+from datetime import datetime, timedelta, timezone  # noqa: I251
 from email.utils import format_datetime
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from typing import Any, List, Optional

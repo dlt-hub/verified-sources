@@ -24,20 +24,17 @@ from typing import Any, Dict, List, Optional
 # dlt resolves config and secrets from sources/.dlt, like in tests
 os.environ.setdefault("DLT_PROJECT_DIR", "sources")
 
-import dlt
 from dlt.common import Decimal
-from dlt.common.configuration import with_config
 
 from sources.servicenow.helpers.client import (
     CSV_EXPORT_PARAMS,
     TABLE_API_PARAMS,
     ServiceNowClient,
 )
-from sources.servicenow.helpers.credentials import ServiceNowAuth, ServiceNowCredentials
 from sources.servicenow.helpers.query import GLIDE_DATETIME_FORMAT, TableQuery
 
 from tests.servicenow.seed import data
-from tests.servicenow.utils import get_credentials
+from tests.servicenow.utils import get_credentials, wait_for_instance
 
 # user names of the account are not captured
 NOT_CAPTURED = {"sys_created_by", "sys_updated_by"}
@@ -285,6 +282,7 @@ def capture_hidden(client: ServiceNowClient) -> None:
 if __name__ == "__main__":
     command = sys.argv[1] if len(sys.argv) > 1 else "all"
     sn_client = ServiceNowClient(get_credentials())
+    wait_for_instance(sn_client)
     commands: List[str] = (
         ["deploy", "load", "capture"] if command == "all" else [command]
     )

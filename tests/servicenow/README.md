@@ -9,7 +9,8 @@
 ## Test instance
 
 The tests use a Personal Developer Instance (PDI) from https://developer.servicenow.com. It hibernates when idle and
-is reclaimed after 10 days without a login. Wake it up before you run the tests.
+is reclaimed after 10 days without a login. Wake it up before you run the tests: the live tests and the
+seed wait up to 5 minutes while the instance answers with its HTML page (`wait_for_instance` in `utils.py`).
 
 1. Request a PDI and note its name, for example `dev12345`.
 2. Create a user for the tests with the `admin` role: the seed creates a table and its fields. For basic

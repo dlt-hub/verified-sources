@@ -18,13 +18,8 @@ from dlt.sources.helpers.requests import Session
 
 from .helpers.client import ServiceNowClient
 from .helpers.credentials import ServiceNowAuth
-from .helpers.table import (
-    SOURCE_SECTION,
-    TReadApi,
-    TTableBackend,
-    read_dictionary,
-    table_resource,
-)
+from .helpers.schema import LazyDictionary, read_dictionary
+from .helpers.table import SOURCE_SECTION, TReadApi, TTableBackend, table_resource
 
 # IT service management, service catalog, knowledge, users, organization and CMDB tables
 DEFAULT_TABLES = (
@@ -62,6 +57,7 @@ def servicenow_source(
     page_size: int = 10000,
     allow_partitioned_load: bool = True,
     max_partitions: int = 10,
+    defer_table_reflect: bool = False,
 ) -> Iterable[DltResource]:
     """Loads ServiceNow tables, by default the most common tables in `DEFAULT_TABLES`.
 
@@ -96,6 +92,9 @@ def servicenow_source(
         allow_partitioned_load (bool): Reads tables of more than one page in `sys_id` ranges in
             parallel. See `servicenow_table`.
         max_partitions (int): Maximum number of `sys_id` ranges of a table.
+        defer_table_reflect (bool): Reads the fields of all tables only when extracting, with
+            one query of `sys_dictionary`, so creating the source makes no API calls. Enable when
+            running on Airflow. See `servicenow_table`.
 
     Returns:
         Iterable[DltResource]: Resources loading the tables.
@@ -107,7 +106,12 @@ def servicenow_source(
             f"`encoded_queries` contains unknown tables that are not in `tables`: {sorted(unknown)}"
         )
     client = ServiceNowClient(credentials, session)
-    dictionary = read_dictionary(client, list(tables))
+    if defer_table_reflect:
+        dictionary = None
+        lazy_dictionary: Optional[LazyDictionary] = LazyDictionary(client, tables)
+    else:
+        dictionary = read_dictionary(client, list(tables))
+        lazy_dictionary = None
     return [
         table_resource(
             client,
@@ -123,6 +127,8 @@ def servicenow_source(
             max_partitions=max_partitions,
             write_disposition=write_disposition,
             parallelized=True,
+            defer_table_reflect=defer_table_reflect,
+            lazy_dictionary=lazy_dictionary,
         )
         for table in tables
     ]
@@ -151,6 +157,7 @@ def servicenow_table(
     write_disposition: Optional[TWriteDispositionConfig] = None,
     primary_key: TColumnNames = None,
     merge_key: TColumnNames = None,
+    defer_table_reflect: bool = False,
 ) -> DltResource:
     """Loads a single table, including custom tables, ordered by `sys_id`.
 
@@ -172,10 +179,14 @@ def servicenow_table(
             default one. Its lag is used, and dlt deduplicates the records with the last cursor
             value. An incremental set with `apply_hints` replaces the default one in the same
             way. With `last_value_func` `max` or `min`, the encoded query selects the cursor
-            range. `min` goes back in time and does not read deleted records. With `row_order`,
-            records are read ordered by the cursor, newest first with `min`. This order needs an
-            index on the cursor field in large tables. `add_limit` is safe to use only with
-            `row_order`.
+            range on date-time, date, number and text fields. The instance compares text
+            case-insensitively. A range of a date-time cursor without an upper end ends at the
+            time of the instance when the run starts. For other field
+            types dlt reads all records and the incremental filters them. `min` goes back in time
+            and does not read deleted records. With `row_order`, records are read ordered by the
+            cursor, newest first with `min`. This order needs an index on the cursor field in
+            large tables. `add_limit` is safe to use only with `row_order`. dlt does not support
+            `lag` on decimal cursors.
         lag (Optional[float]): Lag of the default incremental in seconds. Each run reads again
             the records changed in this time before the last cursor value, to catch records
             committed late. 600 when merging, None otherwise.
@@ -208,9 +219,15 @@ def servicenow_table(
         excluded_columns (Optional[List[str]]): Fields to skip.
         write_disposition (Optional[TWriteDispositionConfig]): If not set: "merge" for a cursor
             on `sys_updated_on` or a custom field, "append" for tables with only a
-            `sys_created_on` cursor, "replace" without incremental.
+            `sys_created_on` cursor, "replace" without incremental. `{"disposition": "replace"}`
+            keeps the incremental state, so the table is replaced with the records changed
+            since the last run.
         primary_key (TColumnNames): Primary key, `sys_id` if not set.
         merge_key (TColumnNames): Merge key of the resource.
+        defer_table_reflect (bool): Reads the fields of the table only when extracting, so
+            creating the resource makes no API calls. Enable when running on Airflow. Column
+            hints are then set when extracting, and the default incremental expects
+            `sys_updated_on`, which nearly all tables have.
 
     Returns:
         DltResource: The dlt resource loading the table.
@@ -235,4 +252,5 @@ def servicenow_table(
         write_disposition=write_disposition,
         primary_key=primary_key,
         merge_key=merge_key,
+        defer_table_reflect=defer_table_reflect,
     )

@@ -1,5 +1,5 @@
 import json
-from datetime import date, time, timezone  # noqa: I251
+from datetime import time  # noqa: I251
 
 import dlt
 from dlt.common import Decimal

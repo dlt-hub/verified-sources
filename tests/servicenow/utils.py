@@ -4,6 +4,7 @@ import re
 import threading
 from datetime import date, datetime, time, timezone  # noqa: I251
 from email.utils import format_datetime
+from time import monotonic, sleep
 from typing import Any, Callable, Dict, List, Optional, Set, Tuple
 from urllib.parse import parse_qs, urlparse
 
@@ -12,6 +13,7 @@ import requests_mock
 from dlt.common import Decimal
 from dlt.common.configuration import with_config
 
+from sources.servicenow.helpers.client import ServiceNowClient
 from sources.servicenow.helpers.credentials import ServiceNowAuth, ServiceNowCredentials
 
 INSTANCE = "dev1"
@@ -52,13 +54,25 @@ def _csv_line(values: List[Optional[str]]) -> str:
     )
 
 
+# internal types that the instance compares and sorts as numbers
+NUMERIC_TYPES = {"integer", "longint", "decimal", "currency", "price", "float"}
+
+
+def _sort_key(value: str, numeric: bool) -> Any:
+    # empty values come first in ascending order
+    return (value != "", Decimal(value) if numeric and value else value)
+
+
 def _matches(
-    record: TRecord, condition: str, collation: Callable[[str], str] = str
+    record: TRecord,
+    condition: str,
+    collation: Callable[[str], str] = str,
+    numeric_fields: Set[str] = frozenset(),  # type: ignore[assignment]
 ) -> bool:
     match = _CONDITION.match(condition)
     assert match, f"unsupported condition `{condition}`"
     field, op, value = match.groups()
-    actual = collation(record.get(field, ""))
+    actual: Any = collation(record.get(field, ""))
     value = collation(value)
     if op == "ISNOTEMPTY":
         return actual != ""
@@ -70,6 +84,8 @@ def _matches(
         return False
     if op == "IN":
         return actual in value.split(",")
+    if field in numeric_fields:
+        actual, value = Decimal(actual), Decimal(value)
     return {
         ">=": actual >= value,
         "<=": actual <= value,
@@ -81,11 +97,14 @@ def _matches(
 
 
 def evaluate_query(
-    records: List[TRecord], query: str, collation: Callable[[str], str] = str
+    records: List[TRecord],
+    query: str,
+    collation: Callable[[str], str] = str,
+    numeric_fields: Set[str] = frozenset(),  # type: ignore[assignment]
 ) -> List[TRecord]:
     """Filters and orders `records` by an encoded query with AND, OR, NQ, ORDERBY and ORDERBYDESC
-    parts. Values are compared with `collation` applied. Empty values sort first in ascending
-    order and last in descending order.
+    parts. Values are compared with `collation` applied, `numeric_fields` as numbers. Empty values
+    sort first in ascending order and last in descending order.
     """
     # blocks of conditions, each condition is a list of alternatives joined by OR
     blocks: List[List[List[str]]] = [[]]
@@ -107,7 +126,7 @@ def evaluate_query(
         if any(
             all(
                 any(
-                    _matches(record, alternative, collation)
+                    _matches(record, alternative, collation, numeric_fields)
                     for alternative in condition
                 )
                 for condition in block
@@ -118,7 +137,10 @@ def evaluate_query(
     # stable sorts from the last key to the first
     for key, descending in reversed(order_by):
         selected.sort(
-            key=lambda record: collation(record.get(key, "")), reverse=descending
+            key=lambda record: _sort_key(
+                collation(record.get(key, "")), key in numeric_fields
+            ),
+            reverse=descending,
         )
     return selected
 
@@ -275,8 +297,16 @@ class FakeInstance:
                 for field in self.ignored_fields
             )
         ]
+        numeric_fields = {
+            field
+            for field, type_ in self.field_types.get(table, {}).items()
+            if type_ in NUMERIC_TYPES
+        }
         matching = evaluate_query(
-            self.tables[table], "^".join(filter(None, tokens)), self.collation
+            self.tables[table],
+            "^".join(filter(None, tokens)),
+            self.collation,
+            numeric_fields,
         )
         offset = int(params.get("sysparm_offset", 0))
         records = [
@@ -496,3 +526,23 @@ def get_credentials(
 ) -> ServiceNowCredentials:
     """Returns the credentials of the test instance from the dlt config"""
     return credentials
+
+
+def wait_for_instance(
+    client: ServiceNowClient, timeout: float = 300, interval: float = 15
+) -> None:
+    """Waits until a developer instance that wakes up from hibernation answers with JSON instead of
+    an HTML page. Other errors raise at once.
+    """
+    deadline = monotonic() + timeout
+    while True:
+        try:
+            client.get(
+                "v2/table/sys_db_object",
+                {"sysparm_limit": 1, "sysparm_fields": "sys_id"},
+            )
+            return
+        except ValueError as ex:
+            if "HTML page" not in str(ex) or monotonic() > deadline:
+                raise
+        sleep(interval)

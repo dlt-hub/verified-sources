@@ -1,6 +1,5 @@
 from typing import Any, Dict, Optional
 
-import dlt
 import pytest
 from dlt.extract.exceptions import ResourceExtractionError
 

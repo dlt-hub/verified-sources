@@ -11,8 +11,9 @@ types come from `sys_dictionary`, and deletes come from `sys_audit_delete`. Setu
 ### 1.0.0
 **Upgrade**: new source.
 - new `servicenow_source` and `servicenow_table`: incremental merge on `sys_updated_on` with deletes,
-  `start_date`, your own `max` or `min` incremental, the Table API or the CSV export, `python` and
-  `pyarrow` backends, and `sys_id` ranges read in parallel
+  `start_date`, your own `max` or `min` incremental on date-time, date, number and text fields, the
+  Table API or the CSV export, `python` and `pyarrow` backends, `sys_id` ranges read in parallel,
+  and `defer_table_reflect`
 
 ## Extension points
 
@@ -32,6 +33,13 @@ types come from `sys_dictionary`, and deletes come from `sys_audit_delete`. Setu
 - The incremental: `table_resource` of `helpers/table.py` creates the default incremental with its
   lag and without deduplication. `table_rows` builds the queries and reads deletes from the
   incremental that dlt passes, so an incremental set with `apply_hints` replaces the default one.
+- Query literals of a field type: `to_glide_literal` and `LITERAL_TYPES` in `helpers/query.py`,
+  the counterpart of `to_soql_literal` in the Salesforce source. `incremental_query` turns an
+  incremental into conditions, the typed `CursorRange` that `check_cursor_range` checks loaded
+  values against, and the order of records.
+- Reading fields: `helpers/schema.py`. `reflect_columns` computes the columns when the resource is
+  created or, with `DeferredReflect`, when extracting. `LazyDictionary` reads `sys_dictionary` once
+  for all resources of a source.
 - A retried response: `_should_retry` of `helpers/client.py`, passed to dlt's `Client` in
   `make_session`.
 - An auth method: a credentials class in `helpers/credentials.py`, added to `ServiceNowAuth`.
@@ -70,9 +78,8 @@ other connectors.
 
 - **Throughput**: the instance checks field ACLs for every value it returns. A page of 10000
   `sys_dictionary` records with 59 fields takes about 38 s, 27 s of it ACL time in
-  `syslog_transaction`. With 12 fields, a page takes about 6.5 s (test instance). Published numbers
-  agree: about 200 records/s for wide tables
-  ([Splunk add-on benchmark](https://splunk.github.io/splunk-add-on-for-servicenow/Performancebenchmark)).
+  `syslog_transaction`. With 12 fields, a page takes about 6.5 s (test instance). Benchmarks
+  published by other connectors agree: about 200 records/s for wide tables.
   `syslog_transaction` splits the time of each request into SQL, ACL and wait times.
 - **Sessions**: the instance runs one transaction per session. Requests that shared the session
   cookie waited 3 to 10 s each (`session_wait_time`), so the session does not keep cookies. A new
@@ -109,8 +116,18 @@ other connectors.
   so a larger `page_size` is lowered to 10000 with a warning. Without it, a page of 20000 is never
   full, and dlt does not read in `sys_id` ranges.
 - **Dates**: date literals in queries compare in UTC, whatever the time zone of the API user. Only
-  `javascript:gs.dateGenerate()` uses the time zone of the API user. Empty values sort first in ascending and last in descending
-  order, and range conditions do not select them (test instance).
+  `javascript:gs.dateGenerate()` uses the time zone of the API user. Empty values sort first in
+  ascending and last in descending order, and range conditions do not select them (test instance).
+- **Query literals**, checked with read-only queries on the seeded tables (test instance):
+  - Integers compare and sort as numbers: `u_number>99` selects 950 of 0..1049, and `ORDERBY`
+    puts 9 before 10.
+  - `u_date>=2024-02-29` and `u_date>=2024-02-29 00:00:00` select the same records.
+  - Decimals, currency, longints above 2^53 and floats written without exponent compare as numbers.
+    The instance does not parse exponents. Empty currencies are stored as `0`.
+  - `>` works on text, but case-insensitively: `types-n` and `TYPES-N` select the same records,
+    while Python compares case-sensitively.
+  - A condition on a field that does not exist is ignored, so all records are returned. The typed
+    range check catches it.
 - **Deletes**: `glide.ui.audit_deleted_tables` decides which `sys_*` tables audit deletes.
   `sys_choice` is not one of them (test instance).
 - **Timestamp ties**: 588 `sys_choice` records share one second and 86446 `sys_dictionary` records

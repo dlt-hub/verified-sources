@@ -16,7 +16,7 @@ from sources.servicenow.helpers.client import (
 )
 
 from tests.servicenow.seed import data
-from tests.servicenow.utils import get_credentials
+from tests.servicenow.utils import get_credentials, wait_for_instance
 from tests.utils import (
     ALL_DESTINATIONS,
     assert_load_info,
@@ -26,6 +26,12 @@ from tests.utils import (
 )
 
 # tests below read the instance seeded with tests/servicenow/seed/seed.py, see README.md
+
+
+@pytest.fixture(scope="module", autouse=True)
+def awake_instance() -> None:
+    # developer instances hibernate when idle and answer with an HTML page while they wake up
+    wait_for_instance(ServiceNowClient(get_credentials()))
 
 
 def readable_sys_ids(table: str) -> Set[str]:
@@ -284,18 +290,20 @@ READERS = pytest.mark.parametrize(
 
 
 def seeded(
-    backend: str, api: str, partitioned: bool = False, **incremental_args: Any
+    backend: str,
+    api: str,
+    partitioned: bool = False,
+    cursor: str = data.INCREMENTAL_CURSOR,
+    **incremental_args: Any,
 ) -> DltResource:
-    """The seeded incremental table with an incremental on its cursor"""
+    """The seeded incremental table with an incremental on `cursor`"""
     return servicenow_table(
         table=data.DLT_INCREMENTAL,
         page_size=data.CHUNK_SIZE,
         backend=backend,
         api=api,
         allow_partitioned_load=partitioned,
-        incremental=dlt.sources.incremental(
-            data.INCREMENTAL_CURSOR, **incremental_args
-        ),
+        incremental=dlt.sources.incremental(cursor, **incremental_args),
     )
 
 
@@ -431,3 +439,52 @@ def test_seeded_chunks(
     )
     # checked last so that rows skipped or repeated above surface first
     assert last_value.tzinfo is not None
+
+
+@skip_if_not_active("duckdb")
+@READERS
+@pytest.mark.parametrize("last_value_func", [max, min])
+def test_seeded_integer_chunks(backend: str, api: str, last_value_func: Any) -> None:
+    # the instance compares and orders integers as numbers, 9 before 10
+    records = data.incremental_records()
+    expected = sorted(
+        (record["u_number"] for record in records), reverse=last_value_func is min
+    )
+    table = seeded(
+        backend,
+        api,
+        cursor="u_number",
+        last_value_func=last_value_func,
+        row_order="asc",
+        range_start="open",
+    )
+    pipeline = dlt.pipeline(
+        pipeline_name=f"servicenow_seeded_integer_{backend}_{api}",
+        destination="duckdb",
+        dev_mode=True,
+    )
+    for start in range(0, len(expected), data.CHUNK_SIZE):
+        chunk = expected[start : start + data.CHUNK_SIZE]
+        assert_load_info(pipeline.run(table.add_limit(1)))
+        assert last_row_count(pipeline) == len(chunk)
+        assert table.state["incremental"]["u_number"]["last_value"] == chunk[-1]
+    pipeline.run(table)
+    assert last_row_count(pipeline) == 0
+    assert loaded_seed_ids(pipeline) == sorted(
+        record[data.SEED_ID_FIELD] for record in records
+    )
+
+
+@skip_if_not_active("duckdb")
+def test_seeded_deferred() -> None:
+    # the fields are read when extracting, the default incremental merges on `sys_updated_on`
+    table = servicenow_table(table=data.DLT_INCREMENTAL, defer_table_reflect=True)
+    pipeline = dlt.pipeline(
+        pipeline_name="servicenow_seeded_deferred", destination="duckdb", dev_mode=True
+    )
+    assert_load_info(pipeline.run(table))
+    assert last_row_count(pipeline) == data.INCREMENTAL_RECORDS
+    columns = pipeline.default_schema.get_table_columns(data.DLT_INCREMENTAL)
+    assert columns["u_number"]["data_type"] == "bigint"
+    assert columns[data.INCREMENTAL_CURSOR]["data_type"] == "timestamp"
+    assert columns["is_deleted"]["hard_delete"] is True

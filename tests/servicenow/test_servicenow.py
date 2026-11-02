@@ -3,6 +3,7 @@ from typing import Optional
 
 import dlt
 import pytest
+from dlt.pipeline.exceptions import PipelineStepFailed
 
 from sources.servicenow import DEFAULT_TABLES, servicenow_source
 from sources.servicenow.helpers.credentials import BasicCredentials
@@ -63,6 +64,43 @@ def test_servicenow_source(
         servicenow_source(
             credentials=credentials, encoded_queries={"incidents": "active=true"}
         )
+
+
+def test_servicenow_source_deferred(
+    instance: FakeInstance, credentials: BasicCredentials
+) -> None:
+    for table in DEFAULT_TABLES:
+        instance.add_table(
+            table,
+            {"sys_id": "GUID", "name": "string", "sys_updated_on": "glide_date_time"},
+            records=make_records(2, updated_on, name=table),
+        )
+    instance.tables["sys_audit_delete"] = []
+    source = servicenow_source(credentials=credentials, defer_table_reflect=True)
+    # creating the source makes no requests
+    assert instance.requests == []
+    pipeline = dlt.pipeline(
+        pipeline_name="servicenow_source_deferred", destination="duckdb", dev_mode=True
+    )
+    assert_load_info(pipeline.run(source))
+    assert load_table_counts(pipeline, *DEFAULT_TABLES) == {
+        name: 2 for name in DEFAULT_TABLES
+    }
+    # the resources share one read of the fields of all tables
+    dictionary = [name for name, _, _ in instance.requests if name == "sys_dictionary"]
+    assert len(dictionary) == 3
+    columns = pipeline.default_schema.get_table_columns("incident")
+    assert columns["sys_updated_on"]["data_type"] == "timestamp"
+    assert columns["is_deleted"]["hard_delete"] is True
+
+    # an unknown table fails in its own resource
+    source = servicenow_source(
+        credentials=credentials,
+        tables=["incident", "u_missing"],
+        defer_table_reflect=True,
+    )
+    with pytest.raises(PipelineStepFailed, match="not in `sys_db_object`"):
+        pipeline.run(source)
 
 
 @pytest.mark.parametrize(
