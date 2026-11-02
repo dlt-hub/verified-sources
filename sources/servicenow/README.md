@@ -33,10 +33,9 @@ types come from `sys_dictionary`, and deletes come from `sys_audit_delete`. Setu
 - The incremental: `table_resource` of `helpers/table.py` creates the default incremental with its
   lag and without deduplication. `table_rows` builds the queries and reads deletes from the
   incremental that dlt passes, so an incremental set with `apply_hints` replaces the default one.
-- Query literals of a field type: `to_glide_literal` and `LITERAL_TYPES` in `helpers/query.py`,
-  the counterpart of `to_soql_literal` in the Salesforce source. `incremental_query` turns an
-  incremental into conditions, the typed `CursorRange` that `check_cursor_range` checks loaded
-  values against, and the order of records.
+- Query literals of a field type: `to_glide_literal` and `LITERAL_TYPES` in `helpers/query.py`.
+  `incremental_query` turns an incremental into conditions, the typed `CursorRange` that
+  `check_cursor_range` checks loaded values against, and the order of records.
 - Reading fields: `helpers/schema.py`. `reflect_columns` computes the columns when the resource is
   created or, with `DeferredReflect`, when extracting. `LazyDictionary` reads `sys_dictionary` once
   for all resources of a source.

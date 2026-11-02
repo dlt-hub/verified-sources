@@ -5,10 +5,17 @@ import dlt
 import pytest
 from dlt.pipeline.exceptions import PipelineStepFailed
 
-from sources.servicenow import DEFAULT_TABLES, servicenow_source
+from sources.servicenow import DEFAULT_TABLES, servicenow_source, servicenow_table
+from sources.servicenow.helpers.client import make_session
 from sources.servicenow.helpers.credentials import BasicCredentials
 
-from tests.servicenow.utils import FakeInstance, make_records, updated_on
+from tests.servicenow.utils import (
+    FakeInstance,
+    add_task_tables,
+    item_rows,
+    make_records,
+    updated_on,
+)
 from tests.utils import assert_load_info, load_table_counts
 
 
@@ -131,3 +138,19 @@ def test_servicenow_source_start_date(
     )
     assert_load_info(pipeline.run(source))
     assert load_table_counts(pipeline, *tables) == {table: 6 for table in tables}
+
+
+def test_servicenow_table_session(
+    instance: FakeInstance, credentials: BasicCredentials
+) -> None:
+    add_task_tables(instance, make_records(3, updated_on))
+    session = make_session()
+    session.headers["X-Session"] = "custom"
+    resource = servicenow_table(
+        credentials=credentials,
+        table="incident",
+        session=session,
+        write_disposition="replace",
+    )
+    assert len(item_rows(list(resource))) == 3
+    assert all(headers["X-Session"] == "custom" for _, _, headers in instance.requests)

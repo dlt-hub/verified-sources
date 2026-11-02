@@ -142,6 +142,7 @@ def servicenow_source(
 def servicenow_table(
     credentials: ServiceNowAuth = dlt.secrets.value,
     table: str = dlt.config.value,
+    session: Optional[Session] = None,
     start_date: Optional[TAnyDateTime] = None,
     incremental: Optional[dlt.sources.incremental[Any]] = None,
     lag: Optional[float] = None,
@@ -169,6 +170,7 @@ def servicenow_table(
         credentials (ServiceNowAuth): Instance and OAuth, API key or basic auth credentials.
         table (str): Name of the table, for example `incident` or `u_custom_table`. Config is
             resolved under `sources.servicenow.<table>`.
+        session (Optional[Session]): Requests session. See `servicenow_source`.
         start_date (Optional[TAnyDateTime]): Loads records changed since this date on the first
             run, all records if not set. It is the initial value of the default incremental, on
             `sys_updated_on` or else on `sys_created_on`. Records without a cursor value are read
@@ -176,17 +178,9 @@ def servicenow_table(
             all records, or the records changed since `start_date`, on each run. Records changed
             during the run are read on the next run.
         incremental (Optional[dlt.sources.incremental[Any]]): Your own incremental instead of the
-            default one. Its lag is used, and dlt deduplicates the records with the last cursor
-            value. An incremental set with `apply_hints` replaces the default one in the same
-            way. With `last_value_func` `max` or `min`, the encoded query selects the cursor
-            range on date-time, date, number and text fields. The instance compares text
-            case-insensitively. A range of a date-time cursor without an upper end ends at the
-            time of the instance when the run starts. For other field
-            types dlt reads all records and the incremental filters them. `min` goes back in time
-            and does not read deleted records. With `row_order`, records are read ordered by the
-            cursor, newest first with `min`. This order needs an index on the cursor field in
-            large tables. `add_limit` is safe to use only with `row_order`. dlt does not support
-            `lag` on decimal cursors.
+            default one, with its lag and deduplication. An incremental set with `apply_hints`
+            replaces the default one in the same way. Cursor types and chunked loads with
+            `row_order` and `add_limit` are described in the dlt docs.
         lag (Optional[float]): Lag of the default incremental in seconds. Each run reads again
             the records changed in this time before the last cursor value, to catch records
             committed late. 600 when merging, None otherwise.
@@ -235,7 +229,7 @@ def servicenow_table(
     if start_date is not None and incremental is not None:
         raise ValueError("Pass `start_date` or `incremental`, not both")
     return table_resource(
-        ServiceNowClient(credentials),
+        ServiceNowClient(credentials, session),
         table,
         start_date=start_date,
         incremental=incremental,
