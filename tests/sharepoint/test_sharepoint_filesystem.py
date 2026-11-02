@@ -710,6 +710,25 @@ def test_sharepoint_files_config_from_env(
     ]
 
 
+@pytest.mark.parametrize(
+    "section",
+    [
+        pytest.param("SOURCES__SHAREPOINT__SHAREPOINT_FOLDER", id="resource_section"),
+        pytest.param("SOURCES__SHAREPOINT", id="source_section"),
+    ],
+)
+def test_sharepoint_folder_config_from_env(
+    graph: Mocker, monkeypatch: pytest.MonkeyPatch, section: str
+) -> None:
+    monkeypatch.setenv(f"{section}__FOLDER_PATH", "Reports")
+    monkeypatch.setenv(f"{section}__FILE_GLOB", "*.csv")
+    mock_files(graph, {"a.csv": b"n\n1\n", "b.txt": b"n\n2\n"})
+
+    rows = list(sharepoint_folder() | read_files("csv"))
+
+    assert [(row["n"], row["file_name"]) for row in rows] == [(1, "a.csv")]
+
+
 def test_sharepoint_files_excel_sheets(graph: Mocker) -> None:
     content = excel_bytes(
         {"Data": [["id", "v"], [1, "a"]], "Empty": [], "Sales 2024": [["id"], [2]]}

@@ -11,7 +11,11 @@ from urllib.parse import quote, urlencode
 
 import dlt
 from dlt.common.configuration import with_config
-from dlt.common.configuration.specs import CredentialsConfiguration, configspec
+from dlt.common.configuration.specs import (
+    ConfigSectionContext,
+    CredentialsConfiguration,
+    configspec,
+)
 from dlt.common.normalizers.json.relational import DataItemNormalizer
 from dlt.common.typing import TDataItems, TSecretStrValue
 from dlt.sources import DltResource
@@ -175,7 +179,10 @@ def item_row(item: Dict[str, Any]) -> Dict[str, Any]:
     return row
 
 
-@with_config(sections=("sources", "sharepoint"))
+@with_config(
+    sections=("sources", "sharepoint", "sharepoint_folder"),
+    sections_merge_style=ConfigSectionContext.resource_merge_style,
+)
 def sharepoint_folder(
     folder_path: str = dlt.config.value,
     library: Optional[str] = None,
