@@ -23,7 +23,15 @@ from typing import (
 from urllib.parse import urlencode
 
 from dlt.common import json, logger
-from dlt.sources.helpers.requests import Client, HTTPError, Response, Session, Timeout
+from dlt.sources.helpers import requests
+from dlt.sources.helpers.requests import (
+    ChunkedEncodingError,
+    Client,
+    HTTPError,
+    ReadTimeout,
+    Response,
+    Session,
+)
 from dlt.sources.helpers.rest_client import RESTClient
 
 from .credentials import ServiceNowCredentials, ServiceNowOAuth2
@@ -276,13 +284,15 @@ def fit_url(table: str, url: str, params: Dict[str, Any]) -> Dict[str, Any]:
 
 def make_session() -> Session:
     """Returns a session that does not keep cookies. The session retries HTTP 429, empty
-    responses and 5xx, but not the 5xx of a cancelled transaction. Retries obey the `Retry-After`
-    header.
+    responses, 5xx and connection errors, but not the 5xx of a cancelled transaction and not read
+    timeouts. Retries obey the `Retry-After` header.
     """
     session = Client(
         request_timeout=REQUEST_TIMEOUT,
         raise_for_status=False,
         status_codes=(),
+        # a page that times out is read again with half of the records
+        exceptions=(requests.ConnectionError, ChunkedEncodingError),
         retry_condition=_should_retry,
     ).session
     # the instance runs the requests that share a session cookie one at a time. without the
@@ -552,7 +562,7 @@ class ServiceNowClient:
             started = time.monotonic()
             try:
                 page = fetch_page(page_query, page_size, offset)
-            except (HTTPError, TransactionCancelled, Timeout) as ex:
+            except (HTTPError, TransactionCancelled, ReadTimeout) as ex:
                 cancelled = not isinstance(ex, HTTPError) or (
                     ex.response is not None
                     and is_transaction_cancelled(ex.response.text)

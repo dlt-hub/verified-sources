@@ -8,8 +8,9 @@ from typing import Any, List, Optional
 import pytest
 import requests_mock
 from dlt.extract.exceptions import ResourceExtractionError
-from dlt.sources.helpers.requests import Response, Timeout
+from dlt.sources.helpers.requests import ConnectTimeout, ReadTimeout, Response
 from pytest_mock import MockerFixture
+from requests.adapters import HTTPAdapter
 
 from sources.servicenow import servicenow_table
 from sources.servicenow.helpers.client import (
@@ -30,6 +31,7 @@ from sources.servicenow.helpers.table import TReadApi, hidden_fields
 from tests.servicenow.seed import data
 from tests.servicenow.utils import (
     INCIDENT,
+    BASE_URL,
     INSTANCE,
     TRANSACTION_CANCELLED,
     FakeInstance,
@@ -321,7 +323,7 @@ def test_keyset_pages_timeout(
     def fetch_page(query: str, limit: int, offset: int) -> List[TRecord]:
         limits.append(limit)
         if len(limits) == 1:
-            raise Timeout("read timed out")
+            raise ReadTimeout("read timed out")
         return [{"sys_id": "1"}] if len(limits) == 2 else []
 
     pages = list(client._keyset_pages("incident", TableQuery(), 400, fetch_page))
@@ -646,3 +648,20 @@ def test_session_without_cookies() -> None:
     finally:
         server.shutdown()
     assert cookies == [None, None]
+
+
+def test_session_timeouts(mocker: MockerFixture) -> None:
+    mocker.patch("time.sleep")
+    send = mocker.patch.object(
+        HTTPAdapter, "send", side_effect=ReadTimeout("read timed out")
+    )
+    session = make_session()
+    # a read timeout is not retried, the page is read again with half of the records instead
+    with pytest.raises(ReadTimeout):
+        session.get(f"{BASE_URL}/api/now/v2/table/incident")
+    assert send.call_count == 1
+    send.reset_mock()
+    send.side_effect = ConnectTimeout("connect timed out")
+    with pytest.raises(ConnectTimeout):
+        session.get(f"{BASE_URL}/api/now/v2/table/incident")
+    assert send.call_count > 1
