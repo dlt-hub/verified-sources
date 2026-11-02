@@ -21,7 +21,8 @@ from typing import (
 import dlt
 import pandas as pd
 import pyarrow.parquet as pq
-from dlt.common import json
+from dlt.common import Decimal, json
+from dlt.common.arithmetics import InvalidOperation
 from dlt.common.storages.fsspec_filesystem import FileItem
 from dlt.common.typing import TDataItems
 from dlt.extract import with_table_name
@@ -201,3 +202,21 @@ def frame_records(df: pd.DataFrame) -> Iterator[List[Dict[str, Any]]]:
 def duration_to_seconds(value: Any) -> Any:
     """Returns a timedelta as float seconds, which dlt can load, and any other value unchanged."""
     return value.total_seconds() if isinstance(value, timedelta) else value
+
+
+def to_decimal(value: Any) -> Optional[Decimal]:
+    """Converts a csv or Excel cell to a Decimal for pandas `converters`, e.g.
+    `reader_kwargs={"converters": {"Amount": to_decimal}}` loads amounts as decimals, not floats.
+
+    Text like "$1,234.56" loses its "$" and "," first; empty cells and text that is still not a
+    number become None. Excel stores numbers as doubles; `str` turns one back into the digits
+    Excel shows.
+    """
+    if pd.isna(value):
+        return None
+    if isinstance(value, str):
+        value = value.replace("$", "").replace(",", "").strip()
+    try:
+        return Decimal(str(value))
+    except InvalidOperation:
+        return None

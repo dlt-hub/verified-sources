@@ -26,7 +26,7 @@ from dlt.sources.helpers.rest_client import RESTClient
 
 from .filesystem import SharepointFileSystem, validate_folder_path
 from .graph import site_client
-from .readers import TFileType, read_file, reader_for
+from .readers import TFileType, read_file, reader_for, to_decimal
 
 # items per delta page; Graph's default page is smaller and the maximum is not documented
 LIST_PAGE_SIZE = 500

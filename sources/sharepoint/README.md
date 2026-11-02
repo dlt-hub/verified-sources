@@ -21,6 +21,8 @@ source for developers and coding agents. Setup and usage are in the
   workbooks one table per sheet, files downloaded in parallel on dlt's extract workers;
   `sharepoint_files`: the two piped together. `sharepoint_folder` also feeds dlt's `read_csv`,
   `read_jsonl` and `read_parquet`, and `read_files` also reads from dlt's `filesystem` resource
+- new `to_decimal`: a pandas converter for `reader_kwargs` that loads csv or Excel amounts as
+  decimals instead of floats
 - new `SharepointFileSystem`: read-only fsspec filesystem registered as
   `sharepoint://<library>/<path>`, usable from pandas and other fsspec clients
 
@@ -103,5 +105,10 @@ Graph payloads from the API reference in `tests/sharepoint/utils.py`.
   UTF-16 or UTF-32), else by `encoding` in `reader_kwargs`, else as UTF-8. Files without a BOM
   in another encoding, e.g. a csv saved by Excel in the Windows code page, fail to decode until
   `encoding` is set.
+- **Amounts**: Excel stores numbers as doubles and pandas parses csv numbers as doubles, so
+  amounts load as `double`. `reader_kwargs={"converters": {"Amount": to_decimal}}` loads a
+  column as `decimal` instead: text like "$1,234.56" loses its "$" and "," first, and empty or
+  unparseable cells become None. Amounts written with a decimal comma need their own converter.
+  Converters are functions, so they are passed in code, not in config.
 - **Permissions**: the app needs the Graph application permission `Sites.Read.All`, or
   `Sites.Selected` with read access granted to the site.

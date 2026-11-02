@@ -1,7 +1,7 @@
 """Loads SharePoint lists and the files of a document library into DuckDB."""
 
 import dlt
-from sharepoint import sharepoint_files, sharepoint_list, sharepoint_lists
+from sharepoint import sharepoint_files, sharepoint_list, sharepoint_lists, to_decimal
 
 
 def load_lists() -> None:
@@ -28,8 +28,13 @@ def load_files() -> None:
     pipeline = dlt.pipeline(
         pipeline_name="sharepoint", destination="duckdb", dataset_name="sharepoint_data"
     )
+    # loads an "Amount" column as decimals, not floats, files without it load unchanged
     reports = sharepoint_files(
-        "Reports", "csv", table_name="reports", file_glob="*.csv"
+        "Reports",
+        "csv",
+        table_name="reports",
+        file_glob="*.csv",
+        reader_kwargs={"converters": {"Amount": to_decimal}},
     )
     load_info = pipeline.run(reports)
     print(load_info)

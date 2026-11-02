@@ -23,7 +23,13 @@ from dlt.sources.filesystem import filesystem, read_csv, read_jsonl, read_parque
 from dlt.sources.helpers.requests import HTTPError
 from requests_mock import Mocker
 
-from sources.sharepoint import read_files, readers, sharepoint_files, sharepoint_folder
+from sources.sharepoint import (
+    read_files,
+    readers,
+    sharepoint_files,
+    sharepoint_folder,
+    to_decimal,
+)
 from sources.sharepoint.filesystem import (
     ITEM_FIELDS,
     SharepointFileSystem,
@@ -74,6 +80,7 @@ QUOTED_FOLDER = "R&D (2024)/Client's #1+Q2 100%/Données"
 QUOTED_PATH = "root:/R%26D%20%282024%29/Client%27s%20%231%2BQ2%20100%25/Donn%C3%A9es:"
 CSV_TEXT = "name,n\nnév,1\n"
 JSONL_TEXT = '{"name": "név", "n": 1}\n'
+DECIMAL_AMOUNTS = ("decimal", [Decimal("1234.56"), None, Decimal("1000.10"), None])
 
 
 def test_filesystem_ls_pagination(graph: Mocker) -> None:
@@ -545,6 +552,38 @@ def test_sharepoint_files_secret_not_in_trace(graph: Mocker) -> None:
                 "_2024": ("double", [5400.0] * 3),
             },
             id="excel_sheet_with_mixed_types",
+        ),
+        pytest.param(
+            "amounts.csv",
+            b'id,amount\n1,1234.56\n2,\n3,"$1,000.10"\n4,n/a\n',
+            {"reader_kwargs": {"converters": {"amount": to_decimal}}},
+            "id",
+            {"amount": DECIMAL_AMOUNTS},
+            id="csv_amounts_with_decimal_converter",
+        ),
+        pytest.param(
+            "amounts.xlsx",
+            excel_bytes(
+                {
+                    "Data": [
+                        ["id", "amount"],
+                        [1, 1234.56],
+                        [2, None],
+                        [3, "$1,000.10"],
+                        [4, "n/a"],
+                    ]
+                }
+            ),
+            {
+                "file_type": "excel",
+                "reader_kwargs": {
+                    "sheet_name": "Data",
+                    "converters": {"amount": to_decimal},
+                },
+            },
+            "id",
+            {"amount": DECIMAL_AMOUNTS},
+            id="excel_amounts_with_decimal_converter",
         ),
         pytest.param(
             "report.jsonl",
