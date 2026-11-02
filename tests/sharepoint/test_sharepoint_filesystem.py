@@ -72,6 +72,8 @@ DRIVE_PAGES = [[{"id": "d1", "name": "Documents"}], [{"id": "d2", "name": "Archi
 SPENT = timedelta(hours=1, minutes=30)
 QUOTED_FOLDER = "R&D (2024)/Client's #1+Q2 100%/Données"
 QUOTED_PATH = "root:/R%26D%20%282024%29/Client%27s%20%231%2BQ2%20100%25/Donn%C3%A9es:"
+CSV_TEXT = "name,n\nnév,1\n"
+JSONL_TEXT = '{"name": "név", "n": 1}\n'
 
 
 def test_filesystem_ls_pagination(graph: Mocker) -> None:
@@ -680,6 +682,52 @@ def test_sharepoint_files_empty_file(
     mock_files(graph, {"blank": content})
 
     assert list(sharepoint_files(**files_config(file_type=file_type))) == []
+
+
+@pytest.mark.parametrize(
+    "file_type,content,reader_kwargs",
+    [
+        pytest.param(
+            "csv", codecs.BOM_UTF8 + CSV_TEXT.encode(), {}, id="csv_utf8_bom"
+        ),
+        pytest.param("csv", CSV_TEXT.encode("utf-16"), {}, id="csv_utf16_bom"),
+        pytest.param(
+            "csv",
+            CSV_TEXT.encode("utf-16"),
+            {"encoding": "cp1252"},
+            id="csv_bom_before_encoding_argument",
+        ),
+        pytest.param(
+            "csv",
+            CSV_TEXT.encode("cp1252"),
+            {"encoding": "cp1252"},
+            id="csv_encoding_argument",
+        ),
+        pytest.param("jsonl", JSONL_TEXT.encode("utf-16"), {}, id="jsonl_utf16_bom"),
+        pytest.param("jsonl", JSONL_TEXT.encode("utf-32"), {}, id="jsonl_utf32_bom"),
+        pytest.param(
+            "jsonl",
+            codecs.BOM_UTF8 + JSONL_TEXT.encode(),
+            {"encoding": "cp1252"},
+            id="jsonl_bom_before_encoding_argument",
+        ),
+        pytest.param(
+            "jsonl",
+            JSONL_TEXT.encode("cp1252"),
+            {"encoding": "cp1252"},
+            id="jsonl_encoding_argument",
+        ),
+    ],
+)
+def test_sharepoint_files_encodings(
+    graph: Mocker, file_type: str, content: bytes, reader_kwargs: Dict[str, Any]
+) -> None:
+    mock_files(graph, {f"a.{file_type}": content})
+    config = files_config(file_type=file_type, reader_kwargs=reader_kwargs)
+
+    rows = list(sharepoint_files(**config))
+
+    assert [(row["name"], row["n"]) for row in rows] == [("név", 1)]
 
 
 def test_filesystem_credentials_required() -> None:

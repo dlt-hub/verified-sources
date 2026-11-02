@@ -235,7 +235,8 @@ def read_files(
         items (Iterable[FileItemDict]): The files, as the listing resource yields them.
         file_type (TFileType): One of "csv", "jsonl", "parquet" or "excel".
         reader_kwargs (Optional[Dict[str, Any]]): Arguments for the pandas reader, such as
-            "sep", "encoding" or "sheet_name"; for parquet the pyarrow "columns".
+            "sep", "encoding" or "sheet_name"; for jsonl only "encoding"; for parquet the
+            pyarrow "columns". A BOM decides the encoding of a csv or jsonl file.
 
     Yields:
         TDataItems: Batches of rows.
@@ -278,8 +279,8 @@ def sharepoint_files(
         file_glob (str): Glob matched against paths under the folder; "**/*.csv" also
             searches subfolders.
         reader_kwargs (Optional[Dict[str, Any]]): Arguments for the pandas reader of csv and
-            excel files, such as "sep", "encoding" or "sheet_name"; for parquet only "columns".
-            Ignored for jsonl.
+            excel files, such as "sep", "encoding" or "sheet_name"; for jsonl only "encoding";
+            for parquet only "columns". A BOM decides the encoding of a csv or jsonl file.
         credentials (SharepointCredentials): Entra ID app credentials and the site id.
 
     Returns:

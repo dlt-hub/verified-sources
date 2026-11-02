@@ -1,6 +1,7 @@
 """Readers that turn a file of a document library into rows with file columns."""
 
 import codecs
+import io
 from datetime import timedelta
 from itertools import islice
 from typing import (
@@ -31,6 +32,14 @@ FILE_TYPES = get_args(TFileType)
 BATCH_SIZE = 10_000
 # up to this size a file is downloaded whole on a worker thread, larger ones are read in ranges
 PREFETCH_MAX_BYTES = 16 * 2**20
+# UTF-32 comes first, its little endian BOM starts with the UTF-16 one
+BOM_ENCODINGS = (
+    (codecs.BOM_UTF32_LE, "utf-32"),
+    (codecs.BOM_UTF32_BE, "utf-32"),
+    (codecs.BOM_UTF8, "utf-8-sig"),
+    (codecs.BOM_UTF16_LE, "utf-16"),
+    (codecs.BOM_UTF16_BE, "utf-16"),
+)
 
 # a batch of records and the workbook sheet it came from, None for every other file type
 TSheetRecords = Tuple[Optional[str], List[Dict[str, Any]]]
@@ -90,10 +99,23 @@ def is_blank(f: Any) -> bool:
     return len(head) < 1024 and not head.removeprefix(codecs.BOM_UTF8).strip()
 
 
+def file_encoding(f: Any, reader_kwargs: Dict[str, Any]) -> str:
+    """Returns the encoding of the file's BOM, else the "encoding" argument, else UTF-8, and rewinds the file."""
+    head = f.read(4)
+    f.seek(0)
+    for bom, encoding in BOM_ENCODINGS:
+        if head.startswith(bom):
+            return encoding
+    return reader_kwargs.get("encoding") or "utf-8"
+
+
 def read_csv(f: Any, reader_kwargs: Dict[str, Any]) -> Iterator[TSheetRecords]:
-    """Yields batches of records of a csv file, read with pandas."""
+    """Yields batches of records of a csv file, read with pandas in the encoding `file_encoding` picks."""
+    encoding = file_encoding(f, reader_kwargs)
     try:
-        chunk_reader = pd.read_csv(f, **{"chunksize": BATCH_SIZE, **reader_kwargs})
+        chunk_reader = pd.read_csv(
+            f, **{"chunksize": BATCH_SIZE, **reader_kwargs, "encoding": encoding}
+        )
     except pd.errors.EmptyDataError:
         return
     with chunk_reader as chunks:
@@ -103,10 +125,16 @@ def read_csv(f: Any, reader_kwargs: Dict[str, Any]) -> Iterator[TSheetRecords]:
 
 
 def read_jsonl(f: Any, reader_kwargs: Dict[str, Any]) -> Iterator[TSheetRecords]:
-    """Yields batches of records of a json lines file, skipping blank lines; takes no arguments."""
-    records = (
-        json.loadb(line.removeprefix(codecs.BOM_UTF8)) for line in f if line.strip()
-    )
+    """Yields batches of records of a json lines file, skipping blank lines; only "encoding" is used."""
+    encoding = file_encoding(f, reader_kwargs)
+    if encoding in ("utf-8", "utf-8-sig"):
+        records = (
+            json.loadb(line.removeprefix(codecs.BOM_UTF8)) for line in f if line.strip()
+        )
+    else:
+        records = (
+            json.loads(line) for line in io.TextIOWrapper(f, encoding) if line.strip()
+        )
     while batch := list(islice(records, BATCH_SIZE)):
         yield None, batch
 

@@ -99,5 +99,9 @@ Graph payloads from the API reference in `tests/sharepoint/utils.py`.
   incremental resource. All files of one glob share one table, so files of different shapes
   widen it; use one `sharepoint_files` per file shape. Renamed files count as new files; a
   workbook replaced by a blank file keeps its sheet tables.
+- **Encodings**: Graph sends no charset, so a csv or jsonl file is decoded by its BOM (UTF-8,
+  UTF-16 or UTF-32), else by `encoding` in `reader_kwargs`, else as UTF-8. Files without a BOM
+  in another encoding, e.g. a csv saved by Excel in the Windows code page, fail to decode until
+  `encoding` is set.
 - **Permissions**: the app needs the Graph application permission `Sites.Read.All`, or
   `Sites.Selected` with read access granted to the site.
