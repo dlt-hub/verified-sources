@@ -218,13 +218,13 @@ def sharepoint_folder(
     )
 
 
-@dlt.transformer(write_disposition="merge", merge_key="file_url")
+@dlt.transformer(write_disposition="merge", merge_key="_dlt_file_url")
 def read_files(
     items: Iterable[FileItemDict],
     file_type: TFileType = dlt.config.value,
     reader_kwargs: Optional[Dict[str, Any]] = None,
 ) -> Iterator[TDataItems]:
-    """Reads csv, jsonl, parquet or excel files into rows that carry `file_url`, `file_name` and `file_modified_at`.
+    """Reads csv, jsonl, parquet or excel files into rows that carry `_dlt_file_url`, `_dlt_file_name` and `_dlt_file_modified_at`.
 
     Pipe it from `sharepoint_folder` or from dlt's `filesystem` resource. A modified file
     replaces its own rows; rename the table with `with_name` or a `table_name` hint. Excel
@@ -261,9 +261,9 @@ def sharepoint_files(
 ) -> DltResource:
     """Loads the rows of the files matching `file_glob` in a folder into one table.
 
-    All matching files share `table_name`, and each row carries the `file_url` and `file_name`
-    it came from. Excel sheets go to their own tables, "<table_name>_<sheet>", unless
-    `reader_kwargs` names one `sheet_name`.
+    All matching files share `table_name`, and each row carries the `_dlt_file_url` and
+    `_dlt_file_name` it came from. Excel sheets go to their own tables, "<table_name>_<sheet>",
+    unless `reader_kwargs` names one `sheet_name`.
 
     Each run reads only new or modified files. A modified file replaces its own rows. A renamed
     file counts as a new file, and the rows of a file emptied or deleted in SharePoint stay in
@@ -283,7 +283,7 @@ def sharepoint_files(
         credentials (SharepointCredentials): Entra ID app credentials and the site id.
 
     Returns:
-        DltResource: `sharepoint_folder` piped into `read_files`, merged on `file_url`.
+        DltResource: `sharepoint_folder` piped into `read_files`, merged on `_dlt_file_url`.
 
     Raises:
         ValueError: If folder_path contains glob characters.

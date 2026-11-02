@@ -60,7 +60,7 @@ def file_rows(
     reader_kwargs: Dict[str, Any],
     table_name: str,
 ) -> Iterator[TDataItems]:
-    """Yields the rows of each file in batches, with `file_url`, `file_name` and `file_modified_at`.
+    """Yields the rows of each file in batches, with `_dlt_file_url`, `_dlt_file_name` and `_dlt_file_modified_at`.
 
     Rows of the base table carry no table name, so table hints apply to them; Excel sheets go
     to "<table_name>_<sheet>" unless one `sheet_name` is given. Blank files are skipped.
@@ -68,9 +68,9 @@ def file_rows(
     read = reader_for(file_type)
     for item in items:
         file_columns = {
-            "file_url": item["file_url"],
-            "file_name": item["file_name"],
-            "file_modified_at": item["modification_date"],
+            "_dlt_file_url": item["file_url"],
+            "_dlt_file_name": item["file_name"],
+            "_dlt_file_modified_at": item["modification_date"],
         }
         with item.open() as f:
             if is_blank(f):

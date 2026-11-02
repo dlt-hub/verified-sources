@@ -16,11 +16,11 @@ source for developers and coding agents. Setup and usage are in the
   `sharepoint_list` table per list; `hard_delete=True` sets the hint on every table
 - new `sharepoint_folder`: dlt's `filesystem` resource over a library folder, new or modified
   files only; `read_files`: a transformer reading csv, jsonl, parquet or excel files into rows
-  with `file_url`, `file_name` and `file_modified_at` (overwriting same-named file columns),
-  merged on `file_url` so a modified file replaces its own rows, Excel workbooks one table
-  per sheet, files downloaded in parallel on dlt's extract workers; `sharepoint_files`:
-  the two piped together. `sharepoint_folder` also feeds dlt's `read_csv`, `read_jsonl` and
-  `read_parquet`, and `read_files` also reads from dlt's `filesystem` resource
+  with `_dlt_file_url`, `_dlt_file_name` and `_dlt_file_modified_at` (overwriting same-named
+  file columns), merged on `_dlt_file_url` so a modified file replaces its own rows, Excel
+  workbooks one table per sheet, files downloaded in parallel on dlt's extract workers;
+  `sharepoint_files`: the two piped together. `sharepoint_folder` also feeds dlt's `read_csv`,
+  `read_jsonl` and `read_parquet`, and `read_files` also reads from dlt's `filesystem` resource
 - new `SharepointFileSystem`: read-only fsspec filesystem registered as
   `sharepoint://<library>/<path>`, usable from pandas and other fsspec clients
 

@@ -82,7 +82,7 @@ def test_files(destination_name: str) -> None:
         "Eve",
         "Gus",
     }
-    assert {row["file_name"] for row in rows} == {
+    assert {row["_dlt_file_name"] for row in rows} == {
         "report_2024_01.csv",
         "report_2024_02.csv",
         "report_2024_03.csv",
