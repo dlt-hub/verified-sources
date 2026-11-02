@@ -100,7 +100,7 @@ scrapy = [
 sharepoint = [
     "pandas>=2.0.0,<3",
     "openpyxl>=3.1.0,<4",
-    "pyarrow>=14.0.0,<20",
+    "pyarrow>=14.0.0",
 ]
 
 [tool.uv]
