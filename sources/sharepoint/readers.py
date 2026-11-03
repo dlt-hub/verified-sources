@@ -211,15 +211,20 @@ def to_decimal(value: Any) -> Optional[Decimal]:
     """Converts a csv or Excel cell to a Decimal for pandas `converters`, e.g.
     `reader_kwargs={"converters": {"Amount": to_decimal}}` loads amounts as decimals, not floats.
 
-    Text like "$1,234.56" loses its "$" and "," first; empty cells and text that is still not a
-    number become None. Excel stores numbers as doubles; `str` turns one back into the digits
-    Excel shows.
+    Text like "$1,234.56" loses its "$" and "," first. Excel stores numbers as doubles; a float
+    becomes the 15 significant digits Excel shows. Empty cells, text that is not a number and
+    NaN or infinite values become None.
     """
     if pd.isna(value):
         return None
-    if isinstance(value, str):
-        value = value.replace("$", "").replace(",", "").strip()
+    if isinstance(value, float):
+        text = format(value, ".15g")
+    elif isinstance(value, str):
+        text = value.replace("$", "").replace(",", "").strip()
+    else:
+        text = str(value)
     try:
-        return Decimal(str(value))
+        result = Decimal(text)
     except InvalidOperation:
         return None
+    return result if result.is_finite() else None

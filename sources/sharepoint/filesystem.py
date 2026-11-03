@@ -17,7 +17,7 @@ from .graph import site_client
 
 
 PREFIX = "sharepoint://"
-ITEM_FIELDS = "id,name,size,file,folder,lastModifiedDateTime"
+ITEM_FIELDS = "id,name,size,file,folder,package,lastModifiedDateTime"
 
 
 class SharepointFileSystem(AbstractFileSystem):
@@ -110,10 +110,12 @@ class SharepointFileSystem(AbstractFileSystem):
 
     @staticmethod
     def _entry(parent: str, item: Dict[str, Any]) -> Dict[str, Any]:
+        # a package, e.g. a OneNote notebook, has children like a folder
+        is_dir = "folder" in item or "package" in item
         return {
             "name": f"{parent}/{item['name']}" if parent else item["name"],
             "size": item.get("size", 0),
-            "type": "file" if "file" in item else "directory",
+            "type": "directory" if is_dir else "file",
             "modified": ensure_datetime_in_tz(item["lastModifiedDateTime"]),
             "id": item["id"],
         }
