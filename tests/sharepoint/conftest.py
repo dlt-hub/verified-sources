@@ -3,6 +3,7 @@
 import pytest
 from requests_mock import Mocker
 
+from sources.sharepoint.graph import entra_auth
 from tests.sharepoint.utils import (
     ACCESS_TOKEN,
     CLIENT_ID,
@@ -25,6 +26,7 @@ def credentials_env(monkeypatch: pytest.MonkeyPatch) -> None:
 
 @pytest.fixture
 def graph(credentials_env: None, requests_mock: Mocker) -> Mocker:
-    """Mocks the token endpoint; each test registers the Graph URLs it calls."""
+    """Mocks the token endpoint; each test registers the Graph URLs it calls and starts without a token."""
+    entra_auth.cache_clear()
     requests_mock.post(TOKEN_URL, **token_response(ACCESS_TOKEN))
     return requests_mock

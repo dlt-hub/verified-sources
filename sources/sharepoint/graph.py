@@ -1,5 +1,8 @@
 """Microsoft Graph client for one SharePoint site."""
 
+import threading
+from datetime import datetime, timedelta, timezone  # noqa: I251
+from functools import cache
 from typing import Any
 
 from dlt.common.configuration.specs import configspec
@@ -14,11 +17,27 @@ GRAPH_URL = "https://graph.microsoft.com/v1.0"
 GRAPH_SCOPE = "https://graph.microsoft.com/.default"
 # SharePoint prioritizes traffic that names its vendor and app over undecorated traffic
 USER_AGENT = f"ISV|dltHub|dlt-sharepoint/{__version__}"
+# renewed this long before `expires_in`, so a request in flight never carries an expired token
+EXPIRY_MARGIN = timedelta(seconds=60)
 
 
 @configspec
 class EntraClientCredentials(OAuth2ClientCredentials):
-    """Client credentials flow that keeps Entra's error description in token errors."""
+    """Client credentials flow with one token for all threads, renewed under a lock before it expires.
+
+    Token errors carry Entra's error description.
+    """
+
+    def __post_init__(self) -> None:
+        super().__post_init__()
+        self._lock = threading.Lock()
+
+    def __call__(self, request: Any) -> Any:
+        with self._lock:
+            return super().__call__(request)
+
+    def is_token_expired(self) -> bool:
+        return datetime.now(timezone.utc) >= self.token_expiry - EXPIRY_MARGIN
 
     def obtain_token(self) -> None:
         try:
@@ -31,10 +50,11 @@ class EntraClientCredentials(OAuth2ClientCredentials):
             ) from e
 
 
+@cache
 def entra_auth(
     tenant_id: str, client_id: str, client_secret: str
 ) -> EntraClientCredentials:
-    """Builds the app-only auth; the token is requested on the first call."""
+    """Returns the app-only auth of the app, one per process, so all clients share its token."""
     return EntraClientCredentials(
         access_token_url=f"https://login.microsoftonline.com/{tenant_id}/oauth2/v2.0/token",
         client_id=client_id,
@@ -46,7 +66,7 @@ def entra_auth(
 def site_client(
     site_id: str, tenant_id: str, client_id: str, client_secret: str
 ) -> RESTClient:
-    """Returns a paging Graph client rooted at the site, authenticated as the Entra app."""
+    """Returns a paging Graph client rooted at the site, authenticated with the app's shared token."""
     return RESTClient(
         base_url=f"{GRAPH_URL}/sites/{site_id}",
         headers={"User-Agent": USER_AGENT},
