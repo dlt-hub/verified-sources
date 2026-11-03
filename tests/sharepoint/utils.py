@@ -49,13 +49,14 @@ E = TypeVar("E", bound=BaseException)
 
 
 class File(NamedTuple):
-    """A file or a folder of the mocked document library."""
+    """A file, a folder or a package (a OneNote notebook) of the mocked document library."""
 
     item_id: str
     name: str
     modified: str = NEW
     content: bytes = b""
     folder: bool = False
+    package: bool = False
 
 
 def token_response(access_token: str, expires_in: int = 3600) -> Dict[str, Any]:
@@ -84,14 +85,16 @@ def item_url(path: str, drive: str = "drive") -> str:
 
 def graph_item(file: File) -> Dict[str, Any]:
     """Returns the file as Graph lists it among the children of its folder."""
-    kind: Dict[str, Any] = (
-        {"folder": {"childCount": 0}}
-        if file.folder
-        else {
+    kind: Dict[str, Any]
+    if file.folder:
+        kind = {"folder": {"childCount": 0}}
+    elif file.package:
+        kind = {"package": {"type": "oneNote"}}
+    else:
+        kind = {
             "file": {"mimeType": "application/octet-stream"},
             "size": len(file.content),
         }
-    )
     return {
         "id": file.item_id,
         "name": file.name,
@@ -121,7 +124,7 @@ def mock_folder(
         f"{url}/children",
         [[graph_item(file) for file in page] for page in pages],
     )
-    for file in (file for page in pages for file in page if not file.folder):
+    for file in (f for page in pages for f in page if not (f.folder or f.package)):
         mock_download(graph, folder, file, drive)
 
 
@@ -281,6 +284,11 @@ def cause_of_type(error: BaseException, error_type: Type[E]) -> E:
 
 def loaded_rows(pipeline: dlt.Pipeline, table: str = "reports") -> List[Dict[str, Any]]:
     return load_tables_to_dicts(pipeline, table)[table]
+
+
+def last_row_count(pipeline: dlt.Pipeline, table: str) -> int:
+    """Returns the number of rows of `table` that the last run of `pipeline` normalized."""
+    return pipeline.last_trace.last_normalize_info.row_counts.get(table, 0)
 
 
 def rows_per_file(pipeline: dlt.Pipeline) -> Dict[str, int]:

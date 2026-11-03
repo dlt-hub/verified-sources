@@ -483,6 +483,92 @@ def test_sharepoint_files_incremental(graph: Mocker) -> None:
         }
 
 
+@pytest.mark.parametrize(
+    "window,first_run,second_run",
+    [
+        pytest.param(
+            {"start_date": "2020-01-01"}, ["B", "C"], [], id="start_date_text"
+        ),
+        pytest.param(
+            {"start_date": datetime(2024, 1, 15, tzinfo=timezone.utc)},
+            ["C"],
+            [],
+            id="start_date_datetime",
+        ),
+        pytest.param(
+            {
+                "incremental": dlt.sources.incremental(
+                    "modification_date",
+                    initial_value=datetime(2020, 1, 1, tzinfo=timezone.utc),
+                    end_value=datetime(2024, 1, 15, tzinfo=timezone.utc),
+                )
+            },
+            ["B"],
+            ["B"],
+            id="incremental_window",
+        ),
+    ],
+)
+def test_sharepoint_files_start_date(
+    graph: Mocker, window: Dict[str, Any], first_run: List[str], second_run: List[str]
+) -> None:
+    """`start_date` is the initial value of the default incremental; an `incremental` replaces it and a window stores no state."""
+    a = File("A", "a.csv", OLD, b"n\n1\n")
+    b = File("B", "b.csv", NEW, b"n\n2\n")
+    c = File("C", "c.csv", NEWER, b"n\n3\n")
+    mock_folder(graph, "Reports", [[a, b, c]])
+    pipeline = new_pipeline("sharepoint_start_date")
+
+    assert_load_info(pipeline.run(sharepoint_files(**files_config(**window))))
+    assert downloaded_ids(graph) == first_run
+
+    graph.reset_mock()
+    pipeline.run(sharepoint_files(**files_config(**window)))
+    assert downloaded_ids(graph) == second_run
+    assert rows_per_file(pipeline) == {f"{i.lower()}.csv": 1 for i in first_run}
+
+
+def test_sharepoint_folder_start_date_or_incremental(
+    credentials_env: None, requests_mock: Mocker
+) -> None:
+    window = {
+        "start_date": "2020-01-01",
+        "incremental": dlt.sources.incremental("modification_date"),
+    }
+    with pytest.raises(
+        ValueError, match="Pass `start_date` or `incremental`, not both"
+    ):
+        sharepoint_folder("Reports", **window)
+    with pytest.raises(
+        ValueError, match="Pass `start_date` or `incremental`, not both"
+    ):
+        sharepoint_files(**files_config(**window))
+    assert requests_mock.call_count == 0
+
+
+def test_sharepoint_files_notebook_package(graph: Mocker) -> None:
+    """A OneNote notebook is a package with neither facet; it is walked like a folder and its section files read."""
+    csv = File("A", "a.csv", NEW, b"n\n1\n")
+    mock_folder(graph, "Reports", [[csv, File("NB", "Notes", package=True)]])
+    section = File("S1", "Section 1.one", NEW, b"\xe4\x52\x5c\x7b")
+    toc = File("T", "Open Notebook.onetoc2", NEW, b"toc")
+    mock_folder(graph, "Reports/Notes", [[section, toc]])
+
+    entries = new_fs().ls("Reports", detail=True)
+    assert [(e["name"], e["type"]) for e in entries] == [
+        ("Reports/a.csv", "file"),
+        ("Reports/Notes", "directory"),
+    ]
+    items = list(sharepoint_folder("Reports", file_glob="**/*"))
+    assert sorted(item["file_url"] for item in items) == [
+        "sharepoint:///Reports/Notes/Open Notebook.onetoc2",
+        "sharepoint:///Reports/Notes/Section 1.one",
+        "sharepoint:///Reports/a.csv",
+    ]
+    one = next(item for item in items if item["file_name"].endswith(".one"))
+    assert one.read_bytes() == section.content
+
+
 def test_sharepoint_files_secret_not_in_trace(graph: Mocker) -> None:
     pipeline = load_file(graph, "report_a.csv", b"n\n1\n")
 
@@ -623,6 +709,25 @@ def test_sharepoint_files_column_types(
     assert data_columns(pipeline, table) == {sort_by, *expected}
 
 
+@pytest.mark.parametrize(
+    "value,expected",
+    [
+        pytest.param(1234.56, Decimal("1234.56"), id="float"),
+        pytest.param(0.1 + 0.2, Decimal("0.3"), id="float_rounded_to_excel_digits"),
+        pytest.param(3, Decimal("3"), id="int"),
+        pytest.param("$1,000.10", Decimal("1000.10"), id="currency_text"),
+        pytest.param("", None, id="empty"),
+        pytest.param(None, None, id="none"),
+        pytest.param(float("nan"), None, id="nan"),
+        pytest.param("n/a", None, id="text"),
+        pytest.param("nan", None, id="nan_text"),
+        pytest.param("Infinity", None, id="infinity_text"),
+    ],
+)
+def test_to_decimal(value: Any, expected: Any) -> None:
+    assert to_decimal(value) == expected
+
+
 def test_sharepoint_files_parquet_columns(graph: Mocker) -> None:
     table = pa.table(
         {
@@ -732,9 +837,7 @@ def test_sharepoint_files_empty_file(
 @pytest.mark.parametrize(
     "file_type,content,reader_kwargs",
     [
-        pytest.param(
-            "csv", codecs.BOM_UTF8 + CSV_TEXT.encode(), {}, id="csv_utf8_bom"
-        ),
+        pytest.param("csv", codecs.BOM_UTF8 + CSV_TEXT.encode(), {}, id="csv_utf8_bom"),
         pytest.param("csv", CSV_TEXT.encode("utf-16"), {}, id="csv_utf16_bom"),
         pytest.param(
             "csv",

@@ -17,7 +17,8 @@ from dlt.common.configuration.specs import (
     configspec,
 )
 from dlt.common.normalizers.json.relational import DataItemNormalizer
-from dlt.common.typing import TDataItems, TSecretStrValue
+from dlt.common.time import ensure_datetime_in_tz
+from dlt.common.typing import TAnyDateTime, TDataItems, TSecretStrValue
 from dlt.sources import DltResource
 from dlt.sources.filesystem import FileItemDict
 from dlt.sources.filesystem import filesystem as list_files
@@ -187,6 +188,8 @@ def sharepoint_folder(
     folder_path: str = dlt.config.value,
     library: Optional[str] = None,
     file_glob: str = "*",
+    start_date: Optional[TAnyDateTime] = None,
+    incremental: Optional[dlt.sources.incremental[Any]] = None,
     credentials: SharepointCredentials = dlt.secrets.value,
 ) -> DltResource:
     """Lists the files of a library folder with dlt's `filesystem` resource, new or modified files only.
@@ -200,21 +203,37 @@ def sharepoint_folder(
             library when not set.
         file_glob (str): Glob matched against paths under the folder; "**/*.csv" also
             searches subfolders.
+        start_date (Optional[TAnyDateTime]): Lists files modified since this date on the first
+            run, all files if not set. It is the initial value of the default incremental on
+            `modification_date`; a naive date is taken as UTC.
+        incremental (Optional[dlt.sources.incremental[Any]]): Your own incremental on
+            `modification_date` instead of the default one, e.g. with an `end_value`. Cannot be
+            combined with `start_date`.
         credentials (SharepointCredentials): Entra ID app credentials and the site id.
 
     Returns:
         DltResource: dlt's `filesystem` resource over the folder, incremental on `modification_date`.
 
     Raises:
-        ValueError: If folder_path contains glob characters.
+        ValueError: If folder_path contains glob characters, or both `start_date` and
+            `incremental` are passed.
     """
     validate_folder_path(folder_path)
+    if start_date is not None and incremental is not None:
+        raise ValueError("Pass `start_date` or `incremental`, not both")
+    if incremental is None:
+        incremental = dlt.sources.incremental(
+            "modification_date",
+            initial_value=None
+            if start_date is None
+            else ensure_datetime_in_tz(start_date),
+        )
     fs = SharepointFileSystem(site_client(**credentials), library)
     return list_files(
         bucket_url=f"sharepoint://{library or ''}/{folder_path}",
         credentials=fs,
         file_glob=file_glob,
-        incremental=dlt.sources.incremental("modification_date"),
+        incremental=incremental,
     )
 
 
@@ -258,6 +277,8 @@ def sharepoint_files(
     library: Optional[str] = None,
     file_glob: str = "*",
     reader_kwargs: Optional[Dict[str, Any]] = None,
+    start_date: Optional[TAnyDateTime] = None,
+    incremental: Optional[dlt.sources.incremental[Any]] = None,
     credentials: SharepointCredentials = dlt.secrets.value,
 ) -> DltResource:
     """Loads the rows of the files matching `file_glob` in a folder into one table.
@@ -265,14 +286,15 @@ def sharepoint_files(
     All matching files share `table_name`, and each row carries the `_dlt_file_url` and
     `_dlt_file_name` it came from. Excel sheets go to their own tables, "<table_name>_<sheet>".
 
-    Each run reads only new or modified files. A modified file replaces its own rows. A renamed
-    file counts as a new file, and the rows of a file emptied or deleted in SharePoint stay in
-    the table. `refresh="drop_resources"` reads every file again.
+    Each run reads only new or modified files, from `start_date` on if set. A modified file
+    replaces its own rows. A renamed file counts as a new file, and the rows of a file emptied
+    or deleted in SharePoint stay in the table. `refresh="drop_resources"` reads every file again.
 
     Args:
         folder_path (str): Folder relative to the library root; "" loads the root itself.
         file_type (TFileType): One of "csv", "jsonl", "parquet" or "excel".
-        table_name (str): Destination table.
+        table_name (str): Destination table of the rows; for excel files the prefix of the
+            sheet tables.
         library (Optional[str]): Display name of the document library; the site's default
             library when not set.
         file_glob (str): Glob matched against paths under the folder; "**/*.csv" also
@@ -280,14 +302,28 @@ def sharepoint_files(
         reader_kwargs (Optional[Dict[str, Any]]): Arguments for the pandas reader of csv and
             excel files, such as "sep", "encoding" or "sheet_name"; for jsonl only "encoding";
             for parquet only "columns". A BOM decides the encoding of a csv or jsonl file.
+        start_date (Optional[TAnyDateTime]): Loads files modified since this date on the first
+            run, all files if not set. It is the initial value of the default incremental on
+            `modification_date`; a naive date is taken as UTC.
+        incremental (Optional[dlt.sources.incremental[Any]]): Your own incremental on
+            `modification_date` instead of the default one, e.g. with an `end_value`. Cannot be
+            combined with `start_date`.
         credentials (SharepointCredentials): Entra ID app credentials and the site id.
 
     Returns:
         DltResource: `sharepoint_folder` piped into `read_files`, merged on `_dlt_file_url`.
 
     Raises:
-        ValueError: If folder_path contains glob characters.
+        ValueError: If folder_path contains glob characters, or both `start_date` and
+            `incremental` are passed.
     """
-    files = sharepoint_folder(folder_path, library, file_glob, credentials=credentials)
+    files = sharepoint_folder(
+        folder_path,
+        library,
+        file_glob,
+        start_date=start_date,
+        incremental=incremental,
+        credentials=credentials,
+    )
     rows = read_files(file_type, reader_kwargs).with_name(table_name)
     return files.with_name(f"{table_name}_files") | rows
