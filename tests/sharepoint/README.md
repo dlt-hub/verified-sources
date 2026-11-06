@@ -48,7 +48,8 @@ The lists cannot be created through the app and are made by hand once:
   | Merge | Done | 2024-04-30 | |
 
   SharePoint names the `Story Points` column `StoryPoints` internally; `included_columns` uses internal names.
-- `dlt toy paging`, a list imported from a CSV with columns `n` and `label` and 1,000 rows, so the items need several Graph pages:
+- `dlt toy paging`, a list imported from a CSV with columns `n` and `label` and 1,000 rows, so the items need several Graph pages.
+  The import names the columns `Title` (n) and `field_1` (label) internally:
 
   ```sh
   { echo 'n,label'; for i in $(seq 1 1000); do echo "$i,item $i"; done; } > dlt_toy_paging.csv

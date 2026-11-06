@@ -280,7 +280,7 @@ def sharepoint_files(
     start_date: Optional[TAnyDateTime] = None,
     incremental: Optional[dlt.sources.incremental[Any]] = None,
     credentials: SharepointCredentials = dlt.secrets.value,
-) -> DltResource:
+) -> Iterable[DltResource]:
     """Loads the rows of the files matching `file_glob` in a folder into one table.
 
     All matching files share `table_name`, and each row carries the `_dlt_file_url` and
@@ -289,6 +289,8 @@ def sharepoint_files(
     Each run reads only new or modified files, from `start_date` on if set. A modified file
     replaces its own rows. A renamed file counts as a new file, and the rows of a file emptied
     or deleted in SharePoint stay in the table. `refresh="drop_resources"` reads every file again.
+    Calls share one schema, use `sharepoint_files.with_args(name=...)` to refresh them separately
+    with `refresh="drop_sources"`.
 
     Args:
         folder_path (str): Folder relative to the library root; "" loads the root itself.
@@ -311,7 +313,8 @@ def sharepoint_files(
         credentials (SharepointCredentials): Entra ID app credentials and the site id.
 
     Returns:
-        DltResource: `sharepoint_folder` piped into `read_files`, merged on `_dlt_file_url`.
+        Iterable[DltResource]: `table_name`, `sharepoint_folder` piped into `read_files` and
+            merged on `_dlt_file_url`, and the file listing `<table_name>_files`, not selected.
 
     Raises:
         ValueError: If folder_path contains glob characters, or both `start_date` and
@@ -325,5 +328,9 @@ def sharepoint_files(
         incremental=incremental,
         credentials=credentials,
     )
-    rows = read_files(file_type, reader_kwargs).with_name(table_name)
-    return files.with_name(f"{table_name}_files") | rows
+    listing = files.with_name(f"{table_name}_files")
+    listing.selected = False
+    return [
+        listing | read_files(file_type, reader_kwargs).with_name(table_name),
+        listing,
+    ]
