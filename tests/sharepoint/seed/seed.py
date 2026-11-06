@@ -1,7 +1,8 @@
-"""Seeds the Documents library of the SharePoint test site with the files of `data.py`.
+"""Seeds the Documents library and the `dlt archive` library of the SharePoint test site with the
+files of `data.py`.
 
 Run from the repository root. Credentials are resolved from `sources/.dlt` like in tests, and the
-app needs `Files.ReadWrite.All`:
+app needs `Files.ReadWrite.All`, and `Sites.Manage.All` to create the `dlt archive` library:
 
     uv run python -m tests.sharepoint.seed.seed
 
@@ -30,25 +31,31 @@ from tests.sharepoint.seed import data
 WORKERS = 5
 
 
-def item_path(path: str) -> str:
+def item_path(path: str, drive: str = "drive") -> str:
     quoted = "/".join(quote(segment, safe="") for segment in path.split("/"))
-    return f"drive/root:/{quoted}:"
+    return f"{drive}/root:/{quoted}:"
 
 
-def ensure_folder(client: RESTClient, path: str) -> None:
-    if not path or client.get(item_path(path)).ok:
+def ensure_folder(client: RESTClient, path: str, drive: str = "drive") -> None:
+    if not path or client.get(item_path(path, drive)).ok:
         return
     parent, _, name = path.rpartition("/")
-    ensure_folder(client, parent)
-    children = f"{item_path(parent)}/children" if parent else "drive/root/children"
+    ensure_folder(client, parent, drive)
+    children = (
+        f"{item_path(parent, drive)}/children" if parent else f"{drive}/root/children"
+    )
     client.post(children, json={"name": name, "folder": {}}).raise_for_status()
 
 
 def upload(
-    client: RESTClient, path: str, content: bytes, modified: Optional[datetime]
+    client: RESTClient,
+    path: str,
+    content: bytes,
+    modified: Optional[datetime],
+    drive: str = "drive",
 ) -> None:
     response = client.request(
-        f"{item_path(path)}/content",
+        f"{item_path(path, drive)}/content",
         method="PUT",
         data=content,
         headers={"Content-Type": "application/octet-stream"},
@@ -58,10 +65,32 @@ def upload(
         stamp = modified.isoformat().replace("+00:00", "Z")
         times = {"createdDateTime": stamp, "lastModifiedDateTime": stamp}
         client.request(
-            f"drive/items/{response.json()['id']}",
+            f"{drive}/items/{response.json()['id']}",
             method="PATCH",
             json={"fileSystemInfo": times},
         ).raise_for_status()
+
+
+def ensure_library(client: RESTClient, name: str) -> str:
+    """Returns the Graph path of the drive of document library `name`, created when missing"""
+    for page in client.paginate("drives", params={"$select": "id,name"}):
+        for drive in page:
+            if drive["name"] == name:
+                return f"drives/{drive['id']}"
+    created = client.post(
+        "lists", json={"displayName": name, "list": {"template": "documentLibrary"}}
+    )
+    created.raise_for_status()
+    drive = client.get(f"lists/{created.json()['id']}/drive")
+    drive.raise_for_status()
+    return f"drives/{drive.json()['id']}"
+
+
+def seed_archive(client: RESTClient) -> None:
+    drive = ensure_library(client, data.ARCHIVE_LIBRARY)
+    ensure_folder(client, data.ARCHIVE_FILE.rpartition("/")[0], drive)
+    upload(client, data.ARCHIVE_FILE, data.ARCHIVE_CONTENT, None, drive)
+    print(f"seeded {data.ARCHIVE_FILE} in {data.ARCHIVE_LIBRARY}")
 
 
 def prune(client: RESTClient, folder: str, keep: Set[str]) -> None:
@@ -97,6 +126,7 @@ def seed(client: RESTClient) -> None:
         }
         prune(client, folder, names)
     print(f"seeded {len(files)} files")
+    seed_archive(client)
 
 
 if __name__ == "__main__":

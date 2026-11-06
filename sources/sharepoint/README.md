@@ -12,6 +12,8 @@ files of document libraries through a read-only fsspec filesystem over Graph, wi
 **Upgrade**: safe, the incremental state carries over.
 - new `sharepoint_files` resource `<table_name>_files`: the file listing, not selected by default.
   Select it to load file metadata with the rows
+- fixed `SharepointFileSystem`: fsspec clients such as pandas read the default library instead of
+  the library named in the url
 
 ### 1.0.0
 **Upgrade**: new source.
@@ -40,8 +42,8 @@ files of document libraries through a read-only fsspec filesystem over Graph, wi
 ## Seeding
 
 1. Run `uv run python -m tests.sharepoint.seed.seed` from the repository root. It writes the files
-   of `tests/sharepoint/seed/data.py` into the Documents library of the test site and needs the
-   `Files.ReadWrite.All` application permission.
+   of `tests/sharepoint/seed/data.py` into the Documents and `dlt archive` libraries of the test
+   site and needs the `Files.ReadWrite.All` and `Sites.Manage.All` application permissions.
 2. Create the lists by hand, see `tests/sharepoint/README.md`.
 
 There are no captured responses. The unit tests build Graph payloads from the API reference.
@@ -49,7 +51,8 @@ There are no captured responses. The unit tests build Graph payloads from the AP
 ## Tests
 
 - Live tests only read the site. The incremental test's expected values come from `seed/data.py`,
-  the other live tests read the hand-made lists and the seeded `dlt test` folder.
+  the other live tests read the hand-made lists, the seeded `dlt test` folder and the
+  `dlt archive` library.
 - Never run two pytest processes in the repository at once: the storage fixture of one run wipes
   the load packages of the other.
 

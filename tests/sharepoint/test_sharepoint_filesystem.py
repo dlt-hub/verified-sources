@@ -152,6 +152,21 @@ def test_filesystem_library_drive(graph: Mocker, library: str, drive: str) -> No
     assert paths.count(f"{SITE_PATH}/{drive}/root/children") == 2
 
 
+@pytest.mark.parametrize(
+    "url,drive",
+    [
+        pytest.param("sharepoint:///a.csv", "drive", id="default_library"),
+        pytest.param("sharepoint://Archive/a.csv", "drives/d2", id="named_library"),
+    ],
+)
+def test_filesystem_library_from_url(graph: Mocker, url: str, drive: str) -> None:
+    # fsspec clients such as pandas build the filesystem from the url
+    mock_pages(graph, DRIVES_URL, DRIVE_PAGES)
+    mock_folder(graph, "", [[File("A", "a.csv", content=b"n\n1\n")]], drive)
+    with fsspec.open(url, client=new_fs(None).client) as f:
+        assert f.read() == b"n\n1\n"
+
+
 def test_filesystem_library_not_found(graph: Mocker) -> None:
     mock_pages(graph, DRIVES_URL, DRIVE_PAGES)
 

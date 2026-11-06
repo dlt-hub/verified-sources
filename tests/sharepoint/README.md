@@ -6,7 +6,7 @@
 ## Test site
 
 The tests use a team site in a Microsoft 365 developer tenant, in the Pacific time zone, and an Entra ID app with
-admin-consented application permissions: `Sites.Read.All` for the tests and `Files.ReadWrite.All` for the seed. To set up a new one:
+admin-consented application permissions: `Sites.Read.All` for the tests, `Files.ReadWrite.All` and `Sites.Manage.All` for the seed. To set up a new one:
 
 1. Create a team site, for example `dlthub-test`.
 2. Register an app in Entra ID, create a client secret, add the application permissions and grant admin consent.
@@ -33,7 +33,8 @@ It uploads the files of `seed/data.py` into the Documents library: the `dlt test
 xlsx files in subfolders, `root_sample.csv` at the library root, `dlt_paging` with 205 one-row csv files, so a
 listing needs two Graph pages, and `dlt_incremental` with 25 one-row csv files whose modification times are
 unique random seconds of 2021, set through `fileSystemInfo`. Files that are no longer in `data.py` are deleted
-from the last two folders. The run takes about a minute.
+from the last two folders. It creates the `dlt archive` document library when missing and uploads
+`archive/report_2023.csv` there, a file the Documents library does not have. The run takes about a minute.
 
 The lists cannot be created through the app and are made by hand once:
 
