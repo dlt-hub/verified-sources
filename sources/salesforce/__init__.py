@@ -218,5 +218,6 @@ def salesforce_table(
         write_disposition=write_disposition,
         primary_key=primary_key,
         merge_key=merge_key,
+        parallelized=True,
         defer_table_reflect=defer_table_reflect,
     )

@@ -75,6 +75,15 @@ class SharepointFileSystem(AbstractFileSystem):
             f"Document library '{self.library}' not found. Available libraries: {names}"
         )
 
+    @staticmethod
+    def _get_kwargs_from_urls(path: str) -> Dict[str, Any]:
+        """Returns the library of a url, so fsspec clients such as pandas open the right one"""
+        if path.startswith(PREFIX):
+            library = path[len(PREFIX) :].partition("/")[0]
+            if library:
+                return {"library": library}
+        return {}
+
     @classmethod
     def _strip_protocol(cls, path: str) -> str:
         """Returns the path relative to the library root, "" for the root."""

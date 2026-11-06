@@ -8,6 +8,13 @@ files of document libraries through a read-only fsspec filesystem over Graph, wi
 
 ## Changelog
 
+### 1.1.0
+**Upgrade**: safe, the incremental state carries over.
+- new `sharepoint_files` resource `<table_name>_files`: the file listing, not selected by default.
+  Select it to load file metadata with the rows
+- fixed `SharepointFileSystem`: fsspec clients such as pandas read the default library instead of
+  the library named in the url
+
 ### 1.0.0
 **Upgrade**: new source.
 - new `sharepoint_list` and `sharepoint_lists`: list items synced with the delta query and merged
@@ -35,8 +42,8 @@ files of document libraries through a read-only fsspec filesystem over Graph, wi
 ## Seeding
 
 1. Run `uv run python -m tests.sharepoint.seed.seed` from the repository root. It writes the files
-   of `tests/sharepoint/seed/data.py` into the Documents library of the test site and needs the
-   `Files.ReadWrite.All` application permission.
+   of `tests/sharepoint/seed/data.py` into the Documents and `dlt archive` libraries of the test
+   site and needs the `Files.ReadWrite.All` and `Sites.Manage.All` application permissions.
 2. Create the lists by hand, see `tests/sharepoint/README.md`.
 
 There are no captured responses. The unit tests build Graph payloads from the API reference.
@@ -44,7 +51,8 @@ There are no captured responses. The unit tests build Graph payloads from the AP
 ## Tests
 
 - Live tests only read the site. The incremental test's expected values come from `seed/data.py`,
-  the other live tests read the hand-made lists and the seeded `dlt test` folder.
+  the other live tests read the hand-made lists, the seeded `dlt test` folder and the
+  `dlt archive` library.
 - Never run two pytest processes in the repository at once: the storage fixture of one run wipes
   the load packages of the other.
 
@@ -75,7 +83,9 @@ Facts from the test site (November 2026) or from Microsoft's docs.
   file (docs). A `children` listing is not guaranteed to be complete while writes happen, only the
   drive delta query is (docs). OneNote notebooks are `package` items with children (docs) and are
   walked like folders. System libraries such as Site Assets are hidden from `/drives` unless
-  `system` is selected (docs), so `library` cannot name them.
+  `system` is selected (docs), so `library` cannot name them. Files download on the dlt extract
+  workers, 5 by default (`workers` in the `[extract]` config section): 16 workers read 236 small
+  csv files in 8 s (test site).
 - **Timestamps**: `createdDateTime` and `lastModifiedDateTime` follow the client-reported
   `fileSystemInfo`, which sync clients and migration tools set to the local times: a Graph `copy`
   got a fresh modified time, an upload whose `fileSystemInfo` was patched to 2020 read back 2020 in

@@ -15,6 +15,7 @@ from dlt.common.time import (
     ensure_datetime_in_tz,
     to_tzinfo,
 )
+from pytest_mock import MockerFixture
 
 from sources.jira.helpers.client import JiraClient
 from sources.jira.helpers.paginators import JiraCursorPaginator
@@ -347,14 +348,19 @@ class JiraMock:
     def _search(self, request: Any, context: Any) -> Dict[str, Any]:
         params = {k: v[0] for k, v in parse_qs(urlparse(request.url).query).items()}
         self.searches.append(params)
-        if params["jql"] in self.jql_results:
-            ids = self.jql_results[params["jql"]]
-            size = int(params["maxResults"])
-            pages = [ids[i : i + size] for i in range(0, len(ids), size)]
-        elif self.search_pages is not None:
+        size = int(params["maxResults"])
+        if params["fields"] != "id":
+            # search returns at most 100 issues per page when it also returns a field
+            size = min(size, 100)
+        if self.search_pages is not None and params["jql"] not in self.jql_results:
             pages = self.search_pages
         else:
-            pages = [self.matching_ids(params["jql"])]
+            ids = (
+                self.jql_results[params["jql"]]
+                if params["jql"] in self.jql_results
+                else self.matching_ids(params["jql"])
+            )
+            pages = [ids[i : i + size] for i in range(0, len(ids), size)]
         page_idx = int(params.get("nextPageToken", 0))
         is_last = page_idx + 1 >= len(pages)
         page: Dict[str, Any] = {
@@ -478,6 +484,27 @@ class JiraMock:
         ids = request.json()["ids"]
         self.worklog_lists.append(ids)
         return [self.worklogs[str(worklog_id)] for worklog_id in ids]
+
+
+def record_search_pages(mocker: MockerFixture) -> List[int]:
+    """Records the number of issues in each search page the source reads"""
+    sizes: List[int] = []
+    search = JiraClient.search
+
+    def recorded(
+        client: JiraClient, jql: str, fields: str, page_size: int
+    ) -> Iterator[List[Dict[str, Any]]]:
+        for page in search(client, jql, fields, page_size):
+            sizes.append(len(page))
+            yield page
+
+    mocker.patch.object(JiraClient, "search", recorded)
+    return sizes
+
+
+def page_sizes(count: int, page_size: int) -> List[int]:
+    """Sizes of the pages that hold `count` items"""
+    return [min(page_size, count - start) for start in range(0, count, page_size)]
 
 
 def duckdb_pipeline(name: str) -> dlt.Pipeline:

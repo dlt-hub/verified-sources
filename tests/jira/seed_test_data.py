@@ -34,7 +34,7 @@ from sources.jira.settings import MAX_SEARCH_PAGE_SIZE
 from tests.jira.utils import CAPTURED_RESPONSES, SEED_LABEL, load_captured
 
 API = "rest/api/2/"
-BULK_ISSUES = 250
+BULK_ISSUES = 500
 CHANGELOG_EDITS = 120
 WORKLOGS = 25
 COMMENTS = 120
@@ -152,8 +152,11 @@ def subtask_type(client: JiraClient, project: str) -> str:
 
 
 def bulk_issues(client: JiraClient, project: str, case: str) -> None:
-    """More issues than a bulk fetch batch of 100, created within the same minutes"""
-    for start in range(0, BULK_ISSUES, 50):
+    """More issues than a bulk fetch batch and several search pages of 100, created within the
+    same minutes. Adds the missing ones when `BULK_ISSUES` grows.
+    """
+    existing = len(search_ids(client, f'labels = "{SEED_LABEL}-{case}"'))
+    for start in range(existing, BULK_ISSUES, 50):
         updates = [
             {"fields": issue_fields(project, case, f"bulk issue {n + 1}")}
             for n in range(start, min(start + 50, BULK_ISSUES))
@@ -391,7 +394,9 @@ def seed(client: JiraClient, project: str, cases: List[str], apply: bool) -> Non
     for case in cases:
         label = f"{SEED_LABEL}-{case.replace('_', '-')}"
         existing = search_ids(client, f'labels = "{label}"')
-        if existing:
+        # other cases are never topped up, a partly created case would get duplicates
+        growing = case == "bulk_issues" and len(existing) < ISSUES_PER_CASE[case]
+        if existing and not growing:
             print(f"{case}: exists ({len(existing)} issues)")
         elif apply:
             print(f"{case}: creating. {CASES[case].__doc__}")

@@ -13,6 +13,10 @@ INCREMENTAL_FOLDER = "dlt_incremental"
 PAGING_FILES = 205
 INCREMENTAL_FILES = 25
 REPORT_HEADER = b"order_id,customer,amount,order_date\n"
+# a document library besides the default one, its file is not in the default library
+ARCHIVE_LIBRARY = "dlt archive"
+ARCHIVE_FILE = "archive/report_2023.csv"
+ARCHIVE_CONTENT = REPORT_HEADER + b"1,Archived,10.5,2023-12-31\n"
 
 DOCUMENTS: Dict[str, bytes] = {
     f"{TEST_FOLDER}/report_2024_01.csv": REPORT_HEADER

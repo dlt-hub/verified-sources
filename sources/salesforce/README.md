@@ -7,6 +7,13 @@ in the [dlt docs](https://dlthub.com/docs/dlt-ecosystem/verified-sources/salesfo
 
 ## Changelog
 
+### 1.0.3
+**Upgrade**: safe, the incremental state carries over.
+- changed `salesforce_table`: resources run their query jobs in parallel, like the resources of
+  `salesforce_source`
+- changed all resources: timestamp columns have no precision hint, new tables get the default
+  precision of the destination. Existing tables keep their type
+
 ### 1.0.2
 **Upgrade**: safe, the incremental state carries over and the next run continues from it. Calls of
 `salesforce_source` with `incremental` fail: pass `start_date`, or `write_disposition="replace"` to
@@ -79,9 +86,7 @@ pyarrow 17 and urllib3 2.3 (local), or taken from docs and other connectors.
   `Sforce-NumberOfRecords` would come from Salesforce itself and raises.
 - **CSV values**: integers come as `120`, currency and doubles of 10 million or more in exponent
   form, e.g. `9.9999999E7` (test org). Formula values are rounded to the scale of the field, also
-  with division, though Fivetran
-  ([docs](https://fivetran.com/docs/connectors/applications/salesforce)) reports unrounded ones
-  (test org). `SystemModstamp` has second precision (test org). Pages have no byte order mark (test
+  with division, though other connectors report unrounded ones (test org). `SystemModstamp` has second precision (test org). Pages have no byte order mark (test
   org).
 - **Long values**: long text areas hold up to 131,072 characters (test org), the default field limit
   of Python's `csv`. An Apex class holds up to 1 million
@@ -91,17 +96,19 @@ pyarrow 17 and urllib3 2.3 (local), or taken from docs and other connectors.
   to about 16 MiB: on a 40 MiB page they take 13 ms longer than blocks of 1 MiB and Arrow allocates
   about 190 MiB instead of 60 MiB, with the same RSS (local). Parsing a page in one block allocated
   about 770 MiB.
-- **Deletes**: `queryAll` returns deleted `OpportunityLineItem` records, deleted on their own or
-  with their opportunity, with `IsDeleted=true` (test org), though Fivetran
-  ([docs](https://fivetran.com/docs/connectors/applications/salesforce)) reports they are not.
-  Deleted records stay in the recycle bin for 15 days, records purged between two runs stay in the
-  destination.
+- **Deletes**: deleted records stay in the recycle bin for 15 days, and `queryAll` returns them with
+  `IsDeleted=true`. Records purged between two runs stay in the destination. `OpportunityLineItem`
+  records deleted on their own skip the recycle bin: `queryAll` returned them hours after the
+  delete but not 8 days later, and `getDeleted` did not list them (test org, other connectors
+  report the same). Line items deleted with their opportunity stay as long as the opportunity. A
+  run that misses such a delete keeps the line item in the destination, until
+  `opportunity_line_item` is reloaded with `write_disposition="replace"`.
 - **Changes without `SystemModstamp`**: formula fields that read related records or use `TODAY()`,
   and sharing changes such as account and opportunity team members, change without changing
-  `SystemModstamp` ([Fivetran docs](https://fivetran.com/docs/connectors/applications/salesforce)).
+  `SystemModstamp` (docs of other connectors).
   Incremental loads keep the old values until the sObject is reloaded.
 - **Compound fields**: the Bulk API rejects some compound fields with `Selecting compound data not
-  supported in Bulk Query`, Airbyte and Estuary read such sObjects with the REST API.
+  supported in Bulk Query`, other connectors read such sObjects with the REST API.
 - **Sessions**: a long job may outlive the session. The source logs in again and continues with the
   same job and page, which does not work for credentials with a session id only (#717).
 - **Throughput**: 50,000 rows with 36 fields load to the local filesystem in 0.15 s with `pyarrow`

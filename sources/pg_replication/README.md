@@ -162,9 +162,8 @@ starts one. Other versions run the same way, e.g.
   every load (Snowflake and DuckDB, #719).
 - **Privileges**: creating a publication needs CREATE on the database, adding a table to it the
   ownership of the table, `FOR TABLES IN SCHEMA` a superuser
-  ([docs](https://www.postgresql.org/docs/current/sql-createpublication.html)). Openflow, Airbyte
-  and Fivetran have the DBA create the publication, Debezium a role that shares the table
-  ownership (#719). Creating the slot needs REPLICATION, a direct snapshot SELECT, the
+  ([docs](https://www.postgresql.org/docs/current/sql-createpublication.html)). Other connectors
+  have the DBA create the publication, or use a role that shares the table ownership (#719). Creating the slot needs REPLICATION, a direct snapshot SELECT, the
   `table` and `unlogged_table` snapshots CREATE on the schema for their copies. Row-level
   security filters snapshots of a role without BYPASSRLS but not replicated changes, so
   `SESSION_OPTIONS` sets `row_security=off` and such snapshots fail

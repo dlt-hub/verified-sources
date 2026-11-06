@@ -152,6 +152,21 @@ def test_filesystem_library_drive(graph: Mocker, library: str, drive: str) -> No
     assert paths.count(f"{SITE_PATH}/{drive}/root/children") == 2
 
 
+@pytest.mark.parametrize(
+    "url,drive",
+    [
+        pytest.param("sharepoint:///a.csv", "drive", id="default_library"),
+        pytest.param("sharepoint://Archive/a.csv", "drives/d2", id="named_library"),
+    ],
+)
+def test_filesystem_library_from_url(graph: Mocker, url: str, drive: str) -> None:
+    # fsspec clients such as pandas build the filesystem from the url
+    mock_pages(graph, DRIVES_URL, DRIVE_PAGES)
+    mock_folder(graph, "", [[File("A", "a.csv", content=b"n\n1\n")]], drive)
+    with fsspec.open(url, client=new_fs(None).client) as f:
+        assert f.read() == b"n\n1\n"
+
+
 def test_filesystem_library_not_found(graph: Mocker) -> None:
     mock_pages(graph, DRIVES_URL, DRIVE_PAGES)
 
@@ -1081,6 +1096,37 @@ def test_sharepoint_files_same_as_pipe(graph: Mocker) -> None:
     assert_load_info(pipeline.run(piped))
 
     assert file_rows_of(pipeline, "piped") == file_rows_of(pipeline, "reports")
+
+
+def test_sharepoint_files_listing(graph: Mocker) -> None:
+    mock_files(graph, {"a.csv": b"n\n1\n2\n", "b.csv": b"n\n3\n"})
+    # the file listing is not loaded by default
+    source = sharepoint_files(**files_config(file_glob="*.csv"))
+    assert {name: r.selected for name, r in source.resources.items()} == {
+        "reports": True,
+        "reports_files": False,
+    }
+
+    # selected, it loads from the same listing that the rows are read from
+    pipeline = new_pipeline("sharepoint_listing")
+    source.resources["reports_files"].selected = True
+    assert_load_info(pipeline.run(source))
+    assert load_table_counts(pipeline, "reports", "reports_files") == {
+        "reports": 3,
+        "reports_files": 2,
+    }
+    assert len(requests_to(graph, "/children")) == 1
+    assert downloaded_ids(graph) == ["a.csv", "b.csv"]
+
+    # the listing alone downloads no file
+    graph.reset_mock()
+    listing = new_pipeline("sharepoint_listing_only")
+    source = sharepoint_files(**files_config(file_glob="*.csv"))
+    assert_load_info(listing.run(source.with_resources("reports_files")))
+    assert [t["name"] for t in listing.default_schema.data_tables()] == [
+        "reports_files"
+    ]
+    assert downloaded_ids(graph) == []
 
 
 def test_read_files_table_name_hint(graph: Mocker) -> None:

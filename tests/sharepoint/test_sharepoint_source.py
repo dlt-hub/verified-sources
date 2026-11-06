@@ -4,10 +4,12 @@ from datetime import datetime, timezone
 from typing import Any, Dict, Optional, Set
 
 import dlt
+import pandas as pd
 import pytest
+from dlt.common.configuration import resolve_configuration
 from dlt.sources import DltResource
 
-from sources.sharepoint import sharepoint_files, sharepoint_list
+from sources.sharepoint import SharepointCredentials, sharepoint_files, sharepoint_list
 from tests.sharepoint.seed import data
 from tests.sharepoint.utils import last_row_count, loaded_rows
 from tests.utils import (
@@ -211,12 +213,20 @@ def test_seeded_full_and_incremental() -> None:
             {None, "A-7"},
         ),
         ({"folder_path": "dlt_paging"}, "t", 205, None, None),
+        (
+            {"folder_path": "archive", "library": data.ARCHIVE_LIBRARY},
+            "t",
+            1,
+            "customer",
+            {"Archived"},
+        ),
     ],
     ids=[
         "subfolders",
         "library_root",
         "excel_in_folder_with_special_chars",
         "folder_with_205_files",
+        "other_library",
     ],
 )
 @pytest.mark.parametrize("destination_name", ALL_DESTINATIONS)
@@ -240,3 +250,20 @@ def test_files_variants(
     assert len(rows) == row_count
     if column:
         assert {row.get(column) for row in rows} == values
+
+
+@skip_if_not_active("duckdb")
+def test_read_library_url_with_pandas() -> None:
+    """pandas reads the library named in the url, the default library has no such file."""
+    credentials = resolve_configuration(
+        SharepointCredentials(), sections=("sources", "sharepoint")
+    )
+    storage_options = dict(credentials)
+    url = f"sharepoint://{data.ARCHIVE_LIBRARY}/{data.ARCHIVE_FILE}"
+    assert pd.read_csv(url, storage_options=storage_options)["customer"].tolist() == [
+        "Archived"
+    ]
+    with pytest.raises(FileNotFoundError):
+        pd.read_csv(
+            f"sharepoint:///{data.ARCHIVE_FILE}", storage_options=storage_options
+        )

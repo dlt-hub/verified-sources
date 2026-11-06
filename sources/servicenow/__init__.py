@@ -91,7 +91,8 @@ def servicenow_source(
         page_size (int): Maximum number of records in a request. See `servicenow_table`.
         allow_partitioned_load (bool): Reads tables of more than one page in `sys_id` ranges in
             parallel. See `servicenow_table`.
-        max_partitions (int): Maximum number of `sys_id` ranges of a table.
+        max_partitions (int): Maximum number of `sys_id` ranges of a table. See
+            `servicenow_table`.
         defer_table_reflect (bool): Reads the fields of all tables only when extracting, with
             one query of `sys_dictionary`, so creating the source makes no API calls. Enable when
             running on Airflow. See `servicenow_table`.
@@ -205,8 +206,8 @@ def servicenow_table(
             and reads them in `sys_id` ranges in parallel with the dlt extract workers. Not used
             with `row_order` or `add_limit`. False reads all pages one after another.
         max_partitions (int): Maximum number of `sys_id` ranges of a table. The dlt extract
-            workers read the ranges, 5 workers by default. About twice as many ranges as workers
-            keep all workers busy.
+            workers read the ranges, 5 by default, set with `workers` in the `[extract]` config
+            section. About twice as many ranges as workers keep all workers busy.
         included_columns (Optional[List[str]]): Fields to load, all fields if not set. `sys_id`,
             the cursor field, the primary key and the merge key are always loaded, unless
             `excluded_columns` skips them.

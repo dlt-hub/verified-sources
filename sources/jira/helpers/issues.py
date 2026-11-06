@@ -10,7 +10,7 @@ from dlt.common import logger
 from dlt.common.exceptions import ResourceNameNotAvailable
 from dlt.common.schema.typing import TTableSchemaColumns, TWriteDispositionConfig
 from dlt.common.schema.utils import merge_columns
-from dlt.common.time import ensure_date, ensure_datetime_in_tz, to_tzinfo
+from dlt.common.time import to_tzinfo
 from dlt.common.typing import DictStrAny, TColumnNames, TDataItem, TTableHintTemplate
 from dlt.extract.exceptions import CurrentSourceNotAvailable, ResourceNotFoundError
 from dlt.extract.incremental import Incremental
@@ -104,9 +104,8 @@ class IssuesReader:
     """Reads issues, shared by the ids resource and the issues transformer built by
     `make_issues_resource`.
 
-    JQL is generated from the incremental of the ids resource, which yields pages of `chunk_size`
-    ids and cursor values of matching issues. The parallelized issues transformer fetches each
-    page in batches with bulk fetch.
+    Search lists the ids of issues matching JQL generated from the incremental, and pages of
+    issues are fetched in parallel.
 
     With `queries`, each query runs as is, without incremental, and rows get the `query_index` of
     the query that found them.
@@ -144,25 +143,35 @@ class IssuesReader:
         self._column_hints: Optional[TTableSchemaColumns] = None
         self.incremental: Optional[Incremental[Any]] = None
         self.cursor: Optional[CursorRange] = None
+        # issues updated after this time are loaded by the next run
+        self.read_until: Optional[datetime] = None
         # first run of an incremental load, nothing loaded before needs to be deleted
         self.initial_load = False
         # write disposition of the issues, set by `make_issues_resource`
         self.write_disposition: TWriteDispositionConfig = "merge"
 
-    def bind(self, incremental: Optional[Incremental[Any]]) -> Optional[str]:
-        """Reads field metadata, binds `incremental` and selects the fields to fetch, returns the
-        cursor field id
-        """
+    def bind(self, incremental: Optional[Incremental[Any]]) -> None:
+        """Reads field metadata, binds `incremental` and selects the fields to fetch"""
         fields = {field["id"]: field for field in self.client.fields()}
         self.incremental = incremental
         cursor_name: Optional[str] = None
         self.cursor = None
+        self.read_until = None
         self.initial_load = False
         if incremental:
             self.cursor = make_cursor_range(
                 incremental, fields, to_tzinfo(self.client.time_zone())
             )
             cursor_name = incremental.get_cursor_column_name()
+            # later updates go to the next run, custom fields may hold future values
+            if (
+                self.cursor.cursor_type == "timestamp"
+                and self.cursor.last_value_func is max
+                and self.cursor.end_value is None
+                and not fields[cursor_name].get("custom")
+                and not is_replace(self.write_disposition)
+            ):
+                self.read_until = datetime.now(timezone.utc)
             # the stored last value advances past the initial value once issues are loaded
             self.initial_load = (
                 incremental.end_value is None
@@ -183,7 +192,6 @@ class IssuesReader:
         self.chunk_size = self._chunk_size or DEFAULT_CHUNK_SIZE
         self.client.split_batches = False
         self._column_hints = None
-        return cursor_name
 
     def make_jqls(self) -> List[Tuple[Optional[int], str]]:
         """Returns the JQL queries to run with their query index, None without `queries`"""
@@ -228,26 +236,11 @@ class IssuesReader:
             for issue in self.client.bulk_fetch(ids, ["comment"], DEFAULT_BULK_ISSUES)
         }
 
-    def search(
-        self, jql: str, cursor_name: Optional[str]
-    ) -> Iterator[List[DictStrAny]]:
-        """Yields pages of ids of issues matching `jql` with values of the `cursor_name` field"""
-        for page in self.client.search(jql, cursor_name or "id", self.search_page_size):
-            items: List[DictStrAny] = []
-            for issue in page:
-                item = {"id": issue["id"]}
-                if cursor_name and self.cursor:
-                    value = (issue.get("fields") or {}).get(cursor_name)
-                    if value is not None:
-                        # the incremental compares datetimes, not strings with offsets
-                        value = (
-                            ensure_date(value)
-                            if self.cursor.cursor_type == "date"
-                            else ensure_datetime_in_tz(value)
-                        )
-                    item[cursor_name] = value
-                items.append(item)
-            yield items
+    def search(self, jql: str) -> Iterator[List[str]]:
+        """Yields pages of ids of issues matching `jql`"""
+        # search serves 5000 ids per page, but only 100 issues when it also returns a field
+        for page in self.client.search(jql, "id", self.search_page_size):
+            yield [issue["id"] for issue in page]
 
     def convert(
         self, issues: List[DictStrAny], query_index: Optional[int] = None
@@ -283,36 +276,41 @@ class IssuesReader:
 def issue_ids(
     reader: IssuesReader, incremental: Optional[Incremental[Any]] = None
 ) -> Iterator[TDataItem]:
-    """Yields pages of `chunk_size` ids and cursor values of issues matching JQL generated from
-    `incremental`. With queries of `jira_search`, ids are tagged with the query index and each
-    query reads at most `page_limit` search pages.
-    """
-    cursor_name = reader.bind(incremental)
+    """Yields deferred fetches of pages of issues matching JQL generated from `incremental`"""
+    reader.bind(incremental)
     for query_index, jql in reader.make_jqls():
         logger.info(f"Reading Jira issues matching JQL: {jql}")
-        search_pages = reader.search(jql, cursor_name)
+        search_pages = reader.search(jql)
         if query_index is not None:
             search_pages = islice(search_pages, reader.page_limit)
-        # each data item has a fixed cost on extract, so search pages are chunked again
-        for page in batched(chain.from_iterable(search_pages), reader.chunk_size):
-            if query_index is not None:
-                page = [{**item, QUERY_INDEX: query_index} for item in page]
-            yield page
+        # fetched issues carry the cursor values, the incremental reads them from there
+        for ids in batched(chain.from_iterable(search_pages), reader.chunk_size):
+            yield fetch_issues(reader, ids, query_index)
 
 
-def issue_details(ids: TDataItem, reader: IssuesReader) -> Iterator[TDataItem]:
-    """Fetches issues in a page of ids. The reader is passed in the meta of the page to the
-    transformers piped from `issues`.
-    """
+@dlt.defer
+def fetch_issues(
+    reader: IssuesReader, ids: List[str], query_index: Optional[int]
+) -> List[DictStrAny]:
+    """Fetches a page of issues and converts them to rows"""
+    rows = reader.convert(reader.fetch(ids), query_index)
+    if reader.read_until is None or reader.incremental is None:
+        return rows
+    cursor = reader.incremental.get_cursor_column_name()
+    return [
+        row
+        for row in rows
+        if row.get(cursor) is None or row[cursor] <= reader.read_until
+    ]
+
+
+def issue_details(issues: TDataItem, reader: IssuesReader) -> Iterator[TDataItem]:
+    """Passes fetched issues on with the reader in their meta, for transformers piped from them"""
     columns = reader.column_hints()
     if columns:
-        # parallel calls reach the extractor in any order, so each yields the hints first
         yield dlt.mark.with_hints([], dlt.mark.make_hints(columns=columns))
-    # a page of ids holds issues found by one query
-    query_index: Optional[int] = ids[0].get(QUERY_INDEX) if ids else None
-    issues = reader.fetch([item["id"] for item in ids])
     if issues:
-        yield DataItemWithMeta(IssuesPage(reader), reader.convert(issues, query_index))
+        yield DataItemWithMeta(IssuesPage(reader), issues)
 
 
 def make_issues_resource(
@@ -324,8 +322,8 @@ def make_issues_resource(
     columns: Optional[TTableSchemaColumns] = None,
     name: str = "issues",
 ) -> DltResource:
-    """Returns the parallelized `name` transformer of the `<name>_ids` resource, which lists ids
-    of issues in the incremental range and holds the incremental state
+    """Returns the `name` transformer of the `<name>_ids` resource, which lists and fetches the
+    issues in the incremental range and holds the incremental state
     """
     reader.write_disposition = write_disposition
     # dlt resets the state of a resource with the `replace` shorthand, here the incremental state
@@ -343,7 +341,6 @@ def make_issues_resource(
         primary_key=primary_key,
         merge_key=merge_key,
         columns=columns,
-        parallelized=True,
     )(reader)
 
 

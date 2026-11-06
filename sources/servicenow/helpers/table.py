@@ -165,7 +165,8 @@ def check_hidden_fields(
         logger.warning(
             f"Fields {hidden} of `{table}` are not returned, for example because of"
             " field ACLs. dlt loads them as nulls that replace the values loaded before."
-            " Grant read access to these fields, or skip them with `excluded_columns`."
+            " Grant read access to these fields, or skip them with `excluded_columns` of"
+            " `servicenow_table`."
         )
 
 

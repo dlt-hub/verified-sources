@@ -325,6 +325,7 @@ def test_seeded_full_and_incremental(backend: str, api: str, partitioned: bool) 
         dev_mode=True,
     )
     assert_load_info(pipeline.run(seeded(backend, api, partitioned)))
+    # the run stops at the time it starts, so the record from 2032 is not read
     assert last_row_count(pipeline) == len(records)
     assert loaded_seed_ids(pipeline) == seed_ids
 
@@ -374,19 +375,41 @@ def test_seeded_full_and_incremental(backend: str, api: str, partitioned: bool) 
         assert "sources" not in backfill.state
         assert loaded_seed_ids(backfill) == seed_ids
 
+    # a window that ends after the future cursor value reads that record
+    future = dlt.pipeline(
+        pipeline_name=f"servicenow_seeded_future_{backend}_{api}_{partitioned}",
+        destination="duckdb",
+        dev_mode=True,
+    )
+    window = seeded(
+        backend,
+        api,
+        partitioned,
+        initial_value=quarters[-1],
+        end_value=datetime(2033, 1, 1, tzinfo=timezone.utc),
+    )
+    assert_load_info(future.run(window))
+    assert loaded_seed_ids(future) == [data.FUTURE_RECORD[data.SEED_ID_FIELD]]
+
 
 @skip_if_not_active("duckdb")
 @READERS
 @pytest.mark.parametrize(
-    "cursor,last_value_func,initial_value",
+    "cursor,last_value_func,initial_value,loads_future",
     [
-        (data.INCREMENTAL_CURSOR, max, None),
-        (data.INCREMENTAL_CURSOR, min, None),
-        (data.INCREMENTAL_CURSOR, max, datetime(1999, 1, 1, tzinfo=timezone.utc)),
-        (data.INCREMENTAL_CURSOR, min, datetime(2100, 1, 1, tzinfo=timezone.utc)),
+        # timestamp ranges without an upper end stop at the time the run starts
+        (data.INCREMENTAL_CURSOR, max, None, False),
+        (data.INCREMENTAL_CURSOR, min, None, False),
+        (
+            data.INCREMENTAL_CURSOR,
+            max,
+            datetime(1999, 1, 1, tzinfo=timezone.utc),
+            False,
+        ),
+        (data.INCREMENTAL_CURSOR, min, datetime(2100, 1, 1, tzinfo=timezone.utc), True),
         # the instance compares and orders integers as numbers, 9 before 10
-        ("u_number", max, None),
-        ("u_number", min, None),
+        ("u_number", max, None, True),
+        ("u_number", min, None, True),
     ],
     ids=[
         "max",
@@ -403,8 +426,11 @@ def test_seeded_chunks(
     cursor: str,
     last_value_func: Any,
     initial_value: Optional[datetime],
+    loads_future: bool,
 ) -> None:
-    records = data.incremental_records()
+    records = data.incremental_records() + (
+        [data.FUTURE_RECORD] if loads_future else []
+    )
     expected = sorted(
         (record[cursor] for record in records), reverse=last_value_func is min
     )
@@ -449,7 +475,8 @@ def test_seeded_deferred() -> None:
         pipeline_name="servicenow_seeded_deferred", destination="duckdb", dev_mode=True
     )
     assert_load_info(pipeline.run(table))
-    assert last_row_count(pipeline) == data.INCREMENTAL_RECORDS
+    # the future `u_updated_at` does not matter to the default cursor
+    assert last_row_count(pipeline) == data.INCREMENTAL_RECORDS + 1
     columns = pipeline.default_schema.get_table_columns(data.DLT_INCREMENTAL)
     assert columns["u_number"]["data_type"] == "bigint"
     assert columns[data.INCREMENTAL_CURSOR]["data_type"] == "timestamp"

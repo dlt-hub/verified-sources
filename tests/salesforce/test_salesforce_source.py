@@ -209,8 +209,8 @@ def test_salesforce_table_filter_deleted_records(include_deleted: bool) -> None:
 
 
 def test_salesforce_table_deleted_line_items() -> None:
-    # line items deleted on their own and with their opportunity are both returned by queryAll,
-    # so merge deletes them in the destination. the recycle bin keeps them for 15 days
+    # line items deleted with their opportunity stay in the recycle bin for 15 days, so queryAll
+    # returns them. line items deleted on their own skip the recycle bin and are purged within days
     rows = list(
         salesforce_table(
             sobject="OpportunityLineItem",
@@ -227,7 +227,7 @@ def test_salesforce_table_deleted_line_items() -> None:
             len(data.DELETED_LINE_ITEM_PREFIX) :
         ].split("-")
         kinds_by_run.setdefault(run_id, set()).add(kind)
-    assert all(kinds == {"direct", "cascade"} for kinds in kinds_by_run.values())
+    assert all("cascade" in kinds for kinds in kinds_by_run.values())
 
 
 @pytest.mark.parametrize("api", ["bulk", "rest"])

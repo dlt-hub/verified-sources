@@ -173,7 +173,7 @@ def load(client: ServiceNowClient) -> None:
     load_records(
         client,
         data.DLT_INCREMENTAL,
-        data.incremental_records(),
+        data.incremental_records() + [data.FUTURE_RECORD],
         data.INCREMENTAL_CURSOR,
     )
 
