@@ -483,8 +483,8 @@ def fetch_props_with_types(
 
 @dlt.resource
 def hubspot_events_for_objects(
-    object_type: THubspotObjectType,
-    object_ids: List[str],
+    object_type: THubspotObjectType = dlt.config.value,
+    object_ids: List[str] = dlt.config.value,
     api_key: str = dlt.secrets.value,
     start_date: pendulum.DateTime = STARTDATE,
 ) -> DltResource:

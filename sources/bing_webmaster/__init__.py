@@ -6,11 +6,11 @@ The dates are always Fridays and during tests, the data up to the latest Friday 
 """
 
 import time
-from typing import Iterable, Iterator, List, Sequence
+from typing import Dict, Iterator, List, Sequence
 
 import dlt
 from dlt.common import logger
-from dlt.common.typing import DictStrAny, DictStrStr
+from dlt.common.typing import DictStrAny
 from dlt.sources import DltResource
 
 from .helpers import get_stats_with_retry, parse_response
@@ -18,16 +18,19 @@ from .helpers import get_stats_with_retry, parse_response
 
 @dlt.source(name="bing_webmaster")
 def source(
-    site_urls: List[str] = None, site_url_pages: Iterable[DictStrStr] = None
+    site_urls: List[str] = dlt.config.value,
+    site_url_pages: List[Dict[str, str]] = dlt.config.value,
 ) -> Sequence[DltResource]:
     """
     A dlt source for the Bing Webmaster api.
     It groups resources for the APIs which return organic search traffic statistics
     Args:
-        site_urls: List[str]: A list of site_urls, e.g, ["dlthub.com", "dlthub.de"]. Use this if you need the weekly traffic per site_url and page
-        site_url_pages: Iterable[DictStrStr]: A list of pairs of site_url and page. Use this if you need the weekly traffic per site_url, page, and query
+        site_urls: List[str]: A list of site_urls to get weekly traffic statistics for
+        site_url_pages: Iterable[Dict[str, str]]: A list of pairs of site_url and page for which to return weekly traffic per site_url, page, and query
     Returns:
         Sequence[DltResource]: A sequence of resources that can be selected from including page_stats and page_query_stats.
+    Examples:
+        >>> source(site_urls=["dlthub.de", "dlthub.com"], site_url_pages=[{"site_url": "dlthub.com", "page": "https://www.dlthub.com/docs"}])
     """
     return (
         page_stats(site_urls),
@@ -70,7 +73,7 @@ def page_stats(
     table_name="bing_page_query_stats",
 )
 def page_query_stats(
-    site_url_pages: Iterable[DictStrStr],
+    site_url_pages: List[Dict[str, str]],
     api_key: str = dlt.secrets.value,
 ) -> Iterator[Iterator[DictStrAny]]:
     """
@@ -80,7 +83,7 @@ def page_query_stats(
     https://learn.microsoft.com/en-us/dotnet/api/microsoft.bing.webmaster.api.interfaces.iwebmasterapi.getpagequerystats
 
     Args:
-        site_url_page (Iterable[DictStrStr]): Iterable of site_url and pages to retrieve statistics for. Can be result of a SQL query, a parsed sitemap, etc.
+        site_url_page (List[Dict[str,str]]): Iterable of site_url and pages to retrieve statistics for. Can be result of a SQL query, a parsed sitemap, etc.
     Yields:
         Iterator[Dict[str, Any]]: An iterator over list of organic traffic statistics.
     """
