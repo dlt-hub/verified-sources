@@ -40,7 +40,8 @@ uv run python -m tests.servicenow.seed.seed all  # or deploy | load | capture
   - inserts the missing records of `u_dlt_pages`: two full pages of 100 and a short one. `u_when` of the first 150
     is empty, more than a page of records without a cursor value.
   - inserts the missing records of `u_dlt_incremental`: 1050 records with unique `u_updated_at` values in 2024,
-    five chunks of 200 and a short one for the standard incremental tests.
+    five chunks of 200 and a short one for the standard incremental tests, and `incremental-future` with
+    `u_updated_at` in 2032, which only a range that ends after it reads.
 
   The platform sets `sys_updated_on` on every write, so the seed cannot set it.
 - `capture`: writes the `sys_dictionary` fields, a Table API page and a CSV export of `u_dlt_types` to `cases/`.

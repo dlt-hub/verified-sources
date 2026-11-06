@@ -176,3 +176,11 @@ def incremental_records() -> List[Dict[str, Any]]:
         }
         for i, second in enumerate(seconds)
     ]
+
+
+# a cursor value after the time a run starts, read only by a range that ends after it
+FUTURE_RECORD: Dict[str, Any] = {
+    SEED_ID_FIELD: "incremental-future",
+    "u_number": INCREMENTAL_RECORDS,
+    INCREMENTAL_CURSOR: datetime(2032, 1, 1, tzinfo=UTC),
+}
