@@ -8,6 +8,7 @@ import dlt
 import pytest
 from dlt.common.time import ensure_datetime_in_tz
 from dlt.sources.helpers.requests import HTTPError
+from pytest_mock import MockerFixture
 
 from sources.jira import (
     issue_changelogs,
@@ -33,7 +34,12 @@ from tests.jira.seed_test_data import (
     search_ids,
     seeded_issues,
 )
-from tests.jira.utils import SEED_LABEL, filesystem_pipeline
+from tests.jira.utils import (
+    SEED_LABEL,
+    filesystem_pipeline,
+    page_sizes,
+    record_search_pages,
+)
 from tests.utils import (
     ALL_DESTINATIONS,
     assert_load_info,
@@ -44,6 +50,8 @@ from tests.utils import (
 
 # pages per resource, so the run stays bounded on a site of any size
 PAGE_LIMIT = 2
+# much less than the seeded issues, so the runs read several search pages
+SEARCH_PAGE_SIZE = 100
 
 
 @pytest.fixture(autouse=True)
@@ -152,12 +160,42 @@ def test_load_query_issues(destination_name: str) -> None:
     info = pipeline.run(search)
     assert_load_info(info)
     data_tables = pipeline.default_schema.data_tables()
-    assert [table["name"] for table in data_tables] == ["issues"]
+    assert [table["name"] for table in data_tables] == ["jira_search"]
     # an issue found by both queries is loaded for each, the key is the issue and the query
-    rows = load_tables_to_dicts(pipeline, "issues")["issues"]
+    rows = load_tables_to_dicts(pipeline, "jira_search")["jira_search"]
     assert {row["query_index"] for row in rows} == {0, 1}
     keys = [(row["id"], row["query_index"]) for row in rows]
     assert len(keys) == len(set(keys))
+
+
+def test_search_pages(mocker: MockerFixture) -> None:
+    """Reads all seeded issues in search pages of 100, fetched in pages of 200 with the largest
+    bulk fetch requests the included fields allow
+    """
+    seeded = seeded_issues()
+    search_pages = record_search_pages(mocker)
+    bulk_fetch = mocker.spy(JiraClient, "bulk_fetch")
+    search = jira_search(
+        jql_queries=[f'labels = "{SEED_LABEL}"'],
+        page_size=SEARCH_PAGE_SIZE,
+        chunk_size=200,
+        included_columns=["summary", "labels"],
+    )
+    rows = list(search)
+    assert sorted(row["id"] for row in rows) == sorted(str(i["id"]) for i in seeded)
+    assert {key for row in rows for key in row} == {
+        "id",
+        "key",
+        "summary",
+        "labels",
+        "query_index",
+    }
+    assert search_pages == page_sizes(len(seeded), SEARCH_PAGE_SIZE)
+    fetches = [call.args for call in bulk_fetch.call_args_list]
+    assert sorted(len(ids) for _, ids, _, _ in fetches) == sorted(
+        page_sizes(len(seeded), 200)
+    )
+    assert {batch_size for _, _, _, batch_size in fetches} == {1000}
 
 
 @pytest.mark.parametrize("destination_name", ALL_DESTINATIONS)
@@ -237,16 +275,25 @@ def test_issue_comments_changed(destination_name: str) -> None:
 
 
 @pytest.mark.parametrize("destination_name", ALL_DESTINATIONS)
-def test_seeded_issues_full_and_incremental(destination_name: str) -> None:
+def test_seeded_issues_full_and_incremental(
+    destination_name: str, mocker: MockerFixture
+) -> None:
     """Loads all seeded issues with their comments, changelogs and worklogs, then in backfill
-    windows and incrementally. The expected counts and values come from the seed cases and the
-    manifest of seeded issues.
+    windows and incrementally, in search pages of 100. The expected counts and values come from
+    the seed cases and the manifest of seeded issues.
     """
     seeded, jql = seeded_issues_with_jql()
+    search_pages = record_search_pages(mocker)
 
     def case_id(case: str) -> str:
         (issue,) = issues_of_case(seeded, case)
         return str(issue["id"])
+
+    # search serves all ids in one page when it returns no fields
+    rows = list(jira_issues(jql=jql, included_columns=["summary"]))
+    assert len(rows) == len(seeded)
+    assert search_pages == [len(seeded)]
+    search_pages.clear()
 
     pipeline = dlt.pipeline(
         pipeline_name="test_jira_seeded",
@@ -254,7 +301,7 @@ def test_seeded_issues_full_and_incremental(destination_name: str) -> None:
         dataset_name="test_jira_seeded",
         dev_mode=True,
     )
-    issues = jira_issues(jql=jql)
+    issues = jira_issues(jql=jql, search_page_size=SEARCH_PAGE_SIZE)
     info = pipeline.run(
         [
             issues,
@@ -264,6 +311,7 @@ def test_seeded_issues_full_and_incremental(destination_name: str) -> None:
         ]
     )
     assert_load_info(info)
+    assert search_pages == page_sizes(len(seeded), SEARCH_PAGE_SIZE)
     assert load_table_counts(pipeline, "issues") == {"issues": len(seeded)}
     tables = load_tables_to_dicts(
         pipeline,
@@ -308,10 +356,17 @@ def test_seeded_issues_full_and_incremental(destination_name: str) -> None:
     )
     for start, end in zip(cuts, cuts[1:]):
         expected = sum(start <= value < end for value in created)
-        assert expected > 0
+        assert expected > SEARCH_PAGE_SIZE
         window = dlt.sources.incremental("created", initial_value=start, end_value=end)
-        assert_load_info(backfill.run(jira_issues(jql=jql, incremental=window)))
+        search_pages.clear()
+        issues = jira_issues(
+            jql=jql, incremental=window, search_page_size=SEARCH_PAGE_SIZE
+        )
+        assert_load_info(backfill.run(issues))
         assert backfill.last_trace.last_normalize_info.row_counts["issues"] == expected
+        # JQL compares whole minutes, so search lists more issues than the window holds
+        assert sum(search_pages) >= expected
+        assert search_pages == page_sizes(sum(search_pages), SEARCH_PAGE_SIZE)
     assert load_table_counts(backfill, "issues") == {"issues": len(seeded)}
 
     # runs without changes: issues within lag are read again, with no lag the issues updated last
@@ -323,7 +378,7 @@ def test_seeded_issues_full_and_incremental(destination_name: str) -> None:
     )
     at_last = sum(value == last for value in updated)
     for lag, expected in ((None, within_lag), (0, at_last), (0, 0)):
-        pipeline.run(jira_issues(jql=jql, lag=lag))
+        pipeline.run(jira_issues(jql=jql, lag=lag, search_page_size=SEARCH_PAGE_SIZE))
         row_counts = pipeline.last_trace.last_normalize_info.row_counts
         assert row_counts.get("issues", 0) == expected, lag
         assert load_table_counts(pipeline, "issues") == {"issues": len(seeded)}

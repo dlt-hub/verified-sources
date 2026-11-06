@@ -158,10 +158,9 @@ def jira_issues(
     """Returns the `issues` resource loading issues matching `jql` incrementally.
 
     Ids of matching issues are listed with JQL search and pages of `chunk_size` issues are fetched
-    with bulk fetch by a parallelized transformer: the number of parallel pages is set by dlt
-    `workers` config of the extract step (5 by default). Fields and their types are taken from
-    the `/field` metadata: each field is a column named by the field id, e.g. `summary` or
-    `customfield_10016`. Comments and worklogs are not loaded into this table: pipe the issues
+    with bulk fetch in parallel: the number of parallel pages is set by dlt `workers` config of
+    the extract step (5 by default). Fields and their types are taken from the `/field` metadata:
+    each field is a column named by the field id, e.g. `summary` or `customfield_10016`. Comments and worklogs are not loaded into this table: pipe the issues
     into `issue_comments` to load comments, use the `worklogs` resource for worklogs.
 
     Args:
@@ -327,14 +326,19 @@ def jira_search(
     page_size: Optional[int] = None,
     jql_queries: List[str] = dlt.config.value,
     page_limit: Optional[int] = None,
+    chunk_size: Optional[int] = None,
+    bulk_fetch_size: Optional[int] = None,
+    included_columns: Optional[List[str]] = None,
+    excluded_columns: Optional[List[str]] = None,
 ) -> Iterable[DltResource]:
     """
-    Jira search source with an `issues` resource that loads issues matching several JQL queries,
-    replaced on each run.
+    Jira search source with a `jira_search` resource that loads issues matching several JQL
+    queries, replaced on each run.
 
     Issues are loaded like `jira_issues` loads them, each row with the `query_index` of the query
     that found it: an issue found by several queries is loaded once for each of them, and the
-    primary key is `id` and `query_index`.
+    primary key is `id` and `query_index`. Rename the resource to load another table, e.g.
+    `jira_search(jql_queries=queries).jira_search.with_name("epics")`.
 
     Args:
         subdomain: The subdomain for the Jira instance.
@@ -345,6 +349,10 @@ def jira_search(
             one that only sorts.
         page_limit: Maximum number of search pages of `page_size` issues to read per query,
             since all queries share one resource and `add_limit` would bound them together.
+        chunk_size: See `jira_issues`.
+        bulk_fetch_size: See `jira_issues`.
+        included_columns: See `jira_issues`.
+        excluded_columns: See `jira_issues`.
 
     Returns:
         Iterable[DltResource]: Resource function for searching issues.
@@ -353,6 +361,14 @@ def jira_search(
         JiraClient(subdomain, email, api_token),
         queries=jql_queries,
         page_limit=page_limit,
+        chunk_size=chunk_size,
+        bulk_fetch_size=bulk_fetch_size,
         search_page_size=page_size or MAX_SEARCH_PAGE_SIZE,
+        included_columns=included_columns,
+        excluded_columns=excluded_columns,
     )
-    return [make_issues_resource(reader, None, "replace", ["id", QUERY_INDEX])]
+    return [
+        make_issues_resource(
+            reader, None, "replace", ["id", QUERY_INDEX], name="jira_search"
+        )
+    ]

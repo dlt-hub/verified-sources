@@ -71,6 +71,7 @@ Breakages are not the only reason to refresh: many sources load correctly but ca
    - **Disposition:** does it match mutability: merge for mutable records, append for insert-only (history, logs), replace only without a cursor?
    - **Query:** are queries built from the incremental, with `incremental.get_current_range()` and a closed range so boundary rows are deduplicated by the primary key, which dlt passes to the incremental?
    - **Lag:** is there a lag for records committed late?
+   - **Cutoff:** can a record move on the cursor while the run reads it, e.g. updated between pages or between listing and fetching? Then the incremental range ends at the time the run starts and records updated later go to the next run, so the cursor never moves past changes the run did not read. Set `dedup_sort="desc"` on the cursor too, so the latest version of a record read twice wins the merge. Skip the cutoff for cursors that may hold future values and for replace loads without state. Test it with a record updated during the run.
    - **Deletes:** do they propagate (soft-delete flag as `hard_delete`, deleted-records endpoints)?
    - **Ordering:** does ORDER BY or LIMIT defeat server-side chunking?
    - **Tests:** plan the [standard incremental tests](#standard-incremental-tests) for each incremental resource.

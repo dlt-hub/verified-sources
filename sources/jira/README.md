@@ -6,6 +6,17 @@ and coding agents. Setup and usage are in the
 
 ## Changelog
 
+### 1.1.0
+**Upgrade**: safe for `jira` and `jira_issues`, incremental state carries over. `jira_search` loads
+into a new `jira_search` table, drop the `issues` table it loaded before.
+- **breaking** `jira_search`: the resource and its table are `jira_search` instead of `issues`, so
+  `jira` and `jira_search` load into one dataset. `with_name` loads another table
+- new `jira_search` arguments `chunk_size`, `bulk_fetch_size`, `included_columns` and
+  `excluded_columns`
+- changed `issues`: search lists only ids, up to 5000 per request instead of 100 issues, and the
+  incremental reads the cursor from fetched issues. Issues updated after the run starts are loaded
+  by the next run, and an issue deleted after search no longer moves the cursor
+
 ### 1.0.0
 **Upgrade**: run once with `refresh="drop_resources"`, e.g.
 `pipeline.run(jira(), refresh="drop_resources")`: it drops the tables loaded before and loads them
@@ -60,7 +71,9 @@ Versions before 1.0.0 were not numbered. Copies taken with `dlt init` have no `v
 Run from `sources/` so the script reads credentials from `sources/.dlt`:
 
 1. `uv run python ../tests/jira/seed_test_data.py` lists the missing cases.
-2. `uv run python ../tests/jira/seed_test_data.py --apply` creates them.
+2. `uv run python ../tests/jira/seed_test_data.py --apply` creates them. `bulk_issues` adds the
+   missing issues when `BULK_ISSUES` grows, other cases are created only when no issue has their
+   label.
 3. `uv run python ../tests/jira/seed_test_data.py --capture` rewrites
    `tests/jira/captured_responses.json`. Run it again after seeding or editing seeded issues.
 
@@ -78,10 +91,11 @@ Facts seen on the test site, about 300 issues, or taken from the
 [Jira Cloud OpenAPI spec](https://dac-static.atlassian.com/cloud/jira/platform/swagger-v3.v3.json)
 (docs).
 
-- **Run time**: requests dominate. On the test site 292 issues load in about 3 s, almost all of it
-  6 requests of about 0.35 s. Issues cost one search request per 5000 ids (docs) and one bulk
-  fetch per 100 issues, or per 1000 issues when at most 100 fields without multiple values are
-  fetched, e.g. with `included_columns` (docs, a larger request was rejected on the test site).
+- **Run time**: requests dominate. On the test site 545 issues load in 3 to 5 s with 9 requests:
+  fields, user, one search and 6 bulk fetches. Issues cost one search request per 5000 ids (docs)
+  and one bulk fetch per 100 issues, or per 1000 issues when at most 100 fields without multiple
+  values are fetched, e.g. with `included_columns` (docs, a larger request was rejected on the
+  test site).
   Changelogs cost one request per 1000 issues and worklogs one list request per 1000 ids (docs).
   Pages are fetched in parallel by the dlt extract `workers`, a run with fewer pages than workers
   is less parallel.
@@ -94,7 +108,11 @@ Facts seen on the test site, about 300 issues, or taken from the
   issue in the incremental range is fetched again. Changelogs of issues not updated since
   `issue_changelogs` was added are not loaded: reset the state of `issues` to load them.
 - **Search**: `/search/jql` is eventually consistent (docs), the lag reads recent issues again on
-  the next run. It rejects a query without a filtering clause (docs), the test site accepts
+  the next run. It serves up to 5000 ids per page, but only 100 issues when it also returns a field
+  (docs, test site), so the cursor comes from fetched issues. Issues updated after the run starts
+  are left to the next run, so a late fetch does not move the cursor past updates search did not
+  list. Cursors on custom fields, which may hold future values, and replace loads have no such
+  cutoff. It rejects a query without a filtering clause (docs), the test site accepts
   `created >= "1970-01-01"` as a bound. JQL compares datetimes with minute precision in the time
   zone of the user, seen with Europe/Zurich on the test site.
 - **Worklogs**: the feeds list worklogs of all issues the user can see, `jql` does not restrict

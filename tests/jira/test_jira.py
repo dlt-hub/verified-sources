@@ -44,7 +44,7 @@ from tests.jira.utils import (
     sent_params,
     serve,
 )
-from tests.utils import load_table_counts, load_tables_to_dicts
+from tests.utils import assert_load_info, load_table_counts, load_tables_to_dicts
 
 
 def test_jira_source(http_mock: requests_mock.Mocker) -> None:
@@ -232,7 +232,7 @@ def test_jira_search(search_mock: JiraMock) -> None:
     queries = ["project = X", "project = Y order by created"]
     source = jira_search(**CREDENTIALS, jql_queries=queries)
     # a resource level hint would win over the source setting, so there must not be one
-    assert source.resources["issues"].max_table_nesting is None
+    assert source.resources["jira_search"].max_table_nesting is None
     rows = list(source)
     # the query index tells which query found the issue, pages are fetched in parallel
     assert sorted((row["id"], row["query_index"]) for row in rows) == [
@@ -253,15 +253,59 @@ def test_jira_search(search_mock: JiraMock) -> None:
     source = jira_search(**CREDENTIALS, jql_queries=queries, page_size=1, page_limit=1)
     pipeline = duckdb_pipeline("jira_search")
     load(pipeline, source)
-    rows = load_tables_to_dicts(pipeline, "issues")["issues"]
+    rows = load_tables_to_dicts(pipeline, "jira_search")["jira_search"]
     assert sorted((row["id"], row["query_index"]) for row in rows) == [
         ("1", 0),
         ("2", 1),
     ]
-    table = pipeline.default_schema.get_table("issues")
+    table = pipeline.default_schema.get_table("jira_search")
     assert table["write_disposition"] == "replace"
     keys = [name for name, col in table["columns"].items() if col.get("primary_key")]
     assert keys == ["id", "query_index"]
+
+    # only the included fields are fetched and get typed columns, one bulk fetch per page of issues
+    search_mock.bulk_fetches.clear()
+    source = jira_search(
+        **CREDENTIALS,
+        jql_queries=queries,
+        chunk_size=1,
+        included_columns=["summary", "updated"],
+    )
+    pipeline = duckdb_pipeline("jira_search_columns")
+    load(pipeline, source)
+    assert len(search_mock.bulk_fetches) == 5
+    assert {tuple(fetch["fields"]) for fetch in search_mock.bulk_fetches} == {
+        ("summary", "updated")
+    }
+    columns = pipeline.default_schema.get_table("jira_search")["columns"]
+    assert {
+        name: col["data_type"]
+        for name, col in columns.items()
+        if not name.startswith("_dlt")
+    } == {
+        "id": "text",
+        "key": "text",
+        "summary": "text",
+        "updated": "timestamp",
+        "query_index": "bigint",
+    }
+
+
+def test_jira_search_with_issues(search_mock: JiraMock) -> None:
+    # jira_search loads its own table, so it shares a dataset with the issues of `jira`
+    pipeline = duckdb_pipeline("jira_search_with_issues")
+    load(pipeline, jira_issues(**CREDENTIALS))
+    # the second schema gets its own load package, the pipeline state goes to the default one
+    info = pipeline.run(jira_search(**CREDENTIALS, jql_queries=["project = X"]))
+    assert_load_info(info, expected_load_packages=2)
+    # a renamed resource loads another table
+    epics = jira_search(**CREDENTIALS, jql_queries=["project = Y order by created"])
+    load(pipeline, epics.jira_search.with_name("epics"))
+    assert load_table_counts(pipeline, "issues", "jira_search", "epics") == {
+        "issues": 4,
+        "jira_search": 3,
+        "epics": 2,
+    }
 
 
 @pytest.mark.parametrize("page_size", [None, 7], ids=["default", "explicit"])

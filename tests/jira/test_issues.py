@@ -171,9 +171,9 @@ def test_issues_pagination(jira_mock: JiraMock) -> None:
     jira_mock.searches.clear()
     jira_mock.add_issues(*issues_updated_at(range(1, 6)))
     jira_mock.search_pages = [["1", "2"], ["3", "4"], ["5"]]
-    # ids found by search pages of `search_page_size` are listed in pages of `chunk_size`
+    # ids found by search pages of `search_page_size` are fetched in pages of `chunk_size`
     reader = IssuesReader(JiraClient(**CREDENTIALS), chunk_size=3, search_page_size=2)
-    assert [len(page) for page in issue_ids(reader)] == [3, 2]
+    assert [len(fetch()) for fetch in issue_ids(reader)] == [3, 2]
     assert [search.get("nextPageToken") for search in jira_mock.searches] == [
         None,
         "1",
@@ -181,6 +181,7 @@ def test_issues_pagination(jira_mock: JiraMock) -> None:
     ]
     assert len({search["jql"] for search in jira_mock.searches}) == 1
     assert {search["maxResults"] for search in jira_mock.searches} == {"2"}
+    jira_mock.bulk_fetches.clear()
 
     # each page is fetched in batches of `bulk_fetch_size`
     rows = list(
@@ -213,6 +214,8 @@ def test_issues_bulk_fetch_batches(
     jira_mock.max_bulk_issues = max_bulk_issues
     rows = list(jira_issues(**CREDENTIALS, included_columns=included_columns))
     assert len(rows) == 1050
+    # search lists only ids, so one page holds all of them
+    assert len(jira_mock.searches) == 1
     # pages hold 1000 issues, fetched with the largest requests the fields allow
     assert (
         sorted(len(fetch["issueIdsOrKeys"]) for fetch in jira_mock.bulk_fetches)
@@ -220,14 +223,17 @@ def test_issues_bulk_fetch_batches(
     )
 
 
-def test_issues_incremental_runs(jira_mock: JiraMock, mocker: MockerFixture) -> None:
+@pytest.mark.parametrize("search_page_size", [5000, 2], ids=["one_page", "pages_of_2"])
+def test_issues_incremental_runs(
+    jira_mock: JiraMock, mocker: MockerFixture, search_page_size: int
+) -> None:
     jira_mock.add_issues(
         make_issue(1, "2024-01-15T10:30:00.000+0000"),
         make_issue(2, "2024-01-16T08:00:30.000+0000"),
         make_issue(3, "2024-01-14T09:00:00.000+0000"),
     )
     pipeline = duckdb_pipeline("jira_issues_incremental")
-    load(pipeline, jira_issues(**CREDENTIALS))
+    load(pipeline, jira_issues(**CREDENTIALS, search_page_size=search_page_size))
     table = pipeline.default_schema.get_table("issues")
     assert table["write_disposition"] == "merge"
     assert table["columns"]["id"]["primary_key"] is True
@@ -241,7 +247,7 @@ def test_issues_incremental_runs(jira_mock: JiraMock, mocker: MockerFixture) -> 
         make_issue(4, "2024-01-17T13:00:00.000+0000"),
         make_issue(5, "2024-01-16T07:50:10.000+0000"),
     )
-    load(pipeline, jira_issues(**CREDENTIALS))
+    load(pipeline, jira_issues(**CREDENTIALS, search_page_size=search_page_size))
     assert jira_mock.jqls == [
         FULL_JQL,
         # the last value minus 10 minutes of lag
@@ -276,28 +282,77 @@ def test_issues_incremental_runs(jira_mock: JiraMock, mocker: MockerFixture) -> 
         return issues
 
     mocker.patch.object(JiraClient, "bulk_fetch", updated_between_fetches)
-    load(pipeline, jira_issues(**CREDENTIALS, chunk_size=2))
+    load(
+        pipeline,
+        jira_issues(**CREDENTIALS, chunk_size=2, search_page_size=search_page_size),
+    )
     assert pipeline.last_trace.last_normalize_info.row_counts["issues"] == 2
     rows = rows_by_id(pipeline, "issues")
     assert [row["id"] for row in rows] == ["1", "2", "3", "4"]
     # the version with the latest update wins the merge
     assert rows[3]["summary"] == "newest"
 
-    # nothing changed since: the cursor advanced to the update of the deleted issue, the range
-    # lists no issue and nothing is extracted
+    # nothing changed since: the cursor advanced to the latest fetched update, not to the update
+    # of the deleted issue listed by search. The range lists no issue and nothing is extracted
     del jira_mock.issues["9"]
     jira_mock.missing_issues.clear()
     jira_mock.search_pages = None
     jira_mock.bulk_fetches.clear()
-    pipeline.run(jira_issues(**CREDENTIALS))
-    assert jira_mock.jqls[-1] == 'updated >= "2024-01-18 09:50" ORDER BY updated ASC'
+    pipeline.run(jira_issues(**CREDENTIALS, search_page_size=search_page_size))
+    assert jira_mock.jqls[-1] == 'updated >= "2024-01-18 10:50" ORDER BY updated ASC'
     assert jira_mock.bulk_fetches == []
+    # cursor values come from fetched issues, so search lists only ids
+    assert {search["fields"] for search in jira_mock.searches} == {"id"}
+    assert {search["maxResults"] for search in jira_mock.searches} == {
+        str(search_page_size)
+    }
     assert "issues" not in pipeline.last_trace.last_normalize_info.row_counts
     assert [(row["id"], row["summary"]) for row in rows_by_id(pipeline, "issues")] == [
         ("1", "changed"),
         ("2", "Issue 2"),
         ("3", "Issue 3"),
         ("4", "newest"),
+    ]
+
+
+def test_issues_updated_during_run(jira_mock: JiraMock, mocker: MockerFixture) -> None:
+    jira_mock.add_issues(
+        make_issue(1, "2024-01-15T10:30:00.000+0000"),
+        make_issue(2, "2024-01-16T08:00:00.000+0000"),
+    )
+    bulk_fetch = JiraClient.bulk_fetch
+
+    def updated_after_start(
+        client: JiraClient, ids: List[str], fields: List[str], batch_size: int
+    ) -> Any:
+        issues = bulk_fetch(client, ids, fields, batch_size)
+        for issue in issues:
+            if issue["id"] == "2":
+                issue["fields"].update(
+                    summary="during run", updated="2099-01-01T00:00:00.000+0000"
+                )
+        return issues
+
+    mocker.patch.object(JiraClient, "bulk_fetch", updated_after_start)
+    # a replace load keeps no state, so it loads every issue it fetched
+    rows = list(jira_issues(**CREDENTIALS, write_disposition="replace"))
+    assert sorted(row["id"] for row in rows) == ["1", "2"]
+
+    # issue 2 is updated after the run started, so the next run loads it and the cursor does
+    # not move past updates that search did not list
+    pipeline = duckdb_pipeline("jira_issues_during_run")
+    load(pipeline, jira_issues(**CREDENTIALS))
+    assert [row["id"] for row in rows_by_id(pipeline, "issues")] == ["1"]
+
+    mocker.patch.object(JiraClient, "bulk_fetch", bulk_fetch)
+    jira_mock.add_issues(
+        make_issue(2, "2024-01-17T00:00:00.000+0000", summary="during run")
+    )
+    load(pipeline, jira_issues(**CREDENTIALS))
+    assert jira_mock.jqls[-1] == 'updated >= "2024-01-15 10:20" ORDER BY updated ASC'
+    assert [(row["id"], row["summary"]) for row in rows_by_id(pipeline, "issues")] == [
+        ("1", "Issue 1"),
+        ("2", "during run"),
     ]
 
 

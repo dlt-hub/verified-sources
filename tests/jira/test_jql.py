@@ -176,16 +176,14 @@ def test_issues_jql(
     expected_jql: str,
 ) -> None:
     jira_mock = JiraMock(http_mock, time_zone=time_zone)
-    cursor = "updated"
     if isinstance(start_or_incremental, dlt.sources.incremental):
         issues = jira_issues(**CREDENTIALS, incremental=start_or_incremental, jql=jql)
-        cursor = start_or_incremental.cursor_path
     else:
         issues = jira_issues(**CREDENTIALS, start_date=start_or_incremental, jql=jql)
     assert list(issues) == []
     assert jira_mock.jqls == [expected_jql]
-    # search returns values of the cursor field for the incremental
-    assert jira_mock.searches[0]["fields"] == cursor
+    # the cursor values come from fetched issues, so search lists ids in its largest pages
+    assert jira_mock.searches[0]["fields"] == "id"
     assert jira_mock.searches[0]["maxResults"] == "5000"
 
 
