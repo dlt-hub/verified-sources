@@ -252,10 +252,7 @@ FIELD_TYPE_CASES: List[Tuple[Dict[str, Any], Optional[Dict[str, Any]]]] = [
         {"data_type": "decimal", "precision": 16, "scale": 2},
     ),
     ({"type": "date"}, {"data_type": "date"}),
-    (
-        {"type": "datetime"},
-        {"data_type": "timestamp", "precision": 3, "timezone": True},
-    ),
+    ({"type": "datetime"}, {"data_type": "timestamp", "timezone": True}),
     ({"type": "time"}, {"data_type": "time", "precision": 3}),
     ({"type": "json"}, {"data_type": "json"}),
     # unknown types are loaded as text
@@ -575,7 +572,7 @@ def test_salesforce_table_columns(
         f"SELECT Id, Amount__c, SystemModstamp FROM Account WHERE SystemModstamp <= {NOW_LITERAL}"
     ]
     assert tables[0].schema.field("Amount__c").type == pa.float64()
-    assert tables[0].schema.field("SystemModstamp").type == pa.timestamp("ms", tz="UTC")
+    assert tables[0].schema.field("SystemModstamp").type == pa.timestamp("us", tz="UTC")
     assert tables[0].column("Amount__c").to_pylist() == [1234.56]
 
 
@@ -1500,17 +1497,7 @@ def incremental_state(pipeline: dlt.Pipeline, cursor: str) -> Dict[str, Any]:
 @pytest.mark.parametrize("backend", ["python", "pyarrow"])
 @pytest.mark.parametrize(
     "defer_table_reflect",
-    [
-        False,
-        pytest.param(
-            True,
-            id="deferred",
-            # TODO: remove when dlt does not count empty items emitted with hints
-            marks=pytest.mark.xfail(
-                reason="add_limit counts the empty item with hints", strict=True
-            ),
-        ),
-    ],
+    [False, True],
     ids=["", "deferred"],
 )
 def test_salesforce_table_chunked_loading(

@@ -51,7 +51,6 @@ def sf_field_to_column_schema(
         col["data_type"] = "date"
     elif sf_type == "datetime":
         col["data_type"] = "timestamp"
-        col["precision"] = 3
         col["timezone"] = True
     elif sf_type == "time":
         col["data_type"] = "time"
