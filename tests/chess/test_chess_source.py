@@ -1,12 +1,13 @@
 import pytest
 
 import dlt
+from dlt.common.schema.utils import is_nested_table
 
 from sources.chess import source, chess_dlt_config_example
 
 from tests.utils import ALL_DESTINATIONS, assert_load_info
 
-PLAYERS = ["magnuscarlsen", "vincentkeymer", "dommarajugukesh", "rpragchess"]
+PLAYERS = ["hikaru", "vincentkeymer", "dommarajugukesh", "rpragchess"]
 
 
 @pytest.mark.parametrize("destination_name", ALL_DESTINATIONS)
@@ -46,11 +47,11 @@ def test_load_players_games(destination_name: str) -> None:
         # you can use unqualified table names
         with c.execute_query(
             "SELECT white__username, COUNT(1) FROM players_games WHERE white__username IN (%s) GROUP BY white__username",
-            "MagnusCarlsen",
+            "Hikaru",
         ) as cur:
             rows = list(cur.fetchall())
             assert len(rows) == 1
-            assert rows[0][1] == 374  # magnus has 374 games
+            assert rows[0][1] == 296  # hikaru has 296 games
 
 
 @pytest.mark.parametrize("destination_name", ALL_DESTINATIONS)
@@ -70,9 +71,9 @@ def test_load_players_profiles(destination_name: str) -> None:
     print(info)
     # make sure all jobs were loaded
     assert_load_info(info)
-    # now let's inspect the generates schema. it should contain just one table with user data
+    # one root table; nested lists like streaming_platforms become nested tables
     schema = pipeline.default_schema
-    user_tables = schema.data_tables()
+    user_tables = [t for t in schema.data_tables() if not is_nested_table(t)]
     assert len(user_tables) == 1
     # tables are typed dicts
     players_table = user_tables[0]
@@ -99,36 +100,36 @@ def test_incremental_games_load(destination_name: str) -> None:
         dataset_name="chess_players_games_data",
         dev_mode=True,
     )
-    data = source(["magnuscarlsen"], start_month="2022/11", end_month="2022/11")
+    data = source(["hikaru"], start_month="2022/11", end_month="2022/11")
     info = pipeline.run(data.with_resources("players_games"))
     assert_load_info(info)
 
-    def get_magnus_games() -> int:
+    def get_hikaru_games() -> int:
         with pipeline.sql_client() as c:
             with c.execute_query(
-                "SELECT white__username, COUNT(1) FROM players_games WHERE white__username IN ('MagnusCarlsen') GROUP BY white__username"
+                "SELECT white__username, COUNT(1) FROM players_games WHERE white__username IN ('Hikaru') GROUP BY white__username"
             ) as cur:
                 rows = list(cur.fetchall())
                 assert len(rows) == 1
                 return rows[0][1]
 
-    magnus_games_no = get_magnus_games()
-    assert magnus_games_no > 0  # should have games
+    hikaru_games_no = get_hikaru_games()
+    assert hikaru_games_no > 0  # should have games
 
     # do load with the same range into the existing dataset
-    data = source(["magnuscarlsen"], start_month="2022/11", end_month="2022/11")
+    data = source(["hikaru"], start_month="2022/11", end_month="2022/11")
     info = pipeline.run(data.with_resources("players_games"))
     # the dlt figured out that there's no new data at all and skipped the loading package
     assert_load_info(info, expected_load_packages=0)
     # there are no more games as pipeline is skipping existing games
-    assert get_magnus_games() == magnus_games_no
+    assert get_hikaru_games() == hikaru_games_no
 
     # get some new games
-    data = source(["magnuscarlsen"], start_month="2022/12", end_month="2022/12")
+    data = source(["hikaru"], start_month="2022/12", end_month="2022/12")
     info = pipeline.run(data.with_resources("players_games"))
     # we have new games in December!
     assert_load_info(info)
-    assert get_magnus_games() > magnus_games_no
+    assert get_hikaru_games() > hikaru_games_no
 
 
 def test_config_values_source() -> None:

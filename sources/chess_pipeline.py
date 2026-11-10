@@ -13,7 +13,7 @@ def load_players_games_example(start_month: str, end_month: str) -> None:
     )
     # create the data source by providing a list of players and start/end month in YYYY/MM format
     data = source(
-        ["magnuscarlsen", "vincentkeymer", "dommarajugukesh", "rpragchess"],
+        ["hikaru", "vincentkeymer", "dommarajugukesh", "rpragchess"],
         start_month=start_month,
         end_month=end_month,
     )
@@ -30,7 +30,7 @@ def load_players_online_status() -> None:
         destination="duckdb",
         dataset_name="chess_players_games_data",
     )
-    data = source(["magnuscarlsen", "vincentkeymer", "dommarajugukesh", "rpragchess"])
+    data = source(["hikaru", "vincentkeymer", "dommarajugukesh", "rpragchess"])
     info = pipeline.run(data.with_resources("players_online_status"))
     print(info)
 
