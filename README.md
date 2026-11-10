@@ -17,12 +17,32 @@
 
 This repository contains verified dlt sources and demo pipelines for each source that you can use as a starting point for your project.
 
+> We launched **dltHub** in March 2026. You can now run your dlt pipelines on a managed, agent-native platform with transformations, data quality and observability built in. [Learn more](https://dlthub.com/) or [deploy your first pipeline](https://dlthub.com/docs/hub/getting-started/onboarding).
+
 ## How to add a verified source to your dlt project
 `dlt` offers an `init` command that will clone and inject any source with an example pipeline from this repository into your project, setup the credentials and python dependencies. Please follow the step by step instructions in our [docs](https://dlthub.com/docs/walkthroughs/add-a-verified-source).
 
 ### We encourage you to hack the code
 Verified sources code is added to your project with the expectation that you will hack or customize code yourself - as you need it.
 
+Ready to run it in production? [Deploy it with dltHub](#run-it-in-production-with-dlthub).
+
+## Run it in production with dltHub
+
+[dltHub](https://dlthub.com/) is an agent-native data engineering platform built around `dlt`. It uses the same sources, destinations, and pipelines you already write, and adds what you need to run them in production:
+
+- **Agent-native development**: build pipelines from prompts with Claude Code, Codex, or Cursor, with per-source context files and scaffolding commands
+- **[Transformations](https://dlthub.com/docs/hub/transformations)** and **[data quality checks](https://dlthub.com/docs/hub/data-quality)** on the data you load
+- **[Managed infrastructure](https://dlthub.com/docs/hub/pipeline-operations/overview)** for pipelines, notebooks, and data apps, with `dev` and `prod` profiles and one-command deploys
+- **[Observability](https://dlthub.com/docs/hub/ingestion/dashboard)**: monitor runs and troubleshoot from the workspace dashboard
+
+`dlt` stays open source under the Apache 2.0 license. dltHub is a commercial product governed by the [dltHub License](https://dlthub.com/docs/hub/license).
+
+**[Deploy your first pipeline →](https://dlthub.com/docs/hub/getting-started/onboarding)** One command sets up a workspace, connects it to dltHub, and has your coding agent deploy and run a sample pipeline:
+
+```sh
+uvx dlthub-start@latest
+```
 
 ## How to contact us and get help
 Join our slack by following the [invitation link](https://dlthub.com/community)
