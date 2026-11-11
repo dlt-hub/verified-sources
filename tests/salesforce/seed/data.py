@@ -5,7 +5,7 @@ CSV parsing and type mapping: null-like and number-like text, quotes, line break
 boundary numbers, dates and times.
 """
 
-from datetime import date, datetime, time, timezone  # noqa: I251
+from datetime import date, datetime, time, timedelta, timezone  # noqa: I251
 from typing import Any, Dict, List
 
 from dlt.common import Decimal
@@ -538,12 +538,42 @@ PAGES_FIELDS: List[Dict[str, Any]] = [
         "precision": 9,
         "scale": 0,
     },
+    # cursor of the incremental tests, Salesforce sets `SystemModstamp` itself
+    {"fullName": "Changed_At__c", "label": "Changed At", "type": "DateTime"},
 ]
+CHANGED_AT_START = datetime(2024, 1, 1, tzinfo=timezone.utc)
+
+
+def changed_at(n: int) -> datetime:
+    """Unique seconds over 90 days, not in the order of `n`"""
+    # 1000003 is coprime with the seconds in 90 days. `random` may change between Python versions
+    return CHANGED_AT_START + timedelta(seconds=n * 1_000_003 % (90 * 24 * 3600))
+
+
 PAGES_RECORDS: List[Dict[str, Any]] = [
-    {"Seed_Id__c": f"page-{n:05d}", "Name": f"row {n}", "Value__c": n}
+    {
+        "Seed_Id__c": f"page-{n:05d}",
+        "Name": f"row {n}",
+        "Value__c": n,
+        "Changed_At__c": changed_at(n),
+    }
     for n in range(1, 1001)
+]
+
+# records written by `test_incremental_changes`, tagged with the id of the test run
+CHANGES = "DltChanges__c"
+CHANGES_FIELDS: List[Dict[str, Any]] = [
+    {"fullName": "Run_Id__c", "label": "Run Id", "type": "Text", "length": 64},
+    {
+        "fullName": "Value__c",
+        "label": "Value",
+        "type": "Number",
+        "precision": 9,
+        "scale": 0,
+    },
 ]
 CUSTOM_OBJECTS: Dict[str, Dict[str, Any]] = {
     DLT_TYPES: {"label": "dlt Types", "fields": DLT_TYPES_FIELDS},
     PAGES: {"label": "dlt Pages", "fields": PAGES_FIELDS},
+    CHANGES: {"label": "dlt Changes", "fields": CHANGES_FIELDS},
 }

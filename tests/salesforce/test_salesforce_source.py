@@ -1,21 +1,33 @@
 import os
-from datetime import timedelta  # noqa: I251
-from typing import Any, Dict, List, Sequence, Set
+import uuid
+from datetime import datetime, timedelta, timezone  # noqa: I251
+from time import sleep
+from typing import Any, Dict, List, Optional, Set
 
 import dlt
 import pytest
+from dlt.extract.resource import DltResource
 
 from sources.salesforce import SOURCE_SOBJECTS, salesforce_source, salesforce_table
 from sources.salesforce.helpers.query import TQueryApi
-from sources.salesforce.helpers.schema import DEFAULT_LAG
 from sources.salesforce.helpers.table import TTableBackend
 from tests.salesforce.seed import data
 from tests.salesforce.utils import (
     assert_dlt_types_loaded,
     count_rows,
-    seeded_modstamps,
+    delete_records,
+    last_row_count,
+    load_rows,
+    salesforce_client,
+    wait_for_org_clock,
+    write_records,
 )
-from tests.utils import ALL_DESTINATIONS, assert_load_info, load_table_counts
+from tests.utils import (
+    ALL_DESTINATIONS,
+    assert_load_info,
+    load_table_counts,
+    skip_if_not_active,
+)
 
 # tests below read the test org seeded with tests/salesforce/seed/seed.py, see README.md
 
@@ -72,22 +84,22 @@ def test_all_resources(destination_name: str) -> None:
 
 @pytest.mark.parametrize("destination_name", ALL_DESTINATIONS)
 @pytest.mark.parametrize("backend", ["python", "pyarrow"])
+@pytest.mark.parametrize("api", ["bulk", "rest"])
 def test_seeded_full_and_incremental(
-    destination_name: str, backend: TTableBackend
+    destination_name: str, backend: TTableBackend, api: TQueryApi
 ) -> None:
-    """Loads the seeded custom objects in full, then incrementally and from a start date. The
-    expected counts come from the seed data and the `SystemModstamp` of the records in the org
-    """
-    # `DltPages__c` is upserted in batches of 200 with distinct timestamps. `DltTypes__c` has
-    # deleted records in the recycle bin, read with queryAll
-    stamps = {
-        sobject: seeded_modstamps(sobject) for sobject in (data.PAGES, data.DLT_TYPES)
-    }
-    seeded = {
-        data.PAGES: len(data.PAGES_RECORDS),
-        data.DLT_TYPES: len(data.DLT_TYPES_RECORDS),
-    }
-    assert len(stamps[data.PAGES]) == seeded[data.PAGES]
+    """Loads `DltPages__c` in full, again, and in windows of `Changed_At__c`. Expected counts
+    come from the seed data"""
+    changed_at = sorted(record["Changed_At__c"] for record in data.PAGES_RECORDS)
+    seed_ids = sorted((record["Seed_Id__c"],) for record in data.PAGES_RECORDS)
+
+    def pages(**incremental_args: Any) -> DltResource:
+        return salesforce_table(
+            sobject=data.PAGES,
+            backend=backend,
+            api=api,
+            incremental=dlt.sources.incremental("Changed_At__c", **incremental_args),
+        )
 
     def make_pipeline(name: str) -> dlt.Pipeline:
         return dlt.pipeline(
@@ -97,63 +109,112 @@ def test_seeded_full_and_incremental(
             dev_mode=True,
         )
 
-    def load(
-        pipeline: dlt.Pipeline, sobjects: Sequence[str], **kwargs: Any
-    ) -> Dict[str, int]:
-        """Runs `salesforce_table` of `sobjects`, returns rows read by sObject"""
-        assert_load_info(
-            pipeline.run(
-                [
-                    salesforce_table(sobject=sobject, backend=backend, **kwargs)
-                    for sobject in sobjects
-                ]
-            )
-        )
-        row_counts = pipeline.last_trace.last_normalize_info.row_counts
-        naming = pipeline.default_schema.naming
-        return {
-            sobject: row_counts.get(naming.normalize_path(sobject), 0)
-            for sobject in sobjects
-        }
-
-    def stored(pipeline: dlt.Pipeline, sobjects: Sequence[str]) -> Dict[str, int]:
-        naming = pipeline.default_schema.naming
-        tables = {sobject: naming.normalize_path(sobject) for sobject in sobjects}
-        counts = load_table_counts(pipeline, *tables.values())
-        return {sobject: counts[table] for sobject, table in tables.items()}
-
     pipeline = make_pipeline("salesforce_seeded")
-    # deleted records are read and deleted from the destination by merge
-    assert load(pipeline, list(seeded)) == {
-        sobject: len(values) for sobject, values in stamps.items()
-    }
-    assert stored(pipeline, list(seeded)) == seeded
+    assert_load_info(pipeline.run(pages()))
+    assert last_row_count(pipeline, data.PAGES) == len(changed_at)
+    assert load_rows(pipeline, data.PAGES, "Seed_Id__c") == seed_ids
 
-    # runs without changes read the records within lag again, with no lag the records with the
-    # last timestamp
-    for lag, window in ((None, timedelta(seconds=DEFAULT_LAG)), (0, timedelta(0))):
-        assert load(pipeline, list(seeded), lag=lag) == {
-            sobject: sum(value >= max(values) - window for value in values)
-            for sobject, values in stamps.items()
-        }, lag
-        assert stored(pipeline, list(seeded)) == seeded
+    # merge on a timestamp turns off deduplication, the closed range reads the last value again
+    assert_load_info(pipeline.run(pages()))
+    assert last_row_count(pipeline, data.PAGES) == changed_at.count(changed_at[-1])
+    assert load_rows(pipeline, data.PAGES, "Seed_Id__c") == seed_ids
 
-    # start in the middle of the batches of pages
-    batches = sorted(set(stamps[data.PAGES]))
-    start = batches[len(batches) // 2]
-    since = {data.PAGES: sum(value >= start for value in stamps[data.PAGES])}
-    assert 0 < since[data.PAGES] < seeded[data.PAGES]
-    pipeline = make_pipeline("salesforce_seeded_since")
-    assert load(pipeline, [data.PAGES], start_date=start) == since
-    assert stored(pipeline, [data.PAGES]) == since
-    # replace loads the records since the start date on every run
-    pipeline = make_pipeline("salesforce_seeded_replace")
-    for _ in range(2):
-        assert (
-            load(pipeline, [data.PAGES], start_date=start, write_disposition="replace")
-            == since
+    # bounds are seeded values, each loads in one window. with `min` the windows go back in time
+    quarters = changed_at[250::250]
+    for last_value_func, bounds in (
+        (max, [changed_at[0], *quarters, changed_at[-1] + timedelta(seconds=1)]),
+        (min, [changed_at[-1], *quarters[::-1], changed_at[0] - timedelta(seconds=1)]),
+    ):
+        backfill = make_pipeline(f"salesforce_seeded_{last_value_func.__name__}")
+        for start, end in zip(bounds, bounds[1:]):
+            expected = sum(
+                start <= value < end if last_value_func is max else end < value <= start
+                for value in changed_at
+            )
+            assert_load_info(
+                backfill.run(
+                    pages(
+                        initial_value=start,
+                        end_value=end,
+                        last_value_func=last_value_func,
+                        range_start="closed",
+                        range_end="open",
+                    )
+                )
+            )
+            assert last_row_count(backfill, data.PAGES) == expected, (start, end)
+        # windows with an end value do not store incremental state
+        assert "sources" not in backfill.state
+        assert load_rows(backfill, data.PAGES, "Seed_Id__c") == seed_ids
+
+
+@pytest.mark.parametrize("destination_name", ALL_DESTINATIONS)
+@pytest.mark.parametrize("backend", ["python", "pyarrow"])
+def test_incremental_changes(destination_name: str, backend: TTableBackend) -> None:
+    """Adds, updates and deletes `DltChanges__c` records between runs of the default incremental.
+    Expected values come from the records the test writes"""
+    client = salesforce_client()
+    run_id = uuid.uuid4().hex
+    run_filter = f"Run_Id__c = '{run_id}'"
+    pipeline = dlt.pipeline(
+        pipeline_name="salesforce_changes",
+        destination=destination_name,
+        dataset_name="salesforce_changes",
+        dev_mode=True,
+    )
+    ids: Dict[str, str] = {}
+
+    def create(*names: str) -> None:
+        records = [{"Name": name, "Run_Id__c": run_id, "Value__c": 1} for name in names]
+        ids.update(zip(names, write_records(client, "POST", data.CHANGES, records)))
+
+    def run() -> int:
+        """Loads the records of this test, returns rows read"""
+        wait_for_org_clock(client, data.CHANGES, run_filter)
+        changes = salesforce_table(
+            sobject=data.CHANGES, backend=backend, lag=0, soql_filter=run_filter
         )
-        assert stored(pipeline, [data.PAGES]) == since
+        assert_load_info(pipeline.run(changes))
+        return last_row_count(pipeline, data.CHANGES)
+
+    try:
+        # the last write before a run is alone in its second. the closed range of the next run
+        # reads it again
+        create("a1", "a2", "a3", "a4")
+        sleep(1.5)
+        create("a5")
+        assert run() == 5
+        assert load_rows(pipeline, data.CHANGES, "Name", "Value__c") == [
+            ("a1", 1.0),
+            ("a2", 1.0),
+            ("a3", 1.0),
+            ("a4", 1.0),
+            ("a5", 1.0),
+        ]
+
+        write_records(client, "PATCH", data.CHANGES, [{"Id": ids["a1"], "Value__c": 2}])
+        delete_records(client, [ids.pop("a2")])
+        create("b1")
+        sleep(1.5)
+        create("b2")
+        # a5 again, updated a1, deleted a2, b1 and b2
+        assert run() == 5
+        changed = [
+            ("a1", 2.0),
+            ("a3", 1.0),
+            ("a4", 1.0),
+            ("a5", 1.0),
+            ("b1", 1.0),
+            ("b2", 1.0),
+        ]
+        assert load_rows(pipeline, data.CHANGES, "Name", "Value__c") == changed
+
+        # b2 again
+        assert run() == 1
+        assert load_rows(pipeline, data.CHANGES, "Name", "Value__c") == changed
+    finally:
+        if ids:
+            delete_records(client, list(ids.values()))
 
 
 @pytest.mark.parametrize(
@@ -249,29 +310,55 @@ def test_salesforce_table_bulk_api_not_supported() -> None:
     assert statuses and all(isinstance(row["MasterLabel"], str) for row in statuses)
 
 
-def test_salesforce_table_chunked_loading() -> None:
-    pipeline = dlt.pipeline(
-        pipeline_name="salesforce_chunked",
-        destination="duckdb",
-        dataset_name="salesforce_data",
-        dev_mode=True,
+@skip_if_not_active("duckdb")
+@pytest.mark.parametrize("backend", ["python", "pyarrow"])
+@pytest.mark.parametrize(
+    "last_value_func,initial_value",
+    [
+        (max, None),
+        (min, None),
+        (max, datetime(2023, 1, 1, tzinfo=timezone.utc)),
+        (min, datetime(2025, 1, 1, tzinfo=timezone.utc)),
+    ],
+    ids=["max", "min", "max_initial_value", "min_initial_value"],
+)
+def test_seeded_chunks(
+    backend: TTableBackend, last_value_func: Any, initial_value: Optional[datetime]
+) -> None:
+    # 300 leaves a partial last chunk of 100
+    chunk_size = 300
+    expected = sorted(
+        (record["Changed_At__c"] for record in data.PAGES_RECORDS),
+        reverse=last_value_func is min,
     )
     pages = salesforce_table(
         sobject=data.PAGES,
-        chunk_size=250,
+        chunk_size=chunk_size,
         api="rest",
-        soql_filter="Value__c <= 600",
+        backend=backend,
         incremental=dlt.sources.incremental(
-            "Value__c",
-            row_order="asc",  # load in order so the next run continues where the last stopped
-            range_start="open",  # values are unique so no records are loaded twice
+            "Changed_At__c",
+            initial_value=initial_value,
+            # in the order of `last_value_func`, newest first with `min`
+            row_order="asc",
+            last_value_func=last_value_func,
+            range_start="open",  # seeded values are unique, the last one is not read again
         ),
     )
-    # every run loads a single page of max 250 records until there are no more records
-    runs = 0
-    while not pipeline.run(pages.add_limit(1)).is_empty:
-        runs += 1
-        assert runs < 10
-    assert runs == 3
-    table_name = pipeline.default_schema.naming.normalize_path(data.PAGES)
-    assert count_rows(pipeline, table_name, "1 = 1") == 600
+    pipeline = dlt.pipeline(
+        pipeline_name="salesforce_seeded_chunks", destination="duckdb", dev_mode=True
+    )
+
+    for start in range(0, len(expected), chunk_size):
+        chunk = expected[start : start + chunk_size]
+        assert_load_info(pipeline.run(pages.add_limit(1)))
+        assert last_row_count(pipeline, data.PAGES) == len(chunk)
+        assert pages.state["incremental"]["Changed_At__c"]["last_value"] == chunk[-1]
+    pipeline.run(pages)
+    assert last_row_count(pipeline, data.PAGES) == 0
+
+    assert load_rows(pipeline, data.PAGES, "Seed_Id__c", "Changed_At__c") == sorted(
+        (record["Seed_Id__c"], record["Changed_At__c"]) for record in data.PAGES_RECORDS
+    )
+    # checked last so that records skipped or read twice surface first
+    assert pages.state["incremental"]["Changed_At__c"]["last_value"].tzinfo is not None
