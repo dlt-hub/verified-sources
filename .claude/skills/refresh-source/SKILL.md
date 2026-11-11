@@ -15,7 +15,7 @@ Work through the phases in order. Do not skip phase 0 — wrong conclusions are 
 ## Phase 0 — Ground truth
 
 0. Build the context with [create-source-context](../create-source-context/SKILL.md): the data the upstream offers, authoritative docs, existing connectors, auth, pagination, limits and a data inventory. For a new source, stop after it until the user confirms the scope.
-1. Read everything in `sources/<name>/`, `sources/<name>_pipeline.py`, `tests/<name>/`. Start with `README.md` and `version.py`: the changelog, extension points and operations notes of the source.
+1. Read everything in `sources/<name>/`, `sources/<name>_pipeline.py`, `tests/<name>/`. Start with `README.md` and `version.py`: the changelog, extension points and maintenance and troubleshooting notes of the source.
 2. `git log --oneline -- sources/<name>` — look for past removals/refactors. **Hunt dead code**: files, fixtures, conftest helpers, docstrings and README claims orphaned by earlier PRs. Dead code should be deleted, never "fixed". Dead code may also be the only reason for a heavy dependency — deleting it can drop whole packages from `requirements.txt`.
 3. Compare the THREE dependency declarations and flag mismatches:
    - `sources/<name>/requirements.txt` — what `dlt init` users actually install (often unbounded!)
@@ -160,7 +160,7 @@ Without an account, run both versions on captured responses (phase 4) and compar
 - a new format of values in an existing column of the same type, e.g. arrays as JSON instead of Postgres literals: old and new values mix in one column, with no variant column and no failed load;
 - changed handling of deletes and key updates: rows remain in or disappear from the destination, unlike in earlier loads;
 - removed or renamed arguments and config keys, new required secrets: the pipeline fails before it loads;
-- data format switches that change dlt columns, e.g. JSON rows to Arrow tables needs `[normalize.parquet_normalizer] add_dlt_load_id` and `add_dlt_id` for tables created from rows.
+- data format switches that change dlt columns, e.g. between rows and Arrow tables: Arrow tables get no `_dlt_id` by default, rows of the `python` backend add it, so loads fail in both directions. The workaround is `[normalize.parquet_normalizer] add_dlt_load_id` and `add_dlt_id` before the first Arrow load of the table.
 
 Not breaking, but report them: new columns or tables, dropped columns (left in the destination with nulls), type widening the destination coerces, a higher minimum dlt or package version, fixed bugs whose wrong rows stay in the destination until a reload.
 
@@ -186,11 +186,13 @@ The version follows the [semantic versioning of dlt](https://github.com/dlt-hub/
 - `patch`: bug fixes.
 
 `sources/<name>/README.md` is the maintenance document of the source, for developers and coding agents that change it. It holds only what is not easily read from the code: no defaults, page sizes, type mappings, test helpers or descriptions of how a resource works. Setup and usage belong in the dlt docs (phase 6). The README holds:
-- **Changelog**: an entry per version, newest first. It answers the question of a user whose pipeline already loaded data: can I upgrade, and do I lose data? The entry starts with an **Upgrade** line, from what [Data shape and upgrade compatibility](#data-shape-and-upgrade-compatibility) found: `safe` when existing pipelines continue with no action, otherwise the steps in order and what happens without them, i.e. failed runs, missed, duplicated or mixed rows. It says whether incremental state carries over. Short bullets follow: start each with **breaking**, new, changed or fixed and name the resource whose data changes. Breaking bullets say what fails;
+- **Changelog**: an entry per version, newest first. It answers the question of a user whose pipeline already loaded data: can I upgrade, and do I lose data? The entry starts with an **Upgrade** line, from what [Data shape and upgrade compatibility](#data-shape-and-upgrade-compatibility) found: `safe` when existing pipelines continue with no action, otherwise the steps in order and what happens without them, i.e. failed runs, missed, duplicated or mixed rows. It says whether incremental state carries over. Short bullets follow: start each with **breaking**, new, changed or fixed and name the resource whose data changes. Breaking bullets say what fails. The first numbered version of an existing source says that copies without `version.py` cannot be upgraded, since they may come from any commit, and gives the steps to reload;
 - **Extension points**: how to add e.g. an endpoint, a field type or a transformer;
+- **Maintenance & Troubleshooting**: what running against the upstream taught: run times and request costs, throttling and quotas, paging quirks, troubleshooting. Name the source of each fact: a run on the test account, a doc with its URL, or an earlier PR. A page size or limit stays only when exploring the upstream set it, stated as the upstream limit with its source, e.g. "search serves at most 5000 ids per page (docs)".
+
+Seeding and tests go to `tests/<name>/README.md`, not to the source README that `dlt init` copies to users:
 - **Seeding**: numbered steps to seed the test account and capture responses;
-- **Tests**: only what the test code does not show, e.g. tests that write to the test account. Not what mocks, fixtures and helpers do;
-- **Operations**: what running against the upstream taught: run times and request costs, throttling and quotas, paging quirks, troubleshooting. Name the source of each fact: a run on the test account, a doc with its URL, or an earlier PR. A page size or limit stays only when exploring the upstream set it, stated as the upstream limit with its source, e.g. "search serves at most 5000 ids per page (docs)".
+- **Tests**: only what the test code does not show, e.g. tests that write to the test account. Not what mocks, fixtures and helpers do.
 
 ```md
 ## Changelog
@@ -231,29 +233,33 @@ Hand-made fixtures encode our assumptions; they hid the header-only page bug in 
   - blank values;
   - deleted records.
 - **Capture real responses** from the seeded account into `tests/<name>/cases/`. Use only synthetic seed data, never customer data. Run credential-free unit tests on them, compared field by field with expected values derived from the seed data.
-- **Keep end-to-end tests read-only, few and parallel**, in `test_<name>_source.py`. Count only seeded records, because accounts come with their own sample data. Pause between live runs, since vendors throttle.
+- **Keep end-to-end tests few and parallel**, in `test_<name>_source.py`, and read-only except the change test of the [standard incremental tests](#standard-incremental-tests). Count only seeded records, because accounts come with their own sample data. Pause between live runs, since vendors throttle.
 - **Never read or print secrets files.** Credentials reach the seed script and tests only through dlt config injection.
 - **Check other popular open source connectors** for the same API and their test suites for edge cases not covered yet: value formats, nulls, quoting, pagination, errors, unsupported objects. Add them as test cases. Take the cases, not the code: write fixtures and values ourselves, because their licenses may not allow copying.
 
 ### Standard incremental tests
 
-Every source with incremental loading has these end-to-end tests, on the seeded test account or on a local container (`tests/<name>/docker-compose.yml`). Reference: `test_local_seeded_full_and_incremental` and `test_local_seeded_chunks` in `tests/mongodb/test_mongodb_source.py`.
+Every source with incremental loading has these end-to-end tests, on the seeded test account or on a local container (`tests/<name>/docker-compose.yml`). Reference: `test_seeded_full_and_incremental`, `test_seeded_chunks` and `test_incremental_changes` in `tests/salesforce/test_salesforce_source.py`, and `test_local_incremental_changes` in `tests/mongodb/test_mongodb_source.py` for a source that cannot see deletes.
 
 **Seed**
-- Unique random cursor values at the precision of the upstream, in an order unrelated to the insert or primary key order.
+- Unique cursor values at the precision of the upstream, spread over many days like natural data, in an order unrelated to the insert or primary key order. Seed data committed to the repo needs the same values on every Python version: compute them from the record number, not with `random`.
+- When the upstream sets the cursor itself, e.g. a modification timestamp, seed the values into a custom field and run the windows and chunks on it.
 - Several chunks and a partial last one, for example 1050 records in chunks of 200.
-- Expected values come from the seeded records, never from another read of the upstream.
+- Expected values are computed in the test from the seed data in the repo, or from values captured when seeding and committed. Never from a read of the upstream at test time: such a test repeats the logic of the source and passes on any data.
 
 **Tests**
+
+Run them without lag.
 1. Full load: loads all seeded primary keys.
-2. Next run: loads 0 rows.
+2. Next run: loads 0 rows, or only the rows with the last value when the source turns off deduplication.
 3. Windows with `initial_value`, `end_value`, `range_start="closed"` and `range_end="open"`: each window loads the seeded values in it and stores no incremental state.
 4. Chunks with `add_limit(1)`, `row_order="asc"` and `range_start="open"`: each run loads the next `chunk_size` values, ascending with `max` and descending with `min`, and stores the last one as `last_value`. A final run loads 0 rows. The stored `last_value` keeps the timezone of the cursor.
+5. Changes, when the upstream accepts writes to an object only the tests use: the test adds, updates and deletes its own records between runs, tagged with a run id, or in its own collection, folder or list, so parallel runs do not see each other's records. Each run reads exactly the changed records, and the destination has the new rows and values and no deleted rows. When the source cannot see deletes, the test asserts that deleted rows stay, and Maintenance & Troubleshooting of the source README says so.
 
 **Parametrization**
 - Every backend and reader: `python` and `pyarrow`, sequential and parallel, Bulk and REST.
 - Chunks: `max` and `min`, each with and without `initial_value`.
-- A parallel reader that fails the chunk test needs `parallel=False` for chunked loading, written in Operations.
+- A parallel reader that fails the chunk test needs `parallel=False` for chunked loading, written in Maintenance & Troubleshooting.
 
 ## Phase 5 — Verify and finish
 

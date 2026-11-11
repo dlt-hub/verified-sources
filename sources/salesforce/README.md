@@ -9,29 +9,29 @@ in the [dlt docs](https://dlthub.com/docs/dlt-ecosystem/verified-sources/salesfo
 
 ### 1.0.3
 **Upgrade**: safe, the incremental state carries over.
-- changed `salesforce_table`: resources run their query jobs in parallel, like the resources of
-  `salesforce_source`
-- changed all resources: timestamp columns have no precision hint, new tables get the default
-  precision of the destination. Existing tables keep their type
+- changed `salesforce_table`: resources run their query jobs in parallel
+- changed all resources: timestamp columns of new tables get the default precision of the
+  destination, existing tables keep their type
 
 ### 1.0.2
-**Upgrade**: safe, the incremental state carries over and the next run continues from it. Calls of
-`salesforce_source` with `incremental` fail: pass `start_date`, or `write_disposition="replace"` to
-reload all records on each run. `salesforce_table(incremental=None)` loads incrementally now, pass
-`write_disposition="replace"` to keep reloading all records.
-- new `salesforce_source` and `salesforce_table`: `start_date`, the initial value of the default
-  incremental. It replaces the `incremental` argument of `salesforce_source`
-- fixed all resources: incremental queries on a timestamp read records changed until the query
-  starts. Records changed while a long query job runs are loaded by the next run, before they could
-  move the cursor past records the job missed
+**Upgrade**: copies without `version.py` cannot be upgraded. Run once with `refresh="drop_sources"`,
+e.g. `pipeline.run(salesforce_source(), refresh="drop_sources")`: it drops the tables and the
+incremental state and loads all records again. Earlier versions loaded most fields as text, without
+primary keys.
+- **breaking** `salesforce_source`: `incremental` fails, pass `start_date`, or
+  `write_disposition="replace"` to reload all records on each run
+- **breaking** `salesforce_table`: `incremental=None` loads incrementally, pass
+  `write_disposition="replace"` to reload all records on each run
+- new `salesforce_source` and `salesforce_table`: `start_date`
+- fixed all resources: records changed while a query job ran could be missed
 - fixed `python` backend: fields longer than 131,072 characters failed. `pyarrow` backend: records
   longer than about 2 MiB failed
-- fixed resources of `salesforce_source` resolve config in the `salesforce` section instead of
-  `table`
-- changed: requests refused because the org runs too many long requests at once are retried, a
-  query job that does not complete in 24 hours is aborted and raises, a result page with fewer
-  records than Salesforce counted raises, and `api="auto"` falls back to the REST API when the Bulk
-  API rejects a compound field
+- fixed `salesforce_source`: resources read config from the `salesforce` section instead of `table`
+- changed all resources: `api="auto"` falls back to the REST API when the Bulk API rejects a
+  compound field
+
+Versions before 1.0.2 were not numbered. Copies taken with `dlt init` have no `version.py`,
+`.dlt/.sources` records the repository commit they came from.
 
 ## Extension points
 
@@ -46,26 +46,7 @@ reload all records on each run. `salesforce_table(incremental=None)` loads incre
   passed to dlt's `Client` in `_connection` of `__init__.py`.
 - An auth method: a credentials class in `helpers/credentials.py`, added to `SalesforceAuth`.
 
-## Seeding
-
-The test org setup and the seeded data are described in `tests/salesforce/README.md`. Run from the
-repository root, credentials are read from `sources/.dlt`:
-
-1. `uv run python -m tests.salesforce.seed.seed deploy` creates the custom objects and fields.
-2. `uv run python -m tests.salesforce.seed.seed load` writes the records of `seed/data.py`, then
-   creates and deletes records so the recycle bin has deleted ones.
-3. `uv run python -m tests.salesforce.seed.seed capture` rewrites `tests/salesforce/cases/`. Commit
-   it, and add values Salesforce stores differently than seeded to `STORED_AS` of `seed/data.py`.
-
-`all` runs the three steps. Each step needs a new client: the Metadata API deploy of
-`simple_salesforce` leaves XML headers on the client and the following REST calls fail with 415.
-
-## Tests
-
-`test_salesforce_source.py` only reads the org. The deleted records it checks are purged from the
-recycle bin 15 days after the last `load`, then the tests of deleted records check nothing.
-
-## Operations
+## Maintenance & Troubleshooting
 
 Facts seen on the Developer Edition test org with API v59.0 (test org), measured locally with
 pyarrow 17 and urllib3 2.3 (local), or taken from docs and other connectors.
@@ -113,3 +94,10 @@ pyarrow 17 and urllib3 2.3 (local), or taken from docs and other connectors.
   same job and page, which does not work for credentials with a session id only (#717).
 - **Throughput**: 50,000 rows with 36 fields load to the local filesystem in 0.15 s with `pyarrow`
   and 2.1 s with `python` (#717).
+- **Backends**: we recommend against switching backends in production, pick one while testing. By
+  default, the Arrow tables of `pyarrow` get no `_dlt_id`, which costs performance and is not needed
+  ([docs](https://dlthub.com/docs/dlt-ecosystem/verified-sources/arrow-pandas#add-_dlt_load_id-and-_dlt_id-to-your-tables)),
+  but rows of `python` add it, so loads of one backend fail on a table loaded with the other
+  (local). `backend="auto"` switches to `pyarrow` when it gets installed. The workaround: set
+  `add_dlt_load_id` and `add_dlt_id` of `[normalize.parquet_normalizer]` for all `pyarrow` loads of
+  the table.

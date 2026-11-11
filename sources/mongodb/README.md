@@ -6,54 +6,31 @@ Maintenance notes of the [MongoDB](https://www.mongodb.com/) source. Setup and u
 ## Changelog
 
 ### 1.0.0
-**Upgrade**: safe, install `dlt>=1.16.0` and `pymongo[zstd]>=4.4`. The incremental state carries over
-and the `python` backend loads the same tables. `data_item_format` still works with a deprecation
-warning. With the `pyarrow` backend nested documents already loaded as `json` columns stay `json`,
-new nested fields are flattened into columns.
-- fixed `mongodb_collection`: failed with `InvalidResourceReturnsResource` on dlt 1.12 and later
-- fixed `pyarrow` backend: failed to import with `pymongoarrow>=1.6`
-- fixed `pyarrow` backend: the incremental cursor is filtered on the server, before the whole
-  collection was read
-- fixed: a projection with an incremental keeps the cursor field, also when the projection
-  includes the document that holds it. Excluding that document raises
-- fixed: a filter on the cursor field no longer replaces the incremental filter
+**Upgrade**: safe, install `dlt>=1.16.0` and `pymongo[zstd]>=4.4`. The incremental state carries
+over. With the `pyarrow` backend, nested documents loaded as `json` columns stay `json`, new nested
+fields load as columns.
+- fixed `mongodb_collection`: failed on dlt 1.12 and later
+- fixed `pyarrow` backend: failed with `pymongoarrow>=1.6`, and read the whole collection with an
+  incremental
+- fixed: a projection dropped the cursor field, a filter on the cursor field replaced the
+  incremental
 - fixed `python` backend: DBRef, MinKey, MaxKey, PCRE-only regexes and dates outside the Python
-  range failed the load. Such dates are clamped
-- fixed `pyarrow` backend: dlt warned about the nullability of `_id` for every table
-- changed `parallel`: reads `_id` partitions of about `partition_size_bytes` instead of skip and
-  limit batches, which can return a document twice or miss it. With `limit` it reads in one query
-- changed `parallel` with the `pyarrow` backend: partitions are parsed in worker processes, at most
-  `workers` of the `extract` config for all collections, and each loads as one table
-- changed `pyarrow` backend: nested documents are flattened up to `max_table_nesting`, except
-  `json` columns
-- changed `pyarrow` backend: timestamps are UTC, ObjectIds in nested documents and lists load as
-  strings
-- changed `pyarrow` backend: when a field changes type between batches, numbers are cast to its
-  first type and other values load as null, before the load failed
+  range failed the load
+- changed `parallel`: documents are no longer loaded twice or missed
+- changed `pyarrow` backend: nested documents load as columns up to `max_table_nesting`, timestamps
+  in UTC, nested ObjectIds as strings, values of a field that changes type are cast or null instead
+  of failing the load
 - changed `pyarrow` backend: values that do not match `pymongoarrow_schema` raise
   `FieldTypeMismatchError`
-- changed: the `python` backend yields `datetime` in UTC instead of `pendulum.DateTime`
-- changed `mongodb`: `system.*` collections are no longer loaded unless named in `collection_names`
-- changed `mongodb_collection`: `data_item_format` is deprecated, use `backend` with `python`
-  (default) or `pyarrow`
-- new: the server compresses the documents it sends with zstd, snappy or zlib, unless the
-  connection URL sets `compressors`
-- new `pyarrow` backend: `on_inferred_type_mismatch`
-- new: `partition_size_bytes` of `parallel` reads, 16 MiB by default
-- new `mongodb`: `backend` and `chunk_size` arguments
+- changed `python` backend: `datetime` in UTC instead of `pendulum.DateTime`
+- changed `mongodb`: `system.*` collections load only when named in `collection_names`
+- changed `mongodb_collection`: `data_item_format` is deprecated, use `backend`
+- new `mongodb`: `backend` and `chunk_size`
+- new `pyarrow` backend: `on_inferred_type_mismatch`, `parallel` reads in worker processes and
+  `partition_size_bytes`
+- new: network compression with zstd, snappy or zlib
 
-## Tests
-
-- `test_local_*` need the local MongoDB: `docker compose -f tests/mongodb/docker-compose.yml up -d`.
-  It runs MongoDB 7 because 8.0 and later crash at start on Linux 6.19 and newer, like GitHub runners
-  ([SERVER-121912](https://jira.mongodb.org/browse/SERVER-121912)).
-- Incremental and ordering tests run only on the local MongoDB. The other tests in
-  `test_mongodb_source.py` read samples of the `sample_mflix` dataset from the `connection_url` in
-  `sources/.dlt/secrets.toml`, `test_all_resources` loads all of it.
-- Run the `pyarrow` backend tests with the oldest and newest `pymongoarrow`:
-  `uv run --with pymongoarrow==1.16.1 pytest tests/mongodb`.
-
-## Operations
+## Maintenance & Troubleshooting
 
 - `pymongoarrow` pins one `pyarrow` minor version per release, so the installed `pyarrow` decides
   its version ([changelog](https://github.com/mongodb-labs/mongo-arrow/blob/main/bindings/python/CHANGELOG.md)).
@@ -65,8 +42,18 @@ new nested fields are flattened into columns.
   timestamp, code with scope, symbol, MinKey and MaxKey as null. Such collections need
   `pymongoarrow_schema` or the `python` backend. Arrays load as child tables with `python` and as
   `json` with `pyarrow`, so a loaded resource needs a reload to switch the backend.
+- We recommend against switching backends in production, pick one while testing. By default, the
+  Arrow tables of `pyarrow` get no `_dlt_id`, which costs performance and is not needed
+  ([docs](https://dlthub.com/docs/dlt-ecosystem/verified-sources/arrow-pandas#add-_dlt_load_id-and-_dlt_id-to-your-tables)),
+  but rows of `python` add it, so loads of one backend fail on a table loaded with the other.
+  `pyarrow` falls back to `python` when `pymongoarrow` is not installed. The workaround for
+  collections without arrays: set `add_dlt_load_id` and `add_dlt_id` of
+  `[normalize.parquet_normalizer]` for all `pyarrow` loads of the table.
 - The primary key is `_id`. Views and time series collections can return documents without `_id`
   and the load fails. Set another key, or none with `apply_hints(primary_key=())`.
+- Deleted documents stay in the destination: the source reads with `find`, which does not return
+  them (`test_local_incremental_changes`). Reload the collection, or soft delete documents and set
+  their cursor field. An update loads only when it also changes the cursor field.
 - `parallel` sizes partitions from the average document size in `$collStats`. Partitions shrink
   down to 1 MiB until each extract worker gets 8. The planner reads `workers` from the `extract`
   config and does not see the `workers` argument of `pipeline.extract`.
