@@ -1,6 +1,5 @@
 """Files seeded into the Documents library of the test site and the values loaded from them"""
 
-import random
 from datetime import date, datetime, timedelta, timezone  # noqa: I251
 from typing import Dict, List, Tuple
 
@@ -52,9 +51,14 @@ def paging_files() -> Dict[str, bytes]:
 
 def incremental_files() -> List[Tuple[str, bytes, datetime]]:
     """Files of `INCREMENTAL_FOLDER` with unique modification times in 2021, in an order unrelated to their names"""
-    seconds = random.Random(2021).sample(range(365 * 24 * 3600), INCREMENTAL_FILES)
     start = datetime(2021, 1, 1, tzinfo=timezone.utc)
+    # the prime 10000019 wraps the seconds of 2021 every few files. `random` may change between
+    # Python versions
     return [
-        (f"inc_{n:02}.csv", f"n\n{n}\n".encode(), start + timedelta(seconds=s))
-        for n, s in enumerate(seconds, 1)
+        (
+            f"inc_{n:02}.csv",
+            f"n\n{n}\n".encode(),
+            start + timedelta(seconds=n * 10_000_019 % (365 * 24 * 3600)),
+        )
+        for n in range(1, INCREMENTAL_FILES + 1)
     ]

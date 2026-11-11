@@ -2,6 +2,7 @@
 
 import io
 import os
+from datetime import datetime  # noqa: I251
 from collections import Counter
 from functools import partial
 from typing import (
@@ -22,6 +23,7 @@ import dlt
 import openpyxl  # type: ignore[import-untyped]
 import pyarrow as pa
 import pyarrow.parquet as pq
+from dlt.sources.helpers.rest_client import RESTClient
 from requests_mock import Mocker
 
 from sources.sharepoint import sharepoint_files
@@ -324,3 +326,50 @@ def files_containing(directory: str, data: bytes) -> List[str]:
                 if data in f.read():
                     found.append(path)
     return found
+
+
+def item_path(path: str, drive: str = "drive") -> str:
+    quoted = "/".join(quote(segment, safe="") for segment in path.split("/"))
+    return f"{drive}/root:/{quoted}:"
+
+
+def ensure_folder(client: RESTClient, path: str, drive: str = "drive") -> None:
+    if not path or client.get(item_path(path, drive)).ok:
+        return
+    parent, _, name = path.rpartition("/")
+    ensure_folder(client, parent, drive)
+    children = (
+        f"{item_path(parent, drive)}/children" if parent else f"{drive}/root/children"
+    )
+    client.post(children, json={"name": name, "folder": {}}).raise_for_status()
+
+
+def upload(
+    client: RESTClient,
+    path: str,
+    content: bytes,
+    modified: Optional[datetime],
+    drive: str = "drive",
+) -> str:
+    """Uploads `content` to `path`, with the modification time `modified` when given. Returns the
+    item id"""
+    response = client.request(
+        f"{item_path(path, drive)}/content",
+        method="PUT",
+        data=content,
+        headers={"Content-Type": "application/octet-stream"},
+    )
+    response.raise_for_status()
+    if modified is not None:
+        stamp = modified.isoformat().replace("+00:00", "Z")
+        times = {"createdDateTime": stamp, "lastModifiedDateTime": stamp}
+        client.request(
+            f"{drive}/items/{response.json()['id']}",
+            method="PATCH",
+            json={"fileSystemInfo": times},
+        ).raise_for_status()
+    return str(response.json()["id"])
+
+
+def delete_item(client: RESTClient, item_id: str, drive: str = "drive") -> None:
+    client.request(f"{drive}/items/{item_id}", method="DELETE").raise_for_status()

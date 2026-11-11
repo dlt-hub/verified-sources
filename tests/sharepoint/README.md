@@ -1,12 +1,13 @@
 # SharePoint tests
 
-- `test_sharepoint_graph.py`, `test_sharepoint_filesystem.py`, `test_sharepoint_list.py`: unit tests. Graph is mocked with `requests_mock`. No credentials needed.
-- `test_sharepoint_source.py`: live tests against the test site. They only read data. The expected values of `test_seeded_full_and_incremental` come from `seed/data.py`.
+- `test_sharepoint_graph.py`, `test_sharepoint_filesystem.py`, `test_sharepoint_list.py`: unit tests. Graph is mocked with `requests_mock`. No credentials needed. There are no captured responses: the unit tests build Graph payloads from the API reference.
+- `test_sharepoint_source.py`: live tests against the test site. They only read data, except `test_files_incremental_changes` and `test_list_incremental_changes`: they add, update and delete files in their own `dlt_changes/<run id>` folder and items of their own list between runs, and delete the folder and the list at the end. The expected values of `test_seeded_full_and_incremental` come from `seed/data.py`, the other live tests read the hand-made lists, the seeded `dlt test` folder and the `dlt archive` library.
+- Never run two pytest processes in the repository at once: the storage fixture of one run wipes the load packages of the other.
 
 ## Test site
 
 The tests use a team site in a Microsoft 365 developer tenant, in the Pacific time zone, and an Entra ID app with
-admin-consented application permissions: `Sites.Read.All` for the tests, `Files.ReadWrite.All` and `Sites.Manage.All` for the seed. To set up a new one:
+admin-consented application permissions: `Sites.Read.All` for the tests, `Files.ReadWrite.All` and `Sites.Manage.All` for the seed and the change tests. To set up a new one:
 
 1. Create a team site, for example `dlthub-test`.
 2. Register an app in Entra ID, create a client secret, add the application permissions and grant admin consent.
@@ -32,11 +33,11 @@ uv run python -m tests.sharepoint.seed.seed
 It uploads the files of `seed/data.py` into the Documents library: the `dlt test` folder with csv, txt and
 xlsx files in subfolders, `root_sample.csv` at the library root, `dlt_paging` with 205 one-row csv files, so a
 listing needs two Graph pages, and `dlt_incremental` with 25 one-row csv files whose modification times are
-unique random seconds of 2021, set through `fileSystemInfo`. Files that are no longer in `data.py` are deleted
+unique seconds of 2021 computed from the file number, set through `fileSystemInfo`. Files that are no longer in `data.py` are deleted
 from the last two folders. It creates the `dlt archive` document library when missing and uploads
 `archive/report_2023.csv` there, a file the Documents library does not have. The run takes about a minute.
 
-The lists cannot be created through the app and are made by hand once:
+The read tests use two lists made by hand once. The app can create lists, `test_list_incremental_changes` creates its own:
 
 - `dlt toy tasks`, a blank list with columns `Status` (choice: Open, Done), `DueDate` (date only) and `Story Points` (number), and 5 items:
 

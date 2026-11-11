@@ -15,7 +15,6 @@ import os
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime  # noqa: I251
 from typing import Dict, Optional, Set, Tuple
-from urllib.parse import quote
 
 # dlt resolves config and secrets from sources/.dlt, like in tests
 os.environ.setdefault("DLT_PROJECT_DIR", "sources")
@@ -27,48 +26,9 @@ from sources.sharepoint import SharepointCredentials
 from sources.sharepoint.graph import site_client
 
 from tests.sharepoint.seed import data
+from tests.sharepoint.utils import ensure_folder, item_path, upload
 
 WORKERS = 5
-
-
-def item_path(path: str, drive: str = "drive") -> str:
-    quoted = "/".join(quote(segment, safe="") for segment in path.split("/"))
-    return f"{drive}/root:/{quoted}:"
-
-
-def ensure_folder(client: RESTClient, path: str, drive: str = "drive") -> None:
-    if not path or client.get(item_path(path, drive)).ok:
-        return
-    parent, _, name = path.rpartition("/")
-    ensure_folder(client, parent, drive)
-    children = (
-        f"{item_path(parent, drive)}/children" if parent else f"{drive}/root/children"
-    )
-    client.post(children, json={"name": name, "folder": {}}).raise_for_status()
-
-
-def upload(
-    client: RESTClient,
-    path: str,
-    content: bytes,
-    modified: Optional[datetime],
-    drive: str = "drive",
-) -> None:
-    response = client.request(
-        f"{item_path(path, drive)}/content",
-        method="PUT",
-        data=content,
-        headers={"Content-Type": "application/octet-stream"},
-    )
-    response.raise_for_status()
-    if modified is not None:
-        stamp = modified.isoformat().replace("+00:00", "Z")
-        times = {"createdDateTime": stamp, "lastModifiedDateTime": stamp}
-        client.request(
-            f"{drive}/items/{response.json()['id']}",
-            method="PATCH",
-            json={"fileSystemInfo": times},
-        ).raise_for_status()
 
 
 def ensure_library(client: RESTClient, name: str) -> str:

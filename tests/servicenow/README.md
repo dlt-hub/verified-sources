@@ -4,7 +4,16 @@
   `test_query.py`, `test_schema.py`, `test_table.py` and `test_servicenow.py`. `FakeInstance` in `utils.py` is a
   fake ServiceNow instance. It answers Table API and CSV export requests with `requests_mock` and evaluates the
   encoded queries that the source sends. The unit tests need no credentials.
-- `test_servicenow_source.py`: live tests against the seeded test instance. They only read data.
+- `test_servicenow_source.py`: live tests against the seeded test instance. They only read data, except
+  `test_incremental_changes`: it adds, updates and deletes its own `u_dlt_changes` records, tagged with
+  `u_run_id`, between runs and deletes them at the end. `encoded_query` does not filter the deletes read from
+  `sys_audit_delete`, so a change test running at the same time adds delete rows to the row counts. Expected
+  values come from `seed/data.py`, except `test_all_resources`, `test_large_table` and
+  `test_partitioned_load_identical`, which read tables the seed does not write.
+
+No test covers these cases, which were tried once by hand on the test instance:
+- the API user in the time zones America/Los_Angeles and Hongkong
+- field `read`, `query_range` and `query_match` ACLs, which need `security_admin` in the UI
 
 ## Test instance
 
@@ -32,15 +41,17 @@ Run from the repository root. The script resolves credentials from `sources/.dlt
 uv run python -m tests.servicenow.seed.seed all  # or deploy | load | capture
 ```
 
+On a new instance, run all steps again.
+
 - `deploy`: creates the `u_dlt_types` table with a field of every type and the choices of `u_choice`, and the
-  `u_dlt_pages` and `u_dlt_incremental` tables.
+  `u_dlt_pages`, `u_dlt_incremental` and `u_dlt_changes` tables.
 - `load`:
-  - upserts the records in `seed/data.py` on `u_seed_id` and deletes seeded records that are no longer in it.
+  - upserts the records in `seed/data.py` on `u_seed_id` and deletes `types-` records that are no longer in it.
     Then it creates and deletes 2 records once, so `sys_audit_delete` has records of the table.
   - inserts the missing records of `u_dlt_pages`: two full pages of 100 and a short one. `u_when` of the first 150
     is empty, more than a page of records without a cursor value.
-  - inserts the missing records of `u_dlt_incremental`: 1050 records with unique `u_updated_at` values in 2024,
-    five chunks of 200 and a short one for the standard incremental tests, and `incremental-future` with
+  - inserts the missing records of `u_dlt_incremental` and updates those whose `u_updated_at` differs: 1050
+    records with unique `u_updated_at` values in 2024, computed from the record number, five chunks of 200 and a short one for the standard incremental tests, and `incremental-future` with
     `u_updated_at` in 2032, which only a range that ends after it reads.
 
   The platform sets `sys_updated_on` on every write, so the seed cannot set it.

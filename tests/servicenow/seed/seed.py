@@ -4,8 +4,8 @@ Run from the repository root. Credentials are resolved from `sources/.dlt` like 
 
     uv run python -m tests.servicenow.seed.seed [deploy|load|capture|capture-hidden|all]
 
-`deploy` creates the `u_dlt_types` table with a field of every type, the `u_dlt_pages` and
-`u_dlt_incremental` tables and the choices of `u_choice`. `load` deletes stale `types-` records and
+`deploy` creates the `u_dlt_types` table with a field of every type, the `u_dlt_pages`,
+`u_dlt_incremental` and `u_dlt_changes` tables and the choices of `u_choice`. `load` deletes stale `types-` records and
 upserts the records in `data.py` on their seed id. Then it creates and deletes the records in
 `data.DELETED_SEED_IDS` once, so `sys_audit_delete` has records of `u_dlt_types`. `capture`
 writes the `sys_dictionary` fields, a Table API page and a CSV export of `u_dlt_types` to
@@ -43,6 +43,7 @@ TABLES = {
     data.DLT_TYPES: ("dlt types", data.FIELDS),
     data.DLT_PAGES: ("dlt pages", data.PAGE_FIELDS),
     data.DLT_INCREMENTAL: ("dlt incremental", data.INCREMENTAL_FIELDS),
+    data.DLT_CHANGES: ("dlt changes", data.CHANGES_FIELDS),
 }
 
 
