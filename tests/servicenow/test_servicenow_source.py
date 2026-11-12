@@ -1,7 +1,9 @@
+import uuid
 from concurrent.futures import ThreadPoolExecutor
-from datetime import datetime, timezone  # noqa: I251
+from datetime import datetime, timedelta, timezone  # noqa: I251
 from functools import partial
-from typing import Any, Dict, List, Optional, Set
+from time import sleep
+from typing import Any, Dict, List, Optional, Set, Tuple
 from urllib.parse import parse_qs, urlparse
 
 import dlt
@@ -16,7 +18,12 @@ from sources.servicenow.helpers.client import (
 )
 
 from tests.servicenow.seed import data
-from tests.servicenow.utils import get_credentials, wait_for_instance
+from tests.servicenow.utils import (
+    delete_record,
+    get_credentials,
+    wait_for_instance,
+    write_record,
+)
 from tests.utils import (
     ALL_DESTINATIONS,
     assert_load_info,
@@ -336,14 +343,13 @@ def test_seeded_full_and_incremental(backend: str, api: str, partitioned: bool) 
         data.DLT_INCREMENTAL: len(records)
     }
 
-    quarters = [
-        datetime(2024, month, 1, tzinfo=timezone.utc) for month in (1, 4, 7, 10)
-    ]
-    quarters.append(datetime(2025, 1, 1, tzinfo=timezone.utc))
+    # bounds are seeded values, so a value on a bound loads in exactly one window
+    values = sorted(values)
+    quarters = [values[len(values) * k // 4] for k in (1, 2, 3)]
     # with `min` the windows go back in time, the last one ends before the first seeded value
     for last_value_func, bounds in (
-        (max, quarters),
-        (min, quarters[:0:-1] + [datetime(2023, 12, 31, tzinfo=timezone.utc)]),
+        (max, [values[0], *quarters, values[-1] + timedelta(seconds=1)]),
+        (min, [values[-1], *quarters[::-1], values[0] - timedelta(seconds=1)]),
     ):
         backfill = dlt.pipeline(
             pipeline_name=f"servicenow_seeded_backfill_{last_value_func.__name__}",
@@ -385,7 +391,7 @@ def test_seeded_full_and_incremental(backend: str, api: str, partitioned: bool) 
         backend,
         api,
         partitioned,
-        initial_value=quarters[-1],
+        initial_value=values[-1] + timedelta(seconds=1),
         end_value=datetime(2033, 1, 1, tzinfo=timezone.utc),
     )
     assert_load_info(future.run(window))
@@ -465,6 +471,8 @@ def test_seeded_chunks(
     assert sorted(rows) == sorted(
         (record[data.SEED_ID_FIELD], record[cursor]) for record in records
     )
+    if cursor == data.INCREMENTAL_CURSOR:
+        assert table.state["incremental"][cursor]["last_value"].tzinfo is not None
 
 
 @skip_if_not_active("duckdb")
@@ -481,3 +489,65 @@ def test_seeded_deferred() -> None:
     assert columns["u_number"]["data_type"] == "bigint"
     assert columns[data.INCREMENTAL_CURSOR]["data_type"] == "timestamp"
     assert columns["is_deleted"]["hard_delete"] is True
+
+
+@pytest.mark.parametrize("destination_name", ALL_DESTINATIONS)
+@READERS
+def test_incremental_changes(destination_name: str, backend: str, api: str) -> None:
+    # adds, updates and deletes records of the run between runs of the default incremental
+    run_id = uuid.uuid4().hex
+    client = ServiceNowClient(get_credentials())
+    sys_ids: Dict[str, str] = {}
+
+    def create(name: str) -> None:
+        values = {data.SEED_ID_FIELD: name, "u_run_id": run_id, "u_value": 1}
+        sys_ids[name] = write_record(client, data.DLT_CHANGES, values)
+
+    def run() -> int:
+        table = servicenow_table(
+            table=data.DLT_CHANGES,
+            encoded_query=f"u_run_id={run_id}",
+            lag=0,
+            backend=backend,
+            api=api,
+        )
+        # runs read until the time of the instance when they start, which is excluded
+        sleep(1.5)
+        assert_load_info(pipeline.run(table))
+        row_counts = pipeline.last_trace.last_normalize_info.row_counts
+        return row_counts.get(data.DLT_CHANGES, 0)
+
+    def loaded() -> List[Tuple[str, int]]:
+        rows = load_tables_to_dicts(pipeline, data.DLT_CHANGES)[data.DLT_CHANGES]
+        return sorted((row[data.SEED_ID_FIELD], int(row["u_value"])) for row in rows)
+
+    pipeline = dlt.pipeline(
+        pipeline_name=f"servicenow_changes_{backend}_{api}",
+        destination=destination_name,
+        dev_mode=True,
+    )
+    try:
+        for name in ("a1", "a2", "a3", "a4"):
+            create(name)
+        # the last change of a run is alone in its second, the next run reads only it again
+        sleep(1.5)
+        create("a5")
+        assert run() == 5
+
+        write_record(client, data.DLT_CHANGES, {"u_value": 2}, sys_ids["a1"])
+        delete_record(client, data.DLT_CHANGES, sys_ids.pop("a2"))
+        create("b1")
+        sleep(1.5)
+        create("b2")
+        # a5 again, a1, the delete of a2, b1 and b2. `encoded_query` does not filter deletes, a
+        # change test running at the same time adds its own
+        assert run() >= 5
+        expected = [("a1", 2), ("a3", 1), ("a4", 1), ("a5", 1), ("b1", 1), ("b2", 1)]
+        assert loaded() == expected
+
+        # b2 again
+        assert run() >= 1
+        assert loaded() == expected
+    finally:
+        for sys_id in sys_ids.values():
+            delete_record(client, data.DLT_CHANGES, sys_id)

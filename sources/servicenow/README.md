@@ -44,32 +44,7 @@ types come from `sys_dictionary`, and deletes come from `sys_audit_delete`. Setu
 - Parallel reads of a table: `plan_partitions` of `helpers/table.py` and the `sys_id` bounds of
   `partition_conditions` in `helpers/query.py`.
 
-## Seeding
-
-The test instance setup and the seeded tables are described in `tests/servicenow/README.md`. The
-seed runs from the repository root and reads credentials from `sources/.dlt`:
-
-1. Run `uv run python -m tests.servicenow.seed.seed deploy` to create the tables and fields.
-2. Run `uv run python -m tests.servicenow.seed.seed load` to write the records of `seed/data.py`. It
-   also creates and deletes records once, so `sys_audit_delete` has records.
-3. Run `uv run python -m tests.servicenow.seed.seed capture` to rewrite `tests/servicenow/cases/`.
-   Commit the result.
-4. Optional: run `capture-hidden` to capture responses while a field ACL hides a field. Before you
-   run it, create the ACL in the UI, see `tests/servicenow/README.md`.
-
-`all` runs the first three steps. A developer instance is reclaimed after 10 days without a login.
-On a new instance, run all steps again.
-
-## Tests
-
-`test_servicenow_source.py` only reads the instance. Its expected values come from `seed/data.py`,
-except `test_all_resources`, `test_large_table` and `test_partitioned_load_identical`, which read
-tables the seed does not write. No test covers these cases, which were tried once by hand on the
-test instance:
-- the API user in the time zones America/Los_Angeles and Hongkong
-- field `read`, `query_range` and `query_match` ACLs, which need `security_admin` in the UI
-
-## Operations
+## Maintenance & Troubleshooting
 
 Facts seen on the developer instance on the Brazil release (test instance), or taken from docs and
 other connectors.
@@ -140,3 +115,11 @@ other connectors.
   hundreds of `sys_choice` records (test instance). When more records share one timestamp than a
   chunk holds, a chunked load with `range_start="closed"` reads the same chunk again. With
   `"open"`, it skips the rest of them.
+- **Backends**: we recommend against switching backends in production, pick one while testing. By
+  default, the Arrow tables of `pyarrow` get no `_dlt_load_id` and `_dlt_id`, and `_dlt_id` costs
+  performance and is not needed
+  ([docs](https://dlthub.com/docs/dlt-ecosystem/verified-sources/arrow-pandas#add-_dlt_load_id-and-_dlt_id-to-your-tables)),
+  but rows of `python` add both, so loads of one backend fail on a table loaded with the other
+  (local). `backend="auto"` switches to `pyarrow` when it gets installed. The workaround: set
+  `add_dlt_load_id` and `add_dlt_id` of `[normalize.parquet_normalizer]` for all `pyarrow` loads of
+  the table.

@@ -7,51 +7,34 @@ and coding agents. Setup and usage are in the
 ## Changelog
 
 ### 1.1.0
-**Upgrade**: safe for `jira` and `jira_issues`, incremental state carries over. `jira_search` loads
-into a new `jira_search` table, drop the `issues` table it loaded before.
-- **breaking** `jira_search`: the resource and its table are `jira_search` instead of `issues`, so
-  `jira` and `jira_search` load into one dataset. `with_name` loads another table
-- new `jira_search` arguments `chunk_size`, `bulk_fetch_size`, `included_columns` and
-  `excluded_columns`
-- changed `issues`: search lists only ids, up to 5000 per request instead of 100 issues, and the
-  incremental reads the cursor from fetched issues. Issues updated after the run starts are loaded
-  by the next run, and an issue deleted after search no longer moves the cursor
+**Upgrade**: safe for `jira` and `jira_issues`, the incremental state carries over. `jira_search`
+loads into a new `jira_search` table, drop the `issues` table it loaded before.
+- **breaking** `jira_search`: loads into `jira_search` instead of `issues`, `with_name` sets another
+  table
+- new `jira_search`: `chunk_size`, `bulk_fetch_size`, `included_columns` and `excluded_columns`
+- fixed `issues`: issues updated during a run are loaded by the next run, and deleted issues no
+  longer move the cursor
 
 ### 1.0.0
 **Upgrade**: run once with `refresh="drop_resources"`, e.g.
 `pipeline.run(jira(), refresh="drop_resources")`: it drops the tables loaded before and loads them
-again. Without it the load of `issues` fails with an error about `_dlt_root_id` (`No root_key
-column` or a missing column), and the columns of earlier versions stay empty in the other tables.
-If a run already failed this way, run `dlt pipeline <name> abort-packages` first. Earlier versions
-kept no incremental state: the first run loads all issues, or the issues updated since
+again. Without it the load of `issues` fails on `_dlt_root_id` and the columns of earlier versions
+stay empty. After such a failed run, run `dlt pipeline <name> abort-packages` first. Earlier
+versions kept no incremental state: the first run loads all issues, or those updated since
 `start_date`.
-- **breaking** `issues`: loaded incrementally on `updated` with a 10 minute lag and merged on `id`
-  instead of replaced. The merge fails on the nested tables of earlier versions
-- **breaking** `issues`: fields are top level columns named by the field id (`fields__summary` is
-  `summary`), nested tables are `issues__<field>`, rich text is wiki markup (API v2), no
-  `changelog`, `operations`, `transitions`, `comment` and `worklog` data. Nested values load as
-  Jira returns them, fields of unknown structure are JSON text
-- **breaking** `jira_search`: issues load like in `jira_issues` with a `query_index` column, the
-  primary key is `id` and `query_index`, an issue found by two queries loads twice.
-  `jql_queries` and `page_limit` are source arguments, `jira_search().issues(jql_queries=...)`
-  fails. `page_size` is the number of ids per search request, 5000 by default instead of 100
-  issues, and `page_limit` counts these pages, so the same `page_limit` loads up to 50 times more
-  issues: set `page_size=100` to keep the old limits
-- **breaking** `workflows`: read from `rest/api/3/workflows/search`, `id` is text and the primary
-  key, `id__name`, `id__entity_id`, `has_draft_workflow`, `is_default`, `projects` and `schemes`
-  stay empty
-- **breaking** `get_paginated_data` is removed and its imports fail,
-  `JiraClient.paginate_endpoint` reads the same endpoints
+- **breaking** `issues`: loaded incrementally and merged on `id` instead of replaced
+- **breaking** `issues`: fields are top level columns named by the field id, without `changelog`,
+  `operations`, `transitions`, `comment` and `worklog`
+- **breaking** `jira_search`: `jql_queries` and `page_limit` are source arguments, the primary key
+  is `id` and `query_index`, `page_size` counts ids: set `page_size=100` to keep the old limits
+- **breaking** `workflows`: `id` is text and the primary key, several columns stay empty
+- **breaking** `get_paginated_data` is removed, use `JiraClient.paginate_endpoint`
 - new resources `issue_comments`, `issue_changelogs`, `worklogs`, `workflow_statuses` and
-  `issue_fields`, the names and schemas of fields, e.g. of custom fields
-- new `jira_issues`: issues matching JQL, updated since `start_date` or in the range of your own
-  `incremental`
-- new `jira` arguments: `jql` restricts issues, `start_date` starts issues and worklogs,
-  `incremental` is passed to `jira_issues`, `write_disposition` of issues, comments, changelogs and
-  worklogs is "merge" by default
-- new `drop_keys`: a function for `add_map` that removes REST links and avatar and icon urls, or
-  other keys, from rows and their nested values
-- changed `users`, `workflows`, `projects`: primary keys, the largest page each endpoint serves
+  `issue_fields`
+- new `jira_issues`: issues matching JQL
+- new `jira` arguments: `jql`, `start_date`, `incremental` and `write_disposition`
+- new `drop_keys`: removes links and avatar and icon urls from rows
+- changed `users`, `workflows`, `projects`: primary keys
 
 Versions before 1.0.0 were not numbered. Copies taken with `dlt init` have no `version.py`,
 `.dlt/.sources` records the repository commit they came from.
@@ -66,26 +49,7 @@ Versions before 1.0.0 were not numbered. Copies taken with `dlt init` have no `v
   gives it its `write_disposition`.
 - A new API: a typed call on `JiraClient`, with a paginator from `paginators.py` or dlt.
 
-## Seeding
-
-Run from `sources/` so the script reads credentials from `sources/.dlt`:
-
-1. `uv run python ../tests/jira/seed_test_data.py` lists the missing cases.
-2. `uv run python ../tests/jira/seed_test_data.py --apply` creates them. `bulk_issues` adds the
-   missing issues when `BULK_ISSUES` grows, other cases are created only when no issue has their
-   label.
-3. `uv run python ../tests/jira/seed_test_data.py --capture` rewrites
-   `tests/jira/captured_responses.json`. Run it again after seeding or editing seeded issues.
-
-The test account cannot delete issues and cannot restrict comments to a group or role, so `--delete`
-fails and restricted comments are tested offline only.
-
-## Tests
-
-`test_issue_comments_changed` writes to the live site: it adds, edits and deletes its own comments
-on the issue labeled `dlt-seed-comment-changes`.
-
-## Operations
+## Maintenance & Troubleshooting
 
 Facts seen on the test site, about 300 issues, or taken from the
 [Jira Cloud OpenAPI spec](https://dac-static.atlassian.com/cloud/jira/platform/swagger-v3.v3.json)

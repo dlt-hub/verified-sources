@@ -1464,10 +1464,10 @@ def test_add_limit_makes_progress(src_config: Tuple[dlt.Pipeline, str, str]) -> 
     )
     dest_pl = dlt.pipeline(pipeline_name="dest_pl", destination="duckdb", dev_mode=True)
     for expected_count in (200, 400, 600):
-        # a batch is a hints item and a data item, so 4 items are 2 batches
+        # `add_limit` does not count the hints items of the batches since dlt 1.32
         changes = replication_resource(
             slot_name, pub_name, target_batch_size=100
-        ).add_limit(4)
+        ).add_limit(2)
         assert_load_info(dest_pl.run(changes))
         assert load_table_counts(dest_pl, "items") == {"items": expected_count}
     assert_load_info(dest_pl.run(replication_resource(slot_name, pub_name)))

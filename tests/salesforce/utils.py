@@ -2,14 +2,16 @@ import gzip
 import json
 import os
 import re
-from datetime import date, datetime, timedelta  # noqa: I251
-from typing import Any, Dict, List
+from datetime import date, datetime, timedelta, timezone  # noqa: I251
+from time import sleep
+from typing import Any, Dict, List, Tuple
 
 import dlt
 from dlt.common import Decimal
 from dlt.common.arithmetics import ROUND_HALF_UP
 from dlt.common.configuration import with_config
 from dlt.common.time import ensure_datetime_in_tz
+from simple_salesforce import Salesforce
 
 from sources.salesforce.helpers.credentials import (
     SalesforceAuth,
@@ -118,14 +120,50 @@ def assert_dlt_types_loaded(pipeline: dlt.Pipeline, double_as_decimal: bool) -> 
 
 
 @with_config(sections=("sources", "salesforce"))
-def seeded_modstamps(
-    sobject: str, credentials: SalesforceAuth = dlt.secrets.value
-) -> List[datetime]:
-    """Reads `SystemModstamp` of all records of `sobject` in the test org, including deleted ones"""
-    records = make_salesforce_client(credentials).query_all(
-        f"SELECT SystemModstamp FROM {sobject}", include_deleted=True
+def salesforce_client(credentials: SalesforceAuth = dlt.secrets.value) -> Salesforce:
+    """Returns a client of the test org"""
+    return make_salesforce_client(credentials)
+
+
+def write_records(
+    client: Salesforce, method: str, sobject: str, records: List[Dict[str, Any]]
+) -> List[str]:
+    """Creates (POST) or updates (PATCH) `records` of `sobject`, returns their ids"""
+    results = client.restful(
+        "composite/sobjects",
+        method=method,
+        json={
+            "allOrNone": True,
+            "records": [
+                {"attributes": {"type": sobject}, **record} for record in records
+            ],
+        },
+    )
+    assert all(result["success"] for result in results), results
+    return [result["id"] for result in results]
+
+
+def delete_records(client: Salesforce, ids: List[str]) -> None:
+    results = client.restful(
+        "composite/sobjects",
+        method="DELETE",
+        params={"ids": ",".join(ids), "allOrNone": "true"},
+    )
+    assert all(result["success"] for result in results), results
+
+
+def wait_for_org_clock(client: Salesforce, sobject: str, condition: str) -> None:
+    """Waits until the local clock passes the last change of the `sobject` records matching
+    `condition`. Incremental runs read changes until the local time"""
+    (record,) = client.query_all(
+        f"SELECT SystemModstamp FROM {sobject} WHERE {condition}"
+        " ORDER BY SystemModstamp DESC LIMIT 1",
+        include_deleted=True,
     )["records"]
-    return [ensure_datetime_in_tz(record["SystemModstamp"]) for record in records]
+    last_change = ensure_datetime_in_tz(record["SystemModstamp"])
+    wait = (last_change - datetime.now(timezone.utc)).total_seconds() + 1
+    if wait > 0:
+        sleep(wait)
 
 
 def count_rows(pipeline: dlt.Pipeline, table_name: str, condition: str) -> int:
@@ -134,3 +172,21 @@ def count_rows(pipeline: dlt.Pipeline, table_name: str, condition: str) -> int:
         table = client.make_qualified_table_name(table_name)
         rows = client.execute_sql(f"SELECT COUNT(*) FROM {table} WHERE {condition}")
     return rows[0][0]  # type: ignore[no-any-return]
+
+
+def last_row_count(pipeline: dlt.Pipeline, sobject: str) -> int:
+    """Rows of `sobject` that the last run of `pipeline` normalized"""
+    table_name = pipeline.default_schema.naming.normalize_path(sobject)
+    return pipeline.last_trace.last_normalize_info.row_counts.get(table_name, 0)
+
+
+def load_rows(
+    pipeline: dlt.Pipeline, sobject: str, *fields: str
+) -> List[Tuple[Any, ...]]:
+    """Returns the sorted values of `fields` in the loaded `sobject` rows"""
+    naming = pipeline.default_schema.naming
+    table_name = naming.normalize_path(sobject)
+    rows = load_tables_to_dicts(pipeline, table_name)[table_name]
+    return sorted(
+        tuple(row[naming.normalize_path(field)] for field in fields) for row in rows
+    )

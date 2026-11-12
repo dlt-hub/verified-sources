@@ -210,12 +210,12 @@ def make_documents(count: int, start: int = 0) -> List[Dict[str, Any]]:
 
 
 def make_seeded_documents(count: int) -> List[Dict[str, Any]]:
-    """Documents updated at random, unique seconds within 90 days, not in insert order"""
+    """Documents updated at unique seconds within 90 days, not in insert order"""
     base = datetime(2024, 1, 1, tzinfo=timezone.utc)
     documents = make_documents(count)
-    for document, seconds in zip(
-        documents, random.sample(range(90 * 24 * 3600), count)
-    ):
+    for document in documents:
+        # 1000003 is coprime with the seconds in 90 days, values repeat in every test run
+        seconds = document["n"] * 1_000_003 % (90 * 24 * 3600)
         document["updated_at"] = base + timedelta(seconds=seconds)
     return documents
 

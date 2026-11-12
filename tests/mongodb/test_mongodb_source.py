@@ -663,11 +663,13 @@ def test_local_seeded_full_and_incremental(
     pipeline.run(seeded())
     assert last_row_count(pipeline, "seeded") == 5
 
-    months = [datetime(2024, month, 1, tzinfo=timezone.utc) for month in (1, 2, 3, 4)]
+    # bounds are seeded values, so a value on a bound loads in exactly one window
+    values = sorted(updated_at)
+    quarters = [values[len(values) * k // 4] for k in (1, 2, 3)]
     # with `min` the windows go back in time, the last one ends before the first seeded value
     for last_value_func, bounds in (
-        (max, months),
-        (min, months[:0:-1] + [datetime(2023, 12, 31, tzinfo=timezone.utc)]),
+        (max, [values[0], *quarters, values[-1] + timedelta(seconds=1)]),
+        (min, [values[-1], *quarters[::-1], values[0] - timedelta(seconds=1)]),
     ):
         backfill = dlt.pipeline(
             pipeline_name=f"mongodb_local_seeded_backfill_{last_value_func.__name__}",
@@ -761,6 +763,68 @@ def test_local_seeded_chunks(
     assert distinct_ids == len(seeded_documents)
     # checked last so that rows skipped or repeated above surface first
     assert seeded.state["incremental"]["updated_at"]["last_value"].tzinfo is not None
+
+
+@skipifwindows
+@skip_if_not_active("duckdb")
+@pytest.mark.parametrize("backend", ["python", "pyarrow"])
+def test_local_incremental_changes(local_mongo: Database, backend: str) -> None:
+    collection = local_mongo["changes"]
+    base = datetime(2024, 1, 1, tzinfo=timezone.utc)
+
+    def changed(_id: str, value: int, minute: int) -> Dict[str, Any]:
+        return {
+            "_id": _id,
+            "value": value,
+            "updated_at": base + timedelta(minutes=minute),
+        }
+
+    changes = mongodb_collection(
+        connection_url=LOCAL_MONGO_URL,
+        database=local_mongo.name,
+        collection="changes",
+        incremental=dlt.sources.incremental("updated_at"),
+        write_disposition="merge",
+        backend=backend,
+    )
+    pipeline = dlt.pipeline(
+        pipeline_name="mongodb_local_changes", destination="duckdb", dev_mode=True
+    )
+
+    def loaded() -> List[Any]:
+        with pipeline.sql_client() as client:
+            return [
+                tuple(row)
+                for row in client.execute_sql(
+                    "SELECT _id, value FROM changes ORDER BY _id"
+                )
+            ]
+
+    collection.insert_many([changed(f"a{n}", 1, n) for n in range(1, 6)])
+    assert_load_info(pipeline.run(changes))
+    assert last_row_count(pipeline, "changes") == 5
+
+    # a5 has the last value, it is read again and dropped as a duplicate
+    collection.replace_one({"_id": "a1"}, changed("a1", 2, 6))
+    collection.delete_one({"_id": "a2"})
+    collection.insert_many([changed("b1", 1, 7), changed("b2", 1, 8)])
+    assert_load_info(pipeline.run(changes))
+    assert last_row_count(pipeline, "changes") == 3
+    # `find` does not return deleted documents, a2 stays in the destination
+    expected = [
+        ("a1", 2),
+        ("a2", 1),
+        ("a3", 1),
+        ("a4", 1),
+        ("a5", 1),
+        ("b1", 1),
+        ("b2", 1),
+    ]
+    assert loaded() == expected
+
+    pipeline.run(changes)
+    assert last_row_count(pipeline, "changes") == 0
+    assert loaded() == expected
 
 
 @skipifwindows

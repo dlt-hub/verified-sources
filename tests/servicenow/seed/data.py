@@ -1,7 +1,6 @@
 """Synthetic records seeded into the ServiceNow test instance and the values loaded from them"""
 
 import os
-import random
 from datetime import date, datetime, time, timedelta, timezone  # noqa: I251
 from typing import Any, Dict, List
 
@@ -10,6 +9,8 @@ from dlt.common import Decimal
 DLT_TYPES = "u_dlt_types"
 DLT_PAGES = "u_dlt_pages"
 DLT_INCREMENTAL = "u_dlt_incremental"
+# records written by `test_incremental_changes`, tagged with the id of the test run
+DLT_CHANGES = "u_dlt_changes"
 SEED_ID_FIELD = "u_seed_id"
 # `DLT_PAGES` has records for two full pages and a short one
 PAGE_SIZE = 100
@@ -164,18 +165,22 @@ def incremental_records() -> List[Dict[str, Any]]:
     an order unrelated to their seed ids. The platform sets `sys_updated_on` on every write, so
     the seed cannot fix it
     """
-    seconds = random.Random(INCREMENTAL_RECORDS).sample(
-        range(366 * 24 * 3600), INCREMENTAL_RECORDS
-    )
     return [
         {
             SEED_ID_FIELD: f"incremental-{i:04d}",
             "u_number": i,
+            # 1000003 is coprime with the seconds of 2024. `random` may change between Python versions
             INCREMENTAL_CURSOR: datetime(2024, 1, 1, tzinfo=UTC)
-            + timedelta(seconds=second),
+            + timedelta(seconds=i * 1_000_003 % (366 * 24 * 3600)),
         }
-        for i, second in enumerate(seconds)
+        for i in range(INCREMENTAL_RECORDS)
     ]
+
+
+CHANGES_FIELDS: Dict[str, Dict[str, Any]] = {
+    "u_run_id": {"internal_type": "string", "max_length": 64},
+    "u_value": {"internal_type": "integer"},
+}
 
 
 # a cursor value after the time a run starts, read only by a range that ends after it

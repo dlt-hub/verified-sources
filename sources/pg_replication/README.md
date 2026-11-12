@@ -10,88 +10,41 @@ and coding agents. The source reads changes of published tables from a replicati
 
 ### 1.0.0
 **Upgrade**: install `dlt>=1.22.0` and `sqlalchemy>=2.0`. `replication_resource` continues from its
-stored `last_commit_lsn` and slot, no change is missed or loaded twice. Without a reload, rows
-loaded before keep the previous format until they change: `real`, `timetz`, array and domain
-columns stay `text`, `timetz` and array values mix the old (`10:11:12+02`, `{1,2}`) and the new
-format (`10:11:12+02:00`, `[1,2]`), and rows that a primary key update left under the old key stay.
-To reload, run `dlt pipeline <name> drop <slot_name>`, which drops the replicated tables and the
-state, call `init_replication` with `reset=True` and an initial snapshot, load the snapshot and run
-`replication_resource`. Tables without a primary key in publications of updates or deletes stop
-the run, see below. Changes are ordered by `_dlt_lsn` and deletes marked in `_dlt_deleted_ts`,
-`lsn` and `deleted_ts` of tables loaded before stay empty.
-- **breaking** `replication_resource`: `real` columns load as `double`, `timetz` as `time`, arrays
-  as `json` and domains as their base type instead of `text`, as in snapshots
-- **breaking** `init_replication` and `replication_resource`: raise `NoPrimaryKeyException` for
-  tables without a primary key or replica identity index when the publication publishes updates or
-  deletes. Before, Postgres rejected updates and deletes of such tables, and with
-  `REPLICA IDENTITY FULL` updates were appended and deletes lost. Publish only inserts for them
-- **breaking** `init_replication` and `replication_resource`: new tables and columns get no length,
-  no integer size and no NOT NULL on non-key columns, so later source changes fit.
-  `reflection_level="full_with_precision"` and `reflect_not_null=True` keep them. Columns loaded
-  before keep their types
-- **breaking** `ItemGenerator`, `get_max_lsn` and `advance_slot` are removed, imports of them fail
-- **breaking** `replication_resource`: changes are ordered by `_dlt_lsn` instead of `lsn` and
-  deletes marked in `_dlt_deleted_ts` instead of `deleted_ts`, so source columns with these names
-  are no longer overwritten. In tables loaded before, `lsn` and `deleted_ts` stay empty in new rows
-  and lose their `dedup_sort` and `hard_delete` hints
-- new `init_replication`: importable from `pg_replication`, the import from `pg_replication.helpers`
-  keeps working
-- new `replication_resource`: a column type change whose values may not fit the destination
-  column stops the run with `IncompatibleColumnTypeException`, a NULL or missing value of a NOT
-  NULL destination column with `NullInNotNullColumnException`. Before, values were rounded or
-  every load failed. Types in `columns` skip the check. `snapshot_pipeline` gives the types of a
-  snapshot loaded by another pipeline
-- new `replication_resource`: `hard_delete=False` keeps deleted rows with `_dlt_deleted_ts` set
-- new `replication_resource`: errors caused by a change name the LSN of its transaction and the
-  `pg_replication_slot_advance` statement that skips it. A value that cannot be loaded, ie. a BC
-  date, raises `ValueConversionException` instead of a converter or Arrow error
-- new `init_replication`: `initial_snapshot="table"` copies the tables, `"unlogged_table"` copies
-  them without WAL, `"direct"` reads them with `sql_table` in the snapshot of the slot. Pass the
-  callbacks of the returned `ReplicationSnapshot` to your own `sql_table` or `sql_database`
-- new `init_replication`: on an existing slot, `initial_snapshot` returns resources that load
-  `table_names` as they are when read, `replication_resource` merges the replayed changes over
-  them. Before, it raised `RuntimeError`. Needs a publication of updates or deletes, with inserts
-  only it raises `ValueError`
-- new `replication_slot_exists`: tells if the slot exists, check it to pass `initial_snapshot` for
-  all tables only on the first run and later for the added tables
-- new `init_replication` and `replication_resource`: `backend="pyarrow"` decodes inserts with numpy
-  into Arrow tables. Switching an existing pipeline changes how `_dlt_id` is created. Without
-  `pyarrow` or `numpy` both raise `MissingDependencyException` before the slot is created or read
-- new `init_replication` and `replication_resource`: `exclude_columns`, applied after
-  `include_columns`
-- changed `init_replication`: a publication that already publishes the tables is used as it is, so
-  a user with only REPLICATION and SELECT can start the replication of tables it does not own.
-  Without the privileges to create or extend the publication, `PublicationPrivilegesException`
-  gives the statement for the table owner. `reset=True` keeps a publication of another role
-- changed: requires `dlt>=1.22.0` and `sqlalchemy>=2.0`, direct snapshots fail on SQLAlchemy 1.4
-- changed `init_replication`: snapshots are read with the session settings of the replication
-  connection, role or database defaults no longer change snapshot values
-- changed `init_replication`: `persist_snapshots=True` is deprecated and logs a warning, use
-  `initial_snapshot="table"`
-- changed `init_replication`: snapshots leave out generated columns, Postgres does not replicate
-  them and updated rows had NULLs. Snapshots that row-level security would filter fail
-- changed `init_replication` and `replication_resource`: tables or columns whose names normalize
-  to the same name raise `TableNameCollisionException` and `ColumnNameCollisionException`. Before,
-  tables of different schemas loaded into one table and the `python` backend dropped a value
-- changed `replication_resource`: an update that leaves a TOASTed value unchanged stops the run with
-  `UnchangedToastException` instead of a decoding error, unless the table has
-  `REPLICA IDENTITY FULL` or the column is excluded. `init_replication` warns about included
-  columns at risk
-- fixed `replication_resource`: a primary key update left the row under the old key
-- fixed `replication_resource`: `REPLICA IDENTITY FULL` made all columns primary keys
-- fixed `replication_resource`: runs reconnected for every batch (`replication slot ... is active
-  for PID`) after an unbounded peek of the slot (#702)
-- fixed `replication_resource`: the position was stored only when the slot was drained, runs
-  bounded by `add_limit` made no progress (#703)
-- fixed `replication_resource`: runs with `flush_slot=False` and no new changes hung
-- fixed `replication_resource`: a schema change in the middle of a transaction loaded it twice or
-  crashed the run
-- fixed `replication_resource`: `Type`, `Origin` and logical messages crashed the run (#656)
-- fixed `replication_resource`: failed on Postgres 10 to 12, and on the first change when
-  `include_columns` or `columns` was not passed (#700)
-- fixed `init_replication`: snapshots of whole-schema publications decoded their own copies (#698),
-  `interval` columns failed snapshots
-- fixed: `dlt init` failed to import the source without `psycopg2` installed
+stored position, no change is missed or loaded twice. Without a reload, rows loaded before keep the
+old formats until they change: `real`, `timetz`, array and domain columns stay `text` and mix old
+and new values, and rows that a primary key update left under the old key stay. To reload, run
+`dlt pipeline <name> drop <slot_name>`, call `init_replication` with `reset=True` and an initial
+snapshot, load the snapshot and run `replication_resource`. Tables without a primary key in
+publications of updates or deletes stop the run.
+- **breaking** `replication_resource`: `real` loads as `double`, `timetz` as `time`, arrays as
+  `json` and domains as their base type instead of `text`
+- **breaking** `init_replication` and `replication_resource`: tables without a primary key or
+  replica identity index raise `NoPrimaryKeyException` when updates or deletes are published
+- **breaking** `init_replication` and `replication_resource`: new columns get no length, integer
+  size and NOT NULL, `reflection_level="full_with_precision"` and `reflect_not_null=True` keep them
+- **breaking** `replication_resource`: changes are ordered by `_dlt_lsn` and deletes marked in
+  `_dlt_deleted_ts` instead of `lsn` and `deleted_ts`, which stay empty in tables loaded before
+- **breaking** `ItemGenerator`, `get_max_lsn` and `advance_slot` are removed
+- new `init_replication`: `initial_snapshot` loads the tables as of the slot, also tables added to
+  an existing slot
+- new `replication_slot_exists`
+- new `init_replication` and `replication_resource`: `backend="pyarrow"` and `exclude_columns`
+- new `replication_resource`: `hard_delete=False` keeps deleted rows
+- changed `replication_resource`: values that may not fit the destination column and unchanged
+  TOASTed values stop the run, before values were rounded or loads failed
+- changed `init_replication`: a publication that already publishes the tables is used as it is,
+  `persist_snapshots=True` is deprecated
+- changed `init_replication` and `replication_resource`: tables or columns whose names normalize to
+  the same name raise, before they loaded into one table or column
+- fixed `replication_resource`: a primary key update left the row under the old key,
+  `REPLICA IDENTITY FULL` made all columns primary keys, a schema change within a transaction
+  loaded it twice
+- fixed `replication_resource`: reconnects for every batch (#702), no progress with `add_limit`
+  (#703), hangs with `flush_slot=False`, crashes on Postgres 10 to 12 (#700) and on `Type`,
+  `Origin` and logical messages (#656)
+- fixed `init_replication`: snapshots of whole-schema publications (#698), of `interval` and
+  generated columns, and with role or database session defaults
+- fixed: `dlt init` failed without `psycopg2`
 
 Versions before 1.0.0 were not numbered. Copies taken with `dlt init` have no `version.py`,
 `.dlt/.sources` records the repository commit they came from.
@@ -108,23 +61,7 @@ Versions before 1.0.0 were not numbered. Copies taken with `dlt init` have no `v
 - A pgoutput message: its decoder in `decoders.py`, handled in `MessageConsumer.process_msg`.
 - A setting that formats values sent as text: `SESSION_OPTIONS` of `schema_types.py`.
 
-## Seeding
-
-The credential-free tests decode pgoutput messages captured from Postgres 17:
-
-1. Start Postgres with logical decoding, see [Tests](#tests).
-2. `uv run python -m tests.pg_replication.capture_messages` from the repository root rewrites
-   `tests/pg_replication/pgoutput_messages.json` with the messages of its `SCENARIOS`.
-3. Update `EXPECTED_SEGMENTS` of `test_helpers.py` when a scenario changes.
-
-## Tests
-
-`test_pg_replication_source.py` needs Postgres with `wal_level=logical` and a user with the
-`REPLICATION` attribute in `sources.pg_replication.credentials`. `tests/postgres/docker-compose.yml`
-starts one. Other versions run the same way, e.g.
-`docker run -p 5434:5432 -e POSTGRES_USER=loader -e POSTGRES_PASSWORD=loader -e POSTGRES_DB=dlt_data postgres:12 -c wal_level=logical`.
-
-## Operations
+## Maintenance & Troubleshooting
 
 - **Versions**: Postgres 10, 12, 14 and 17 pass the tests (#719). Whole-schema publications need
   Postgres 15 ([docs](https://www.postgresql.org/docs/15/sql-createpublication.html)), logical
@@ -196,3 +133,10 @@ starts one. Other versions run the same way, e.g.
 - **Performance**: 500k rows from a local Postgres 17 into `filesystem`: 173k rows/s with
   `pyarrow`, 34k with `python`, 172k receiving messages without decoding, 23k before 1.0.0. Both
   backends peak at about 240 MB (#719).
+- **Backends**: we recommend against switching backends in production, pick one while testing and
+  use it for the initial load too. By default, the Arrow tables of `pyarrow` get no `_dlt_load_id`
+  and `_dlt_id`, and `_dlt_id` costs performance and is not needed
+  ([docs](https://dlthub.com/docs/dlt-ecosystem/verified-sources/arrow-pandas#add-_dlt_load_id-and-_dlt_id-to-your-tables)),
+  but rows of `python` add both, so loads of one backend fail on a table loaded with the other
+  (local). The workaround: set `add_dlt_load_id` and `add_dlt_id` of
+  `[normalize.parquet_normalizer]` for all `pyarrow` loads of the table.

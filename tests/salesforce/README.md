@@ -2,7 +2,9 @@
 
 - `test_salesforce_table.py`: unit tests. Salesforce is mocked with `requests_mock`; real responses come from the
   fixtures in `cases/`. No credentials needed.
-- `test_salesforce_source.py`: live tests against the seeded test org. They only read data.
+- `test_salesforce_source.py`: live tests against the seeded test org. They only read data, except
+  `test_incremental_changes`: it adds, updates and deletes its own `DltChanges__c` records between incremental
+  runs.
 
 ## Test org
 
@@ -29,9 +31,9 @@ Run from the repository root. The script resolves credentials from `sources/.dlt
 uv run python -m tests.salesforce.seed.seed all  # or deploy | load | capture
 ```
 
-- `deploy`: creates the `DltTypes__c` and `DltPages__c` custom objects and adds the `Dlt_Seed_Id__c` external id
-  to standard objects. It assigns the `Dlt_Seed` permission set to the Run As user and makes them a
-  Marketing User, which is needed to create campaigns.
+- `deploy`: creates the `DltTypes__c`, `DltPages__c` and `DltChanges__c` custom objects and adds the
+  `Dlt_Seed_Id__c` external id to standard objects. It assigns the `Dlt_Seed` permission set to the Run As user
+  and makes them a Marketing User, which is needed to create campaigns.
 - `load`: writes the records in `seed/data.py`. Most are upserted on their seed id. Pricebook entries,
   opportunity line items, roles, tasks and events are created only when missing. Then it creates and deletes
   2 `DltTypes__c` records, a line item, and an opportunity with its line item, so the recycle bin has records
@@ -39,8 +41,15 @@ uv run python -m tests.salesforce.seed.seed all  # or deploy | load | capture
 - `capture`: writes the `DltTypes__c` describe and its Bulk API result page to `cases/`. The unit tests compare
   these with `seed/data.py`.
 
+Each step needs a new client: the Metadata API deploy of `simple_salesforce` leaves XML headers on the client
+and the following REST calls fail with 415.
+
 `DltTypes__c` also has a record over 2 MiB in six long text fields and formula fields that divide, which
 Salesforce rounds to the field scale.
+
+The incremental tests read `DltPages__c` on `Changed_At__c`: unique seconds over 90 days, in an order unrelated
+to the record number. Salesforce sets `SystemModstamp` itself, so the seed cannot spread it. The expected counts
+are computed from `seed/data.py`.
 
 `load` is safe to repeat. Pause between live test runs to stay within the org's daily limits.
 
@@ -53,8 +62,12 @@ standard object:
 - **Tasks and events:** counted by the `dlt ` prefix of their subject.
 - **Users and roles:** only lower bounds are checked.
 - **`DltTypes__c` and `DltPages__c`:** hold only seeded records.
+- **`DltChanges__c`:** holds only records of test runs, read by the `Run_Id__c` of the run. A run deletes its
+  records at the end, they stay in the recycle bin for 15 days.
 
-Deleted records stay in the recycle bin for 15 days, so the tests do not count them.
+Deleted records stay in the recycle bin for 15 days, so the tests do not count them. The deleted records of
+the seed are purged 15 days after the last `load`, then the tests of deleted records check nothing until the
+next `load`.
 
 ## Changing seed data
 

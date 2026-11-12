@@ -1,7 +1,8 @@
 """Live tests against the test site described in README.md."""
 
-from datetime import datetime, timezone
-from typing import Any, Dict, Optional, Set
+import uuid
+from datetime import datetime, timedelta, timezone
+from typing import Any, Dict, List, Optional, Set, Tuple
 
 import dlt
 import pandas as pd
@@ -11,7 +12,15 @@ from dlt.sources import DltResource
 
 from sources.sharepoint import SharepointCredentials, sharepoint_files, sharepoint_list
 from tests.sharepoint.seed import data
-from tests.sharepoint.utils import last_row_count, loaded_rows
+from tests.sharepoint.utils import (
+    delete_item,
+    ensure_folder,
+    graph_client,
+    item_path,
+    last_row_count,
+    loaded_rows,
+    upload,
+)
 from tests.utils import (
     ALL_DESTINATIONS,
     assert_load_info,
@@ -152,12 +161,14 @@ def test_seeded_full_and_incremental() -> None:
     assert_load_info(since.run(seeded_files(start_date=start)))
     assert seeded_names(since) == {name for name, _, when in seeded if when >= start}
 
-    quarters = [
-        datetime(2021, month, 1, tzinfo=timezone.utc) for month in (1, 4, 7, 10)
-    ]
-    quarters.append(datetime(2022, 1, 1, tzinfo=timezone.utc))
-    # with `min` the windows go back in time
-    for last_value_func, bounds in ((max, quarters), (min, quarters[::-1])):
+    # bounds are seeded values, so a value on a bound loads in exactly one window
+    values = sorted(modified)
+    quarters = [values[len(values) * k // 4] for k in (1, 2, 3)]
+    # with `min` the windows go back in time, the last one ends before the first seeded value
+    for last_value_func, bounds in (
+        (max, [values[0], *quarters, values[-1] + timedelta(seconds=1)]),
+        (min, [values[-1], *quarters[::-1], values[0] - timedelta(seconds=1)]),
+    ):
         backfill = dlt.pipeline(
             pipeline_name=f"sharepoint_seeded_backfill_{last_value_func.__name__}",
             destination="duckdb",
@@ -182,6 +193,118 @@ def test_seeded_full_and_incremental() -> None:
         # windows with an end value do not store incremental state
         assert "sources" not in backfill.state
         assert seeded_names(backfill) == names
+
+
+@pytest.mark.parametrize("destination_name", ALL_DESTINATIONS)
+def test_files_incremental_changes(destination_name: str) -> None:
+    """Adds, updates and deletes files of the run between runs of the default incremental"""
+    folder = f"dlt_changes/{uuid.uuid4().hex}"
+    base = datetime(2022, 1, 1, tzinfo=timezone.utc)
+    client = graph_client()
+    item_ids: Dict[str, str] = {}
+
+    def write(name: str, value: int, minute: int) -> None:
+        content = f"name,value\n{name},{value}\n".encode()
+        modified = base + timedelta(minutes=minute)
+        item_ids[name] = upload(client, f"{folder}/{name}.csv", content, modified)
+
+    def run() -> int:
+        files = sharepoint_files(folder, "csv", table_name="changes", file_glob="*.csv")
+        # a run without changes loads no package
+        pipeline.run(files).raise_on_failed_jobs()
+        return last_row_count(pipeline, "changes")
+
+    def loaded() -> List[Tuple[str, int]]:
+        rows = loaded_rows(pipeline, "changes")
+        return sorted((row["name"], int(row["value"])) for row in rows)
+
+    pipeline = dlt.pipeline(
+        pipeline_name="sharepoint_changes",
+        destination=destination_name,
+        dev_mode=True,
+    )
+    ensure_folder(client, folder)
+    try:
+        for minute, name in enumerate(("a1", "a2", "a3"), 1):
+            write(name, 1, minute)
+        assert run() == 3
+
+        # the file with the last value, a3, is read again and dropped as a duplicate
+        write("a1", 2, 4)
+        delete_item(client, item_ids.pop("a2"))
+        write("b1", 1, 5)
+        assert run() == 2
+        # the listing does not show deleted files, the row of a2 stays
+        expected = [("a1", 2), ("a2", 1), ("a3", 1), ("b1", 1)]
+        assert loaded() == expected
+
+        assert run() == 0
+        assert loaded() == expected
+    finally:
+        delete_item(client, client.get(item_path(folder)).json()["id"])
+
+
+@pytest.mark.parametrize("destination_name", ALL_DESTINATIONS)
+def test_list_incremental_changes(destination_name: str) -> None:
+    """Adds, updates and deletes items of a list made for the run between delta syncs"""
+    title = f"dlt changes {uuid.uuid4().hex}"
+    client = graph_client()
+    created = client.post(
+        "lists",
+        json={
+            "displayName": title,
+            "columns": [{"name": "Value", "number": {}}],
+            "list": {"template": "genericList"},
+        },
+    )
+    created.raise_for_status()
+    items_path = f"lists/{created.json()['id']}/items"
+    item_ids: Dict[str, str] = {}
+
+    def add(name: str) -> None:
+        response = client.post(items_path, json={"fields": {"Title": name, "Value": 1}})
+        response.raise_for_status()
+        item_ids[name] = response.json()["id"]
+
+    def run() -> int:
+        items = sharepoint_list(title, included_columns=["Title", "Value"])
+        items.apply_hints(columns={"_deleted": {"hard_delete": True}})
+        # a run without changes loads no package
+        pipeline.run(items.with_name("changes")).raise_on_failed_jobs()
+        return last_row_count(pipeline, "changes")
+
+    def loaded() -> List[Tuple[str, int]]:
+        rows = loaded_rows(pipeline, "changes")
+        return sorted((row["title"], int(row["value"])) for row in rows)
+
+    pipeline = dlt.pipeline(
+        pipeline_name="sharepoint_list_changes",
+        destination=destination_name,
+        dev_mode=True,
+    )
+    try:
+        for name in ("a1", "a2", "a3"):
+            add(name)
+        assert run() == 3
+
+        client.request(
+            f"{items_path}/{item_ids['a1']}/fields", method="PATCH", json={"Value": 2}
+        ).raise_for_status()
+        client.request(
+            f"{items_path}/{item_ids['a2']}", method="DELETE"
+        ).raise_for_status()
+        add("b1")
+        # a1, the delete of a2 and b1
+        assert run() == 3
+        expected = [("a1", 2), ("a3", 1), ("b1", 1)]
+        assert loaded() == expected
+
+        assert run() == 0
+        assert loaded() == expected
+    finally:
+        client.request(
+            f"lists/{created.json()['id']}", method="DELETE"
+        ).raise_for_status()
 
 
 @pytest.mark.parametrize(

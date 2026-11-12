@@ -39,24 +39,7 @@ files of document libraries through a read-only fsspec filesystem over Graph, wi
 - Deleted and copied files: the drive delta query would report them; today the listing walks the
   folder on every run.
 
-## Seeding
-
-1. Run `uv run python -m tests.sharepoint.seed.seed` from the repository root. It writes the files
-   of `tests/sharepoint/seed/data.py` into the Documents and `dlt archive` libraries of the test
-   site and needs the `Files.ReadWrite.All` and `Sites.Manage.All` application permissions.
-2. Create the lists by hand, see `tests/sharepoint/README.md`.
-
-There are no captured responses. The unit tests build Graph payloads from the API reference.
-
-## Tests
-
-- Live tests only read the site. The incremental test's expected values come from `seed/data.py`,
-  the other live tests read the hand-made lists, the seeded `dlt test` folder and the
-  `dlt archive` library.
-- Never run two pytest processes in the repository at once: the storage fixture of one run wipes
-  the load packages of the other.
-
-## Operations
+## Maintenance & Troubleshooting
 
 Facts from the test site (November 2026) or from Microsoft's docs.
 
@@ -92,11 +75,13 @@ Facts from the test site (November 2026) or from Microsoft's docs.
   both (test site, 2026-11-03). A file that appears with times older than the watermark is skipped
   until `refresh="drop_resources"`. `cTag` and `eTag` are opaque. The listing is in folder order,
   so chunked loads with `add_limit` and `row_order` are not supported.
+- **Deletes**: the rows of a deleted file stay in the table, the listing shows only the files that
+  exist (`test_files_incremental_changes`). Reload with `refresh="drop_resources"`. Deleted list
+  items come from the delta query (`test_list_incremental_changes`).
 - **Encodings**: Graph sends no charset. A csv or jsonl file is decoded by its BOM, else by
   `encoding` in `reader_kwargs`, else as UTF-8, so a csv saved by Excel in a Windows code page
   needs `encoding`.
 - **Amounts**: Excel stores numbers as doubles and pandas parses csv numbers as doubles;
   `reader_kwargs={"converters": {"Amount": to_decimal}}` loads a column as `decimal`. Converters
   are functions, so they are passed in code, not in config.
-- **Permissions**: `Sites.Read.All`, or `Sites.Selected` with read access to the site. Seeding
-  needs `Files.ReadWrite.All`.
+- **Permissions**: `Sites.Read.All`, or `Sites.Selected` with read access to the site.
