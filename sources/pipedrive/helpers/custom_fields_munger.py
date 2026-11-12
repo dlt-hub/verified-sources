@@ -1,4 +1,4 @@
-from typing import Any, Dict, TypedDict, Optional
+from typing import Any, Dict, TypedDict, Optional, cast
 
 import dlt
 
@@ -100,3 +100,68 @@ def rename_fields(data: TDataPage, fields_mapping: Dict[str, Any]) -> TDataPage:
                 field_value = options_map.get(str(field_value), field_value)
             data_item[field_name] = field_value
     return data
+
+
+def build_v2_fields_mapping(fields: TDataPage) -> Dict[str, TFieldMapping]:
+    """Build a field mapping from Pipedrive API v2 field metadata."""
+    fields_mapping: Dict[str, TFieldMapping] = {}
+    for field in fields:
+        if not field.get("is_custom_field"):
+            continue
+        field_code = field.get("field_code")
+        if not field_code:
+            continue
+        fields_mapping[field_code] = {
+            "name": field["field_name"],
+            "normalized_name": _normalized_name(field["field_name"]),
+            "options": _build_v2_options_map(field.get("options")),
+            "field_type": field["field_type"],
+        }
+    return fields_mapping
+
+
+def update_v2_fields_mapping(
+    new_fields_mapping: TDataPage, existing_fields_mapping: Dict[str, Any]
+) -> Dict[str, Any]:
+    """Update custom fields state from Pipedrive API v2 field metadata."""
+    for field in new_fields_mapping:
+        if not field.get("is_custom_field"):
+            continue
+        field_code = field.get("field_code")
+        if not field_code:
+            continue
+        data_item = {
+            "key": field_code,
+            "name": field["field_name"],
+            "field_type": field["field_type"],
+            "options": _build_v2_options(field.get("options")),
+        }
+        existing_fields_mapping = _update_field(data_item, existing_fields_mapping)
+    return existing_fields_mapping
+
+
+def rename_v2_custom_fields(
+    data_item: Dict[str, Any], fields_mapping: Dict[str, Any]
+) -> Dict[str, Any]:
+    """Move mapped Pipedrive API v2 custom fields to readable top-level fields."""
+    custom_fields = data_item.get("custom_fields")
+    if not isinstance(custom_fields, dict) or not fields_mapping:
+        return data_item
+    data_item.pop("custom_fields")
+    rename_fields([custom_fields], fields_mapping)
+    data_item.update(custom_fields)
+    return data_item
+
+
+def _build_v2_options_map(options: Optional[Any]) -> Dict[str, str]:
+    return {str(option["id"]): option["label"] for option in _build_v2_options(options)}
+
+
+def _build_v2_options(options: Optional[Any]) -> TDataPage:
+    if not options:
+        return []
+    if isinstance(options, dict):
+        return [
+            {"id": option_id, "label": label} for option_id, label in options.items()
+        ]
+    return cast(TDataPage, options)
