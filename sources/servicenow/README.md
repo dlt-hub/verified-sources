@@ -116,9 +116,10 @@ other connectors.
   chunk holds, a chunked load with `range_start="closed"` reads the same chunk again. With
   `"open"`, it skips the rest of them.
 - **Backends**: we recommend against switching backends in production, pick one while testing. By
-  default, the Arrow tables of `pyarrow` get no `_dlt_id`, which costs performance and is not needed
+  default, the Arrow tables of `pyarrow` get no `_dlt_load_id` and `_dlt_id`, and `_dlt_id` costs
+  performance and is not needed
   ([docs](https://dlthub.com/docs/dlt-ecosystem/verified-sources/arrow-pandas#add-_dlt_load_id-and-_dlt_id-to-your-tables)),
-  but rows of `python` add it, so loads of one backend fail on a table loaded with the other.
-  `backend="auto"` switches to `pyarrow` when it gets installed. The workaround: set
+  but rows of `python` add both, so loads of one backend fail on a table loaded with the other
+  (local). `backend="auto"` switches to `pyarrow` when it gets installed. The workaround: set
   `add_dlt_load_id` and `add_dlt_id` of `[normalize.parquet_normalizer]` for all `pyarrow` loads of
   the table.

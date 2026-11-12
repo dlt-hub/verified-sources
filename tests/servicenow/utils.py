@@ -552,10 +552,11 @@ def write_record(
     """Creates a record of `table`, or updates the record `sys_id`. Returns its sys_id"""
     path = f"table/{table}" if sys_id is None else f"table/{table}/{sys_id}"
     method = "POST" if sys_id is None else "PATCH"
-    response = client.rest.request(path, method=method, json={k: str(v) for k, v in values.items()})  # type: ignore[arg-type]
+    inputs = {field: str(value) for field, value in values.items()}
+    response = client.rest.request(path, method=method, json=inputs)  # type: ignore[arg-type]
     response.raise_for_status()
     return str(response.json()["result"]["sys_id"])
 
 
 def delete_record(client: ServiceNowClient, table: str, sys_id: str) -> None:
-    client.rest.request(f"table/{table}/{sys_id}", method="DELETE").raise_for_status()  # type: ignore[arg-type]
+    client.rest.request(f"table/{table}/{sys_id}", method="DELETE").raise_for_status()

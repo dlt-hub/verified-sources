@@ -160,7 +160,7 @@ Without an account, run both versions on captured responses (phase 4) and compar
 - a new format of values in an existing column of the same type, e.g. arrays as JSON instead of Postgres literals: old and new values mix in one column, with no variant column and no failed load;
 - changed handling of deletes and key updates: rows remain in or disappear from the destination, unlike in earlier loads;
 - removed or renamed arguments and config keys, new required secrets: the pipeline fails before it loads;
-- data format switches that change dlt columns, e.g. between rows and Arrow tables: Arrow tables get no `_dlt_id` by default, rows of the `python` backend add it, so loads fail in both directions. The workaround is `[normalize.parquet_normalizer] add_dlt_load_id` and `add_dlt_id` before the first Arrow load of the table.
+- data format switches that change dlt columns, e.g. between rows and Arrow tables: Arrow tables get no `_dlt_load_id` and `_dlt_id` by default, rows of the `python` backend add both, so loads fail in both directions. The workaround is `[normalize.parquet_normalizer] add_dlt_load_id` and `add_dlt_id` before the first Arrow load of the table.
 
 Not breaking, but report them: new columns or tables, dropped columns (left in the destination with nulls), type widening the destination coerces, a higher minimum dlt or package version, fixed bugs whose wrong rows stay in the destination until a reload.
 

@@ -539,13 +539,14 @@ def test_incremental_changes(destination_name: str, backend: str, api: str) -> N
         create("b1")
         sleep(1.5)
         create("b2")
-        # a5 again, a1, the delete of a2, b1 and b2
-        assert run() == 5
+        # a5 again, a1, the delete of a2, b1 and b2. `encoded_query` does not filter deletes, a
+        # change test running at the same time adds its own
+        assert run() >= 5
         expected = [("a1", 2), ("a3", 1), ("a4", 1), ("a5", 1), ("b1", 1), ("b2", 1)]
         assert loaded() == expected
 
         # b2 again
-        assert run() == 1
+        assert run() >= 1
         assert loaded() == expected
     finally:
         for sys_id in sys_ids.values():

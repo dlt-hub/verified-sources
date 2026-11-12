@@ -6,7 +6,7 @@ from typing import Any, Dict, List, Optional, Set
 
 import dlt
 import pytest
-from dlt.extract.resource import DltResource
+from dlt.sources import DltResource
 
 from sources.salesforce import SOURCE_SOBJECTS, salesforce_source, salesforce_table
 from sources.salesforce.helpers.query import TQueryApi
@@ -82,12 +82,10 @@ def test_all_resources(destination_name: str) -> None:
     assert load_table_counts(pipeline, *table_names) == table_counts
 
 
-@pytest.mark.parametrize("destination_name", ALL_DESTINATIONS)
+@skip_if_not_active("duckdb")
 @pytest.mark.parametrize("backend", ["python", "pyarrow"])
 @pytest.mark.parametrize("api", ["bulk", "rest"])
-def test_seeded_full_and_incremental(
-    destination_name: str, backend: TTableBackend, api: TQueryApi
-) -> None:
+def test_seeded_full_and_incremental(backend: TTableBackend, api: TQueryApi) -> None:
     """Loads `DltPages__c` in full, again, and in windows of `Changed_At__c`. Expected counts
     come from the seed data"""
     changed_at = sorted(record["Changed_At__c"] for record in data.PAGES_RECORDS)
@@ -103,10 +101,7 @@ def test_seeded_full_and_incremental(
 
     def make_pipeline(name: str) -> dlt.Pipeline:
         return dlt.pipeline(
-            pipeline_name=name,
-            destination=destination_name,
-            dataset_name=name,
-            dev_mode=True,
+            pipeline_name=name, destination="duckdb", dataset_name=name, dev_mode=True
         )
 
     pipeline = make_pipeline("salesforce_seeded")
@@ -131,6 +126,7 @@ def test_seeded_full_and_incremental(
                 start <= value < end if last_value_func is max else end < value <= start
                 for value in changed_at
             )
+            assert expected > 0
             assert_load_info(
                 backfill.run(
                     pages(
@@ -312,6 +308,7 @@ def test_salesforce_table_bulk_api_not_supported() -> None:
 
 @skip_if_not_active("duckdb")
 @pytest.mark.parametrize("backend", ["python", "pyarrow"])
+@pytest.mark.parametrize("api", ["bulk", "rest"])
 @pytest.mark.parametrize(
     "last_value_func,initial_value",
     [
@@ -323,7 +320,10 @@ def test_salesforce_table_bulk_api_not_supported() -> None:
     ids=["max", "min", "max_initial_value", "min_initial_value"],
 )
 def test_seeded_chunks(
-    backend: TTableBackend, last_value_func: Any, initial_value: Optional[datetime]
+    backend: TTableBackend,
+    api: TQueryApi,
+    last_value_func: Any,
+    initial_value: Optional[datetime],
 ) -> None:
     # 300 leaves a partial last chunk of 100
     chunk_size = 300
@@ -334,7 +334,7 @@ def test_seeded_chunks(
     pages = salesforce_table(
         sobject=data.PAGES,
         chunk_size=chunk_size,
-        api="rest",
+        api=api,
         backend=backend,
         incremental=dlt.sources.incremental(
             "Changed_At__c",

@@ -15,8 +15,8 @@ fields load as columns.
 - fixed: a projection dropped the cursor field, a filter on the cursor field replaced the
   incremental
 - fixed `python` backend: DBRef, MinKey, MaxKey, PCRE-only regexes and dates outside the Python
-  range failed the load
-- changed `parallel`: documents are no longer loaded twice or missed
+  range failed the load. Such dates are clamped
+- fixed `parallel`: documents were loaded twice or missed
 - changed `pyarrow` backend: nested documents load as columns up to `max_table_nesting`, timestamps
   in UTC, nested ObjectIds as strings, values of a field that changes type are cast or null instead
   of failing the load
@@ -43,10 +43,11 @@ fields load as columns.
   `pymongoarrow_schema` or the `python` backend. Arrays load as child tables with `python` and as
   `json` with `pyarrow`, so a loaded resource needs a reload to switch the backend.
 - We recommend against switching backends in production, pick one while testing. By default, the
-  Arrow tables of `pyarrow` get no `_dlt_id`, which costs performance and is not needed
+  Arrow tables of `pyarrow` get no `_dlt_load_id` and `_dlt_id`, and `_dlt_id` costs performance and
+  is not needed
   ([docs](https://dlthub.com/docs/dlt-ecosystem/verified-sources/arrow-pandas#add-_dlt_load_id-and-_dlt_id-to-your-tables)),
-  but rows of `python` add it, so loads of one backend fail on a table loaded with the other.
-  `pyarrow` falls back to `python` when `pymongoarrow` is not installed. The workaround for
+  but rows of `python` add both, so loads of one backend fail on a table loaded with the other
+  (local). `pyarrow` falls back to `python` when `pymongoarrow` is not installed. The workaround for
   collections without arrays: set `add_dlt_load_id` and `add_dlt_id` of
   `[normalize.parquet_normalizer]` for all `pyarrow` loads of the table.
 - The primary key is `_id`. Views and time series collections can return documents without `_id`

@@ -134,9 +134,9 @@ Versions before 1.0.0 were not numbered. Copies taken with `dlt init` have no `v
   `pyarrow`, 34k with `python`, 172k receiving messages without decoding, 23k before 1.0.0. Both
   backends peak at about 240 MB (#719).
 - **Backends**: we recommend against switching backends in production, pick one while testing and
-  use it for the initial load too. By default, the Arrow tables of `pyarrow` get no `_dlt_id`, which
-  costs performance and is not needed
+  use it for the initial load too. By default, the Arrow tables of `pyarrow` get no `_dlt_load_id`
+  and `_dlt_id`, and `_dlt_id` costs performance and is not needed
   ([docs](https://dlthub.com/docs/dlt-ecosystem/verified-sources/arrow-pandas#add-_dlt_load_id-and-_dlt_id-to-your-tables)),
-  but rows of `python` add it, so loads of one backend fail on a table loaded with the other. The
-  workaround: set `add_dlt_load_id` and `add_dlt_id` of `[normalize.parquet_normalizer]` for all
-  `pyarrow` loads of the table.
+  but rows of `python` add both, so loads of one backend fail on a table loaded with the other
+  (local). The workaround: set `add_dlt_load_id` and `add_dlt_id` of
+  `[normalize.parquet_normalizer]` for all `pyarrow` loads of the table.

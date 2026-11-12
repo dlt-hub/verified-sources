@@ -75,11 +75,13 @@ Facts from the test site (November 2026) or from Microsoft's docs.
   both (test site, 2026-11-03). A file that appears with times older than the watermark is skipped
   until `refresh="drop_resources"`. `cTag` and `eTag` are opaque. The listing is in folder order,
   so chunked loads with `add_limit` and `row_order` are not supported.
+- **Deletes**: the rows of a deleted file stay in the table, the listing shows only the files that
+  exist (`test_files_incremental_changes`). Reload with `refresh="drop_resources"`. Deleted list
+  items come from the delta query (`test_list_incremental_changes`).
 - **Encodings**: Graph sends no charset. A csv or jsonl file is decoded by its BOM, else by
   `encoding` in `reader_kwargs`, else as UTF-8, so a csv saved by Excel in a Windows code page
   needs `encoding`.
 - **Amounts**: Excel stores numbers as doubles and pandas parses csv numbers as doubles;
   `reader_kwargs={"converters": {"Amount": to_decimal}}` loads a column as `decimal`. Converters
   are functions, so they are passed in code, not in config.
-- **Permissions**: `Sites.Read.All`, or `Sites.Selected` with read access to the site. Seeding
-  needs `Files.ReadWrite.All`.
+- **Permissions**: `Sites.Read.All`, or `Sites.Selected` with read access to the site.

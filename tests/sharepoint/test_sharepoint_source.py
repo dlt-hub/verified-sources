@@ -11,11 +11,11 @@ from dlt.common.configuration import resolve_configuration
 from dlt.sources import DltResource
 
 from sources.sharepoint import SharepointCredentials, sharepoint_files, sharepoint_list
-from sources.sharepoint.graph import site_client
 from tests.sharepoint.seed import data
 from tests.sharepoint.utils import (
     delete_item,
     ensure_folder,
+    graph_client,
     item_path,
     last_row_count,
     loaded_rows,
@@ -193,13 +193,6 @@ def test_seeded_full_and_incremental() -> None:
         # windows with an end value do not store incremental state
         assert "sources" not in backfill.state
         assert seeded_names(backfill) == names
-
-
-def graph_client() -> Any:
-    credentials = resolve_configuration(
-        SharepointCredentials(), sections=("sources", "sharepoint")
-    )
-    return site_client(**dict(credentials))
 
 
 @pytest.mark.parametrize("destination_name", ALL_DESTINATIONS)
