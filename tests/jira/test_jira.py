@@ -1,5 +1,6 @@
 import os
 from datetime import date, datetime, timezone
+from functools import partial
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
@@ -14,12 +15,12 @@ from sources.jira import (
     issue_comments,
     jira,
     jira_issues,
-    jira_search,
     worklogs,
 )
-from sources.jira.settings import DEFAULT_ENDPOINTS
+from sources.jira.settings import DEFAULT_ENDPOINTS, DEFAULT_LAG
 
 from tests.jira.utils import (
+    ALL_FIELD_IDS,
     BASE_URL,
     CREDENTIALS,
     CUSTOM,
@@ -44,7 +45,7 @@ from tests.jira.utils import (
     sent_params,
     serve,
 )
-from tests.utils import assert_load_info, load_table_counts, load_tables_to_dicts
+from tests.utils import load_table_counts, load_tables_to_dicts
 
 
 def test_jira_source(http_mock: requests_mock.Mocker) -> None:
@@ -173,6 +174,66 @@ def test_issues_config_resolution(jira_mock: JiraMock) -> None:
     assert any({"bugs_ids", "tasks_ids"} <= names for names in resource_states)
 
 
+def test_issues_incremental_argument(jira_mock: JiraMock) -> None:
+    jira_mock.add_issues(make_issue(1, UPDATED_1), make_issue(2, UPDATED_2))
+    # without incremental the JQL runs as it is on each run and no state is kept
+    jql = "project = KAN ORDER BY created DESC"
+    jira_mock.jql_results = {jql: ["2", "1"]}
+    pipeline = duckdb_pipeline("jira_issues_no_incremental")
+    for _ in range(2):
+        load(pipeline, jira_issues(**CREDENTIALS, jql=jql, incremental=None))
+    assert jira_mock.jqls == [jql, jql]
+    assert load_table_counts(pipeline, "issues") == {"issues": 2}
+    assert "sources" not in pipeline.state
+    list(jira(**CREDENTIALS, incremental=None).with_resources("issues"))
+    assert jira_mock.jqls[-1] == 'created >= "1970-01-01"'
+    with pytest.raises(ValueError):
+        jira_issues(**CREDENTIALS, jql=jql)
+    with pytest.raises(ValueError):
+        jira_issues(**CREDENTIALS, incremental=None, start_date=START)
+
+    # an incremental without cursor, passed or in config, sets values of the default one
+    start = datetime(2024, 1, 1, tzinfo=timezone.utc)
+    end = datetime(2024, 2, 1, tzinfo=timezone.utc)
+    passed = jira_issues(
+        **CREDENTIALS,
+        incremental=dlt.sources.incremental(initial_value=start, end_value=end),
+    )
+    os.environ["SOURCES__JIRA__ISSUES__INCREMENTAL__INITIAL_VALUE"] = start.isoformat()
+    os.environ["SOURCES__JIRA__ISSUES__INCREMENTAL__END_VALUE"] = end.isoformat()
+    configured = jira_issues(**CREDENTIALS)
+    for issues in (passed, configured):
+        assert len(list(issues)) == 2
+        assert jira_mock.jqls[-1] == (
+            'updated >= "2024-01-01 00:00" AND updated < "2024-02-01 00:01"'
+            " ORDER BY updated ASC"
+        )
+        incremental = issues._parent.incremental.incremental
+        assert (incremental.cursor_path, incremental.lag) == ("updated", DEFAULT_LAG)
+        assert issues.columns["updated"]["dedup_sort"] == "desc"
+
+
+def test_jira_columns(jira_mock: JiraMock) -> None:
+    jira_mock.add_issues(make_issue(1, UPDATED_1))
+    list(jira(**CREDENTIALS, included_columns=["summary"]).with_resources("issues"))
+    assert jira_mock.bulk_fetches[-1]["fields"] == ["summary", "updated"]
+    list(jira(**CREDENTIALS, excluded_columns=()).with_resources("issues"))
+    assert jira_mock.bulk_fetches[-1]["fields"] == ALL_FIELD_IDS
+
+    # the `[sources.jira]` section reaches the source and the standalone resource
+    os.environ["SOURCES__JIRA__EXCLUDED_COLUMNS"] = "[]"
+    list(jira(**CREDENTIALS).with_resources("issues"))
+    assert jira_mock.bulk_fetches[-1]["fields"] == ALL_FIELD_IDS
+    list(jira_issues(**CREDENTIALS))
+    assert jira_mock.bulk_fetches[-1]["fields"] == ALL_FIELD_IDS
+
+    # the section of the resource holds the arguments `jira` does not take
+    os.environ["SOURCES__JIRA__ISSUES__LAG"] = "60"
+    source = jira(**CREDENTIALS).with_resources("issues")
+    list(source)
+    assert source.resources["issues"]._parent.incremental.incremental.lag == 60
+
+
 def test_issue_fields(jira_mock: JiraMock) -> None:
     pipeline = duckdb_pipeline("jira_issue_fields")
     load(pipeline, jira(**CREDENTIALS).with_resources("issue_fields"))
@@ -228,84 +289,44 @@ def test_transformers_not_from_issues(transformer: DltResource) -> None:
     assert isinstance(py_ex.value.__cause__, ValueError)
 
 
-def test_jira_search(search_mock: JiraMock) -> None:
-    queries = ["project = X", "project = Y order by created"]
-    source = jira_search(**CREDENTIALS, jql_queries=queries)
-    # a resource level hint would win over the source setting, so there must not be one
-    assert source.resources["jira_search"].max_table_nesting is None
-    rows = list(source)
-    # the query index tells which query found the issue, pages are fetched in parallel
-    assert sorted((row["id"], row["query_index"]) for row in rows) == [
-        ("1", 0),
-        ("2", 0),
-        ("2", 1),
-        ("3", 0),
-        ("4", 1),
+def with_query(query: str, row: Dict[str, Any]) -> Dict[str, Any]:
+    return {**row, "query": query}
+
+
+def test_issues_of_several_queries(search_mock: JiraMock) -> None:
+    # each query is a resource with its own table, limit and config section
+    os.environ["SOURCES__JIRA__EPICS__JQL"] = "project = Y"
+    pipeline = duckdb_pipeline("jira_issues_queries")
+    resources = [
+        jira_issues(**CREDENTIALS, jql="project = X", name="bugs", chunk_size=1),
+        jira_issues(**CREDENTIALS, name="epics", chunk_size=1),
     ]
-    # queries run as they are, search lists ids only and issues are fetched in bulk
-    assert [search["jql"] for search in search_mock.searches] == queries
-    assert {search["fields"] for search in search_mock.searches} == {"id"}
-    for sent in search_mock.searches:
-        assert not (UNACCEPTED_PARAMS | INTERNAL_KEYS) & set(sent)
+    load(pipeline, [resource.add_limit(1) for resource in resources])
+    assert load_table_counts(pipeline, "bugs", "epics") == {"bugs": 1, "epics": 1}
+    assert sorted(search_mock.jqls) == [
+        "(project = X) ORDER BY updated ASC",
+        "(project = Y) ORDER BY updated ASC",
+    ]
+    assert {search["maxResults"] for search in search_mock.searches} == {"1"}
     assert len(search_mock.bulk_fetches) == 2
 
-    # the page limit bounds each query, a shared limit would let the first query absorb it
-    source = jira_search(**CREDENTIALS, jql_queries=queries, page_size=1, page_limit=1)
-    pipeline = duckdb_pipeline("jira_search")
-    load(pipeline, source)
-    rows = load_tables_to_dicts(pipeline, "jira_search")["jira_search"]
-    assert sorted((row["id"], row["query_index"]) for row in rows) == [
-        ("1", 0),
-        ("2", 1),
+    # one table: a query column added by `add_map` is part of the primary key
+    pipeline = duckdb_pipeline("jira_issues_one_table")
+    resources = [
+        jira_issues(**CREDENTIALS, jql=f"project = {project}", name=name)
+        .add_map(partial(with_query, name))
+        .apply_hints(table_name="issues", primary_key=["id", "query"])
+        for name, project in (("bugs", "X"), ("epics", "Y"))
     ]
-    table = pipeline.default_schema.get_table("jira_search")
-    assert table["write_disposition"] == "replace"
-    keys = [name for name, col in table["columns"].items() if col.get("primary_key")]
-    assert keys == ["id", "query_index"]
-
-    # only the included fields are fetched and get typed columns, one bulk fetch per page of issues
-    search_mock.bulk_fetches.clear()
-    source = jira_search(
-        **CREDENTIALS,
-        jql_queries=queries,
-        chunk_size=1,
-        included_columns=["summary", "updated"],
-    )
-    pipeline = duckdb_pipeline("jira_search_columns")
-    load(pipeline, source)
-    assert len(search_mock.bulk_fetches) == 5
-    assert {tuple(fetch["fields"]) for fetch in search_mock.bulk_fetches} == {
-        ("summary", "updated")
-    }
-    columns = pipeline.default_schema.get_table("jira_search")["columns"]
-    assert {
-        name: col["data_type"]
-        for name, col in columns.items()
-        if not name.startswith("_dlt")
-    } == {
-        "id": "text",
-        "key": "text",
-        "summary": "text",
-        "updated": "timestamp",
-        "query_index": "bigint",
-    }
-
-
-def test_jira_search_with_issues(search_mock: JiraMock) -> None:
-    # jira_search loads its own table, so it shares a dataset with the issues of `jira`
-    pipeline = duckdb_pipeline("jira_search_with_issues")
-    load(pipeline, jira_issues(**CREDENTIALS))
-    # the second schema gets its own load package, the pipeline state goes to the default one
-    info = pipeline.run(jira_search(**CREDENTIALS, jql_queries=["project = X"]))
-    assert_load_info(info, expected_load_packages=2)
-    # a renamed resource loads another table
-    epics = jira_search(**CREDENTIALS, jql_queries=["project = Y order by created"])
-    load(pipeline, epics.jira_search.with_name("epics"))
-    assert load_table_counts(pipeline, "issues", "jira_search", "epics") == {
-        "issues": 4,
-        "jira_search": 3,
-        "epics": 2,
-    }
+    load(pipeline, resources)
+    rows = load_tables_to_dicts(pipeline, "issues")["issues"]
+    assert sorted((row["id"], row["query"]) for row in rows) == [
+        ("1", "bugs"),
+        ("2", "bugs"),
+        ("2", "epics"),
+        ("3", "bugs"),
+        ("4", "epics"),
+    ]
 
 
 @pytest.mark.parametrize("page_size", [None, 7], ids=["default", "explicit"])

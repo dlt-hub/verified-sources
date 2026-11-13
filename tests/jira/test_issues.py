@@ -1,8 +1,11 @@
+import os
 from datetime import date, datetime, timezone
-from typing import Any, Dict, List, Optional
+from time import sleep
+from typing import Any, Dict, List, Optional, Sequence
 
 import dlt
 import pytest
+from dlt.common.time import ensure_datetime_in_tz
 from dlt.pipeline.exceptions import PipelineStepFailed
 from dlt.pipeline.helpers import pipeline_drop
 from pytest_mock import MockerFixture
@@ -15,9 +18,10 @@ from sources.jira import (
     jira_issues,
 )
 from sources.jira.helpers.client import JiraClient
-from sources.jira.helpers.issues import IssuesReader, changelog_rows, issue_ids
+from sources.jira.helpers.issues import changelog_rows
 
 from tests.jira.utils import (
+    ALL_FIELD_IDS,
     CREDENTIALS,
     DEFAULT_FIELD_IDS,
     JiraMock,
@@ -124,17 +128,20 @@ def test_issues_captured(captured_mock: JiraMock) -> None:
         pipeline,
         "issues",
         "issues__subtasks",
-        "issues__issuelinks",
         "issues__customfield_10020",
     ) == {
         "issues": 8,
         "issues__subtasks": 2,
-        "issues__issuelinks": 5,
         "issues__customfield_10020": 1,
     }
     rows = {
         row["key"]: row for row in load_tables_to_dicts(pipeline, "issues")["issues"]
     }
+    # links, attachments, votes and watchers are not loaded by default
+    tables = {table["name"] for table in pipeline.default_schema.data_tables()}
+    assert not tables & {"issues__issuelinks", "issues__attachment"}
+    assert not any(name.startswith(("votes", "watches")) for name in rows["TST-24"])
+
     assert rows["TST-19"]["parent__key"] == "TST-18"
     assert rows["TST-24"]["customfield_10046__child__value"] == "[dummy] rest_api"
     assert rows["TST-24"]["timetracking__original_estimate_seconds"] == 7200
@@ -157,6 +164,16 @@ def test_issues_captured(captured_mock: JiraMock) -> None:
 
     assert comparable(paged) == comparable(pipeline)
 
+    # `excluded_columns=[]` loads all fields
+    everything = duckdb_pipeline("jira_issues_captured_all_fields")
+    load(everything, jira_issues(**CREDENTIALS, excluded_columns=[]))
+    assert load_table_counts(
+        everything, "issues", "issues__issuelinks", "issues__attachment"
+    ) == {"issues": 8, "issues__issuelinks": 5, "issues__attachment": 1}
+    everything_row = rows_by_id(everything, "issues")[0]
+    assert any(name.startswith("votes") for name in everything_row)
+    assert any(name.startswith("watches") for name in everything_row)
+
 
 def test_issues_pagination(jira_mock: JiraMock) -> None:
     # nothing is fetched for issues, comments and changelogs when search finds no issues
@@ -172,8 +189,8 @@ def test_issues_pagination(jira_mock: JiraMock) -> None:
     jira_mock.add_issues(*issues_updated_at(range(1, 6)))
     jira_mock.search_pages = [["1", "2"], ["3", "4"], ["5"]]
     # ids found by search pages of `search_page_size` are fetched in pages of `chunk_size`
-    reader = IssuesReader(JiraClient(**CREDENTIALS), chunk_size=3, search_page_size=2)
-    assert [len(fetch()) for fetch in issue_ids(reader)] == [3, 2]
+    assert len(list(jira_issues(**CREDENTIALS, chunk_size=3, search_page_size=2))) == 5
+    assert sorted(len(f["issueIdsOrKeys"]) for f in jira_mock.bulk_fetches) == [2, 3]
     assert [search.get("nextPageToken") for search in jira_mock.searches] == [
         None,
         "1",
@@ -196,23 +213,33 @@ def test_issues_pagination(jira_mock: JiraMock) -> None:
 
 
 @pytest.mark.parametrize(
-    "included_columns,max_bulk_issues,expected_batches",
+    "columns,max_bulk_issues,expected_batches",
     [
-        (["summary"], None, [50, 1000]),
-        (None, None, [50] + [100] * 10),
-        (["summary"], 100, [50] + [100] * 10 + [1000]),
+        ({"included_columns": ["summary"]}, None, [50, 1000]),
+        ({"included_columns": ["summary", "labels"]}, None, [50, 1000]),
+        ({}, None, [50, 1000]),
+        ({"excluded_columns": []}, None, [50] + [100] * 10),
+        ({"included_columns": ["summary", "attachment"]}, None, [50] + [100] * 10),
+        ({"included_columns": ["summary"]}, 100, [50] + [100] * 10 + [1000]),
     ],
-    ids=["single_value_fields", "multi_value_fields", "rejected_batch"],
+    ids=[
+        "included_fields",
+        "multi_value_field",
+        "default_fields",
+        "all_fields",
+        "capped_field",
+        "rejected_batch",
+    ],
 )
 def test_issues_bulk_fetch_batches(
     jira_mock: JiraMock,
-    included_columns: Optional[List[str]],
+    columns: Dict[str, List[str]],
     max_bulk_issues: Optional[int],
     expected_batches: List[int],
 ) -> None:
     jira_mock.add_issues(*issues_updated_at(range(1, 1051)))
     jira_mock.max_bulk_issues = max_bulk_issues
-    rows = list(jira_issues(**CREDENTIALS, included_columns=included_columns))
+    rows = list(jira_issues(**CREDENTIALS, **columns))
     assert len(rows) == 1050
     # search lists only ids, so one page holds all of them
     assert len(jira_mock.searches) == 1
@@ -313,6 +340,102 @@ def test_issues_incremental_runs(
         ("3", "Issue 3"),
         ("4", "newest"),
     ]
+
+
+# issue n updated on day n of January, chunks of 3 and a partial one
+CHUNKED_UPDATES = [f"2024-01-{day:02d}T10:00:00.000+0000" for day in range(1, 11)]
+
+
+def first_chunk_finishes_last(mocker: MockerFixture) -> None:
+    bulk_fetch = JiraClient.bulk_fetch
+
+    def slow_first_chunk(
+        client: JiraClient, ids: List[str], fields: List[str], batch_size: int
+    ) -> Any:
+        if "1" in ids:
+            sleep(0.5)
+        return bulk_fetch(client, ids, fields, batch_size)
+
+    mocker.patch.object(JiraClient, "bulk_fetch", slow_first_chunk)
+
+
+def chunked_issues() -> Any:
+    return jira_issues(
+        **CREDENTIALS,
+        chunk_size=3,
+        incremental=dlt.sources.incremental(
+            "updated", row_order="asc", range_start="open"
+        ),
+    )
+
+
+@pytest.mark.parametrize(
+    "limit_on", ["issues", "ids", "source", "count_rows"], ids=lambda value: value
+)
+def test_issues_chunked_runs(
+    jira_mock: JiraMock, mocker: MockerFixture, limit_on: str
+) -> None:
+    jira_mock.add_issues(
+        *(make_issue(n, updated) for n, updated in enumerate(CHUNKED_UPDATES, 1))
+    )
+    # parallel fetches of all chunks would let the short last chunk finish first
+    first_chunk_finishes_last(mocker)
+    os.environ["EXTRACT__WORKERS"] = "5"
+    pipeline = duckdb_pipeline("jira_issues_chunked")
+
+    def limited() -> Any:
+        issues = chunked_issues()
+        if limit_on == "issues":
+            return issues.add_limit(1)
+        if limit_on == "ids":
+            issues._parent.add_limit(1)
+            return issues
+        if limit_on == "count_rows":
+            return issues.add_limit(3, count_rows=True)
+        return dlt.source(lambda: issues, name="jira")().add_limit(1)
+
+    # JQL compares whole minutes: an open range lists the issue of the last value again and the
+    # incremental drops it, so a run after the first loads one issue less than the chunk
+    chunks = [["1", "2", "3"], ["4", "5"], ["6", "7"], ["8", "9"], ["10"]]
+    for chunk in chunks:
+        jira_mock.searches.clear()
+        load(pipeline, limited())
+        assert pipeline.last_trace.last_normalize_info.row_counts["issues"] == len(
+            chunk
+        )
+        loaded = sorted((row["id"] for row in rows_by_id(pipeline, "issues")), key=int)
+        assert loaded == [str(n) for n in range(1, int(chunk[-1]) + 1)]
+        # the search lists only the issues of the limited page
+        assert {search["maxResults"] for search in jira_mock.searches} == {"3"}
+        state = next(
+            source["resources"]["issues_ids"]["incremental"]["updated"]
+            for source in pipeline.state["sources"].values()
+        )
+        assert state["last_value"] == ensure_datetime_in_tz(
+            CHUNKED_UPDATES[int(chunk[-1]) - 1]
+        )
+    pipeline.run(limited())
+    assert "issues" not in pipeline.last_trace.last_normalize_info.row_counts
+
+
+def test_issues_time_limit_fetches_in_order(
+    jira_mock: JiraMock, mocker: MockerFixture
+) -> None:
+    jira_mock.add_issues(
+        *(make_issue(n, updated) for n, updated in enumerate(CHUNKED_UPDATES, 1))
+    )
+    first_chunk_finishes_last(mocker)
+    os.environ["EXTRACT__WORKERS"] = "5"
+    pipeline = duckdb_pipeline("jira_issues_time_limit")
+    # a time limit cannot be pushed down to the search, pages are fetched one after another
+    load(pipeline, chunked_issues().add_limit(max_time=60))
+    assert [fetch["issueIdsOrKeys"] for fetch in jira_mock.bulk_fetches] == [
+        ["1", "2", "3"],
+        ["4", "5", "6"],
+        ["7", "8", "9"],
+        ["10"],
+    ]
+    assert len(rows_by_id(pipeline, "issues")) == len(CHUNKED_UPDATES)
 
 
 def test_issues_updated_during_run(jira_mock: JiraMock, mocker: MockerFixture) -> None:
@@ -438,36 +561,48 @@ def test_issues_unexpected_values(jira_mock: JiraMock) -> None:
 
 
 @pytest.mark.parametrize(
-    "included_columns,excluded_columns,expected_fields",
+    "columns,expected_fields",
     [
-        (["summary", "status", "colour"], None, ["summary", "status", "updated"]),
-        (["summary", "updated", "comment"], None, ["summary", "updated", "comment"]),
         (
-            None,
-            ["description", "customfield_10050"],
+            {"included_columns": ["summary", "status", "colour"]},
+            ["summary", "status", "updated"],
+        ),
+        (
+            {"included_columns": ["summary", "updated", "comment"]},
+            ["summary", "updated", "comment"],
+        ),
+        # the default excluded columns do not filter the included ones
+        (
+            {"included_columns": ["summary", "attachment"]},
+            ["summary", "attachment", "updated"],
+        ),
+        ({}, DEFAULT_FIELD_IDS),
+        ({"excluded_columns": []}, ALL_FIELD_IDS),
+        (
+            {"excluded_columns": ("description", "customfield_10050")},
             [
                 field_id
-                for field_id in DEFAULT_FIELD_IDS
+                for field_id in ALL_FIELD_IDS
                 if field_id not in ("description", "customfield_10050")
             ],
         ),
     ],
-    ids=["included", "included_comments", "excluded"],
+    ids=[
+        "included",
+        "included_comments",
+        "included_default_excluded",
+        "default",
+        "all_fields",
+        "excluded",
+    ],
 )
 def test_issues_columns(
     jira_mock: JiraMock,
-    included_columns: Optional[List[str]],
-    excluded_columns: Optional[List[str]],
+    columns: Dict[str, Sequence[str]],
     expected_fields: List[str],
 ) -> None:
     jira_mock.add_issues(make_issue(1, UPDATED_1))
-    rows = list(
-        jira_issues(
-            **CREDENTIALS,
-            included_columns=included_columns,
-            excluded_columns=excluded_columns,
-        )
-    )
+    rows = list(jira_issues(**CREDENTIALS, **columns))
     assert jira_mock.bulk_fetches[0]["fields"] == expected_fields
     # the issue has no thumbnail and no parent, empty fields are skipped
     present = [f for f in expected_fields if f not in ("thumbnail", "parent")]
