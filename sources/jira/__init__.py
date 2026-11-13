@@ -212,7 +212,10 @@ def jira_issues(
     if is_default:
         start = None if start_date is None else ensure_datetime_in_tz(start_date)
         incremental = make_default_incremental(
-            incremental, start, DEFAULT_LAG if lag is None else lag
+            incremental,
+            dlt.sources.incremental[datetime](
+                "updated", initial_value=start, lag=DEFAULT_LAG if lag is None else lag
+            ),
         )
         # the latest version of an issue read more than once in a run wins
         columns = {"updated": {"name": "updated", "dedup_sort": "desc"}}

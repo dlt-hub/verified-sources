@@ -80,21 +80,21 @@ def is_default_incremental(incremental: Optional[Incremental[Any]]) -> bool:
 
 
 def make_default_incremental(
-    incremental: Incremental[Any], initial_value: Any, lag: float
+    incremental: Incremental[Any], default: Incremental[Any]
 ) -> Incremental[Any]:
-    """Returns the incremental on `updated` with the values set on the copy of
-    `DEFAULT_INCREMENTAL`, e.g. its `end_value` from config
+    """Returns `default` with the values set on `incremental`, the copy of `DEFAULT_INCREMENTAL`
+    that dlt merged with config or a partial incremental, e.g. an `end_value`. `default` keeps its
+    generic type
     """
     values = incremental.copy()
-    values.cursor_path = None
+    # `merge` applies the values that are not None
+    for key, value in DEFAULT_INCREMENTAL.items():
+        if values[key] == value:
+            setattr(values, key, None)
     # values from config are strings
-    if values.initial_value is not None:
-        values.initial_value = ensure_datetime_in_tz(values.initial_value)
-    if values.end_value is not None:
-        values.end_value = ensure_datetime_in_tz(values.end_value)
-    default: Incremental[Any] = dlt.sources.incremental(
-        "updated", initial_value=initial_value, lag=lag
-    )
+    for key in ("initial_value", "end_value"):
+        if values[key] is not None:
+            setattr(values, key, ensure_datetime_in_tz(values[key]))
     return default.merge(values)
 
 
