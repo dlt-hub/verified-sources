@@ -3,8 +3,10 @@
 import json
 import os
 import re
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
+from functools import lru_cache
 from typing import Any, Dict, Iterator, List, Optional, Set
+from zoneinfo import ZoneInfo
 from urllib.parse import parse_qs, urlparse
 
 import dlt
@@ -19,7 +21,15 @@ from pytest_mock import MockerFixture
 
 from sources.jira.helpers.client import JiraClient
 from sources.jira.helpers.paginators import JiraCursorPaginator
+from sources.jira.settings import DEFAULT_EXCLUDED_COLUMNS
 
+from tests.seed_utils import (
+    MINUTE,
+    PERF_PERIOD,
+    PERF_STARTS,
+    perf_description,
+    spread,
+)
 from tests.utils import assert_load_info, load_tables_to_dicts
 
 BASE_URL = "https://test.atlassian.net/"
@@ -29,6 +39,17 @@ CREDENTIALS = {"subdomain": "test", "email": "user@example.com", "api_token": "t
 AUTH: Dict[str, Any] = {**CREDENTIALS, "page_size": 2}
 # label of the issues seeded on the test site by `seed_test_data.py`
 SEED_LABEL = "dlt-seed"
+# performance data set seeded by `seed_test_data.py --performance`: projects with `PERF_ISSUES`
+# issues each, numbered from 0 in `PERF_NUMBER_FIELD`, with unique minutes in `PERF_CURSOR_FIELD`
+PERF_LABEL = "dlt-perf"
+PERF_PROJECTS = ("DLTPA", "DLTPB")
+PERF_ISSUES = 20_000
+# "[dummy] Date time" and "[dummy] Number" of the test site, global and on the TST create screen
+PERF_CURSOR_FIELD = "customfield_10050"
+PERF_NUMBER_FIELD = "customfield_10047"
+# Jira stores datetime fields as wall time in the user time zone and keeps the first pass of the
+# hour repeated when DST ends. The seed checks that the account uses this zone
+PERF_TIME_ZONE = "Europe/Zurich"
 UPDATED_1 = "2024-01-15T10:30:00.123+0100"
 UPDATED_2 = "2024-01-16T08:00:00.000-0800"
 START = datetime(2024, 1, 15, 9, 30, 15, tzinfo=timezone.utc)
@@ -51,6 +72,39 @@ CUSTOM = "com.atlassian.jira.plugin.system.customfieldtypes:"
 # clauses the source generates for the `updated` cursor, e.g. updated >= "2024-01-16 07:50"
 UPDATED_CLAUSE = re.compile(r'\bupdated\s*(>=|<)\s*"([^"]+)"')
 UPDATED_ORDER = re.compile(r"\bORDER BY updated (ASC|DESC)\b", re.IGNORECASE)
+
+
+@lru_cache(maxsize=None)
+def perf_cursors(project: str) -> List[datetime]:
+    """Unique cursor values of the issues of a performance project, in minutes. Values in the second
+    pass of a repeated hour move by whole hours to a free minute
+    """
+    zone = ZoneInfo(PERF_TIME_ZONE)
+    start = PERF_STARTS[PERF_PROJECTS.index(project)]
+    values = [spread(n, start, PERF_PERIOD, MINUTE) for n in range(PERF_ISSUES)]
+    taken = set(values)
+    for n, value in enumerate(values):
+        if value.astimezone(zone).fold:
+            moved = value
+            while moved.astimezone(zone).fold or moved in taken:
+                moved += timedelta(hours=1)
+            taken.add(moved)
+            values[n] = moved
+    return values
+
+
+def perf_issue(project: str, n: int) -> Dict[str, Any]:
+    """Values of the issue `n` of a performance project as loaded. None is an empty field"""
+    return {
+        "summary": f"perf {project} issue {n}",
+        "description": perf_description(n),
+        PERF_NUMBER_FIELD: float(n),
+        PERF_CURSOR_FIELD: perf_cursors(project)[n],
+    }
+
+
+def perf_jql(project: str) -> str:
+    return f'project = {project} AND labels = "{PERF_LABEL}"'
 
 
 def system_field(
@@ -118,9 +172,12 @@ FIELDS = [
     custom_field(10034, "group", CUSTOM + "grouppicker"),
     custom_field(10050, "any", "com.example.app:widget"),
 ]
-# fields loaded by default, comments and worklogs have their own resources
-DEFAULT_FIELD_IDS = [
+# fields loaded with `excluded_columns=[]`, comments and worklogs have their own resources
+ALL_FIELD_IDS = [
     field["id"] for field in FIELDS if field["id"] not in ("comment", "worklog")
+]
+DEFAULT_FIELD_IDS = [
+    field_id for field_id in ALL_FIELD_IDS if field_id not in DEFAULT_EXCLUDED_COLUMNS
 ]
 
 USER = {

@@ -16,7 +16,6 @@ from tests.salesforce.utils import (
     assert_dlt_types_loaded,
     count_rows,
     delete_records,
-    last_row_count,
     load_rows,
     salesforce_client,
     wait_for_org_clock,
@@ -25,6 +24,7 @@ from tests.salesforce.utils import (
 from tests.utils import (
     ALL_DESTINATIONS,
     assert_load_info,
+    last_row_count,
     load_table_counts,
     skip_if_not_active,
 )

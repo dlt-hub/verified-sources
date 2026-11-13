@@ -125,6 +125,14 @@ def salesforce_client(credentials: SalesforceAuth = dlt.secrets.value) -> Salesf
     return make_salesforce_client(credentials)
 
 
+@with_config(sections=("sources", data.PERF_SECTION))
+def performance_credentials(
+    credentials: SalesforceAuth = dlt.secrets.value,
+) -> SalesforceAuth:
+    """Returns the credentials of the performance org"""
+    return credentials
+
+
 def write_records(
     client: Salesforce, method: str, sobject: str, records: List[Dict[str, Any]]
 ) -> List[str]:
@@ -172,12 +180,6 @@ def count_rows(pipeline: dlt.Pipeline, table_name: str, condition: str) -> int:
         table = client.make_qualified_table_name(table_name)
         rows = client.execute_sql(f"SELECT COUNT(*) FROM {table} WHERE {condition}")
     return rows[0][0]  # type: ignore[no-any-return]
-
-
-def last_row_count(pipeline: dlt.Pipeline, sobject: str) -> int:
-    """Rows of `sobject` that the last run of `pipeline` normalized"""
-    table_name = pipeline.default_schema.naming.normalize_path(sobject)
-    return pipeline.last_trace.last_normalize_info.row_counts.get(table_name, 0)
 
 
 def load_rows(

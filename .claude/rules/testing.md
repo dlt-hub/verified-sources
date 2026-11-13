@@ -14,6 +14,9 @@ paths:
   the source modules: `helpers/client.py` -> `test_client.py`, `__init__.py` -> `test_<name>.py`
 - End-to-end tests read from the real upstream or write to a non-local destination. They go only to
   `tests/<source_name>/test_<source_name>_source.py`
+- Performance tests read large seeded data from the real upstream. They go to
+  `tests/<source_name>/test_<source_name>_performance.py` with `pytestmark = pytest.mark.performance`,
+  which `pytest.ini` deselects so CI and `make` never run them
 
 ## Environment and fixtures
 Tests run within fixtures (see `conftest.py`) that:
