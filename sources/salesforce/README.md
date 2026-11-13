@@ -33,27 +33,40 @@ primary keys.
 Versions before 1.0.2 were not numbered. Copies taken with `dlt init` have no `version.py`,
 `.dlt/.sources` records the repository commit they came from.
 
-## Extension points
+## Optimization & Configuration
 
-- An sObject of `salesforce_source`: an entry in `SOURCE_SOBJECTS` of `__init__.py`.
-- A field type: its dlt column in `sf_field_to_column_schema` of `helpers/schema.py`, types the Bulk
-  API cannot select in `NON_QUERYABLE_TYPES`, cursor fields of the default incremental in
-  `UPDATED_AT_FIELDS` and `CREATED_AT_FIELDS`.
-- A query API: a class with the `query` method of `QueryApi` in `helpers/query.py`, yielding
-  `ResultPage`s, picked in `make_query_api`. Errors after which `api="auto"` uses the REST API:
-  `is_bulk_not_supported`.
-- A retried error: a predicate like `is_concurrent_limit_exceeded` of `helpers/connection.py`,
-  passed to dlt's `Client` in `_connection` of `__init__.py`.
-- An auth method: a credentials class in `helpers/credentials.py`, added to `SalesforceAuth`.
+Learned from the performance tests on a scratch org with two objects of 50,000 records (performance
+tests), from #717 and from local runs (local).
+
+- **Query API**: Bulk API 2.0, picked by `api="auto"`, reads large objects fastest. Each Bulk job
+  waits for the org to prepare it before its first page, also for small objects, and the wait varies
+  between runs. Frequent incremental runs that read few records are about an order of magnitude
+  faster per run with `api="rest"` (performance tests).
+- **Several objects**: the org prepares the jobs of several objects at once, so objects loaded in one
+  run take about the time of one: two objects side by side doubled the throughput of one
+  (performance tests). Load the objects in one pipeline run.
+- **Page size**: the default `chunk_size` is the fastest with Bulk API jobs, smaller pages add
+  requests and time. The REST API serves at most 2000 records per page and read one large object at
+  about half the throughput of the Bulk API (performance tests).
+- **Chunked loads**: `row_order` and `add_limit` add `ORDER BY` and `LIMIT`, which turn off the
+  server-side chunking of large Bulk jobs (#717).
+- **Backend**: `pyarrow` parses pages about 14 times faster than `python` (#717). Pick one before
+  the first load, see Backends below.
+
+## Code Customization
+
+- An sObject of `salesforce_source`: `SOURCE_SOBJECTS` in `__init__.py`.
+- A field type: `helpers/schema.py`.
+- A query API: `helpers/query.py`.
+- A retried error: `helpers/connection.py`.
+- An auth method: `helpers/credentials.py`.
 
 ## Maintenance & Troubleshooting
 
 Facts seen on the Developer Edition test org with API v59.0 (test org), measured locally with
 pyarrow 17 and urllib3 2.3 (local), or taken from docs and other connectors.
 
-- **Jobs**: a Bulk API query job takes 5 to 30 s to return its first page, also for small sObjects
-  (#717). `ORDER BY` is accepted (test org), but `ORDER BY` and `LIMIT` turn off the server-side
-  chunking of large jobs (#717). A job without results returns a page with only the header,
+- **Jobs**: `ORDER BY` is accepted. A job without results returns a page with only the header,
   `Sforce-Locator: null` and `Sforce-NumberOfRecords: 0` (test org).
 - **Limits**: the test org allows 15,000 API requests and 10,000 Bulk API 2.0 query jobs a day, and
   every response carries `Sforce-Limit-Info` (test org). Requests running longer than 20 s are
@@ -92,8 +105,6 @@ pyarrow 17 and urllib3 2.3 (local), or taken from docs and other connectors.
   supported in Bulk Query`, other connectors read such sObjects with the REST API.
 - **Sessions**: a long job may outlive the session. The source logs in again and continues with the
   same job and page, which does not work for credentials with a session id only (#717).
-- **Throughput**: 50,000 rows with 36 fields load to the local filesystem in 0.15 s with `pyarrow`
-  and 2.1 s with `python` (#717).
 - **Backends**: we recommend against switching backends in production, pick one while testing. By
   default, the Arrow tables of `pyarrow` get no `_dlt_load_id` and `_dlt_id`, and `_dlt_id` costs
   performance and is not needed

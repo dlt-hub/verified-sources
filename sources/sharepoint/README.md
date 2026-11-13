@@ -26,18 +26,22 @@ files of document libraries through a read-only fsspec filesystem over Graph, wi
   `_dlt_file_modified_at`, merged on `_dlt_file_url`; `to_decimal` converter for amounts
 - new `SharepointFileSystem`: fsspec filesystem registered as `sharepoint://<library>/<path>`
 
-## Extension points
+## Optimization & Configuration
 
-- A file type: a value of `TFileType` and a `read_<type>` reader in `READERS` of `readers.py`.
-- Another collection of the site, e.g. site pages or attachments: a resource on
-  `site_client(**credentials).paginate(...)`, see `list_items`.
-- Another reader: any transformer taking `FileItem`s can follow `sharepoint_folder`, and
-  `read_files` can follow any listing of `FileItem`s, e.g. dlt's `filesystem` on a bucket.
-- File metadata: `ITEM_FIELDS` and `SharepointFileSystem._entry`.
-- List fields to keep or drop: `item_row`. Lists `sharepoint_lists` picks without `list_titles`:
-  `user_list_titles`.
-- Deleted and copied files: the drive delta query would report them; today the listing walks the
-  folder on every run.
+- **Extract workers** (`workers` in the `[extract]` config section): files download on the extract
+  workers, so more workers read many small files faster, up to the throttling budget of the tenant:
+  a file costs 2 resource units, see Throttling below (test site).
+
+## Code Customization
+
+- A file type: `READERS` in `readers.py`.
+- Another collection of the site, e.g. site pages or attachments: follow `list_items` in
+  `__init__.py`.
+- Another reader of files: a transformer after `sharepoint_folder` in `__init__.py`.
+- File metadata: `filesystem.py`.
+- List fields to keep or drop: `item_row` in `__init__.py`.
+- Deleted and copied files: the drive delta query would report them, the listing in `filesystem.py`
+  walks the folder on every run.
 
 ## Maintenance & Troubleshooting
 
@@ -66,9 +70,7 @@ Facts from the test site (November 2026) or from Microsoft's docs.
   file (docs). A `children` listing is not guaranteed to be complete while writes happen, only the
   drive delta query is (docs). OneNote notebooks are `package` items with children (docs) and are
   walked like folders. System libraries such as Site Assets are hidden from `/drives` unless
-  `system` is selected (docs), so `library` cannot name them. Files download on the dlt extract
-  workers, 5 by default (`workers` in the `[extract]` config section): 16 workers read 236 small
-  csv files in 8 s (test site).
+  `system` is selected (docs), so `library` cannot name them.
 - **Timestamps**: `createdDateTime` and `lastModifiedDateTime` follow the client-reported
   `fileSystemInfo`, which sync clients and migration tools set to the local times: a Graph `copy`
   got a fresh modified time, an upload whose `fileSystemInfo` was patched to 2020 read back 2020 in
