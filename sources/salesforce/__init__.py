@@ -20,7 +20,13 @@ from dlt.sources.helpers.requests import Client, Session
 from .helpers.connection import SalesforceConnection, is_concurrent_limit_exceeded
 from .helpers.credentials import SalesforceAuth, make_salesforce_client
 from .helpers.query import TQueryApi
-from .helpers.table import SOURCE_SECTION, TTableBackend, table_resource
+from .helpers.table import (
+    DEFAULT_INCREMENTAL,
+    SOURCE_SECTION,
+    TTableBackend,
+    is_default_incremental,
+    table_resource,
+)
 
 # resource names and the sObjects they load
 SOURCE_SOBJECTS = {
@@ -134,7 +140,7 @@ def salesforce_table(
     credentials: SalesforceAuth = dlt.secrets.value,
     sobject: str = dlt.config.value,
     start_date: Optional[TAnyDateTime] = None,
-    incremental: Optional[dlt.sources.incremental[Any]] = None,
+    incremental: Optional[dlt.sources.incremental[Any]] = DEFAULT_INCREMENTAL,
     lag: Optional[float] = None,
     soql_filter: Optional[str] = None,
     include_deleted: bool = True,
@@ -164,9 +170,11 @@ def salesforce_table(
             the first of `SystemModstamp`, `LastModifiedDate`, `CreatedDate` and `LoginTime`
             present in the sObject. The "replace" write disposition loads all records, or the
             records changed since `start_date`, on each run.
-        incremental (Optional[dlt.sources.incremental[Any]]): Your own incremental instead of the
-            default one, used as is, without lag. It generates the WHERE clause of the query.
-            Setting `row_order` adds ORDER BY, which disables PK chunking of Bulk API jobs.
+        incremental (Optional[dlt.sources.incremental[Any]]): The default incremental if not
+            passed, an incremental without `cursor_path` sets its values. Your own incremental is
+            used as is, without lag. `None` loads all records on each run. The incremental
+            generates the WHERE clause of the query. Setting `row_order` adds ORDER BY, which
+            disables PK chunking of Bulk API jobs.
         lag (Optional[float]): Seconds re-read on each run by the default incremental, to catch
             records committed late. 600 when merging, None otherwise.
         soql_filter (Optional[str]): SOQL condition added to the WHERE clause, e.g.
@@ -199,8 +207,10 @@ def salesforce_table(
     Returns:
         DltResource: The dlt resource loading the sObject.
     """
-    if start_date is not None and incremental is not None:
-        raise ValueError("Pass `start_date` or `incremental`, not both")
+    if start_date is not None and not is_default_incremental(incremental):
+        raise ValueError(
+            "`start_date` sets the default incremental, do not pass `incremental`"
+        )
     return table_resource(
         _connection(credentials, None),
         sobject,

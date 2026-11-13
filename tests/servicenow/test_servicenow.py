@@ -139,7 +139,7 @@ def test_servicenow_invalid_arguments(
                 "start_date": "2024-02-02",
                 "incremental": dlt.sources.incremental("sys_created_on"),
             },
-            "not both",
+            "sets the default incremental",
         ),
         # the table has no field that the default incremental can start from
         ({"table": "cmn_schedule", "start_date": "2024-02-02"}, "start_date"),

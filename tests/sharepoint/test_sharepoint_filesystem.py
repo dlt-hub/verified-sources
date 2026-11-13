@@ -505,6 +505,23 @@ def test_sharepoint_files_incremental(graph: Mocker) -> None:
             {"start_date": "2020-01-01"}, ["B", "C"], [], id="start_date_text"
         ),
         pytest.param(
+            {"incremental": None},
+            ["A", "B", "C"],
+            ["A", "B", "C"],
+            id="no_incremental",
+        ),
+        pytest.param(
+            {
+                "incremental": dlt.sources.incremental(
+                    initial_value=datetime(2020, 1, 1, tzinfo=timezone.utc),
+                    end_value=datetime(2024, 1, 15, tzinfo=timezone.utc),
+                )
+            },
+            ["B"],
+            ["B"],
+            id="partial_incremental_window",
+        ),
+        pytest.param(
             {"start_date": datetime(2024, 1, 15, tzinfo=timezone.utc)},
             ["C"],
             [],
@@ -550,13 +567,9 @@ def test_sharepoint_folder_start_date_or_incremental(
         "start_date": "2020-01-01",
         "incremental": dlt.sources.incremental("modification_date"),
     }
-    with pytest.raises(
-        ValueError, match="Pass `start_date` or `incremental`, not both"
-    ):
+    with pytest.raises(ValueError, match="`start_date` sets the default incremental"):
         sharepoint_folder("Reports", **window)
-    with pytest.raises(
-        ValueError, match="Pass `start_date` or `incremental`, not both"
-    ):
+    with pytest.raises(ValueError, match="`start_date` sets the default incremental"):
         sharepoint_files(**files_config(**window))
     assert requests_mock.call_count == 0
 

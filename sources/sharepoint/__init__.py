@@ -5,6 +5,7 @@ reads the rows of csv, jsonl, parquet and excel files. API reference:
 https://learn.microsoft.com/graph/api/resources/sharepoint
 """
 
+from datetime import datetime
 from itertools import count
 from typing import Any, Dict, Iterable, Iterator, List, Optional
 from urllib.parse import quote, urlencode
@@ -32,6 +33,12 @@ from .readers import TFileType, read_file, reader_for, to_decimal
 # items per delta page; Graph's default page is smaller and the maximum is not documented
 LIST_PAGE_SIZE = 500
 LIST_IDX = DataItemNormalizer.C_DLT_LIST_IDX
+# cursor that marks the default of `incremental` arguments, no file listing column has this name.
+# The default is replaced by the incremental on `modification_date`, `None` lists all files
+DEFAULT_INCREMENTAL_MARKER = "_dlt_default_incremental_marker"
+DEFAULT_INCREMENTAL: dlt.sources.incremental[Any] = dlt.sources.incremental(
+    DEFAULT_INCREMENTAL_MARKER
+)
 
 
 @configspec
@@ -49,6 +56,33 @@ class SharepointCredentials(CredentialsConfiguration):
     client_id: str = None
     client_secret: TSecretStrValue = None
     site_id: str = None
+
+
+def is_default_incremental(incremental: Optional[dlt.sources.incremental[Any]]) -> bool:
+    """True if `incremental` is a copy of `DEFAULT_INCREMENTAL`, dlt copies argument defaults"""
+    return (
+        incremental is not None
+        and incremental.cursor_path == DEFAULT_INCREMENTAL_MARKER
+    )
+
+
+def make_default_incremental(
+    incremental: dlt.sources.incremental[Any], default: dlt.sources.incremental[Any]
+) -> dlt.sources.incremental[Any]:
+    """Returns `default` with the values set on `incremental`, the copy of `DEFAULT_INCREMENTAL`
+    that dlt merged with config or a partial incremental, e.g. an `end_value`. `default` keeps its
+    generic type
+    """
+    values = incremental.copy()
+    # `merge` applies the values that are not None
+    for key, value in DEFAULT_INCREMENTAL.items():
+        if values[key] == value:
+            setattr(values, key, None)
+    # values from config are strings
+    for key in ("initial_value", "end_value"):
+        if values[key] is not None:
+            setattr(values, key, ensure_datetime_in_tz(values[key]))
+    return default.merge(values)
 
 
 @dlt.resource(
@@ -189,7 +223,7 @@ def sharepoint_folder(
     library: Optional[str] = None,
     file_glob: str = "*",
     start_date: Optional[TAnyDateTime] = None,
-    incremental: Optional[dlt.sources.incremental[Any]] = None,
+    incremental: Optional[dlt.sources.incremental[Any]] = DEFAULT_INCREMENTAL,
     credentials: SharepointCredentials = dlt.secrets.value,
 ) -> DltResource:
     """Lists the files of a library folder with dlt's `filesystem` resource, new or modified files only.
@@ -206,27 +240,34 @@ def sharepoint_folder(
         start_date (Optional[TAnyDateTime]): Lists files modified since this date on the first
             run, all files if not set. It is the initial value of the default incremental on
             `modification_date`; a naive date is taken as UTC.
-        incremental (Optional[dlt.sources.incremental[Any]]): Your own incremental on
-            `modification_date` instead of the default one, e.g. with an `end_value`. Cannot be
-            combined with `start_date`.
+        incremental (Optional[dlt.sources.incremental[Any]]): The incremental on
+            `modification_date` if not passed, an incremental without `cursor_path` sets its
+            values, e.g. an `end_value`. Your own incremental is used as is, it cannot be
+            combined with `start_date`. `None` lists all files on each run.
         credentials (SharepointCredentials): Entra ID app credentials and the site id.
 
     Returns:
         DltResource: dlt's `filesystem` resource over the folder, incremental on `modification_date`.
 
     Raises:
-        ValueError: If folder_path contains glob characters, or both `start_date` and
-            `incremental` are passed.
+        ValueError: If folder_path contains glob characters, or `start_date` comes with
+            `incremental`.
     """
     validate_folder_path(folder_path)
-    if start_date is not None and incremental is not None:
-        raise ValueError("Pass `start_date` or `incremental`, not both")
-    if incremental is None:
-        incremental = dlt.sources.incremental(
-            "modification_date",
-            initial_value=None
-            if start_date is None
-            else ensure_datetime_in_tz(start_date),
+    is_default = is_default_incremental(incremental)
+    if start_date is not None and not is_default:
+        raise ValueError(
+            "`start_date` sets the default incremental, do not pass `incremental`"
+        )
+    if is_default:
+        incremental = make_default_incremental(
+            incremental,
+            dlt.sources.incremental[datetime](
+                "modification_date",
+                initial_value=None
+                if start_date is None
+                else ensure_datetime_in_tz(start_date),
+            ),
         )
     fs = SharepointFileSystem(site_client(**credentials), library)
     return list_files(
@@ -278,7 +319,7 @@ def sharepoint_files(
     file_glob: str = "*",
     reader_kwargs: Optional[Dict[str, Any]] = None,
     start_date: Optional[TAnyDateTime] = None,
-    incremental: Optional[dlt.sources.incremental[Any]] = None,
+    incremental: Optional[dlt.sources.incremental[Any]] = DEFAULT_INCREMENTAL,
     credentials: SharepointCredentials = dlt.secrets.value,
 ) -> Iterable[DltResource]:
     """Loads the rows of the files matching `file_glob` in a folder into one table.
@@ -307,9 +348,10 @@ def sharepoint_files(
         start_date (Optional[TAnyDateTime]): Loads files modified since this date on the first
             run, all files if not set. It is the initial value of the default incremental on
             `modification_date`; a naive date is taken as UTC.
-        incremental (Optional[dlt.sources.incremental[Any]]): Your own incremental on
-            `modification_date` instead of the default one, e.g. with an `end_value`. Cannot be
-            combined with `start_date`.
+        incremental (Optional[dlt.sources.incremental[Any]]): The incremental on
+            `modification_date` if not passed, an incremental without `cursor_path` sets its
+            values, e.g. an `end_value`. Your own incremental is used as is, it cannot be
+            combined with `start_date`. `None` lists all files on each run.
         credentials (SharepointCredentials): Entra ID app credentials and the site id.
 
     Returns:
@@ -317,8 +359,8 @@ def sharepoint_files(
             merged on `_dlt_file_url`, and the file listing `<table_name>_files`, not selected.
 
     Raises:
-        ValueError: If folder_path contains glob characters, or both `start_date` and
-            `incremental` are passed.
+        ValueError: If folder_path contains glob characters, or `start_date` comes with
+            `incremental`.
     """
     files = sharepoint_folder(
         folder_path,

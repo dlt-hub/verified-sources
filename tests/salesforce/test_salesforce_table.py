@@ -649,9 +649,17 @@ FIELD_TYPES = {
             ["Id", "SystemModstamp"],
             {"incremental": None},
             None,
+            "replace",
+            ["Id"],
+            "",
+        ),
+        (
+            ["Id", "SystemModstamp"],
+            {"incremental": dlt.sources.incremental(lag=60)},
+            None,
             "merge",
             ["Id"],
-            " WHERE SystemModstamp >= 2024-01-31T23:50:00.000Z"
+            " WHERE SystemModstamp >= 2024-01-31T23:59:00.000Z"
             f" AND SystemModstamp <= {NOW_LITERAL}",
         ),
         (
@@ -698,7 +706,8 @@ FIELD_TYPES = {
         "no_cursor",
         "explicit_lag",
         "explicit_append_no_lag",
-        "none_is_default_incremental",
+        "none_without_incremental",
+        "partial_incremental_sets_lag",
         "explicit_replace_no_incremental",
         "explicit_primary_key",
         "explicit_incremental_merge",

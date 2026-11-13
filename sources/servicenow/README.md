@@ -8,6 +8,14 @@ types come from `sys_dictionary`, and deletes come from `sys_audit_delete`. Setu
 
 ## Changelog
 
+### 1.1.0
+**Upgrade**: remove `incremental=None` from `servicenow_table` to keep the default incremental:
+with it, each run reads all records and replaces the table. The incremental state carries over.
+- changed `servicenow_table`: `incremental=None` loads without incremental, the default
+  incremental is the default value of `incremental`
+- new `servicenow_table`: an incremental without `cursor_path` sets values of the default
+  incremental, e.g. `lag` or `end_value`, also in config
+
 ### 1.0.0
 **Upgrade**: new source.
 - new `servicenow_source` and `servicenow_table`: incremental merge on `sys_updated_on` with deletes,

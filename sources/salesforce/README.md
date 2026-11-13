@@ -7,6 +7,14 @@ in the [dlt docs](https://dlthub.com/docs/dlt-ecosystem/verified-sources/salesfo
 
 ## Changelog
 
+### 1.1.0
+**Upgrade**: remove `incremental=None` from `salesforce_table` to keep the default incremental:
+with it, each run reads all records and replaces the table. The incremental state carries over.
+- changed `salesforce_table`: `incremental=None` loads without incremental, the default
+  incremental is the default value of `incremental`
+- new `salesforce_table`: an incremental without `cursor_path` sets values of the default
+  incremental, e.g. `lag` or `end_value`, also in config
+
 ### 1.0.3
 **Upgrade**: safe, the incremental state carries over.
 - changed `salesforce_table`: resources run their query jobs in parallel

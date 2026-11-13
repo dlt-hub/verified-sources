@@ -274,15 +274,13 @@ def test_servicenow_table_hidden_cursor(
     # a field ACL hides the cursor. Without an error, the incremental reads all records on
     # every run
     instance.hidden_fields = {"sys_updated_on"}
+    incremental: Dict[str, Any] = (
+        {"incremental": dlt.sources.incremental("sys_updated_on", row_order=row_order)}
+        if row_order
+        else {}
+    )
     resource = servicenow_table(
-        credentials=credentials,
-        table="incident",
-        incremental=(
-            dlt.sources.incremental("sys_updated_on", row_order=row_order)
-            if row_order
-            else None
-        ),
-        api=api,
+        credentials=credentials, table="incident", api=api, **incremental
     )
     with pytest.raises(ResourceExtractionError, match="field ACL"):
         list(resource)
@@ -413,6 +411,39 @@ def test_servicenow_table_sequential_load(
         "sys_id<" in query or "sys_id>=" in query
         for query in instance.queries("incident")
     )
+
+
+def test_servicenow_table_incremental_argument(
+    instance: FakeInstance, credentials: BasicCredentials
+) -> None:
+    add_task_tables(instance, make_records(30, updated_on))
+    instance.tables["sys_audit_delete"] = []
+    # without incremental each run reads all records and replaces the table
+    pipeline = dlt.pipeline(
+        pipeline_name="servicenow_no_incremental", destination="duckdb", dev_mode=True
+    )
+    for _ in range(2):
+        resource = servicenow_table(
+            credentials=credentials, table="incident", incremental=None
+        )
+        assert_load_info(pipeline.run(resource))
+    assert resource.write_disposition == "replace"
+    assert resource.incremental.incremental is None
+    assert load_table_counts(pipeline, "incident") == {
+        "incident": pipeline.last_trace.last_normalize_info.row_counts["incident"]
+    }
+
+    # an incremental without cursor sets values of the default one, which keeps its settings
+    resource = servicenow_table(
+        credentials=credentials,
+        table="incident",
+        incremental=dlt.sources.incremental(lag=60),
+    )
+    pipeline.extract(resource)
+    incremental = resource.incremental.incremental
+    assert (incremental.cursor_path, incremental.lag) == ("sys_updated_on", 60)
+    assert incremental.on_cursor_value_missing == "include"
+    assert incremental.primary_key == ()
 
 
 @pytest.mark.parametrize(

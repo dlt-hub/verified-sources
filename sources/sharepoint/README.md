@@ -8,6 +8,14 @@ files of document libraries through a read-only fsspec filesystem over Graph, wi
 
 ## Changelog
 
+### 1.2.0
+**Upgrade**: remove `incremental=None` from `sharepoint_files` and `sharepoint_folder` to keep the
+default incremental: with it, each run reads all files. The incremental state carries over.
+- changed `sharepoint_files`, `sharepoint_folder`: `incremental=None` lists all files on each
+  run, the default incremental is the default value of `incremental`
+- new `sharepoint_files`, `sharepoint_folder`: an incremental without `cursor_path` sets values of
+  the default incremental, e.g. `end_value`, also in config
+
 ### 1.1.0
 **Upgrade**: safe, the incremental state carries over.
 - new `sharepoint_files` resource `<table_name>_files`: the file listing, not selected by default.
