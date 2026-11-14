@@ -83,14 +83,23 @@ DEFAULT_LAG = 600.0
 BOUNDING_JQL = 'created >= "1970-01-01"'
 # max issues in a search page that requests ids only
 MAX_SEARCH_PAGE_SIZE = 5000
-# bulk fetch returns up to 1000 issues for an explicit list of max 100 single value fields,
-# 100 issues otherwise
+# bulk fetch returns up to 1000 issues for an explicit list of max 100 fields, 100 issues when any
+# of `BULK_CAPPED_FIELDS` is requested (test site)
 MAX_BULK_ISSUES = 1000
 DEFAULT_BULK_ISSUES = 100
 MAX_BULK_ISSUES_FIELDS = 100
-MULTI_VALUE_FIELDS = {"comment", "worklog", "attachment"}
+BULK_CAPPED_FIELDS = {
+    "comment",
+    "worklog",
+    "attachment",
+    "issuelinks",
+    "votes",
+    "watches",
+}
 # loaded by dedicated resources, restrictions are permission metadata with dynamic keys
 EXCLUDED_FIELDS = {"comment", "worklog", "issuerestriction"}
+# records of their own that cap bulk fetch at 100 issues
+DEFAULT_EXCLUDED_COLUMNS = ("attachment", "issuelinks", "votes", "watches")
 # keys of REST links and avatar and icon urls, removed by `drop_keys` by default
 URL_KEYS = ("self", "avatarUrls", "iconUrl")
 # rows in a page of issues, comments and changelogs yielded by the resources, independent of the

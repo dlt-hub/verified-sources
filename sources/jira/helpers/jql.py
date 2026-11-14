@@ -72,15 +72,12 @@ def make_cursor_range(
     )
 
 
-def make_jql(jql: Optional[str], cursor: Optional[CursorRange]) -> str:
+def make_jql(jql: Optional[str], cursor: CursorRange) -> str:
     """Generates JQL that selects a superset of the `cursor` range among issues matching `jql`.
 
-    Datetimes are compared with minute precision in the time zone of the user, so the range
-    is widened to whole minutes and the incremental filters the exact range. Without a cursor,
-    `jql` is used as is.
+    JQL compares datetimes with minute precision in the time zone of the user, so the range is
+    widened to whole minutes and the incremental filters the exact range.
     """
-    if cursor is None:
-        return jql or BOUNDING_JQL
     conditions: List[str] = []
     if jql:
         conditions.append(f"({jql})")

@@ -15,7 +15,6 @@ from sources.jira import (
     issue_comments,
     jira,
     jira_issues,
-    jira_search,
     worklogs,
 )
 from sources.jira.helpers.client import JiraClient
@@ -85,8 +84,8 @@ def test_load_all_endpoints(destination_name: str) -> None:
         dataset_name="test_dataset_name",
         dev_mode=True,
     )
-    # seeded issues with comments, changes and worklogs. `add_limit` does not bound issues,
-    # they are read by a transformer
+    # seeded issues with comments, changes and worklogs. `add_limit` bounds the issues to
+    # `PAGE_LIMIT` pages of 1000, more than the seeded issues
     all_endpoints = jira(
         page_size=5,
         jql=f'labels = "{SEED_LABEL}" AND NOT labels = "{SEED_LABEL}-bulk-issues"',
@@ -143,29 +142,26 @@ def test_load_users(destination_name: str) -> None:
 
 @pytest.mark.parametrize("destination_name", ALL_DESTINATIONS)
 def test_load_query_issues(destination_name: str) -> None:
-    queries = [
-        f'labels = "{SEED_LABEL}" order by created DESC',  # seeded issues
-        "created >= '2000-01-01' order by created DESC",  # every issue, overlaps the first
-    ]
+    queries = {
+        "seeded": f'labels = "{SEED_LABEL}"',
+        "everything": "created >= '2000-01-01'",
+    }
     pipeline = dlt.pipeline(
-        pipeline_name="test_jira_search",
+        pipeline_name="test_jira_queries",
         destination=destination_name,
         dataset_name="test_dataset_name",
         dev_mode=True,
     )
-
-    # each query is bounded on its own, so the second one runs and the overlap is real
-    search = jira_search(page_size=5, jql_queries=queries, page_limit=PAGE_LIMIT)
-    search.max_table_nesting = 0
-    info = pipeline.run(search)
-    assert_load_info(info)
-    data_tables = pipeline.default_schema.data_tables()
-    assert [table["name"] for table in data_tables] == ["jira_search"]
-    # an issue found by both queries is loaded for each, the key is the issue and the query
-    rows = load_tables_to_dicts(pipeline, "jira_search")["jira_search"]
-    assert {row["query_index"] for row in rows} == {0, 1}
-    keys = [(row["id"], row["query_index"]) for row in rows]
-    assert len(keys) == len(set(keys))
+    resources = []
+    for name, jql in queries.items():
+        # each query is limited on its own, so the second one runs and the overlap is real
+        issues = jira_issues(jql=jql, name=name, chunk_size=5).add_limit(PAGE_LIMIT)
+        issues.max_table_nesting = 0
+        resources.append(issues)
+    assert_load_info(pipeline.run(resources))
+    assert load_table_counts(pipeline, *queries) == {name: 10 for name in queries}
+    seeded_ids = load_table_distinct_counts(pipeline, "id", "seeded")
+    assert seeded_ids == {"seeded": 10}
 
 
 def test_search_pages(mocker: MockerFixture) -> None:
@@ -175,20 +171,20 @@ def test_search_pages(mocker: MockerFixture) -> None:
     seeded = seeded_issues()
     search_pages = record_search_pages(mocker)
     bulk_fetch = mocker.spy(JiraClient, "bulk_fetch")
-    search = jira_search(
-        jql_queries=[f'labels = "{SEED_LABEL}"'],
-        page_size=SEARCH_PAGE_SIZE,
+    issues = jira_issues(
+        jql=f'labels = "{SEED_LABEL}"',
+        search_page_size=SEARCH_PAGE_SIZE,
         chunk_size=200,
         included_columns=["summary", "labels"],
     )
-    rows = list(search)
+    rows = list(issues)
     assert sorted(row["id"] for row in rows) == sorted(str(i["id"]) for i in seeded)
     assert {key for row in rows for key in row} == {
         "id",
         "key",
         "summary",
         "labels",
-        "query_index",
+        "updated",
     }
     assert search_pages == page_sizes(len(seeded), SEARCH_PAGE_SIZE)
     fetches = [call.args for call in bulk_fetch.call_args_list]
@@ -301,7 +297,10 @@ def test_seeded_issues_full_and_incremental(
         dataset_name="test_jira_seeded",
         dev_mode=True,
     )
-    issues = jira_issues(jql=jql, search_page_size=SEARCH_PAGE_SIZE)
+    # all fields, so the seeded attachment is loaded
+    issues = jira_issues(
+        jql=jql, search_page_size=SEARCH_PAGE_SIZE, excluded_columns=[]
+    )
     info = pipeline.run(
         [
             issues,

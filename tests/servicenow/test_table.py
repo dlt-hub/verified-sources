@@ -274,15 +274,13 @@ def test_servicenow_table_hidden_cursor(
     # a field ACL hides the cursor. Without an error, the incremental reads all records on
     # every run
     instance.hidden_fields = {"sys_updated_on"}
+    incremental: Dict[str, Any] = (
+        {"incremental": dlt.sources.incremental("sys_updated_on", row_order=row_order)}
+        if row_order
+        else {}
+    )
     resource = servicenow_table(
-        credentials=credentials,
-        table="incident",
-        incremental=(
-            dlt.sources.incremental("sys_updated_on", row_order=row_order)
-            if row_order
-            else None
-        ),
-        api=api,
+        credentials=credentials, table="incident", api=api, **incremental
     )
     with pytest.raises(ResourceExtractionError, match="field ACL"):
         list(resource)
@@ -415,6 +413,39 @@ def test_servicenow_table_sequential_load(
     )
 
 
+def test_servicenow_table_incremental_argument(
+    instance: FakeInstance, credentials: BasicCredentials
+) -> None:
+    add_task_tables(instance, make_records(30, updated_on))
+    instance.tables["sys_audit_delete"] = []
+    # without incremental each run reads all records and replaces the table
+    pipeline = dlt.pipeline(
+        pipeline_name="servicenow_no_incremental", destination="duckdb", dev_mode=True
+    )
+    for _ in range(2):
+        resource = servicenow_table(
+            credentials=credentials, table="incident", incremental=None
+        )
+        assert_load_info(pipeline.run(resource))
+    assert resource.write_disposition == "replace"
+    assert resource.incremental.incremental is None
+    assert load_table_counts(pipeline, "incident") == {
+        "incident": pipeline.last_trace.last_normalize_info.row_counts["incident"]
+    }
+
+    # an incremental without cursor sets values of the default one, which keeps its settings
+    resource = servicenow_table(
+        credentials=credentials,
+        table="incident",
+        incremental=dlt.sources.incremental(lag=60),
+    )
+    pipeline.extract(resource)
+    incremental = resource.incremental.incremental
+    assert (incremental.cursor_path, incremental.lag) == ("sys_updated_on", 60)
+    assert incremental.on_cursor_value_missing == "include"
+    assert incremental.primary_key == ()
+
+
 @pytest.mark.parametrize(
     "start_date",
     ["2024-02-02", date(2024, 2, 2), datetime(2024, 2, 2, tzinfo=timezone.utc), None],
@@ -479,6 +510,39 @@ def test_servicenow_table_start_date(
     ]
     assert first_pages == expected_queries
     assert load_table_counts(pipeline, "incident") == {"incident": 6}
+
+
+@pytest.mark.parametrize("from_config", [False, True], ids=["passed", "config"])
+def test_servicenow_table_start_date_over_partial_incremental(
+    instance: FakeInstance, credentials: BasicCredentials, from_config: bool
+) -> None:
+    # `start_date` wins over the initial value of an incremental without cursor
+    add_task_tables(instance, make_records(30, updated_on))
+    instance.tables["sys_audit_delete"] = []
+    partial = {
+        "initial_value": datetime(2024, 1, 1, tzinfo=timezone.utc),
+        "end_value": datetime(2024, 2, 2, 3, tzinfo=timezone.utc),
+    }
+    kwargs: Dict[str, Any] = {}
+    if from_config:
+        for key, value in partial.items():
+            os.environ[
+                f"SOURCES__SERVICENOW__INCIDENT__INCREMENTAL__{key.upper()}"
+            ] = value.isoformat()
+    else:
+        kwargs["incremental"] = dlt.sources.incremental(**partial)
+    resource = servicenow_table(
+        credentials=credentials, table="incident", start_date="2024-02-02", **kwargs
+    )
+    list(resource)
+    first_pages = [
+        query.removesuffix("^ORDERBYsys_id")
+        for query in instance.queries("incident")
+        if query and "sys_id>" not in query
+    ]
+    assert first_pages == [
+        "sys_updated_on>=2024-02-02 00:00:00^sys_updated_on<2024-02-02 03:00:00"
+    ]
 
 
 def test_servicenow_table_without_pyarrow(

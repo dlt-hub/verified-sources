@@ -49,17 +49,21 @@ publications of updates or deletes stop the run.
 Versions before 1.0.0 were not numbered. Copies taken with `dlt init` have no `version.py`,
 `.dlt/.sources` records the repository commit they came from.
 
-## Extension points
+## Optimization & Configuration
 
-- A Postgres type: its dlt column type in `to_dlt_column_type` and its converter in `_CONVERTERS`
-  of `schema_types.py`, an array type in `_ARRAY_ELEMENT_TYPES`, a value Arrow cannot cast from text
-  in `to_castable_array` of `arrow_helpers.py`. Add a column to `PG_TYPES_DDL` of
-  `tests/pg_replication/cases.py`, `test_snapshot_types_match_replication` then compares snapshot
-  and replication.
-- A snapshot column type that `sql_table` reflects differently: `snapshot_type_adapter` of
-  `snapshot.py`.
-- A pgoutput message: its decoder in `decoders.py`, handled in `MessageConsumer.process_msg`.
-- A setting that formats values sent as text: `SESSION_OPTIONS` of `schema_types.py`.
+Measured with 500,000 rows from a local Postgres 17 (#719).
+
+- **Backend**: `pyarrow` is about 5 times faster than `python`, with about the same peak memory.
+  With `pyarrow` decoding is not the bottleneck: receiving the messages without decoding them was as
+  fast. Pick one before the initial load, see Backends below.
+
+## Code Customization
+
+- A Postgres type: `schema_types.py`, its Arrow cast in `arrow_helpers.py`, and a column in the test
+  cases of `tests/pg_replication/cases.py`.
+- A snapshot column type that `sql_table` reflects differently: `snapshot.py`.
+- A pgoutput message: `decoders.py`.
+- A setting that formats values sent as text: `SESSION_OPTIONS` in `schema_types.py`.
 
 ## Maintenance & Troubleshooting
 
@@ -130,9 +134,6 @@ Versions before 1.0.0 were not numbered. Copies taken with `dlt init` have no `v
   ([docs](https://www.postgresql.org/docs/current/protocol-replication.html)) and holds back vacuum
   until the last table is read. On an existing slot the tables are read as they are and the
   replayed changes are merged over them (Postgres 10 and 17).
-- **Performance**: 500k rows from a local Postgres 17 into `filesystem`: 173k rows/s with
-  `pyarrow`, 34k with `python`, 172k receiving messages without decoding, 23k before 1.0.0. Both
-  backends peak at about 240 MB (#719).
 - **Backends**: we recommend against switching backends in production, pick one while testing and
   use it for the initial load too. By default, the Arrow tables of `pyarrow` get no `_dlt_load_id`
   and `_dlt_id`, and `_dlt_id` costs performance and is not needed

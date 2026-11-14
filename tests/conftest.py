@@ -1,5 +1,8 @@
 import os
 import logging
+from typing import Any, Iterator
+
+import pytest
 
 # will run the following auto use fixtures for all tests ie. to cleanup the datasets, env variables and file system after each test
 from tests.utils import (
@@ -9,6 +12,8 @@ from tests.utils import (
     new_test_storage,
     preserve_environ,
 )
+
+from tests.seed_utils import HttpLog, record_http
 
 # will force duckdb to be created in pipeline folder
 from dlt.destinations.impl.duckdb.configuration import DuckDbCredentials
@@ -53,3 +58,12 @@ def pytest_configure(config):
 
     # disable pyiceberg logging
     logging.getLogger("pyiceberg").setLevel("WARNING")
+
+
+@pytest.fixture
+def perf_http(perf_account: Any, request: pytest.FixtureRequest) -> Iterator[HttpLog]:
+    """Records the HTTP requests of a performance test. `perf_account` of the test module holds
+    the account it reads
+    """
+    with record_http(request.node.name) as log:
+        yield log

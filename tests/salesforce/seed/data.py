@@ -10,6 +10,8 @@ from typing import Any, Dict, List
 
 from dlt.common import Decimal
 
+from tests.seed_utils import PERF_STARTS, perf_values, spread
+
 API_VERSION = "59.0"
 DLT_TYPES = "DltTypes__c"
 SEED_ID_FIELD = "Dlt_Seed_Id__c"
@@ -546,8 +548,7 @@ CHANGED_AT_START = datetime(2024, 1, 1, tzinfo=timezone.utc)
 
 def changed_at(n: int) -> datetime:
     """Unique seconds over 90 days, not in the order of `n`"""
-    # 1000003 is coprime with the seconds in 90 days. `random` may change between Python versions
-    return CHANGED_AT_START + timedelta(seconds=n * 1_000_003 % (90 * 24 * 3600))
+    return spread(n, CHANGED_AT_START, timedelta(days=90))
 
 
 PAGES_RECORDS: List[Dict[str, Any]] = [
@@ -577,3 +578,101 @@ CUSTOM_OBJECTS: Dict[str, Dict[str, Any]] = {
     PAGES: {"label": "dlt Pages", "fields": PAGES_FIELDS},
     CHANGES: {"label": "dlt Changes", "fields": CHANGES_FIELDS},
 }
+
+# performance data set written by `seed.py --performance` to its own org, a scratch org with 500 MB
+# of data storage. Each record takes 2 KB, see README.md
+PERF_SECTION = "salesforce_performance"
+PERF_OBJECTS = ("DltPerfA__c", "DltPerfB__c")
+PERF_RECORDS = 50_000
+PERF_PERMISSION_SET = "Dlt_Seed_Performance"
+PERF_CURSOR = "Changed_At__c"
+PERF_FIELDS: List[Dict[str, Any]] = [
+    {
+        "fullName": "Seed_Id__c",
+        "label": "Seed Id",
+        "type": "Text",
+        "length": 64,
+        "externalId": True,
+        "unique": True,
+    },
+    {
+        "fullName": "Number__c",
+        "label": "Number",
+        "type": "Number",
+        "precision": 9,
+        "scale": 0,
+    },
+    {"fullName": PERF_CURSOR, "label": "Changed At", "type": "DateTime"},
+    {
+        "fullName": "Description__c",
+        "label": "Description",
+        "type": "Text",
+        "length": 255,
+    },
+    {"fullName": "Code__c", "label": "Code", "type": "Text", "length": 16},
+    {
+        "fullName": "Count__c",
+        "label": "Count",
+        "type": "Number",
+        "precision": 9,
+        "scale": 0,
+    },
+    {
+        "fullName": "Amount__c",
+        "label": "Amount",
+        "type": "Currency",
+        "precision": 16,
+        "scale": 2,
+    },
+    {
+        "fullName": "Ratio__c",
+        "label": "Ratio",
+        "type": "Number",
+        "precision": 9,
+        "scale": 3,
+    },
+    {
+        "fullName": "Active__c",
+        "label": "Active",
+        "type": "Checkbox",
+        "defaultValue": "false",
+    },
+    {"fullName": "Due__c", "label": "Due", "type": "Date"},
+    {"fullName": "Started_At__c", "label": "Started At", "type": "DateTime"},
+]
+PERF_CUSTOM_OBJECTS: Dict[str, Dict[str, Any]] = {
+    obj: {"label": f"dlt Perf {obj[-4]}", "fields": PERF_FIELDS} for obj in PERF_OBJECTS
+}
+# field of each kind of `perf_values`
+PERF_FIELD_NAMES = {
+    "number": "Number__c",
+    "cursor": PERF_CURSOR,
+    "description": "Description__c",
+    "code": "Code__c",
+    "count": "Count__c",
+    "amount": "Amount__c",
+    "ratio": "Ratio__c",
+    "active": "Active__c",
+    "due": "Due__c",
+    "started_at": "Started_At__c",
+}
+
+
+def perf_record(sobject: str, n: int) -> Dict[str, Any]:
+    """Values of the record `n` of a performance object as loaded. None is an empty field"""
+    values = perf_values(n, PERF_STARTS[PERF_OBJECTS.index(sobject)])
+    return {
+        "Seed_Id__c": f"perf-{sobject[-4].lower()}-{n:06d}",
+        "Name": f"{sobject} record {n}",
+        **{PERF_FIELD_NAMES[kind]: value for kind, value in values.items()},
+    }
+
+
+def perf_records(sobject: str) -> List[Dict[str, Any]]:
+    return [perf_record(sobject, n) for n in range(PERF_RECORDS)]
+
+
+# External Client App for a client that logs in with the OAuth 2.0 JWT bearer flow, pre-authorized
+# for the users with `PERF_PERMISSION_SET`. External Client Apps need a newer API version
+JWT_APP = "Dlt_Jwt_Client"
+JWT_APP_API_VERSION = "64.0"

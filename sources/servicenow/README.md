@@ -8,6 +8,15 @@ types come from `sys_dictionary`, and deletes come from `sys_audit_delete`. Setu
 
 ## Changelog
 
+### 1.1.0
+**Upgrade**: remove `incremental=None` from `servicenow_table` to keep the default incremental:
+with it, each run reads all records and replaces the table. The incremental state carries over.
+- changed `servicenow_table`: `incremental=None` loads without incremental, the default
+  incremental is the default value of `incremental`
+- new `servicenow_table`: an incremental without `cursor_path` sets values of the default
+  incremental, e.g. `lag` or `end_value`, also in config. `start_date` wins over its
+  `initial_value`
+
 ### 1.0.0
 **Upgrade**: new source.
 - new `servicenow_source` and `servicenow_table`: incremental merge on `sys_updated_on` with deletes,
@@ -15,57 +24,54 @@ types come from `sys_dictionary`, and deletes come from `sys_audit_delete`. Setu
   Table API or the CSV export, `python` and `pyarrow` backends, `sys_id` ranges read in parallel,
   and `defer_table_reflect`
 
-## Extension points
+## Optimization & Configuration
 
-- A table of `servicenow_source`: an entry in `DEFAULT_TABLES` of `__init__.py`.
-- A field type, in `helpers/schema.py` unless noted:
-  - its dlt column: `internal_type_to_column`
-  - types that are not loaded: `SKIPPED_TYPES`
-  - durations: `DURATION_TYPES`
-  - the cursor fields of the default incremental: `UPDATED_AT_FIELD`, `CREATED_AT_FIELD`
-  - the conversion of values: `helpers/convert.py`. Both backends must give the same values.
-- A reader: a `fetch_page(query, limit, offset)` callable passed to `_keyset_pages` of
-  `helpers/client.py`, like `pages`, `arrow_pages` and `csv_pages`. The loop keeps the keyset
-  position, halves the page after a cancelled transaction and skips pages hidden by ACLs. It is not a
-  `RESTClient` paginator. `RESTClient.paginate()` parses every response with `response.json()`. An
-  error raised inside it ends the generator, so a cancelled page cannot be read again with fewer
-  records. Requests still go through `RESTClient` and dlt's `Client` session.
-- The incremental: `table_resource` of `helpers/table.py` creates the default incremental with its
-  lag and without deduplication. `table_rows` builds the queries and reads deletes from the
-  incremental that dlt passes, so an incremental set with `apply_hints` replaces the default one.
-- Query literals of a field type: `to_glide_literal` and `LITERAL_TYPES` in `helpers/query.py`.
-  `incremental_query` turns an incremental into conditions and the order of records.
-- Reading fields: `helpers/schema.py`. `reflect_columns` computes the columns when the resource is
-  created or, with `DeferredReflect`, when extracting. `LazyDictionary` reads `sys_dictionary` once
-  for all resources of a source.
-- A retried response: `_should_retry` of `helpers/client.py`, passed to dlt's `Client` in
-  `make_session`.
-- An auth method: a credentials class in `helpers/credentials.py`, added to `ServiceNowAuth`.
-- Parallel reads of a table: `plan_partitions` of `helpers/table.py` and the `sys_id` bounds of
-  `partition_conditions` in `helpers/query.py`.
+Learned on the developer instance with one node (test instance), in the performance tests on two
+tables of 50,000 records with 12 custom fields (performance tests), and from docs.
+
+- **Columns**: the instance checks field ACLs for every value it returns, so the number of columns
+  sets the time of a page: a page of 59 fields took about 6 times as long as one of 12 (test
+  instance). Load only the columns you need with `included_columns` or `excluded_columns`.
+  Benchmarks published by other connectors also show slow wide tables.
+- **Partitions**: keep `allow_partitioned_load`, the default. `sys_id` ranges read in parallel were 2
+  to 3 times faster than reading page by page (test instance, performance tests). `sys_id`s generated
+  by the instance are random hex, so ranges split by the first hex digit hold about the same number
+  of records. Chunked loads with `row_order` or `add_limit` read one page after another.
+- **Extract workers** (`workers` in the `[extract]` config section): more workers help when loading
+  many tables, 10 instead of 5 workers loaded 12 tables about 1.5 times faster (test instance). They do
+  not speed up one table: a node runs about 4 API transactions at once and queues the rest
+  ([semaphores](https://www.servicenow.com/docs/r/impact/io-semaphores-performance-metrics.html)),
+  and 10 workers read one table as fast as 5. Two tables side by side reached about 1.3 times the
+  throughput of one (performance tests).
+- **Reader**: the Table API with `pyarrow` or `python` and the CSV export were within a few % of each
+  other, the instance is the bottleneck, not the client (performance tests).
+- **Page size**: on wide tables lower `page_size` so a page finishes within the transaction quota, a
+  cancelled page is read again with half the records, see Quotas below. The CSV export returns at
+  most 10,000 records per page.
+
+## Code Customization
+
+- A table of `servicenow_source`: `DEFAULT_TABLES` in `__init__.py`.
+- A field type: `helpers/schema.py`, the conversion of its values in `helpers/convert.py`.
+- A reader: `helpers/client.py`.
+- The incremental and its query conditions: `helpers/table.py` and `helpers/query.py`.
+- Parallel reads of a table: `helpers/table.py`.
+- A retried response: `helpers/client.py`.
+- An auth method: `helpers/credentials.py`.
 
 ## Maintenance & Troubleshooting
 
 Facts seen on the developer instance on the Brazil release (test instance), or taken from docs and
 other connectors.
 
-- **Throughput**: the instance checks field ACLs for every value it returns, about 50 µs per value.
-  A page of 10000 records with 59 fields takes about 38 s, 27 s of it ACL time, and about 6.5 s with
-  12 fields (test instance). Benchmarks published by other connectors agree: about 200 records/s
-  for wide tables. `syslog_transaction` splits the time of each request into SQL, ACL and wait
-  times.
+- **Slow pages**: `syslog_transaction` splits the time of each request into SQL, ACL and wait times
+  (test instance).
 - **Sessions**: the instance runs one transaction per session. Requests that shared the session
   cookie waited 3 to 10 s each (`session_wait_time`), so the session does not keep cookies. A new
   session per request costs about 0.05 s (test instance, and
   [community article](https://www.servicenow.com/community/now-platform-articles/inbound-integrations-performance-design-on-the-servicenow/ta-p/2316967)).
-- **Parallel reads**: 12 tables with 97000 records loaded in 35 s with 5 extract workers and in 22 s
-  with 10 (`workers` in the `[extract]` config section). A table of 152000 records loaded in 162 s
-  page by page, in 58 s in `sys_id` ranges with 5 workers and in 34 s with 10, with the same
-  records (test instance). `sys_id`s generated by the instance are random hex, so ranges split by
-  the first hex digit hold about the same number of records. A node runs about 4 API transactions
-  at once and queues 50, then answers HTTP 429
+- **HTTP 429**: a node runs about 4 API transactions at once and queues 50, then answers HTTP 429
   ([semaphores](https://www.servicenow.com/docs/r/impact/io-semaphores-performance-metrics.html)).
-  Ranges are not read with `row_order` or `add_limit`, chunked loads read one page after another.
 - **Quotas**: Table API transactions are cancelled after 60 s by default
   ([quota rules](https://www.servicenow.com/docs/r/platform-administration/platform-performance/c_DefaultQuotaRules.html)).
   A cancelled transaction returns HTTP 200 with part of the page and an error, or truncated JSON.

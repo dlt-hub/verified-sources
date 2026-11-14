@@ -16,28 +16,61 @@ with its label exist. Run from the `sources` folder to read credentials from `so
 
 The counts and values the end-to-end tests expect come from the constants below and from the
 manifest of seeded issues that `--capture` records, so run it again after seeding.
+
+`--performance` works on the performance projects in `PERF_PROJECTS` of `tests/jira/utils.py`
+instead: it shows the missing issues, `--apply` creates the projects and the missing issues and
+then verifies them, `--verify` only verifies:
+
+    uv run python ../tests/jira/seed_test_data.py --performance --apply
+    uv run python ../tests/jira/seed_test_data.py --performance --verify
 """
 
 import argparse
 import json
+from collections import defaultdict
+from functools import partial
+from time import sleep
 from typing import Any, Callable, Dict, Iterable, List, Optional
 from urllib.parse import quote, urlparse
 
 import dlt
+from dlt.common.time import ensure_datetime_in_tz
 from dlt.sources.helpers.requests import HTTPError
 from dlt.sources.helpers.rest_client.typing import HTTPMethod
 
 from sources.jira.helpers.client import HOOKS, JiraClient
 from sources.jira.helpers.paginators import response_body
-from sources.jira.settings import MAX_SEARCH_PAGE_SIZE
+from sources.jira.settings import MAX_BULK_ISSUES, MAX_SEARCH_PAGE_SIZE
 
-from tests.jira.utils import CAPTURED_RESPONSES, SEED_LABEL, load_captured
+from tests.jira.utils import (
+    CAPTURED_RESPONSES,
+    PERF_CURSOR_FIELD,
+    PERF_ISSUES,
+    PERF_LABEL,
+    PERF_NUMBER_FIELD,
+    PERF_PROJECTS,
+    PERF_TIME_ZONE,
+    SEED_LABEL,
+    load_captured,
+    perf_issue,
+    perf_jql,
+)
+from tests.seed_utils import (
+    account_lock,
+    map_with_progress,
+    raise_differences,
+    record_http,
+    report_differences,
+)
 
 API = "rest/api/2/"
 BULK_ISSUES = 500
 CHANGELOG_EDITS = 120
 WORKLOGS = 25
 COMMENTS = 120
+# issues per bulk create request, the maximum of Jira
+CREATE_BATCH = 50
+CREATE_THREADS = 10
 # issues each case creates, expected by the end-to-end tests
 ISSUES_PER_CASE = {
     "bulk_issues": BULK_ISSUES,
@@ -92,16 +125,23 @@ def request(client: JiraClient, method: HTTPMethod, path: str, **kwargs: Any) ->
     return response_body(response) if response.content else None
 
 
-def issue_fields(
-    project: str, case: str, summary: str, **fields: Any
+def task_fields(
+    project: str, summary: str, labels: List[str], **fields: Any
 ) -> Dict[str, Any]:
     return {
         "project": {"key": project},
         "issuetype": {"name": "Task"},
-        "summary": f"[{SEED_LABEL}] {summary}",
-        "labels": [SEED_LABEL, f"{SEED_LABEL}-{case}"],
+        "summary": summary,
+        "labels": labels,
         **fields,
     }
+
+
+def issue_fields(
+    project: str, case: str, summary: str, **fields: Any
+) -> Dict[str, Any]:
+    labels = [SEED_LABEL, f"{SEED_LABEL}-{case}"]
+    return task_fields(project, f"[{SEED_LABEL}] {summary}", labels, **fields)
 
 
 def create_issue(
@@ -113,12 +153,60 @@ def create_issue(
     return key
 
 
-def search_ids(client: JiraClient, jql: str) -> List[str]:
-    return [
-        issue["id"]
-        for page in client.search(jql, "id", MAX_SEARCH_PAGE_SIZE)
-        for issue in page
+def create_batch(client: JiraClient, issues: List[Dict[str, Any]]) -> List[str]:
+    """Creates `issues` with one bulk request, returns the errors"""
+    updates = [{"fields": fields} for fields in issues]
+    try:
+        result = request(client, "POST", "issue/bulk", json={"issueUpdates": updates})
+    except HTTPError as http_ex:
+        return [f"{len(issues)} issues: {http_ex}"]
+    return [json.dumps(error) for error in result.get("errors") or []]
+
+
+def create_issues(client: JiraClient, issues: List[Dict[str, Any]], label: str) -> None:
+    """Creates `issues` with bulk requests in parallel, raises when any fails"""
+    batches = [
+        issues[i : i + CREATE_BATCH] for i in range(0, len(issues), CREATE_BATCH)
     ]
+    results = map_with_progress(
+        partial(create_batch, client), batches, label, CREATE_THREADS, len
+    )
+    errors = [error for batch_errors in results for error in batch_errors]
+    if errors:
+        raise ValueError(f"{label}: {len(errors)} errors, first: {errors[:3]}")
+
+
+def delete_issues(client: JiraClient, ids: Iterable[str]) -> None:
+    for issue_id in ids:
+        try:
+            request(
+                client, "DELETE", f"issue/{issue_id}", params={"deleteSubtasks": "true"}
+            )
+        except HTTPError as http_ex:
+            # subtasks are deleted with their parent
+            if http_ex.response.status_code != 404:
+                raise
+
+
+def search_ids(
+    client: JiraClient, jql: str, expected: Optional[int] = None
+) -> List[str]:
+    """Ids of the issues matching `jql`. Search lags behind created issues: with `expected` it
+    searches again until it finds that many or the same number three times in a row
+    """
+    ids: List[str] = []
+    unchanged = 0
+    while True:
+        found = [
+            issue["id"]
+            for page in client.search(jql, "id", MAX_SEARCH_PAGE_SIZE)
+            for issue in page
+        ]
+        unchanged = unchanged + 1 if len(found) == len(ids) else 0
+        ids = found
+        if expected is None or len(ids) == expected or unchanged == 3:
+            return ids
+        sleep(10)
 
 
 def case_label(case: str) -> str:
@@ -156,15 +244,11 @@ def bulk_issues(client: JiraClient, project: str, case: str) -> None:
     same minutes. Adds the missing ones when `BULK_ISSUES` grows.
     """
     existing = len(search_ids(client, f'labels = "{SEED_LABEL}-{case}"'))
-    for start in range(existing, BULK_ISSUES, 50):
-        updates = [
-            {"fields": issue_fields(project, case, f"bulk issue {n + 1}")}
-            for n in range(start, min(start + 50, BULK_ISSUES))
-        ]
-        result = request(client, "POST", "issue/bulk", json={"issueUpdates": updates})
-        print(
-            f"  created {len(result['issues'])} issues, errors: {result.get('errors')}"
-        )
+    issues = [
+        issue_fields(project, case, f"bulk issue {n + 1}")
+        for n in range(existing, BULK_ISSUES)
+    ]
+    create_issues(client, issues, case)
 
 
 def long_changelog(client: JiraClient, project: str, case: str) -> None:
@@ -406,15 +490,7 @@ def seed(client: JiraClient, project: str, cases: List[str], apply: bool) -> Non
 
 
 def delete(client: JiraClient) -> None:
-    for issue_id in search_ids(client, f'labels = "{SEED_LABEL}"'):
-        try:
-            request(
-                client, "DELETE", f"issue/{issue_id}", params={"deleteSubtasks": "true"}
-            )
-        except HTTPError as http_ex:
-            # subtasks are deleted with their parent
-            if http_ex.response.status_code != 404:
-                raise
+    delete_issues(client, search_ids(client, f'labels = "{SEED_LABEL}"'))
     print("deleted all seeded issues")
 
 
@@ -531,6 +607,163 @@ def capture(client: JiraClient) -> None:
     )
 
 
+# TST's issue type screen scheme, its create screen has the custom fields of the performance
+# issues. Jira ignores schemes passed when creating a project
+PERF_SCREEN_SCHEME = "10001"
+
+
+def project_exists(client: JiraClient, project: str) -> bool:
+    try:
+        request(client, "GET", f"project/{project}")
+        return True
+    except HTTPError as http_ex:
+        if http_ex.response is None or http_ex.response.status_code != 404:
+            raise
+        return False
+
+
+def create_perf_project(client: JiraClient, project: str) -> None:
+    account_id = request(client, "GET", "myself")["accountId"]
+    try:
+        request(
+            client,
+            "POST",
+            "project",
+            json={
+                "key": project,
+                "name": f"dlt perf {project[-1].lower()}",
+                "projectTypeKey": "software",
+                "leadAccountId": account_id,
+            },
+        )
+    except HTTPError:
+        # creating a project is slow, a retried request finds the project created
+        if not project_exists(client, project):
+            raise
+    permissions = request(
+        client,
+        "GET",
+        "mypermissions",
+        params={"projectKey": project, "permissions": "DELETE_ISSUES"},
+    )["permissions"]
+    print(
+        f"{project}: created, can delete issues:"
+        f" {permissions['DELETE_ISSUES']['havePermission']}"
+    )
+
+
+def use_perf_screens(client: JiraClient, project: str) -> None:
+    """Assigns `PERF_SCREEN_SCHEME` to `project`"""
+    project_id = request(client, "GET", f"project/{project}")["id"]
+    assigned = request(
+        client, "GET", "issuetypescreenscheme/project", params={"projectId": project_id}
+    )["values"]
+    if assigned and assigned[0]["issueTypeScreenScheme"]["id"] == PERF_SCREEN_SCHEME:
+        return
+    request(
+        client,
+        "PUT",
+        "issuetypescreenscheme/project",
+        json={"issueTypeScreenSchemeId": PERF_SCREEN_SCHEME, "projectId": project_id},
+    )
+    print(f"{project}: assigned the issue type screen scheme {PERF_SCREEN_SCHEME}")
+
+
+def perf_issues_by_number(
+    client: JiraClient, project: str
+) -> Dict[int, List[Dict[str, Any]]]:
+    """Fetches the performance issues of `project` with their seeded fields, by number"""
+    ids = search_ids(client, perf_jql(project), PERF_ISSUES)
+    fields = ["summary", PERF_NUMBER_FIELD, PERF_CURSOR_FIELD]
+    by_number: Dict[int, List[Dict[str, Any]]] = defaultdict(list)
+    for issue in client.bulk_fetch(ids, fields, MAX_BULK_ISSUES):
+        by_number[int(issue["fields"][PERF_NUMBER_FIELD])].append(issue)
+    return by_number
+
+
+def perf_fields(project: str, n: int) -> Dict[str, Any]:
+    values = perf_issue(project, n)
+    fields = {
+        PERF_NUMBER_FIELD: n,
+        PERF_CURSOR_FIELD: values[PERF_CURSOR_FIELD].strftime(
+            "%Y-%m-%dT%H:%M:%S.000+0000"
+        ),
+    }
+    if values["description"] is not None:
+        fields["description"] = values["description"]
+    return task_fields(project, values["summary"], [PERF_LABEL], **fields)
+
+
+def seed_performance(client: JiraClient, apply: bool) -> None:
+    time_zone = client.time_zone()
+    if time_zone != PERF_TIME_ZONE:
+        raise ValueError(
+            f"The account uses {time_zone}, the cursor values in `perf_cursors` avoid the repeated"
+            f" hours of {PERF_TIME_ZONE}"
+        )
+    for project in PERF_PROJECTS:
+        if not project_exists(client, project):
+            if not apply:
+                print(f"{project}: missing project and {PERF_ISSUES} issues")
+                continue
+            create_perf_project(client, project)
+        if apply:
+            use_perf_screens(client, project)
+        by_number = perf_issues_by_number(client, project)
+        missing = [n for n in range(PERF_ISSUES) if n not in by_number]
+        print(f"{project}: {len(by_number)} issues, {len(missing)} missing")
+        if not apply:
+            continue
+        create_issues(client, [perf_fields(project, n) for n in missing], project)
+        repair_perf_issues(client, project)
+    if apply:
+        verify_performance(client)
+
+
+def repair_perf_issues(client: JiraClient, project: str) -> None:
+    """Deletes duplicates left by retried bulk creates and updates the issues whose cursor differs
+    from `perf_issue`
+    """
+    duplicates: List[str] = []
+    different = []
+    for n, issues in perf_issues_by_number(client, project).items():
+        duplicates.extend(issue["id"] for issue in issues[1:])
+        cursor = perf_issue(project, n)[PERF_CURSOR_FIELD]
+        if ensure_datetime_in_tz(issues[0]["fields"][PERF_CURSOR_FIELD]) != cursor:
+            different.append((issues[0]["id"], n))
+    delete_issues(client, duplicates)
+    for issue_id, n in different:
+        fields = {PERF_CURSOR_FIELD: perf_fields(project, n)[PERF_CURSOR_FIELD]}
+        request(client, "PUT", f"issue/{issue_id}", json={"fields": fields})
+    if duplicates or different:
+        print(
+            f"  {project}: deleted {len(duplicates)} duplicates, updated {len(different)} cursors"
+        )
+
+
+def verify_performance(client: JiraClient) -> None:
+    """Compares the summary and cursor of the performance issues with `perf_issue`"""
+    errors: List[str] = []
+    for project in PERF_PROJECTS:
+        expected = {
+            n: (issue["summary"], issue[PERF_CURSOR_FIELD])
+            for n, issue in ((n, perf_issue(project, n)) for n in range(PERF_ISSUES))
+        }
+        stored = (
+            (
+                n,
+                (
+                    issue["fields"]["summary"],
+                    ensure_datetime_in_tz(issue["fields"][PERF_CURSOR_FIELD]),
+                ),
+            )
+            for n, issues in perf_issues_by_number(client, project).items()
+            for issue in issues
+        )
+        errors.extend(report_differences(project, expected, stored))
+    raise_differences(errors)
+
+
 def main(args: Optional[List[str]] = None) -> None:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--apply", action="store_true", help="create missing cases")
@@ -546,13 +779,29 @@ def main(args: Optional[List[str]] = None) -> None:
     parser.add_argument(
         "--project", default="TST", help="key of a company-managed project"
     )
+    parser.add_argument(
+        "--performance",
+        action="store_true",
+        help="seed the performance projects instead of the cases",
+    )
+    parser.add_argument(
+        "--verify", action="store_true", help="verify the performance issues"
+    )
     parsed = parser.parse_args(args)
+    if parsed.verify and not parsed.performance:
+        parser.error("--verify needs --performance")
     client = JiraClient(
         dlt.secrets["sources.jira.subdomain"],
         dlt.secrets["sources.jira.email"],
         dlt.secrets["sources.jira.api_token"],
     )
-    if parsed.delete:
+    if parsed.performance:
+        with account_lock("jira"), record_http("seed --performance"):
+            if parsed.verify:
+                verify_performance(client)
+            else:
+                seed_performance(client, parsed.apply)
+    elif parsed.delete:
         delete(client)
     elif parsed.capture:
         capture(client)
