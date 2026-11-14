@@ -13,13 +13,14 @@ query, without ORDER BY, and drop the `jira_search` table. Move `included_column
 Set `excluded_columns = []` there to keep loading `attachment`, `issuelinks`, `votes` and `watches`:
 without it these columns and the `issues__attachment` and `issues__issuelinks` tables stop getting
 new values. Remove `incremental=None` from `jira` and `jira_issues` to keep the default incremental.
-The incremental state carries over.
+The incremental state carries over. Requires dlt 1.32 or later.
 - **breaking** `jira_search`: removed. Several `jira_issues` load several queries incrementally, add
   a column with `add_map` to load them into one table
 - new `jira_issues`: reads its config from the `sources.jira.<name>` section
 - **breaking** `issues`: `incremental=None` loads without incremental, the JQL runs as it is and may
   contain ORDER BY. The default incremental is the default value of `incremental`, an incremental
-  without `cursor_path` sets its values, e.g. `end_value`
+  without `cursor_path` sets its values, e.g. `end_value`. `start_date` wins over its
+  `initial_value`
 - new `jira`: `included_columns` and `excluded_columns`
 - changed `issues`: `attachment`, `issuelinks`, `votes` and `watches` are not loaded by default,
   they cap bulk fetch at 100 issues. Default loads make 8 times fewer requests
@@ -142,8 +143,7 @@ Facts seen on the test site, a Free plan site, or taken from the
   listed and all of them load, so chunked loads with `row_order` load pages in order. JQL compares
   whole minutes, so with `range_start="open"` a run lists the issues of the last value again and
   drops them, a chunk then holds fewer new issues than `chunk_size` (test site). `max_time` cannot
-  limit the search, then pages are fetched one after another. dlt before 1.32 ignores `add_limit`
-  on a transformer: limit `issues_ids`, the parent of `issues`.
+  limit the search, then pages are fetched one after another.
 - **Workflow statuses**: `workflows/search` returns the statuses of a workflow as
   `statusReference`, their names are in its sibling `statuses` list, so selecting `workflows` and
   `workflow_statuses` reads the endpoint twice. `rest/api/3/status` omits unused statuses and

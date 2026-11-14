@@ -84,13 +84,15 @@ def make_default_incremental(
 ) -> Incremental[Any]:
     """Returns `default` with the values set on `incremental`, the copy of `DEFAULT_INCREMENTAL`
     that dlt merged with config or a partial incremental, e.g. an `end_value`. `default` keeps its
-    generic type
+    generic type and its `initial_value`, the `start_date`
     """
     values = incremental.copy()
     # `merge` applies the values that are not None
     for key, value in DEFAULT_INCREMENTAL.items():
         if values[key] == value:
             setattr(values, key, None)
+    if default.initial_value is not None:
+        values.initial_value = None
     # values from config are strings
     for key in ("initial_value", "end_value"):
         if values[key] is not None:

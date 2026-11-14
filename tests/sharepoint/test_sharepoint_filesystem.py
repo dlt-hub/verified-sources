@@ -522,6 +522,18 @@ def test_sharepoint_files_incremental(graph: Mocker) -> None:
             id="partial_incremental_window",
         ),
         pytest.param(
+            {
+                "start_date": "2020-01-01",
+                "incremental": dlt.sources.incremental(
+                    initial_value=datetime(2019, 1, 1, tzinfo=timezone.utc),
+                    end_value=datetime(2024, 1, 15, tzinfo=timezone.utc),
+                ),
+            },
+            ["B"],
+            ["B"],
+            id="start_date_over_partial_incremental",
+        ),
+        pytest.param(
             {"start_date": datetime(2024, 1, 15, tzinfo=timezone.utc)},
             ["C"],
             [],
@@ -558,6 +570,25 @@ def test_sharepoint_files_start_date(
     pipeline.run(sharepoint_files(**files_config(**window)))
     assert downloaded_ids(graph) == second_run
     assert rows_per_file(pipeline) == {f"{i.lower()}.csv": 1 for i in first_run}
+
+
+def test_sharepoint_files_start_date_over_configured_incremental(graph: Mocker) -> None:
+    # `start_date` wins over the initial value in config, the end value applies
+    a = File("A", "a.csv", OLD, b"n\n1\n")
+    b = File("B", "b.csv", NEW, b"n\n2\n")
+    c = File("C", "c.csv", NEWER, b"n\n3\n")
+    mock_folder(graph, "Reports", [[a, b, c]])
+    os.environ[
+        "SOURCES__SHAREPOINT__SHAREPOINT_FILES__INCREMENTAL__INITIAL_VALUE"
+    ] = "2019-01-01T00:00:00+00:00"
+    os.environ[
+        "SOURCES__SHAREPOINT__SHAREPOINT_FILES__INCREMENTAL__END_VALUE"
+    ] = "2024-01-15T00:00:00+00:00"
+    pipeline = new_pipeline("sharepoint_start_date_config")
+    assert_load_info(
+        pipeline.run(sharepoint_files(**files_config(start_date="2020-01-01")))
+    )
+    assert downloaded_ids(graph) == ["B"]
 
 
 def test_sharepoint_folder_start_date_or_incremental(

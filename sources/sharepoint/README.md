@@ -14,7 +14,8 @@ default incremental: with it, each run reads all files. The incremental state ca
 - changed `sharepoint_files`, `sharepoint_folder`: `incremental=None` lists all files on each
   run, the default incremental is the default value of `incremental`
 - new `sharepoint_files`, `sharepoint_folder`: an incremental without `cursor_path` sets values of
-  the default incremental, e.g. `end_value`, also in config
+  the default incremental, e.g. `end_value`, also in config. `start_date` wins over its
+  `initial_value`
 
 ### 1.1.0
 **Upgrade**: safe, the incremental state carries over.

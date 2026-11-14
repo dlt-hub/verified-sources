@@ -168,8 +168,9 @@ def salesforce_table(
         start_date (Optional[TAnyDateTime]): Loads records changed since this date on the first
             run, all records if not set. It is the initial value of the default incremental on
             the first of `SystemModstamp`, `LastModifiedDate`, `CreatedDate` and `LoginTime`
-            present in the sObject. The "replace" write disposition loads all records, or the
-            records changed since `start_date`, on each run.
+            present in the sObject, it wins over the `initial_value` of an incremental without
+            `cursor_path`. The "replace" write disposition loads all records, or the records
+            changed since `start_date`, on each run.
         incremental (Optional[dlt.sources.incremental[Any]]): The default incremental if not
             passed, an incremental without `cursor_path` sets its values. Your own incremental is
             used as is, without lag. `None` loads all records on each run. The incremental

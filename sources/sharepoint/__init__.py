@@ -71,13 +71,15 @@ def make_default_incremental(
 ) -> dlt.sources.incremental[Any]:
     """Returns `default` with the values set on `incremental`, the copy of `DEFAULT_INCREMENTAL`
     that dlt merged with config or a partial incremental, e.g. an `end_value`. `default` keeps its
-    generic type
+    generic type and its `initial_value`, the `start_date`
     """
     values = incremental.copy()
     # `merge` applies the values that are not None
     for key, value in DEFAULT_INCREMENTAL.items():
         if values[key] == value:
             setattr(values, key, None)
+    if default.initial_value is not None:
+        values.initial_value = None
     # values from config are strings
     for key in ("initial_value", "end_value"):
         if values[key] is not None:
@@ -239,7 +241,8 @@ def sharepoint_folder(
             searches subfolders.
         start_date (Optional[TAnyDateTime]): Lists files modified since this date on the first
             run, all files if not set. It is the initial value of the default incremental on
-            `modification_date`; a naive date is taken as UTC.
+            `modification_date` and wins over the `initial_value` of an incremental without
+            `cursor_path`. A naive date is taken as UTC.
         incremental (Optional[dlt.sources.incremental[Any]]): The incremental on
             `modification_date` if not passed, an incremental without `cursor_path` sets its
             values, e.g. an `end_value`. Your own incremental is used as is, it cannot be
@@ -347,7 +350,8 @@ def sharepoint_files(
             for parquet only "columns". A BOM decides the encoding of a csv or jsonl file.
         start_date (Optional[TAnyDateTime]): Loads files modified since this date on the first
             run, all files if not set. It is the initial value of the default incremental on
-            `modification_date`; a naive date is taken as UTC.
+            `modification_date` and wins over the `initial_value` of an incremental without
+            `cursor_path`. A naive date is taken as UTC.
         incremental (Optional[dlt.sources.incremental[Any]]): The incremental on
             `modification_date` if not passed, an incremental without `cursor_path` sets its
             values, e.g. an `end_value`. Your own incremental is used as is, it cannot be

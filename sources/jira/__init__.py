@@ -174,7 +174,8 @@ def jira_issues(
         jql (Optional[str]): JQL selecting the issues, e.g. `project = KAN`. ORDER BY only
             without incremental.
         start_date (Optional[TAnyDateTime]): Loads issues updated since this date on the first
-            run. The initial value of the default incremental on `updated`.
+            run. The initial value of the default incremental on `updated`, it wins over the
+            `initial_value` of an incremental without `cursor_path`.
         incremental (Optional[dlt.sources.incremental[Any]]): The incremental on `updated` with
             lag and dedup sort by default, an incremental without `cursor_path` sets its values.
             Your own incremental is used as it is, its cursor must be a date or datetime field.

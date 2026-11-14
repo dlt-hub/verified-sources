@@ -503,6 +503,34 @@ def test_salesforce_table_incremental_soql(
     ]
 
 
+@pytest.mark.parametrize("from_config", [False, True], ids=["passed", "config"])
+def test_salesforce_table_start_date_over_partial_incremental(
+    sf_mock: requests_mock.Mocker, credentials: InstanceAuth, from_config: bool
+) -> None:
+    # `start_date` wins over the initial value of an incremental without cursor
+    calls = mock_bulk2(sf_mock, [""])
+    partial = {
+        "initial_value": datetime(2024, 1, 1, tzinfo=timezone.utc),
+        "end_value": datetime(2024, 3, 1, tzinfo=timezone.utc),
+    }
+    kwargs: Dict[str, Any] = {}
+    if from_config:
+        for key, value in partial.items():
+            os.environ[
+                f"SOURCES__SALESFORCE__ACCOUNT__INCREMENTAL__{key.upper()}"
+            ] = value.isoformat()
+    else:
+        kwargs["incremental"] = dlt.sources.incremental(**partial)
+    resource = salesforce_table(
+        credentials=credentials, sobject="Account", start_date="2024-02-01", **kwargs
+    )
+    assert list(resource) == []
+    assert calls["queries"] == [
+        f"SELECT {QUERIED_FIELDS} FROM Account WHERE SystemModstamp >= 2024-02-01T00:00:00.000Z"
+        " AND SystemModstamp < 2024-03-01T00:00:00.000Z"
+    ]
+
+
 def test_salesforce_table_incremental_missing_cursor(
     sf_mock: requests_mock.Mocker, credentials: InstanceAuth
 ) -> None:

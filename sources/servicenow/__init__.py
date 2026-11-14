@@ -181,15 +181,16 @@ def servicenow_table(
         session (Optional[Session]): Requests session. See `servicenow_source`.
         start_date (Optional[TAnyDateTime]): Loads records changed since this date on the first
             run, all records if not set. It is the initial value of the default incremental, on
-            `sys_updated_on` or else on `sys_created_on`. Records without a cursor value are read
+            `sys_updated_on` or else on `sys_created_on`, and wins over the `initial_value` of an
+            incremental without `cursor_path`. Records without a cursor value are read
             on the first run, when no start date is set. The "replace" write disposition loads
             all records, or the records changed since `start_date`, on each run. Records changed
             during the run are read on the next run.
         incremental (Optional[dlt.sources.incremental[Any]]): The default incremental if not
             passed, an incremental without `cursor_path` sets its values. Your own incremental
-            is used with its lag and deduplication. `None` loads all records on each run. An incremental set with `apply_hints`
-            replaces the default one in the same way. Cursor types and chunked loads with
-            `row_order` and `add_limit` are described in the dlt docs.
+            is used with its lag and deduplication. `None` loads all records on each run. An
+            incremental set with `apply_hints` replaces the default one. Cursor types and chunked
+            loads with `row_order` and `add_limit` are described in the dlt docs.
         lag (Optional[float]): Lag of the default incremental in seconds. Each run reads again
             the records changed in this time before the last cursor value, to catch records
             committed late. 600 when merging, None otherwise.

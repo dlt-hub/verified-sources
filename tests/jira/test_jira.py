@@ -212,6 +212,19 @@ def test_issues_incremental_argument(jira_mock: JiraMock) -> None:
         assert (incremental.cursor_path, incremental.lag) == ("updated", DEFAULT_LAG)
         assert issues.columns["updated"]["dedup_sort"] == "desc"
 
+    # `start_date` wins over the initial value of an incremental without cursor
+    since = datetime(2023, 6, 1, tzinfo=timezone.utc)
+    partial = dlt.sources.incremental(initial_value=start, end_value=end)
+    for issues in (
+        jira_issues(**CREDENTIALS, start_date=since, incremental=partial),
+        jira_issues(**CREDENTIALS, start_date=since),
+    ):
+        list(issues)
+        assert jira_mock.jqls[-1] == (
+            'updated >= "2023-06-01 00:00" AND updated < "2024-02-01 00:01"'
+            " ORDER BY updated ASC"
+        )
+
 
 def test_jira_columns(jira_mock: JiraMock) -> None:
     jira_mock.add_issues(make_issue(1, UPDATED_1))

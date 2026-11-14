@@ -512,6 +512,39 @@ def test_servicenow_table_start_date(
     assert load_table_counts(pipeline, "incident") == {"incident": 6}
 
 
+@pytest.mark.parametrize("from_config", [False, True], ids=["passed", "config"])
+def test_servicenow_table_start_date_over_partial_incremental(
+    instance: FakeInstance, credentials: BasicCredentials, from_config: bool
+) -> None:
+    # `start_date` wins over the initial value of an incremental without cursor
+    add_task_tables(instance, make_records(30, updated_on))
+    instance.tables["sys_audit_delete"] = []
+    partial = {
+        "initial_value": datetime(2024, 1, 1, tzinfo=timezone.utc),
+        "end_value": datetime(2024, 2, 2, 3, tzinfo=timezone.utc),
+    }
+    kwargs: Dict[str, Any] = {}
+    if from_config:
+        for key, value in partial.items():
+            os.environ[
+                f"SOURCES__SERVICENOW__INCIDENT__INCREMENTAL__{key.upper()}"
+            ] = value.isoformat()
+    else:
+        kwargs["incremental"] = dlt.sources.incremental(**partial)
+    resource = servicenow_table(
+        credentials=credentials, table="incident", start_date="2024-02-02", **kwargs
+    )
+    list(resource)
+    first_pages = [
+        query.removesuffix("^ORDERBYsys_id")
+        for query in instance.queries("incident")
+        if query and "sys_id>" not in query
+    ]
+    assert first_pages == [
+        "sys_updated_on>=2024-02-02 00:00:00^sys_updated_on<2024-02-02 03:00:00"
+    ]
+
+
 def test_servicenow_table_without_pyarrow(
     instance: FakeInstance, credentials: BasicCredentials, mocker: MockerFixture
 ) -> None:
