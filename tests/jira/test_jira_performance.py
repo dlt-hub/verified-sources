@@ -19,15 +19,9 @@ from tests.jira.utils import (
     perf_issue,
     perf_jql,
 )
+from tests.perf_utils import assert_loaded_rows, in_window, seeded_windows
 from tests.seed_utils import HttpLog, account_lock, print_extract_speed
-from tests.utils import (
-    assert_load_info,
-    assert_loaded_rows,
-    in_window,
-    last_row_count,
-    seeded_windows,
-    skip_if_not_active,
-)
+from tests.utils import assert_load_info, last_row_count, skip_if_not_active
 
 pytestmark = [pytest.mark.performance, skip_if_not_active("duckdb")]
 

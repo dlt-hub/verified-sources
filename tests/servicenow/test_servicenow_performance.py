@@ -12,17 +12,11 @@ from sources.servicenow.helpers.client import ServiceNowClient
 from sources.servicenow.helpers.query import TableQuery
 from sources.servicenow.helpers.table import TReadApi, TTableBackend
 
+from tests.perf_utils import assert_loaded_rows, in_window, seeded_windows
 from tests.seed_utils import HttpLog, account_lock, print_extract_speed
 from tests.servicenow.seed import data
 from tests.servicenow.utils import get_credentials, wait_for_instance
-from tests.utils import (
-    assert_load_info,
-    assert_loaded_rows,
-    in_window,
-    last_row_count,
-    seeded_windows,
-    skip_if_not_active,
-)
+from tests.utils import assert_load_info, last_row_count, skip_if_not_active
 
 pytestmark = [pytest.mark.performance, skip_if_not_active("duckdb")]
 
