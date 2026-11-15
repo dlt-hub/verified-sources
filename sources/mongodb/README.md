@@ -30,6 +30,27 @@ fields load as columns.
   `partition_size_bytes`
 - new: network compression with zstd, snappy or zlib
 
+## Optimization & Configuration
+
+Measured on 1 million documents of a local server and on Atlas.
+
+- **Backend**: `pyarrow` reads about 3 times faster than `python`, which decodes documents in
+  Python.
+- **Parallel reads**: `parallel=True` with `pyarrow` reads partitions in worker processes, about 2.5
+  times faster with 8 extract workers. `python` does not gain from `parallel`, decoding holds the GIL.
+  Partitions are sized from the average document size in `$collStats` and shrink down to 1 MiB until
+  each extract worker gets 8. The planner reads `workers` from the `extract` config and does not see
+  the `workers` argument of `pipeline.extract`.
+- **Filters**: planning scans the documents that match a filter or an incremental, index the cursor
+  field.
+- **Memory**: a worker holds about three copies of its partition, and dlt keeps up to
+  `max_parallel_items` (20) partitions in flight. Lower `partition_size_bytes` or the extract
+  workers when memory is tight.
+- **Compression**: network compression made Atlas reads about 2.5 times faster and local reads
+  slower. Disable it with `compressors=` in the connection URL for a server on the same machine.
+- **Chunked loads**: loading in chunks with `add_limit` and `row_order` needs `parallel=False`. dlt
+  evaluates parallel reads ahead and its incremental moves past the reads that `add_limit` drops.
+
 ## Maintenance & Troubleshooting
 
 - `pymongoarrow` pins one `pyarrow` minor version per release, so the installed `pyarrow` decides
@@ -55,20 +76,10 @@ fields load as columns.
 - Deleted documents stay in the destination: the source reads with `find`, which does not return
   them (`test_local_incremental_changes`). Reload the collection, or soft delete documents and set
   their cursor field. An update loads only when it also changes the cursor field.
-- `parallel` sizes partitions from the average document size in `$collStats`. Partitions shrink
-  down to 1 MiB until each extract worker gets 8. The planner reads `workers` from the `extract`
-  config and does not see the `workers` argument of `pipeline.extract`.
 - Without a filter, partitions are `min`/`max` bounds on the `_id` index. With a filter (an
   incremental with a last value or `filter_`), partitions are `$gte`/`$lt` ranges of the most common
   `_id` type and one query for each other type
   ([type bracketing](https://www.mongodb.com/docs/manual/reference/mql/query-predicates/type-bracketing/)).
-  Planning scans the matching documents, index the cursor field. Views, time series collections
-  and collections whose planning query fails are read in one query.
+  Views, time series collections and collections whose planning query fails are read in one query.
 - Parallel `pyarrow` reads start one worker process per extract thread with `sys.executable`. Where
-  it is not a Python interpreter (uwsgi), use `parallel=False`. A worker holds about three copies
-  of its partition, dlt keeps up to `max_parallel_items` (20) partitions in flight.
-- Loading in chunks with `add_limit` and `row_order` needs `parallel=False`. dlt evaluates parallel
-  reads ahead and its incremental moves past the reads that `add_limit` drops.
-- 1M local documents read in 11 s with `pyarrow` and 4.4 s with 8 workers. `python` takes 30 s
-  with or without `parallel` because decoding holds the GIL. Compression makes Atlas reads 2.5x
-  faster and local reads 30% slower, disable it with `compressors=` in the connection URL.
+  it is not a Python interpreter (uwsgi), use `parallel=False`.

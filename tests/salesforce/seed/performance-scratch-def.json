@@ -1,0 +1,5 @@
+{
+  "orgName": "dlt performance",
+  "edition": "Developer",
+  "description": "Performance tests of the dlt salesforce source, seeded with seed.py --performance"
+}

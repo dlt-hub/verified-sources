@@ -95,6 +95,43 @@ CURSOR_VALUE_TYPES: Dict[str, Tuple[type, ...]] = {
 }
 
 
+# cursor that marks the default of `incremental` arguments, no ServiceNow field has this name. The
+# default is replaced by the default incremental of the table, `None` loads without incremental
+DEFAULT_INCREMENTAL_MARKER = "_dlt_default_incremental_marker"
+DEFAULT_INCREMENTAL: Incremental[Any] = dlt.sources.incremental(
+    DEFAULT_INCREMENTAL_MARKER
+)
+
+
+def is_default_incremental(incremental: Optional[Incremental[Any]]) -> bool:
+    """True if `incremental` is a copy of `DEFAULT_INCREMENTAL`, dlt copies argument defaults"""
+    return (
+        incremental is not None
+        and incremental.cursor_path == DEFAULT_INCREMENTAL_MARKER
+    )
+
+
+def make_default_incremental(
+    incremental: Incremental[Any], default: Incremental[Any]
+) -> Incremental[Any]:
+    """Returns `default` with the values set on `incremental`, the copy of `DEFAULT_INCREMENTAL`
+    that dlt merged with config or a partial incremental, e.g. an `end_value`. `default` keeps its
+    generic type and its `initial_value`, the `start_date`
+    """
+    values = incremental.copy()
+    # `merge` applies the values that are not None
+    for key, value in DEFAULT_INCREMENTAL.items():
+        if values[key] == value:
+            setattr(values, key, None)
+    if default.initial_value is not None:
+        values.initial_value = None
+    # values from config are strings
+    for key in ("initial_value", "end_value"):
+        if values[key] is not None:
+            setattr(values, key, ensure_datetime_in_tz(values[key]))
+    return default.merge(values)
+
+
 def resolve_backend(backend: TTableBackend) -> Literal["python", "pyarrow"]:
     """Picks pyarrow for "auto" when it is installed, without importing it"""
     if backend == "auto":
@@ -569,7 +606,7 @@ def table_resource(
     dictionary: Optional[List[TRecord]] = None,
     name: Optional[str] = None,
     start_date: Optional[TAnyDateTime] = None,
-    incremental: Optional[Incremental[Any]] = None,
+    incremental: Optional[Incremental[Any]] = DEFAULT_INCREMENTAL,
     lag: Optional[float] = None,
     encoded_query: Optional[str] = None,
     include_deleted: bool = True,
@@ -624,7 +661,9 @@ def table_resource(
             dictionary = read_dictionary(client, [table])
         chain = table_chain(client.tables(), table)
 
-    if incremental is None:
+    is_default = is_default_incremental(incremental)
+    cursor_field: Optional[str] = None
+    if is_default:
         if write_disposition == "replace" and start_date is None:
             # the "replace" shorthand resets incremental state in dlt, the full table is reloaded
             cursor_field = None
@@ -640,7 +679,7 @@ def table_resource(
                     f"Table `{table}` has no `{UPDATED_AT_FIELD}` or `{CREATED_AT_FIELD}` field"
                     " to load records changed since `start_date`. Pass an explicit incremental."
                 )
-    else:
+    elif incremental is not None:
         cursor_field = incremental.get_cursor_column_name()
         if cursor_field is None:
             raise ValueError(
@@ -654,28 +693,31 @@ def table_resource(
         else write_disposition
     )
 
-    table_incremental: Optional[Incremental[Any]]
-    if incremental is None:
+    table_incremental = incremental
+    if is_default:
         if lag is None and disposition == "merge":
             lag = DEFAULT_LAG
         table_incremental = (
-            dlt.sources.incremental(
-                cursor_field,
-                initial_value=(
-                    None if start_date is None else ensure_datetime_in_tz(start_date)
+            make_default_incremental(
+                incremental,
+                dlt.sources.incremental[datetime](
+                    cursor_field,
+                    initial_value=(
+                        None
+                        if start_date is None
+                        else ensure_datetime_in_tz(start_date)
+                    ),
+                    lag=lag,
+                    # records imported without timestamps are read on the first run
+                    on_cursor_value_missing="include",
+                    # timestamps have second precision, so many records can share the last
+                    # cursor value. merge deduplicates them, and the state keeps no hashes
+                    primary_key=() if disposition == "merge" else None,
                 ),
-                lag=lag,
-                # records imported without timestamps are read on the first run
-                on_cursor_value_missing="include",
-                # timestamps have second precision, so many records can share the last cursor
-                # value. merge deduplicates them, and the state keeps no hashes of the records
-                primary_key=() if disposition == "merge" else None,
             )
             if cursor_field
             else None
         )
-    else:
-        table_incremental = incremental
 
     deferred: Optional[DeferredReflect] = None
     durations: Set[str] = set()
@@ -686,7 +728,7 @@ def table_resource(
             included_columns,
             excluded_columns,
             required_columns,
-            default_cursor=incremental is None,
+            default_cursor=is_default,
         )
     else:
         # records deleted in ServiceNow are deleted from the destination, `table_rows` reads them

@@ -36,6 +36,44 @@ SOURCE_SECTION = "salesforce"
 __source_name__ = SOURCE_SECTION
 
 
+# cursor that marks the default of `incremental` arguments, no Salesforce field has this name.
+# The default is replaced by the default incremental of the sObject, `None` loads without
+# incremental
+DEFAULT_INCREMENTAL_MARKER = "_dlt_default_incremental_marker"
+DEFAULT_INCREMENTAL: Incremental[Any] = dlt.sources.incremental(
+    DEFAULT_INCREMENTAL_MARKER
+)
+
+
+def is_default_incremental(incremental: Optional[Incremental[Any]]) -> bool:
+    """True if `incremental` is a copy of `DEFAULT_INCREMENTAL`, dlt copies argument defaults"""
+    return (
+        incremental is not None
+        and incremental.cursor_path == DEFAULT_INCREMENTAL_MARKER
+    )
+
+
+def make_default_incremental(
+    incremental: Incremental[Any], default: Incremental[Any]
+) -> Incremental[Any]:
+    """Returns `default` with the values set on `incremental`, the copy of `DEFAULT_INCREMENTAL`
+    that dlt merged with config or a partial incremental, e.g. an `end_value`. `default` keeps its
+    generic type and its `initial_value`, the `start_date`
+    """
+    values = incremental.copy()
+    # `merge` applies the values that are not None
+    for key, value in DEFAULT_INCREMENTAL.items():
+        if values[key] == value:
+            setattr(values, key, None)
+    if default.initial_value is not None:
+        values.initial_value = None
+    # values from config are strings
+    for key in ("initial_value", "end_value"):
+        if values[key] is not None:
+            setattr(values, key, ensure_datetime_in_tz(values[key]))
+    return default.merge(values)
+
+
 class DeferredDescribe(NamedTuple):
     """Arguments to describe the sObject when extracting and hints derived without describing it"""
 
@@ -288,7 +326,7 @@ def table_resource(
     sobject: str,
     name: Optional[str] = None,
     start_date: Optional[TAnyDateTime] = None,
-    incremental: Optional[Incremental[Any]] = None,
+    incremental: Optional[Incremental[Any]] = DEFAULT_INCREMENTAL,
     lag: Optional[float] = None,
     soql_filter: Optional[str] = None,
     include_deleted: bool = True,
@@ -321,7 +359,9 @@ def table_resource(
             [primary_key] if isinstance(primary_key, str) else list(primary_key)
         )
 
-    if incremental is None:
+    is_default = is_default_incremental(incremental)
+    cursor_field: Optional[str] = None
+    if is_default:
         if write_disposition == "replace" and start_date is None:
             # the "replace" shorthand resets incremental state in dlt, the full table is reloaded
             cursor_field = None
@@ -335,7 +375,7 @@ def table_resource(
                     f"sObject `{sobject}` has no field to load records changed since"
                     " `start_date`. Pass an explicit incremental."
                 )
-    else:
+    elif incremental is not None:
         cursor_field = incremental.get_cursor_column_name()
     write_disposition = write_disposition or get_write_disposition(cursor_field)
     disposition = (
@@ -344,23 +384,26 @@ def table_resource(
         else write_disposition
     )
 
-    table_incremental: Optional[Incremental[Any]]
-    if incremental is None:
+    table_incremental = incremental
+    if is_default:
         if lag is None and disposition == "merge":
             lag = DEFAULT_LAG
         table_incremental = (
-            dlt.sources.incremental(
-                cursor_field,
-                initial_value=(
-                    None if start_date is None else ensure_datetime_in_tz(start_date)
+            make_default_incremental(
+                incremental,
+                dlt.sources.incremental[datetime](
+                    cursor_field,
+                    initial_value=(
+                        None
+                        if start_date is None
+                        else ensure_datetime_in_tz(start_date)
+                    ),
+                    lag=lag,
                 ),
-                lag=lag,
             )
             if cursor_field
             else None
         )
-    else:
-        table_incremental = incremental
     # Salesforce timestamps have second precision, many records may share the last cursor value
     # and their hashes would be kept in the state. merge removes the duplicates
     skip_dedup = (
@@ -377,7 +420,7 @@ def table_resource(
             included_columns,
             excluded_columns,
             double_as_decimal,
-            default_cursor=incremental is None,
+            default_cursor=is_default,
             has_primary_key=bool(primary_key),
             hard_delete=hard_delete,
             skip_dedup=skip_dedup,

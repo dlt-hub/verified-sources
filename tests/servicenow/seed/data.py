@@ -6,6 +6,8 @@ from typing import Any, Dict, List
 
 from dlt.common import Decimal
 
+from tests.seed_utils import PERF_STARTS, perf_values, spread
+
 DLT_TYPES = "u_dlt_types"
 DLT_PAGES = "u_dlt_pages"
 DLT_INCREMENTAL = "u_dlt_incremental"
@@ -169,9 +171,9 @@ def incremental_records() -> List[Dict[str, Any]]:
         {
             SEED_ID_FIELD: f"incremental-{i:04d}",
             "u_number": i,
-            # 1000003 is coprime with the seconds of 2024. `random` may change between Python versions
-            INCREMENTAL_CURSOR: datetime(2024, 1, 1, tzinfo=UTC)
-            + timedelta(seconds=i * 1_000_003 % (366 * 24 * 3600)),
+            INCREMENTAL_CURSOR: spread(
+                i, datetime(2024, 1, 1, tzinfo=UTC), timedelta(days=366)
+            ),
         }
         for i in range(INCREMENTAL_RECORDS)
     ]
@@ -189,3 +191,38 @@ FUTURE_RECORD: Dict[str, Any] = {
     "u_number": INCREMENTAL_RECORDS,
     INCREMENTAL_CURSOR: datetime(2032, 1, 1, tzinfo=UTC),
 }
+
+
+# performance data set written by `seed.py --performance`: tables with the same fields and
+# `PERF_RECORDS` records each
+PERF_TABLES = ("u_dlt_perf_a", "u_dlt_perf_b")
+PERF_RECORDS = 50_000
+PERF_CURSOR = "u_updated_at"
+PERF_FIELDS: Dict[str, Dict[str, Any]] = {
+    "u_number": {"internal_type": "integer"},
+    PERF_CURSOR: {"internal_type": "glide_date_time"},
+    "u_name": {"internal_type": "string", "max_length": 40},
+    "u_description": {"internal_type": "string", "max_length": 1000},
+    "u_code": {"internal_type": "string", "max_length": 16},
+    "u_count": {"internal_type": "integer"},
+    "u_amount": {"internal_type": "decimal"},
+    "u_ratio": {"internal_type": "float"},
+    "u_active": {"internal_type": "boolean"},
+    "u_due": {"internal_type": "glide_date"},
+    "u_started_at": {"internal_type": "glide_date_time"},
+}
+
+
+def perf_record(table: str, n: int) -> Dict[str, Any]:
+    """Values of the record `n` of a performance table as loaded. None is an empty field"""
+    values = perf_values(n, PERF_STARTS[PERF_TABLES.index(table)])
+    return {
+        SEED_ID_FIELD: f"perf-{table[-1]}-{n:06d}",
+        "u_name": f"{table} record {n}",
+        PERF_CURSOR: values.pop("cursor"),
+        **{f"u_{kind}": value for kind, value in values.items()},
+    }
+
+
+def perf_records(table: str) -> List[Dict[str, Any]]:
+    return [perf_record(table, n) for n in range(PERF_RECORDS)]
