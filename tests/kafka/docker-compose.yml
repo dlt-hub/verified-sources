@@ -1,0 +1,63 @@
+# run `tests/kafka/certs/generate.sh` first, the SSL listener needs its certificates
+services:
+  kafka:
+    image: apache/kafka:4.1.0
+    container_name: dlt_kafka
+    restart: unless-stopped
+    ports:
+      - 9092:9092
+      - 9094:9094
+      - 9095:9095
+    volumes:
+      - ./certs:/etc/kafka/certs:ro
+    environment:
+      KAFKA_NODE_ID: 1
+      KAFKA_PROCESS_ROLES: broker,controller
+      KAFKA_LISTENERS: PLAINTEXT://:9092,CONTROLLER://:9093,SASL://:9094,MTLS://:9095,INTERNAL://:19092
+      # the image configures SSL itself when a listener is named SSL, `MTLS` uses the settings below
+      # INTERNAL is advertised to the other containers, the schema registry uses it
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://localhost:9092,SASL://localhost:9094,MTLS://localhost:9095,INTERNAL://kafka:19092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,CONTROLLER:PLAINTEXT,SASL:SASL_PLAINTEXT,MTLS:SSL,INTERNAL:PLAINTEXT
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@localhost:9093
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
+      # SASL listener: PLAIN user dlt/dlt-secret, SCRAM users are created by the tests
+      KAFKA_SASL_ENABLED_MECHANISMS: PLAIN,SCRAM-SHA-512
+      KAFKA_LISTENER_NAME_SASL_PLAIN_SASL_JAAS_CONFIG: org.apache.kafka.common.security.plain.PlainLoginModule required user_dlt="dlt-secret";
+      KAFKA_LISTENER_NAME_SASL_SCRAM___SHA___512_SASL_JAAS_CONFIG: org.apache.kafka.common.security.scram.ScramLoginModule required;
+      # MTLS listener requires client certificates signed by the test CA
+      KAFKA_SSL_KEYSTORE_TYPE: PEM
+      KAFKA_SSL_KEYSTORE_LOCATION: /etc/kafka/certs/server.pem
+      KAFKA_SSL_TRUSTSTORE_TYPE: PEM
+      KAFKA_SSL_TRUSTSTORE_LOCATION: /etc/kafka/certs/ca.pem
+      KAFKA_SSL_CLIENT_AUTH: required
+    healthcheck:
+      test: ["CMD", "/opt/kafka/bin/kafka-broker-api-versions.sh", "--bootstrap-server", "localhost:9092"]
+      interval: 2s
+      retries: 30
+      start_period: 60s
+      start_interval: 1s
+
+  schema-registry:
+    image: confluentinc/cp-schema-registry:8.3.3
+    container_name: dlt_schema_registry
+    restart: unless-stopped
+    depends_on:
+      kafka:
+        condition: service_healthy
+    ports:
+      - 8081:8081
+    environment:
+      SCHEMA_REGISTRY_HOST_NAME: schema-registry
+      SCHEMA_REGISTRY_LISTENERS: http://0.0.0.0:8081
+      SCHEMA_REGISTRY_KAFKASTORE_BOOTSTRAP_SERVERS: PLAINTEXT://kafka:19092
+    healthcheck:
+      # the image has no curl
+      test: ["CMD", "bash", "-c", "exec 3<>/dev/tcp/localhost/8081 && printf 'GET /subjects HTTP/1.0\\r\\n\\r\\n' >&3 && head -1 <&3 | grep -q ' 200 '"]
+      interval: 2s
+      retries: 30
+      start_period: 60s
+      start_interval: 1s

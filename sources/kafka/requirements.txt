@@ -1,2 +1,2 @@
-confluent-kafka>=2.3.0
-dlt>=0.5.1
+confluent-kafka>=2.13.2,<3
+dlt>=1.28.1

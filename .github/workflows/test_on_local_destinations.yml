@@ -76,6 +76,15 @@ jobs:
             docker compose -f tests/mongodb/docker-compose.yml logs
             exit 1
           }
+      - name: Start local Kafka
+        if: runner.os == 'Linux' && contains(needs.get_changed_sources.outputs.sources_list, 'kafka')
+        run: |
+          bash tests/kafka/certs/generate.sh
+          docker compose -f tests/kafka/docker-compose.yml up -d --wait || {
+            docker compose -f tests/kafka/docker-compose.yml ps -a
+            docker compose -f tests/kafka/docker-compose.yml logs
+            exit 1
+          }
       - run: |
           sources_list="${{ needs.get_changed_sources.outputs.sources_list }}"
           test_paths=$(echo "$sources_list" | awk '{for(i=1;i<=NF;i++) printf "tests/%s ", $i}')
