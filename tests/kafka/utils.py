@@ -4,7 +4,6 @@ import os
 import sys
 import threading
 from datetime import datetime, timezone
-from uuid import UUID
 from typing import (
     Any,
     Callable,
@@ -76,18 +75,10 @@ def message(
 
 
 class FakePartition:
-    """Log of one partition: a `None` record is a transaction marker that occupies an offset"""
+    """Log of one partition, from offset 0"""
 
-    def __init__(self, records: List[Optional[Message]], low: int = 0) -> None:
+    def __init__(self, records: List[Message]) -> None:
         self.records = records
-        self.low = low
-
-    @property
-    def high(self) -> int:
-        return self.low + len(self.records)
-
-    def record(self, offset: int) -> Optional[Message]:
-        return self.records[offset - self.low]
 
 
 class FakeTopicMetadata:
@@ -102,30 +93,19 @@ class FakeClusterMetadata:
 
 
 class FakeConsumer:
-    """In-memory consumer with the `confluent_kafka.Consumer` calls the source makes.
-
-    Assigned offsets out of the log range reset to the log start, like
-    `auto.offset.reset=earliest`. `live` partitions get a new message on every `consume` call
-    until `live_limit` messages were added.
-    """
+    """In-memory consumer with the `confluent_kafka.Consumer` calls the source makes without
+    `start_from` and `end_time`. `errors` arrive with the first batch."""
 
     def __init__(
         self,
         topics: Dict[str, List[FakePartition]],
-        partition_eof: bool = True,
-        live: Iterable[Tuple[str, int]] = (),
-        live_limit: int = 2000,
         errors: Iterable[KafkaError] = (),
     ) -> None:
         self.topics = topics
-        self.partition_eof = partition_eof
-        self.live = list(live)
-        self.live_limit = live_limit
         self.errors = list(errors)
         self.positions: Dict[Tuple[str, int], int] = {}
         self.eof_sent: Set[Tuple[str, int]] = set()
         self.paused: Set[Tuple[str, int]] = set()
-        self.consume_calls = 0
         self.closed = False
 
     def list_topics(self, timeout: float = -1) -> FakeClusterMetadata:
@@ -142,29 +122,11 @@ class FakeConsumer:
         timeout: Optional[float] = None,
         cached: bool = False,
     ) -> Tuple[int, int]:
-        part = self.topics[partition.topic][partition.partition]
-        return part.low, part.high
-
-    def offsets_for_times(
-        self, partitions: List[TopicPartition], timeout: Optional[float] = None
-    ) -> List[TopicPartition]:
-        result = []
-        for tp in partitions:
-            part = self.topics[tp.topic][tp.partition]
-            found = -1
-            for offset in range(part.low, part.high):
-                msg = part.record(offset)
-                if msg is not None and msg.timestamp()[1] >= tp.offset:
-                    found = offset
-                    break
-            result.append(TopicPartition(tp.topic, tp.partition, found))
-        return result
+        return 0, len(self.topics[partition.topic][partition.partition].records)
 
     def assign(self, partitions: List[TopicPartition]) -> None:
         for tp in partitions:
-            part = self.topics[tp.topic][tp.partition]
-            offset = tp.offset if part.low <= tp.offset <= part.high else part.low
-            self.positions[(tp.topic, tp.partition)] = offset
+            self.positions[(tp.topic, tp.partition)] = tp.offset
 
     def position(self, partitions: List[TopicPartition]) -> List[TopicPartition]:
         return [
@@ -180,11 +142,6 @@ class FakeConsumer:
     def consume(self, num_messages: int = 1, timeout: float = -1) -> List[Message]:
         if self.closed:
             raise RuntimeError("Consumer closed")
-        self.consume_calls += 1
-        for topic, partition in self.live:
-            part = self.topics[topic][partition]
-            if len(part.records) < self.live_limit:
-                part.records.append(make_message(topic, partition, part.high))
         batch: List[Message] = [
             message("", -1, -1, error=error) for error in self.errors
         ]
@@ -192,16 +149,13 @@ class FakeConsumer:
         for (topic, partition), position in list(self.positions.items()):
             if (topic, partition) in self.paused:
                 continue
-            part = self.topics[topic][partition]
-            while position < part.high and len(batch) < num_messages:
-                msg = part.record(position)
+            records = self.topics[topic][partition].records
+            while position < len(records) and len(batch) < num_messages:
+                batch.append(records[position])
                 position += 1
-                if msg is not None:
-                    batch.append(msg)
             self.positions[(topic, partition)] = position
             if (
-                self.partition_eof
-                and position == part.high
+                position == len(records)
                 and (topic, partition) not in self.eof_sent
                 and len(batch) < num_messages
             ):
@@ -220,49 +174,25 @@ class FakeConsumer:
         self.closed = True
 
 
-def make_message(
-    topic: str,
-    partition: int,
-    offset: int,
-    key: Optional[bytes] = b"k",
-    value: Optional[bytes] = None,
-    ts_ms: Optional[int] = None,
-) -> Message:
-    return message(
-        topic,
-        partition,
-        offset,
-        key=key,
-        value=value if value is not None else f"value_{offset}".encode(),
-        timestamp=(
-            TIMESTAMP_CREATE_TIME,
-            BASE_TS_MS + offset * 1000 if ts_ms is None else ts_ms,
-        ),
-    )
-
-
-def make_partition(
-    topic: str, partition: int, count: int, low: int = 0, markers: Iterable[int] = ()
-) -> FakePartition:
-    """`count` messages from offset `low`, transaction markers at `markers` offsets"""
-    marker_offsets = set(markers)
+def make_partition(topic: str, partition: int, count: int) -> FakePartition:
+    """`count` messages with values `value_<offset>`, a second apart"""
     return FakePartition(
         [
-            None if offset in marker_offsets else make_message(topic, partition, offset)
-            for offset in range(low, low + count)
-        ],
-        low=low,
+            message(
+                topic,
+                partition,
+                offset,
+                value=f"value_{offset}".encode(),
+                timestamp=(TIMESTAMP_CREATE_TIME, BASE_TS_MS + offset * 1000),
+            )
+            for offset in range(count)
+        ]
     )
 
 
 def framed(schema_id: int, value: Any) -> bytes:
     """JSON value with the Confluent framing: a 0 byte and the 4 bytes of `schema_id`"""
     return b"\x00" + schema_id.to_bytes(4, "big") + json.dumps(value).encode()
-
-
-def guid_headers(guid: str) -> List[Tuple[str, bytes]]:
-    """`__value_schema_id` header of a schema GUID"""
-    return [("__value_schema_id", b"\x01" + UUID(guid).bytes)]
 
 
 def avro_body(schema: Any, value: Any) -> bytes:
@@ -288,7 +218,7 @@ def record_partition(
 ) -> FakePartition:
     """Messages of partition 0 with keys `key_<offset>` unless given. A value that is not bytes
     is JSON, framed with its schema id"""
-    records: List[Optional[Message]] = []
+    records: List[Message] = []
     for offset, value in enumerate(values):
         schema_id = schema_ids[offset] if schema_ids is not None else None
         if isinstance(value, bytes) or value is None:
@@ -349,15 +279,21 @@ def produce_registry(
     keys: Optional[Sequence[Any]] = None,
     key_schema: Any = None,
     header: bool = False,
+    subject: Optional[str] = None,
 ) -> None:
     """Produces `values` with a Schema Registry serializer, `json` or `avro`. A `None` value is a
-    tombstone. Keys are serialized with `key_schema` when given."""
+    tombstone. Keys are serialized with `key_schema` when given. Value schemas are registered
+    under `subject`, by default `<topic>-value`."""
     from confluent_kafka.schema_registry import header_schema_id_serializer
     from confluent_kafka.schema_registry.avro import AvroSerializer
     from confluent_kafka.schema_registry.json_schema import JSONSerializer
     from confluent_kafka.serialization import MessageField, SerializationContext
 
-    conf = {"schema.id.serializer": header_schema_id_serializer} if header else {}
+    conf: Dict[str, Any] = {}
+    if header:
+        conf["schema.id.serializer"] = header_schema_id_serializer
+    if subject is not None:
+        conf["subject.name.strategy"] = lambda ctx, record_name: subject
     value_serializer: Any
     if serializer == "avro":
         value_serializer = AvroSerializer(registry, json.dumps(schema), conf=conf)

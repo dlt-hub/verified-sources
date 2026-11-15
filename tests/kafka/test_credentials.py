@@ -2,7 +2,6 @@ import sys
 from types import ModuleType, SimpleNamespace
 from typing import Any, Dict, List, Tuple
 
-import dlt
 import pytest
 from confluent_kafka import Consumer
 from dlt.common.exceptions import MissingDependencyException

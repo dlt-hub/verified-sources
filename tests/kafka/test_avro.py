@@ -1,9 +1,7 @@
-from datetime import date, datetime, time, timezone
 from typing import Any, Dict, List, Optional, Tuple
 
 import fastavro
 import pytest
-from dlt.common import Decimal
 from dlt.common.normalizers.naming.snake_case import (
     NamingConvention as SnakeCaseNamingConvention,
 )
@@ -321,8 +319,17 @@ def test_top_level_union() -> None:
             {"name": "carrier", "type": "string"},
         ],
     }
-    union, named = parse([created, shipped])
-    assert list(union_fields(union, named)) == [("id",), ("carrier",)]
+    cancelled = {
+        "type": "record",
+        "name": "Cancelled",
+        "namespace": "com.shop",
+        "fields": [{"name": "id", "type": "string"}],
+    }
+    union, named = parse([created, shipped, cancelled])
+    fields = union_fields(union, named)
+    assert list(fields) == [("id",), ("carrier",)]
+    # a field with other types in other branches loads as json
+    assert fields[("id",)].column == {"data_type": "json"}
     assert record_name(union[1], named) == "com.shop.Shipped"
     assert record_name("string", named) == "string"
     connect_default = {

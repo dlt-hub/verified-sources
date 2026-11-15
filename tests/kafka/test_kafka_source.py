@@ -2,7 +2,20 @@ import json
 import threading
 import time
 from datetime import date, datetime, timezone
-from typing import Any, Callable, Dict, Iterator, List, Optional, Sequence, Tuple
+from datetime import time as dt_time
+from functools import partial
+from typing import (
+    Any,
+    Callable,
+    Dict,
+    Iterator,
+    List,
+    NamedTuple,
+    Optional,
+    Sequence,
+    Tuple,
+    Union,
+)
 
 import dlt
 import pytest
@@ -10,37 +23,42 @@ from confluent_kafka import (
     OFFSET_INVALID,
     Consumer,
     KafkaException,
+    Message,
     Producer,
     TopicPartition,
 )
 from confluent_kafka.admin import AdminClient, NewTopic
 from dlt.common import Decimal
+from dlt.common.schema.exceptions import DataValidationError
 from dlt.pipeline.exceptions import PipelineStepFailed
 
 from sources.kafka import (
     AvroProcessor,
+    IncompatibleColumnTypeException,
     JsonProcessor,
     KafkaCredentials,
     SchemaRegistryCredentials,
     kafka_consumer,
 )
+from sources.kafka.helpers.processors import TBackend
 
 from tests.kafka.utils import (
+    BACKENDS,
     BASE_TS_MS,
     LOCAL_KAFKA,
     MakeTopic,
+    SeededMessage,
     as_datetime,
     auth_credentials,
     avro_framed,
-    produce_registry,
-    run_processor,
     column_types,
     exception_chain,
-    SeededMessage,
     last_row_count,
     loaded_offsets,
     produce,
+    produce_registry,
     run_in_thread,
+    run_processor,
     stored_offsets,
     table_rows,
 )
@@ -78,24 +96,56 @@ def live_producer(make_topic: MakeTopic) -> Iterator[Callable[[str, int], None]]
         thread.join(10)
 
 
-def test_local_single_message_and_next_runs(
+@pytest.mark.parametrize(
+    "counts,stored",
+    [([1], {"0": 1}), ([1, 1], {"0": 0, "1": 1}), ([0, 3], {"1": 3})],
+    ids=["single_message", "one_message_per_partition", "empty_partition"],
+)
+def test_local_reads_to_the_end_and_next_runs(
     pipeline: dlt.Pipeline,
     make_topic: MakeTopic,
     producer: Producer,
     local_credentials: KafkaCredentials,
+    counts: List[int],
+    stored: Dict[str, int],
 ) -> None:
-    topic = make_topic()
-    produce(producer, topic, 1)
+    topic = make_topic(partitions=len(counts))
+    for partition, count in enumerate(counts):
+        produce(producer, topic, count, partition=partition)
     assert_load_info(pipeline.run(kafka_consumer(topic, credentials=local_credentials)))
-    assert loaded_offsets(pipeline, topic) == [(0, 0)]
+    assert loaded_offsets(pipeline, topic) == [
+        (partition, offset)
+        for partition, count in enumerate(counts)
+        for offset in range(count)
+    ]
 
-    produce(producer, topic, 1)
+    produce(producer, topic, 1, partition=len(counts) - 1)
     pipeline.run(kafka_consumer(topic, credentials=local_credentials))
     assert last_row_count(pipeline, topic) == 1
 
     pipeline.run(kafka_consumer(topic, credentials=local_credentials))
     assert last_row_count(pipeline, topic) == 0
-    assert stored_offsets(pipeline) == {topic: {"0": 1}}
+    # an empty partition has no stored offset
+    assert stored_offsets(pipeline) == {topic: stored}
+
+
+def test_local_add_topic(
+    pipeline: dlt.Pipeline,
+    make_topic: MakeTopic,
+    producer: Producer,
+    local_credentials: KafkaCredentials,
+) -> None:
+    topic, added = make_topic(), make_topic()
+    produce(producer, topic, 3)
+    produce(producer, added, 2)
+    pipeline.run(kafka_consumer(topic, credentials=local_credentials))
+
+    assert_load_info(
+        pipeline.run(kafka_consumer([topic, added], credentials=local_credentials))
+    )
+    assert loaded_offsets(pipeline, added) == [(0, 0), (0, 1)]
+    assert last_row_count(pipeline, topic) == 0
+    assert stored_offsets(pipeline) == {topic: {"0": 2}, added: {"0": 1}}
 
 
 @pytest.mark.parametrize(
@@ -125,13 +175,32 @@ def test_local_start_from(
             (1, offset) for offset in range(1, after + 1)
         ]
 
+    # a later `start_from` skips messages after the stored offset
+    later_ms = start_ms + 100_000
+    produce(producer, topic, 2, partition=1, timestamp_ms=lambda i: later_ms - 1)
+    produce(producer, topic, 3, partition=1, timestamp_ms=lambda i: later_ms + i)
+    pipeline.run(
+        kafka_consumer(
+            topic, credentials=local_credentials, start_from=as_datetime(later_ms)
+        )
+    )
+    assert last_row_count(pipeline, topic) == 3
+    assert loaded_offsets(pipeline, topic)[-3:] == [
+        (1, offset) for offset in range(after + 3, after + 6)
+    ]
 
+
+@pytest.mark.parametrize(
+    "partition_eof", [True, False], ids=["credentials", "consumer_without_eof"]
+)
 def test_local_transaction_marker_with_live_partition(
     pipeline: dlt.Pipeline,
     make_topic: MakeTopic,
     transactional_producer: Producer,
     live_producer: Callable[[str, int], None],
     local_credentials: KafkaCredentials,
+    kafka_warnings: List[str],
+    partition_eof: bool,
 ) -> None:
     topic = make_topic(partitions=2)
     transactional_producer.begin_transaction()
@@ -140,14 +209,23 @@ def test_local_transaction_marker_with_live_partition(
     live_producer(topic, 1)
     time.sleep(1)
 
+    credentials: Union[KafkaCredentials, Consumer] = local_credentials
+    if not partition_eof:
+        # a consumer passed by the user: the position past the marker ends partition 0
+        local_credentials.consumer_config = {"enable.partition.eof": False}
+        credentials = local_credentials.init_consumer()
     finished, result = run_in_thread(
-        lambda: pipeline.run(kafka_consumer(topic, credentials=local_credentials)), 30
+        lambda: pipeline.run(kafka_consumer(topic, credentials=credentials)), 30
     )
     assert finished, "the run did not end while partition 1 receives messages"
     assert "error" not in result
+    assert not any("read to the end" in warning for warning in kafka_warnings)
     assert [offset for p, offset in loaded_offsets(pipeline, topic) if p == 0] == list(
         range(5)
     )
+    if isinstance(credentials, Consumer):
+        with pytest.raises(RuntimeError, match="Consumer closed"):
+            credentials.assignment()
 
 
 def test_local_open_transaction(
@@ -265,6 +343,17 @@ def test_local_offsets_deleted_by_retention(
         "3 messages" in message and topic in message for message in kafka_warnings
     )
 
+    # a first run starts at the moved start of the log without a warning
+    kafka_warnings.clear()
+    first_run = dlt.pipeline(
+        pipeline_name=f"{pipeline.pipeline_name}_first",
+        destination="duckdb",
+        dev_mode=True,
+    )
+    first_run.run(kafka_consumer(topic, credentials=local_credentials))
+    assert loaded_offsets(first_run, topic) == [(0, 6), (0, 7)]
+    assert kafka_warnings == []
+
     # every message is deleted, the moved start is stored and the next run does not warn
     for future in kafka_admin.delete_records([TopicPartition(topic, 0, 8)]).values():
         future.result()
@@ -329,6 +418,40 @@ def test_local_null_and_empty(
     ]
 
 
+def test_local_function_processor_names_tables(
+    pipeline: dlt.Pipeline,
+    make_topic: MakeTopic,
+    producer: Producer,
+    local_credentials: KafkaCredentials,
+) -> None:
+    def to_table(msg: Message) -> Dict[str, Any]:
+        table = "even" if msg.offset() % 2 == 0 else "odd"
+        return {"_kafka": {"topic": table, "offset": msg.offset()}}
+
+    topic = make_topic()
+    produce(producer, topic, 5)
+    pipeline.run(
+        kafka_consumer(topic, credentials=local_credentials, msg_processor=to_table)
+    )
+    assert sorted(pipeline.default_schema.data_table_names()) == ["even", "odd"]
+
+
+def test_local_static_table_name(
+    pipeline: dlt.Pipeline,
+    make_topic: MakeTopic,
+    producer: Producer,
+    local_credentials: KafkaCredentials,
+) -> None:
+    topics = [make_topic(), make_topic()]
+    for topic in topics:
+        produce(producer, topic, 2)
+    resource = kafka_consumer(topics, credentials=local_credentials)
+    resource.apply_hints(table_name="all_topics")
+    pipeline.run(resource)
+    assert pipeline.default_schema.data_table_names() == ["all_topics"]
+    assert len(loaded_offsets(pipeline, "all_topics")) == 4
+
+
 def test_local_seeded_full_and_incremental(
     pipeline: dlt.Pipeline,
     seeded_topic: Tuple[str, List[SeededMessage]],
@@ -349,28 +472,35 @@ def test_local_seeded_full_and_incremental(
     pipeline.run(kafka_consumer(topic, credentials=local_credentials))
     assert last_row_count(pipeline, topic) == 5
 
-    bounds = [BASE_TS_MS + day * 86_400_000 for day in (0, 10, 20, 30)]
+    day_10, day_20, day_30 = (BASE_TS_MS + day * 86_400_000 for day in (10, 20, 30))
     backfill = dlt.pipeline(
         pipeline_name=f"{pipeline.pipeline_name}_backfill",
         destination="duckdb",
         dev_mode=True,
     )
-    for start, end in zip(bounds, bounds[1:]):
+    # the first window has no start
+    for start, end in ((None, day_10), (day_10, day_20), (day_20, day_30)):
         window = sorted(
-            (m.partition, m.offset) for m in seeded if start <= m.ts_ms < end
+            (m.partition, m.offset)
+            for m in seeded
+            if (start is None or start <= m.ts_ms) and m.ts_ms < end
         )
         assert window
         backfill.run(
             kafka_consumer(
                 topic,
                 credentials=local_credentials,
-                start_from=as_datetime(start),
+                start_from=None if start is None else as_datetime(start),
                 end_time=as_datetime(end),
             )
         )
         assert last_row_count(backfill, topic) == len(window)
         assert stored_offsets(backfill) == {}
     assert loaded_offsets(backfill, topic) == expected
+
+    # windows do not store offsets, a run without a window reads every message
+    backfill.run(kafka_consumer(topic, credentials=local_credentials))
+    assert last_row_count(backfill, topic) == len(seeded) + 5
 
 
 ROW_AVRO = {
@@ -494,79 +624,376 @@ def test_local_seeded_chunks(
     assert runs >= len(seeded) // 200
 
 
-ORDER_SCHEMA: Dict[str, Any] = {
-    "title": "Order",
-    "type": "object",
-    "properties": {
-        "id": {"type": "integer"},
-        "amount": {"type": "number"},
-        "created": {"type": "string", "format": "date-time"},
-        "day": {"type": "string", "format": "date"},
-        "customer": {"type": "object", "properties": {"name": {"type": "string"}}},
-        "tags": {"type": "array", "items": {"type": "string"}},
-    },
+ADDRESS_AVRO = {
+    "type": "record",
+    "name": "Address",
+    "namespace": "com.shop",
+    "fields": [{"name": "city", "type": "string"}, {"name": "zip", "type": "int"}],
 }
 
 
-@pytest.mark.parametrize("backend", ["python", "pyarrow"])
+class RegistryTypes(NamedTuple):
+    processor: Callable[..., Any]
+    schema: Any
+    values: List[Any]
+    types: Dict[str, str]
+    rows: List[Tuple[Any, ...]]
+    """`types` columns, key and offset of `values`"""
+
+
+REGISTRY_TYPES = {
+    "json": RegistryTypes(
+        processor=partial(JsonProcessor, strict=True),
+        schema={
+            "title": "Order",
+            "type": "object",
+            "properties": {
+                "id": {"type": "integer"},
+                "amount": {"type": "number"},
+                "created": {"type": "string", "format": "date-time"},
+                "day": {"type": "string", "format": "date"},
+                "note": {"type": ["string", "null"]},
+                "customer": {
+                    "type": "object",
+                    "properties": {
+                        "name": {"type": "string"},
+                        "vip": {"type": "boolean"},
+                    },
+                },
+                "tags": {"type": "array", "items": {"type": "string"}},
+            },
+        },
+        values=[
+            {
+                "id": 1,
+                "amount": 1.5,
+                "created": "2026-01-01T10:00:00+02:00",
+                "day": "2026-01-01",
+                "note": "first",
+                "customer": {"name": "ann", "vip": True},
+                "tags": ["a", "b"],
+            },
+            {
+                "id": 2,
+                "amount": 2,
+                "created": "2026-01-02T00:00:00Z",
+                "day": "2026-01-02",
+                "note": None,
+                "customer": {"name": "bob", "vip": False},
+                "tags": [],
+            },
+        ],
+        # lists are `json` from the schema, no nested tables
+        types={
+            "id": "bigint",
+            "amount": "double",
+            "created": "timestamp",
+            "day": "date",
+            "note": "text",
+            "customer__name": "text",
+            "customer__vip": "bool",
+            "tags": "json",
+        },
+        rows=[
+            (
+                1,
+                1.5,
+                datetime(2026, 1, 1, 8, tzinfo=timezone.utc),
+                date(2026, 1, 1),
+                "first",
+                "ann",
+                True,
+                '["a","b"]',
+                "key_0",
+                0,
+            ),
+            (
+                2,
+                2.0,
+                datetime(2026, 1, 2, tzinfo=timezone.utc),
+                date(2026, 1, 2),
+                None,
+                "bob",
+                False,
+                "[]",
+                "key_1",
+                1,
+            ),
+        ],
+    ),
+    "avro": RegistryTypes(
+        processor=AvroProcessor,
+        schema={
+            "type": "record",
+            "name": "Order",
+            "namespace": "com.shop",
+            "fields": [
+                {"name": "id", "type": "long"},
+                {"name": "orderId", "type": {"type": "string", "logicalType": "uuid"}},
+                {
+                    "name": "amount",
+                    "type": {
+                        "type": "bytes",
+                        "logicalType": "decimal",
+                        "precision": 12,
+                        "scale": 2,
+                    },
+                },
+                {
+                    "name": "created",
+                    "type": {"type": "long", "logicalType": "timestamp-millis"},
+                },
+                {
+                    "name": "local",
+                    "type": {"type": "long", "logicalType": "local-timestamp-micros"},
+                },
+                {
+                    "name": "nanos",
+                    "type": {"type": "long", "logicalType": "timestamp-nanos"},
+                },
+                {"name": "day", "type": {"type": "int", "logicalType": "date"}},
+                {"name": "at", "type": {"type": "int", "logicalType": "time-millis"}},
+                {
+                    "name": "status",
+                    "type": {
+                        "type": "enum",
+                        "name": "Status",
+                        "symbols": ["NEW", "PAID"],
+                    },
+                },
+                {"name": "hash", "type": {"type": "fixed", "name": "Hash", "size": 2}},
+                {"name": "note", "type": ["null", "string"]},
+                {"name": "billing", "type": ["null", ADDRESS_AVRO]},
+                {"name": "tags", "type": {"type": "array", "items": "string"}},
+                {"name": "attributes", "type": {"type": "map", "values": "long"}},
+                {"name": "score", "type": ["null", "long", "string"]},
+                {
+                    "name": "updated",
+                    "type": {
+                        "type": "long",
+                        "connect.name": "io.debezium.time.MicroTimestamp",
+                    },
+                },
+                {
+                    "name": "price",
+                    "type": {
+                        "type": "record",
+                        "name": "VariableScaleDecimal",
+                        "namespace": "io.debezium.data",
+                        "fields": [
+                            {"name": "scale", "type": "int"},
+                            {"name": "value", "type": "bytes"},
+                        ],
+                    },
+                },
+            ],
+        },
+        values=[
+            {
+                "id": 1,
+                "orderId": "00000000-0000-0000-0000-000000000001",
+                "amount": Decimal("12.34"),
+                "created": datetime(2026, 1, 1, 8, tzinfo=timezone.utc),
+                "local": datetime(2026, 1, 1, 9, 30),
+                "nanos": 1767225600123456789,
+                "day": date(2026, 1, 1),
+                "at": dt_time(10, 11, 12),
+                "status": "NEW",
+                "hash": b"\x00\xff",
+                "note": "first",
+                "billing": {"city": "Berlin", "zip": 10115},
+                "tags": ["a", "b"],
+                "attributes": {"weight": 3},
+                "score": 5,
+                "updated": 1767225600000001,
+                "price": {"scale": 2, "value": b"\x04\xd2"},
+            },
+            {
+                "id": 2,
+                "orderId": "00000000-0000-0000-0000-000000000002",
+                "amount": Decimal("-0.50"),
+                "created": datetime(2026, 1, 2, tzinfo=timezone.utc),
+                "local": datetime(2026, 1, 2),
+                "nanos": 0,
+                "day": date(2026, 1, 2),
+                "at": dt_time(0),
+                "status": "PAID",
+                "hash": b"\x01\x02",
+                "note": None,
+                "billing": None,
+                "tags": [],
+                "attributes": {},
+                "score": "high",
+                "updated": 0,
+                "price": {"scale": 0, "value": b"\x01"},
+            },
+        ],
+        types={
+            "id": "bigint",
+            "order_id": "text",
+            "amount": "decimal",
+            "created": "timestamp",
+            "local": "timestamp",
+            "nanos": "timestamp",
+            "day": "date",
+            "at": "time",
+            "status": "text",
+            "hash": "binary",
+            "note": "text",
+            "billing__city": "text",
+            "billing__zip": "bigint",
+            "tags": "json",
+            "attributes": "json",
+            "score": "json",
+            "updated": "timestamp",
+            "price": "text",
+        },
+        rows=[
+            (
+                1,
+                "00000000-0000-0000-0000-000000000001",
+                Decimal("12.34"),
+                datetime(2026, 1, 1, 8, tzinfo=timezone.utc),
+                # local timestamps have no time zone
+                datetime(2026, 1, 1, 9, 30),
+                # nanoseconds load as microseconds
+                datetime(2026, 1, 1, 0, 0, 0, 123456, tzinfo=timezone.utc),
+                date(2026, 1, 1),
+                dt_time(10, 11, 12),
+                "NEW",
+                b"\x00\xff",
+                "first",
+                "Berlin",
+                10115,
+                '["a","b"]',
+                '{"weight":3}',
+                "5",
+                datetime(2026, 1, 1, 0, 0, 0, 1, tzinfo=timezone.utc),
+                "12.34",
+                "key_0",
+                0,
+            ),
+            (
+                2,
+                "00000000-0000-0000-0000-000000000002",
+                Decimal("-0.50"),
+                datetime(2026, 1, 2, tzinfo=timezone.utc),
+                datetime(2026, 1, 2),
+                datetime(1970, 1, 1, tzinfo=timezone.utc),
+                date(2026, 1, 2),
+                dt_time(0),
+                "PAID",
+                b"\x01\x02",
+                None,
+                None,
+                None,
+                "[]",
+                "{}",
+                '"high"',
+                datetime(1970, 1, 1, tzinfo=timezone.utc),
+                "1",
+                "key_1",
+                1,
+            ),
+        ],
+    ),
+}
+
+
+@pytest.mark.parametrize("backend", BACKENDS)
 @pytest.mark.parametrize("header", [False, True], ids=["prefix", "header"])
-def test_local_registry_json(
+@pytest.mark.parametrize("value_format", ["json", "avro"])
+def test_local_registry_types(
     pipeline: dlt.Pipeline,
     make_topic: MakeTopic,
     producer: Producer,
     local_credentials: KafkaCredentials,
     local_registry: Any,
     local_registry_credentials: SchemaRegistryCredentials,
-    backend: str,
+    value_format: str,
     header: bool,
+    backend: TBackend,
 ) -> None:
+    expected = REGISTRY_TYPES[value_format]
     topic = make_topic()
-    orders = [
-        {
-            "id": i,
-            "amount": i * 1.5,
-            "created": f"2026-01-0{i + 1}T10:00:00+02:00",
-            "day": f"2026-01-0{i + 1}",
-            "customer": {"name": f"c{i}"},
-            "tags": ["a"] * i,
-        }
-        for i in range(3)
-    ]
+    # a tombstone has no schema and loads the metadata only
     produce_registry(
-        producer, local_registry, topic, ORDER_SCHEMA, orders, header=header
+        producer,
+        local_registry,
+        topic,
+        expected.schema,
+        expected.values + [None],
+        value_format,
+        header=header,
     )
     assert_load_info(
         run_processor(
             pipeline,
             topic,
             local_credentials,
-            JsonProcessor(backend=backend, strict=True),
+            expected.processor(backend=backend),
             local_registry_credentials,
         )
     )
     assert pipeline.default_schema.data_table_names() == [topic]
     types = column_types(pipeline, topic)
-    assert {
-        name: types[name] for name in ORDER_SCHEMA["properties"] if name != "customer"
-    } == {
-        "id": "bigint",
-        "amount": "double",
-        "created": "timestamp",
-        "day": "date",
-        "tags": "json",
-    }
-    assert table_rows(
-        pipeline, topic, ["id", "amount", "created", "day", "customer__name"]
-    )[1] == (
-        1,
-        1.5,
-        datetime(2026, 1, 2, 8, tzinfo=timezone.utc),
-        date(2026, 1, 2),
-        "c1",
+    assert {name: types[name] for name in expected.types} == expected.types
+    rows = table_rows(
+        pipeline, topic, [*expected.types, "_kafka__key", "_kafka__offset"]
     )
+    assert rows == expected.rows + [(None,) * len(expected.types) + ("key_2", 2)]
 
 
-@pytest.mark.parametrize("backend", ["python", "pyarrow"])
+EVENT_SCHEMAS = {
+    # the registry accepts optional fields added to a closed JSON content model only
+    "json": (
+        {
+            "type": "object",
+            "properties": {"id": {"type": "integer"}, "unset": {"type": "string"}},
+            "additionalProperties": False,
+        },
+        {
+            "type": "object",
+            "properties": {
+                "id": {"type": "integer"},
+                "unset": {"type": "string"},
+                "amount": {"type": "number"},
+            },
+            "additionalProperties": False,
+        },
+    ),
+    "avro": (
+        {
+            "type": "record",
+            "name": "Event",
+            "fields": [
+                {"name": "id", "type": "long"},
+                {"name": "unset", "type": ["null", "string"], "default": None},
+            ],
+        },
+        {
+            "type": "record",
+            "name": "Event",
+            "fields": [
+                {"name": "id", "type": "long"},
+                {"name": "unset", "type": ["null", "string"], "default": None},
+                {"name": "amount", "type": ["null", "double"], "default": None},
+            ],
+        },
+    ),
+}
+
+
+@pytest.mark.parametrize("backend", BACKENDS)
+@pytest.mark.parametrize(
+    "other_subject,expected_hints",
+    [
+        (False, [["amount", "id", "unset"]]),
+        (True, [["id", "unset"], ["amount", "id", "unset"]]),
+    ],
+    ids=["topic_subject", "other_subject"],
+)
+@pytest.mark.parametrize("value_format", ["json", "avro"])
 def test_local_registry_schema_evolution(
     pipeline: dlt.Pipeline,
     make_topic: MakeTopic,
@@ -574,43 +1001,54 @@ def test_local_registry_schema_evolution(
     local_credentials: KafkaCredentials,
     local_registry: Any,
     local_registry_credentials: SchemaRegistryCredentials,
-    backend: str,
+    emitted_hints: List[Dict[str, Any]],
+    value_format: str,
+    other_subject: bool,
+    expected_hints: List[List[str]],
+    backend: TBackend,
 ) -> None:
     topic = make_topic()
-    # the registry accepts optional fields added to a closed content model only
-    v1 = {
-        "type": "object",
-        "properties": {"id": {"type": "integer"}},
-        "additionalProperties": False,
-    }
-    produce_registry(producer, local_registry, topic, v1, [{"id": 1}])
-    run_processor(
-        pipeline,
+    v1, v2 = EVENT_SCHEMAS[value_format]
+    produce_events = partial(
+        produce_registry,
+        producer,
+        local_registry,
         topic,
-        local_credentials,
-        JsonProcessor(backend=backend),
-        local_registry_credentials,
+        serializer=value_format,
+        subject=f"{topic}-other" if other_subject else None,
     )
+    processor_class = JsonProcessor if value_format == "json" else AvroProcessor
 
-    v2 = {
-        "type": "object",
-        "properties": {"id": {"type": "integer"}, "note": {"type": "string"}},
-        "additionalProperties": False,
-    }
-    produce_registry(producer, local_registry, topic, v2, [{"id": 2, "note": "new"}])
-    produce_registry(producer, local_registry, topic, v1, [{"id": 3}])
-    run_processor(
-        pipeline,
-        topic,
-        local_credentials,
-        JsonProcessor(backend=backend),
-        local_registry_credentials,
-    )
-    assert column_types(pipeline, topic)["note"] == "text"
-    assert table_rows(pipeline, topic, ["id", "note"]) == [
-        (1, None),
-        (2, "new"),
-        (3, None),
+    def run() -> List[List[str]]:
+        emitted_hints.clear()
+        resource = kafka_consumer(
+            topic,
+            credentials=local_credentials,
+            msg_processor=processor_class(backend=backend),
+            schema_registry=local_registry_credentials,
+        )
+        resource.apply_hints(columns={"id": {"data_type": "text"}})
+        pipeline.run(resource)
+        return [sorted(hints["columns"]) for hints in emitted_hints]
+
+    produce_events(v1, [{"id": 1}])
+    assert run() == [["id", "unset"]]
+
+    # writers of both versions interleave
+    produce_events(v1, [{"id": 2}])
+    produce_events(v2, [{"id": 3, "amount": 1.5}])
+    produce_events(v1, [{"id": 4}])
+    # the latest schema of `<topic>-value` before the first message, else each schema that adds
+    # columns
+    assert run() == expected_hints
+    types = column_types(pipeline, topic)
+    # columns of the schema without values, columns the user applied win
+    assert (types["unset"], types["id"], types["amount"]) == ("text", "text", "double")
+    assert table_rows(pipeline, topic, ["id", "amount"]) == [
+        ("1", None),
+        ("2", None),
+        ("3", 1.5),
+        ("4", None),
     ]
 
 
@@ -832,175 +1270,75 @@ def test_local_partitions_added(
     assert loaded_offsets(pipeline, topic) == [(0, 0), (0, 1), (0, 2), (2, 0), (2, 1)]
 
 
-ADDRESS_AVRO = {
-    "type": "record",
-    "name": "Address",
-    "namespace": "com.shop",
-    "fields": [{"name": "city", "type": "string"}],
-}
-ORDER_AVRO = {
-    "type": "record",
-    "name": "Order",
-    "namespace": "com.shop",
-    "fields": [
-        {"name": "id", "type": "long"},
-        {
-            "name": "amount",
-            "type": {
-                "type": "bytes",
-                "logicalType": "decimal",
-                "precision": 12,
-                "scale": 2,
-            },
-        },
-        {
-            "name": "created",
-            "type": {"type": "long", "logicalType": "timestamp-millis"},
-        },
-        {"name": "day", "type": {"type": "int", "logicalType": "date"}},
-        {"name": "customer", "type": ADDRESS_AVRO},
-        {"name": "tags", "type": {"type": "array", "items": "string"}},
-        {"name": "note", "type": ["null", "string"], "default": None},
-    ],
-}
-
-
-@pytest.mark.parametrize("backend", ["python", "pyarrow"])
-@pytest.mark.parametrize("header", [False, True], ids=["prefix", "header"])
-def test_local_registry_avro(
+@pytest.mark.parametrize("on_type_change", ["strict", "skip"])
+def test_local_type_change(
     pipeline: dlt.Pipeline,
     make_topic: MakeTopic,
     producer: Producer,
     local_credentials: KafkaCredentials,
     local_registry: Any,
     local_registry_credentials: SchemaRegistryCredentials,
-    backend: str,
-    header: bool,
+    on_type_change: Any,
 ) -> None:
     topic = make_topic()
-    orders = [
-        {
-            "id": i,
-            "amount": Decimal(f"{i}.25"),
-            "created": datetime(2026, 1, i + 1, 10, tzinfo=timezone.utc),
-            "day": date(2026, 1, i + 1),
-            "customer": {"city": f"c{i}"},
-            "tags": ["a"] * i,
-            "note": None if i else "first",
+
+    def schema(amount_type: str) -> Dict[str, Any]:
+        return {
+            "type": "record",
+            "name": "Payment",
+            "fields": [
+                {"name": "id", "type": "long"},
+                {"name": "amount", "type": amount_type},
+            ],
         }
-        for i in range(3)
-    ]
-    produce_registry(
-        producer,
-        local_registry,
-        topic,
-        ORDER_AVRO,
-        orders,
-        header=header,
-        serializer="avro",
-    )
-    assert_load_info(
-        run_processor(
-            pipeline,
+
+    def payments() -> Any:
+        resource = kafka_consumer(
             topic,
-            local_credentials,
-            AvroProcessor(backend=backend),
-            local_registry_credentials,
+            credentials=local_credentials,
+            msg_processor=AvroProcessor(),
+            schema_registry=local_registry_credentials,
+            on_type_change=on_type_change,
         )
-    )
-    assert pipeline.default_schema.data_table_names() == [topic]
-    types = column_types(pipeline, topic)
-    assert {
-        name: types[name]
-        for name in ("id", "amount", "created", "day", "customer__city", "tags", "note")
-    } == {
-        "id": "bigint",
-        "amount": "decimal",
-        "created": "timestamp",
-        "day": "date",
-        "customer__city": "text",
-        "tags": "json",
-        "note": "text",
-    }
-    assert table_rows(
-        pipeline, topic, ["id", "amount", "created", "day", "customer__city", "note"]
-    )[1] == (
-        1,
-        Decimal("1.25"),
-        datetime(2026, 1, 2, 10, tzinfo=timezone.utc),
-        date(2026, 1, 2),
-        "c1",
-        None,
-    )
+        if on_type_change == "skip":
+            resource.apply_hints(schema_contract={"data_type": "freeze"})
+        return resource
 
-
-@pytest.mark.parametrize("backend", ["python", "pyarrow"])
-def test_local_avro_schema_evolution(
-    pipeline: dlt.Pipeline,
-    make_topic: MakeTopic,
-    producer: Producer,
-    local_credentials: KafkaCredentials,
-    local_registry: Any,
-    local_registry_credentials: SchemaRegistryCredentials,
-    backend: str,
-) -> None:
-    topic = make_topic()
-    v1 = {"type": "record", "name": "Event", "fields": [{"name": "id", "type": "long"}]}
-    v2 = {
-        "type": "record",
-        "name": "Event",
-        "fields": [
-            {"name": "id", "type": "long"},
-            {"name": "note", "type": ["null", "string"], "default": None},
-        ],
-    }
-    produce_registry(
-        producer, local_registry, topic, v1, [{"id": 1}], serializer="avro"
-    )
-    run_processor(
-        pipeline,
-        topic,
-        local_credentials,
-        AvroProcessor(backend=backend),
-        local_registry_credentials,
-    )
-    # writers of both versions interleave
     produce_registry(
         producer,
         local_registry,
         topic,
-        v2,
-        [{"id": 2, "note": "new"}],
+        schema("int"),
+        [{"id": 1, "amount": 2}],
         serializer="avro",
     )
-    produce_registry(
-        producer, local_registry, topic, v1, [{"id": 3}], serializer="avro"
-    )
+    pipeline.run(payments())
+    # int to double is a compatible Avro change, dlt never changes the destination column
     produce_registry(
         producer,
         local_registry,
         topic,
-        v2,
-        [{"id": 4, "note": None}],
+        schema("double"),
+        [{"id": 2, "amount": 2.5}],
         serializer="avro",
     )
-    run_processor(
-        pipeline,
-        topic,
-        local_credentials,
-        AvroProcessor(backend=backend),
-        local_registry_credentials,
+    with pytest.raises(PipelineStepFailed) as ex:
+        pipeline.run(payments())
+    expected = (
+        IncompatibleColumnTypeException
+        if on_type_change == "strict"
+        else DataValidationError
     )
-    assert column_types(pipeline, topic)["note"] == "text"
-    assert table_rows(pipeline, topic, ["id", "note"]) == [
-        (1, None),
-        (2, "new"),
-        (3, None),
-        (4, None),
-    ]
+    error = next(e for e in exception_chain(ex.value) if isinstance(e, expected))
+    assert "amount" in str(error)
+    assert column_types(pipeline, topic)["amount"] == "bigint"
+    assert table_rows(pipeline, topic, ["id", "amount"]) == [(1, 2)]
 
 
-@pytest.mark.parametrize("backend", ["python", "pyarrow"])
+@pytest.mark.parametrize("backend", BACKENDS)
+@pytest.mark.parametrize(
+    "table_per_schema", [False, True], ids=["one_table", "table_per_schema"]
+)
 def test_local_avro_references_and_union(
     pipeline: dlt.Pipeline,
     make_topic: MakeTopic,
@@ -1008,11 +1346,13 @@ def test_local_avro_references_and_union(
     local_credentials: KafkaCredentials,
     local_registry: Any,
     local_registry_credentials: SchemaRegistryCredentials,
-    backend: str,
+    table_per_schema: bool,
+    backend: TBackend,
 ) -> None:
     from confluent_kafka.schema_registry import Schema, SchemaReference
 
     topic = make_topic()
+    # the second field uses the named type that the first one references
     created = {
         "type": "record",
         "name": "Created",
@@ -1020,6 +1360,7 @@ def test_local_avro_references_and_union(
         "fields": [
             {"name": "id", "type": "long"},
             {"name": "billing", "type": "Address"},
+            {"name": "shipping", "type": "Address"},
         ],
     }
     shipped = {
@@ -1059,14 +1400,32 @@ def test_local_avro_references_and_union(
     expanded = [
         {
             **created,
-            "fields": [created["fields"][0], {"name": "billing", "type": ADDRESS_AVRO}],
+            "fields": [
+                created["fields"][0],
+                {"name": "billing", "type": ADDRESS_AVRO},
+                created["fields"][2],
+            ],
         },
         shipped,
     ]
     events = [
-        ("com.shop.Created", {"id": 1, "billing": {"city": "Berlin"}}),
+        (
+            "com.shop.Created",
+            {
+                "id": 1,
+                "billing": {"city": "Berlin", "zip": 1},
+                "shipping": {"city": "Paris", "zip": 2},
+            },
+        ),
         ("com.shop.Shipped", {"id": 1, "carrier": "ups"}),
-        ("com.shop.Created", {"id": 2, "billing": {"city": "Paris"}}),
+        (
+            "com.shop.Created",
+            {
+                "id": 2,
+                "billing": {"city": "Rome", "zip": 3},
+                "shipping": {"city": "Oslo", "zip": 4},
+            },
+        ),
     ]
     for event in events:
         producer.produce(topic, avro_framed(union_id, expanded, event), b"k")
@@ -1078,21 +1437,32 @@ def test_local_avro_references_and_union(
             local_credentials,
             AvroProcessor(
                 backend=backend,
-                table_per_schema=True,
+                table_per_schema=table_per_schema,
                 table_name=lambda topic, name: name.rsplit(".", 1)[1].lower(),
             ),
             local_registry_credentials,
         )
     )
+    if not table_per_schema:
+        columns = ["id", "billing__city", "shipping__city", "carrier", "_kafka__offset"]
+        assert table_rows(pipeline, topic, columns) == [
+            (1, "Berlin", "Paris", None, 0),
+            (1, None, None, "ups", 1),
+            (2, "Rome", "Oslo", None, 2),
+        ]
+        return
     assert sorted(pipeline.default_schema.data_table_names()) == ["created", "shipped"]
-    assert table_rows(pipeline, "created", ["id", "billing__city"]) == [
-        (1, "Berlin"),
-        (2, "Paris"),
+    columns = ["id", "billing__city", "shipping__city", "_kafka__offset"]
+    assert table_rows(pipeline, "created", columns) == [
+        (1, "Berlin", "Paris", 0),
+        (2, "Rome", "Oslo", 2),
     ]
-    assert table_rows(pipeline, "shipped", ["id", "carrier"]) == [(1, "ups")]
+    assert table_rows(pipeline, "shipped", ["id", "carrier", "_kafka__offset"]) == [
+        (1, "ups", 1)
+    ]
 
 
-@pytest.mark.parametrize("backend", ["python", "pyarrow"])
+@pytest.mark.parametrize("backend", BACKENDS)
 def test_local_avro_keys(
     pipeline: dlt.Pipeline,
     make_topic: MakeTopic,
@@ -1100,28 +1470,48 @@ def test_local_avro_keys(
     local_credentials: KafkaCredentials,
     local_registry: Any,
     local_registry_credentials: SchemaRegistryCredentials,
-    backend: str,
+    backend: TBackend,
 ) -> None:
     topic = make_topic()
-    value_schema = {
-        "type": "record",
-        "name": "Row",
-        "fields": [{"name": "v", "type": "string"}],
-    }
     key_schema = {
         "type": "record",
         "name": "Key",
-        "fields": [{"name": "id", "type": "long"}],
+        "fields": [
+            {"name": "id", "type": "long"},
+            {"name": "region", "type": "string"},
+        ],
     }
+    key = {"id": 1, "region": "eu"}
     produce_registry(
         producer,
         local_registry,
         topic,
-        value_schema,
-        [{"v": "a"}, {"v": "b"}, None],
-        keys=[{"id": 1}, {"id": 2}, {"id": 1}],
+        ROW_AVRO,
+        [{"v": "a"}],
+        "avro",
+        keys=[key],
         key_schema=key_schema,
-        serializer="avro",
+    )
+    # keys without a schema: a long key starts with a 0 byte and makes schema id 0
+    produce_registry(
+        producer,
+        local_registry,
+        topic,
+        ROW_AVRO,
+        [{"v": "b"}, {"v": "c"}, {"v": "d"}],
+        "avro",
+        keys=[(65).to_bytes(8, "big"), b"plain", None],
+    )
+    # a tombstone keeps its key
+    produce_registry(
+        producer,
+        local_registry,
+        topic,
+        ROW_AVRO,
+        [None],
+        "avro",
+        keys=[key],
+        key_schema=key_schema,
     )
     run_processor(
         pipeline,
@@ -1130,7 +1520,23 @@ def test_local_avro_keys(
         AvroProcessor(backend=backend),
         local_registry_credentials,
     )
-    rows = table_rows(pipeline, topic, ["_kafka__key__id", "v", "_kafka_msg_id"])
-    assert [row[:2] for row in rows] == [(1, "a"), (2, "b"), (1, None)]
-    # the tombstone of key 1 shares the id of its message
-    assert rows[0][2] == rows[2][2]
+    types = column_types(pipeline, topic)
+    assert (types["_kafka__key__id"], types["_kafka__key__region"]) == (
+        "bigint",
+        "text",
+    )
+    rows = table_rows(
+        pipeline,
+        topic,
+        ["v", "_kafka__key__id", "_kafka__key__region", "_kafka__key", "_kafka_msg_id"],
+    )
+    # the long key loads as text, inserts into duckdb drop its 0 characters, parquet keeps them
+    assert [row[:3] + (row[3] and row[3].lstrip("\x00"),) for row in rows] == [
+        ("a", 1, "eu", None),
+        ("b", None, None, "A"),
+        ("c", None, None, "plain"),
+        ("d", None, None, None),
+        (None, 1, "eu", None),
+    ]
+    # messages of a key share the id
+    assert rows[0][4] == rows[4][4]

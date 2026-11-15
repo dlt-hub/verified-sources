@@ -24,6 +24,16 @@ from sources.kafka.helpers.kafka_connect import (
             {"data_type": "decimal", "precision": 38, "scale": 4},
             ("decimal", 4),
         ),
+        # MySQL DECIMAL(65,30) read by Debezium
+        (
+            {
+                "type": "bytes",
+                "name": "org.apache.kafka.connect.data.Decimal",
+                "parameters": {"scale": "30", "connect.decimal.precision": "65"},
+            },
+            {"data_type": "text"},
+            ("decimal_text", 30),
+        ),
         (
             {"type": "int64", "name": "org.apache.kafka.connect.data.Timestamp"},
             {"data_type": "timestamp", "timezone": True},
@@ -56,6 +66,7 @@ from sources.kafka.helpers.kafka_connect import (
         "float32",
         "bytes",
         "decimal",
+        "wide_decimal",
         "timestamp",
         "nano_timestamp",
         "date",

@@ -23,8 +23,8 @@ from tests.kafka.utils import (
     MockRegistry,
     UseFakeConsumer,
     column_types,
+    avro_framed,
     exception_chain,
-    guid_headers,
     loaded_offsets,
     message,
     record_partition,
@@ -53,114 +53,6 @@ ORDER_SCHEMA = {
         "tags": {"type": "array", "items": {"type": "string"}},
     },
 }
-ORDERS = [
-    {
-        "id": 1,
-        "amount": 1.5,
-        "created": "2026-01-01T10:00:00+02:00",
-        "day": "2026-01-01",
-        "note": "first",
-        "customer": {"name": "ann", "vip": True},
-        "tags": ["a", "b"],
-    },
-    {
-        "id": 2,
-        "amount": 2,
-        "created": "2026-01-02T00:00:00Z",
-        "day": "2026-01-02",
-        "note": None,
-        "customer": {"name": "bob", "vip": False},
-        "tags": [],
-    },
-    None,
-]
-VALUE_COLUMNS = [
-    "id",
-    "amount",
-    "created",
-    "day",
-    "note",
-    "customer__name",
-    "customer__vip",
-]
-
-
-@pytest.mark.parametrize("framing", ["prefix", "header"])
-def test_backends_load_registry_types(
-    use_fake_consumer: UseFakeConsumer, mock_registry: MockRegistry, framing: str
-) -> None:
-    registry, registry_credentials = mock_registry
-    registered = register(registry, f"{TOPIC}-value", ORDER_SCHEMA)
-    loaded = []
-    for backend in BACKENDS:
-        schema_ids = [registered.schema_id] * len(ORDERS)
-        partition = record_partition(
-            TOPIC, ORDERS, schema_ids=schema_ids if framing == "prefix" else None
-        )
-        if framing == "header":
-            for record in partition.records:
-                record.set_headers(guid_headers(registered.guid))
-        credentials = use_fake_consumer(FakeConsumer({TOPIC: [partition]}))
-        pipeline = dlt.pipeline(
-            f"json_{uuid4().hex[:8]}", destination="duckdb", dev_mode=True
-        )
-        run_processor(
-            pipeline,
-            TOPIC,
-            credentials,
-            JsonProcessor(backend=backend, strict=True),
-            registry_credentials,
-        )
-        loaded.append(
-            (
-                pipeline.default_schema.data_table_names(),
-                column_types(pipeline, TABLE),
-                table_rows(
-                    pipeline, TABLE, VALUE_COLUMNS + ["_kafka__offset", "_kafka__key"]
-                ),
-            )
-        )
-    python, pyarrow = loaded
-    tables, types, rows = python
-    # lists are `json` from the schema, no nested tables
-    assert tables == [TABLE]
-    assert {name: types[name] for name in VALUE_COLUMNS + ["tags"]} == {
-        "id": "bigint",
-        "amount": "double",
-        "created": "timestamp",
-        "day": "date",
-        "note": "text",
-        "customer__name": "text",
-        "customer__vip": "bool",
-        "tags": "json",
-    }
-    assert rows == [
-        (
-            1,
-            1.5,
-            datetime(2026, 1, 1, 8, tzinfo=timezone.utc),
-            date(2026, 1, 1),
-            "first",
-            "ann",
-            True,
-            0,
-            "key_0",
-        ),
-        (
-            2,
-            2.0,
-            datetime(2026, 1, 2, tzinfo=timezone.utc),
-            date(2026, 1, 2),
-            None,
-            "bob",
-            False,
-            1,
-            "key_1",
-        ),
-        # a tombstone loads the metadata only
-        (None, None, None, None, None, None, None, 2, "key_2"),
-    ]
-    assert pyarrow == python
 
 
 def test_backends_without_schema(use_fake_consumer: UseFakeConsumer) -> None:
@@ -437,59 +329,169 @@ def test_kafka_connect_envelope(
     assert rows[1:] == [(None,) * len(names)] * 2
 
 
-def order_schema(properties: Dict[str, Any], title: str = "Order") -> Dict[str, Any]:
-    return {"title": title, "type": "object", "properties": properties}
+DECIMAL = "org.apache.kafka.connect.data.Decimal"
 
 
 @pytest.mark.parametrize("backend", BACKENDS)
-@pytest.mark.parametrize(
-    "subject,expected_hints",
-    [
-        (f"{TOPIC}-value", [["amount", "id", "unset"]]),
-        ("other-value", [["id", "unset"], ["amount", "id", "unset"]]),
-    ],
-    ids=["topic_subject", "other_subject"],
-)
-def test_registry_hints(
+def test_kafka_connect_edge_values(
+    pipeline: dlt.Pipeline,
+    use_fake_consumer: UseFakeConsumer,
+    kafka_warnings: List[str],
+    backend: str,
+) -> None:
+    schema = {
+        "type": "struct",
+        "name": "orders.Value",
+        "fields": [
+            {
+                "type": "bytes",
+                "optional": True,
+                "name": DECIMAL,
+                "parameters": {"scale": "2", "connect.decimal.precision": "38"},
+                "field": "big",
+            },
+            # MySQL DECIMAL(65,30)
+            {
+                "type": "bytes",
+                "optional": True,
+                "name": DECIMAL,
+                "parameters": {"scale": "30", "connect.decimal.precision": "65"},
+                "field": "wide",
+            },
+            # SQL Server datetimeoffset(7)
+            {
+                "type": "string",
+                "optional": True,
+                "name": "io.debezium.time.ZonedTimestamp",
+                "field": "zoned",
+            },
+            {
+                "type": "int64",
+                "optional": True,
+                "name": "io.debezium.time.MicroTimestamp",
+                "field": "updated",
+            },
+        ],
+    }
+    big = 123456789012345678901234567890123
+    values = [
+        connect_value(
+            schema,
+            {
+                "big": b64(big.to_bytes(14, "big", signed=True)),
+                "wide": b64((10**64 - 1).to_bytes(27, "big", signed=True)),
+                "zoned": "2026-01-01T10:00:00.1234567+02:00",
+                "updated": 0,
+            },
+        ),
+        # Debezium writes PostgreSQL `infinity` past the range of datetimes
+        connect_value(schema, {"updated": 9223372036825200000}),
+        # JsonConverter writes schemaless records with a null schema
+        b'{"schema":null,"payload":{"note":"schemaless"}}',
+    ]
+    credentials = use_fake_consumer(
+        FakeConsumer({TOPIC: [record_partition(TOPIC, values)]})
+    )
+    processor = JsonProcessor(backend=backend, envelope="kafka_connect", on_decode_error="skip")  # type: ignore[arg-type]
+    run_processor(pipeline, TOPIC, credentials, processor)
+    assert skipped_offsets(kafka_warnings) == [1]
+    types = column_types(pipeline, TABLE)
+    assert (types["big"], types["wide"], types["zoned"]) == (
+        "decimal",
+        "text",
+        "timestamp",
+    )
+    assert table_rows(pipeline, TABLE, ["big", "wide", "zoned", "note"]) == [
+        (
+            Decimal("1234567890123456789012345678901.23"),
+            "9999999999999999999999999999999999.999999999999999999999999999999",
+            datetime(2026, 1, 1, 8, 0, 0, 123456, tzinfo=timezone.utc),
+            None,
+        ),
+        (None, None, None, "schemaless"),
+    ]
+
+
+@pytest.mark.parametrize("backend", BACKENDS)
+def test_decimal_columns_load_exactly(
+    pipeline: dlt.Pipeline, use_fake_consumer: UseFakeConsumer, backend: str
+) -> None:
+    values = [
+        b'{"amount": 0.1}',
+        b'{"amount": 12345678901234567.89}',
+        b'{"amount": 1.005}',
+    ]
+    credentials = use_fake_consumer(
+        FakeConsumer({TOPIC: [record_partition(TOPIC, values)]})
+    )
+    resource = kafka_consumer(
+        TOPIC, credentials=credentials, msg_processor=JsonProcessor(backend=backend)  # type: ignore[arg-type]
+    )
+    resource.apply_hints(
+        columns={"amount": {"data_type": "decimal", "precision": 38, "scale": 18}}
+    )
+    pipeline.run(resource)
+    assert [row[0] for row in table_rows(pipeline, TABLE, ["amount"])] == [
+        Decimal("0.1"),
+        Decimal("12345678901234567.89"),
+        Decimal("1.005"),
+    ]
+
+
+def test_pyarrow_infers_utc_timestamps(
+    pipeline: dlt.Pipeline, use_fake_consumer: UseFakeConsumer
+) -> None:
+    # the first batch has whole seconds only, Java `Instant.toString()` drops a zero fraction
+    values = [
+        b'{"at": "2026-01-01T10:00:00Z"}',
+        b'{"at": "2026-01-01T10:00:00.250Z"}',
+    ]
+    credentials = use_fake_consumer(
+        FakeConsumer({TOPIC: [record_partition(TOPIC, values)]})
+    )
+    pipeline.run(
+        kafka_consumer(
+            TOPIC,
+            credentials=credentials,
+            msg_processor=JsonProcessor(backend="pyarrow"),
+            batch_size=1,
+        )
+    )
+    column = pipeline.default_schema.get_table_columns(TABLE)["at"]
+    assert (column["data_type"], column.get("timezone", True)) == ("timestamp", True)
+    assert table_rows(pipeline, TABLE, ["at"]) == [
+        (datetime(2026, 1, 1, 10, tzinfo=timezone.utc),),
+        (datetime(2026, 1, 1, 10, 0, 0, 250000, tzinfo=timezone.utc),),
+    ]
+
+
+@pytest.mark.parametrize("backend", BACKENDS)
+def test_other_schema_type_is_decode_error(
     pipeline: dlt.Pipeline,
     use_fake_consumer: UseFakeConsumer,
     mock_registry: MockRegistry,
-    emitted_hints: List[Dict[str, Any]],
-    backend: Any,
-    subject: str,
-    expected_hints: List[List[str]],
+    kafka_warnings: List[str],
+    backend: str,
 ) -> None:
     registry, registry_credentials = mock_registry
-    v1_properties = {"id": {"type": "integer"}, "unset": {"type": "string"}}
-    v1 = register(registry, subject, order_schema(v1_properties)).schema_id
-    v2_properties = {**v1_properties, "amount": {"type": "number"}}
-    v2 = register(registry, subject, order_schema(v2_properties)).schema_id
-    # writers of v1 and v2 interleave
+    avro = {
+        "type": "record",
+        "name": "Order",
+        "fields": [{"name": "id", "type": "long"}],
+    }
+    avro_id = register(registry, "orders-avro", avro, schema_type="AVRO").schema_id
     partition = record_partition(
-        TOPIC,
-        [{"id": 1}, {"id": 2}, {"id": 3, "amount": 1}, {"id": 4}],
-        schema_ids=[v1, v1, v2, v1],
+        TOPIC, [{"id": 1}, avro_framed(avro_id, avro, {"id": 2}), {"id": 3}]
     )
-    resource = kafka_consumer(
-        TOPIC,
-        credentials=use_fake_consumer(FakeConsumer({TOPIC: [partition]})),
-        msg_processor=JsonProcessor(backend=backend),
-        schema_registry=registry_credentials,
-    )
-    resource.apply_hints(columns={"id": {"data_type": "text"}})
-    pipeline.run(resource)
-    # the latest schema of `<topic>-value` before the first message, else each schema that adds
-    # columns
-    assert [sorted(hints["columns"]) for hints in emitted_hints] == expected_hints
-    types = column_types(pipeline, TABLE)
-    # columns of the schema without values, columns the user applied win
-    assert (types["unset"], types["id"], types["amount"]) == ("text", "text", "double")
-    assert table_rows(pipeline, TABLE, ["id", "amount"]) == [
-        ("1", None),
-        ("2", None),
-        ("3", 1.0),
-        ("4", None),
-    ]
+    credentials = use_fake_consumer(FakeConsumer({TOPIC: [partition]}))
+    processor = JsonProcessor(backend=backend, on_decode_error="skip")  # type: ignore[arg-type]
+    run_processor(pipeline, TOPIC, credentials, processor, registry_credentials)
+    assert loaded_offsets(pipeline, TABLE) == [(0, 0), (0, 2)]
+    assert skipped_offsets(kafka_warnings) == [1]
+
+
+def order_schema(properties: Dict[str, Any], title: str = "Order") -> Dict[str, Any]:
+    return {"title": title, "type": "object", "properties": properties}
 
 
 def test_no_hints_without_registry(

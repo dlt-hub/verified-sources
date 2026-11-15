@@ -50,8 +50,30 @@ TEXT = TypedField({"data_type": "text"}, None)
             "00000000-0000-0000-0000-000000000001",
             id="uuid_bytes",
         ),
-        pytest.param(("str", None), Decimal("1.50"), "1.50", id="decimal_text"),
+        pytest.param(("str", None), Decimal("1.50"), "1.50", id="str_decimal"),
+        pytest.param(
+            ("str", None), Decimal("1E-7"), "0.0000001", id="str_small_decimal"
+        ),
         pytest.param(("decimal", 2), "BNI=", Decimal("12.34"), id="decimal_base64"),
+        # more digits than the default decimal context of Python keeps
+        pytest.param(
+            ("decimal", 2),
+            (123456789012345678901234567890123).to_bytes(14, "big", signed=True),
+            Decimal("1234567890123456789012345678901.23"),
+            id="decimal_33_digits",
+        ),
+        pytest.param(
+            ("decimal_text", 30),
+            (10**64 - 1).to_bytes(27, "big", signed=True),
+            "9999999999999999999999999999999999.999999999999999999999999999999",
+            id="decimal_text_64_digits",
+        ),
+        pytest.param(
+            ("variable_decimal", None),
+            {"scale": 10, "value": b"\x05"},
+            "0.0000000005",
+            id="variable_decimal_small",
+        ),
         pytest.param(
             ("variable_decimal", None),
             {"scale": 2, "value": b"\x04\xd2"},
