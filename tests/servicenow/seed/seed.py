@@ -3,6 +3,7 @@
 Run from the repository root. Credentials are resolved from `sources/.dlt` like in tests:
 
     uv run python -m tests.servicenow.seed.seed [deploy|load|capture|capture-hidden|all]
+    uv run python -m tests.servicenow.seed.seed [deploy|load|verify|all] --performance
 
 `deploy` creates the `u_dlt_types` table with a field of every type, the `u_dlt_pages`,
 `u_dlt_incremental` and `u_dlt_changes` tables and the choices of `u_choice`. `load` deletes stale
@@ -10,16 +11,19 @@ Run from the repository root. Credentials are resolved from `sources/.dlt` like 
 the records in `data.DELETED_SEED_IDS` once, so `sys_audit_delete` has records of `u_dlt_types`.
 `capture` writes the `sys_dictionary` fields, a Table API page and a CSV export of `u_dlt_types` to
 `tests/servicenow/cases`. `capture-hidden`, not part of `all`, writes a page and an export of
-`u_dlt_pages` while a read ACL hides `sys_updated_on`. See `tests/servicenow/README.md`.
+`u_dlt_pages` while a read ACL hides `sys_updated_on`.
+
+With `--performance` the steps write only the performance tables in `data.PERF_TABLES`. `load`
+ends with `verify`, which compares the number and cursor of every record with `data.py`.
 """
 
+import argparse
 import json
 import os
-import sys
-from concurrent.futures import ThreadPoolExecutor
+from collections import defaultdict
 from datetime import date, datetime, time, timezone  # noqa: I251
 from functools import partial
-from typing import Any, Dict, List, Optional
+from typing import Any, Callable, Dict, List, Optional, Tuple
 
 # dlt resolves config and secrets from sources/.dlt, like in tests
 os.environ.setdefault("DLT_PROJECT_DIR", "sources")
@@ -33,6 +37,13 @@ from sources.servicenow.helpers.client import (
 )
 from sources.servicenow.helpers.query import GLIDE_DATETIME_FORMAT, TableQuery
 
+from tests.seed_utils import (
+    account_lock,
+    map_with_progress,
+    raise_differences,
+    record_http,
+    report_differences,
+)
 from tests.servicenow.seed import data
 from tests.servicenow.utils import get_credentials, wait_for_instance
 
@@ -45,6 +56,10 @@ TABLES = {
     data.DLT_INCREMENTAL: ("dlt incremental", data.INCREMENTAL_FIELDS),
     data.DLT_CHANGES: ("dlt changes", data.CHANGES_FIELDS),
 }
+PERF_TABLES = {
+    table: (f"dlt perf {table[-1]}", data.PERF_FIELDS) for table in data.PERF_TABLES
+}
+ALL_TABLES = {**TABLES, **PERF_TABLES}
 
 
 def find_one(
@@ -81,39 +96,39 @@ def to_input(value: Any, field: str) -> str:
     return str(value)
 
 
-def deploy_table(
-    client: ServiceNowClient, table: str, label: str, fields: Dict[str, Dict[str, Any]]
+def deploy_tables(
+    client: ServiceNowClient, tables: Dict[str, Tuple[str, Dict[str, Dict[str, Any]]]]
 ) -> None:
-    if not find_one(client, "sys_db_object", f"name={table}"):
-        send(
-            client,
-            "POST",
-            "table/sys_db_object",
-            json={"name": table, "label": label, "create_access_controls": "true"},
-        )
-    fields = {
-        data.SEED_ID_FIELD: {"internal_type": "string", "max_length": 64},
-        **fields,
-    }
-    for element, attributes in fields.items():
-        if find_one(client, "sys_dictionary", f"name={table}^element={element}"):
-            continue
-        send(
-            client,
-            "POST",
-            "table/sys_dictionary",
-            json={
-                "name": table,
-                "element": element,
-                "column_label": element[2:].replace("_", " "),
-                **{key: str(value) for key, value in attributes.items()},
-            },
-        )
+    for table, (label, fields) in tables.items():
+        if not find_one(client, "sys_db_object", f"name={table}"):
+            send(
+                client,
+                "POST",
+                "table/sys_db_object",
+                json={"name": table, "label": label, "create_access_controls": "true"},
+            )
+        fields = {
+            data.SEED_ID_FIELD: {"internal_type": "string", "max_length": 64},
+            **fields,
+        }
+        for element, attributes in fields.items():
+            if find_one(client, "sys_dictionary", f"name={table}^element={element}"):
+                continue
+            send(
+                client,
+                "POST",
+                "table/sys_dictionary",
+                json={
+                    "name": table,
+                    "element": element,
+                    "column_label": element[2:].replace("_", " "),
+                    **{key: str(value) for key, value in attributes.items()},
+                },
+            )
 
 
 def deploy(client: ServiceNowClient) -> None:
-    for table, (label, fields) in TABLES.items():
-        deploy_table(client, table, label, fields)
+    deploy_tables(client, TABLES)
     for value, label in data.CHOICES.items():
         query = f"name={data.DLT_TYPES}^element=u_choice^value={value}"
         if not find_one(client, "sys_choice", query):
@@ -136,11 +151,15 @@ def insert(client: ServiceNowClient, table: str, record: Dict[str, Any]) -> str:
     return str(send(client, "POST", f"table/{table}", json=values)["result"]["sys_id"])
 
 
+def delete(client: ServiceNowClient, table: str, sys_id: str) -> None:
+    send(client, "DELETE", f"table/{table}/{sys_id}")
+
+
 def upsert(client: ServiceNowClient, table: str, record: Dict[str, Any]) -> str:
     """Creates or updates `record` matched on its seed id, returns its sys_id. Fields of the table
     missing from `record` are emptied.
     """
-    values = {field: record.get(field) for field in TABLES[table][1]}
+    values = {field: record.get(field) for field in ALL_TABLES[table][1]}
     values[data.SEED_ID_FIELD] = record[data.SEED_ID_FIELD]
     existing = find_one(
         client, table, f"{data.SEED_ID_FIELD}={record[data.SEED_ID_FIELD]}"
@@ -163,13 +182,13 @@ def load(client: ServiceNowClient) -> None:
         client.records(data.DLT_TYPES, stale, ["sys_id", data.SEED_ID_FIELD])
     ):
         if record[data.SEED_ID_FIELD] not in seed_ids:
-            send(client, "DELETE", f"table/{data.DLT_TYPES}/{record['sys_id']}")
+            delete(client, data.DLT_TYPES, record["sys_id"])
     for record in data.RECORDS:
         upsert(client, data.DLT_TYPES, record)
     if not find_one(client, "sys_audit_delete", f"tablename={data.DLT_TYPES}"):
         for seed_id in data.DELETED_SEED_IDS:
             sys_id = upsert(client, data.DLT_TYPES, {data.SEED_ID_FIELD: seed_id})
-            send(client, "DELETE", f"table/{data.DLT_TYPES}/{sys_id}")
+            delete(client, data.DLT_TYPES, sys_id)
     load_records(client, data.DLT_PAGES, data.page_records(), "u_when")
     load_records(
         client,
@@ -182,11 +201,15 @@ def load(client: ServiceNowClient) -> None:
 def load_records(
     client: ServiceNowClient, table: str, records: List[Dict[str, Any]], field: str
 ) -> None:
-    """Inserts the `records` missing from `table` and updates the ones whose `field` differs"""
-    existing = {
-        record[data.SEED_ID_FIELD]: record
-        for record in client.records(table, TableQuery(), [data.SEED_ID_FIELD, field])
-    }
+    """Deletes all but one record of each seed id, a retried insert may create more. Then inserts
+    the `records` missing from `table` and updates the ones whose `field` differs
+    """
+    existing: Dict[str, List[Dict[str, Any]]] = defaultdict(list)
+    for record in client.records(
+        table, TableQuery(), ["sys_id", data.SEED_ID_FIELD, field]
+    ):
+        existing[record[data.SEED_ID_FIELD]].append(record)
+    duplicates = [record["sys_id"] for same in existing.values() for record in same[1:]]
     missing = [
         record for record in records if record[data.SEED_ID_FIELD] not in existing
     ]
@@ -194,12 +217,47 @@ def load_records(
         record
         for record in records
         if record[data.SEED_ID_FIELD] in existing
-        and existing[record[data.SEED_ID_FIELD]].get(field, "")
+        and existing[record[data.SEED_ID_FIELD]][0].get(field, "")
         != to_input(record[field], field)
     ]
-    with ThreadPoolExecutor(8) as pool:
-        list(pool.map(partial(insert, client, table), missing))
-        list(pool.map(partial(upsert, client, table), changed))
+    map_with_progress(partial(delete, client, table), duplicates, f"{table} deletes")
+    map_with_progress(partial(insert, client, table), missing, f"{table} inserts")
+    map_with_progress(partial(upsert, client, table), changed, f"{table} updates")
+
+
+def verify_records(
+    client: ServiceNowClient,
+    table: str,
+    records: List[Dict[str, Any]],
+    fields: List[str],
+) -> List[str]:
+    """Compares the `fields` of the records in `table` with `records` by seed id"""
+    expected = {
+        record[data.SEED_ID_FIELD]: [to_input(record[field], field) for field in fields]
+        for record in records
+    }
+    stored = (
+        (record[data.SEED_ID_FIELD], [record.get(field, "") for field in fields])
+        for record in client.records(table, TableQuery(), [data.SEED_ID_FIELD, *fields])
+    )
+    return report_differences(table, expected, stored)
+
+
+def load_performance(client: ServiceNowClient) -> None:
+    for table in data.PERF_TABLES:
+        load_records(client, table, data.perf_records(table), data.PERF_CURSOR)
+    verify_performance(client)
+
+
+def verify_performance(client: ServiceNowClient) -> None:
+    fields = ["u_number", data.PERF_CURSOR]
+    raise_differences(
+        [
+            error
+            for table in data.PERF_TABLES
+            for error in verify_records(client, table, data.perf_records(table), fields)
+        ]
+    )
 
 
 def capture(client: ServiceNowClient) -> None:
@@ -280,18 +338,64 @@ def capture_hidden(client: ServiceNowClient) -> None:
         f.write(export.content)
 
 
-if __name__ == "__main__":
-    command = sys.argv[1] if len(sys.argv) > 1 else "all"
+STEPS: Dict[str, Callable[[ServiceNowClient], None]] = {
+    "deploy": deploy,
+    "load": load,
+    "capture": capture,
+    "capture-hidden": capture_hidden,
+}
+PERF_STEPS: Dict[str, Callable[[ServiceNowClient], None]] = {
+    "deploy": partial(deploy_tables, tables=PERF_TABLES),
+    "load": load_performance,
+    "verify": verify_performance,
+}
+
+
+def main(argv: Optional[List[str]] = None) -> None:
+    parser = argparse.ArgumentParser(description="Seeds the ServiceNow test instance")
+    parser.add_argument(
+        "command",
+        nargs="?",
+        default="all",
+        choices=sorted({"all", *STEPS, *PERF_STEPS}),
+    )
+    parser.add_argument(
+        "--performance",
+        action="store_true",
+        help="deploy, load or verify the performance tables only",
+    )
+    args = parser.parse_args(argv)
+    steps = PERF_STEPS if args.performance else STEPS
+    if args.command == "all":
+        commands = (
+            ["deploy", "load"] if args.performance else ["deploy", "load", "capture"]
+        )
+    elif args.command in steps:
+        commands = [args.command]
+    else:
+        parser.error(
+            f"`{args.command}` needs {'no ' if args.performance else ''}--performance"
+        )
     sn_client = ServiceNowClient(get_credentials())
     wait_for_instance(sn_client)
-    commands: List[str] = (
-        ["deploy", "load", "capture"] if command == "all" else [command]
-    )
+    if args.performance:
+        with account_lock("servicenow"), record_http(
+            f"seed {args.command} --performance"
+        ):
+            run_steps(sn_client, steps, commands)
+    else:
+        run_steps(sn_client, steps, commands)
+
+
+def run_steps(
+    client: ServiceNowClient,
+    steps: Dict[str, Callable[[ServiceNowClient], None]],
+    commands: List[str],
+) -> None:
     for name in commands:
-        {
-            "deploy": deploy,
-            "load": load,
-            "capture": capture,
-            "capture-hidden": capture_hidden,
-        }[name](sn_client)
+        steps[name](client)
         print(f"{name}: done")
+
+
+if __name__ == "__main__":
+    main()

@@ -35,7 +35,7 @@ def search_mock(http_mock: requests_mock.Mocker) -> JiraMock:
         *(make_issue(n, "2024-01-15T10:30:00.000+0000") for n in range(1, 5))
     )
     jira_mock.jql_results = {
-        "project = X": ["1", "2", "3"],
-        "project = Y order by created": ["2", "4"],
+        "(project = X) ORDER BY updated ASC": ["1", "2", "3"],
+        "(project = Y) ORDER BY updated ASC": ["2", "4"],
     }
     return jira_mock

@@ -5,6 +5,8 @@
 - `test_salesforce_source.py`: live tests against the seeded test org. They only read data, except
   `test_incremental_changes`: it adds, updates and deletes its own `DltChanges__c` records between incremental
   runs.
+- `test_salesforce_performance.py`: performance tests against the [performance org](#performance-org), marked
+  `performance`. `pytest.ini` deselects them.
 
 ## Test org
 
@@ -83,3 +85,30 @@ Upserts only add and change data, so the org can keep data that `seed/data.py` n
 After changing `DltTypes__c` records or fields, run `load` and `capture`, then commit `cases/`. If Salesforce
 stores a value differently than seeded (e.g., rounds a number or trims whitespace), add it to `STORED_AS` in
 `seed/data.py`.
+
+## Performance org
+
+The test org has no room for large objects, so the performance data lives in a scratch org created with the test
+org as the Dev Hub, from `seed/performance-scratch-def.json`. Its credentials go to
+`[sources.salesforce_performance.credentials]`. Seed it with the test data and the performance data:
+
+```sh
+uv run python -m tests.salesforce.seed.seed all --performance  # or deploy | load | verify
+```
+
+`DltPerfA__c` and `DltPerfB__c` hold 50,000 records each with 12 fields of the common types. `Changed_At__c` has
+unique seconds over two years, in an order unrelated to `Number__c`. The values come from `perf_record` in
+`seed/data.py`. `load` stops when the records do not fit in the data storage left in the org and ends with `verify`,
+which compares every record with `seed/data.py`.
+
+```sh
+ALL_DESTINATIONS='["duckdb"]' uv run pytest -m performance -s tests/salesforce/test_salesforce_performance.py
+```
+
+Performance tests and `--performance` seeds print a summary of their HTTP requests and warn when the API
+throttled any, the timings of such a run are not comparable. They lock the account in the temp directory, so a
+second run on the same machine fails at once. Set `PERF_RESULTS` to an absolute path to append the results as JSON
+lines.
+
+`uv run python -m tests.salesforce.seed.seed jwt-app --performance --certificate client.crt` deploys an External
+Client App for clients that log in with the JWT bearer flow, pre-authorized for the org admin.

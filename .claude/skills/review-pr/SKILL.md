@@ -156,7 +156,7 @@ If the PR fixes a bug:
 
 Documentation is split between two repos:
 
-- **Source README** (`sources/<name>/README.md`) — the maintenance document of the source: changelog, extension points, maintenance & troubleshooting, see [Source version and README](../refresh-source/SKILL.md#source-version-and-readme). Seeding and tests go to `tests/<name>/README.md`. Check that the PR updates the sections it affects. Setup guides, configuration reference and usage examples belong in the dlt docs.
+- **Source README** (`sources/<name>/README.md`) — the maintenance document of the source: changelog, optimization & configuration, code customization, maintenance & troubleshooting, see [Source version and README](../refresh-source/SKILL.md#source-version-and-readme). Seeding and tests go to `tests/<name>/README.md`. Check that the PR updates the sections it affects. Setup guides, configuration reference and usage examples belong in the dlt docs.
 - **User docs** — live in the `dlt-hub/dlt` repo under `docs/website/docs/dlt-ecosystem/verified-sources/`, as `<doc>.md` or a `<doc>/` folder. The doc name does not always match the source folder (e.g. `stripe_analytics` → `stripe.md`, `asana_dlt` → `asana.md`, `kinesis` → `amazon_kinesis.md`). List and fetch them with `gh api repos/dlt-hub/dlt/contents/docs/website/docs/dlt-ecosystem/verified-sources?ref=devel`.
 
 If the PR changes user-facing behavior (source or resource arguments, defaults, loaded schema, setup steps, required permissions, dependencies):

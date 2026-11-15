@@ -386,3 +386,9 @@ def data_item_length(data: TDataItem) -> int:
         return data.num_rows
     else:
         raise TypeError("Unsupported data type.")
+
+
+def last_row_count(pipeline: dlt.Pipeline, table: str) -> int:
+    """Rows of `table` that the last run of `pipeline` normalized"""
+    table_name = pipeline.default_schema.naming.normalize_path(table)
+    return pipeline.last_trace.last_normalize_info.row_counts.get(table_name, 0)

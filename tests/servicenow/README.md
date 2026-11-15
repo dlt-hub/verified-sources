@@ -10,6 +10,8 @@
   `sys_audit_delete`, so a change test running at the same time adds delete rows to the row counts, which the
   test checks as lower bounds. Expected values come from `seed/data.py`, except `test_all_resources`,
   `test_large_table` and `test_partitioned_load_identical`, which read tables the seed does not write.
+- `test_servicenow_performance.py`: performance tests against the [performance data](#performance-data), marked
+  `performance`. `pytest.ini` deselects them.
 
 No test covers these cases, which were tried once by hand on the test instance:
 - the API user in the time zones America/Los_Angeles and Hongkong
@@ -65,3 +67,20 @@ On a new instance, run all steps again.
   2. Add a `record` ACL with operation `read` on `u_dlt_pages.sys_updated_on`, **Admin overrides** cleared and the
      script `answer = false;`.
   3. After the capture, deactivate the ACL.
+
+## Performance data
+
+`u_dlt_perf_a` and `u_dlt_perf_b` hold 50,000 records each with 12 fields of the common types. `u_updated_at` has
+unique seconds over two years, in an order unrelated to `u_number`. The values come from `perf_record` in
+`seed/data.py`. Seed them separately from the test data, `load` ends with `verify`, which compares every record with
+`seed/data.py`. A reclaimed instance loses them:
+
+```sh
+uv run python -m tests.servicenow.seed.seed all --performance     # or deploy | load | verify
+ALL_DESTINATIONS='["duckdb"]' uv run pytest -m performance -s tests/servicenow/test_servicenow_performance.py
+```
+
+Performance tests and `--performance` seeds print a summary of their HTTP requests and warn when the API
+throttled any, the timings of such a run are not comparable. They lock the account in the temp directory, so a
+second run on the same machine fails at once. Set `PERF_RESULTS` to an absolute path to append the results as JSON
+lines.

@@ -1,7 +1,7 @@
 """ This source uses Jira API and dlt to load data such as Issues, Users, Workflows and Projects to the database. """
 
 from datetime import datetime
-from typing import Annotated, Any, Iterable, Iterator, List, Optional
+from typing import Annotated, Any, Iterable, Iterator, Optional, Sequence
 
 import dlt
 from dlt.common.configuration import NotResolved, with_config
@@ -16,11 +16,13 @@ from .helpers.comments import COMMENT_COLUMNS, comment_rows
 from .helpers.issues import (
     CHANGELOGS_RESOURCE,
     COMMENTS_RESOURCE,
-    QUERY_INDEX,
+    DEFAULT_INCREMENTAL,
     IssuesPage,
     IssuesReader,
     changelog_rows,
+    is_default_incremental,
     is_replace,
+    make_default_incremental,
     make_issues_resource,
 )
 from .helpers.jql import ORDER_BY
@@ -28,6 +30,7 @@ from .helpers.schema_types import drop_keys
 from .helpers.worklogs import WORKLOG_COLUMNS, worklog_rows
 from .settings import (
     DEFAULT_ENDPOINTS,
+    DEFAULT_EXCLUDED_COLUMNS,
     DEFAULT_LAG,
     DEFAULT_PAGE_SIZE,
     MAX_SEARCH_PAGE_SIZE,
@@ -46,7 +49,6 @@ __all__ = [
     "issue_fields",
     "jira",
     "jira_issues",
-    "jira_search",
     "worklogs",
 ]
 
@@ -59,32 +61,33 @@ def jira(
     page_size: Optional[int] = None,
     jql: Optional[str] = None,
     start_date: Optional[TAnyDateTime] = None,
-    incremental: Optional[dlt.sources.incremental[Any]] = None,
+    incremental: Optional[dlt.sources.incremental[Any]] = DEFAULT_INCREMENTAL,
+    included_columns: Optional[Sequence[str]] = None,
+    excluded_columns: Sequence[str] = DEFAULT_EXCLUDED_COLUMNS,
     # Optional, so dlt resolves it from config
     write_disposition: Optional[TWriteDispositionConfig] = "merge",
 ) -> Iterable[DltResource]:
-    """
-    Jira source function that generates a list of resource functions based on endpoints.
+    """Loads issues, their comments and changelogs, worklogs, issue fields, users, workflows,
+    workflow statuses and projects.
 
-    Issues, their comments, changelogs and worklogs are loaded incrementally with
-    `write_disposition`. Issue fields, users, workflows, workflow statuses and projects are
-    replaced on each run.
+    Issues, comments, changelogs and worklogs load incrementally with `write_disposition`, the
+    other resources are replaced on each run.
 
     Args:
-        subdomain: The subdomain for the Jira instance.
+        subdomain: The subdomain of the Jira site.
         email: The email to authenticate with.
         api_token: The API token to authenticate with.
-        page_size: Rows per request of users, workflows and projects. Defaults to the largest
-            page each endpoint serves.
-        jql: JQL restricting loaded issues and their comments and changelogs, e.g.
-            `project = KAN`. Worklogs are read for all issues of the site.
-        start_date: Loads issues and worklogs updated since this date on the first run, all of
-            them if not set.
-        incremental: Your own incremental of issues instead of `start_date`, see `jira_issues`.
-        write_disposition: Write disposition of issues, their comments and changelogs and of
-            worklogs. "replace" loads all of them, updated since `start_date`, on each run.
-    Returns:
-        Iterable[DltResource]: List of resource functions.
+        page_size: Rows per request of users, workflows and projects, the largest page of each
+            endpoint if not set.
+        jql: JQL selecting the issues and their comments and changelogs, e.g. `project = KAN`.
+            Worklogs are read for all issues.
+        start_date: Loads issues and worklogs updated since this date on the first run, with
+            the default incremental.
+        incremental: See `jira_issues`.
+        included_columns: See `jira_issues`.
+        excluded_columns: See `jira_issues`.
+        write_disposition: Of issues, comments, changelogs and worklogs. "replace" loads all of
+            them, updated since `start_date`, on each run.
     """
     start = None if start_date is None else ensure_datetime_in_tz(start_date)
     issues = jira_issues(
@@ -94,6 +97,8 @@ def jira(
         jql=jql,
         start_date=start,
         incremental=incremental,
+        included_columns=included_columns,
+        excluded_columns=excluded_columns,
         write_disposition=write_disposition,
     )
     # client of the endpoint resources, comments and changelogs use the client of `issues`
@@ -134,7 +139,8 @@ def endpoint_rows(
 
 
 @with_config(
-    sections=(known_sections.SOURCES, SOURCE_SECTION, "issues"),
+    sections=(known_sections.SOURCES, SOURCE_SECTION),
+    section_arg_name="name",
     sections_merge_style=ConfigSectionContext.resource_merge_style,
 )
 def jira_issues(
@@ -143,13 +149,13 @@ def jira_issues(
     api_token: str = dlt.secrets.value,
     jql: Optional[str] = None,
     start_date: Optional[TAnyDateTime] = None,
-    incremental: Optional[dlt.sources.incremental[Any]] = None,
+    incremental: Optional[dlt.sources.incremental[Any]] = DEFAULT_INCREMENTAL,
     lag: Optional[float] = None,
     chunk_size: Optional[int] = None,
     bulk_fetch_size: Optional[int] = None,
     search_page_size: int = MAX_SEARCH_PAGE_SIZE,
-    included_columns: Optional[List[str]] = None,
-    excluded_columns: Optional[List[str]] = None,
+    included_columns: Optional[Sequence[str]] = None,
+    excluded_columns: Sequence[str] = DEFAULT_EXCLUDED_COLUMNS,
     write_disposition: Optional[TWriteDispositionConfig] = "merge",
     primary_key: TColumnNames = None,
     merge_key: TColumnNames = None,
@@ -157,58 +163,60 @@ def jira_issues(
 ) -> DltResource:
     """Returns the `issues` resource loading issues matching `jql` incrementally.
 
-    Ids of matching issues are listed with JQL search and pages of `chunk_size` issues are fetched
-    with bulk fetch in parallel: the number of parallel pages is set by dlt `workers` config of
-    the extract step (5 by default). Fields and their types are taken from the `/field` metadata:
-    each field is a column named by the field id, e.g. `summary` or `customfield_10016`. Comments and worklogs are not loaded into this table: pipe the issues
-    into `issue_comments` to load comments, use the `worklogs` resource for worklogs.
+    Search lists the ids of the issues, pages of `chunk_size` issues are fetched in parallel by the
+    extract workers. Each field is a column named by the field id, e.g. `customfield_10016`. Pipe
+    the issues into `issue_comments` and `issue_changelogs` to load those.
 
     Args:
-        subdomain (str): The subdomain for the Jira instance.
+        subdomain (str): The subdomain of the Jira site.
         email (str): The email to authenticate with.
         api_token (str): The API token to authenticate with.
-        jql (Optional[str]): JQL restricting loaded issues, e.g. `project = KAN`. It must not
-            contain ORDER BY.
+        jql (Optional[str]): JQL selecting the issues, e.g. `project = KAN`. ORDER BY only
+            without incremental.
         start_date (Optional[TAnyDateTime]): Loads issues updated since this date on the first
-            run, all issues if not set. It is the initial value of the default incremental
-            `dlt.sources.incremental("updated", initial_value=start_date, lag=lag)`, with
-            `dedup_sort="desc"` on `updated` so the latest version of an issue wins the merge.
-        incremental (Optional[dlt.sources.incremental[Any]]): Your own incremental instead of the
-            default one, used as is, without lag and dedup sort. Its cursor must be a date or
-            datetime field, e.g. `created` or a custom field id.
-        lag (Optional[float]): Seconds re-read on each run by the default incremental, to catch
-            issues missing in search results. 600 if not set.
-        chunk_size (Optional[int]): Rows in a yielded page of issues and of the comments and
-            changelogs piped from them, 1000 if not set. Pages of issues are fetched in parallel,
-            each in requests of `bulk_fetch_size` issues.
-        bulk_fetch_size (Optional[int]): Issues fetched in a single request, at most 1000. If not
-            set: 1000 if at most 100 fields with a single value are loaded, 100 otherwise.
-        search_page_size (int): Issue ids listed in a single search request, at most 5000.
-        included_columns (Optional[List[str]]): Field ids to load, all fields if not set. Included
-            fields get typed columns, also before they have values.
-        excluded_columns (Optional[List[str]]): Field ids to skip.
+            run. The initial value of the default incremental on `updated`, it wins over the
+            `initial_value` of an incremental without `cursor_path`.
+        incremental (Optional[dlt.sources.incremental[Any]]): The incremental on `updated` with
+            lag and dedup sort by default, an incremental without `cursor_path` sets its values.
+            Your own incremental is used as it is, its cursor must be a date or datetime field.
+            `None` loads all issues matching `jql` on each run.
+        lag (Optional[float]): Seconds the default incremental reads again on each run, 600 if
+            not set.
+        chunk_size (Optional[int]): Issues in a page, 1000 if not set.
+        bulk_fetch_size (Optional[int]): Issues fetched in a request, at most 1000. 100 if
+            `attachment`, `issuelinks`, `votes`, `watches`, `comment`, `worklog` or more than 100
+            fields are loaded, 1000 otherwise.
+        search_page_size (int): Issue ids listed in a search request, at most 5000.
+        included_columns (Optional[Sequence[str]]): Field ids to load, they get typed columns
+            before they have values. All fields if not set.
+        excluded_columns (Sequence[str]): Field ids to skip when `included_columns` is not set.
+            Pass `[]` to load `attachment`, `issuelinks`, `votes` and `watches`, which cap bulk
+            fetch at 100 issues.
         write_disposition (Optional[TWriteDispositionConfig]): "replace" loads all issues,
             updated since `start_date`, on each run.
-        primary_key (TColumnNames): Primary key, the issue `id` if not set.
+        primary_key (TColumnNames): The issue `id` if not set.
         merge_key (TColumnNames): Merge key of the resource.
-        name (str): Name of the resource and of its table. Its incremental state is kept by the
-            `<name>_ids` resource, the parent listing the ids. Use it to load several resources
-            of issues in one pipeline.
-
-    Returns:
-        DltResource: The dlt resource loading issues.
+        name (str): Name of the resource, its table and its config section
+            `sources.jira.<name>`. The `<name>_ids` resource keeps the incremental state.
     """
-    if jql and ORDER_BY.search(jql):
+    is_default = is_default_incremental(incremental)
+    if jql and incremental is not None and ORDER_BY.search(jql):
         raise ValueError(
-            f"JQL `{jql}` must not contain ORDER BY, issues are ordered by cursor"
+            f"JQL `{jql}` must not contain ORDER BY, issues are ordered by cursor. Pass"
+            " `incremental=None` to run it as it is"
         )
-    if start_date is not None and incremental is not None:
-        raise ValueError("Pass `start_date` or `incremental`, not both")
+    if start_date is not None and not is_default:
+        raise ValueError(
+            "`start_date` sets the default incremental, do not pass `incremental`"
+        )
     columns: Optional[TTableSchemaColumns] = None
-    if incremental is None:
+    if is_default:
         start = None if start_date is None else ensure_datetime_in_tz(start_date)
-        incremental = dlt.sources.incremental(
-            "updated", initial_value=start, lag=DEFAULT_LAG if lag is None else lag
+        incremental = make_default_incremental(
+            incremental,
+            dlt.sources.incremental[datetime](
+                "updated", initial_value=start, lag=DEFAULT_LAG if lag is None else lag
+            ),
         )
         # the latest version of an issue read more than once in a run wins
         columns = {"updated": {"name": "updated", "dedup_sort": "desc"}}
@@ -316,59 +324,3 @@ def issue_fields(
     Columns of `issues` are named by the field `id`.
     """
     yield JiraClient(subdomain, email, api_token).fields()
-
-
-@dlt.source(max_table_nesting=2)
-def jira_search(
-    subdomain: str = dlt.secrets.value,
-    email: str = dlt.secrets.value,
-    api_token: str = dlt.secrets.value,
-    page_size: Optional[int] = None,
-    jql_queries: List[str] = dlt.config.value,
-    page_limit: Optional[int] = None,
-    chunk_size: Optional[int] = None,
-    bulk_fetch_size: Optional[int] = None,
-    included_columns: Optional[List[str]] = None,
-    excluded_columns: Optional[List[str]] = None,
-) -> Iterable[DltResource]:
-    """
-    Jira search source with a `jira_search` resource that loads issues matching several JQL
-    queries, replaced on each run.
-
-    Issues are loaded like `jira_issues` loads them, each row with the `query_index` of the query
-    that found it: an issue found by several queries is loaded once for each of them, and the
-    primary key is `id` and `query_index`. Rename the resource to load another table, e.g.
-    `jira_search(jql_queries=queries).jira_search.with_name("epics")`.
-
-    Args:
-        subdomain: The subdomain for the Jira instance.
-        email: The email to authenticate with.
-        api_token: The API token to authenticate with.
-        page_size: Issue ids listed in a single search request, at most 5000 (the default).
-        jql_queries: JQL queries to run. A query needs a filtering clause; Jira rejects
-            one that only sorts.
-        page_limit: Maximum number of search pages of `page_size` issues to read per query,
-            since all queries share one resource and `add_limit` would bound them together.
-        chunk_size: See `jira_issues`.
-        bulk_fetch_size: See `jira_issues`.
-        included_columns: See `jira_issues`.
-        excluded_columns: See `jira_issues`.
-
-    Returns:
-        Iterable[DltResource]: Resource function for searching issues.
-    """
-    reader = IssuesReader(
-        JiraClient(subdomain, email, api_token),
-        queries=jql_queries,
-        page_limit=page_limit,
-        chunk_size=chunk_size,
-        bulk_fetch_size=bulk_fetch_size,
-        search_page_size=page_size or MAX_SEARCH_PAGE_SIZE,
-        included_columns=included_columns,
-        excluded_columns=excluded_columns,
-    )
-    return [
-        make_issues_resource(
-            reader, None, "replace", ["id", QUERY_INDEX], name="jira_search"
-        )
-    ]
