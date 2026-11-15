@@ -6,12 +6,12 @@ Maintenance notes of the [Kafka](https://kafka.apache.org/) source. Setup and us
 ## Changelog
 
 ### 1.0.0
-**Upgrade**: safe from any earlier commit (#306 to #607) after you install
-`confluent-kafka>=2.13.2` and `dlt>=1.28.1`. The offsets in the state carry over and the columns do
-not change (tested from the last unnumbered commit). The first run also loads the messages that
-earlier versions held back. To reload instead, run
-`pipeline.run(kafka_consumer(...), refresh="drop_sources")`. Messages that retention deleted are
-lost.
+**Upgrade**: copies without `version.py` may come from any earlier commit. From the last one
+(#607), the upgrade is safe after you install `confluent-kafka>=2.13.2` and `dlt>=1.28.1`: the
+offsets in the state carry over and the columns do not change (tested). The first run also loads
+the messages that earlier versions held back. From an older copy, or when you are not sure, reload
+with `pipeline.run(kafka_consumer(...), refresh="drop_sources")`. Messages that retention deleted
+are lost.
 - **breaking** `OffsetTracker` is removed. `helpers.py` is split into `helpers/client.py`,
   `helpers/credentials.py` and `helpers/processors.py`. Import `KafkaCredentials` and
   `default_msg_processor` from the `kafka` package
@@ -41,6 +41,9 @@ lost.
 - new `kafka_consumer`: `request_timeout` of the metadata and offset requests
 - new `kafka_consumer`: `schema_registry` with `SchemaRegistryCredentials`. `msg_processor` accepts
   a `BatchProcessor` that converts the messages of one topic and one schema at once
+- new `kafka_consumer`: `on_type_change`. With "strict", a schema that changes a loaded column to
+  a type whose values do not fit fails the run with `IncompatibleColumnTypeException`. With "skip",
+  the `data_type` schema contract decides
 - new `KafkaCredentials`: SSL and mTLS with PEM strings or files, SCRAM, OAuth with OIDC, and any
   librdkafka property in `consumer_config`
 - new `KafkaMskIamCredentials`: Amazon MSK with IAM access control
@@ -52,26 +55,38 @@ lost.
 
 Versions before 1.0.0 have no `version.py`. `.dlt/.sources` records the commit of a copy.
 
-## Extension points
+## Optimization & Configuration
 
-- Message conversion: pass a `msg_processor` function to `kafka_consumer`. The function must return
-  `_kafka.topic`, which names the table. `helpers/processors.py` holds the default function and
-  its helpers.
-- A message format: subclass `BatchProcessor` of `helpers/processors.py`. `schema_id` groups the
-  messages. `table_schema` returns the table and the columns of a schema, and `kafka_consumer`
-  emits them as table hints when they change. `__call__` converts a group. `JsonProcessor` and
-  `AvroProcessor` are examples.
-- Schema types: JSON Schema in `json_schema_fields` of `helpers/json_schema.py`, Avro in
-  `avro_fields` of `helpers/avro.py`, and Kafka Connect and Debezium types in `connect_fields` and
-  `logical_field` of `helpers/kafka_connect.py`. Value conversions are in `helpers/columns.py`.
-- Credentials: when many users need a librdkafka property, add it as a field of `KafkaCredentials`
-  in `helpers/credentials.py`. Name the field like the property, with underscores instead of
-  periods. Other properties go to `consumer_config`.
-- Token based auth: write a subclass of `KafkaCredentials` that sets `oauth_cb`, like
-  `KafkaMskIamCredentials`. Put it before `KafkaCredentials` in the `credentials` union of
-  `kafka_consumer`. dlt resolves the first spec that has all its required fields.
-- Reading: `partition_ranges` and `read_batches` in `helpers/client.py` work with any
-  `confluent_kafka.Consumer`.
+Measured with 300000 messages in 4 partitions of a local Kafka, loaded to `filesystem`, with JSON
+values of 198 bytes and Avro values of 48 bytes (local Kafka).
+
+- **Backend and file format**: `pyarrow` with `parquet` loads about 5 times faster than `python`
+  with `JsonProcessor`, and about 4 times faster with `AvroProcessor`. With `jsonl`, `pyarrow` is only
+  about 1.5 times faster, because writing JSON lines takes most of the time. With `python`, dlt
+  normalizes every row, which limits all processors, `default_msg_processor` included. Pick the
+  backend before the first load, see the backend switch below.
+- **Consumer**: with `pyarrow` and `parquet`, reading the messages takes most of the run. Consuming
+  alone is only about 1.3 times faster.
+- **`batch_timeout`**: since `confluent-kafka` 2.15.1, `consume` waits for `batch_size` messages
+  until `batch_timeout`, so the last batch of every run waits the full `batch_timeout`
+  ([PR 2235](https://github.com/confluentinc/confluent-kafka-python/pull/2235)). A consumer passed
+  as `credentials` without `enable.partition.eof` also ends with an empty batch. A lower
+  `batch_timeout` shortens frequent runs on quiet topics, but a run ends early when no message
+  arrives in time.
+
+## Code Customization
+
+- A message conversion: a `msg_processor` function, follow `default_msg_processor` in
+  `helpers/processors.py`.
+- A message format: follow `JsonProcessor` in `helpers/json_processor.py`.
+- A JSON Schema type: `helpers/json_schema.py`.
+- An Avro type: `helpers/avro.py`.
+- A Kafka Connect or Debezium type: `helpers/kafka_connect.py`.
+- A value conversion: `helpers/columns.py`.
+- A type change that fits a loaded column: `column_type_fits` in `helpers/hints.py`.
+- A librdkafka property used by many users: `KafkaCredentials` in `helpers/credentials.py`.
+- Token based auth: follow `KafkaMskIamCredentials` in `helpers/credentials.py`.
+- Reading with your own consumer: `read_batches` in `helpers/client.py`.
 
 ## Maintenance & Troubleshooting
 
@@ -80,37 +95,31 @@ Versions before 1.0.0 have no `version.py`. `.dlt/.sources` records the commit o
   transactions load on a later run, and messages of aborted transactions do not load (local
   Kafka). To read open transactions, set `"isolation.level": "read_uncommitted"` in
   `consumer_config`. This setting also loads the messages of aborted transactions.
-- Since `confluent-kafka` 2.15.1, `consume` waits for `batch_size` messages until `batch_timeout`.
-  The last batch of every run waits the full `batch_timeout`
-  ([PR 2235](https://github.com/confluentinc/confluent-kafka-python/pull/2235)). A consumer passed
-  as `credentials` without `enable.partition.eof` also ends with an empty batch.
 - When no message arrives within `batch_timeout`, the run ends early with a warning. The warning
   names the partitions that were not read to the end. The next run continues after the last
-  message read. For slow clusters, increase `batch_timeout`.
-- Throughput of 300000 messages in 4 partitions to `filesystem`, in messages/s (local Kafka):
-
-  | Processor | Values | `jsonl` | `parquet` |
-  |---|---|---|---|
-  | `default_msg_processor` | JSON, 198 bytes | 23000 | |
-  | `JsonProcessor(backend="python")` | JSON, 198 bytes | 21000 | |
-  | `JsonProcessor(backend="pyarrow")` | JSON, 198 bytes | 33000 | 109000 |
-  | `AvroProcessor(backend="python")` | Avro, 48 bytes | 19000 | |
-  | `AvroProcessor(backend="pyarrow")` | Avro, 48 bytes | 26000 | 83000 |
-
-  Consuming alone runs at about 139000 messages/s.
+  message read (local Kafka). For slow clusters, increase `batch_timeout`.
 - Protobuf values are not read. Schema ids of AWS Glue (a `0x03` byte) and Azure Event Hubs are
   not read, and their values are decode errors. `default_msg_processor` loads the Confluent
   framing ([wire format](https://docs.confluent.io/platform/current/schema-registry/fundamentals/serdes-develop/index.html#wire-format))
   as text.
 - When `JsonProcessor` or `AvroProcessor` cannot decode a message, the run fails before the offset
-  of that message is stored. The next run starts at that message again. To log and skip such
-  messages, set `on_decode_error="skip"`.
+  of that message is stored. The next run starts at that message again (`test_decode_errors`). To
+  log and skip such messages, set `on_decode_error="skip"`.
 - Producers with the Java `LongSerializer` write keys as 8 binary bytes. Keys that are not UTF-8
-  and have no Avro schema are decode errors for `JsonProcessor` and `AvroProcessor`.
-  `default_msg_processor` loads them as binary.
+  and have no Avro schema are decode errors for `JsonProcessor` and `AvroProcessor`
+  (`test_decode_errors`). `default_msg_processor` loads them as binary.
 - Debezium writes the PostgreSQL `infinity` timestamp as 9223372036825200000
   ([Debezium docs](https://debezium.io/documentation/reference/stable/connectors/postgresql.html)).
-  No timestamp column holds this value, so `AvroProcessor` reports a decode error.
+  No timestamp column holds this value, so both processors report a decode error
+  (`test_kafka_connect_edge_values`).
+- Schema Registry types change, for example an Avro `int` becomes a `double`, and dlt never
+  changes the type of a destination column. Without a check, `2.5` loaded as `2` into the old
+  `bigint` column (local Kafka). With `on_type_change="strict"`, a loaded column keeps its type when
+  the new values fit it, and the run fails with `IncompatibleColumnTypeException` when they do
+  not. With "skip", set the `data_type` schema contract to "freeze" to fail the run
+  (`test_local_type_change`).
+- Decimals wider than 38 digits load as text with all their digits, like Debezium
+  `VariableScaleDecimal`: most destinations hold at most 38 digits (`test_kafka_connect_edge_values`).
 - `AvroProcessor` does not apply the data contract rules of a schema. Encrypted fields load as
   ciphertext, and transforms and migrations do not run. A warning names the schema
   ([data contracts](https://docs.confluent.io/platform/current/schema-registry/fundamentals/data-contracts.html)).
@@ -118,7 +127,9 @@ Versions before 1.0.0 have no `version.py`. `.dlt/.sources` records the commit o
   of a run. dlt fails a load when the Arrow type of a column changes within the load (local run).
   A value that does not fit, for example `2.5` after integers, is a decode error. Schema Registry
   types, columns applied to the resource, or the `python` backend prevent the error. Without a
-  schema, lists load as nested tables with `python` and as `json` with `pyarrow`.
+  schema, lists load as nested tables with `python` and as `json` with `pyarrow`, and ISO dates
+  and timestamps load as text with `python` and as UTC timestamps with `pyarrow`
+  (`test_pyarrow_infers_utc_timestamps`).
 - A backend switch on a loaded table fails in both directions. Rows get NOT NULL `_dlt_load_id`
   and `_dlt_id` columns, and Arrow tables do not (`test_local_backend_switch`). Before the first
   load, set `add_dlt_load_id` and `add_dlt_id` of `[normalize.parquet_normalizer]`.
@@ -136,8 +147,9 @@ Versions before 1.0.0 have no `version.py`. `.dlt/.sources` records the commit o
   with a null `_kafka__data`, and earlier rows of its key stay (`test_local_incremental_changes`).
   Debezium deletes read with `envelope="kafka_connect"` load as rows too. For the latest value per key,
   deduplicate on `_kafka__key` by the largest `_kafka__offset`, per partition.
-- `_kafka_msg_id` is a hash of topic, partition and key. Messages with the same key share it, so it
-  is not a primary key. `_kafka__partition` and `_kafka__offset` identify a message in a table.
+- `_kafka_msg_id` is a hash of topic, partition and key (`test_default_msg_processor`). Messages
+  with the same key share it, so it is not a primary key. `_kafka__partition` and `_kafka__offset`
+  identify a message in a table.
 - A wrong password or a missing client certificate fails with `_TRANSPORT` `Failed to get
   metadata` after `request_timeout`. librdkafka logs the cause, for example
   `SASL authentication error`, to stderr (local Kafka).

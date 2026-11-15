@@ -16,6 +16,7 @@ from typing import (
 from uuid import UUID
 
 from dlt.common import Decimal, json
+from dlt.common.arithmetics import DEFAULT_NUMERIC_PRECISION, numeric_default_context
 from dlt.common.normalizers.naming import NamingConvention
 from dlt.common.schema.typing import TColumnSchema, TTableSchemaColumns
 from dlt.common.time import ensure_datetime_in_tz
@@ -25,6 +26,8 @@ TPath = Tuple[str, ...]
 TConversion = Tuple[str, Any]
 """How a decoded value is converted, a kind and its parameter, see `value_converter`"""
 
+# wider decimals load as text: most destinations hold at most 38 digits
+MAX_DECIMAL_PRECISION = DEFAULT_NUMERIC_PRECISION
 EPOCH = datetime(1970, 1, 1, tzinfo=timezone.utc)
 # local timestamps are wall-clock times without a time zone
 LOCAL_EPOCH = datetime(1970, 1, 1)
@@ -82,12 +85,14 @@ def value_converter(conversion: TConversion) -> Callable[[Any], Any]:
         return base64.b64decode
     if kind == "decimal":
         return partial(_decimal, scale=parameter)
+    if kind == "decimal_text":
+        return partial(_decimal_text, scale=parameter)
     if kind == "variable_decimal":
         return _variable_decimal
     if kind == "uuid":
         return _uuid
     if kind == "str":
-        return str
+        return _text
     if kind == "iso_timestamp":
         return partial(ensure_datetime_in_tz, tz=timezone.utc)
     if kind == "json":
@@ -167,13 +172,26 @@ def _days(value: int) -> date:
 def _decimal(value: Union[bytes, str], scale: int) -> Decimal:
     """Decimal from its unscaled big-endian bytes, base64 encoded in JSON"""
     data = base64.b64decode(value) if isinstance(value, str) else value
-    return Decimal(int.from_bytes(data, "big", signed=True)).scaleb(-scale)
+    unscaled = int.from_bytes(data, "big", signed=True)
+    # the context keeps every digit, also of values wider than 38 digits
+    with numeric_default_context(
+        max(DEFAULT_NUMERIC_PRECISION, len(str(abs(unscaled))))
+    ):
+        return Decimal(unscaled).scaleb(-scale)
+
+
+def _decimal_text(value: Union[bytes, str], scale: int) -> str:
+    return format(_decimal(value, scale), "f")
 
 
 def _variable_decimal(value: Union[Mapping[str, Any], str]) -> str:
     """Debezium VariableScaleDecimal, a record of `scale` and `value` or its JSON"""
     record: Mapping[str, Any] = json.loads(value) if isinstance(value, str) else value
-    return str(_decimal(record["value"], int(record["scale"])))
+    return _decimal_text(record["value"], int(record["scale"]))
+
+
+def _text(value: Any) -> str:
+    return format(value, "f") if isinstance(value, Decimal) else str(value)
 
 
 def _uuid(value: Union[UUID, bytes, str]) -> str:

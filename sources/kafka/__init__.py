@@ -28,7 +28,7 @@ from .helpers.credentials import (
     KafkaMskIamCredentials,
     SchemaRegistryCredentials,
 )
-from .helpers.hints import TableHints
+from .helpers.hints import IncompatibleColumnTypeException, TableHints, TOnTypeChange
 from .helpers.json_processor import JsonProcessor
 from .helpers.processors import (
     BatchProcessor,
@@ -47,6 +47,7 @@ __all__ = [
     "AvroProcessor",
     "JsonProcessor",
     "MessageDecodeError",
+    "IncompatibleColumnTypeException",
     "default_msg_processor",
 ]
 
@@ -64,6 +65,7 @@ def kafka_consumer(
     end_time: Optional[TAnyDateTime] = None,
     request_timeout: float = 30,
     schema_registry: Optional[SchemaRegistryCredentials] = None,
+    on_type_change: TOnTypeChange = "strict",
 ) -> Iterable[TDataItem]:
     """Extract recent messages from the given Kafka topics.
 
@@ -93,8 +95,13 @@ def kafka_consumer(
         request_timeout (float): Timeout of the requests for topic metadata and offsets, in
             seconds.
         schema_registry (Optional[SchemaRegistryCredentials]): A Schema Registry, by default taken
-            from `schema_registry` in the source config. `JsonProcessor` types the columns with the
-            schemas of the messages.
+            from `schema_registry` in the source config. `JsonProcessor` and `AvroProcessor` type
+            the columns with the schemas of the messages.
+        on_type_change (TOnTypeChange): What happens when a schema changes the type of a column
+            loaded before. "strict" keeps the loaded type when the new values fit it and raises
+            `IncompatibleColumnTypeException` when they do not, dlt never changes the type of a
+            destination column. "skip" emits the new type: set the `data_type` schema contract
+            of the resource to "freeze" to fail the run, or "discard_value" to drop the values.
 
     Yields:
         Iterable[TDataItem]: Kafka messages.
@@ -136,15 +143,13 @@ def kafka_consumer(
     registry = schema_registry.init_client() if schema_registry is not None else None
     resource = _current_resource()
     table_override = _static_table_name(resource)
-    hints = TableHints(resource)
+    hints = TableHints(resource, on_type_change)
 
     with closing(consumer):
         processor.prepare(topics, registry, _naming())
         for topic in topics:
             table, columns = processor.table_schema(topic, None)
-            hints_item = hints.update(table_override or table, columns)
-            if hints_item is not None:
-                yield hints_item
+            hints.update(table_override or table, columns)
 
         ranges = partition_ranges(
             consumer, topics, offsets, start_dt, end_dt, request_timeout
@@ -165,9 +170,7 @@ def kafka_consumer(
             ):
                 table, columns = processor.table_schema(topic, schema_id)
                 table = table_override or table
-                hints_item = hints.update(table, columns)
-                if hints_item is not None:
-                    yield hints_item
+                hints.update(table, columns)
                 for (offset_topic, partition), offset in group_offset.items():
                     offsets.setdefault(offset_topic, {})[str(partition)] = offset
                 items = processor(table, schema_id, hints.columns(table), group)
@@ -176,7 +179,7 @@ def kafka_consumer(
                         dlt.mark.with_table_name(_unmarked(item), table_override)
                         for item in items
                     ]
-                yield from items
+                yield from hints.with_hints(table, items)
 
 
 def _current_resource() -> Optional[DltResource]:

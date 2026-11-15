@@ -2,7 +2,7 @@ from typing import Any, Dict, Mapping, Optional, Tuple
 
 from dlt.common.schema.typing import TColumnSchema, TDataType
 
-from .columns import TConversion, TFields, TPath, TypedField
+from .columns import MAX_DECIMAL_PRECISION, TConversion, TFields, TPath, TypedField
 
 ENVELOPE_PREFIX = b'{"schema":'
 ENVELOPE_PAYLOAD = b',"payload":'
@@ -72,13 +72,15 @@ def connect_payload(value: bytes) -> Optional[bytes]:
 
 
 def connect_schema(value: bytes) -> Optional[bytes]:
-    """The schema of a Kafka Connect JSON envelope, `None` when `value` is not one"""
+    """The schema of a Kafka Connect JSON envelope, `None` when `value` is not one or has no
+    schema, as `JsonConverter` writes schemaless records"""
     if not value.startswith(ENVELOPE_PREFIX):
         return None
     end = value.find(ENVELOPE_PAYLOAD)
     if end < 0:
         return None
-    return value[len(ENVELOPE_PREFIX) : end]
+    schema = value[len(ENVELOPE_PREFIX) : end]
+    return None if schema.strip() == b"null" else schema
 
 
 def connect_fields(schema: Mapping[str, Any]) -> TFields:
@@ -106,13 +108,16 @@ def _add_fields(fields: TFields, path: TPath, schema: Mapping[str, Any]) -> None
     elif name == DECIMAL:
         parameters = schema.get("parameters") or {}
         scale = int(parameters.get("scale", 0))
-        precision = int(parameters.get("connect.decimal.precision", 38))
-        column = {
-            "data_type": "decimal",
-            "precision": max(precision, scale),
-            "scale": scale,
-        }
-        conversion = ("decimal", scale)
+        precision = max(
+            int(parameters.get("connect.decimal.precision", MAX_DECIMAL_PRECISION)),
+            scale,
+        )
+        if precision > MAX_DECIMAL_PRECISION:
+            column = {"data_type": "text"}
+            conversion = ("decimal_text", scale)
+        else:
+            column = {"data_type": "decimal", "precision": precision, "scale": scale}
+            conversion = ("decimal", scale)
     elif name == VARIABLE_SCALE_DECIMAL:
         column["data_type"] = "text"
         conversion = ("variable_decimal", None)

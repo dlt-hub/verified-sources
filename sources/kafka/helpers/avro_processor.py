@@ -33,7 +33,6 @@ from .columns import (
     check_names,
     convert_row,
     drop_null_records,
-    fields_columns,
     record_paths,
     row_conversions,
 )
@@ -119,7 +118,6 @@ class AvroProcessor(SchemaProcessor):
             raise MissingDependencyException("AvroProcessor", ["fastavro"])
         super().__init__(backend, on_decode_error, table_per_schema, table_name)
         self._writers: Dict[TSchemaId, Union[WriterSchema, str]] = {}
-        self._fields: Dict[Tuple[str, Optional[Hashable]], TFields] = {}
 
     def prepare(
         self,
@@ -151,9 +149,9 @@ class AvroProcessor(SchemaProcessor):
             return None
         return AvroSchemaId(value_id, branch, key_id)
 
-    def compute_table_schema(
+    def compute_table_fields(
         self, topic: str, schema_id: Optional[Hashable]
-    ) -> Tuple[str, Optional[TTableSchemaColumns]]:
+    ) -> Tuple[str, Optional[TFields]]:
         avro_id: Optional[AvroSchemaId] = schema_id  # type: ignore[assignment]
         fields = self.fields(topic, avro_id)
         table = topic
@@ -168,14 +166,11 @@ class AvroProcessor(SchemaProcessor):
                 return topic, None
             if name:
                 table = self.table_name(topic, name)
-        return table, fields_columns(fields, self.naming) or None
+        return table, fields
 
     def fields(self, topic: str, schema_id: Optional[AvroSchemaId]) -> TFields:
         """Fields of the values and keys of a schema id, of the latest schemas of `topic` for
         `None`"""
-        cache_key = (topic, schema_id)
-        if cache_key in self._fields:
-            return self._fields[cache_key]
         fields: TFields = {}
         value = self._value_writer(topic, schema_id)
         if isinstance(value, WriterSchema):
@@ -195,7 +190,6 @@ class AvroProcessor(SchemaProcessor):
                 avro_fields(key.schema, key.named, prefix=KEY_PREFIX, scalar_name=None)
             )
         check_names(fields, self.naming)
-        self._fields[cache_key] = fields
         return fields
 
     def writer(self, schema_id: TSchemaId) -> Union[WriterSchema, str]:
@@ -303,7 +297,9 @@ class AvroProcessor(SchemaProcessor):
     ) -> List[TDataItem]:
         avro_id: Optional[AvroSchemaId] = schema_id  # type: ignore[assignment]
         topic = messages[0].topic()
-        fields = self.fields(topic, avro_id) if avro_id is not None else {}
+        fields = (
+            self.table_fields(topic, avro_id)[1] if avro_id is not None else None
+        ) or {}
         value_writer = self._value_writer(topic, avro_id) if avro_id else None
         key_writer = self._key_writer(topic, avro_id) if avro_id else None
         scalar_value = isinstance(value_writer, WriterSchema) and not is_record(
@@ -342,19 +338,55 @@ class AvroProcessor(SchemaProcessor):
         if not rows:
             return []
         if self.backend == "pyarrow":
-            from .arrow import avro_arrow_table, avro_arrow_types
+            return [
+                dlt.mark.with_table_name(item, table)
+                for item in self._arrow_tables(
+                    rows,
+                    decoded,
+                    None if isinstance(key_writer, WriterSchema) else keys,
+                    fields,
+                    columns,
+                )
+            ]
+        return [dlt.mark.with_table_name(rows, table)]
 
-            item: TDataItem = avro_arrow_table(
-                rows,
-                decoded,
-                None if isinstance(key_writer, WriterSchema) else keys,
-                avro_arrow_types(fields),
-                columns,
-                self.naming,
-            )
-        else:
-            item = rows
-        return [dlt.mark.with_table_name(item, table)]
+    def _arrow_tables(
+        self,
+        rows: List[Dict[str, Any]],
+        messages: List[Message],
+        keys: Optional[List[Any]],
+        fields: TFields,
+        columns: Optional[TTableSchemaColumns],
+    ) -> List[TDataItem]:
+        """Arrow tables of the decoded `rows`, halves are retried to find the rows that fail"""
+        import pyarrow as pa
+
+        from .arrow import avro_arrow_table, avro_arrow_types
+
+        try:
+            return [
+                avro_arrow_table(
+                    rows, messages, keys, avro_arrow_types(fields), columns, self.naming
+                )
+            ]
+        except (pa.ArrowException, ValueError) as ex:
+            if len(rows) == 1:
+                self.decode_error(MessageDecodeError(messages[0], str(ex)))
+                return []
+        middle = len(rows) // 2
+        return self._arrow_tables(
+            rows[:middle],
+            messages[:middle],
+            None if keys is None else keys[:middle],
+            fields,
+            columns,
+        ) + self._arrow_tables(
+            rows[middle:],
+            messages[middle:],
+            None if keys is None else keys[middle:],
+            fields,
+            columns,
+        )
 
     def _decode_value(
         self,

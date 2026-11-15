@@ -3,7 +3,7 @@ from typing import Any, Dict, List, Mapping, Optional, Sequence, Set
 from dlt.common import json
 from dlt.common.schema.typing import TColumnSchema, TDataType
 
-from .columns import TFields, TPath, TypedField
+from .columns import TConversion, TFields, TPath, TypedField
 from .registry import TSchemaId
 
 JSON_STRING_FORMATS: Dict[str, TDataType] = {
@@ -60,9 +60,11 @@ def _add_fields(
     data_type = _data_type(branches)
     if data_type is not None:
         column: TColumnSchema = {"data_type": data_type}
+        conversion: Optional[TConversion] = None
         if data_type == "timestamp":
             column["timezone"] = True
-        fields[path] = TypedField(column, None)
+            conversion = ("iso_timestamp", None)
+        fields[path] = TypedField(column, conversion)
 
 
 def _branches(

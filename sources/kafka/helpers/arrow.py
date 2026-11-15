@@ -1,4 +1,5 @@
 import io
+from datetime import datetime, timedelta, timezone
 from typing import (
     Any,
     Callable,
@@ -13,6 +14,7 @@ from typing import (
 )
 
 import pyarrow as pa
+import pyarrow.compute as pc
 from confluent_kafka import TIMESTAMP_NOT_AVAILABLE, Message
 from dlt.common import json
 from dlt.common.configuration.container import Container
@@ -22,21 +24,30 @@ from dlt.common.normalizers.naming import NamingConvention
 from dlt.common.schema.typing import TTableSchemaColumns
 from pyarrow import json as pa_json
 
-from .columns import TFields, TPath, column_name, value_converter
+from .columns import EPOCH, TFields, TPath, column_name, value_converter
 from .processors import MessageDecodeError, TPayload, message_id, text_key
 
-# JSON Schema types as pyarrow.json parses them, dates, times and decimals are cast from strings
+UTC_MICROS = pa.timestamp("us", tz="UTC")
+# JSON Schema types as pyarrow.json parses them, dates, times and timestamps are converted from
+# strings: pyarrow rejects timestamps with more than 6 fractional digits
 PARSE_TYPES: Dict[str, pa.DataType] = {
     "bigint": pa.int64(),
     "double": pa.float64(),
     "bool": pa.bool_(),
     "text": pa.string(),
-    "timestamp": pa.timestamp("us", tz="UTC"),
+    "timestamp": pa.string(),
     "date": pa.string(),
     "time": pa.string(),
-    "decimal": pa.string(),
 }
 MIN_BLOCK_SIZE = 1 << 20
+# the range of Python datetimes in microseconds and days since the epoch
+MIN_MICROS = (datetime(1, 1, 1, tzinfo=timezone.utc) - EPOCH) // timedelta(
+    microseconds=1
+)
+MAX_MICROS = (datetime.max.replace(tzinfo=timezone.utc) - EPOCH) // timedelta(
+    microseconds=1
+)
+MICROS_PER_UNIT = {"ms": 1000, "us": 1}
 
 TArrowTypes = Dict[TPath, pa.DataType]
 """Arrow types of the fields of a table by their paths"""
@@ -59,9 +70,9 @@ def connect_types(fields: TFields) -> TArrowTypes:
         kind = field.conversion[0] if field.conversion else None
         if kind in ("epoch", "time", "days"):
             types[path] = pa.int64()
-        elif kind in ("base64", "decimal", "json"):
+        elif kind in ("base64", "decimal", "decimal_text", "json", "iso_timestamp"):
             types[path] = pa.string()
-        elif kind in (None, "iso_timestamp"):
+        elif kind is None:
             arrow_type = PARSE_TYPES.get(field.column.get("data_type"))
             if arrow_type is not None:
                 types[path] = arrow_type
@@ -93,10 +104,29 @@ def nested_schema(types: Mapping[TPath, pa.DataType]) -> pa.Schema:
     return pa.schema(fields(tree))
 
 
-def convert_connect_arrays(
+def iso_timestamps(array: Any) -> Any:
+    """ISO 8601 strings as UTC timestamps, digits past microseconds are cut like in rows"""
+    try:
+        return pc.cast(array, UTC_MICROS)
+    except pa.ArrowInvalid:
+        convert = value_converter(("iso_timestamp", None))
+        return pa.array(
+            [None if value is None else convert(value) for value in array.to_pylist()],
+            UTC_MICROS,
+        )
+
+
+def check_range(array: Any, low: int, high: int) -> None:
+    """Raises when a value of `array` is outside of `low` and `high`, like Python datetimes do"""
+    values = array.cast(pa.int64())
+    if pc.any(pc.or_(pc.less(values, low), pc.greater(values, high))).as_py():
+        raise ValueError("a date or timestamp is outside of the years 1 to 9999")
+
+
+def convert_arrays(
     table: pa.Table, fields: TFields, naming: NamingConvention
 ) -> pa.Table:
-    """Converts Kafka Connect logical values to the types of their columns"""
+    """Converts the values of `fields` with a conversion to the types of their columns"""
     for path, field in fields.items():
         name = column_name(path, naming)
         if field.conversion is None or name not in table.column_names:
@@ -105,9 +135,14 @@ def convert_connect_arrays(
         index = table.schema.get_field_index(name)
         array = table.column(index)
         if kind == "epoch":
+            if parameter == "ns":
+                check_range(array, MIN_MICROS * 1000, MAX_MICROS * 1000)
+            else:
+                unit = MICROS_PER_UNIT[parameter]
+                check_range(array, MIN_MICROS // unit, MAX_MICROS // unit)
             array = array.cast(pa.int64()).cast(pa.timestamp(parameter, tz="UTC"))
             # nanoseconds load as microseconds, like in rows
-            array = array.cast(pa.timestamp("us", tz="UTC"), safe=False)
+            array = array.cast(UTC_MICROS, safe=False)
         elif kind == "time":
             if parameter == "ms":
                 array = array.cast(pa.int32()).cast(pa.time32("ms"))
@@ -115,8 +150,13 @@ def convert_connect_arrays(
                 array = array.cast(pa.int64()).cast(pa.time64(parameter))
                 array = array.cast(pa.time64("us"), safe=False)
         elif kind == "days":
+            check_range(
+                array, MIN_MICROS // 86_400_000_000, MAX_MICROS // 86_400_000_000
+            )
             array = array.cast(pa.int32()).cast(pa.date32())
-        elif kind != "iso_timestamp":
+        elif kind == "iso_timestamp":
+            array = iso_timestamps(array)
+        else:
             convert = value_converter(field.conversion)
             if kind == "decimal":
                 arrow_type = pa.decimal128(
@@ -265,7 +305,7 @@ def json_arrow_table(
     allowed: Optional[Set[str]],
     naming: NamingConvention,
     on_error: Callable[[MessageDecodeError], None],
-    connect: TFields,
+    fields: TFields,
 ) -> Optional[pa.Table]:
     """Arrow table of JSON object values, `None` when no message decodes.
 
@@ -279,7 +319,7 @@ def json_arrow_table(
         allowed: Top-level fields allowed in strict mode.
         naming: Naming convention of the destination schema.
         on_error: Called with the messages that do not decode.
-        connect: Kafka Connect fields of the payloads, their values are converted.
+        fields: Fields of the payloads, the values of fields with a conversion are converted.
     """
     json_columns = {
         naming.normalize_path(name)
@@ -288,15 +328,49 @@ def json_arrow_table(
     }
     json_columns.update(
         column_name(path, naming)
-        for path, field in connect.items()
+        for path, field in fields.items()
         if field.conversion and field.conversion[0] == "variable_decimal"
     )
-    options = pa_json.ParseOptions(
-        explicit_schema=nested_schema(types) if types else None,
-        unexpected_field_behavior="infer",
-    )
+    caps = destination_caps()
+    converted = {
+        column_name(path, naming) for path, field in fields.items() if field.conversion
+    }
+    # decimals parse from the JSON text, not through floats
+    decimals = {
+        naming.normalize_path(name): get_py_arrow_datatype(column, caps, "UTC")
+        for name, column in (columns or {}).items()
+        if column.get("data_type") == "decimal"
+        and naming.normalize_path(name) not in converted
+    }
+    parse_types = {
+        path: decimals.get(column_name(path, naming), arrow_type)
+        for path, arrow_type in types.items()
+    }
+    options = pa_json.ParseOptions(unexpected_field_behavior="infer")
     errors: List[MessageDecodeError] = []
     new_types: TArrowTypes = {}
+
+    def explicit_types(table: pa.Table) -> TArrowTypes:
+        """Types of the inferred fields that must parse with another type"""
+        explicit: TArrowTypes = {}
+        for path, arrow_type in scalar_types(table.schema).items():
+            name = column_name(path, naming)
+            if name in decimals and arrow_type != decimals[name]:
+                explicit[path] = decimals[name]
+            elif path not in parse_types and pa.types.is_timestamp(arrow_type):
+                # inferred from the first values, e.g. whole seconds without a time zone
+                explicit[path] = UTC_MICROS
+        return explicit
+
+    def read(data: bytes) -> pa.Table:
+        options.explicit_schema = nested_schema(parse_types) if parse_types else None
+        return pa_json.read_json(
+            io.BytesIO(data),
+            read_options=pa_json.ReadOptions(
+                block_size=max(len(data) + 1, MIN_BLOCK_SIZE)
+            ),
+            parse_options=options,
+        )
 
     def convert(batch: List[Tuple[Message, Optional[str]]]) -> pa.Table:
         values = [
@@ -304,13 +378,11 @@ def json_arrow_table(
         ]
         data = b"\n".join(values)
         options.newlines_in_values = any(b"\n" in value for value in values)
-        table = pa_json.read_json(
-            io.BytesIO(data),
-            read_options=pa_json.ReadOptions(
-                block_size=max(len(data) + 1, MIN_BLOCK_SIZE)
-            ),
-            parse_options=options,
-        )
+        table = read(data)
+        explicit = explicit_types(table)
+        if explicit:
+            parse_types.update(explicit)
+            table = read(data)
         if table.num_rows != len(batch):
             raise ValueError("not a JSON object")
         if allowed is not None and not set(table.column_names) <= allowed:
@@ -323,8 +395,8 @@ def json_arrow_table(
             if path not in types
         )
         table = flatten_structs(table, naming, json_columns)
-        if connect:
-            table = convert_connect_arrays(table, connect, naming)
+        if fields:
+            table = convert_arrays(table, fields, naming)
         keys = [key for _, key in batch]
         for name, array in metadata_columns(
             [m for m, _ in batch], keys, naming

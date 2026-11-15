@@ -1,4 +1,5 @@
 import json as stdlib_json
+from functools import partial
 from typing import Any, Dict, Hashable, List, Literal, Optional, Sequence, Set, Tuple
 
 import dlt
@@ -8,7 +9,7 @@ from dlt.common.normalizers.naming import NamingConvention
 from dlt.common.schema.typing import TTableSchemaColumns
 from dlt.common.typing import TDataItem
 
-from .columns import TFields, TPath, convert_row, fields_columns, row_conversions
+from .columns import TFields, TPath, convert_row, row_conversions
 from .json_schema import json_schema_fields, json_schema_name, top_level_fields
 from .kafka_connect import connect_fields, connect_payload, connect_schema
 from .processors import (
@@ -24,9 +25,9 @@ from .processors import (
     text_key,
 )
 from .registry import (
-    CONFLUENT_PREFIX_SIZE,
     VALUE_SCHEMA_ID_HEADER,
     TSchemaId,
+    body_start,
     framed_schema_id,
     latest_registry_schema,
     registry_schema,
@@ -36,12 +37,8 @@ TEnvelope = Literal["kafka_connect"]
 KAFKA_CONNECT_ID = "kafka_connect"
 
 
-def without_prefix(value: bytes) -> bytes:
-    return value[CONFLUENT_PREFIX_SIZE:]
-
-
-def as_is(value: bytes) -> bytes:
-    return value
+def value_body(start: int, value: bytes) -> bytes:
+    return value[start:]
 
 
 def envelope_payload(value: bytes) -> bytes:
@@ -109,7 +106,8 @@ class JsonProcessor(SchemaProcessor):
         super().__init__(backend, on_decode_error, table_per_schema, table_name)
         self.strict = strict
         self.envelope = envelope
-        self._fields: Dict[Tuple[str, Optional[Hashable]], Optional[TFields]] = {}
+        # schema ids of other schema types, their messages are decode errors
+        self._other_types: Dict[Hashable, str] = {}
         self._arrow_types: Dict[str, Dict[TPath, Any]] = {}
         # tombstones have no envelope, they reuse the Kafka Connect fields of their table
         self._table_connect: Dict[str, TFields] = {}
@@ -143,44 +141,37 @@ class JsonProcessor(SchemaProcessor):
         # JSON never starts with a 0 byte
         return framed_schema_id(value, msg.headers(), VALUE_SCHEMA_ID_HEADER)
 
-    def compute_table_schema(
+    def compute_table_fields(
         self, topic: str, schema_id: Optional[Hashable]
-    ) -> Tuple[str, Optional[TTableSchemaColumns]]:
-        table, fields = self._schema_fields(topic, schema_id)  # type: ignore[arg-type]
-        self._fields[(topic, schema_id)] = fields
-        if fields is None:
-            return table, None
-        return table, fields_columns(fields, self.naming)
-
-    def _schema_fields(
-        self, topic: str, schema_id: Optional[TSchemaId]
     ) -> Tuple[str, Optional[TFields]]:
-        if schema_id is not None and schema_id[0] == KAFKA_CONNECT_ID:
-            schema = json.loadb(schema_id[1])
+        sid: Optional[TSchemaId] = schema_id  # type: ignore[assignment]
+        if sid is not None and sid[0] == KAFKA_CONNECT_ID:
+            schema = json.loadb(sid[1])
             table = topic
             if self.table_per_schema and schema.get("name"):
                 table = self.table_name(topic, schema["name"])
             return table, connect_fields(schema)
         if self.registry is None:
             return topic, None
-        if schema_id is None:
+        if sid is None:
             latest = latest_registry_schema(self.registry, f"{topic}-value")
             schema = None if latest is None else latest.schema
         else:
-            schema = registry_schema(self.registry, schema_id)
+            schema = registry_schema(self.registry, sid)
         if schema is None:
             return topic, None
         schema_type = schema.schema_type or "AVRO"
+        if schema_type != "JSON" and sid is not None:
+            self._other_types[sid] = schema_type
+            return topic, None
         if schema_type != "JSON":
             raise ValueError(
                 f"Topic `{topic}` has a {schema_type} schema in the Schema Registry,"
                 " JsonProcessor reads JSON values only"
             )
         table = topic
-        if self.table_per_schema and schema_id is not None:
-            table = self.table_name(
-                topic, json_schema_name(self.registry, schema_id, schema)
-            )
+        if self.table_per_schema and sid is not None:
+            table = self.table_name(topic, json_schema_name(self.registry, sid, schema))
         return table, json_schema_fields(json.loads(schema.schema_str))
 
     def __call__(
@@ -191,8 +182,12 @@ class JsonProcessor(SchemaProcessor):
         messages: List[Message],
     ) -> List[TDataItem]:
         topic = messages[0].topic()
-        self.table_schema(topic, schema_id)
-        fields = self._fields[(topic, schema_id)]
+        if schema_id in self._other_types:
+            reason = f"its schema is {self._other_types[schema_id]}, JsonProcessor reads JSON only"
+            for msg in messages:
+                self.decode_error(MessageDecodeError(msg, reason))
+            return []
+        _, fields, _ = self.table_fields(topic, schema_id)
         if self.strict and not self.envelope and (schema_id is None or fields is None):
             # tombstones have no schema
             reason = (
@@ -213,11 +208,10 @@ class JsonProcessor(SchemaProcessor):
         if self.envelope:
             connect = fields or self._table_connect.get(table, {})
             self._table_connect[table] = connect
-        payload: TPayload = as_is
-        if self.envelope:
-            payload = envelope_payload
-        elif schema_id is not None and schema_id[0] == "id":  # type: ignore[index]
-            payload = without_prefix
+        payload: TPayload = envelope_payload
+        if not self.envelope:
+            start = 0 if schema_id is None else body_start(schema_id)  # type: ignore[arg-type]
+            payload = partial(value_body, start)
         allowed = top_level_fields(fields) if self.strict and fields else None
         if self.backend == "pyarrow":
             from .arrow import connect_types, json_arrow_table, schema_types
@@ -234,7 +228,7 @@ class JsonProcessor(SchemaProcessor):
                 allowed,
                 self.naming,
                 self.decode_error,
-                connect,
+                connect or fields or {},
             )
             if item is None:
                 return []
@@ -269,7 +263,7 @@ class JsonProcessor(SchemaProcessor):
                         f"fields {sorted(value.keys() - allowed)} are not in its schema",
                     )
                 convert_row(value, conversions)
-            except (MessageDecodeError, ValueError, TypeError) as ex:
+            except (MessageDecodeError, ValueError, TypeError, ArithmeticError) as ex:
                 if not isinstance(ex, MessageDecodeError):
                     ex = MessageDecodeError(msg, str(ex))
                 self.decode_error(ex)

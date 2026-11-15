@@ -2,7 +2,7 @@ from typing import Any, Dict, List, Mapping, Optional, Sequence
 
 from dlt.common.schema.typing import TColumnSchema, TDataType
 
-from .columns import TConversion, TFields, TPath, TypedField
+from .columns import MAX_DECIMAL_PRECISION, TConversion, TFields, TPath, TypedField
 from .kafka_connect import VARIABLE_SCALE_DECIMAL, logical_field
 
 PRIMITIVE_TYPES: Dict[str, TDataType] = {
@@ -16,8 +16,6 @@ PRIMITIVE_TYPES: Dict[str, TDataType] = {
 }
 INTEGER_TYPES = {"int", "long"}
 NUMBER_TYPES = {"int", "long", "float", "double"}
-# wider decimals load as text: most destinations hold at most 38 digits
-MAX_DECIMAL_PRECISION = 38
 # logical types fastavro converts, timestamps by whether they are in UTC
 FASTAVRO_TIMESTAMPS = {
     ("long", "timestamp-millis"): True,
@@ -63,11 +61,14 @@ def avro_fields(
 
 
 def union_fields(branches: Sequence[Any], named: Mapping[str, Any]) -> TFields:
-    """Fields of all branches of a top-level union, which load into one table"""
+    """Fields of all branches of a top-level union, which load into one table. A field with
+    other types in other branches loads as json."""
     fields: TFields = {}
     for branch in branches:
         for path, field in avro_fields(branch, named).items():
-            fields.setdefault(path, field)
+            seen = fields.setdefault(path, field)
+            if seen != field:
+                fields[path] = TypedField({"data_type": "json"}, None)
     return fields
 
 

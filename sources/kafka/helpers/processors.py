@@ -23,7 +23,7 @@ from dlt.common.schema.typing import TTableSchemaColumns
 from dlt.common.typing import TDataItem
 from dlt.common.utils import digest128
 
-from .columns import EPOCH
+from .columns import EPOCH, TFields, fields_columns
 
 TMessageProcessor = Callable[[Message], Dict[str, Any]]
 TPayload = Callable[[bytes], bytes]
@@ -208,22 +208,32 @@ class SchemaProcessor(BatchProcessor, ABC):
         self.table_per_schema = table_per_schema
         self.table_name = table_name
         self._tables: Dict[
-            Tuple[str, Optional[Hashable]], Tuple[str, Optional[TTableSchemaColumns]]
+            Tuple[str, Optional[Hashable]],
+            Tuple[str, Optional[TFields], Optional[TTableSchemaColumns]],
         ] = {}
 
     def table_schema(
         self, topic: str, schema_id: Optional[Hashable]
     ) -> Tuple[str, Optional[TTableSchemaColumns]]:
+        table, _, columns = self.table_fields(topic, schema_id)
+        return table, columns
+
+    def table_fields(
+        self, topic: str, schema_id: Optional[Hashable]
+    ) -> Tuple[str, Optional[TFields], Optional[TTableSchemaColumns]]:
+        """The table, the fields and the columns of a schema id, cached"""
         key = (topic, schema_id)
         if key not in self._tables:
-            self._tables[key] = self.compute_table_schema(topic, schema_id)
+            table, fields = self.compute_table_fields(topic, schema_id)
+            columns = fields_columns(fields, self.naming) if fields else None
+            self._tables[key] = (table, fields, columns)
         return self._tables[key]
 
     @abstractmethod
-    def compute_table_schema(
+    def compute_table_fields(
         self, topic: str, schema_id: Optional[Hashable]
-    ) -> Tuple[str, Optional[TTableSchemaColumns]]:
-        """`table_schema` before it is cached"""
+    ) -> Tuple[str, Optional[TFields]]:
+        """The table and the fields of a schema id, `None` fields when it has no schema"""
 
     def decode_error(self, error: MessageDecodeError) -> None:
         if self.on_decode_error == "raise":
