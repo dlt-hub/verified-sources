@@ -1,0 +1,74 @@
+name: benchmark | extraction
+
+on:
+  workflow_dispatch:
+    inputs:
+      cases:
+        description: Comma separated cases, all configured cases when empty
+        required: false
+        default: ""
+      modes:
+        description: Comma separated modes
+        required: false
+        default: "iterate,extract"
+      rounds:
+        description: Rounds over all cases
+        required: false
+        default: "3"
+  pull_request:
+    types: [labeled]
+
+# runs of one account slow each other down
+concurrency:
+  group: benchmark
+  cancel-in-progress: false
+
+env:
+  DLT_SECRETS_TOML: ${{ secrets.DLT_SECRETS_TOML }}
+  RUNTIME__LOG_LEVEL: ERROR
+
+jobs:
+  benchmark:
+    name: extraction benchmark
+    if: github.event_name == 'workflow_dispatch' || github.event.label.name == 'benchmark'
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+
+    steps:
+      - name: Check out
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.ref }}
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v4
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: make dev
+
+      - name: create secrets.toml
+        run: echo "$DLT_SECRETS_TOML" > sources/.dlt/secrets.toml
+
+      - name: Test the benchmark
+        run: uv run pytest tests/_benchmark
+
+      - name: Run benchmark
+        env:
+          CASES: ${{ github.event.inputs.cases }}
+          MODES: ${{ github.event.inputs.modes }}
+          ROUNDS: ${{ github.event.inputs.rounds }}
+        run: |
+          args=(--rounds "${ROUNDS:-3}" --output benchmark-results.jsonl)
+          if [ -n "$CASES" ]; then args+=(--cases "$CASES"); fi
+          if [ -n "$MODES" ]; then args+=(--modes "$MODES"); fi
+          uv run python -m tests._benchmark.run "${args[@]}"
+
+      - name: Upload results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: benchmark-results
+          path: benchmark-results.jsonl
+          if-no-files-found: warn

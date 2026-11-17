@@ -9,7 +9,7 @@ from collections import Counter
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import contextmanager
 from datetime import date, datetime, timedelta, timezone  # noqa: I251
-from time import monotonic
+from time import monotonic, thread_time
 from typing import (
     Any,
     Callable,
@@ -19,6 +19,7 @@ from typing import (
     Iterator,
     List,
     Mapping,
+    NamedTuple,
     Optional,
     Sequence,
     Tuple,
@@ -31,7 +32,7 @@ import dlt
 from dlt.common import Decimal
 
 # patching the base class records the requests of all clients
-from requests import Session  # noqa: I251
+from requests import Response, Session  # noqa: I251
 
 TItem = TypeVar("TItem")
 TKey = TypeVar("TKey", bound=Hashable)
@@ -48,6 +49,9 @@ PERF_STARTS = (
 PERF_WORDS = ["alpha", "bravo", "charlie", "delta", "echo", "foxtrot", "golf", "hotel"]
 SECOND = timedelta(seconds=1)
 MINUTE = timedelta(minutes=1)
+MB = 1024 * 1024
+# wire size of a compressed body sent in chunks
+UNKNOWN_BYTES = -1
 
 
 def spread(
@@ -164,6 +168,20 @@ RATE_LIMIT_HEADERS = (
 THROTTLED_STATUSES = (429, 503)
 
 
+class RequestTiming(NamedTuple):
+    """A request sent and read by a thread: monotonic start and end, time to the response headers,
+    decoded body and wire bytes, and the CPU time the sending thread spent in it
+    """
+
+    started: float
+    finished: float
+    to_headers: float
+    body_bytes: int
+    wire_bytes: int
+    cpu: float
+    status: int
+
+
 class HttpLog:
     """Statuses, durations and rate limit headers of HTTP responses. Durations include reading
     the body: streaming APIs send headers before they compute the body
@@ -175,28 +193,60 @@ class HttpLog:
         self.statuses: Counter[int] = Counter()
         self.durations: List[float] = []
         self.to_headers: List[float] = []
+        self.requests: List[RequestTiming] = []
+        self.redirects = 0
+        self.hosts: Counter[str] = Counter()
         self.throttled: List[str] = []
         self.errors: Counter[str] = Counter()
         self.rate_limits: Dict[str, str] = {}
 
-    def add(
-        self,
-        url: str,
-        status: int,
-        duration: float,
-        to_headers: float,
-        headers: Mapping[str, str],
-    ) -> None:
+    def add(self, url: str, headers: Mapping[str, str], timing: RequestTiming) -> None:
         limits = {name: headers[name] for name in RATE_LIMIT_HEADERS if name in headers}
         with self._lock:
-            self.statuses[status] += 1
-            self.durations.append(duration)
-            self.to_headers.append(to_headers)
+            self.statuses[timing.status] += 1
+            self.durations.append(timing.finished - timing.started)
+            self.to_headers.append(timing.to_headers)
+            self.requests.append(timing)
+            self.hosts[urlsplit(url).hostname or ""] += 1
             self.rate_limits.update(limits)
-            if status in THROTTLED_STATUSES:
+            if timing.status in THROTTLED_STATUSES:
                 self.throttled.append(
-                    f"+{monotonic() - self.started:.1f} s: {status} {urlsplit(url).path} {limits}"
+                    f"+{monotonic() - self.started:.1f} s: {timing.status}"
+                    f" {urlsplit(url).path} {limits}"
                 )
+
+    def body_bytes(self) -> int:
+        return sum(timing.body_bytes for timing in self.requests)
+
+    def wire_bytes(self) -> Optional[int]:
+        """Bytes received, None if the size of a compressed chunked body is not known"""
+        if any(timing.wire_bytes == UNKNOWN_BYTES for timing in self.requests):
+            return None
+        return sum(timing.wire_bytes for timing in self.requests)
+
+    def busy_seconds(self) -> float:
+        """Seconds in which at least one request was in flight"""
+        busy, end = 0.0, float("-inf")
+        for timing in sorted(self.requests):
+            if timing.started > end:
+                busy += timing.finished - timing.started
+            elif timing.finished > end:
+                busy += timing.finished - end
+            end = max(end, timing.finished)
+        return busy
+
+    def peak_concurrency(self) -> int:
+        """The largest number of requests in flight at once"""
+        # requests that end at the same moment another starts do not overlap
+        events = sorted(
+            [(timing.started, 1) for timing in self.requests]
+            + [(timing.finished, -1) for timing in self.requests]
+        )
+        peak = in_flight = 0
+        for _, change in events:
+            in_flight += change
+            peak = max(peak, in_flight)
+        return peak
 
     def summary(self, label: str) -> str:
         def percentiles(values: List[float]) -> str:
@@ -207,11 +257,15 @@ class HttpLog:
             )
             return f"p50 {p50:.2f} s, p95 {p95:.2f} s, max {ordered[-1]:.2f} s"
 
+        wire_bytes = self.wire_bytes()
+        wire = "unknown" if wire_bytes is None else f"{wire_bytes / MB:.1f} MB"
         lines = [
             f"{label}: {len(self.durations)} requests, statuses {dict(sorted(self.statuses.items()))}"
             " (0 is a connection error)",
             f"  duration {percentiles(self.durations)}, sum {sum(self.durations):.1f} s",
             f"  time to headers {percentiles(self.to_headers)}",
+            f"  received {self.body_bytes() / MB:.1f} MB, {wire} on the wire, in flight"
+            f" {self.busy_seconds():.1f} s, peak concurrency {self.peak_concurrency()}",
             f"  connection errors: {dict(self.errors)}",
             f"  throttled responses: {len(self.throttled)}",
             *(f"    {line}" for line in self.throttled[:20]),
@@ -221,43 +275,77 @@ class HttpLog:
         return "\n".join(lines)
 
 
+def response_timing(
+    response: Optional[Response], started: float, cpu_started: float
+) -> RequestTiming:
+    """Timing of a request that ends now, `response` is None after a connection error"""
+    finished, cpu = monotonic(), thread_time() - cpu_started
+    if response is None:
+        return RequestTiming(started, finished, 0.0, 0, 0, cpu, 0)
+    length = int(response.headers.get("Content-Length") or 0)
+    # a streamed body that the caller did not read yet must stay unread
+    body_bytes = (
+        len(response.content)
+        if getattr(response, "_content_consumed", True)
+        else length
+    )
+    try:
+        # urllib3 does not count the bytes of chunked bodies
+        wire_bytes = int(response.raw.tell()) or length
+    except Exception:
+        wire_bytes = length
+    if not wire_bytes and body_bytes:
+        compressed = "Content-Encoding" in response.headers
+        wire_bytes = UNKNOWN_BYTES if compressed else body_bytes
+    return RequestTiming(
+        started,
+        finished,
+        response.elapsed.total_seconds(),
+        body_bytes,
+        wire_bytes,
+        cpu,
+        response.status_code,
+    )
+
+
 @contextmanager
-def record_http(label: str) -> Iterator[HttpLog]:
+def record_http(label: str, print_summary: bool = True) -> Iterator[HttpLog]:
     """Records the HTTP responses of all threads and prints their summary. Warns when the API
     throttled, the timings of such a run are not comparable
     """
     log = HttpLog()
     send = Session.send
+    # redirects call `send` again inside the request that they belong to
+    nested = threading.local()
 
     # dlt sessions call `requests.Session.send` for every attempt, it also reads the body
     def recording_send(session: Session, request: Any, **kwargs: Any) -> Any:
-        started = monotonic()
+        if getattr(nested, "active", False):
+            with log._lock:
+                log.redirects += 1
+            return send(session, request, **kwargs)
+        nested.active = True
+        started, cpu_started = monotonic(), thread_time()
         try:
             response = send(session, request, **kwargs)
         except Exception as ex:
             # response hooks raise for error statuses, those requests got a response
             failed = getattr(ex, "response", None)
-            if failed is not None:
-                to_headers = failed.elapsed.total_seconds()
-                log.add(
-                    request.url,
-                    failed.status_code,
-                    monotonic() - started,
-                    to_headers,
-                    failed.headers,
-                )
-            else:
-                log.add(request.url, 0, monotonic() - started, 0.0, {})
+            log.add(
+                request.url,
+                {} if failed is None else failed.headers,
+                response_timing(failed, started, cpu_started),
+            )
+            if failed is None:
                 with log._lock:
                     log.errors[type(ex).__name__] += 1
             raise
-        to_headers = response.elapsed.total_seconds()
+        finally:
+            nested.active = False
         log.add(
             request.url,
-            response.status_code,
-            monotonic() - started,
-            to_headers,
             response.headers,
+            response_timing(response, started, cpu_started),
         )
         return response
 
@@ -265,7 +353,8 @@ def record_http(label: str) -> Iterator[HttpLog]:
         try:
             yield log
         finally:
-            print(log.summary(label))
+            if print_summary:
+                print(log.summary(label))
             if log.throttled:
                 warnings.warn(
                     f"{label}: the API throttled {len(log.throttled)} requests, the timings are"
