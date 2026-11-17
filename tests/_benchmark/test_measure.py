@@ -119,7 +119,7 @@ def is_configured() -> bool:
 
 def test_measure_and_report() -> None:
     case = BenchmarkCase(
-        "numbers", "benchmark-unit-test", numbers, 100, is_configured, nothing
+        "numbers", "jira", "benchmark-unit-test", numbers, 100, is_configured, nothing
     )
     # an extract leaves no incremental state behind for the following runs
     results = [

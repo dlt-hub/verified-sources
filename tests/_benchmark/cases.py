@@ -22,6 +22,8 @@ from tests.servicenow.utils import get_credentials, wait_for_instance
 
 class BenchmarkCase(NamedTuple):
     name: str
+    source: str
+    """Folder of the source in `sources`"""
     account: str
     """`account_lock` key shared with the performance tests and seeds of the account"""
     resource: Callable[[], DltResource]
@@ -75,6 +77,7 @@ CASES: Dict[str, BenchmarkCase] = {
     for case in (
         BenchmarkCase(
             "salesforce",
+            "salesforce",
             salesforce_data.PERF_SECTION,
             salesforce_resource,
             salesforce_data.PERF_RECORDS,
@@ -83,6 +86,7 @@ CASES: Dict[str, BenchmarkCase] = {
         ),
         BenchmarkCase(
             "salesforce_rest",
+            "salesforce",
             salesforce_data.PERF_SECTION,
             partial(salesforce_resource, "rest"),
             salesforce_data.PERF_RECORDS,
@@ -92,12 +96,14 @@ CASES: Dict[str, BenchmarkCase] = {
         BenchmarkCase(
             "servicenow",
             "servicenow",
+            "servicenow",
             servicenow_resource,
             servicenow_data.PERF_RECORDS,
             partial(resolves, get_credentials),
             wake_servicenow,
         ),
         BenchmarkCase(
+            "jira",
             "jira",
             "jira",
             jira_resource,

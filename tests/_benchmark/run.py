@@ -43,7 +43,7 @@ def main(argv: Optional[List[str]] = None) -> int:
             cases.append(CASES[name])
         else:
             print(f"Skipping {name}: its credentials are not configured, see README.md")
-    metadata = run_metadata([case.name for case in cases])
+    metadata = run_metadata(sorted({case.source for case in cases}))
     os.makedirs(os.path.dirname(os.path.abspath(args.output)), exist_ok=True)
 
     results: List[Dict[str, Any]] = []
