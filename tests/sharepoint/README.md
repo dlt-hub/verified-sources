@@ -37,6 +37,13 @@ unique seconds of 2021 computed from the file number, set through `fileSystemInf
 from the last two folders. It creates the `dlt archive` document library when missing and uploads
 `archive/report_2023.csv` there, a file the Documents library does not have. The run takes about a minute.
 
+`uv run python -m tests.sharepoint.seed.seed --performance` creates the `dlt perf` list for the
+extraction benchmark (`tests/_benchmark`): 20,000 items with the values of the performance data sets
+of the other sources, in the columns `Number`, `ChangedAt`, `Description`, `Code`, `Count`, `Amount`,
+`Ratio`, `Active`, `Due` and `StartedAt`. It adds the missing items in Graph `$batch` requests of 20
+and deletes duplicates, so it resumes after an interruption. A full run takes about 20 minutes:
+Graph slows item creation down after the first few thousand items.
+
 The read tests use two lists made by hand once. The app can create lists, `test_list_incremental_changes` creates its own:
 
 - `dlt toy tasks`, a blank list with columns `Status` (choice: Open, Done), `DueDate` (date only) and `Story Points` (number), and 5 items:

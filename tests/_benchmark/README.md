@@ -15,12 +15,15 @@ source. `salesforce_rest` reads the same object with the REST API, which has no 
 | `salesforce_rest` | `salesforce_table(sobject="DltPerfA__c", api="rest")` | 50,000 | same |
 | `servicenow` | `servicenow_table(table="u_dlt_perf_a")` | 50,000 | `tests/servicenow/README.md` |
 | `jira` | `jira_issues(jql=perf_jql("DLTPA"))` | 20,000 | `tests/jira/README.md` |
+| `sharepoint` | `sharepoint_list("dlt perf")` | 20,000 | `tests/sharepoint/README.md`, `--performance` |
 
 Each case runs in two loads:
 
 - `full`: `incremental=None`, reads all records without the default incremental.
 - `incremental`: the default incremental of the source on its first run, which also reads all
   records but filters them on the cursor.
+
+`sharepoint` runs only `incremental`: a list is always read with the delta query.
 
 And in up to two modes:
 
@@ -54,7 +57,8 @@ export SOURCES__SALESFORCE_PERFORMANCE__CREDENTIALS__INSTANCE_URL=https://connec
 ```
 
 In CI, the `benchmark | extraction` workflow runs on `workflow_dispatch` and on pull requests
-labeled `benchmark`, also for new commits on such a pull request. It uploads the JSON lines as the `benchmark-results` artifact.
+labeled `benchmark`, also for new commits on such a pull request. A label
+`benchmark:<cases>`, e.g. `benchmark:sharepoint`, runs only those cases once. It uploads the JSON lines as the `benchmark-results` artifact.
 
 `pytest.ini` keeps folders starting with `_` out of test discovery and the CI test jobs skip
 `tests/_*`, so the benchmark runs only in its own workflow. Its unit tests run with

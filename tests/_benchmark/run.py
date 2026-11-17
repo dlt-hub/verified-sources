@@ -58,6 +58,8 @@ def main(argv: Optional[List[str]] = None) -> int:
             # runs of a case are spread over the benchmark and alternate their order
             for case in cases:
                 for load, mode in variants if round_no % 2 else variants[::-1]:
+                    if load not in case.loads:
+                        continue
                     if results:
                         sleep(args.pause)
                     print(f"Round {round_no}: {case.name} {load} {mode}", flush=True)

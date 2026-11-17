@@ -34,10 +34,11 @@ env:
 jobs:
   benchmark:
     name: extraction benchmark
-    # a new label or new commits on a pull request labeled `benchmark`
+    # a new label or new commits on a pull request labeled `benchmark`. A label `benchmark:<cases>`
+    # runs only the comma separated cases
     if: >-
       github.event_name == 'workflow_dispatch'
-      || (github.event.action == 'labeled' && github.event.label.name == 'benchmark')
+      || (github.event.action == 'labeled' && startsWith(github.event.label.name, 'benchmark'))
       || (github.event.action == 'synchronize'
           && contains(github.event.pull_request.labels.*.name, 'benchmark'))
     runs-on: ubuntu-latest
@@ -69,7 +70,9 @@ jobs:
           MODES: ${{ github.event.inputs.modes }}
           LOADS: ${{ github.event.inputs.loads }}
           ROUNDS: ${{ github.event.inputs.rounds }}
+          LABEL: ${{ github.event.label.name }}
         run: |
+          if [ -z "$CASES" ] && [[ "$LABEL" == benchmark:* ]]; then CASES="${LABEL#benchmark:}"; fi
           args=(--rounds "${ROUNDS:-3}" --output benchmark-results.jsonl)
           if [ -n "$CASES" ]; then args+=(--cases "$CASES"); fi
           if [ -n "$MODES" ]; then args+=(--modes "$MODES"); fi

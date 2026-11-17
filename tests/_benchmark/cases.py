@@ -12,12 +12,15 @@ from sources.salesforce import salesforce_table
 from sources.salesforce.helpers.query import TQueryApi
 from sources.servicenow import servicenow_table
 from sources.servicenow.helpers.client import ServiceNowClient
+from sources.sharepoint import sharepoint_list
 
 from tests.jira.utils import PERF_ISSUES, PERF_PROJECTS, perf_jql
 from tests.salesforce.seed import data as salesforce_data
 from tests.salesforce.utils import performance_credentials
 from tests.servicenow.seed import data as servicenow_data
 from tests.servicenow.utils import get_credentials, wait_for_instance
+from tests.sharepoint.seed import data as sharepoint_data
+from tests.sharepoint.utils import graph_client
 
 TLoad = Literal["full", "incremental"]
 LOADS: Tuple[TLoad, ...] = ("full", "incremental")
@@ -35,6 +38,7 @@ class BenchmarkCase(NamedTuple):
     is_configured: Callable[[], bool]
     prepare: Callable[[], None]
     """Runs before the measured run, e.g. wakes up an instance"""
+    loads: Tuple[TLoad, ...] = LOADS
 
 
 def resolves(resolve: Callable[[], object]) -> bool:
@@ -74,6 +78,11 @@ def wake_servicenow() -> None:
 def jira_resource(load: TLoad) -> DltResource:
     project = PERF_PROJECTS[0]
     return jira_issues(jql=perf_jql(project), name=project.lower(), **load_args(load))
+
+
+def sharepoint_resource(load: TLoad) -> DltResource:
+    # the delta query of a list has no full load, its first run reads all items
+    return sharepoint_list(sharepoint_data.PERF_LIST)
 
 
 def jira_credentials() -> None:
@@ -119,6 +128,16 @@ CASES: Dict[str, BenchmarkCase] = {
             PERF_ISSUES,
             partial(resolves, jira_credentials),
             nothing,
+        ),
+        BenchmarkCase(
+            "sharepoint",
+            "sharepoint",
+            "sharepoint",
+            sharepoint_resource,
+            sharepoint_data.PERF_ITEMS,
+            partial(resolves, graph_client),
+            nothing,
+            ("incremental",),
         ),
     )
 }
