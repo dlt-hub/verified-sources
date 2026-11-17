@@ -9,6 +9,7 @@ from dlt.sources import DltResource
 
 from sources.jira import jira_issues
 from sources.salesforce import salesforce_table
+from sources.salesforce.helpers.query import TQueryApi
 from sources.servicenow import servicenow_table
 from sources.servicenow.helpers.client import ServiceNowClient
 
@@ -43,9 +44,11 @@ def nothing() -> None:
     pass
 
 
-def salesforce_resource() -> DltResource:
+def salesforce_resource(api: TQueryApi = "auto") -> DltResource:
     return salesforce_table(
-        credentials=performance_credentials(), sobject=salesforce_data.PERF_OBJECTS[0]
+        credentials=performance_credentials(),
+        sobject=salesforce_data.PERF_OBJECTS[0],
+        api=api,
     )
 
 
@@ -74,6 +77,14 @@ CASES: Dict[str, BenchmarkCase] = {
             "salesforce",
             salesforce_data.PERF_SECTION,
             salesforce_resource,
+            salesforce_data.PERF_RECORDS,
+            partial(resolves, performance_credentials),
+            nothing,
+        ),
+        BenchmarkCase(
+            "salesforce_rest",
+            salesforce_data.PERF_SECTION,
+            partial(salesforce_resource, "rest"),
             salesforce_data.PERF_RECORDS,
             partial(resolves, performance_credentials),
             nothing,

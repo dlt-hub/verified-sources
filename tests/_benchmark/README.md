@@ -7,11 +7,12 @@ bodies, or waits outside of requests.
 ## Cases
 
 Each case reads one resource with default settings, like the `test_performance_baseline` of its
-source:
+source. `salesforce_rest` reads the same object with the REST API, which has no job to wait for:
 
 | Case | Resource | Rows | Seed |
 |---|---|---|---|
-| `salesforce` | `salesforce_table(sobject="DltPerfA__c")` | 50,000 | `tests/salesforce/README.md`, performance org |
+| `salesforce` | `salesforce_table(sobject="DltPerfA__c")`, Bulk API 2.0 | 50,000 | `tests/salesforce/README.md`, performance org |
+| `salesforce_rest` | `salesforce_table(sobject="DltPerfA__c", api="rest")` | 50,000 | same |
 | `servicenow` | `servicenow_table(table="u_dlt_perf_a")` | 50,000 | `tests/servicenow/README.md` |
 | `jira` | `jira_issues(jql=perf_jql("DLTPA"))` | 20,000 | `tests/jira/README.md` |
 
@@ -47,7 +48,7 @@ export SOURCES__SALESFORCE_PERFORMANCE__CREDENTIALS__INSTANCE_URL=https://connec
 ```
 
 In CI, the `benchmark | extraction` workflow runs on `workflow_dispatch` and on pull requests
-labeled `benchmark`. It uploads the JSON lines as the `benchmark-results` artifact.
+labeled `benchmark`, also for new commits on such a pull request. It uploads the JSON lines as the `benchmark-results` artifact.
 
 `pytest.ini` keeps folders starting with `_` out of test discovery and the CI test jobs skip
 `tests/_*`, so the benchmark runs only in its own workflow. Its unit tests run with

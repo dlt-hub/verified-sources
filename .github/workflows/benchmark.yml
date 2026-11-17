@@ -16,7 +16,7 @@ on:
         required: false
         default: "3"
   pull_request:
-    types: [labeled]
+    types: [labeled, synchronize]
 
 # runs of one account slow each other down
 concurrency:
@@ -30,7 +30,12 @@ env:
 jobs:
   benchmark:
     name: extraction benchmark
-    if: github.event_name == 'workflow_dispatch' || github.event.label.name == 'benchmark'
+    # a new label or new commits on a pull request labeled `benchmark`
+    if: >-
+      github.event_name == 'workflow_dispatch'
+      || (github.event.action == 'labeled' && github.event.label.name == 'benchmark')
+      || (github.event.action == 'synchronize'
+          && contains(github.event.pull_request.labels.*.name, 'benchmark'))
     runs-on: ubuntu-latest
     timeout-minutes: 180
 

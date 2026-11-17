@@ -1,6 +1,6 @@
 """Benchmarks the raw extraction of a large seeded resource of each source, see README.md
 
-    uv run python -m tests._benchmark.run [--cases salesforce,servicenow,jira] [--rounds 3]
+    uv run python -m tests._benchmark.run [--cases salesforce,salesforce_rest,servicenow,jira] [--rounds 3]
 """
 
 import argparse
