@@ -14,6 +14,7 @@ from tests._benchmark.machine import location, machine_stats
 
 COLUMNS = (
     "case",
+    "load",
     "mode",
     "runs",
     "rows",
@@ -65,7 +66,9 @@ def median(results: List[Dict[str, Any]], key: str) -> float:
     return float(statistics.median(result[key] for result in results))
 
 
-def summary_row(case: str, mode: str, results: List[Dict[str, Any]]) -> List[str]:
+def summary_row(
+    case: str, load: str, mode: str, results: List[Dict[str, Any]]
+) -> List[str]:
     walls = [result["wall_s"] for result in results]
     request_s = median(results, "request_s")
     transfer = median(results, "transfer_s") / request_s if request_s else 0.0
@@ -74,6 +77,7 @@ def summary_row(case: str, mode: str, results: List[Dict[str, Any]]) -> List[str
     rtt = f"{statistics.median(rtts):.0f}" if rtts else "n/a"
     return [
         case,
+        load,
         mode,
         str(len(results)),
         f"{median(results, 'rows'):.0f}",
@@ -97,13 +101,15 @@ def summary_row(case: str, mode: str, results: List[Dict[str, Any]]) -> List[str
 
 
 def render_report(results: List[Dict[str, Any]], metadata: Dict[str, Any]) -> str:
-    groups: Dict[Tuple[str, str], List[Dict[str, Any]]] = {}
+    groups: Dict[Tuple[str, str, str], List[Dict[str, Any]]] = {}
     failed: List[Dict[str, Any]] = []
     for result in results:
         if result.get("error") or not result.get("valid"):
             failed.append(result)
         else:
-            groups.setdefault((result["case"], result["mode"]), []).append(result)
+            groups.setdefault(
+                (result["case"], result.get("load", "incremental"), result["mode"]), []
+            ).append(result)
     versions = ", ".join(
         f"{name} {version}" for name, version in metadata["sources"].items()
     )
@@ -135,8 +141,8 @@ def render_report(results: List[Dict[str, Any]], metadata: Dict[str, Any]) -> st
         "| " + " | ".join(COLUMNS) + " |",
         "|" + "---|" * len(COLUMNS),
     ]
-    for (case, mode), group in groups.items():
-        lines.append("| " + " | ".join(summary_row(case, mode, group)) + " |")
+    for (case, load, mode), group in sorted(groups.items()):
+        lines.append("| " + " | ".join(summary_row(case, load, mode, group)) + " |")
     if failed:
         lines += ["", "Failed or invalid runs:", ""]
         for result in failed:
@@ -144,6 +150,7 @@ def render_report(results: List[Dict[str, Any]], metadata: Dict[str, Any]) -> st
                 f"{result['rows']} rows, expected {result['expected_rows']}"
             )
             lines.append(
-                f"- {result['case']} {result['mode']} round {result['round']}: {reason}"
+                f"- {result['case']} {result.get('load', '')} {result['mode']}"
+                f" round {result['round']}: {reason}"
             )
     return "\n".join(lines) + "\n"

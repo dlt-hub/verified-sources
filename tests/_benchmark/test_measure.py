@@ -1,12 +1,13 @@
-from typing import Any, Dict, Iterator, List
+from typing import Any, Dict, Iterator, List, Optional
 
 import dlt
 import pyarrow as pa
 import pytest
 import requests_mock
+from dlt.sources import DltResource
 from dlt.sources.helpers.requests import Session
 
-from tests._benchmark.cases import BenchmarkCase, nothing
+from tests._benchmark.cases import BenchmarkCase, TLoad, load_args, nothing
 from tests._benchmark.measure import CpuSampler, bound, count_rows, measure
 from tests._benchmark.report import render_report, run_metadata
 from tests.seed_utils import HttpLog, RequestTiming, record_http
@@ -108,9 +109,13 @@ def test_cpu_sampler() -> None:
 
 @dlt.resource(name="numbers")
 def numbers(
-    n: dlt.sources.incremental[int] = dlt.sources.incremental("n"),
+    incremental: Optional[dlt.sources.incremental[int]] = dlt.sources.incremental("n"),
 ) -> Iterator[List[Dict[str, int]]]:
     yield [{"n": i} for i in range(100)]
+
+
+def numbers_resource(load: TLoad) -> DltResource:
+    return numbers(**load_args(load))
 
 
 def is_configured() -> bool:
@@ -119,12 +124,24 @@ def is_configured() -> bool:
 
 def test_measure_and_report() -> None:
     case = BenchmarkCase(
-        "numbers", "jira", "benchmark-unit-test", numbers, 100, is_configured, nothing
+        "numbers",
+        "jira",
+        "benchmark-unit-test",
+        numbers_resource,
+        100,
+        is_configured,
+        nothing,
     )
     # an extract leaves no incremental state behind for the following runs
+    variants = [
+        ("extract", "incremental"),
+        ("iterate", "incremental"),
+        ("extract", "incremental"),
+        ("iterate", "full"),
+    ]
     results = [
-        measure(case, mode, round_no)  # type: ignore[arg-type]
-        for round_no, mode in enumerate(["extract", "iterate", "extract"], start=1)
+        measure(case, mode, load, round_no)  # type: ignore[arg-type]
+        for round_no, (mode, load) in enumerate(variants, start=1)
     ]
     for result in results:
         assert result["rows"] == 100
@@ -136,10 +153,12 @@ def test_measure_and_report() -> None:
     failed = {
         "case": "numbers",
         "mode": "iterate",
-        "round": 4,
+        "load": "full",
+        "round": 5,
         "error": "HTTPError: 503",
     }
     report = render_report(results + [failed], run_metadata(["jira"]))
-    assert "| numbers | extract | 2 | 100 |" in report
-    assert "| numbers | iterate | 1 | 100 |" in report
-    assert "- numbers iterate round 4: HTTPError: 503" in report
+    assert "| numbers | incremental | extract | 2 | 100 |" in report
+    assert "| numbers | incremental | iterate | 1 | 100 |" in report
+    assert "| numbers | full | iterate | 1 | 100 |" in report
+    assert "- numbers full iterate round 5: HTTPError: 503" in report

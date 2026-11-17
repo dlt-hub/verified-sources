@@ -8,9 +8,13 @@ on:
         required: false
         default: ""
       modes:
-        description: Comma separated modes
+        description: Comma separated modes, iterate and extract
         required: false
-        default: "iterate,extract"
+        default: "iterate"
+      loads:
+        description: Comma separated loads, full and incremental
+        required: false
+        default: "full,incremental"
       rounds:
         description: Rounds over all cases
         required: false
@@ -63,11 +67,13 @@ jobs:
         env:
           CASES: ${{ github.event.inputs.cases }}
           MODES: ${{ github.event.inputs.modes }}
+          LOADS: ${{ github.event.inputs.loads }}
           ROUNDS: ${{ github.event.inputs.rounds }}
         run: |
           args=(--rounds "${ROUNDS:-3}" --output benchmark-results.jsonl)
           if [ -n "$CASES" ]; then args+=(--cases "$CASES"); fi
           if [ -n "$MODES" ]; then args+=(--modes "$MODES"); fi
+          if [ -n "$LOADS" ]; then args+=(--loads "$LOADS"); fi
           uv run python -m tests._benchmark.run "${args[@]}"
 
       - name: Upload results

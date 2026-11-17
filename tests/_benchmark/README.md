@@ -16,10 +16,16 @@ source. `salesforce_rest` reads the same object with the REST API, which has no 
 | `servicenow` | `servicenow_table(table="u_dlt_perf_a")` | 50,000 | `tests/servicenow/README.md` |
 | `jira` | `jira_issues(jql=perf_jql("DLTPA"))` | 20,000 | `tests/jira/README.md` |
 
-Each case runs in two modes:
+Each case runs in two loads:
 
-- `iterate`: iterates the resource and drops the items. The extract workers still read pages and
-  partitions in parallel.
+- `full`: `incremental=None`, reads all records without the default incremental.
+- `incremental`: the default incremental of the source on its first run, which also reads all
+  records but filters them on the cursor.
+
+And in up to two modes:
+
+- `iterate` (default): iterates the resource and drops the items. The extract workers still read
+  pages and partitions in parallel.
 - `extract`: `pipeline.extract` into a temporary pipelines dir, which also writes the items to
   files.
 
@@ -28,12 +34,12 @@ The time includes creating the resource, so logins and describe calls count.
 ## Running
 
 ```sh
-uv run python -m tests._benchmark.run                      # all configured cases, 3 rounds
-uv run python -m tests._benchmark.run --cases jira --rounds 1 --modes iterate
+uv run python -m tests._benchmark.run                      # all configured cases, both loads, 3 rounds
+uv run python -m tests._benchmark.run --cases jira --rounds 1 --loads full --modes iterate,extract
 ```
 
-Rounds go over all cases, so the runs of one case are minutes apart, and the order of the modes
-alternates between rounds. Run it in CI: on a flaky network the timings say more about the network
+Rounds go over all cases, so the runs of one case are minutes apart, and the order of the loads
+and modes alternates between rounds. Run it in CI: on a flaky network the timings say more about the network
 than about the sources. Cases without credentials are skipped. Results are appended to
 `_storage/benchmark/results.jsonl` (`--output`). The markdown summary is printed and appended to
 `$GITHUB_STEP_SUMMARY` when set. The exit code is 1 when a run failed or read a different number

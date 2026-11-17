@@ -1,6 +1,6 @@
 """Benchmarks the raw extraction of a large seeded resource of each source, see README.md
 
-    uv run python -m tests._benchmark.run [--cases salesforce,salesforce_rest,servicenow,jira] [--rounds 3]
+    uv run python -m tests._benchmark.run [--cases salesforce,servicenow] [--loads full] [--rounds 3]
 """
 
 import argparse
@@ -16,7 +16,7 @@ os.environ.setdefault("DLT_PROJECT_DIR", "sources")
 # pyarrow is imported on first use, the first run must not pay for it
 from dlt.common.libs import pyarrow  # noqa: F401
 
-from tests._benchmark.cases import CASES
+from tests._benchmark.cases import CASES, LOADS
 from tests._benchmark.measure import MODES, measure
 from tests._benchmark.report import render_report, run_metadata
 
@@ -24,7 +24,8 @@ from tests._benchmark.report import render_report, run_metadata
 def main(argv: Optional[List[str]] = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--cases", default=",".join(CASES))
-    parser.add_argument("--modes", default=",".join(MODES))
+    parser.add_argument("--modes", default="iterate")
+    parser.add_argument("--loads", default=",".join(LOADS))
     parser.add_argument("--rounds", type=int, default=3)
     parser.add_argument(
         "--pause", type=float, default=10.0, help="seconds between two runs"
@@ -35,6 +36,11 @@ def main(argv: Optional[List[str]] = None) -> int:
     unknown = set(modes) - set(MODES)
     if unknown:
         parser.error(f"unknown modes {sorted(unknown)}, pick from {MODES}")
+    loads = args.loads.split(",")
+    unknown = set(loads) - set(LOADS)
+    if unknown:
+        parser.error(f"unknown loads {sorted(unknown)}, pick from {LOADS}")
+    variants = [(load, mode) for load in loads for mode in modes]
     cases = []
     for name in args.cases.split(","):
         if name not in CASES:
@@ -49,19 +55,20 @@ def main(argv: Optional[List[str]] = None) -> int:
     results: List[Dict[str, Any]] = []
     with open(args.output, "a", encoding="utf-8") as output:
         for round_no in range(1, args.rounds + 1):
-            # runs of a case are spread over the benchmark and alternate the mode order
+            # runs of a case are spread over the benchmark and alternate their order
             for case in cases:
-                for mode in modes if round_no % 2 else list(reversed(modes)):
+                for load, mode in variants if round_no % 2 else variants[::-1]:
                     if results:
                         sleep(args.pause)
-                    print(f"Round {round_no}: {case.name} {mode}", flush=True)
+                    print(f"Round {round_no}: {case.name} {load} {mode}", flush=True)
                     try:
-                        result = measure(case, mode, round_no)
+                        result = measure(case, mode, load, round_no)
                     except Exception as ex:
                         traceback.print_exc()
                         result = {
                             "case": case.name,
                             "mode": mode,
+                            "load": load,
                             "round": round_no,
                             "error": f"{type(ex).__name__}: {ex}",
                         }

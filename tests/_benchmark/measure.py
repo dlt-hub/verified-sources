@@ -10,7 +10,7 @@ from typing import Any, Dict, List, Literal, Optional, Tuple
 
 import dlt
 
-from tests._benchmark.cases import BenchmarkCase
+from tests._benchmark.cases import BenchmarkCase, TLoad
 from tests._benchmark.machine import connect_rtt_ms
 from tests.seed_utils import MB, HttpLog, account_lock, record_http
 
@@ -106,22 +106,22 @@ class FirstItem:
         return item
 
 
-def iterate(case: BenchmarkCase, first: FirstItem) -> int:
+def iterate(case: BenchmarkCase, load: TLoad, first: FirstItem) -> int:
     rows = 0
-    for item in case.resource().add_map(first):
+    for item in case.resource(load).add_map(first):
         rows += count_rows(item)
     return rows
 
 
-def extract(case: BenchmarkCase, round_no: int, first: FirstItem) -> int:
+def extract(case: BenchmarkCase, load: TLoad, round_no: int, first: FirstItem) -> int:
     pipelines_dir = tempfile.mkdtemp(prefix="dlt-benchmark-")
     pipeline = dlt.pipeline(
-        pipeline_name=f"benchmark_{case.name}_{round_no}",
+        pipeline_name=f"benchmark_{case.name}_{load}_{round_no}",
         pipelines_dir=pipelines_dir,
         dev_mode=True,
     )
     try:
-        info = pipeline.extract(case.resource().add_map(first))
+        info = pipeline.extract(case.resource(load).add_map(first))
         return sum(
             table.items_count
             for step_metrics in info.metrics.values()
@@ -184,11 +184,15 @@ def bound(result: Dict[str, Any]) -> str:
     return "waits"
 
 
-def measure(case: BenchmarkCase, mode: TMode, round_no: int) -> Dict[str, Any]:
-    """Runs `case` once in `mode`. Login and describe calls of the source are measured too"""
+def measure(
+    case: BenchmarkCase, mode: TMode, load: TLoad, round_no: int
+) -> Dict[str, Any]:
+    """Runs `case` once in `mode` and `load`. Login and describe calls of the source are measured
+    too
+    """
     with account_lock(case.account):
         case.prepare()
-        with record_http(f"{case.name} {mode}", print_summary=False) as http:
+        with record_http(f"{case.name} {load} {mode}", print_summary=False) as http:
             with CpuSampler() as sampler:
                 started, cpu_started, main_cpu_started = (
                     monotonic(),
@@ -197,15 +201,16 @@ def measure(case: BenchmarkCase, mode: TMode, round_no: int) -> Dict[str, Any]:
                 )
                 first = FirstItem()
                 if mode == "iterate":
-                    rows = iterate(case, first)
+                    rows = iterate(case, load, first)
                 else:
-                    rows = extract(case, round_no, first)
+                    rows = extract(case, load, round_no, first)
                 wall = monotonic() - started
                 cpu = process_time() - cpu_started
                 main_cpu = thread_time() - main_cpu_started
     result: Dict[str, Any] = {
         "case": case.name,
         "mode": mode,
+        "load": load,
         "round": round_no,
         "rows": rows,
         "expected_rows": case.expected_rows,

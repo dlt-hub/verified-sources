@@ -1,7 +1,7 @@
 """Large seeded resources read by the extraction benchmark, one per source"""
 
 from functools import partial
-from typing import Callable, Dict, NamedTuple
+from typing import Any, Callable, Dict, Literal, NamedTuple, Tuple
 
 import dlt
 from dlt.common.configuration.exceptions import ConfigFieldMissingException
@@ -19,6 +19,9 @@ from tests.salesforce.utils import performance_credentials
 from tests.servicenow.seed import data as servicenow_data
 from tests.servicenow.utils import get_credentials, wait_for_instance
 
+TLoad = Literal["full", "incremental"]
+LOADS: Tuple[TLoad, ...] = ("full", "incremental")
+
 
 class BenchmarkCase(NamedTuple):
     name: str
@@ -26,8 +29,8 @@ class BenchmarkCase(NamedTuple):
     """Folder of the source in `sources`"""
     account: str
     """`account_lock` key shared with the performance tests and seeds of the account"""
-    resource: Callable[[], DltResource]
-    """Returns a new resource with default settings"""
+    resource: Callable[[TLoad], DltResource]
+    """Returns a new resource with default settings, without incremental for a full load"""
     expected_rows: int
     is_configured: Callable[[], bool]
     prepare: Callable[[], None]
@@ -46,25 +49,31 @@ def nothing() -> None:
     pass
 
 
-def salesforce_resource(api: TQueryApi = "auto") -> DltResource:
+def load_args(load: TLoad) -> Dict[str, Any]:
+    """A full load reads all records without the default incremental"""
+    return {"incremental": None} if load == "full" else {}
+
+
+def salesforce_resource(load: TLoad, api: TQueryApi = "auto") -> DltResource:
     return salesforce_table(
         credentials=performance_credentials(),
         sobject=salesforce_data.PERF_OBJECTS[0],
         api=api,
+        **load_args(load),
     )
 
 
-def servicenow_resource() -> DltResource:
-    return servicenow_table(table=servicenow_data.PERF_TABLES[0])
+def servicenow_resource(load: TLoad) -> DltResource:
+    return servicenow_table(table=servicenow_data.PERF_TABLES[0], **load_args(load))
 
 
 def wake_servicenow() -> None:
     wait_for_instance(ServiceNowClient(get_credentials()))
 
 
-def jira_resource() -> DltResource:
+def jira_resource(load: TLoad) -> DltResource:
     project = PERF_PROJECTS[0]
-    return jira_issues(jql=perf_jql(project), name=project.lower())
+    return jira_issues(jql=perf_jql(project), name=project.lower(), **load_args(load))
 
 
 def jira_credentials() -> None:
@@ -88,7 +97,7 @@ CASES: Dict[str, BenchmarkCase] = {
             "salesforce_rest",
             "salesforce",
             salesforce_data.PERF_SECTION,
-            partial(salesforce_resource, "rest"),
+            partial(salesforce_resource, api="rest"),
             salesforce_data.PERF_RECORDS,
             partial(resolves, performance_credentials),
             nothing,
