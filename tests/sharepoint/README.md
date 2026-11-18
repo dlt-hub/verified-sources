@@ -43,6 +43,12 @@ of the other sources, in the columns `Number`, `ChangedAt`, `Description`, `Code
 `Ratio`, `Active`, `Due` and `StartedAt`. It adds the missing items in Graph `$batch` requests of 20
 and deletes duplicates, so it resumes after an interruption. A full run takes about 20 minutes:
 Graph slows item creation down after the first few thousand items.
+`test_sharepoint_performance.py` reads the list, also as two resources, serial and parallel. Its
+tests are marked `performance` and `pytest.ini` deselects them:
+
+```sh
+ALL_DESTINATIONS='["duckdb"]' uv run pytest -m performance -s tests/sharepoint/test_sharepoint_performance.py
+```
 
 The read tests use two lists made by hand once. The app can create lists, `test_list_incremental_changes` creates its own:
 
