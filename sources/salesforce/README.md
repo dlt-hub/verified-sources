@@ -47,10 +47,12 @@ Versions before 1.0.2 were not numbered. Copies taken with `dlt init` have no `v
 Learned from the performance tests on a scratch org with two objects of 50,000 records (performance
 tests), from #717 and from local runs (local).
 
-- **Query API**: Bulk API 2.0, picked by `api="auto"`, reads large objects fastest. Each Bulk job
-  waits for the org to prepare it before its first page, also for small objects, and the wait varies
-  between runs. Frequent incremental runs that read few records are about an order of magnitude
-  faster per run with `api="rest"` (performance tests).
+- **Query API**: each Bulk API 2.0 job, picked by `api="auto"`, waits for the org to prepare it
+  before its first page, also for small objects, and the wait varies between runs. The REST API
+  returns its first page right away, so the Bulk API takes far longer to the first data and pays off
+  only on really large objects. Use `api="rest"` for the other objects and for frequent incremental
+  runs, which are about an order of magnitude faster per run (performance tests, extraction
+  benchmark).
 - **Several objects**: the org prepares the jobs of several objects at once, so objects loaded in one
   run take about the time of one: two objects side by side doubled the throughput of one
   (performance tests). Load the objects in one pipeline run.
