@@ -1,8 +1,9 @@
 """Mocked tests of the SharePoint list sources: Graph calls go to requests_mock, loads go to duckdb."""
 
 import re
+import threading
 from functools import partial
-from typing import Any, Callable, Dict, List, Optional, Set, Tuple
+from typing import Any, Callable, Dict, Iterator, List, Optional, Set, Tuple
 from urllib.parse import urlparse
 
 import dlt
@@ -13,6 +14,7 @@ from dlt.sources import DltResource
 from dlt.sources.helpers.requests import HTTPError
 from requests_mock import Mocker
 
+from sources import sharepoint
 from sources.sharepoint import LIST_PAGE_SIZE, sharepoint_list, sharepoint_lists
 from tests.sharepoint.utils import (
     ACCESS_TOKEN,
@@ -320,6 +322,27 @@ def test_sharepoint_lists_tables(
         t: 1 for t in expected_tables
     }
     assert bool(lists_requests(graph)) is (list_titles is None)
+
+
+def test_sharepoint_lists_read_in_parallel(
+    credentials_env: None, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Each list is read on an extract worker, so the lists wait for Graph at the same time."""
+    titles = ["Tasks", "Contacts"]
+    # requests_mock serializes requests, the barrier replaces the pages of the lists
+    waiting = threading.Barrier(len(titles), timeout=5)
+
+    def pages_when_all_wait(
+        client: Any, list_title: str, included_columns: Any
+    ) -> Iterator[List[Dict[str, Any]]]:
+        waiting.wait()
+        yield [{"id": "1", "Title": list_title}]
+
+    monkeypatch.setattr(sharepoint, "list_items", pages_when_all_wait)
+
+    rows = list(sharepoint_lists(titles))
+
+    assert sorted(row["Title"] for row in rows) == sorted(titles)
 
 
 @pytest.mark.parametrize(

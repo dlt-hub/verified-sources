@@ -8,6 +8,11 @@ files of document libraries through a read-only fsspec filesystem over Graph, wi
 
 ## Changelog
 
+### 1.2.1
+**Upgrade**: safe, the incremental state carries over.
+- changed `sharepoint_lists`: each list is read on an extract worker, so the lists load in
+  parallel
+
 ### 1.2.0
 **Upgrade**: remove `incremental=None` from `sharepoint_files` and `sharepoint_folder` to keep the
 default incremental: with it, each run reads all files. The incremental state carries over.
@@ -39,7 +44,10 @@ default incremental: with it, each run reads all files. The incremental state ca
 
 - **Extract workers** (`workers` in the `[extract]` config section): files download on the extract
   workers, so more workers read many small files faster, up to the throttling budget of the tenant:
-  a file costs 2 resource units, see Throttling below (test site).
+  a file costs 2 resource units, see Throttling below (test site). `sharepoint_lists` reads each
+  list on one worker, so several lists load in about the time of the largest one; call
+  `parallelize()` on `sharepoint_list` resources to get the same. The pages of one list come one
+  after another: each delta page links the next.
 
 ## Code Customization
 
