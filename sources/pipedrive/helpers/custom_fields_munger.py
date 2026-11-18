@@ -1,4 +1,4 @@
-from typing import Any, Dict, TypedDict, Optional
+from typing import Any, Dict, TypedDict, Optional, List
 
 import dlt
 
@@ -93,6 +93,7 @@ def rename_fields(data: TDataPage, fields_mapping: Dict[str, Any]) -> TDataPage:
             options_map = field["options"]
             # Get label instead of ID for 'enum' and 'set' fields
             if field_value and field["field_type"] == "set":  # Multiple choice
+                field_value = _coerce_set_field_value(field_value)
                 field_value = [
                     options_map.get(str(enum_id), enum_id) for enum_id in field_value
                 ]
@@ -100,3 +101,18 @@ def rename_fields(data: TDataPage, fields_mapping: Dict[str, Any]) -> TDataPage:
                 field_value = options_map.get(str(field_value), field_value)
             data_item[field_name] = field_value
     return data
+
+
+def _coerce_set_field_value(field_value: Any) -> List[Any]:
+    """Normalize Pipedrive `set` custom fields to a list of option ids."""
+    if isinstance(field_value, str):
+        return [
+            option_id.strip()
+            for option_id in field_value.split(",")
+            if option_id.strip()
+        ]
+    if isinstance(field_value, list):
+        return field_value
+    if isinstance(field_value, tuple):
+        return list(field_value)
+    return [field_value]
