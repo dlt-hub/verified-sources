@@ -1,7 +1,7 @@
 """Loads SharePoint lists and the files of document libraries through Microsoft Graph.
 
-`sharepoint_lists` and `sharepoint_list` sync list items with Graph's delta query, `sharepoint_files`
-reads the rows of csv, jsonl, parquet and excel files. API reference:
+`sharepoint_lists` and `sharepoint_list` load list items incrementally, `sharepoint_files` loads
+the rows of csv, jsonl, parquet and excel files. API reference:
 https://learn.microsoft.com/graph/api/resources/sharepoint
 """
 
@@ -59,7 +59,8 @@ class SharepointCredentials(CredentialsConfiguration):
 
 
 def is_default_incremental(incremental: Optional[dlt.sources.incremental[Any]]) -> bool:
-    """True if `incremental` is a copy of `DEFAULT_INCREMENTAL`, dlt copies argument defaults"""
+    """Returns True if `incremental` is the default of an `incremental` argument."""
+    # dlt passes a copy of the argument default, so compare the marker cursor, not the instance
     return (
         incremental is not None
         and incremental.cursor_path == DEFAULT_INCREMENTAL_MARKER
@@ -69,9 +70,9 @@ def is_default_incremental(incremental: Optional[dlt.sources.incremental[Any]]) 
 def make_default_incremental(
     incremental: dlt.sources.incremental[Any], default: dlt.sources.incremental[Any]
 ) -> dlt.sources.incremental[Any]:
-    """Returns `default` with the values set on `incremental`, the copy of `DEFAULT_INCREMENTAL`
-    that dlt merged with config or a partial incremental, e.g. an `end_value`. `default` keeps its
-    generic type and its `initial_value`, the `start_date`
+    """Returns `default` with the values set on `incremental`, e.g. an `end_value` from config.
+
+    `default` keeps its type and its `initial_value`.
     """
     values = incremental.copy()
     # `merge` applies the values that are not None
@@ -101,13 +102,13 @@ def sharepoint_list(
     included_columns: Optional[List[str]] = None,
     credentials: SharepointCredentials = dlt.secrets.value,
 ) -> Iterator[TDataItems]:
-    """Syncs the items of one list: the first run reads the whole list, later runs only what changed.
+    """Loads the items of one list: the first run loads all items, later runs only the changed ones.
 
     The resource and its table are named after the list; rename them with `with_name`. An item
     deleted in SharePoint keeps its row with `_deleted` set and its fields empty; to delete such
-    rows from the table, apply `columns={"_deleted": {"hard_delete": True}}` with `apply_hints`.
-    `refresh="drop_resources"` reads the whole list again. Multi-value columns become child
-    tables; `sharepoint_lists` with `source.max_table_nesting = 0` set on it keeps them as json.
+    rows, apply `columns={"_deleted": {"hard_delete": True}}` with `apply_hints`.
+    `refresh="drop_resources"` loads the whole list again. Multi-value columns become child
+    tables, or json when `max_table_nesting = 0` is set on the `sharepoint_lists` source.
 
     Args:
         list_title (str): Display name of the list.
@@ -116,9 +117,7 @@ def sharepoint_list(
         credentials (SharepointCredentials): Entra ID app credentials and the site id.
 
     Yields:
-        TDataItems: Pages of items keyed by "id"; a deleted item has `_deleted` set and no fields.
-            `_dlt_list_idx` orders the rows of one run, so an item Graph sends twice keeps its
-            last state.
+        TDataItems: Pages of list items.
     """
     yield from list_items(site_client(**credentials), list_title, included_columns)
 
@@ -129,17 +128,16 @@ def sharepoint_lists(
     hard_delete: bool = False,
     credentials: SharepointCredentials = dlt.secrets.value,
 ) -> Iterable[DltResource]:
-    """Loads several lists of the site, one table per list, each synced like `sharepoint_list`.
+    """Loads several lists of the site, one table per list, each like `sharepoint_list`.
 
     Lists whose titles normalize to the same table name, such as "Sales Report" and
     "Sales-Report", load into one table and overwrite each other's items; load one of them with
     `sharepoint_list` renamed with `with_name`.
 
     Args:
-        list_titles (Optional[List[str]]): Display names of the lists to load. Without it, the
-            site's lists are read when the source is created and every visible list of the
-            generic template (made with "Blank list" or "From CSV") is loaded. Lists of other
-            templates, such as Tasks or Contacts, load only when named here.
+        list_titles (Optional[List[str]]): Display names of the lists to load. Without it, all
+            visible lists made with "Blank list" or "From CSV" load; lists of other templates,
+            such as Tasks or Contacts, load only when named here.
         hard_delete (bool): Deletes the rows of items deleted in SharePoint. Without it, such
             rows stay with `_deleted` set and their fields empty.
         credentials (SharepointCredentials): Entra ID app credentials and the site id.
@@ -156,7 +154,11 @@ def sharepoint_lists(
         raise ValueError(
             "No lists to load: list_titles is empty or the site has no visible generic list."
         )
-    resources = [sharepoint_list(title, credentials=credentials) for title in titles]
+    # `parallelized` on the decorator does not survive binding the arguments
+    resources = [
+        sharepoint_list(title, credentials=credentials).parallelize()
+        for title in titles
+    ]
     if hard_delete:
         for resource in resources:
             resource.apply_hints(columns={"_deleted": {"hard_delete": True}})
@@ -186,7 +188,7 @@ def list_items(
     key = f"delta_link:{list_title}:{expand}"
     query = urlencode({"$expand": expand, "$top": LIST_PAGE_SIZE})
     first_link = f"lists/{quote(list_title, safe='')}/items/delta?{query}"
-    # Graph may send an item more than once in a feed and its last occurrence is the latest state
+    # Graph may send an item more than once in a feed; `_dlt_list_idx` keeps its last occurrence
     positions = count()
     try:
         for page in client.paginate(state.get(key, first_link)):
@@ -228,10 +230,10 @@ def sharepoint_folder(
     incremental: Optional[dlt.sources.incremental[Any]] = DEFAULT_INCREMENTAL,
     credentials: SharepointCredentials = dlt.secrets.value,
 ) -> DltResource:
-    """Lists the files of a library folder with dlt's `filesystem` resource, new or modified files only.
+    """Lists the new or modified files of a library folder.
 
-    The resource yields `FileItem`s, so any reader transformer can follow it: `read_files`, or
-    dlt's `read_csv`, `read_jsonl` and `read_parquet`.
+    The resource yields `FileItem`s like dlt's `filesystem` resource, so any reader can follow
+    it: `read_files`, or dlt's `read_csv`, `read_jsonl` and `read_parquet`.
 
     Args:
         folder_path (str): Folder relative to the library root; "" lists the root itself.
@@ -240,17 +242,14 @@ def sharepoint_folder(
         file_glob (str): Glob matched against paths under the folder; "**/*.csv" also
             searches subfolders.
         start_date (Optional[TAnyDateTime]): Lists files modified since this date on the first
-            run, all files if not set. It is the initial value of the default incremental on
-            `modification_date` and wins over the `initial_value` of an incremental without
-            `cursor_path`. A naive date is taken as UTC.
-        incremental (Optional[dlt.sources.incremental[Any]]): The incremental on
-            `modification_date` if not passed, an incremental without `cursor_path` sets its
-            values, e.g. an `end_value`. Your own incremental is used as is, it cannot be
-            combined with `start_date`. `None` lists all files on each run.
+            run, all files if not set. A naive date is taken as UTC.
+        incremental (Optional[dlt.sources.incremental[Any]]): Incremental on
+            `modification_date` by default. One without `cursor_path` sets only its values,
+            e.g. `end_value`; `None` lists all files on each run.
         credentials (SharepointCredentials): Entra ID app credentials and the site id.
 
     Returns:
-        DltResource: dlt's `filesystem` resource over the folder, incremental on `modification_date`.
+        DltResource: The file listing, incremental on `modification_date`.
 
     Raises:
         ValueError: If folder_path contains glob characters, or `start_date` comes with
@@ -292,14 +291,13 @@ def read_files(
     Pipe it from `sharepoint_folder` or from dlt's `filesystem` resource. A modified file
     replaces its own rows; rename the table with `with_name` or a `table_name` hint. Excel
     workbooks load one table per sheet, "<table>_<sheet>".
-    Files are downloaded in parallel on dlt's extract workers, see `read_file`.
 
     Args:
         items (Iterable[FileItemDict]): The files, as the listing resource yields them.
         file_type (TFileType): One of "csv", "jsonl", "parquet" or "excel".
-        reader_kwargs (Optional[Dict[str, Any]]): Arguments for the pandas reader, such as
-            "sep", "encoding" or "sheet_name"; for jsonl only "encoding"; for parquet the
-            pyarrow "columns". A BOM decides the encoding of a csv or jsonl file.
+        reader_kwargs (Optional[Dict[str, Any]]): Arguments for the pandas reader of csv and
+            excel files, such as "sep", "encoding" or "sheet_name"; for jsonl only "encoding";
+            for parquet only "columns". A BOM decides the encoding of a csv or jsonl file.
 
     Yields:
         TDataItems: Batches of rows.
@@ -327,14 +325,15 @@ def sharepoint_files(
 ) -> Iterable[DltResource]:
     """Loads the rows of the files matching `file_glob` in a folder into one table.
 
-    All matching files share `table_name`, and each row carries the `_dlt_file_url` and
-    `_dlt_file_name` it came from. Excel sheets go to their own tables, "<table_name>_<sheet>".
+    Each row carries `_dlt_file_url`, `_dlt_file_name` and `_dlt_file_modified_at`. Excel sheets
+    load into their own tables, "<table_name>_<sheet>".
 
-    Each run reads only new or modified files, from `start_date` on if set. A modified file
+    Each run loads only new or modified files, from `start_date` on if set. A modified file
     replaces its own rows. A renamed file counts as a new file, and the rows of a file emptied
-    or deleted in SharePoint stay in the table. `refresh="drop_resources"` reads every file again.
-    Calls share one schema, use `sharepoint_files.with_args(name=...)` to refresh them separately
-    with `refresh="drop_sources"`.
+    or deleted in SharePoint stay in the table. `refresh="drop_resources"` loads every file again.
+    Several `sharepoint_files` sources in one pipeline share a schema; name each with
+    `sharepoint_files.with_args(name=...)` to refresh them separately with
+    `refresh="drop_sources"`.
 
     Args:
         folder_path (str): Folder relative to the library root; "" loads the root itself.
@@ -349,18 +348,15 @@ def sharepoint_files(
             excel files, such as "sep", "encoding" or "sheet_name"; for jsonl only "encoding";
             for parquet only "columns". A BOM decides the encoding of a csv or jsonl file.
         start_date (Optional[TAnyDateTime]): Loads files modified since this date on the first
-            run, all files if not set. It is the initial value of the default incremental on
-            `modification_date` and wins over the `initial_value` of an incremental without
-            `cursor_path`. A naive date is taken as UTC.
-        incremental (Optional[dlt.sources.incremental[Any]]): The incremental on
-            `modification_date` if not passed, an incremental without `cursor_path` sets its
-            values, e.g. an `end_value`. Your own incremental is used as is, it cannot be
-            combined with `start_date`. `None` lists all files on each run.
+            run, all files if not set. A naive date is taken as UTC.
+        incremental (Optional[dlt.sources.incremental[Any]]): Incremental on
+            `modification_date` by default. One without `cursor_path` sets only its values,
+            e.g. `end_value`; `None` loads all files on each run.
         credentials (SharepointCredentials): Entra ID app credentials and the site id.
 
     Returns:
-        Iterable[DltResource]: `table_name`, `sharepoint_folder` piped into `read_files` and
-            merged on `_dlt_file_url`, and the file listing `<table_name>_files`, not selected.
+        Iterable[DltResource]: `table_name` with the rows, and the file listing
+            `<table_name>_files`, not selected by default.
 
     Raises:
         ValueError: If folder_path contains glob characters, or `start_date` comes with

@@ -51,9 +51,9 @@ TReader = Callable[[Any, Dict[str, Any]], Iterator[TSheetRecords]]
 def read_file(
     item: FileItemDict, file_type: str, reader_kwargs: Dict[str, Any], table_name: str
 ) -> Iterator[TDataItems]:
-    """Downloads the file on a dlt worker thread and returns its rows, which dlt reads in the main thread.
+    """Downloads a small file on a worker thread and returns its rows.
 
-    Files over `PREFETCH_MAX_BYTES` or of unknown size are read in ranges as their rows are read.
+    Files over `PREFETCH_MAX_BYTES` or of unknown size are read in ranges while their rows are read.
     """
     size = item.get("size_in_bytes")
     if size is not None and size <= PREFETCH_MAX_BYTES:
@@ -72,8 +72,7 @@ def file_rows(
 ) -> Iterator[TDataItems]:
     """Yields the rows of each file in batches, with `_dlt_file_url`, `_dlt_file_name` and `_dlt_file_modified_at`.
 
-    Rows of the base table carry no table name, so table hints apply to them; Excel sheets go
-    to "<table_name>_<sheet>". Blank files are skipped.
+    Excel sheets go to "<table_name>_<sheet>". Blank files are skipped.
     """
     read = reader_for(file_type)
     for item in items:
@@ -88,6 +87,7 @@ def file_rows(
             for sheet, records in read(f, reader_kwargs):
                 rows = [{**record, **file_columns} for record in records]
                 if sheet is None:
+                    # no table name, so the table hints of the resource apply
                     yield rows
                 else:
                     yield with_table_name(rows, f"{table_name}_{sheet}")
@@ -111,7 +111,7 @@ def file_encoding(f: Any, reader_kwargs: Dict[str, Any]) -> str:
 
 
 def read_csv(f: Any, reader_kwargs: Dict[str, Any]) -> Iterator[TSheetRecords]:
-    """Yields batches of records of a csv file, read with pandas in the encoding `file_encoding` picks."""
+    """Yields batches of records of a csv file."""
     encoding = file_encoding(f, reader_kwargs)
     try:
         chunk_reader = pd.read_csv(
@@ -208,12 +208,11 @@ def duration_to_seconds(value: Any) -> Any:
 
 
 def to_decimal(value: Any) -> Optional[Decimal]:
-    """Converts a csv or Excel cell to a Decimal for pandas `converters`, e.g.
-    `reader_kwargs={"converters": {"Amount": to_decimal}}` loads amounts as decimals, not floats.
+    """Converts a csv or Excel cell to a Decimal, for pandas `converters`.
 
-    Text like "$1,234.56" loses its "$" and "," first. Excel stores numbers as doubles; a float
-    becomes the 15 significant digits Excel shows. Empty cells, text that is not a number and
-    NaN or infinite values become None.
+    `reader_kwargs={"converters": {"Amount": to_decimal}}` loads amounts as decimals, not floats.
+    Text like "$1,234.56" loses its "$" and "," first. A float keeps the 15 significant digits
+    Excel shows. Empty cells, text that is not a number and NaN or infinite values become None.
     """
     if pd.isna(value):
         return None

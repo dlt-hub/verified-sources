@@ -27,10 +27,14 @@ class SharepointFileSystem(AbstractFileSystem):
     empty library for the site's default library.
 
     Args:
-        client (Optional[RESTClient]): Graph client rooted at the site.
+        client (Optional[RESTClient]): Graph client rooted at the site. Without it, the client is
+            built from `tenant_id`, `client_id`, `client_secret` and `site_id`, e.g. passed as
+            fsspec storage options.
         library (Optional[str]): Display name of the library, None for the site's default one.
-        tenant_id (Optional[str]): With client_id, client_secret and site_id, the fsspec storage
-            options that build the client when none is given.
+        tenant_id (Optional[str]): Directory (tenant) id of the Entra ID app.
+        client_id (Optional[str]): Application (client) id of the Entra ID app.
+        client_secret (Optional[str]): Client secret value of the Entra ID app.
+        site_id (Optional[str]): Composite Graph site id.
     """
 
     protocol = "sharepoint"

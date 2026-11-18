@@ -23,7 +23,7 @@ EXPIRY_MARGIN = timedelta(seconds=60)
 
 @configspec
 class EntraClientCredentials(OAuth2ClientCredentials):
-    """Client credentials flow with one token for all threads, renewed under a lock before it expires.
+    """Client credentials flow whose token is renewed before it expires.
 
     Token errors carry Entra's error description.
     """
@@ -33,6 +33,7 @@ class EntraClientCredentials(OAuth2ClientCredentials):
         self._lock = threading.Lock()
 
     def __call__(self, request: Any) -> Any:
+        # threads share the token, only one of them renews it
         with self._lock:
             return super().__call__(request)
 
