@@ -23,7 +23,10 @@ from tests._benchmark.report import render_report, run_metadata
 
 def main(argv: Optional[List[str]] = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--cases", default=",".join(CASES))
+    parser.add_argument(
+        "--cases",
+        default=",".join(name for name, case in CASES.items() if case.by_default),
+    )
     parser.add_argument("--modes", default="iterate")
     parser.add_argument("--loads", default=",".join(LOADS))
     parser.add_argument("--rounds", type=int, default=3)

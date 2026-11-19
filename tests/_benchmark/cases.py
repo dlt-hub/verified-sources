@@ -39,6 +39,8 @@ class BenchmarkCase(NamedTuple):
     prepare: Callable[[], None]
     """Runs before the measured run, e.g. wakes up an instance"""
     loads: Tuple[TLoad, ...] = LOADS
+    by_default: bool = True
+    """Runs when no cases are named, large cases run only on request"""
 
 
 def resolves(resolve: Callable[[], object]) -> bool:
@@ -58,10 +60,14 @@ def load_args(load: TLoad) -> Dict[str, Any]:
     return {"incremental": None} if load == "full" else {}
 
 
-def salesforce_resource(load: TLoad, api: TQueryApi = "auto") -> DltResource:
+def salesforce_resource(
+    load: TLoad,
+    sobject: str = salesforce_data.PERF_OBJECTS[0],
+    api: TQueryApi = "auto",
+) -> DltResource:
     return salesforce_table(
         credentials=performance_credentials(),
-        sobject=salesforce_data.PERF_OBJECTS[0],
+        sobject=sobject,
         api=api,
         **load_args(load),
     )
@@ -110,6 +116,32 @@ CASES: Dict[str, BenchmarkCase] = {
             salesforce_data.PERF_RECORDS,
             partial(resolves, performance_credentials),
             nothing,
+        ),
+        BenchmarkCase(
+            "salesforce_wide",
+            "salesforce",
+            salesforce_data.PERF_SECTION,
+            partial(salesforce_resource, sobject=salesforce_data.PERF_WIDE_OBJECT),
+            salesforce_data.PERF_WIDE_RECORDS,
+            partial(resolves, performance_credentials),
+            nothing,
+            ("full",),
+            by_default=False,
+        ),
+        BenchmarkCase(
+            "salesforce_wide_rest",
+            "salesforce",
+            salesforce_data.PERF_SECTION,
+            partial(
+                salesforce_resource,
+                sobject=salesforce_data.PERF_WIDE_OBJECT,
+                api="rest",
+            ),
+            salesforce_data.PERF_WIDE_RECORDS,
+            partial(resolves, performance_credentials),
+            nothing,
+            ("full",),
+            by_default=False,
         ),
         BenchmarkCase(
             "servicenow",
