@@ -101,6 +101,11 @@ unique seconds over two years, in an order unrelated to `Number__c`. The values 
 `seed/data.py`. `load` stops when the records do not fit in the data storage left in the org and ends with `verify`,
 which compares every record with `seed/data.py`.
 
+`DltPerfWide__c` holds 150,000 records of 110 random `Text(255)` fields, 4 GB in all. A record costs the same 2 KB of
+data storage whatever its width, so the wide object fits in the org next to the others. `load` deploys and runs the Batch
+Apex class `seed/DltWideSeed.cls`, which generates the values in the org, so nothing is uploaded. It skips existing
+records, and `verify` counts them.
+
 ```sh
 ALL_DESTINATIONS='["duckdb"]' uv run pytest -m performance -s tests/salesforce/test_salesforce_performance.py
 ```

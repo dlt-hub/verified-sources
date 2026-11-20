@@ -7,6 +7,11 @@ in the [dlt docs](https://dlthub.com/docs/dlt-ecosystem/verified-sources/salesfo
 
 ## Changelog
 
+### 1.2.0
+**Upgrade**: safe, the incremental state carries over.
+- changed `salesforce_table` and `salesforce_source`: Bulk API results that Salesforce splits into
+  chunks download in parallel on the extract workers, in pages of at most `chunk_size` records
+
 ### 1.1.0
 **Upgrade**: remove `incremental=None` from `salesforce_table` to keep the default incremental:
 with it, each run reads all records and replaces the table. The incremental state carries over.
@@ -47,10 +52,12 @@ Versions before 1.0.2 were not numbered. Copies taken with `dlt init` have no `v
 Learned from the performance tests on a scratch org with two objects of 50,000 records (performance
 tests), from #717 and from local runs (local).
 
-- **Query API**: Bulk API 2.0, picked by `api="auto"`, reads large objects fastest. Each Bulk job
-  waits for the org to prepare it before its first page, also for small objects, and the wait varies
-  between runs. Frequent incremental runs that read few records are about an order of magnitude
-  faster per run with `api="rest"` (performance tests).
+- **Query API**: each Bulk API 2.0 job, picked by `api="auto"`, waits for the org to prepare it
+  before its first page, also for small objects, and the wait varies between runs. The REST API
+  returns its first page right away, so the Bulk API takes far longer to the first data and pays off
+  only on really large objects. Use `api="rest"` for the other objects and for frequent incremental
+  runs, which are about an order of magnitude faster per run (performance tests, extraction
+  benchmark).
 - **Several objects**: the org prepares the jobs of several objects at once, so objects loaded in one
   run take about the time of one: two objects side by side doubled the throughput of one
   (performance tests). Load the objects in one pipeline run.
@@ -59,6 +66,9 @@ tests), from #717 and from local runs (local).
   about half the throughput of the Bulk API (performance tests).
 - **Chunked loads**: `row_order` and `add_limit` add `ORDER BY` and `LIMIT`, which turn off the
   server-side chunking of large Bulk jobs (#717).
+- **Extract workers**: Salesforce splits the results of a large Bulk job into chunks, and each chunk
+  downloads on an extract worker, so more workers read more chunks at once. With `row_order` or
+  `add_limit` the chunks download one after another.
 - **Backend**: `pyarrow` parses pages about 14 times faster than `python` (#717). Pick one before
   the first load, see Backends below.
 
@@ -77,6 +87,12 @@ pyarrow 17 and urllib3 2.3 (local), or taken from docs and other connectors.
 
 - **Jobs**: `ORDER BY` is accepted. A job without results returns a page with only the header,
   `Sforce-Locator: null` and `Sforce-NumberOfRecords: 0` (test org).
+- **Result chunks**: `resultPages` lists the result chunks of a completed job, from API v58.0
+  ([docs](https://developer.salesforce.com/docs/atlas.en-us.api_asynch.meta/api_bulk_v2/query_get_parallel_job_results.htm)).
+  150,000 records of 28 KB came in 5 chunks of up to 31,000 records. A request without
+  `maxRecords` returns one chunk, and a `maxRecords` larger than the rest of a chunk runs into the
+  next one, so the source reads a chunk in one response and cuts it into pages. A download that
+  breaks starts the chunk again and skips the records already read (performance org).
 - **Limits**: the test org allows 15,000 API requests and 10,000 Bulk API 2.0 query jobs a day, and
   every response carries `Sforce-Limit-Info` (test org). Requests running longer than 20 s are
   limited to 25 at once in production and 5 in Developer Editions, refused with HTTP 403

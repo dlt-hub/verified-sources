@@ -1,8 +1,9 @@
-"""Files seeded into the Documents library of the test site and the values loaded from them"""
+"""Files and the performance list seeded into the test site and the values loaded from them"""
 
 from datetime import date, datetime, timedelta, timezone  # noqa: I251
-from typing import Dict, List, Tuple
+from typing import Any, Dict, List, Tuple
 
+from tests.seed_utils import PERF_STARTS, perf_values
 from tests.sharepoint.utils import excel_bytes
 
 TEST_FOLDER = "dlt test"
@@ -62,3 +63,46 @@ def incremental_files() -> List[Tuple[str, bytes, datetime]]:
         )
         for n in range(1, INCREMENTAL_FILES + 1)
     ]
+
+
+# performance list written by `seed.py --performance` with the values of the performance data
+# sets of the other sources
+PERF_LIST = "dlt perf"
+PERF_ITEMS = 20_000
+# Graph column definitions, the internal names are the display names
+PERF_COLUMNS: List[Dict[str, Any]] = [
+    {"name": "Number", "number": {"decimalPlaces": "none"}, "indexed": True},
+    {"name": "ChangedAt", "dateTime": {"format": "dateTime"}},
+    {"name": "Description", "text": {"allowMultipleLines": True, "textType": "plain"}},
+    {"name": "Code", "text": {"maxLength": 16}},
+    {"name": "Count", "number": {"decimalPlaces": "none"}},
+    {"name": "Amount", "number": {"decimalPlaces": "two"}},
+    {"name": "Ratio", "number": {"decimalPlaces": "automatic"}},
+    {"name": "Active", "boolean": {}},
+    {"name": "Due", "dateTime": {"format": "dateOnly"}},
+    {"name": "StartedAt", "dateTime": {"format": "dateTime"}},
+]
+
+
+def graph_datetime(value: datetime) -> str:
+    return value.isoformat().replace("+00:00", "Z")
+
+
+def perf_item(n: int) -> Dict[str, Any]:
+    """Fields of the item `n` of the performance list as written to Graph, without empty ones"""
+    values = perf_values(n, PERF_STARTS[0])
+    fields = {
+        "Title": f"perf item {n}",
+        "Number": n,
+        "ChangedAt": graph_datetime(values["cursor"]),
+        "Description": values["description"],
+        "Code": values["code"],
+        "Count": values["count"],
+        # a string keeps the decimal exact, SharePoint parses it
+        "Amount": str(values["amount"]),
+        "Ratio": values["ratio"],
+        "Active": values["active"],
+        "Due": values["due"].isoformat(),
+        "StartedAt": graph_datetime(values["started_at"]),
+    }
+    return {name: value for name, value in fields.items() if value is not None}
