@@ -276,19 +276,25 @@ class HttpLog:
 
 
 def response_timing(
-    response: Optional[Response], started: float, cpu_started: float
+    response: Optional[Response],
+    started: float,
+    cpu: float,
+    body_bytes: Optional[int] = None,
 ) -> RequestTiming:
-    """Timing of a request that ends now, `response` is None after a connection error"""
-    finished, cpu = monotonic(), thread_time() - cpu_started
+    """Timing of a request that ends now, `response` is None after a connection error.
+    `body_bytes` are those of a streamed body that the caller read
+    """
+    finished = monotonic()
     if response is None:
         return RequestTiming(started, finished, 0.0, 0, 0, cpu, 0)
     length = int(response.headers.get("Content-Length") or 0)
-    # a streamed body that the caller did not read yet must stay unread
-    body_bytes = (
-        len(response.content)
-        if getattr(response, "_content_consumed", True)
-        else length
-    )
+    if body_bytes is None:
+        # a body that the caller did not read yet must stay unread
+        body_bytes = (
+            len(response.content)
+            if getattr(response, "_content_consumed", True)
+            else length
+        )
     try:
         # urllib3 does not count the bytes of chunked bodies
         wire_bytes = int(response.raw.tell()) or length
@@ -306,6 +312,44 @@ def response_timing(
         cpu,
         response.status_code,
     )
+
+
+class StreamedTiming:
+    """Adds the timing of a streamed response to `log` once the caller read its body or closed
+    it. The body is read after `send` returns, possibly on other threads
+    """
+
+    def __init__(
+        self, log: HttpLog, url: str, response: Response, started: float, cpu: float
+    ) -> None:
+        self.log, self.url, self.response, self.started = log, url, response, started
+        self.cpu, self.body_bytes, self.done = cpu, 0, False
+        self._iter_content, self._close = response.iter_content, response.close
+        response.iter_content = self.iter_content  # type: ignore[method-assign]
+        response.close = self.close  # type: ignore[method-assign]
+
+    def iter_content(self, *args: Any, **kwargs: Any) -> Iterator[Any]:
+        blocks = self._iter_content(*args, **kwargs)
+        while True:
+            cpu_started = thread_time()
+            block = next(blocks, None)
+            self.cpu += thread_time() - cpu_started
+            if block is None:
+                self.finish()
+                return
+            self.body_bytes += len(block)
+            yield block
+
+    def close(self) -> None:
+        self.finish()
+        self._close()
+
+    def finish(self) -> None:
+        if self.done:
+            return
+        self.done = True
+        timing = response_timing(self.response, self.started, self.cpu, self.body_bytes)
+        self.log.add(self.url, self.response.headers, timing)
 
 
 @contextmanager
@@ -334,7 +378,7 @@ def record_http(label: str, print_summary: bool = True) -> Iterator[HttpLog]:
             log.add(
                 request.url,
                 {} if failed is None else failed.headers,
-                response_timing(failed, started, cpu_started),
+                response_timing(failed, started, thread_time() - cpu_started),
             )
             if failed is None:
                 with log._lock:
@@ -342,11 +386,13 @@ def record_http(label: str, print_summary: bool = True) -> Iterator[HttpLog]:
             raise
         finally:
             nested.active = False
-        log.add(
-            request.url,
-            response.headers,
-            response_timing(response, started, cpu_started),
-        )
+        cpu = thread_time() - cpu_started
+        if kwargs.get("stream") and not getattr(response, "_content_consumed", True):
+            StreamedTiming(log, request.url, response, started, cpu)
+        else:
+            log.add(
+                request.url, response.headers, response_timing(response, started, cpu)
+            )
         return response
 
     with patch.object(Session, "send", recording_send):

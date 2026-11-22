@@ -221,7 +221,6 @@ def test_performance_result_chunks(
             credentials=perf_account,
             sobject=data.PERF_WIDE_OBJECT,
             incremental=None,
-            chunk_size=data.PERF_WIDE_CHUNK_SIZE,
         )
     )
     assert extracted_rows(info) == data.PERF_WIDE_RECORDS

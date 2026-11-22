@@ -38,6 +38,26 @@ def test_record_http_bytes_and_redirects() -> None:
         assert timing.cpu >= 0
 
 
+def test_record_http_streamed_body() -> None:
+    body = b"x" * 1000
+    with requests_mock.Mocker() as m:
+        m.get("https://example.com/data", content=body)
+        with record_http("test", print_summary=False) as http:
+            session = Session()
+            # a streamed request ends when the caller read its body or closed the response
+            response = session.get("https://example.com/data", stream=True)
+            assert http.requests == []
+            assert b"".join(response.iter_content(100)) == body
+            response.close()
+            closed = session.get("https://example.com/data", stream=True)
+            next(closed.iter_content(100))
+            closed.close()
+            closed.close()
+
+    assert len(http.requests) == 2
+    assert http.body_bytes() == len(body) + 100
+
+
 def test_http_log_busy_seconds_and_concurrency() -> None:
     log = HttpLog()
     for started, finished in [(0.0, 2.0), (1.0, 3.0), (5.0, 6.0), (6.0, 7.0)]:

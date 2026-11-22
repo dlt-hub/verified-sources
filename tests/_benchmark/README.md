@@ -13,8 +13,8 @@ source. `salesforce_rest` reads the same object with the REST API, which has no 
 |---|---|---|---|
 | `salesforce` | `salesforce_table(sobject="DltPerfA__c")`, Bulk API 2.0 | 50,000 | `tests/salesforce/README.md`, performance org |
 | `salesforce_rest` | `salesforce_table(sobject="DltPerfA__c", api="rest")` | 50,000 | same |
-| `salesforce_wide` | `salesforce_table(sobject="DltPerfWide__c", chunk_size=2000)`, Bulk API 2.0, 28 KB per record | 150,000 | same |
-| `salesforce_wide_rest` | `salesforce_table(sobject="DltPerfWide__c", api="rest", chunk_size=2000)` | 150,000 | same |
+| `salesforce_wide` | `salesforce_table(sobject="DltPerfWide__c")`, Bulk API 2.0, 28 KB per record | 150,000 | same |
+| `salesforce_wide_rest` | `salesforce_table(sobject="DltPerfWide__c", api="rest")` | 150,000 | same |
 | `servicenow` | `servicenow_table(table="u_dlt_perf_a")` | 50,000 | `tests/servicenow/README.md` |
 | `jira` | `jira_issues(jql=perf_jql("DLTPA"))` | 20,000 | `tests/jira/README.md` |
 | `sharepoint` | `sharepoint_list("dlt perf")` | 20,000 | `tests/sharepoint/README.md`, `--performance` |
@@ -26,9 +26,8 @@ Each case runs in two loads:
   records but filters them on the cursor.
 
 `sharepoint` runs only `incremental`: a list is always read with the delta query. The
-`salesforce_wide` cases run only `full` and only when named in `--cases`: each run downloads 4 GB. They set a
-small `chunk_size` because the result chunks download in parallel and each holds a page. The workflow then also
-runs `test_performance_result_chunks`.
+`salesforce_wide` cases run only `full` and only when named in `--cases`: each run downloads 4 GB. The workflow
+then also runs `test_performance_result_chunks`.
 
 And in up to two modes:
 

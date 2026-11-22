@@ -1,7 +1,7 @@
 """Large seeded resources read by the extraction benchmark, one per source"""
 
 from functools import partial
-from typing import Any, Callable, Dict, Literal, NamedTuple, Optional, Tuple
+from typing import Any, Callable, Dict, Literal, NamedTuple, Tuple
 
 import dlt
 from dlt.common.configuration.exceptions import ConfigFieldMissingException
@@ -64,13 +64,10 @@ def salesforce_resource(
     load: TLoad,
     sobject: str = salesforce_data.PERF_OBJECTS[0],
     api: TQueryApi = "auto",
-    chunk_size: Optional[int] = None,
 ) -> DltResource:
-    args: Dict[str, Any] = {"chunk_size": chunk_size} if chunk_size else {}
     return salesforce_table(
         credentials=performance_credentials(),
         sobject=sobject,
-        **args,
         api=api,
         **load_args(load),
     )
@@ -124,11 +121,7 @@ CASES: Dict[str, BenchmarkCase] = {
             "salesforce_wide",
             "salesforce",
             salesforce_data.PERF_SECTION,
-            partial(
-                salesforce_resource,
-                sobject=salesforce_data.PERF_WIDE_OBJECT,
-                chunk_size=salesforce_data.PERF_WIDE_CHUNK_SIZE,
-            ),
+            partial(salesforce_resource, sobject=salesforce_data.PERF_WIDE_OBJECT),
             salesforce_data.PERF_WIDE_RECORDS,
             partial(resolves, performance_credentials),
             nothing,
@@ -143,7 +136,6 @@ CASES: Dict[str, BenchmarkCase] = {
                 salesforce_resource,
                 sobject=salesforce_data.PERF_WIDE_OBJECT,
                 api="rest",
-                chunk_size=salesforce_data.PERF_WIDE_CHUNK_SIZE,
             ),
             salesforce_data.PERF_WIDE_RECORDS,
             partial(resolves, performance_credentials),
