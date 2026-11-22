@@ -52,7 +52,11 @@ public class DltWideSeed implements Database.Batchable<Integer> {
                 row.put('Name', seedId);
                 row.put('Seed_Id__c', seedId);
                 for (String field : fields) {
-                    Integer start = Math.mod(Math.abs(Crypto.getRandomInteger()), maxStart);
+                    // the remainder of a negative number is negative
+                    Integer start = Math.mod(Crypto.getRandomInteger(), maxStart);
+                    if (start < 0) {
+                        start += maxStart;
+                    }
                     row.put(field, pool.substring(start, start + 255));
                 }
                 rows.add(row);

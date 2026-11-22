@@ -159,7 +159,7 @@ def seed_performance(
     ids = perf_item_ids(client, list_id)
     requests: List[Dict[str, Any]] = [
         {
-            "id": str(n),
+            "id": f"post-{n}",
             "method": "POST",
             "url": items_url,
             "headers": {"Content-Type": "application/json"},
@@ -170,7 +170,7 @@ def seed_performance(
     ]
     # an item created by a request that also failed on the client is there twice
     requests += [
-        {"id": item_id, "method": "DELETE", "url": f"{items_url}/{item_id}"}
+        {"id": f"delete-{item_id}", "method": "DELETE", "url": f"{items_url}/{item_id}"}
         for item_ids in ids.values()
         for item_id in item_ids[1:]
     ]
