@@ -28,7 +28,7 @@ from simple_salesforce.exceptions import SalesforceOperationError
 
 from .connection import SalesforceConnection
 from .csv_utils import arrow_column_max, csv_page_to_arrow, csv_page_to_rows
-from .query import QueryApi, ResultPage, TQueryApi, make_query_api
+from .query import MAX_PAGE_BYTES, QueryApi, ResultPage, TQueryApi, make_query_api
 from .schema import (
     DEFAULT_LAG,
     UPDATED_AT_FIELDS,
@@ -209,16 +209,22 @@ def table_rows(
         limit,
         read_until=datetime.now(timezone.utc),
     )
-    # result chunks are read in parallel, which loses the order of records and the pages that
-    # `add_limit` counts
-    partitioned = limit is None and (
+    # result chunks are read in parallel, which loses the order of records, and go on after
+    # `add_limit` stops the resource: the incremental would still see their records
+    partitioned = resource.limit is None and (
         incremental is None or incremental.row_order is None
     )
     # they feed the LIMIT warning, result chunks are read without LIMIT
     rows_count, max_cursor = 0, None
     try:
         for result in query_api.query(
-            soql, columns_hints, include_deleted, chunk_size, partitioned
+            soql,
+            columns_hints,
+            include_deleted,
+            chunk_size,
+            partitioned,
+            # `add_limit` counts pages of `chunk_size` records
+            None if limit is not None else MAX_PAGE_BYTES,
         ):
             if not isinstance(result, ResultPage):
                 # dlt reads iterators yielded by a resource sequentially unless wrapped

@@ -1,3 +1,4 @@
+import base64
 import csv
 import io
 import json
@@ -20,6 +21,7 @@ from dlt.common.typing import TAnyDateTime
 from dlt.extract.exceptions import ResourceExtractionError
 from pytest_mock import MockerFixture
 from requests.exceptions import ChunkedEncodingError
+from urllib3.exceptions import ProtocolError
 from simple_salesforce.exceptions import (
     SalesforceMalformedRequest,
     SalesforceExpiredSession,
@@ -36,6 +38,7 @@ from sources.salesforce.helpers.credentials import (
 )
 from sources.salesforce.helpers.query import BulkQueryApi, ResultPage, TQueryApi
 from sources.salesforce.helpers.schema import sf_field_to_column_schema
+from sources.salesforce.helpers import query as query_module
 from sources.salesforce.helpers import table as table_module
 from sources.salesforce.helpers.table import TTableBackend
 
@@ -330,10 +333,9 @@ def test_salesforce_table_pagination(
         salesforce_table(credentials=credentials, sobject="Account", chunk_size=2)
     )
 
-    # each result page is requested with the locator of the previous one
+    # each result chunk is requested whole with the locator of the previous one
     assert calls["results"] == [
-        {"maxRecords": ["2"], **({"locator": [locator]} if locator else {})}
-        for locator in LOCATORS[: len(pages)]
+        {"locator": [locator]} if locator else {} for locator in LOCATORS[: len(pages)]
     ]
     assert all(isinstance(item, pa.Table) for item in items)
     assert [item.num_rows for item in items] == expected_rows
@@ -408,22 +410,50 @@ def account_row(n: int) -> str:
     return ROW_3.replace('"001C"', f'"001{n:03d}"', 1)
 
 
+def chunk_locator(chunk: int, offset: int = 0) -> str:
+    return base64.b64encode(f"{offset}:chunk{chunk}:0".encode()).decode().rstrip("=")
+
+
+class BrokenStream(io.RawIOBase):
+    """Sends `data`, then breaks the connection"""
+
+    def __init__(self, data: bytes) -> None:
+        self.data = data
+
+    def readable(self) -> bool:
+        return True
+
+    def readinto(self, buffer: Any) -> int:
+        if not self.data:
+            raise ProtocolError("connection broken")
+        size = min(len(buffer), len(self.data))
+        buffer[:size] = self.data[:size]
+        self.data = self.data[size:]
+        return size
+
+
 class FakeChunkedResults:
     """Answers a Bulk API 2.0 query job on `Account` whose results Salesforce wrote in `chunks`.
 
-    Like Salesforce, a page without `maxRecords` ends with its chunk and a page with `maxRecords`
-    goes on into the next chunks. Locators are `<chunk>:<offset>`. With `short_pages`, pages read
-    with `maxRecords` miss their last record but count it
+    Like Salesforce, a response without `maxRecords` ends with its chunk and a response with
+    `maxRecords` goes on into the next chunks. Locators are `<offset>:chunk<n>:0` in base64. The
+    downloads of a chunk in `breaks`, first or resumed, break after the next number of bytes in its
+    list. `miscount` is added to the record counts of whole chunks, `resumed_miscount` to those of
+    resumed downloads
     """
 
     def __init__(
         self,
         m: requests_mock.Mocker,
         chunks: List[List[str]],
-        short_pages: bool = False,
+        breaks: Optional[Dict[int, List[int]]] = None,
+        miscount: int = 0,
+        resumed_miscount: int = 0,
     ) -> None:
         self.chunks = chunks
-        self.short_pages = short_pages
+        self.breaks = {chunk: list(cuts) for chunk, cuts in (breaks or {}).items()}
+        self.miscount = miscount
+        self.resumed_miscount = resumed_miscount
         self.requests: List[Dict[str, str]] = []
         m.get(
             re.compile(r"/sobjects/Account/describe$"),
@@ -439,53 +469,73 @@ class FakeChunkedResults:
             json={
                 "done": True,
                 "resultChunks": [
-                    {"resultLink": f"/jobs/query/{JOB_ID}/results?locator={n}:0"}
+                    {
+                        "resultLink": f"/jobs/query/{JOB_ID}/results?locator={chunk_locator(n)}"
+                    }
                     for n in range(len(chunks))
                 ],
             },
         )
-        m.get(re.compile(rf"/jobs/query/{JOB_ID}/results"), text=self.results)
+        m.get(re.compile(rf"/jobs/query/{JOB_ID}/results"), body=self.results)
 
-    def results(self, request: Any, context: Any) -> str:
+    def results(self, request: Any, context: Any) -> Any:
         params = {
             name: values[0]
             for name, values in parse_qs(urlparse(request.url).query).items()
         }
         self.requests.append(params)
-        chunk, offset = map(int, params.get("locator", "0:0").split(":"))
+        locator = params["locator"]
+        offset, chunk_name, _ = (
+            base64.b64decode(locator + "=" * (-len(locator) % 4)).decode().split(":")
+        )
+        first_chunk = chunk = int(chunk_name[len("chunk") :])
+        position = int(offset)
         if "maxRecords" in params:
             wanted = int(params["maxRecords"])
             records: List[str] = []
             while len(records) < wanted and chunk < len(self.chunks):
-                taken = self.chunks[chunk][offset : offset + wanted - len(records)]
+                taken = self.chunks[chunk][position : position + wanted - len(records)]
                 records += taken
-                offset += len(taken)
-                if offset == len(self.chunks[chunk]):
-                    chunk, offset = chunk + 1, 0
+                position += len(taken)
+                if position == len(self.chunks[chunk]):
+                    chunk, position = chunk + 1, 0
+            count = len(records) + self.resumed_miscount
         else:
-            records = self.chunks[chunk][offset:]
-            chunk, offset = chunk + 1, 0
+            records = self.chunks[chunk][position:]
+            chunk, position = chunk + 1, 0
+            count = len(records) + self.miscount
         context.headers = {
-            "Sforce-Locator": f"{chunk}:{offset}"
-            if chunk < len(self.chunks)
-            else "null",
-            "Sforce-NumberOfRecords": str(len(records)),
+            "Sforce-Locator": (
+                chunk_locator(chunk, position) if chunk < len(self.chunks) else "null"
+            ),
+            "Sforce-NumberOfRecords": str(count),
         }
-        if self.short_pages and "maxRecords" in params:
-            records = records[:-1]
-        return HEADER + "".join(records)
+        body = (HEADER + "".join(records)).encode()
+        cuts = self.breaks.get(first_chunk)
+        if cuts:
+            return BrokenStream(body[: cuts.pop(0)])
+        return io.BytesIO(body)
+
+
+def chunk_rows(*sizes: int) -> List[List[str]]:
+    starts = [sum(sizes[:n]) for n in range(len(sizes))]
+    return [
+        [account_row(n) for n in range(start, start + size)]
+        for start, size in zip(starts, sizes)
+    ]
+
+
+def item_ids(items: List[Any]) -> List[str]:
+    rows = [row for item in items for row in item.to_pylist()]
+    return sorted(row["Id"] for row in rows)
 
 
 @pytest.mark.parametrize("backend", ["python", "pyarrow"])
 def test_salesforce_table_result_chunks(
     sf_mock: requests_mock.Mocker, credentials: InstanceAuth, backend: TTableBackend
 ) -> None:
-    # chunks of 5, 3 and 4 records in pages of 2: the last page of a chunk asks only for the rest
-    chunks = [
-        [account_row(n) for n in range(start, start + size)]
-        for start, size in ((0, 5), (5, 3), (8, 4))
-    ]
-    results = FakeChunkedResults(sf_mock, chunks)
+    # chunks of 5, 3 and 4 records, each downloaded in one request and cut into pages of 2
+    results = FakeChunkedResults(sf_mock, chunk_rows(5, 3, 4))
     items = list(
         salesforce_table(
             credentials=credentials, sobject="Account", backend=backend, chunk_size=2
@@ -494,19 +544,142 @@ def test_salesforce_table_result_chunks(
 
     if backend == "pyarrow":
         assert len(items) == 7
-        rows = [row for item in items for row in item.to_pylist()]
+        ids = item_ids(items)
     else:
-        rows = items
-    assert sorted(row["Id"] for row in rows) == [f"001{n:03d}" for n in range(12)]
-    # a request without `maxRecords` counts the records of each chunk
-    assert sorted(
-        (params["locator"], params.get("maxRecords", "")) for params in results.requests
-    ) == sorted(
-        [("0:0", ""), ("1:0", ""), ("2:0", "")]
-        + [("0:0", "2"), ("0:2", "2"), ("0:4", "1")]
-        + [("1:0", "2"), ("1:2", "1")]
-        + [("2:0", "2"), ("2:2", "2")]
+        ids = sorted(row["Id"] for row in items)
+    assert ids == [f"001{n:03d}" for n in range(12)]
+    assert sorted(params["locator"] for params in results.requests) == sorted(
+        chunk_locator(n) for n in range(3)
     )
+    assert all("maxRecords" not in params for params in results.requests)
+
+
+@pytest.mark.parametrize("row_order", [False, True], ids=["parallel", "row_order"])
+def test_salesforce_table_result_chunk_resumes(
+    sf_mock: requests_mock.Mocker,
+    credentials: InstanceAuth,
+    monkeypatch: pytest.MonkeyPatch,
+    row_order: bool,
+) -> None:
+    # the download of the second chunk breaks inside its third record, after two pages of one
+    monkeypatch.setattr(query_module, "RESPONSE_READ_BYTES", 16)
+    chunks = chunk_rows(2, 4, 2)
+    broken_at = len(HEADER) + len(chunks[1][0]) + len(chunks[1][1]) + 10
+    results = FakeChunkedResults(sf_mock, chunks, breaks={1: [broken_at]})
+    incremental: Optional[dlt.sources.incremental[str]] = (
+        dlt.sources.incremental("SystemModstamp", row_order="asc")
+        if row_order
+        else None
+    )
+    items = list(
+        salesforce_table(
+            credentials=credentials,
+            sobject="Account",
+            chunk_size=1,
+            incremental=incremental,
+        )
+    )
+
+    assert item_ids(items) == [f"001{n:03d}" for n in range(8)]
+    # the resumed download starts after the two records read and asks for the rest of the chunk
+    assert {"locator": chunk_locator(1, 2), "maxRecords": "2"} in results.requests
+
+
+@pytest.mark.parametrize("progress", [True, False], ids=["progress", "no_progress"])
+def test_salesforce_table_result_chunk_breaks(
+    sf_mock: requests_mock.Mocker,
+    credentials: InstanceAuth,
+    monkeypatch: pytest.MonkeyPatch,
+    progress: bool,
+) -> None:
+    # three breaks, each after one new record or inside the first one, with two attempts allowed
+    monkeypatch.setattr(query_module, "CHUNK_DOWNLOAD_ATTEMPTS", 2)
+    monkeypatch.setattr(query_module, "RESPONSE_READ_BYTES", 16)
+    chunks = chunk_rows(4)
+    cut = len(HEADER) + (len(chunks[0][0]) if progress else 0) + 10
+    results = FakeChunkedResults(sf_mock, chunks, breaks={0: [cut] * 3})
+    resource = salesforce_table(
+        credentials=credentials, sobject="Account", chunk_size=1
+    )
+    if progress:
+        assert item_ids(list(resource)) == [f"001{n:03d}" for n in range(4)]
+        assert [params.get("maxRecords") for params in results.requests] == [
+            None,
+            "3",
+            "2",
+            "1",
+        ]
+    else:
+        with pytest.raises(ResourceExtractionError) as py_ex:
+            list(resource)
+        assert isinstance(py_ex.value.__cause__, ChunkedEncodingError)
+        assert len(results.requests) == 2
+
+
+def test_salesforce_table_result_chunk_breaks_at_end(
+    sf_mock: requests_mock.Mocker,
+    credentials: InstanceAuth,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # the body breaks after its last record, so nothing is left to resume
+    monkeypatch.setattr(query_module, "RESPONSE_READ_BYTES", 1)
+    chunks = chunk_rows(2)
+    body_size = len(HEADER) + sum(len(row) for row in chunks[0])
+    results = FakeChunkedResults(sf_mock, chunks, breaks={0: [body_size]})
+    resource = salesforce_table(
+        credentials=credentials, sobject="Account", chunk_size=2
+    )
+
+    assert item_ids(list(resource)) == ["001000", "001001"]
+    assert len(results.requests) == 1
+
+
+@pytest.mark.parametrize(
+    "miscount,resumed_miscount,message",
+    [
+        (1, 0, "holds 2 of the 3 records"),
+        (0, 1, "resumed download of a result chunk"),
+    ],
+    ids=["chunk", "resumed"],
+)
+def test_salesforce_table_result_chunk_miscount(
+    sf_mock: requests_mock.Mocker,
+    credentials: InstanceAuth,
+    miscount: int,
+    resumed_miscount: int,
+    message: str,
+) -> None:
+    # Salesforce counted a record of the chunk that is not in its download
+    FakeChunkedResults(
+        sf_mock,
+        chunk_rows(2),
+        breaks={0: [len(HEADER) + 10]} if resumed_miscount else None,
+        miscount=miscount,
+        resumed_miscount=resumed_miscount,
+    )
+    resource = salesforce_table(credentials=credentials, sobject="Account")
+    with pytest.raises(ResourceExtractionError) as py_ex:
+        list(resource)
+    assert isinstance(py_ex.value.__cause__, SalesforceOperationError)
+    assert message in str(py_ex.value.__cause__)
+
+
+@pytest.mark.parametrize("add_limit", [False, True], ids=["bytes", "add_limit"])
+def test_salesforce_table_result_page_bytes(
+    sf_mock: requests_mock.Mocker,
+    credentials: InstanceAuth,
+    monkeypatch: pytest.MonkeyPatch,
+    add_limit: bool,
+) -> None:
+    # pages also end at a size, except under `add_limit`, which counts pages of `chunk_size`
+    monkeypatch.setattr(table_module, "MAX_PAGE_BYTES", 1)
+    FakeChunkedResults(sf_mock, chunk_rows(4))
+    resource = salesforce_table(credentials=credentials, sobject="Account")
+    if add_limit:
+        resource.add_limit(1)
+    items = list(resource)
+
+    assert [item.num_rows for item in items] == ([4] if add_limit else [1, 1, 1, 1])
 
 
 def test_salesforce_table_result_chunks_in_parallel(
@@ -522,7 +695,11 @@ def test_salesforce_table_result_chunks_in_parallel(
     threads = set()
 
     def chunk_pages(
-        self: BulkQueryApi, job_id: str, locator: Optional[str], page_size: int
+        self: BulkQueryApi,
+        job_id: str,
+        locator: Optional[str],
+        page_size: int,
+        max_page_bytes: Optional[int],
     ) -> Iterator[ResultPage]:
         threads.add(threading.current_thread().name)
         waiting.wait()
@@ -540,16 +717,20 @@ def test_salesforce_table_result_chunks_in_parallel(
     assert len(threads) == len(pages)
 
 
-@pytest.mark.parametrize("case", ["row_order", "add_limit", "no_result_pages"])
+@pytest.mark.parametrize(
+    "case", ["row_order", "add_limit", "max_time", "no_result_pages"]
+)
 def test_salesforce_table_result_chunks_in_sequence(
     sf_mock: requests_mock.Mocker,
     credentials: InstanceAuth,
     mocker: MockerFixture,
     case: str,
 ) -> None:
-    # records read in order or under a limit, or without `resultPages`, come page by page
+    # records read in order or under a limit, or without `resultPages`, follow the locators of
+    # the responses from chunk to chunk
     calls = mock_bulk2(sf_mock, [HEADER + ROW_1, HEADER + ROW_2], chunked=True)
     logger = mocker.patch("sources.salesforce.helpers.query.logger")
+    parallel = mocker.spy(table_module, "wrap_parallel_iterator")
     resource = salesforce_table(credentials=credentials, sobject="Account")
     if case == "row_order":
         resource = salesforce_table(
@@ -559,56 +740,19 @@ def test_salesforce_table_result_chunks_in_sequence(
         )
     elif case == "add_limit":
         resource.add_limit(2)
+    elif case == "max_time":
+        resource.add_limit(max_time=60)
     else:
         sf_mock.get(re.compile(rf"/jobs/query/{JOB_ID}/resultPages"), status_code=404)
     rows = [row for item in resource for row in item.to_pylist()]
 
     assert [row["Id"] for row in rows] == ["001A", "001B"]
-    assert all("maxRecords" in params for params in calls["results"])
-    assert len(calls["result_pages"]) == 0
+    assert calls["results"] == [{}, {"locator": [LOCATORS[1]]}]
+    parallel.assert_not_called()
     if case == "no_result_pages":
         assert "API version 58.0" in logger.warning.call_args.args[0]
     else:
         logger.warning.assert_not_called()
-
-
-def test_salesforce_table_truncated_result_chunk(
-    sf_mock: requests_mock.Mocker, credentials: InstanceAuth
-) -> None:
-    # pages of result chunks arrive without their last record, Salesforce counted it
-    FakeChunkedResults(
-        sf_mock,
-        [[account_row(0), account_row(1)], [account_row(2)]],
-        short_pages=True,
-    )
-    resource = salesforce_table(credentials=credentials, sobject="Account")
-    with pytest.raises(ResourceExtractionError) as py_ex:
-        list(resource)
-    assert isinstance(py_ex.value.__cause__, SalesforceOperationError)
-    assert re.search(r"holds \d of the \d records", str(py_ex.value.__cause__))
-
-
-def test_salesforce_table_result_chunk_ends_early(
-    sf_mock: requests_mock.Mocker,
-    credentials: InstanceAuth,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    # Salesforce counts one more record in the last chunk than its pages return
-    FakeChunkedResults(sf_mock, [[account_row(0), account_row(1)], [account_row(2)]])
-    chunk_records = BulkQueryApi._chunk_records
-
-    def one_more(
-        self: BulkQueryApi, job_id: str, locator: Optional[str]
-    ) -> Optional[int]:
-        records = chunk_records(self, job_id, locator)
-        return records + 1 if locator == "1:0" and records is not None else records
-
-    monkeypatch.setattr(BulkQueryApi, "_chunk_records", one_more)
-    resource = salesforce_table(credentials=credentials, sobject="Account")
-    with pytest.raises(ResourceExtractionError) as py_ex:
-        list(resource)
-    assert isinstance(py_ex.value.__cause__, SalesforceOperationError)
-    assert "ended after 1 of the 2 records" in str(py_ex.value.__cause__)
 
 
 @pytest.mark.parametrize(

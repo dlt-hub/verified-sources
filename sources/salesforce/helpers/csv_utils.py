@@ -2,7 +2,7 @@
 
 import csv
 import io
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, Iterable, Iterator, List, Optional, Tuple
 
 from dlt.common import Decimal
 from dlt.common.configuration.container import Container
@@ -110,6 +110,52 @@ def csv_page_to_arrow(page: bytes, columns: TTableSchemaColumns) -> Optional[Any
         or DestinationCapabilitiesContext.generic_capabilities()
     )
     return cast_arrow_as_columns_schema(table, columns, caps, "UTC")
+
+
+def split_csv_records(
+    blocks: Iterable[bytes], max_records: int, max_bytes: Optional[int] = None
+) -> Iterator[Tuple[bytes, int]]:
+    """Cuts a CSV body that arrives in `blocks` into pages that repeat the header, with their
+    number of records. A page ends after `max_records` records or when it reaches `max_bytes`.
+    A newline ends a record only outside quotes, so values may hold newlines.
+    """
+    header: Optional[bytes] = None
+    page = bytearray()
+    page_records = 0
+    pending, scanned, quotes = b"", 0, 0
+    for block in blocks:
+        data = pending + block
+        start, pos = 0, scanned
+        while True:
+            newline = data.find(b"\n", pos)
+            if newline < 0:
+                quotes += data.count(b'"', pos)
+                break
+            quotes += data.count(b'"', pos, newline)
+            pos = newline + 1
+            if quotes % 2:
+                continue
+            record = data[start:pos]
+            start, quotes = pos, 0
+            if header is None:
+                header = record
+            else:
+                page += record
+                page_records += 1
+                if page_records >= max_records or (
+                    max_bytes is not None and len(page) >= max_bytes
+                ):
+                    # null bytes are not valid in CSV
+                    yield header + bytes(page).replace(b"\x00", b""), page_records
+                    page.clear()
+                    page_records = 0
+        pending = data[start:]
+        scanned = len(pending)
+    if pending.strip() and header is not None:
+        page += pending if pending.endswith(b"\n") else pending + b"\n"
+        page_records += 1
+    if page_records:
+        yield header + bytes(page).replace(b"\x00", b""), page_records
 
 
 def arrow_column_max(table: Any, name: str) -> Any:

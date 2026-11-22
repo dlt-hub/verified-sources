@@ -1,9 +1,11 @@
 """Query APIs that run SOQL and yield CSV result pages in the Bulk API 2.0 format"""
 
+import base64
 from time import sleep
 from typing import (
     Any,
     Dict,
+    Generator,
     Iterator,
     List,
     Literal,
@@ -17,6 +19,8 @@ from urllib.parse import parse_qs, quote, urlparse
 
 from dlt.common import Decimal, logger
 from dlt.common.schema.typing import TTableSchemaColumns
+from requests.exceptions import ChunkedEncodingError, ContentDecodingError
+from requests.exceptions import ConnectionError as RequestsConnectionError
 from simple_salesforce.exceptions import (
     SalesforceMalformedRequest,
     SalesforceOperationError,
@@ -24,7 +28,7 @@ from simple_salesforce.exceptions import (
 )
 
 from .connection import SalesforceConnection
-from .csv_utils import rest_records_to_csv
+from .csv_utils import rest_records_to_csv, split_csv_records
 
 TQueryApi = Literal["auto", "bulk", "rest"]
 
@@ -36,6 +40,12 @@ MAX_JOB_WAIT = 24 * 3600.0
 MAX_REST_URL_LENGTH = 16384
 # records in a REST API result page, 2000 is the max
 REST_BATCH_SIZE = 2000
+# a Bulk API result page also ends at this size, so wide records do not fill the memory
+MAX_PAGE_BYTES = 64 * 2**20
+RESPONSE_READ_BYTES = 2**20
+# a broken download of a result chunk resumes after the records already read, and fails after
+# this many breaks in a row without new records
+CHUNK_DOWNLOAD_ATTEMPTS = 5
 
 
 class ResultPage(NamedTuple):
@@ -57,14 +67,47 @@ class QueryApi(Protocol):
         query_all: bool,
         page_size: int,
         partitioned: bool = False,
+        max_page_bytes: Optional[int] = None,
     ) -> Iterator[TQueryResult]:
         """Yields CSV result pages of `soql` selecting `columns`.
 
         `query_all` also returns deleted and archived records. `page_size` is the max number of
-        records in a page. With `partitioned`, results that Salesforce splits into chunks are
-        yielded as one iterator of pages per chunk, in no particular order.
+        records in a page, `max_page_bytes` its max size if the API streams its results. With
+        `partitioned`, results that Salesforce splits into chunks are yielded as one iterator of
+        pages per chunk, in no particular order.
         """
         ...
+
+
+class ChunkLocator(NamedTuple):
+    """A decoded Bulk API 2.0 result locator: a record offset in a result chunk"""
+
+    offset: int
+    chunk_id: str
+    suffix: str
+
+    @classmethod
+    def decode(cls, locator: Optional[str]) -> Optional["ChunkLocator"]:
+        """Returns None for a locator of another format: the format is not documented"""
+        if not locator:
+            return None
+        try:
+            offset, chunk_id, suffix = (
+                base64.b64decode(locator + "=" * (-len(locator) % 4))
+                .decode("ascii")
+                .split(":")
+            )
+            return cls(int(offset), chunk_id, suffix)
+        # also a `binascii.Error` or a `UnicodeDecodeError`
+        except ValueError:
+            return None
+
+    def encode(self) -> str:
+        return (
+            base64.b64encode(f"{self.offset}:{self.chunk_id}:{self.suffix}".encode())
+            .decode()
+            .rstrip("=")
+        )
 
 
 class BulkQueryApi:
@@ -80,74 +123,28 @@ class BulkQueryApi:
         query_all: bool,
         page_size: int,
         partitioned: bool = False,
+        max_page_bytes: Optional[int] = None,
     ) -> Iterator[TQueryResult]:
         job_id = self._create_job(soql, query_all)
         self._wait_for_job(job_id)
-        locators = self._result_chunks(job_id) if partitioned else []
-        if len(locators) > 1:
+        locators = self._result_chunks(job_id)
+        if partitioned and len(locators) > 1:
             logger.info(
                 f"Bulk API query job {job_id} has {len(locators)} result chunks"
             )
-            for locator in locators:
-                yield self._chunk_pages(job_id, locator, page_size)
+            for chunk_locator in locators:
+                yield self._chunk_pages(
+                    job_id, chunk_locator, page_size, max_page_bytes
+                )
             return
-        yield from self._pages(job_id, page_size)
-
-    def _pages(
-        self,
-        job_id: str,
-        page_size: int,
-        locator: Optional[str] = None,
-        records: Optional[int] = None,
-    ) -> Iterator[ResultPage]:
-        """Yields the result pages from `locator` on, and stops after `records` records if given"""
-        read = 0
-        while records is None or read < records:
-            max_records = (
-                page_size if records is None else min(page_size, records - read)
+        # the locators of the responses lead from chunk to chunk in the order of the query
+        locator = locators[0] if locators else None
+        while True:
+            locator = yield from self._chunk_pages(
+                job_id, locator, page_size, max_page_bytes
             )
-            page, locator = self._page(job_id, max_records, locator)
-            yield page
-            if records is not None and page.records is None:
-                raise SalesforceOperationError(
-                    f"A result page of job {job_id} came without `Sforce-NumberOfRecords`"
-                )
-            read += page.records or 0
-            if (
-                records is not None
-                and (not page.records or locator is None)
-                and read < records
-            ):
-                raise SalesforceOperationError(
-                    f"A result chunk of job {job_id} ended after {read} of the {records} records"
-                    " Salesforce counted"
-                )
             if locator is None:
                 return
-
-    def _page(
-        self, job_id: str, max_records: Optional[int], locator: Optional[str]
-    ) -> Tuple[ResultPage, Optional[str]]:
-        """Returns a result page and the locator of the next one, None after the last page"""
-        params: Dict[str, Any] = {}
-        if max_records is not None:
-            params["maxRecords"] = max_records
-        if locator:
-            params["locator"] = locator
-        response = self.connection.request(
-            "GET", "bulk2", f"query/{job_id}/results", accept="text/csv", params=params
-        )
-        records = response.headers.get("Sforce-NumberOfRecords")
-        next_locator = response.headers.get("Sforce-Locator")
-        # null bytes are not valid in CSV
-        page = ResultPage(
-            response.content.replace(b"\x00", b""),
-            None if records is None else int(records),
-        )
-        return (
-            page,
-            None if not next_locator or next_locator == "null" else next_locator,
-        )
 
     def _result_chunks(self, job_id: str) -> List[Optional[str]]:
         """Returns the locators of the result chunks of a completed job, None for a chunk read
@@ -161,8 +158,8 @@ class BulkQueryApi:
             except (SalesforceResourceNotFound, SalesforceMalformedRequest) as ex:
                 logger.warning(
                     f"Cannot list the result chunks of Bulk API job {job_id}, so they download one"
-                    " after another. Listing them needs API version 58.0 or later, set `version`"
-                    f" in the credentials. {ex}"
+                    " after another and a broken download of the first one fails the load. Listing"
+                    f" them needs API version 58.0 or later, set `version` in the credentials. {ex}"
                 )
                 return []
             for chunk in body.get("resultChunks") or []:
@@ -175,33 +172,81 @@ class BulkQueryApi:
             path = next_url.split("/jobs/", 1)[-1]
 
     def _chunk_pages(
-        self, job_id: str, locator: Optional[str], page_size: int
-    ) -> Iterator[ResultPage]:
-        """Yields the pages of the result chunk at `locator`. The last page asks only for the
-        records left in the chunk: a larger `maxRecords` goes on into the next chunk
-        """
-        records = self._chunk_records(job_id, locator)
-        if records is None:
-            # without `maxRecords` a response ends with its chunk
-            yield self._page(job_id, None, locator)[0]
-            return
-        yield from self._pages(job_id, page_size, locator, records)
+        self,
+        job_id: str,
+        locator: Optional[str],
+        page_size: int,
+        max_page_bytes: Optional[int],
+    ) -> Generator[ResultPage, None, Optional[str]]:
+        """Downloads the result chunk at `locator` in one streamed response and yields it in pages
+        of at most `page_size` records and `max_page_bytes`. Returns the locator of the next chunk,
+        None after the last one.
 
-    def _chunk_records(self, job_id: str, locator: Optional[str]) -> Optional[int]:
-        """Returns the number of records in the result chunk at `locator`, from the headers of a
-        response closed before its body is read
+        A broken download continues after the records already yielded, with a locator at that
+        offset and `maxRecords` set to the rest of the chunk: a larger `maxRecords` goes on into
+        the next chunk.
         """
-        response = self.connection.request(
-            "GET",
-            "bulk2",
-            f"query/{job_id}/results",
-            accept="text/csv",
-            params={"locator": locator} if locator else {},
-            stream=True,
-        )
-        response.close()
-        records = response.headers.get("Sforce-NumberOfRecords")
-        return None if records is None else int(records)
+        start = ChunkLocator.decode(locator)
+        params: Dict[str, Any] = {"locator": locator} if locator else {}
+        read, resumed_at, breaks = 0, 0, 0
+        total: Optional[int] = None
+        while True:
+            response = self.connection.request(
+                "GET",
+                "bulk2",
+                f"query/{job_id}/results",
+                accept="text/csv",
+                params=params,
+                stream=True,
+            )
+            records = _records_header(response.headers)
+            if total is None:
+                total = records
+            elif records != total - read:
+                response.close()
+                raise SalesforceOperationError(
+                    f"A resumed download of a result chunk of job {job_id} holds {records}"
+                    f" records, {total - read} were expected"
+                )
+            try:
+                for page, page_records in split_csv_records(
+                    response.iter_content(RESPONSE_READ_BYTES),
+                    page_size,
+                    max_page_bytes,
+                ):
+                    read += page_records
+                    yield ResultPage(page, page_records)
+            except (
+                ChunkedEncodingError,
+                ContentDecodingError,
+                RequestsConnectionError,
+            ) as ex:
+                # a body that broke after its last record is complete
+                if read != total:
+                    breaks = 1 if read > resumed_at else breaks + 1
+                    if (
+                        breaks >= CHUNK_DOWNLOAD_ATTEMPTS
+                        or start is None
+                        or total is None
+                    ):
+                        raise
+                    logger.warning(
+                        f"Download of a result chunk of job {job_id} broke after {read} records,"
+                        f" resuming: {ex}"
+                    )
+                    resumed_at = read
+                    resume = start._replace(offset=start.offset + read)
+                    params = {"locator": resume.encode(), "maxRecords": total - read}
+                    continue
+            finally:
+                response.close()
+            if total is not None and read != total:
+                raise SalesforceOperationError(
+                    f"A result chunk of job {job_id} holds {read} of the {total} records"
+                    " Salesforce counted"
+                )
+            next_locator = response.headers.get("Sforce-Locator")
+            return None if not next_locator or next_locator == "null" else next_locator
 
     def _create_job(self, soql: str, query_all: bool) -> str:
         job = self.connection.request(
@@ -254,6 +299,7 @@ class RestQueryApi:
         query_all: bool,
         page_size: int,
         partitioned: bool = False,
+        max_page_bytes: Optional[int] = None,
     ) -> Iterator[TQueryResult]:
         path = "queryAll" if query_all else "query"
         if (
@@ -292,8 +338,11 @@ class AutoQueryApi:
         query_all: bool,
         page_size: int,
         partitioned: bool = False,
+        max_page_bytes: Optional[int] = None,
     ) -> Iterator[TQueryResult]:
-        pages = self.bulk.query(soql, columns, query_all, page_size, partitioned)
+        pages = self.bulk.query(
+            soql, columns, query_all, page_size, partitioned, max_page_bytes
+        )
         try:
             # the job is created when the first page is requested
             first_page = next(pages)
@@ -318,6 +367,11 @@ def make_query_api(connection: SalesforceConnection, api: TQueryApi) -> QueryApi
     if api == "rest":
         return RestQueryApi(connection)
     return AutoQueryApi(BulkQueryApi(connection), RestQueryApi(connection))
+
+
+def _records_header(headers: Any) -> Optional[int]:
+    records = headers.get("Sforce-NumberOfRecords")
+    return None if records is None else int(records)
 
 
 def is_bulk_not_supported(ex: SalesforceMalformedRequest) -> bool:

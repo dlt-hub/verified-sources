@@ -2,13 +2,17 @@ import os
 import uuid
 from datetime import datetime, timedelta, timezone  # noqa: I251
 from time import sleep
-from typing import Any, Dict, List, Optional, Set
+from typing import Any, Dict, Iterator, List, Optional, Set
+from urllib.parse import parse_qs, urlparse
 
 import dlt
 import pytest
 from dlt.sources import DltResource
+from dlt.sources.helpers.requests import Response
+from requests.exceptions import ChunkedEncodingError
 
 from sources.salesforce import SOURCE_SOBJECTS, salesforce_source, salesforce_table
+from sources.salesforce.helpers import query as query_module
 from sources.salesforce.helpers.query import TQueryApi
 from sources.salesforce.helpers.table import TTableBackend
 from tests.salesforce.seed import data
@@ -298,6 +302,48 @@ def test_salesforce_table_pages(api: TQueryApi) -> None:
         value for table in tables for value in table.column("Value__c").to_pylist()
     )
     assert values == [float(record["Value__c"]) for record in data.PAGES_RECORDS]
+
+
+def test_salesforce_table_resumes_broken_download(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A Bulk API result download that breaks continues after the records already yielded"""
+    iter_content = Response.iter_content
+    downloads: List[Dict[str, List[str]]] = []
+
+    def break_first_download(
+        self: Response, *args: Any, **kwargs: Any
+    ) -> Iterator[Any]:
+        blocks = iter_content(self, *args, **kwargs)
+        if "/results" not in self.url:
+            yield from blocks
+            return
+        downloads.append(parse_qs(urlparse(self.url).query))
+        received = 0
+        for block in blocks:
+            received += len(block)
+            if len(downloads) == 1 and received > 20_000:
+                raise ChunkedEncodingError("download broken by the test")
+            yield block
+
+    monkeypatch.setattr(query_module, "RESPONSE_READ_BYTES", 1024)
+    monkeypatch.setattr(Response, "iter_content", break_first_download)
+    tables = list(
+        salesforce_table(
+            sobject=data.PAGES, chunk_size=50, api="bulk", backend="pyarrow"
+        )
+    )
+
+    seed_ids = [
+        value for table in tables for value in table.column("Seed_Id__c").to_pylist()
+    ]
+    assert sorted(seed_ids) == sorted(
+        record["Seed_Id__c"] for record in data.PAGES_RECORDS
+    )
+    # the second download asks only for the records after those yielded before the break
+    assert len(downloads) == 2
+    resumed = int(downloads[1]["maxRecords"][0])
+    assert 0 < resumed < len(data.PAGES_RECORDS)
 
 
 def test_salesforce_table_bulk_api_not_supported() -> None:
