@@ -12,6 +12,7 @@ import dlt
 
 from tests._benchmark.cases import BenchmarkCase, TLoad
 from tests._benchmark.machine import connect_rtt_ms
+from tests.perf_utils import extracted_rows
 from tests.seed_utils import MB, HttpLog, account_lock, record_http
 
 TMode = Literal["iterate", "extract"]
@@ -121,14 +122,7 @@ def extract(case: BenchmarkCase, load: TLoad, round_no: int, first: FirstItem) -
         dev_mode=True,
     )
     try:
-        info = pipeline.extract(case.resource(load).add_map(first))
-        return sum(
-            table.items_count
-            for step_metrics in info.metrics.values()
-            for metrics in step_metrics
-            for name, table in metrics["table_metrics"].items()
-            if not name.startswith("_dlt")
-        )
+        return extracted_rows(pipeline.extract(case.resource(load).add_map(first)))
     finally:
         # an active pipeline gives its incremental state to resources iterated later
         pipeline.deactivate()

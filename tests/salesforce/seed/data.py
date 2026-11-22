@@ -645,6 +645,8 @@ PERF_FIELDS: List[Dict[str, Any]] = [
 # as the narrow records, so the org holds 4 GB of them. Batch Apex `DltWideSeed.cls` writes them
 PERF_WIDE_OBJECT = "DltPerfWide__c"
 PERF_WIDE_RECORDS = 150_000
+# pages of about 57 MB: the result chunks of the wide object download in parallel, a page each
+PERF_WIDE_CHUNK_SIZE = 2_000
 PERF_WIDE_FIELD_PREFIX = "Text_"
 PERF_WIDE_FIELD_COUNT = 110
 PERF_WIDE_FIELDS: List[Dict[str, Any]] = [

@@ -214,6 +214,7 @@ def table_rows(
     partitioned = limit is None and (
         incremental is None or incremental.row_order is None
     )
+    # they feed the LIMIT warning, result chunks are read without LIMIT
     rows_count, max_cursor = 0, None
     try:
         for result in query_api.query(

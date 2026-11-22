@@ -79,6 +79,18 @@ jobs:
           if [ -n "$LOADS" ]; then args+=(--loads "$LOADS"); fi
           uv run python -m tests._benchmark.run "${args[@]}"
 
+      - name: Test parallel result chunks of Salesforce
+        # reads the 4 GB wide object again, only when its case is benchmarked
+        if: >-
+          contains(format(',{0},', github.event.label.name), ':salesforce_wide,')
+          || contains(format(',{0},', github.event.label.name), ',salesforce_wide,')
+          || contains(format(',{0},', github.event.inputs.cases), ',salesforce_wide,')
+        env:
+          ALL_DESTINATIONS: '["duckdb"]'
+        run: >-
+          uv run pytest -m performance tests/salesforce/test_salesforce_performance.py
+          -k result_chunks -s
+
       - name: Upload results
         if: always()
         uses: actions/upload-artifact@v4
