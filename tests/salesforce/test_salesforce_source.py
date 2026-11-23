@@ -1,4 +1,5 @@
 import os
+import random
 import uuid
 from datetime import datetime, timedelta, timezone  # noqa: I251
 from time import sleep
@@ -9,18 +10,23 @@ import dlt
 import pytest
 from dlt.sources import DltResource
 from dlt.sources.helpers.requests import Response
+from pytest_mock import MockerFixture
 from requests.exceptions import ChunkedEncodingError
 
 from sources.salesforce import SOURCE_SOBJECTS, salesforce_source, salesforce_table
 from sources.salesforce.helpers import query as query_module
+from sources.salesforce.helpers.credentials import SalesforceAuth
 from sources.salesforce.helpers.query import TQueryApi
 from sources.salesforce.helpers.table import TTableBackend
 from tests.salesforce.seed import data
+from tests.perf_utils import extracted_rows
 from tests.salesforce.utils import (
+    PageBreaks,
     assert_dlt_types_loaded,
     count_rows,
     delete_records,
     load_rows,
+    perf_wide_records,
     salesforce_client,
     wait_for_org_clock,
     write_records,
@@ -344,6 +350,46 @@ def test_salesforce_table_resumes_broken_download(
     assert len(downloads) == 2
     resumed = int(downloads[1]["maxRecords"][0])
     assert 0 < resumed < len(data.PAGES_RECORDS)
+
+
+@pytest.mark.large_data
+@skip_if_not_active("duckdb")
+def test_salesforce_table_large_bulk_download(
+    perf_wide_account: SalesforceAuth,
+    monkeypatch: pytest.MonkeyPatch,
+    mocker: MockerFixture,
+) -> None:
+    """Extracts the 4 GB wide object of the performance org, whose result chunks download in
+    parallel, with one random page in every ten broken while it downloads
+    """
+    seed = random.randrange(2**32)
+    print(f"page breaks seed {seed}")
+    breaks = PageBreaks(random.Random(seed))
+    monkeypatch.setattr(query_module, "split_csv_records", breaks.split)
+    warnings = mocker.spy(query_module.logger, "warning")
+    ids: Set[str] = set()
+
+    def collect_ids(table: Any) -> Any:
+        ids.update(table.column("Id").to_pylist())
+        return table
+
+    resource = salesforce_table(
+        credentials=perf_wide_account,
+        sobject=data.PERF_WIDE_OBJECT,
+        incremental=None,
+        backend="pyarrow",
+    )
+    pipeline = dlt.pipeline(pipeline_name="salesforce_large_bulk", dev_mode=True)
+    info = pipeline.extract(resource.add_map(collect_ids))
+
+    resumes = [
+        call for call in warnings.call_args_list if "resuming" in str(call.args[0])
+    ]
+    print(f"{breaks.pages} pages, {breaks.breaks} broken, {len(resumes)} resumed")
+    assert breaks.breaks >= breaks.pages // 10 > 0
+    assert len(resumes) == breaks.breaks
+    # every record once, the deleted ones that `queryAll` still returns included
+    assert extracted_rows(info) == len(ids) == perf_wide_records(perf_wide_account)
 
 
 def test_salesforce_table_bulk_api_not_supported() -> None:

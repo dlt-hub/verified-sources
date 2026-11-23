@@ -21,6 +21,7 @@ from dlt.common.typing import TAnyDateTime
 from dlt.extract.exceptions import ResourceExtractionError
 from pytest_mock import MockerFixture
 from requests.exceptions import ChunkedEncodingError
+from tenacity import stop_after_attempt, wait_none
 from urllib3.exceptions import ProtocolError
 from simple_salesforce.exceptions import (
     SalesforceMalformedRequest,
@@ -36,7 +37,13 @@ from sources.salesforce.helpers.credentials import (
     InstanceAuth,
     make_salesforce_client,
 )
-from sources.salesforce.helpers.query import BulkQueryApi, ResultPage, TQueryApi
+from sources.salesforce.helpers.csv_utils import TruncatedCsvError
+from sources.salesforce.helpers.query import (
+    BulkQueryApi,
+    JobResults,
+    ResultPage,
+    TQueryApi,
+)
 from sources.salesforce.helpers.schema import sf_field_to_column_schema
 from sources.salesforce.helpers import query as query_module
 from sources.salesforce.helpers import table as table_module
@@ -117,7 +124,8 @@ def mock_bulk2(
 ) -> Dict[str, List[Any]]:
     """Mocks `sobject` describe and a Bulk API 2.0 query job returning `pages`.
 
-    With `chunked`, `resultPages` lists each page as a result chunk, else a single chunk.
+    Each page is a result chunk. With `chunked`, `resultPages` lists them, else it is not found
+    as before API version 58.0 and the chunks are read one after another.
 
     `job_states` are returned by consecutive job status checks, the last one repeats. `failures`
     maps a page locator, "create" or "status" to failures before the request succeeds: an HTTP
@@ -169,7 +177,12 @@ def mock_bulk2(
             return fail(failures["status"].pop(0), context)
         state = states.pop(0) if len(states) > 1 else states[0]
         return json.dumps(
-            {"id": JOB_ID, "state": state, "errorMessage": f"job {state}"}
+            {
+                "id": JOB_ID,
+                "state": state,
+                "errorMessage": f"job {state}",
+                "numberRecordsProcessed": sum(count_records(page) for page in pages),
+            }
         )
 
     def abort_job(request: Any, context: Any) -> str:
@@ -203,7 +216,10 @@ def mock_bulk2(
 
     def result_pages(request: Any, context: Any) -> str:
         calls["result_pages"].append(request.url)
-        locators = LOCATORS[: len(pages)] if chunked else [""]
+        if not chunked:
+            context.status_code = 404
+            return json.dumps([{"errorCode": "NOT_FOUND", "message": "not found"}])
+        locators = LOCATORS[: len(pages)]
         links = [
             f"/jobs/query/{JOB_ID}/results" + (f"?locator={locator}" if locator else "")
             for locator in locators
@@ -349,7 +365,7 @@ def test_salesforce_table_results_without_locator(
     sf_mock: requests_mock.Mocker, credentials: InstanceAuth
 ) -> None:
     # a result page without the Sforce-Locator header is the last one
-    mock_bulk2(sf_mock, [HEADER + ROW_1, HEADER + ROW_2])
+    mock_bulk2(sf_mock, [HEADER + ROW_1])
     results = sf_mock.get(
         re.compile(rf"/jobs/query/{JOB_ID}/results"), text=HEADER + ROW_1
     )
@@ -402,8 +418,9 @@ def test_salesforce_table_truncated_page(
     )
     with pytest.raises(ResourceExtractionError) as py_ex:
         list(resource)
-    assert isinstance(py_ex.value.__cause__, SalesforceOperationError)
-    assert "holds 1 of the 2 records" in str(py_ex.value.__cause__)
+    # the first chunk has no locator to resume from
+    assert isinstance(py_ex.value.__cause__, TruncatedCsvError)
+    assert "ended after 1 of the 2 records" in str(py_ex.value.__cause__)
 
 
 def account_row(n: int) -> str:
@@ -430,6 +447,11 @@ class BrokenStream(io.RawIOBase):
         buffer[:size] = self.data[:size]
         self.data = self.data[size:]
         return size
+
+
+@pytest.fixture(autouse=True)
+def no_resume_wait(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(query_module, "CHUNK_DOWNLOAD_WAIT", wait_none())
 
 
 class FakeChunkedResults:
@@ -462,7 +484,11 @@ class FakeChunkedResults:
         m.post(re.compile(r"/jobs/query$"), json={"id": JOB_ID})
         m.get(
             re.compile(rf"/jobs/query/{JOB_ID}$"),
-            json={"id": JOB_ID, "state": "JobComplete"},
+            json={
+                "id": JOB_ID,
+                "state": "JobComplete",
+                "numberRecordsProcessed": sum(len(chunk) for chunk in chunks),
+            },
         )
         m.get(
             re.compile(rf"/jobs/query/{JOB_ID}/resultPages"),
@@ -592,8 +618,8 @@ def test_salesforce_table_result_chunk_breaks(
     monkeypatch: pytest.MonkeyPatch,
     progress: bool,
 ) -> None:
-    # three breaks, each after one new record or inside the first one, with two attempts allowed
-    monkeypatch.setattr(query_module, "CHUNK_DOWNLOAD_ATTEMPTS", 2)
+    # three breaks, each after one new record or inside the first one, two attempts per page
+    monkeypatch.setattr(query_module, "CHUNK_DOWNLOAD_STOP", stop_after_attempt(2))
     monkeypatch.setattr(query_module, "RESPONSE_READ_BYTES", 16)
     chunks = chunk_rows(4)
     cut = len(HEADER) + (len(chunks[0][0]) if progress else 0) + 10
@@ -614,6 +640,32 @@ def test_salesforce_table_result_chunk_breaks(
             list(resource)
         assert isinstance(py_ex.value.__cause__, ChunkedEncodingError)
         assert len(results.requests) == 2
+
+
+@pytest.mark.parametrize("backend", ["python", "pyarrow"])
+def test_salesforce_table_result_page_miscount(
+    sf_mock: requests_mock.Mocker,
+    credentials: InstanceAuth,
+    monkeypatch: pytest.MonkeyPatch,
+    backend: TTableBackend,
+) -> None:
+    # the records counted in the stream must be those parsed from the page
+    split = query_module.split_csv_records
+
+    def miscounting_split(*args: Any) -> Iterator[Tuple[bytes, int]]:
+        for page, records in split(*args):
+            yield page, records + 1
+
+    monkeypatch.setattr(query_module, "split_csv_records", miscounting_split)
+    FakeChunkedResults(sf_mock, chunk_rows(2))
+    resource = salesforce_table(
+        credentials=credentials, sobject="Account", backend=backend
+    )
+    with pytest.raises(ResourceExtractionError) as py_ex:
+        list(resource)
+    assert "result page of sObject `Account` holds 2 of the 3 records" in str(
+        py_ex.value.__cause__
+    )
 
 
 def test_salesforce_table_result_chunk_breaks_at_end(
@@ -637,7 +689,12 @@ def test_salesforce_table_result_chunk_breaks_at_end(
 @pytest.mark.parametrize(
     "miscount,resumed_miscount,message",
     [
-        (1, 0, "holds 2 of the 3 records"),
+        # the download is resumed for the record that Salesforce counted
+        (
+            1,
+            0,
+            "holds 0 records, 1 were expected",
+        ),
         (0, 1, "resumed download of a result chunk"),
     ],
     ids=["chunk", "resumed"],
@@ -700,6 +757,7 @@ def test_salesforce_table_result_chunks_in_parallel(
         locator: Optional[str],
         page_size: int,
         max_page_bytes: Optional[int],
+        job_results: JobResults,
     ) -> Iterator[ResultPage]:
         threads.add(threading.current_thread().name)
         waiting.wait()
@@ -1510,7 +1568,7 @@ def test_connection_session_refresh(
                 connection.client = make_salesforce_client(renewed)
             context.status_code = 401
             return [{"errorCode": "INVALID_SESSION_ID", "message": "Session expired"}]
-        return {"id": JOB_ID, "state": "JobComplete"}
+        return {"id": JOB_ID, "state": "JobComplete", "numberRecordsProcessed": 0}
 
     sf_mock.get(re.compile(rf"/jobs/query/{JOB_ID}$"), json=job_status)
     BulkQueryApi(connection)._wait_for_job(JOB_ID)
@@ -1854,10 +1912,7 @@ class FakeBulk2Org:
             json={"name": "Account", "fields": fields},
         )
         m.post(re.compile(r"/jobs/query$"), json=self.create_job)
-        m.get(
-            re.compile(rf"/jobs/query/{JOB_ID}$"),
-            json={"id": JOB_ID, "state": "JobComplete"},
-        )
+        m.get(re.compile(rf"/jobs/query/{JOB_ID}$"), json=self.job_status)
         m.get(re.compile(rf"/jobs/query/{JOB_ID}/results"), text=self.results)
         m.get(
             re.compile(rf"/jobs/query/{JOB_ID}/resultPages"),
@@ -1885,6 +1940,13 @@ class FakeBulk2Org:
         lines += [",".join(f'"{row[name]}"' for name in names) for row in rows]
         self._page = "\n".join(lines) + "\n"
         return {"id": JOB_ID}
+
+    def job_status(self, request: Any, context: Any) -> Dict[str, Any]:
+        return {
+            "id": JOB_ID,
+            "state": "JobComplete",
+            "numberRecordsProcessed": count_records(self._page),
+        }
 
     def results(self, request: Any, context: Any) -> str:
         context.headers = {

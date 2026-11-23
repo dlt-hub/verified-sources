@@ -201,14 +201,17 @@ def measure(
                 wall = monotonic() - started
                 cpu = process_time() - cpu_started
                 main_cpu = thread_time() - main_cpu_started
+    expected_rows = (
+        case.expected_rows() if callable(case.expected_rows) else case.expected_rows
+    )
     result: Dict[str, Any] = {
         "case": case.name,
         "mode": mode,
         "load": load,
         "round": round_no,
         "rows": rows,
-        "expected_rows": case.expected_rows,
-        "valid": rows == case.expected_rows,
+        "expected_rows": expected_rows,
+        "valid": rows == expected_rows,
         "wall_s": wall,
         "rows_per_min": rows / wall * 60,
         "first_item_s": None if first.at is None else first.at - started,

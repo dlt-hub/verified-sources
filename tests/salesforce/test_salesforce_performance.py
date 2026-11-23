@@ -21,7 +21,7 @@ from tests.perf_utils import (
     seeded_windows,
 )
 from tests.salesforce.seed import data
-from tests.salesforce.utils import performance_credentials
+from tests.salesforce.utils import perf_wide_records, performance_credentials
 from tests.seed_utils import HttpLog, account_lock, print_extract_speed
 from tests.utils import assert_load_info, last_row_count, skip_if_not_active
 
@@ -215,6 +215,7 @@ def test_performance_result_chunks(
         pytest.skip(
             f"{data.PERF_WIDE_OBJECT} has {count} records, run the seed with --performance"
         )
+    expected = perf_wide_records(perf_account)
     pipeline = dlt.pipeline(pipeline_name="salesforce_perf_chunks", dev_mode=True)
     info = pipeline.extract(
         salesforce_table(
@@ -223,5 +224,5 @@ def test_performance_result_chunks(
             incremental=None,
         )
     )
-    assert extracted_rows(info) == data.PERF_WIDE_RECORDS
+    assert extracted_rows(info) == expected
     assert perf_http.peak_concurrency() > 1

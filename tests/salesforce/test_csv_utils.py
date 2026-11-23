@@ -1,10 +1,14 @@
 import csv
 import io
-from typing import List, Optional
+from typing import Iterator, List, Optional, Tuple
 
 import pytest
 
-from sources.salesforce.helpers.csv_utils import split_csv_records
+from sources.salesforce.helpers.csv_utils import (
+    TruncatedCsvError,
+    csv_page_to_rows,
+    split_csv_records,
+)
 
 HEADER = b'"Id","Text"\n'
 VALUES = ["a", 'multi\nline, ""quoted""', "", "x" * 50, 'ends with a quote ""\n\n', "z"]
@@ -41,8 +45,48 @@ def test_split_csv_records(
 
 
 def test_split_csv_records_edges() -> None:
-    # a header without records, a last record without newline, null bytes
+    # a header without records, null bytes
     assert list(split_csv_records([HEADER], 10)) == []
     assert list(split_csv_records([], 10)) == []
-    pages = list(split_csv_records([HEADER + b'"1","a\x00b"'], 10))
+    pages = list(split_csv_records([HEADER + b'"1","a\x00b"\n'], 10))
     assert pages == [(HEADER + b'"1","ab"\n', 1)]
+
+
+@pytest.mark.parametrize(
+    "tail",
+    [b'"9","z"', b'"9","multi\nli', b'"9"'],
+    ids=["no_newline", "inside_quotes", "missing_field"],
+)
+def test_split_csv_records_truncated(tail: bytes) -> None:
+    # a body that ends inside a record raises, the records of its unfinished page stay unyielded
+    pages = split_csv_records([BODY, tail], 7)
+    yielded: List[Tuple[bytes, int]] = []
+    with pytest.raises(TruncatedCsvError):
+        for page in pages:
+            yielded.append(page)
+    assert sum(records for _, records in yielded) == len(RECORDS) // 7 * 7
+
+
+def test_split_csv_records_broken_blocks() -> None:
+    # an error of the blocks is raised, the records of the unfinished page stay unyielded
+    def blocks() -> Iterator[bytes]:
+        yield BODY[: len(BODY) // 2]
+        raise ConnectionError("broken")
+
+    yielded: List[Tuple[bytes, int]] = []
+    with pytest.raises(ConnectionError):
+        for page in split_csv_records(blocks(), 4):
+            yielded.append(page)
+    assert all(records == 4 for _, records in yielded)
+    assert [row for page, _ in yielded for row in read_rows(page)] == read_rows(BODY)[
+        : 4 * len(yielded)
+    ]
+
+
+def test_csv_page_to_rows_missing_fields() -> None:
+    columns = {"Id": {"name": "Id", "data_type": "text"}}
+    assert csv_page_to_rows(HEADER + b'"1","a"\n', columns) == [
+        {"Id": "1", "Text": "a"}
+    ]
+    with pytest.raises(ValueError, match="1 of the 2 fields"):
+        csv_page_to_rows(HEADER + b'"1"\n', columns)

@@ -1,7 +1,7 @@
 """Large seeded resources read by the extraction benchmark, one per source"""
 
 from functools import partial
-from typing import Any, Callable, Dict, Literal, NamedTuple, Tuple
+from typing import Any, Callable, Dict, Literal, NamedTuple, Tuple, Union
 
 import dlt
 from dlt.common.configuration.exceptions import ConfigFieldMissingException
@@ -16,7 +16,7 @@ from sources.sharepoint import sharepoint_list
 
 from tests.jira.utils import PERF_ISSUES, PERF_PROJECTS, perf_jql
 from tests.salesforce.seed import data as salesforce_data
-from tests.salesforce.utils import performance_credentials
+from tests.salesforce.utils import perf_wide_records, performance_credentials
 from tests.servicenow.seed import data as servicenow_data
 from tests.servicenow.utils import get_credentials, wait_for_instance
 from tests.sharepoint.seed import data as sharepoint_data
@@ -34,7 +34,8 @@ class BenchmarkCase(NamedTuple):
     """`account_lock` key shared with the performance tests and seeds of the account"""
     resource: Callable[[TLoad], DltResource]
     """Returns a new resource with default settings, without incremental for a full load"""
-    expected_rows: int
+    expected_rows: Union[int, Callable[[], int]]
+    """Rows a load reads, or a function that counts them before each round"""
     is_configured: Callable[[], bool]
     prepare: Callable[[], None]
     """Runs before the measured run, e.g. wakes up an instance"""
@@ -58,6 +59,10 @@ def nothing() -> None:
 def load_args(load: TLoad) -> Dict[str, Any]:
     """A full load reads all records without the default incremental"""
     return {"incremental": None} if load == "full" else {}
+
+
+def salesforce_wide_records() -> int:
+    return perf_wide_records(performance_credentials())
 
 
 def salesforce_resource(
@@ -122,7 +127,7 @@ CASES: Dict[str, BenchmarkCase] = {
             "salesforce",
             salesforce_data.PERF_SECTION,
             partial(salesforce_resource, sobject=salesforce_data.PERF_WIDE_OBJECT),
-            salesforce_data.PERF_WIDE_RECORDS,
+            salesforce_wide_records,
             partial(resolves, performance_credentials),
             nothing,
             ("full",),
@@ -137,7 +142,7 @@ CASES: Dict[str, BenchmarkCase] = {
                 sobject=salesforce_data.PERF_WIDE_OBJECT,
                 api="rest",
             ),
-            salesforce_data.PERF_WIDE_RECORDS,
+            salesforce_wide_records,
             partial(resolves, performance_credentials),
             nothing,
             ("full",),
