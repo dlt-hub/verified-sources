@@ -9,15 +9,11 @@ in the [dlt docs](https://dlthub.com/docs/dlt-ecosystem/verified-sources/salesfo
 
 ### 1.2.0
 **Upgrade**: safe, the incremental state carries over.
-- changed `salesforce_table` and `salesforce_source`: Bulk API results download in one streamed
-  request per result chunk, the chunks of large results in parallel on the extract workers. A broken
-  download continues after the records already read. Pages also end at a size limit, so wide
-  records no longer take gigabytes of memory
-- new `settings.py`: the sObjects of `salesforce_source`, page sizes, limits, job waits and the
-  retries of broken downloads
-- new `salesforce_table` and `salesforce_source`: the records read with the Bulk API are checked
-  against the counts Salesforce reports for each page, result chunk and query job. A mismatch fails
-  the load
+- changed `salesforce_table` and `salesforce_source`: large Bulk API results download in parallel,
+  and a broken download resumes. Wide records no longer take gigabytes of memory
+- new `salesforce_table` and `salesforce_source`: Bulk API reads are checked against the record
+  counts Salesforce reports, a mismatch fails the load
+- new `settings.py`: the sObjects of `salesforce_source`, limits and retries
 
 ### 1.1.0
 **Upgrade**: remove `incremental=None` from `salesforce_table` to keep the default incremental:
@@ -68,17 +64,15 @@ tests), from #717 and from local runs (local).
 - **Several objects**: the org prepares the jobs of several objects at once, so objects loaded in one
   run take about the time of one: two objects side by side doubled the throughput of one
   (performance tests). Load the objects in one pipeline run.
-- **Page size**: Bulk API results download in one request per result chunk, so `chunk_size` only
-  sets the records in a page that dlt processes, and pages also end at a size limit, except under
-  `add_limit`, which counts pages of `chunk_size` records. Each request waits seconds before its
-  first byte, more requests take longer (performance tests). The REST API serves at most 2000
-  records per page and read one large object at about half the throughput of the Bulk API
-  (performance tests).
+- **Page size**: `chunk_size` does not change how Bulk API results download, each result chunk
+  comes in one request. The REST API serves at most 2000 records per page and read one large
+  object at about half the throughput of the Bulk API (performance tests).
 - **Chunked loads**: `row_order` and `add_limit` add `ORDER BY` and `LIMIT`, which turn off the
   server-side chunking of large Bulk jobs (#717).
-- **Extract workers**: Salesforce splits the results of a large Bulk job into chunks, and each chunk
-  downloads on an extract worker, so more workers read more chunks at once. With `row_order` or
-  `add_limit` the chunks download one after another.
+- **Extract workers**: the result chunks of a large Bulk job download in parallel, one per extract
+  worker. `row_order` and `add_limit` read them one after another.
+- **API version**: set `version` to 58.0 or later in the credentials. Older versions cannot list
+  result chunks, so they do not download in parallel and a broken first chunk fails the load.
 - **Backend**: `pyarrow` parses pages about 14 times faster than `python` (#717). Pick one before
   the first load, see Backends below.
 
@@ -98,41 +92,26 @@ pyarrow 17 and urllib3 2.3 (local), or taken from docs and other connectors.
 
 - **Jobs**: `ORDER BY` is accepted. A job without results returns a page with only the header,
   `Sforce-Locator: null` and `Sforce-NumberOfRecords: 0` (test org).
-- **Result chunks**: `resultPages` lists the result chunks of a completed job, from API v58.0
-  ([docs](https://developer.salesforce.com/docs/atlas.en-us.api_asynch.meta/api_bulk_v2/query_get_parallel_job_results.htm)).
-  Chunks are cut by size: 150,000 records of 28 KB came in 5 chunks of up to 31,000 records, the
-  `Id` and `Name` of the same records in one chunk. A request without `maxRecords` returns one chunk
-  and its number of records, a repeated download the same records in the same order. HTTP `Range`
-  is ignored. A `maxRecords` larger than the rest of a chunk runs into the next one, equal to the rest
-  it stops at the end of the chunk. The locator, not documented, is `<offset>:<chunk>:0` in base64: a
-  locator at a record offset with `maxRecords` equal to the rest returns exactly the remaining
-  records, which is how the source resumes a broken download (performance org, test org). Offsets
-  count records, not lines: values with newlines resumed exactly (test org). The listed locators
-  start at offset 0, the `Sforce-Locator` of each chunk is the next listed locator and `null` after
-  the last one, and the records of the chunks add up to `numberRecordsProcessed` of the job, also
-  for `queryAll` with deleted records (performance org, test org). The source checks all three while
-  it reads, since the locator format is not documented. The results are a snapshot of the job:
-  records deleted, changed or added after it completed come as they were, so the counts hold while
-  the org changes (performance org). The docs name the listing fields
-  `resultPages`, `resultUrl` and `nextRecordUrl`, API v59.0 sends `resultChunks`, `resultLink` and
-  `nextRecordsUrl`, the source reads both. With an API version older than 58.0 the source warns and
-  downloads the chunks one after another. The first chunk then has no locator, so its broken
-  download fails the load.
+- **Result chunks**: listed from API v58.0
+  ([docs](https://developer.salesforce.com/docs/atlas.en-us.api_asynch.meta/api_bulk_v2/query_get_parallel_job_results.htm)),
+  which name the fields `resultPages` and `resultUrl` while v59.0 sends `resultChunks` and
+  `resultLink`. Chunks are cut by size: 150,000 records of 28 KB came in 5 chunks. The locator is
+  not documented: `<offset>:<chunk>:0` in base64, offsets count records. The source resumes broken
+  downloads with it and fails the load when a chunk does not end where the next one starts or the
+  chunks do not add up to `numberRecordsProcessed`. If that happens, Salesforce changed the format:
+  use `api="rest"` (performance org, test org).
 - **Limits**: the test org allows 15,000 API requests and 10,000 Bulk API 2.0 query jobs a day, and
   every response carries `Sforce-Limit-Info` (test org). Requests running longer than 20 s are
   limited to 25 at once in production and 5 in Developer Editions, refused with HTTP 403
-  `REQUEST_LIMIT_EXCEEDED` and `ConcurrentPerOrgLongTxn`; the daily limit returns the same code
+  `ConcurrentPerOrgLongTxn`; the daily limit returns the same code
   ([limits](https://developer.salesforce.com/docs/platform/salesforce-app-limits-cheatsheet/guide/salesforce-app-limits-platform-api.html)).
+  The source retries it with dlt's request retries, raise `RUNTIME__REQUEST_MAX_ATTEMPTS` when loads
+  fail on it. 11 result downloads at once in a Developer Edition were not refused (performance org).
 - **REST cursors**: 30 open query cursors of one user still served their next pages, the documented
   limit of 10 was not seen (test org).
-- **Truncated pages**: with urllib3 2, requests raises `ChunkedEncodingError` on a body shorter
-  than its `Content-Length` or a cut chunked body. urllib3 1.26 does not check `Content-Length`, so
-  a short body ends without an error. dlt retries the requests of REST API pages (local), but not a
-  Bulk API result chunk that breaks while it streams: the source resumes it itself, also when the
-  body ends inside a record or before `Sforce-NumberOfRecords` records. Salesforce ends every record
-  with a newline. REST API reads are not counted: `totalSize` is fixed when the query starts, and
-  `query` skips records deleted while it pages, so a correct read can return fewer (performance
-  org).
+- **Truncated pages**: urllib3 1.26 ends a body shorter than its `Content-Length` without an error,
+  urllib3 2 raises (local). A Bulk API result download resumes in both cases, a REST API page is
+  retried by dlt.
 - **CSV values**: integers come as `120`, currency and doubles of 10 million or more in exponent
   form, e.g. `9.9999999E7` (test org). Formula values are rounded to the scale of the field, also
   with division, though other connectors report unrounded ones (test org). `SystemModstamp` has second precision (test org). Pages have no byte order mark (test

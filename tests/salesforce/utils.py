@@ -307,7 +307,8 @@ class FakeBulkConnection:
     it goes on into the next chunks, and `resultPages` lists the chunks. `cut` returns where the
     body of the n-th results request with `params` ends, None for a whole body: with `broken` the
     connection breaks there, else the body ends early. `offset_shift` moves the offsets the server
-    reads from the locators of resumed downloads. `result_pages` replaces the listing.
+    reads from the locators of resumed downloads. `result_pages` replaces the listing. The responses
+    of the chunks in `null_locators` end the results.
     """
 
     def __init__(
@@ -318,8 +319,10 @@ class FakeBulkConnection:
         offset_shift: int = 0,
         result_pages: Optional[List[Dict[str, Any]]] = None,
         job_records: Optional[int] = None,
+        null_locators: Tuple[int, ...] = (),
     ) -> None:
         self.chunks, self.cut, self.broken = chunks, cut, broken
+        self.null_locators = null_locators
         self.offset_shift = offset_shift
         self.result_pages = result_pages or [
             {
@@ -364,6 +367,7 @@ class FakeBulkConnection:
             base64.b64decode(locator + "=" * (-len(locator) % 4)).decode().split(":")
         )
         chunk, position = int(name[len("chunk") :]), int(offset)
+        first_chunk = chunk
         if "maxRecords" in params:
             position += self.offset_shift
             wanted, records = int(params["maxRecords"]), []
@@ -376,10 +380,9 @@ class FakeBulkConnection:
         else:
             records = self.chunks[chunk][position:]
             chunk, position = chunk + 1, 0
+        ends = chunk >= len(self.chunks) or first_chunk in self.null_locators
         headers = {
-            "Sforce-Locator": (
-                bulk_locator(chunk, position) if chunk < len(self.chunks) else "null"
-            ),
+            "Sforce-Locator": "null" if ends else bulk_locator(chunk, position),
             "Sforce-NumberOfRecords": str(len(records)),
         }
         response = FakeBulkResponse(

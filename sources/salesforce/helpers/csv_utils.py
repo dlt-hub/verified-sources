@@ -143,9 +143,9 @@ def split_csv_records(
 
     Yields:
         Tuple[bytes, int]: A page and its number of records. A page is the header followed by
-            one or more whole records, with null bytes removed. The last record of the body
-            gets a newline if it came without one. A body with only a header yields nothing.
-            Records of a body that broke off stay unyielded, the error of `blocks` is raised.
+            one or more whole records, with null bytes removed. A body with only a header yields
+            nothing. Records of a body that broke off stay unyielded, the error of `blocks` is
+            raised.
 
     Raises:
         TruncatedCsvError: The body ended inside a record. Salesforce ends every record with a

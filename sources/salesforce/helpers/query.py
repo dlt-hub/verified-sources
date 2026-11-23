@@ -169,9 +169,11 @@ class ChunkDownload:
 
     def log_resume(self, retry_state: RetryCallState) -> None:
         ex = retry_state.outcome.exception() if retry_state.outcome else None
+        # `upcoming_sleep` needs tenacity 8.3, dlt allows older versions
+        wait = getattr(retry_state.next_action, "sleep", 0.0)
         logger.warning(
             f"Download of a result chunk of job {self.job_id} broke after {self.read} records,"
-            f" resuming in {retry_state.upcoming_sleep:.0f} s: {ex}"
+            f" resuming in {wait:.0f} s: {ex}"
         )
 
     def close(self) -> None:
@@ -246,6 +248,7 @@ class JobResults:
         self.starts = {_chunk_key(locator) for locator in locators}
         self.chunks_left = len(locators)
         self.read = 0
+        self.ends = 0
         self._lock = threading.Lock()
 
     def chunk_read(self, records: int, next_locator: Optional[str]) -> None:
@@ -261,12 +264,19 @@ class JobResults:
             )
         with self._lock:
             self.read += records
+            self.ends += next_locator is None
             self.chunks_left -= 1
             last = self.chunks_left == 0
         if last:
             self.check()
 
     def check(self) -> None:
+        # only the last chunk ends without a next locator
+        if self.starts and self.ends != 1:
+            raise SalesforceOperationError(
+                f"{self.ends} result chunks of Bulk API job {self.job_id} end the results, 1 was"
+                " expected"
+            )
         if self.read != self.expected:
             raise SalesforceOperationError(
                 f"Bulk API query job {self.job_id} returned {self.read} of its"
@@ -324,9 +334,9 @@ class BulkQueryApi:
                 body = self.connection.request("GET", "bulk2", path).json()
             except (SalesforceResourceNotFound, SalesforceMalformedRequest) as ex:
                 logger.warning(
-                    f"Cannot list the result chunks of Bulk API job {job_id}, so they download one"
-                    " after another and a broken download of the first one fails the load. Listing"
-                    f" them needs API version 58.0 or later, set `version` in the credentials. {ex}"
+                    f"Set `version` to 58.0 or later in the credentials: Bulk API job {job_id}"
+                    " cannot list its result chunks, so they do not download in parallel and a"
+                    f" broken download of the first one fails the load. {ex}"
                 )
                 return []
             # API v59.0 sends `resultChunks` and `resultLink`, the docs name `resultPages` and
