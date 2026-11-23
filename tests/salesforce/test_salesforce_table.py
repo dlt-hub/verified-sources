@@ -808,7 +808,7 @@ def test_salesforce_table_result_chunks_in_sequence(
     assert calls["results"] == [{}, {"locator": [LOCATORS[1]]}]
     parallel.assert_not_called()
     if case == "no_result_pages":
-        assert "API version 58.0" in logger.warning.call_args.args[0]
+        assert "`version` to 58.0" in logger.warning.call_args.args[0]
     else:
         logger.warning.assert_not_called()
 

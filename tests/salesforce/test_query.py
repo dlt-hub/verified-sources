@@ -303,6 +303,23 @@ def test_bulk_job_records(
         read_ids(pool, connection, partitioned)
 
 
+@pytest.mark.parametrize(
+    "partitioned,message",
+    [
+        (True, "2 result chunks .* end the results"),
+        (False, "returned 2 of its 6 records"),
+    ],
+    ids=["parallel", "sequential"],
+)
+def test_bulk_chunk_ends_results_early(
+    pool: ThreadPoolExecutor, partitioned: bool, message: str
+) -> None:
+    # the first chunk ends the results, its records still add up with the others in parallel
+    connection = FakeBulkConnection(bulk_chunks(2, 2, 2), null_locators=(0,))
+    with pytest.raises(SalesforceOperationError, match=message):
+        read_ids(pool, connection, partitioned)
+
+
 def test_bulk_chunk_closed_early() -> None:
     # pages that are not read are not downloaded and the response is closed
     connection = FakeBulkConnection(bulk_chunks(5))
