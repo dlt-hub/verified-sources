@@ -8,14 +8,10 @@ from dlt.common.schema.typing import (
     TWriteDisposition,
 )
 
+from ..settings import CREATED_AT_FIELDS, UPDATED_AT_FIELDS
+
 # compound and binary fields cannot be queried with the Bulk API
 NON_QUERYABLE_TYPES = {"address", "location", "base64"}
-# fields changed on every record update, in order of preference
-UPDATED_AT_FIELDS = ("SystemModstamp", "LastModifiedDate")
-# fields of insert-only sObjects like field history or login history
-CREATED_AT_FIELDS = ("CreatedDate", "LoginTime")
-# records may be committed with a timestamp older than the newest one already read
-DEFAULT_LAG = 600.0
 
 
 def sf_field_to_column_schema(

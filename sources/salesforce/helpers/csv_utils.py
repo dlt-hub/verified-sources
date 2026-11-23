@@ -11,10 +11,15 @@ from dlt.common.destination import DestinationCapabilitiesContext
 from dlt.common.schema.typing import TColumnSchema, TTableSchemaColumns
 from dlt.common.typing import TDataItem
 
+from ..settings import ARROW_BLOCK_SIZE
+
+
+class TruncatedCsvError(ValueError):
+    """A CSV body ended inside a record or before all records it was counted to hold"""
+
+
 # Apex code exceeds the default 131,072 characters, a larger limit overflows a Windows C long
 csv.field_size_limit(2**31 - 1)
-# pyarrow fails on a record longer than two parse blocks, Salesforce records stay under ~6 MiB
-ARROW_BLOCK_SIZE = 8 * 2**20
 
 
 def csv_page_to_rows(
@@ -28,10 +33,18 @@ def csv_page_to_rows(
     header = next(reader, None)
     if not header:
         return []
-    rows: List[TDataItem] = [
-        {name: None if value == "" else value for name, value in zip(header, record)}
-        for record in reader
-    ]
+    rows: List[TDataItem] = []
+    for record in reader:
+        if len(record) != len(header):
+            raise ValueError(
+                f"A CSV record holds {len(record)} of the {len(header)} fields of the header"
+            )
+        rows.append(
+            {
+                name: None if value == "" else value
+                for name, value in zip(header, record)
+            }
+        )
     cursor_type = columns.get(cursor, {}).get("data_type") if cursor else None
     if cursor and cursor_type not in (None, "text"):
         # the incremental compares cursor values before the normalizer coerces them
@@ -115,9 +128,28 @@ def csv_page_to_arrow(page: bytes, columns: TTableSchemaColumns) -> Optional[Any
 def split_csv_records(
     blocks: Iterable[bytes], max_records: int, max_bytes: Optional[int] = None
 ) -> Iterator[Tuple[bytes, int]]:
-    """Cuts a CSV body that arrives in `blocks` into pages that repeat the header, with their
-    number of records. A page ends after `max_records` records or when it reaches `max_bytes`.
-    A newline ends a record only outside quotes, so values may hold newlines.
+    """Splits a streamed Bulk API CSV body into pages of whole records.
+
+    Salesforce quotes every value and doubles the quotes inside values, so a newline ends a
+    record only when the record so far holds an even number of quotes. Values may hold newlines.
+    Records are counted without parsing their values.
+
+    Args:
+        blocks: The CSV body in blocks of any size, e.g. from `Response.iter_content`. Its first
+            record is the header.
+        max_records: A page ends after this many records.
+        max_bytes: A page also ends at the record that brings its records to this many bytes or
+            more, the header not counted. None for pages limited by records only.
+
+    Yields:
+        Tuple[bytes, int]: A page and its number of records. A page is the header followed by
+            one or more whole records, with null bytes removed. The last record of the body
+            gets a newline if it came without one. A body with only a header yields nothing.
+            Records of a body that broke off stay unyielded, the error of `blocks` is raised.
+
+    Raises:
+        TruncatedCsvError: The body ended inside a record. Salesforce ends every record with a
+            newline.
     """
     header: Optional[bytes] = None
     page = bytearray()
@@ -152,8 +184,9 @@ def split_csv_records(
         pending = data[start:]
         scanned = len(pending)
     if pending.strip() and header is not None:
-        page += pending if pending.endswith(b"\n") else pending + b"\n"
-        page_records += 1
+        raise TruncatedCsvError(
+            f"A CSV body ended inside a record, {len(pending)} bytes after its last newline"
+        )
     if page_records:
         yield header + bytes(page).replace(b"\x00", b""), page_records
 

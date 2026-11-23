@@ -26,12 +26,11 @@ from dlt.extract.incremental import Incremental
 from dlt.extract.resource import DltResource, wrap_parallel_iterator
 from simple_salesforce.exceptions import SalesforceOperationError
 
+from ..settings import DEFAULT_LAG, MAX_PAGE_BYTES, UPDATED_AT_FIELDS
 from .connection import SalesforceConnection
 from .csv_utils import arrow_column_max, csv_page_to_arrow, csv_page_to_rows
-from .query import MAX_PAGE_BYTES, QueryApi, ResultPage, TQueryApi, make_query_api
+from .query import QueryApi, ResultPage, TQueryApi, make_query_api
 from .schema import (
-    DEFAULT_LAG,
-    UPDATED_AT_FIELDS,
     fields_to_columns,
     get_cursor_field,
     get_primary_key,

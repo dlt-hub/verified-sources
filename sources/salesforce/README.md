@@ -13,6 +13,11 @@ in the [dlt docs](https://dlthub.com/docs/dlt-ecosystem/verified-sources/salesfo
   request per result chunk, the chunks of large results in parallel on the extract workers. A broken
   download continues after the records already read. Pages also end at a size limit, so wide
   records no longer take gigabytes of memory
+- new `settings.py`: the sObjects of `salesforce_source`, page sizes, limits, job waits and the
+  retries of broken downloads
+- new `salesforce_table` and `salesforce_source`: the records read with the Bulk API are checked
+  against the counts Salesforce reports for each page, result chunk and query job. A mismatch fails
+  the load
 
 ### 1.1.0
 **Upgrade**: remove `incremental=None` from `salesforce_table` to keep the default incremental:
@@ -79,7 +84,8 @@ tests), from #717 and from local runs (local).
 
 ## Code Customization
 
-- An sObject of `salesforce_source`: `SOURCE_SOBJECTS` in `__init__.py`.
+- An sObject of `salesforce_source`: `SOURCE_SOBJECTS` in `settings.py`.
+- Page sizes, limits, job waits, retries of broken downloads: `settings.py`.
 - A field type: `helpers/schema.py`.
 - A query API: `helpers/query.py`.
 - A retried error: `helpers/connection.py`.
@@ -100,9 +106,18 @@ pyarrow 17 and urllib3 2.3 (local), or taken from docs and other connectors.
   is ignored. A `maxRecords` larger than the rest of a chunk runs into the next one, equal to the rest
   it stops at the end of the chunk. The locator, not documented, is `<offset>:<chunk>:0` in base64: a
   locator at a record offset with `maxRecords` equal to the rest returns exactly the remaining
-  records, which is how the source resumes a broken download (performance org, test org). With an
-  API version older than 58.0 the source warns and downloads the chunks one after another. The
-  first chunk then has no locator, so its broken download fails the load.
+  records, which is how the source resumes a broken download (performance org, test org). Offsets
+  count records, not lines: values with newlines resumed exactly (test org). The listed locators
+  start at offset 0, the `Sforce-Locator` of each chunk is the next listed locator and `null` after
+  the last one, and the records of the chunks add up to `numberRecordsProcessed` of the job, also
+  for `queryAll` with deleted records (performance org, test org). The source checks all three while
+  it reads, since the locator format is not documented. The results are a snapshot of the job:
+  records deleted, changed or added after it completed come as they were, so the counts hold while
+  the org changes (performance org). The docs name the listing fields
+  `resultPages`, `resultUrl` and `nextRecordUrl`, API v59.0 sends `resultChunks`, `resultLink` and
+  `nextRecordsUrl`, the source reads both. With an API version older than 58.0 the source warns and
+  downloads the chunks one after another. The first chunk then has no locator, so its broken
+  download fails the load.
 - **Limits**: the test org allows 15,000 API requests and 10,000 Bulk API 2.0 query jobs a day, and
   every response carries `Sforce-Limit-Info` (test org). Requests running longer than 20 s are
   limited to 25 at once in production and 5 in Developer Editions, refused with HTTP 403
@@ -110,10 +125,14 @@ pyarrow 17 and urllib3 2.3 (local), or taken from docs and other connectors.
   ([limits](https://developer.salesforce.com/docs/platform/salesforce-app-limits-cheatsheet/guide/salesforce-app-limits-platform-api.html)).
 - **REST cursors**: 30 open query cursors of one user still served their next pages, the documented
   limit of 10 was not seen (test org).
-- **Truncated pages**: requests raises `ChunkedEncodingError` on a body shorter than its
-  `Content-Length` or a cut chunked body. dlt retries the requests of REST API pages (local), but not
-  a Bulk API result chunk that breaks while it streams: the source resumes it itself. A chunk with
-  fewer records than `Sforce-NumberOfRecords` would come from Salesforce itself and raises.
+- **Truncated pages**: with urllib3 2, requests raises `ChunkedEncodingError` on a body shorter
+  than its `Content-Length` or a cut chunked body. urllib3 1.26 does not check `Content-Length`, so
+  a short body ends without an error. dlt retries the requests of REST API pages (local), but not a
+  Bulk API result chunk that breaks while it streams: the source resumes it itself, also when the
+  body ends inside a record or before `Sforce-NumberOfRecords` records. Salesforce ends every record
+  with a newline. REST API reads are not counted: `totalSize` is fixed when the query starts, and
+  `query` skips records deleted while it pages, so a correct read can return fewer (performance
+  org).
 - **CSV values**: integers come as `120`, currency and doubles of 10 million or more in exponent
   form, e.g. `9.9999999E7` (test org). Formula values are rounded to the scale of the field, also
   with division, though other connectors report unrounded ones (test org). `SystemModstamp` has second precision (test org). Pages have no byte order mark (test
