@@ -3,7 +3,17 @@
 import importlib.util
 from copy import copy
 from datetime import datetime, timezone  # noqa: I251
-from typing import Any, Dict, Iterator, List, Literal, NamedTuple, Optional, Tuple
+from typing import (
+    Any,
+    Dict,
+    Generator,
+    Iterator,
+    List,
+    Literal,
+    NamedTuple,
+    Optional,
+    Tuple,
+)
 
 import dlt
 from dlt.common import logger
@@ -13,15 +23,14 @@ from dlt.common.schema.utils import merge_columns
 from dlt.common.time import ensure_datetime_in_tz
 from dlt.common.typing import TAnyDateTime, TColumnNames, TDataItem
 from dlt.extract.incremental import Incremental
-from dlt.extract.resource import DltResource
+from dlt.extract.resource import DltResource, wrap_parallel_iterator
 from simple_salesforce.exceptions import SalesforceOperationError
 
+from ..settings import DEFAULT_LAG, MAX_PAGE_BYTES, UPDATED_AT_FIELDS
 from .connection import SalesforceConnection
 from .csv_utils import arrow_column_max, csv_page_to_arrow, csv_page_to_rows
-from .query import QueryApi, TQueryApi, make_query_api
+from .query import QueryApi, ResultPage, TQueryApi, make_query_api
 from .schema import (
-    DEFAULT_LAG,
-    UPDATED_AT_FIELDS,
     fields_to_columns,
     get_cursor_field,
     get_primary_key,
@@ -199,21 +208,32 @@ def table_rows(
         limit,
         read_until=datetime.now(timezone.utc),
     )
+    # result chunks are read in parallel, which loses the order of records, and go on after
+    # `add_limit` stops the resource: the incremental would still see their records
+    partitioned = resource.limit is None and (
+        incremental is None or incremental.row_order is None
+    )
+    # they feed the LIMIT warning, result chunks are read without LIMIT
     rows_count, max_cursor = 0, None
     try:
-        for page in query_api.query(soql, columns_hints, include_deleted, chunk_size):
-            item: Any
-            if backend == "pyarrow":
-                item = csv_page_to_arrow(page.csv, columns_hints)
-                page_rows = 0 if item is None else item.num_rows
-            else:
-                item = csv_page_to_rows(page.csv, columns_hints, cursor_name)
-                page_rows = len(item)
-            if page.records is not None and page_rows != page.records:
-                raise SalesforceOperationError(
-                    f"A result page of sObject `{sobject}` holds {page_rows} of the"
-                    f" {page.records} records Salesforce counted"
+        for result in query_api.query(
+            soql,
+            columns_hints,
+            include_deleted,
+            chunk_size,
+            partitioned,
+            # `add_limit` counts pages of `chunk_size` records
+            None if limit is not None else MAX_PAGE_BYTES,
+        ):
+            if not isinstance(result, ResultPage):
+                # dlt reads iterators yielded by a resource sequentially unless wrapped
+                yield wrap_parallel_iterator(
+                    _convert_pages(result, sobject, columns_hints, backend, cursor_name)
                 )
+                continue
+            item, page_rows = _convert_page(
+                result, sobject, columns_hints, backend, cursor_name
+            )
             if not page_rows:
                 continue
             rows_count += page_rows
@@ -246,6 +266,42 @@ def table_rows(
     _warn_if_cursor_not_moved(
         sobject, columns_hints, incremental, max_cursor, rows_count, limit, False
     )
+
+
+def _convert_page(
+    page: ResultPage,
+    sobject: str,
+    columns: TTableSchemaColumns,
+    backend: Literal["python", "pyarrow"],
+    cursor_name: Optional[str],
+) -> Tuple[Any, int]:
+    """Returns the Arrow table or rows of a CSV result page and its number of records"""
+    item: Any
+    if backend == "pyarrow":
+        item = csv_page_to_arrow(page.csv, columns)
+        page_rows = 0 if item is None else item.num_rows
+    else:
+        item = csv_page_to_rows(page.csv, columns, cursor_name)
+        page_rows = len(item)
+    if page.records is not None and page_rows != page.records:
+        raise SalesforceOperationError(
+            f"A result page of sObject `{sobject}` holds {page_rows} of the"
+            f" {page.records} records Salesforce counted"
+        )
+    return item, page_rows
+
+
+def _convert_pages(
+    pages: Iterator[ResultPage],
+    sobject: str,
+    columns: TTableSchemaColumns,
+    backend: Literal["python", "pyarrow"],
+    cursor_name: Optional[str],
+) -> Generator[TDataItem, None, None]:
+    for page in pages:
+        item, page_rows = _convert_page(page, sobject, columns, backend, cursor_name)
+        if page_rows:
+            yield item
 
 
 def _primary_key(resource: DltResource) -> List[str]:
