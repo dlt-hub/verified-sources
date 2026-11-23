@@ -1,7 +1,7 @@
 """Loads Salesforce sObjects with the Bulk API 2.0.
 
-`salesforce_source` loads the sObjects in `SOURCE_SOBJECTS`, `salesforce_table` loads any sObject,
-including custom objects.
+`salesforce_source` loads the sObjects in `settings.SOURCE_SOBJECTS`, `salesforce_table` loads any
+sObject, including custom objects.
 
 Salesforce API docs: https://developer.salesforce.com/docs/apis
 """
@@ -27,25 +27,7 @@ from .helpers.table import (
     is_default_incremental,
     table_resource,
 )
-
-# resource names and the sObjects they load
-SOURCE_SOBJECTS = {
-    "sf_user": "User",
-    "user_role": "UserRole",
-    "opportunity": "Opportunity",
-    "opportunity_line_item": "OpportunityLineItem",
-    "opportunity_contact_role": "OpportunityContactRole",
-    "account": "Account",
-    "contact": "Contact",
-    "lead": "Lead",
-    "campaign": "Campaign",
-    "campaign_member": "CampaignMember",
-    "product_2": "Product2",
-    "pricebook_2": "Pricebook2",
-    "pricebook_entry": "PricebookEntry",
-    "task": "Task",
-    "event": "Event",
-}
+from .settings import SOURCE_SOBJECTS
 
 
 def _connection(

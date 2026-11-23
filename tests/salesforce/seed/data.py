@@ -586,15 +586,16 @@ PERF_OBJECTS = ("DltPerfA__c", "DltPerfB__c")
 PERF_RECORDS = 50_000
 PERF_PERMISSION_SET = "Dlt_Seed_Performance"
 PERF_CURSOR = "Changed_At__c"
+PERF_SEED_ID_FIELD: Dict[str, Any] = {
+    "fullName": "Seed_Id__c",
+    "label": "Seed Id",
+    "type": "Text",
+    "length": 64,
+    "externalId": True,
+    "unique": True,
+}
 PERF_FIELDS: List[Dict[str, Any]] = [
-    {
-        "fullName": "Seed_Id__c",
-        "label": "Seed Id",
-        "type": "Text",
-        "length": 64,
-        "externalId": True,
-        "unique": True,
-    },
+    PERF_SEED_ID_FIELD,
     {
         "fullName": "Number__c",
         "label": "Number",
@@ -640,8 +641,33 @@ PERF_FIELDS: List[Dict[str, Any]] = [
     {"fullName": "Due__c", "label": "Due", "type": "Date"},
     {"fullName": "Started_At__c", "label": "Started At", "type": "DateTime"},
 ]
+# records of 110 random Text(255) fields, about 28 KB each. They cost the same 2 KB of data storage
+# as the narrow records, so the org holds 4 GB of them. Batch Apex `DltWideSeed.cls` writes them
+PERF_WIDE_OBJECT = "DltPerfWide__c"
+PERF_WIDE_RECORDS = 150_000
+# deleted records that `queryAll` may still return: Salesforce keeps purged records until it
+# removes them physically, days later
+PERF_WIDE_MAX_DELETED = 500
+PERF_WIDE_FIELD_PREFIX = "Text_"
+PERF_WIDE_FIELD_COUNT = 110
+PERF_WIDE_FIELDS: List[Dict[str, Any]] = [
+    PERF_SEED_ID_FIELD,
+    *(
+        {
+            "fullName": f"{PERF_WIDE_FIELD_PREFIX}{n:03d}__c",
+            "label": f"Text {n:03d}",
+            "type": "Text",
+            "length": 255,
+        }
+        for n in range(1, PERF_WIDE_FIELD_COUNT + 1)
+    ),
+]
 PERF_CUSTOM_OBJECTS: Dict[str, Dict[str, Any]] = {
-    obj: {"label": f"dlt Perf {obj[-4]}", "fields": PERF_FIELDS} for obj in PERF_OBJECTS
+    **{
+        obj: {"label": f"dlt Perf {obj[-4]}", "fields": PERF_FIELDS}
+        for obj in PERF_OBJECTS
+    },
+    PERF_WIDE_OBJECT: {"label": "dlt Perf Wide", "fields": PERF_WIDE_FIELDS},
 }
 # field of each kind of `perf_values`
 PERF_FIELD_NAMES = {

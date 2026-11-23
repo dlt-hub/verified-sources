@@ -12,9 +12,10 @@ on standard objects and a permission set granting access to them. `load` upserts
 `DltTypes__c` to `tests/salesforce/cases`.
 
 `--performance` seeds the performance org configured in `sources.salesforce_performance`: `deploy`
-and `load` write the objects above and the performance objects in `data.PERF_OBJECTS`. `load`
-ends with `verify`, which compares the number and cursor of every performance record with
-`data.py`. an External Client App for the JWT bearer flow with the X.509 certificate of the client,
+and `load` write the objects above and the performance objects in `data.PERF_OBJECTS`. The wide
+object `data.PERF_WIDE_OBJECT` gets random values from the Batch Apex class `DltWideSeed.cls`,
+which `deploy` deploys and `load` runs in the org. `load` ends with `verify`, which compares the
+number and cursor of every performance record with `data.py` and counts the wide records. an External Client App for the JWT bearer flow with the X.509 certificate of the client,
 pre-authorized for the users with the performance permission set.
 See `tests/salesforce/README.md`.
 """
@@ -23,6 +24,7 @@ import argparse
 import gzip
 import io
 import json
+import math
 import os
 import zipfile
 from datetime import date, datetime, time, timezone  # noqa: I251
@@ -67,6 +69,10 @@ BULK_RECORDS = 10_000
 # data storage of most records, the org refuses writes when its storage is full
 RECORD_KB = 2
 STORAGE_HEADROOM_MB = 5
+WIDE_SEED_CLASS = "DltWideSeed"
+WIDE_RECORDS_PER_BATCH = 100
+# Batch Apex jobs writing the wide records at the same time, an org runs up to 5
+WIDE_SEED_JOBS = 3
 
 
 class Package(NamedTuple):
@@ -515,7 +521,87 @@ def deploy_jwt_app(client: Salesforce, certificate: str, app: str) -> None:
 def load_performance(client: Salesforce) -> None:
     for sobject in data.PERF_OBJECTS:
         upsert(client, sobject, "Seed_Id__c", data.perf_records(sobject))
+    load_wide(client)
     verify_performance(client)
+
+
+def deploy_wide_seed(client: Salesforce) -> None:
+    """Deploys the Batch Apex class that writes the wide performance records"""
+    with open(
+        os.path.join(os.path.dirname(__file__), f"{WIDE_SEED_CLASS}.cls"),
+        encoding="utf-8",
+    ) as f:
+        source = f.read()
+    package = {
+        "types": [{"members": WIDE_SEED_CLASS, "name": "ApexClass"}],
+        "version": data.API_VERSION,
+    }
+    deploy_files(
+        client,
+        {
+            f"classes/{WIDE_SEED_CLASS}.cls": source,
+            f"classes/{WIDE_SEED_CLASS}.cls-meta.xml": metadata_file(
+                "ApexClass", {"apiVersion": data.API_VERSION, "status": "Active"}
+            ),
+            "package.xml": metadata_file("Package", package),
+        },
+    )
+
+
+def load_wide(client: Salesforce) -> None:
+    """Writes the missing wide performance records with Batch Apex and waits for the jobs"""
+    sobject = data.PERF_WIDE_OBJECT
+    if count(client, sobject) >= data.PERF_WIDE_RECORDS:
+        return
+    check_storage(client, sobject, data.PERF_WIDE_RECORDS)
+    batches = math.ceil(data.PERF_WIDE_RECORDS / WIDE_RECORDS_PER_BATCH)
+    batches_per_job = math.ceil(batches / WIDE_SEED_JOBS)
+    started = datetime.now(timezone.utc).replace(microsecond=0)
+    for first in range(0, batches, batches_per_job):
+        last = min(first + batches_per_job, batches)
+        execute_anonymous(
+            client,
+            f"Database.executeBatch(new {WIDE_SEED_CLASS}('{sobject}',"
+            f" '{data.PERF_WIDE_FIELD_PREFIX}', {data.PERF_WIDE_FIELD_COUNT},"
+            f" {data.PERF_WIDE_RECORDS}, {WIDE_RECORDS_PER_BATCH}, {first}, {last}), 1);",
+        )
+    wait_for_wide_seed(client, started)
+
+
+def count(client: Salesforce, sobject: str) -> int:
+    return client.query(f"SELECT COUNT() FROM {sobject}")["totalSize"]  # type: ignore[no-any-return]
+
+
+def execute_anonymous(client: Salesforce, body: str) -> None:
+    result = client.restful("tooling/executeAnonymous/", params={"anonymousBody": body})
+    if not result["success"]:
+        raise RuntimeError(result["compileProblem"] or result["exceptionMessage"])
+
+
+def wait_for_wide_seed(client: Salesforce, started: datetime) -> None:
+    """Waits for the seed jobs created since `started`, raises when one of their batches failed"""
+    soql = (
+        "SELECT Status, JobItemsProcessed, TotalJobItems, NumberOfErrors, ExtendedStatus"
+        f" FROM AsyncApexJob WHERE ApexClass.Name = '{WIDE_SEED_CLASS}'"
+        f" AND JobType = 'BatchApex' AND CreatedDate >= {started:%Y-%m-%dT%H:%M:%SZ}"
+    )
+    while True:
+        jobs = client.query(soql)["records"]
+        if jobs and all(
+            job["Status"] in ("Completed", "Failed", "Aborted") for job in jobs
+        ):
+            break
+        processed = sum(job["JobItemsProcessed"] for job in jobs)
+        total = sum(job["TotalJobItems"] or 0 for job in jobs)
+        print(f"{WIDE_SEED_CLASS}: {processed} of {total} batches")
+        sleep(30)
+    failed = [
+        job["ExtendedStatus"] or job["Status"]
+        for job in jobs
+        if job["NumberOfErrors"] or job["Status"] != "Completed"
+    ]
+    if failed:
+        raise RuntimeError(f"{WIDE_SEED_CLASS} failed: {failed}")
 
 
 def verify_performance(client: Salesforce) -> None:
@@ -539,6 +625,11 @@ def verify_performance(client: Salesforce) -> None:
             )
         )
         errors.extend(report_differences(sobject, expected, stored))
+    wide = count(client, data.PERF_WIDE_OBJECT)
+    if wide != data.PERF_WIDE_RECORDS:
+        errors.append(
+            f"{data.PERF_WIDE_OBJECT}: {wide} records, expected {data.PERF_WIDE_RECORDS}"
+        )
     raise_differences(errors)
 
 
@@ -626,7 +717,7 @@ def main(argv: Optional[List[str]] = None) -> None:
     new_client = get_performance_client if args.performance else get_client
     steps: Dict[str, List[Callable[[Salesforce], None]]] = {
         "deploy": (
-            [deploy, partial(deploy, package=PERF_PACKAGE)]
+            [deploy, partial(deploy, package=PERF_PACKAGE), deploy_wide_seed]
             if args.performance
             else [deploy]
         ),

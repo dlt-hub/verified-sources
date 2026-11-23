@@ -17,6 +17,9 @@ paths:
 - Performance tests read large seeded data from the real upstream. They go to
   `tests/<source_name>/test_<source_name>_performance.py` with `pytestmark = pytest.mark.performance`,
   which `pytest.ini` deselects so CI and `make` never run them
+- End-to-end tests that check gigabytes of seeded data, e.g. downloads that break and resume, are
+  marked `large_data`. `pytest.ini` deselects them, `make` skips them and CI runs them on Linux with
+  `-m "not performance"`
 
 ## Environment and fixtures
 Tests run within fixtures (see `conftest.py`) that:
