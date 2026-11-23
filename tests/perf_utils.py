@@ -3,6 +3,7 @@ from datetime import datetime, timedelta  # noqa: I251
 from typing import Any, Callable, Dict, Iterable, List, Tuple
 
 import dlt
+from dlt.common.pipeline import ExtractInfo
 
 from tests.utils import load_tables_to_dicts
 
@@ -26,6 +27,17 @@ def in_window(
     value: datetime, start: datetime, end: datetime, last_value_func: Any
 ) -> bool:
     return start <= value < end if last_value_func is max else end < value <= start
+
+
+def extracted_rows(info: ExtractInfo) -> int:
+    """Rows of the data tables in the extract metrics of `info`"""
+    return sum(
+        table.items_count
+        for step_metrics in info.metrics.values()
+        for metrics in step_metrics
+        for name, table in metrics["table_metrics"].items()
+        if not name.startswith("_dlt")
+    )
 
 
 def assert_loaded_rows(

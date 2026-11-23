@@ -85,10 +85,11 @@ jobs:
             docker compose -f tests/kafka/docker-compose.yml logs
             exit 1
           }
+      # `large_data` tests read gigabytes from the seeded accounts, so only Linux runs them
       - run: |
           sources_list="${{ needs.get_changed_sources.outputs.sources_list }}"
           test_paths=$(echo "$sources_list" | awk '{for(i=1;i<=NF;i++) printf "tests/%s ", $i}')
-          uv run pytest $test_paths
+          uv run pytest -m "not performance" $test_paths
         if: runner.os != 'Windows'
         name: Run tests on Linux/macOS
       - run: |

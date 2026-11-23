@@ -4,7 +4,9 @@
   fixtures in `cases/`. No credentials needed.
 - `test_salesforce_source.py`: live tests against the seeded test org. They only read data, except
   `test_incremental_changes`: it adds, updates and deletes its own `DltChanges__c` records between incremental
-  runs.
+  runs. `test_salesforce_table_large_bulk_download` reads the 4 GB `DltPerfWide__c` of the
+  [performance org](#performance-org) with broken downloads, marked `large_data`: `pytest.ini` deselects it and CI
+  runs it on Linux.
 - `test_salesforce_performance.py`: performance tests against the [performance org](#performance-org), marked
   `performance`. `pytest.ini` deselects them.
 
@@ -100,6 +102,14 @@ uv run python -m tests.salesforce.seed.seed all --performance  # or deploy | loa
 unique seconds over two years, in an order unrelated to `Number__c`. The values come from `perf_record` in
 `seed/data.py`. `load` stops when the records do not fit in the data storage left in the org and ends with `verify`,
 which compares every record with `seed/data.py`.
+
+`DltPerfWide__c` holds 150,000 records of 110 random `Text(255)` fields, 4 GB in all. Never delete its records:
+Salesforce keeps returning purged records to `queryAll` for days, so the tests accept at most
+`PERF_WIDE_MAX_DELETED` of them. A record costs the same 2 KB of data storage whatever its width, so the wide object
+fits in the org next to the others. `load` deploys and runs the Batch Apex class `seed/DltWideSeed.cls`, which
+generates the values in the org, so nothing is uploaded. It skips existing records, and `verify` counts them. Its
+Bulk API results come in several chunks, which `test_salesforce_table_large_bulk_download` downloads in parallel
+with broken downloads.
 
 ```sh
 ALL_DESTINATIONS='["duckdb"]' uv run pytest -m performance -s tests/salesforce/test_salesforce_performance.py
