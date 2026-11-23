@@ -14,9 +14,14 @@ from sources.salesforce.helpers.credentials import (
 )
 from sources.salesforce.helpers.query import TQueryApi
 from sources.salesforce.helpers.table import TTableBackend
-from tests.perf_utils import assert_loaded_rows, in_window, seeded_windows
+from tests.perf_utils import (
+    assert_loaded_rows,
+    extracted_rows,
+    in_window,
+    seeded_windows,
+)
 from tests.salesforce.seed import data
-from tests.salesforce.utils import performance_credentials
+from tests.salesforce.utils import perf_wide_records, performance_credentials
 from tests.seed_utils import HttpLog, account_lock, print_extract_speed
 from tests.utils import assert_load_info, last_row_count, skip_if_not_active
 
@@ -198,3 +203,26 @@ def test_performance_incremental(
         chunks.run(table)
         assert last_row_count(chunks, SOBJECT) == 0
         assert_perf_rows(chunks, SOBJECT)
+
+
+def test_performance_result_chunks(
+    perf_account: SalesforceAuth, perf_http: HttpLog
+) -> None:
+    """Extracts all records of the wide object, whose result chunks download in parallel"""
+    client = make_salesforce_client(perf_account)
+    count = client.query(f"SELECT COUNT() FROM {data.PERF_WIDE_OBJECT}")["totalSize"]
+    if count != data.PERF_WIDE_RECORDS:
+        pytest.skip(
+            f"{data.PERF_WIDE_OBJECT} has {count} records, run the seed with --performance"
+        )
+    expected = perf_wide_records(perf_account)
+    pipeline = dlt.pipeline(pipeline_name="salesforce_perf_chunks", dev_mode=True)
+    info = pipeline.extract(
+        salesforce_table(
+            credentials=perf_account,
+            sobject=data.PERF_WIDE_OBJECT,
+            incremental=None,
+        )
+    )
+    assert extracted_rows(info) == expected
+    assert perf_http.peak_concurrency() > 1

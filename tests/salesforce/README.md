@@ -109,7 +109,8 @@ Salesforce keeps returning purged records to `queryAll` for days, so the tests a
 fits in the org next to the others. `load` deploys and runs the Batch Apex class `seed/DltWideSeed.cls`, which
 generates the values in the org, so nothing is uploaded. It skips existing records, and `verify` counts them. Its
 Bulk API results come in several chunks, which `test_salesforce_table_large_bulk_download` downloads in parallel
-with broken downloads.
+with broken downloads. `test_performance_result_chunks` extracts them in parallel and counts; it downloads 4 GB, so the
+`benchmark | extraction` workflow runs it with the `salesforce_wide` cases.
 
 ```sh
 ALL_DESTINATIONS='["duckdb"]' uv run pytest -m performance -s tests/salesforce/test_salesforce_performance.py

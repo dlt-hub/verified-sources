@@ -1,0 +1,100 @@
+name: benchmark | extraction
+
+on:
+  workflow_dispatch:
+    inputs:
+      cases:
+        description: Comma separated cases, all configured cases when empty
+        required: false
+        default: ""
+      modes:
+        description: Comma separated modes, iterate and extract
+        required: false
+        default: "iterate"
+      loads:
+        description: Comma separated loads, full and incremental
+        required: false
+        default: "full,incremental"
+      rounds:
+        description: Rounds over all cases
+        required: false
+        default: "3"
+  pull_request:
+    types: [labeled, synchronize]
+
+# runs of one account slow each other down
+concurrency:
+  group: benchmark
+  cancel-in-progress: false
+
+env:
+  DLT_SECRETS_TOML: ${{ secrets.DLT_SECRETS_TOML }}
+  RUNTIME__LOG_LEVEL: ERROR
+
+jobs:
+  benchmark:
+    name: extraction benchmark
+    # a new label or new commits on a pull request labeled `benchmark`. A label `benchmark:<cases>`
+    # runs only the comma separated cases
+    if: >-
+      github.event_name == 'workflow_dispatch'
+      || (github.event.action == 'labeled' && startsWith(github.event.label.name, 'benchmark'))
+      || (github.event.action == 'synchronize'
+          && contains(github.event.pull_request.labels.*.name, 'benchmark'))
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+
+    steps:
+      - name: Check out
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.ref }}
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v4
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: make dev
+
+      - name: create secrets.toml
+        run: echo "$DLT_SECRETS_TOML" > sources/.dlt/secrets.toml
+
+      - name: Test the benchmark
+        run: uv run pytest tests/_benchmark
+
+      - name: Run benchmark
+        env:
+          CASES: ${{ github.event.inputs.cases }}
+          MODES: ${{ github.event.inputs.modes }}
+          LOADS: ${{ github.event.inputs.loads }}
+          ROUNDS: ${{ github.event.inputs.rounds }}
+          LABEL: ${{ github.event.label.name }}
+        run: |
+          if [ -z "$CASES" ] && [[ "$LABEL" == benchmark:* ]]; then CASES="${LABEL#benchmark:}"; fi
+          args=(--rounds "${ROUNDS:-3}" --output benchmark-results.jsonl)
+          if [ -n "$CASES" ]; then args+=(--cases "$CASES"); fi
+          if [ -n "$MODES" ]; then args+=(--modes "$MODES"); fi
+          if [ -n "$LOADS" ]; then args+=(--loads "$LOADS"); fi
+          uv run python -m tests._benchmark.run "${args[@]}"
+
+      - name: Test parallel result chunks of Salesforce
+        # reads the 4 GB wide object again, only when its case is benchmarked
+        if: >-
+          contains(format(',{0},', github.event.label.name), ':salesforce_wide,')
+          || contains(format(',{0},', github.event.label.name), ',salesforce_wide,')
+          || contains(format(',{0},', github.event.inputs.cases), ',salesforce_wide,')
+        env:
+          ALL_DESTINATIONS: '["duckdb"]'
+        run: >-
+          uv run pytest -m performance tests/salesforce/test_salesforce_performance.py
+          -k result_chunks -s
+
+      - name: Upload results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: benchmark-results
+          path: benchmark-results.jsonl
+          if-no-files-found: warn
