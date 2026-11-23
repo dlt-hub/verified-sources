@@ -100,6 +100,7 @@ Using absolute paths under `WORKTREE`:
 - Check if similar patterns exist elsewhere that should also be updated.
 - Review the coding style and code patterns against `.claude/rules/` (coding style, imports, testing) and `CONTRIBUTING.md`.
 - Check that the change survives `dlt init` distribution (`docs/DISTRIBUTION.md`): the source folder stays self-contained, uses relative imports, and imports nothing from other sources or from `tests`. The demo script `sources/<name>_pipeline.py` uses absolute imports from the source package.
+- Check that settings a user may change, e.g. page sizes, limits, timeouts and retry strategies, live in `sources/<name>/settings.py`, not as constants in `helpers/`. Flag new constants in the wrong place, see [Source structure](../refresh-source/SKILL.md#source-structure-and-dlt-building-blocks).
 - If **reviewer instructions** were provided, pay special attention to the areas or concerns they describe during this analysis.
 - Mention only crucial findings to the user in the initial overview. Avoid code snippets except if critical bugs were found.
 
