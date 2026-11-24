@@ -49,6 +49,22 @@ def load_support_with_pivoting() -> Any:
     return info
 
 
+def load_support_with_ticket_comments() -> Any:
+    """
+    Loads Zendesk Support data with ticket comments included. 
+    Simply done by setting the include_ticket_comments to true.
+    Loads only the base tables.
+    """
+    pipeline = dlt.pipeline(
+        pipeline_name="zendesk_support_pivoting",
+        destination="postgres",
+        dev_mode=False,
+    )
+    data = zendesk_support(load_all=False, include_ticket_comments=True)
+    info = pipeline.run(data=data)
+    return info
+
+
 def incremental_load_all_start_date() -> Any:
     """
     Implements incremental load when possible to Support, Chat and Talk Endpoints. The default behaviour gets data since the last load time saved in dlt state or
